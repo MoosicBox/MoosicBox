@@ -3,17 +3,17 @@ source: packages/clippier/tests/error_handling_tests.rs
 expression: test_data
 ---
 filtering_edge_cases:
+  empty_features_table:
+    input: no features defined
+    output: empty feature list
   all_features_skipped:
     all_features:
       - feat1
       - feat2
-    result: empty list
     skip_features:
       - feat1
       - feat2
-  empty_features_table:
-    input: no features defined
-    output: empty feature list
+    result: empty list
   invalid_offset:
     features:
       - feat1

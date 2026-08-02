@@ -2,12 +2,12 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
+package_name: api
 chunked: 2
-expected_chunks:
-  - - server
-  - - database
+spread: true
 features:
   - server
   - database
-package_name: api
-spread: true
+expected_chunks:
+  - - server
+  - - database

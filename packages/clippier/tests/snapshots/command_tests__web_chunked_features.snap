@@ -2,8 +2,8 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
+package_name: web
 chunked: 2
 features:
   - frontend
   - ssr
-package_name: web

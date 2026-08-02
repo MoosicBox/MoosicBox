@@ -2,7 +2,7 @@
 source: packages/clippier/tests/workspace_deps_tests.rs
 expression: test_data
 ---
+note: "When default-features = false, only explicitly enabled features are included"
 example_package: models
 explicit_features:
   - json
-note: "When default-features = false, only explicitly enabled features are included"

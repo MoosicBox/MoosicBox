@@ -3,11 +3,11 @@ source: packages/clippier/tests/business_logic_tests.rs
 expression: normalize_paths(parsed)
 ---
 - name: api
-  os: ubuntu-latest
   path: packages/api
+  os: ubuntu-latest
 - name: cli
-  os: ubuntu-latest
   path: packages/cli
-- name: core
   os: ubuntu-latest
+- name: core
   path: packages/core
+  os: ubuntu-latest

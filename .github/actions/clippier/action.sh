@@ -1523,6 +1523,77 @@ main() {
         return
     fi
 
+    if [[ "$INPUT_COMMAND" == release-* ]]; then
+        CONTEXT_PHASE="release $INPUT_COMMAND"
+        local subcommand="${INPUT_COMMAND#release-}"
+        args=(release "$subcommand" "${INPUT_WORKSPACE_PATH:-.}" --output json)
+        if [[ -n "${INPUT_RELEASE_PACKAGES:-}" ]]; then
+            args+=(--package "$INPUT_RELEASE_PACKAGES")
+        fi
+        if [[ -n "${INPUT_GIT_BASE:-}" && -n "${INPUT_GIT_HEAD:-}" ]]; then
+            args+=(--git-base "$INPUT_GIT_BASE" --git-head "$INPUT_GIT_HEAD")
+        fi
+        if [[ -n "${INPUT_RELEASE_SEMVER_FEATURE_POLICY:-}" ]]; then
+            args+=(--semver-feature-policy "$INPUT_RELEASE_SEMVER_FEATURE_POLICY")
+        fi
+        [[ -n "${INPUT_RELEASE_SEMVER_FEATURES:-}" ]] && args+=(--semver-features "$INPUT_RELEASE_SEMVER_FEATURES")
+        [[ -n "${INPUT_RELEASE_SEMVER_CURRENT_FEATURES:-}" ]] && args+=(--semver-current-features "$INPUT_RELEASE_SEMVER_CURRENT_FEATURES")
+        [[ -n "${INPUT_RELEASE_SEMVER_BASELINE_FEATURES:-}" ]] && args+=(--semver-baseline-features "$INPUT_RELEASE_SEMVER_BASELINE_FEATURES")
+        if [[ "${INPUT_RELEASE_DRY_RUN:-false}" == "true" ]] && [[ "$subcommand" != "status" && "$subcommand" != "verify" ]]; then
+            args+=(--dry-run)
+        fi
+        if [[ "$subcommand" == "publish" ]]; then
+            [[ "${INPUT_RELEASE_VERIFY_PACKAGE:-false}" == "true" ]] && args+=(--verify)
+            [[ "${INPUT_RELEASE_ALLOW_DIRTY:-false}" == "true" ]] && args+=(--allow-dirty)
+        fi
+        local release_output
+        release_output=$("$CLIPPIER_BIN" "${args[@]}")
+        echo "release-status<<EOF" >> "$GITHUB_OUTPUT"
+        printf '%s\n' "$release_output" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+        if [[ "$subcommand" == "status" || "$subcommand" == "prepare" || "$subcommand" == "verify" ]]; then
+            local status_json="$release_output"
+            [[ "$subcommand" != "status" ]] && status_json=$(printf '%s' "$release_output" | jq -c '.status')
+            local pending_packages publish_order has_changes
+            pending_packages=$(printf '%s' "$status_json" | jq -c '[.packages[] | select(.changed) | .name]')
+            publish_order=$(printf '%s' "$status_json" | jq -c '.publish_order')
+            has_changes=$(printf '%s' "$pending_packages" | jq -r 'length > 0')
+            echo "release-has-changes=$has_changes" >> "$GITHUB_OUTPUT"
+            echo "release-packages=$pending_packages" >> "$GITHUB_OUTPUT"
+            echo "release-publish-order=$publish_order" >> "$GITHUB_OUTPUT"
+            {
+                echo "## Clippier Cargo release"
+                echo
+                echo "Pending packages: $(printf '%s' "$pending_packages" | jq -r 'join(", ") // "none"')"
+                echo
+                echo "Publish order: $(printf '%s' "$publish_order" | jq -r 'join(" → ") // "none"')"
+            } >> "$GITHUB_STEP_SUMMARY"
+        elif [[ "$subcommand" == "publish" ]]; then
+            local published already_published dry_run disabled total
+            published=$(printf '%s' "$release_output" | jq -r '[.packages[] | select(.status == "PUBLISHED")] | length')
+            already_published=$(printf '%s' "$release_output" | jq -r '[.packages[] | select(.status == "ALREADY_PUBLISHED")] | length')
+            dry_run=$(printf '%s' "$release_output" | jq -r '[.packages[] | select(.status == "DRY_RUN")] | length')
+            disabled=$(printf '%s' "$release_output" | jq -r '[.packages[] | select(.status == "PUBLISH_DISABLED")] | length')
+            total=$(printf '%s' "$release_output" | jq -r '.packages | length')
+            {
+                echo "## Clippier Cargo publication"
+                echo
+                echo "| Result | Count |"
+                echo "| --- | ---: |"
+                echo "| Published | $published |"
+                echo "| Already published | $already_published |"
+                echo "| Dry run | $dry_run |"
+                echo "| Publish disabled | $disabled |"
+                echo "| Total | $total |"
+                echo
+                echo "### Packages"
+                printf '%s' "$release_output" | jq -r '.packages[] | "- `\(.name)@\(.version)`: \(.status)"'
+            } >> "$GITHUB_STEP_SUMMARY"
+        fi
+        printf '%s\n' "$release_output"
+        return
+    fi
+
     if [[ "$INPUT_COMMAND" == "workspace-setup" ]]; then
         setup_workspace_ci_environment
         return
@@ -1543,6 +1614,10 @@ main() {
 
         # Exit with the captured code (workflow step fails on test failure, but no misleading error summary)
         exit $exit_code
+    fi
+
+    if [[ "${INPUT_COMMAND:-}" == release-* ]]; then
+        return
     fi
 
     # Set phase for other commands

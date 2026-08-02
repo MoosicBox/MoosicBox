@@ -2,8 +2,6 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
-macos_deps:
-  - brew install sqlite3
 package_name: api
 supported_os:
   - ubuntu
@@ -13,3 +11,5 @@ ubuntu_deps:
   - apt-get install libsqlite3-dev
 windows_deps:
   - "vcpkg install sqlite3:x64-windows"
+macos_deps:
+  - brew install sqlite3

@@ -48,6 +48,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Shared Cargo workspace metadata support.
+#[cfg(any(feature = "publish", feature = "release", feature = "versioning"))]
+mod cargo_workspace;
+
 /// Package filtering based on Cargo.toml properties.
 ///
 /// This module provides functionality to filter workspace packages based on
@@ -63,6 +67,10 @@ pub mod publish;
 /// Cargo workspace version bumping support.
 #[cfg(feature = "versioning")]
 pub mod versioning;
+
+/// Stateless Cargo release preparation support.
+#[cfg(feature = "release")]
+pub mod release;
 
 /// Tool detection and execution infrastructure for linting and formatting.
 ///

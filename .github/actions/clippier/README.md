@@ -14,8 +14,32 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 - 🧰 **Automatic Diagnostics** - `run-matrix` publishes failure JSON and reproduction scripts by default
 - 🎲 **Deterministic Randomization** - Reproducible test matrices with seed support
 - 🔄 **Flexible Transformation** - Package name transformation via regex
+- 📦 **Stateless Cargo Releases** - Registry-backed status, semver preparation, verification, and dependency-ordered publishing
 - ⚡ **Smart Caching** - Automatic clippier binary caching
 
+## Stateless Cargo release commands
+
+Use `release-status`, `release-prepare`, `release-verify`, or `release-publish` to invoke Clippier's
+stateless Cargo release pipeline. The Action emits deterministic `release-status`,
+`release-has-changes`, `release-packages`, and `release-publish-order` outputs. No output or artifact
+is required by later release invocations: each command reconstructs state from the repository and
+crates.io.
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+  id: release
+  with:
+      command: release-prepare
+      workspace-path: .
+      release-packages: crate_a,crate_b # optional
+      release-dry-run: "false"
+      clippier-features: release
+```
+
+Use the reusable `cargo-release-prepare.yml` and `cargo-release-publish.yml` workflows for managed
+release PRs and protected publication. Preparation receives no publishing credentials. Publication
+must run from the default branch, is serialized per repository, and supports crates.io trusted
+publishing or `CARGO_REGISTRY_TOKEN` as a fallback.
 
 ## Standard run-matrix reporting
 

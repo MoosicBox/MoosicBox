@@ -2,11 +2,11 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
+package_name: web
 env_vars:
+  WEB_PORT: "8080"
   FRONTEND_BUILD:
+    value: production
     features:
       - frontend
-    value: production
   SSR_ENABLED: "true"
-  WEB_PORT: "8080"
-package_name: web

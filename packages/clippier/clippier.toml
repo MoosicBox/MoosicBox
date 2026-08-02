@@ -1,3 +1,10 @@
+[release.semver]
+# Defaults to cargo-semver-checks' deterministic upstream heuristic.
+# feature-policy = "all"
+# features = ["public-api-feature"]
+# current-features = []
+# baseline-features = []
+
 [[ci-steps]]
 toolchain = "free_disk_space"
 

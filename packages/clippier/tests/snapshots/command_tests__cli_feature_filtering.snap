@@ -2,11 +2,11 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
+package_name: cli
 all_features:
   - interactive
   - batch
-filtered_features:
-  - interactive
-package_name: cli
 skip_features:
   - batch
+filtered_features:
+  - interactive

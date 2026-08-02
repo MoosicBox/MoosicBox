@@ -2,8 +2,8 @@
 source: packages/clippier/tests/error_handling_tests.rs
 expression: test_data
 ---
-circular_check: no cycles detected
 dependency_graph:
   api:
     - models
   models: []
+circular_check: no cycles detected

@@ -12,15 +12,15 @@ packages_using_serde:
 packages_using_tokio:
   - core
   - api
-reasoning:
-  api:
-    - "External dependency changes: tokio"
-    - "Depends on affected package: models"
-  core:
-    - "External dependency changes: serde, tokio"
-  models:
-    - "Depends on affected package: core"
 transitively_affected:
   - api
   - web
   - cli
+reasoning:
+  core:
+    - "External dependency changes: serde, tokio"
+  models:
+    - "Depends on affected package: core"
+  api:
+    - "External dependency changes: tokio"
+    - "Depends on affected package: models"

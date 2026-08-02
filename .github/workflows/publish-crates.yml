@@ -2,34 +2,16 @@ name: Publish Crates
 
 on:
     workflow_dispatch:
+        inputs:
+            packages:
+                description: Comma-separated release roots; empty publishes all pending packages
+                required: false
+                type: string
+                default: ""
 
 jobs:
-    deploy:
-        runs-on: ubuntu-latest
-
-        steps:
-            - uses: actions/checkout@v6
-
-            - uses: dtolnay/rust-toolchain@stable
-
-            - name: Get Dependencies
-              id: get-deps
-              run: |
-                  DEPENDENCIES=$(cargo run -p clippier features . -o json | jq -rc '[.[] | select(.os == "ubuntu") | select(.dependencies) | .dependencies] | unique | .[]')
-                  echo "Using deps (raw):"
-                  echo "$DEPENDENCIES"
-                  echo 'deps<<EOF' >> $GITHUB_OUTPUT
-                  echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
-
-            - name: Install Dependencies
-              run: ${{ steps.get-deps.outputs.deps }}
-
-            - name: Publish
-              shell: bash
-              env:
-                  STATIC_TOKEN: 123
-                  TUNNEL_ACCESS_TOKEN: 123
-                  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-              run: |
-                  cargo run -p clippier -- publish
+    publish:
+        uses: ./.github/workflows/cargo-release-publish.yml
+        with:
+            packages: ${{ inputs.packages }}
+        secrets: inherit

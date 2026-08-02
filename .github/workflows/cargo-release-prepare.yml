@@ -1,0 +1,119 @@
+name: Prepare Cargo Release
+
+on:
+    workflow_call:
+        inputs:
+            packages:
+                description: Comma-separated release roots; empty selects all pending packages
+                required: false
+                type: string
+                default: ""
+    workflow_dispatch:
+        inputs:
+            packages:
+                description: Comma-separated release roots; empty selects all pending packages
+                required: false
+                type: string
+                default: ""
+
+permissions:
+    contents: write
+    pull-requests: write
+
+concurrency:
+    group: cargo-release-prepare-${{ github.repository }}
+    cancel-in-progress: false
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Create managed release branch
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  branch=clippier/cargo-release
+                  git fetch origin "$branch" || true
+                  git checkout -B "$branch" "origin/${{ github.event.repository.default_branch }}"
+
+            - name: Reconstruct Cargo release status
+              id: status
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: release-status
+                  workspace-path: .
+                  release-packages: ${{ inputs.packages }}
+                  clippier-version: master
+                  clippier-features: release
+
+            - name: Prepare reconstructed Cargo release
+              id: release
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: release-prepare
+                  workspace-path: .
+                  release-packages: ${{ inputs.packages }}
+                  clippier-version: master
+                  clippier-features: release
+
+            - name: Verify prepared Cargo release
+              if: steps.release.outputs.release-has-changes == 'true'
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: release-verify
+                  workspace-path: .
+                  release-packages: ${{ inputs.packages }}
+                  clippier-version: master
+                  clippier-features: release
+
+            - name: Stop when no release changes are required
+              if: steps.status.outputs.release-has-changes != 'true'
+              run: echo "No Cargo packages currently require release" >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Create or update managed release pull request
+              if: steps.status.outputs.release-has-changes == 'true'
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RELEASE_STATUS: ${{ steps.release.outputs.release-status }}
+                  RELEASE_PACKAGES: ${{ steps.release.outputs.release-packages }}
+                  RELEASE_ORDER: ${{ steps.release.outputs.release-publish-order }}
+              run: |
+                  set -euo pipefail
+                  branch=clippier/cargo-release
+                  git config user.name github-actions[bot]
+                  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+                  git add --all
+                  git reset -- cargo-semver-release-pipeline-progress.md 2>/dev/null || true
+                  if git diff --cached --quiet; then
+                      echo "No source-controlled release changes were produced" >> "$GITHUB_STEP_SUMMARY"
+                      exit 0
+                  fi
+                  git commit -m "Prepare Cargo package releases"
+                  git push --force-with-lease origin "HEAD:$branch"
+
+                  packages=$(printf '%s' "$RELEASE_PACKAGES" | jq -r 'join(", ")')
+                  order=$(printf '%s' "$RELEASE_ORDER" | jq -r 'join(" → ")')
+                  body=$(cat <<EOF
+                  ## Cargo release preparation
+
+                  Clippier reconstructed this release from the repository and crates.io. No persistent release plan is used.
+
+                  **Packages:** $packages
+
+                  **Publish order:** $order
+
+                  The existing affected-package workflows validate the changed packages in this PR.
+                  EOF
+                  )
+                  base="${{ github.event.repository.default_branch }}"
+                  existing=$(gh pr list --head "$branch" --base "$base" --state open --json number --jq '.[0].number // empty')
+                  if [[ -n "$existing" ]]; then
+                      gh pr edit "$existing" --title "Prepare Cargo package releases" --body "$body"
+                  else
+                      gh pr create --head "$branch" --base "$base" --title "Prepare Cargo package releases" --body "$body"
+                  fi

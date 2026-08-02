@@ -3,9 +3,9 @@ source: packages/clippier/tests/error_handling_tests.rs
 expression: test_data
 ---
 scenarios:
-  - error: file not found
-    path: packages/nonexistent/Cargo.toml
-  - optional: true
-    path: packages/api/clippier.toml
-  - error: workspace not found
-    path: /nonexistent/workspace
+  - path: packages/nonexistent/Cargo.toml
+    error: file not found
+  - path: packages/api/clippier.toml
+    optional: true
+  - path: /nonexistent/workspace
+    error: workspace not found

@@ -4,7 +4,7 @@ author: "MoosicBox"
 
 inputs:
     command:
-        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, setup, workspace-setup, run-matrix, report, fmt)"
+        description: "Clippier command to run (features, packages, affected-packages, workspace-deps, validate-feature-propagation, release-status, release-prepare, release-verify, release-publish, setup, workspace-setup, run-matrix, report, fmt)"
         required: true
 
     workspace-path:
@@ -307,6 +307,41 @@ inputs:
         required: false
         default: "rustfmt, clippy"
 
+    release-packages:
+        description: "Comma-separated Cargo release roots; empty selects all publishable packages"
+        required: false
+
+    release-dry-run:
+        description: "Preview release preparation or publication"
+        required: false
+        default: "false"
+
+    release-verify-package:
+        description: "Run Cargo package verification before publication"
+        required: false
+        default: "false"
+
+    release-allow-dirty:
+        description: "Allow unrelated dirty files while publishing"
+        required: false
+        default: "false"
+
+    release-semver-feature-policy:
+        description: "cargo-semver-checks feature policy override (default-heuristic, all, default-only, explicit-only)"
+        required: false
+
+    release-semver-features:
+        description: "Comma-separated features enabled for current and baseline analyses"
+        required: false
+
+    release-semver-current-features:
+        description: "Comma-separated features enabled only for current source"
+        required: false
+
+    release-semver-baseline-features:
+        description: "Comma-separated features enabled only for registry baseline"
+        required: false
+
     # Inputs for run-matrix command
     run-matrix-steps-file:
         description: "Path to a YAML/JSON file containing run-matrix step definitions. Cannot be used with run-matrix-commands or run-matrix-steps."
@@ -469,6 +504,22 @@ inputs:
         default: "true"
 
 outputs:
+    release-status:
+        description: "Ephemeral reconstructed release status JSON"
+        value: ${{ steps.run-action.outputs.release-status }}
+
+    release-has-changes:
+        description: "Whether reconstructed release status contains pending packages"
+        value: ${{ steps.run-action.outputs.release-has-changes }}
+
+    release-packages:
+        description: "Pending release package names as compact JSON"
+        value: ${{ steps.run-action.outputs.release-packages }}
+
+    release-publish-order:
+        description: "Dependency-first publication order as compact JSON"
+        value: ${{ steps.run-action.outputs.release-publish-order }}
+
     matrix:
         description: "Generated matrix JSON for GitHub Actions"
         value: ${{ steps.run-action.outputs.matrix }}
@@ -638,6 +689,7 @@ runs:
           if: |
               inputs.clippier-version != '' && (
                 inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
                 inputs.command == 'packages' ||
                 inputs.command == 'affected-packages' ||
                 inputs.command == 'workspace-deps' ||
@@ -656,6 +708,7 @@ runs:
           id: clippier-hash
           if: |
               inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
               inputs.command == 'packages' ||
               inputs.command == 'affected-packages' ||
               inputs.command == 'workspace-deps' ||
@@ -685,6 +738,7 @@ runs:
           if: |
               inputs.skip-cache != 'true' && (
                 inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
                 inputs.command == 'packages' ||
                 inputs.command == 'affected-packages' ||
                 inputs.command == 'workspace-deps' ||
@@ -696,11 +750,12 @@ runs:
           uses: actions/cache@v5
           with:
               path: ./target/release/clippier
-              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}
+              key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-${{ inputs.clippier-version || 'local' }}-${{ steps.clippier-hash.outputs.hash }}-${{ startsWith(inputs.command, 'release-') && 'release' || inputs.clippier-features }}
 
         - name: Setup Rust toolchain for clippier build
           if: |
               inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
               inputs.command == 'packages' ||
               inputs.command == 'affected-packages' ||
               inputs.command == 'workspace-deps' ||
@@ -713,6 +768,7 @@ runs:
         - name: Build clippier
           if: |
               inputs.command == 'features' ||
+                startsWith(inputs.command, 'release-') ||
               inputs.command == 'packages' ||
               inputs.command == 'affected-packages' ||
               inputs.command == 'workspace-deps' ||
@@ -723,18 +779,22 @@ runs:
           shell: bash
           run: |
               if [[ ! -f ./target/release/clippier ]] || [[ "${{ inputs.skip-cache }}" == "true" ]]; then
-                echo "Building clippier with features: ${{ inputs.clippier-features }}"
+                FEATURES="${{ inputs.clippier-features }}"
+                if [[ "${{ inputs.command }}" == release-* ]] && [[ ",$FEATURES," != *,release,* ]]; then
+                  FEATURES="${FEATURES:+$FEATURES,}release"
+                fi
+                echo "Building clippier with features: $FEATURES"
 
                 if [[ -n "${{ inputs.clippier-version }}" ]]; then
                   echo "Building clippier from MoosicBox@${{ inputs.clippier-version }}"
                   cd .clippier-source
-                  cargo build --package clippier --features "${{ inputs.clippier-features }}" --release
+                  cargo build --package clippier --features "$FEATURES" --release
                   mkdir -p ../target/release
                   cp target/release/clippier ../target/release/
                   cd ..
                 else
                   echo "Building clippier from local repository"
-                  cargo build --package clippier --features "${{ inputs.clippier-features }}" --release
+                  cargo build --package clippier --features "$FEATURES" --release
                 fi
 
                 chmod +x ./target/release/clippier
@@ -811,6 +871,14 @@ runs:
               INPUT_SKIP_CHECKOUT: ${{ inputs.skip-checkout }}
               INPUT_CHECKOUT_FETCH_DEPTH: ${{ inputs.checkout-fetch-depth }}
               INPUT_RUST_COMPONENTS: ${{ inputs.rust-components }}
+              INPUT_RELEASE_PACKAGES: ${{ inputs.release-packages }}
+              INPUT_RELEASE_DRY_RUN: ${{ inputs.release-dry-run }}
+              INPUT_RELEASE_VERIFY_PACKAGE: ${{ inputs.release-verify-package }}
+              INPUT_RELEASE_ALLOW_DIRTY: ${{ inputs.release-allow-dirty }}
+              INPUT_RELEASE_SEMVER_FEATURE_POLICY: ${{ inputs.release-semver-feature-policy }}
+              INPUT_RELEASE_SEMVER_FEATURES: ${{ inputs.release-semver-features }}
+              INPUT_RELEASE_SEMVER_CURRENT_FEATURES: ${{ inputs.release-semver-current-features }}
+              INPUT_RELEASE_SEMVER_BASELINE_FEATURES: ${{ inputs.release-semver-baseline-features }}
               INPUT_RUN_MATRIX_PACKAGE_JSON: ${{ inputs.run-matrix-package-json }}
               INPUT_RUN_MATRIX_STEPS_FILE: ${{ inputs.run-matrix-steps-file }}
               INPUT_RUN_MATRIX_TEMPLATE_VARS: ${{ inputs.run-matrix-template-vars }}

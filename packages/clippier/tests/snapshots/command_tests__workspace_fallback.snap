@@ -2,7 +2,7 @@
 source: packages/clippier/tests/command_tests.rs
 expression: test_data
 ---
-fallback_features: []
-fallback_os: ubuntu
-has_clippier_toml: false
 package_name: models
+has_clippier_toml: false
+fallback_os: ubuntu
+fallback_features: []

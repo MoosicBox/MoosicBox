@@ -18,7 +18,7 @@ use cargo_metadata::{DependencyKind as CargoDependencyKind, MetadataCommand, Pac
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{ColorMode, OutputType};
+use crate::{ColorMode, OutputType, cargo_workspace::normalize_workspace_root};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -681,15 +681,6 @@ fn print_failure_summary(
         }
     }
     eprintln!();
-}
-
-fn normalize_workspace_root(path: &Path) -> PathBuf {
-    if path.file_name().is_some_and(|name| name == "Cargo.toml") {
-        path.parent()
-            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
-    } else {
-        path.to_path_buf()
-    }
 }
 
 fn load_publish_packages(

@@ -9,29 +9,29 @@ all_features:
   - database
   - server
   - frontend
-required_features:
-  optional:
-    - database
-    - server
-    - frontend
-  required:
-    - json
-    - async
 skip_features:
+  skip:
+    - default
+    - _internal
   remaining:
     - json
     - async
     - database
     - server
     - frontend
-  skip:
-    - default
-    - _internal
+required_features:
+  required:
+    - json
+    - async
+  optional:
+    - database
+    - server
+    - frontend
 specific_features:
+  selected:
+    - json
+    - database
   ignored:
     - async
     - server
     - frontend
-  selected:
-    - json
-    - database

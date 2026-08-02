@@ -4,9 +4,9 @@ expression: test_data
 ---
 malformed_scenarios:
   unquoted_string:
-    error: expecting quoted string
     value: unquoted value
+    error: expecting quoted string
   wrong_type:
-    error: type mismatch
     expected: array
     received: string
+    error: type mismatch

@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "clippier"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = { workspace = true }
+version     = "0.4.0"
 
 [package.metadata]
 examples = true
@@ -47,25 +47,33 @@ switchy_fs = { workspace = true, features = [
 ] }
 switchy_random = { workspace = true, features = ["rand"] }
 
-anyhow         = { workspace = true }
-async-trait    = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+cargo-semver-checks = { workspace = true, optional = true }
 cargo_metadata = { workspace = true, optional = true }
-chrono         = { workspace = true }
-clap           = { workspace = true }
-ctrlc          = { workspace = true, optional = true }
-globset        = { workspace = true }
-itertools      = { workspace = true }
-log            = { workspace = true }
-ratatui        = { workspace = true, optional = true }
-rayon          = { workspace = true, optional = true }
-regex          = { workspace = true }
-reqwest        = { workspace = true, optional = true }
-serde          = { workspace = true }
-serde_json     = { workspace = true }
-serde_yaml     = { workspace = true, optional = true }
-thiserror      = { workspace = true }
-toml           = { workspace = true }
-which          = { workspace = true, optional = true, features = ["real-sys"] }
+chrono = { workspace = true }
+clap = { workspace = true }
+ctrlc = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
+globset = { workspace = true }
+itertools = { workspace = true }
+log = { workspace = true }
+ratatui = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
+regex = { workspace = true }
+reqwest = { workspace = true, optional = true, features = ["blocking", "json"] }
+semver = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true, optional = true, features = [
+    "display",
+    "parse",
+] }
+which = { workspace = true, optional = true, features = ["real-sys"] }
 
 git2 = { workspace = true, optional = true }
 mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
@@ -83,6 +91,7 @@ default = [
     "git-diff",
     "node-workspace",
     "publish",
+    "release",
     "tools-tui",
     "transforms-vendored",
     "versioning",
@@ -104,6 +113,17 @@ publish = [
     "dep:reqwest",
     "switchy_async/net",
     "switchy_async/time",
+]
+release = [
+    "dep:cargo-semver-checks",
+    "dep:cargo_metadata",
+    "dep:flate2",
+    "dep:reqwest",
+    "dep:semver",
+    "dep:tar",
+    "dep:toml_edit",
+    "publish",
+    "switchy_async/net",
 ]
 versioning = ["dep:cargo_metadata"]
 

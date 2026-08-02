@@ -4,11 +4,6 @@ expression: test_data
 ---
 changed_files:
   - packages/core/src/lib.rs
-dependency_chain:
-  api: depends on models
-  cli: depends on api
-  models: depends on core
-  web: depends on api
 directly_affected:
   - core
 transitively_affected:
@@ -16,3 +11,8 @@ transitively_affected:
   - api
   - web
   - cli
+dependency_chain:
+  models: depends on core
+  api: depends on models
+  web: depends on api
+  cli: depends on api

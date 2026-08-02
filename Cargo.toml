@@ -405,6 +405,7 @@ btparse = "0.2.0"
 bumpalo = "3.20.3"
 bytes = "1.12.1"
 bytesize = "2.4.2"
+cargo-semver-checks = { version = "0.50.0", default-features = false }
 cargo_metadata = "0.23.1"
 chrono = { version = "0.4.45", default-features = false, features = [
     "clock",
@@ -549,6 +550,7 @@ rust_decimal_macros = { version = "1.40.0", default-features = false }
 rustc_version = "0.4.1"
 ryu = "1.0.23"
 scoped-tls = "1.0.1"
+semver = { version = "1.0.28", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
@@ -588,6 +590,7 @@ symphonia = { version = "0.5.5", features = ["all"] }
 syn = "2.0.119"
 syntect = "5.3.0"
 tantivy = "0.25.0"
+tar = { version = "0.4.46", default-features = false }
 tauri = { version = "2.11.5", features = ["protocol-asset"] }
 tauri-build = { version = "2.6.3", features = [] }
 tauri-plugin = { version = "2.6.3", features = ["build"] }
@@ -613,6 +616,7 @@ tokio-tungstenite = { version = "0.29.0", features = [
 ] }
 tokio-util = "0.7.19"
 toml = "1.1.3"
+toml_edit = { version = "0.25.13", default-features = false }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
 tracing-log = "0.2.0"

@@ -11,7 +11,7 @@ use clap::ValueEnum;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::OutputType;
+use crate::{OutputType, cargo_workspace::normalize_workspace_root};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -209,15 +209,6 @@ pub fn handle_version_command(
     match output {
         OutputType::Raw => Ok(report.to_raw_string()),
         OutputType::Json => Ok(serde_json::to_string_pretty(&report)?),
-    }
-}
-
-fn normalize_workspace_root(path: &Path) -> PathBuf {
-    if path.file_name().is_some_and(|name| name == "Cargo.toml") {
-        path.parent()
-            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
-    } else {
-        path.to_path_buf()
     }
 }
 

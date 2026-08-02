@@ -13,6 +13,12 @@ use clap::{Parser, Subcommand};
 
 #[cfg(any(feature = "check", feature = "format", feature = "publish"))]
 use clippier::ColorMode;
+#[cfg(feature = "release")]
+use clippier::release::{
+    IndependentizeConfig, ReleasePrepareConfig, ReleasePublishConfig, ReleaseStatusConfig,
+    handle_independentize_command, handle_release_prepare_command, handle_release_publish_command,
+    handle_release_status_command, handle_release_verify_command,
+};
 #[cfg(feature = "versioning")]
 use clippier::versioning::{VersionBump, VersionConfig, VersionOperation, handle_version_command};
 use clippier::{
@@ -92,6 +98,207 @@ enum VersionCommands {
         publishable_only: bool,
 
         /// Print the bump plan without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+}
+
+#[cfg(feature = "release")]
+#[derive(Subcommand)]
+enum ReleaseCommands {
+    /// Reconstruct release requirements from workspace and crates.io
+    Status {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Only inspect the selected publishable package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Optional Git base revision used only to narrow registry-backed candidates
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Optional Git head revision paired with --git-base
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
+        /// Override cargo-semver-checks feature selection
+        #[arg(long, value_enum)]
+        semver_feature_policy: Option<clippier::release::SemverFeaturePolicy>,
+
+        /// Features enabled for both current and baseline analyses
+        #[arg(long, value_delimiter = ',')]
+        semver_features: Vec<String>,
+
+        /// Features enabled only for current source
+        #[arg(long, value_delimiter = ',')]
+        semver_current_features: Vec<String>,
+
+        /// Features enabled only for registry baseline
+        #[arg(long, value_delimiter = ',')]
+        semver_baseline_features: Vec<String>,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+    /// Apply reconstructed versions and dependency requirements
+    Prepare {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+        /// Only prepare the selected publishable package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Optional Git base revision used only to narrow registry-backed candidates
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Optional Git head revision paired with --git-base
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
+        /// Override cargo-semver-checks feature selection
+        #[arg(long, value_enum)]
+        semver_feature_policy: Option<clippier::release::SemverFeaturePolicy>,
+
+        /// Features enabled for both current and baseline analyses
+        #[arg(long, value_delimiter = ',')]
+        semver_features: Vec<String>,
+
+        /// Features enabled only for current source
+        #[arg(long, value_delimiter = ',')]
+        semver_current_features: Vec<String>,
+
+        /// Features enabled only for registry baseline
+        #[arg(long, value_delimiter = ',')]
+        semver_baseline_features: Vec<String>,
+        /// Print required edits without writing files
+        #[arg(long)]
+        dry_run: bool,
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+    /// Verify that current manifests fully materialize reconstructed release requirements
+    Verify {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+        /// Only verify the selected publishable package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Optional Git base revision used only to narrow registry-backed candidates
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Optional Git head revision paired with --git-base
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
+        /// Override cargo-semver-checks feature selection
+        #[arg(long, value_enum)]
+        semver_feature_policy: Option<clippier::release::SemverFeaturePolicy>,
+
+        /// Features enabled for both current and baseline analyses
+        #[arg(long, value_delimiter = ',')]
+        semver_features: Vec<String>,
+
+        /// Features enabled only for current source
+        #[arg(long, value_delimiter = ',')]
+        semver_current_features: Vec<String>,
+
+        /// Features enabled only for registry baseline
+        #[arg(long, value_delimiter = ',')]
+        semver_baseline_features: Vec<String>,
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+    /// Publish the verified pending release closure
+    Publish {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+        /// Only publish selected roots plus mandatory pending dependencies
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Optional Git base revision used only to narrow registry-backed candidates
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Optional Git head revision paired with --git-base
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
+        /// Override cargo-semver-checks feature selection
+        #[arg(long, value_enum)]
+        semver_feature_policy: Option<clippier::release::SemverFeaturePolicy>,
+
+        /// Features enabled for both current and baseline analyses
+        #[arg(long, value_delimiter = ',')]
+        semver_features: Vec<String>,
+
+        /// Features enabled only for current source
+        #[arg(long, value_delimiter = ',')]
+        semver_current_features: Vec<String>,
+
+        /// Features enabled only for registry baseline
+        #[arg(long, value_delimiter = ',')]
+        semver_baseline_features: Vec<String>,
+        /// Preview publication without uploading
+        #[arg(long)]
+        dry_run: bool,
+        /// Run Cargo package verification
+        #[arg(long)]
+        verify: bool,
+        /// Allow unrelated dirty workspace files
+        #[arg(long)]
+        allow_dirty: bool,
+        /// Seconds to wait for registry availability
+        #[arg(long, default_value_t = 300)]
+        publish_timeout_secs: u64,
+        /// Seconds between registry availability checks
+        #[arg(long, default_value_t = 10)]
+        publish_poll_secs: u64,
+        /// Retries after registry rate limiting
+        #[arg(long, default_value_t = 3)]
+        rate_limit_retries: u16,
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+        /// Color mode for Cargo output
+        #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
+        color: ColorMode,
+    },
+    /// Materialize inherited versions for independently publishable packages
+    Independentize {
+        /// Path to workspace root or Cargo.toml. Defaults to current directory.
+        #[arg(index = 1, default_value = ".")]
+        workspace_root: PathBuf,
+
+        /// Only migrate the selected publishable package(s)
+        #[arg(short = 'p', long = "package", value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
+        /// Print the migration without writing manifests
         #[arg(long)]
         dry_run: bool,
 
@@ -487,6 +694,12 @@ enum Commands {
 
         #[arg(short, long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
+    },
+    /// Prepare and publish stateless Cargo releases
+    #[cfg(feature = "release")]
+    Release {
+        #[command(subcommand)]
+        command: ReleaseCommands,
     },
     /// Bump Cargo workspace package versions
     #[cfg(feature = "versioning")]
@@ -976,6 +1189,162 @@ async fn run() -> Result<(), BoxError> {
             )
             .await?
         }
+        #[cfg(feature = "release")]
+        Commands::Release { command } => match command {
+            ReleaseCommands::Status {
+                workspace_root,
+                packages,
+                #[cfg(feature = "git-diff")]
+                git_base,
+                #[cfg(feature = "git-diff")]
+                git_head,
+                semver_feature_policy,
+                semver_features,
+                semver_current_features,
+                semver_baseline_features,
+                output,
+            } => {
+                handle_release_status_command(
+                    &ReleaseStatusConfig {
+                        workspace_root,
+                        packages,
+                        #[cfg(feature = "git-diff")]
+                        git_base,
+                        #[cfg(feature = "git-diff")]
+                        git_head,
+                        semver_feature_policy,
+                        semver_features,
+                        semver_current_features,
+                        semver_baseline_features,
+                    },
+                    output,
+                )
+                .await?
+            }
+            ReleaseCommands::Prepare {
+                workspace_root,
+                packages,
+                #[cfg(feature = "git-diff")]
+                git_base,
+                #[cfg(feature = "git-diff")]
+                git_head,
+                semver_feature_policy,
+                semver_features,
+                semver_current_features,
+                semver_baseline_features,
+                dry_run,
+                output,
+            } => {
+                handle_release_prepare_command(
+                    &ReleasePrepareConfig {
+                        status: ReleaseStatusConfig {
+                            workspace_root,
+                            packages,
+                            #[cfg(feature = "git-diff")]
+                            git_base,
+                            #[cfg(feature = "git-diff")]
+                            git_head,
+                            semver_feature_policy,
+                            semver_features,
+                            semver_current_features,
+                            semver_baseline_features,
+                        },
+                        dry_run,
+                    },
+                    output,
+                )
+                .await?
+            }
+            ReleaseCommands::Verify {
+                workspace_root,
+                packages,
+                #[cfg(feature = "git-diff")]
+                git_base,
+                #[cfg(feature = "git-diff")]
+                git_head,
+                semver_feature_policy,
+                semver_features,
+                semver_current_features,
+                semver_baseline_features,
+                output,
+            } => {
+                handle_release_verify_command(
+                    &ReleaseStatusConfig {
+                        workspace_root,
+                        packages,
+                        #[cfg(feature = "git-diff")]
+                        git_base,
+                        #[cfg(feature = "git-diff")]
+                        git_head,
+                        semver_feature_policy,
+                        semver_features,
+                        semver_current_features,
+                        semver_baseline_features,
+                    },
+                    output,
+                )
+                .await?
+            }
+            ReleaseCommands::Publish {
+                workspace_root,
+                packages,
+                #[cfg(feature = "git-diff")]
+                git_base,
+                #[cfg(feature = "git-diff")]
+                git_head,
+                semver_feature_policy,
+                semver_features,
+                semver_current_features,
+                semver_baseline_features,
+                dry_run,
+                verify,
+                allow_dirty,
+                publish_timeout_secs,
+                publish_poll_secs,
+                rate_limit_retries,
+                output,
+                color,
+            } => {
+                handle_release_publish_command(
+                    ReleasePublishConfig {
+                        status: ReleaseStatusConfig {
+                            workspace_root,
+                            packages,
+                            #[cfg(feature = "git-diff")]
+                            git_base,
+                            #[cfg(feature = "git-diff")]
+                            git_head,
+                            semver_feature_policy,
+                            semver_features,
+                            semver_current_features,
+                            semver_baseline_features,
+                        },
+                        dry_run,
+                        verify,
+                        allow_dirty,
+                        color,
+                        publish_timeout_secs,
+                        publish_poll_secs,
+                        rate_limit_retries,
+                    },
+                    output,
+                )
+                .await?
+            }
+            ReleaseCommands::Independentize {
+                workspace_root,
+                packages,
+                dry_run,
+                output,
+            } => handle_independentize_command(
+                &IndependentizeConfig {
+                    workspace_root,
+                    packages,
+                    dry_run,
+                },
+                output,
+            )?,
+        },
         #[cfg(feature = "versioning")]
         Commands::Version { command } => match command {
             VersionCommands::Bump {

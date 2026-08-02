@@ -2,9 +2,9 @@
 source: packages/clippier/tests/workspace_deps_tests.rs
 expression: test_data
 ---
+requested_package: nonexistent
 available_packages:
   - api
   - models
-error_message: "Package 'nonexistent' not found in workspace"
-requested_package: nonexistent
 should_error: true
+error_message: "Package 'nonexistent' not found in workspace"

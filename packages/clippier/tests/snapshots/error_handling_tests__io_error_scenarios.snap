@@ -3,12 +3,12 @@ source: packages/clippier/tests/error_handling_tests.rs
 expression: test_data
 ---
 io_errors:
-  disk_full:
-    error: no space left on device
-    operation: create temp files
-  network_unavailable:
-    error: network unreachable
-    operation: download dependencies
   readonly_directory:
-    error: permission denied
     operation: write dockerfile
+    error: permission denied
+  disk_full:
+    operation: create temp files
+    error: no space left on device
+  network_unavailable:
+    operation: download dependencies
+    error: network unreachable

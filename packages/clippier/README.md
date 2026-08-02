@@ -467,6 +467,106 @@ The packages command provides:
 - **Monorepo management**: List subsets of packages for targeted operations
 - **Documentation**: Generate package inventories for workspace documentation
 
+### Stateless Cargo SemVer Releases
+
+Clippier reconstructs Cargo release state from the current workspace and crates.io. It does not
+create or require a release-plan file, tag, prior workflow artifact, or release database.
+
+```bash
+# Explain changed/unpublished packages, exact baselines, required versions, dependency ripple,
+# and dependency-first publication order.
+clippier release status
+clippier release status --package my_crate,another_crate --output json
+
+# Preview and apply only the required package/dependency versions.
+clippier release prepare --dry-run
+clippier release prepare --package my_crate
+
+# Reconstruct and fail unless every required change is fully materialized and packageable.
+clippier release verify
+
+# Publish all pending packages, or selected roots plus mandatory pending dependencies.
+clippier release publish --dry-run
+clippier release publish --package my_crate --verify
+```
+
+Release preparation is explicitly invoked and idempotent. Clippier compares normalized
+`cargo package` archives with the latest stable non-yanked crates.io releases, ignores generated
+`.cargo_vcs_info.json`, and normalizes package version fields. Existing local versions that are
+already sufficient are retained instead of incremented again.
+
+For packages with a library target, Clippier privately uses `cargo-semver-checks` against the exact
+registry baseline. Its deterministic upstream default feature policy is used: default and
+stable-looking features are enabled while names such as `unstable`, `nightly`, `bench`, `no_std`,
+`_...`, `unstable-...`, and `unstable_...` are excluded. Output records the engine version and
+feature policy. Override it when needed with `--semver-feature-policy all`,
+`--semver-feature-policy default-only`, or `--semver-feature-policy explicit-only`, plus
+`--semver-features`, `--semver-current-features`, and `--semver-baseline-features`. Persistent
+settings use `[release.semver]` in the workspace `clippier.toml` with `feature-policy`, `features`,
+`current-features`, and `baseline-features`. `cargo-semver-checks` does not detect every theoretical Rust API incompatibility;
+analysis failures fail the release rather than silently guessing. Changed packages without a
+checkable library target use the smallest patch-compatible Cargo release.
+
+Cargo pre-1.0 compatibility follows the left-most-non-zero convention:
+
+| Baseline | Compatible change                                          | Incompatible change |
+| -------- | ---------------------------------------------------------- | ------------------- |
+| `1.2.3`  | `1.2.4` or `1.3.0` when an API feature release is required | `2.0.0`             |
+| `0.4.3`  | `0.4.4`                                                    | `0.5.0`             |
+| `0.0.3`  | `0.0.4`                                                    | `0.0.4`             |
+
+When a dependency's target version no longer satisfies a normal/build requirement, Clippier
+updates the requirement owner, includes the consumer, semver-checks it, and repeats through reverse
+dependencies until stable. Compatible requirements and dev-dependencies do not cause unnecessary
+consumer releases.
+
+#### Migrating shared workspace versions
+
+Workspaces whose publishable packages inherit `[workspace.package].version` can make those
+versions explicit without numerically changing them:
+
+```bash
+clippier release independentize --dry-run
+clippier release independentize
+```
+
+The command preserves unpublished package inheritance and centralized `[workspace.dependencies]`,
+validates effective Cargo metadata equivalence, rolls back failed edits, and is idempotent.
+
+#### GitHub Actions
+
+The composite Action supports `release-status`, `release-prepare`, `release-verify`, and
+`release-publish` commands. Minimal preparation usage is:
+
+```yaml
+- uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+  id: release
+  with:
+      command: release-prepare
+      release-packages: optional_crate_a,optional_crate_b
+      clippier-features: release
+```
+
+It exposes `release-status`, `release-has-changes`, `release-packages`, and
+`release-publish-order`. These are ephemeral job outputs, not authoritative persistent state.
+Reusable `.github/workflows/cargo-release-prepare.yml` and
+`.github/workflows/cargo-release-publish.yml` provide manual push-button PR preparation and
+protected default-branch publishing. The preparation workflow has no registry credentials and lets
+existing affected-package workflows test its PR. Publication uses repository concurrency and the
+`release` GitHub environment. Configure crates.io trusted publishing for the workflow when
+available; `CARGO_REGISTRY_TOKEN` remains the fallback.
+
+Local publication uses the identical implementation:
+
+```bash
+CARGO_REGISTRY_TOKEN=... clippier release publish --verify
+```
+
+Every publish invocation re-verifies repository and registry state. Versions already on crates.io
+are skipped, so rerunning after partial publication resumes the remaining dependency-ordered
+packages. If registry state changes between preparation and publication, fresh reconstruction
+rejects stale or insufficient manifests instead of trusting prior output.
+
 ### Publish Cargo Workspace Crates
 
 Publish all crates in a Cargo workspace, skipping versions that already exist on crates.io and ordering unpublished crates by normal/build workspace dependencies:

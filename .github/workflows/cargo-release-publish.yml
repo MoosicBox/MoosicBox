@@ -1,0 +1,76 @@
+name: Publish Cargo Release
+
+on:
+    workflow_call:
+        inputs:
+            packages:
+                description: Comma-separated release roots; empty publishes all pending packages
+                required: false
+                type: string
+                default: ""
+        secrets:
+            CARGO_REGISTRY_TOKEN:
+                description: crates.io token fallback when trusted publishing is not configured
+                required: false
+    workflow_dispatch:
+        inputs:
+            packages:
+                description: Comma-separated release roots; empty publishes all pending packages
+                required: false
+                type: string
+                default: ""
+
+permissions:
+    contents: read
+    id-token: write
+
+concurrency:
+    group: cargo-release-publish-${{ github.repository }}
+    cancel-in-progress: false
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        environment: release
+        env:
+            CARGO_REGISTRY_TOKEN_FALLBACK: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Require protected default branch
+              shell: bash
+              env:
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+                      echo "Cargo publication is restricted to $DEFAULT_BRANCH" >&2
+                      exit 1
+                  fi
+
+            - name: Verify reconstructed Cargo release
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: release-verify
+                  workspace-path: .
+                  release-packages: ${{ inputs.packages }}
+                  clippier-version: master
+                  clippier-features: release
+
+            - name: Authenticate to crates.io with trusted publishing
+              id: crates-io-auth
+              if: ${{ env.CARGO_REGISTRY_TOKEN_FALLBACK == '' }}
+              uses: rust-lang/crates-io-auth-action@v1
+
+            - name: Publish reconstructed Cargo release
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              env:
+                  CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN_FALLBACK || steps.crates-io-auth.outputs.token }}
+              with:
+                  command: release-publish
+                  workspace-path: .
+                  release-packages: ${{ inputs.packages }}
+                  release-verify-package: "true"
+                  clippier-version: master
+                  clippier-features: release

@@ -2,12 +2,12 @@
 source: packages/clippier/tests/error_handling_tests.rs
 expression: test_data
 ---
-expected_error: TOML parsing failed
 scenario: invalid_cargo_toml
+expected_error: TOML parsing failed
 test_cases:
-  - content: "[dependencies]\nserde = \"1.0\""
+  - name: missing_package_section
+    content: "[dependencies]\nserde = \"1.0\""
     error_type: missing required field
-    name: missing_package_section
-  - content: "[package\nname = \"test\""
+  - name: invalid_syntax
+    content: "[package\nname = \"test\""
     error_type: syntax error
-    name: invalid_syntax
