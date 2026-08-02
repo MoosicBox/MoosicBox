@@ -256,7 +256,7 @@ impl TursoDatabaseBuilder {
 #[derive(Debug)]
 pub struct TursoDatabase {
     database: turso::Database,
-    connection: turso::Connection,
+    connection: std::sync::Arc<tokio::sync::Mutex<turso::Connection>>,
 }
 
 impl TursoDatabase {
@@ -310,7 +310,7 @@ impl TursoDatabase {
         log::debug!("Turso database initialized: path={path}");
         Ok(Self {
             database,
-            connection,
+            connection: std::sync::Arc::new(tokio::sync::Mutex::new(connection)),
         })
     }
 }
@@ -1407,6 +1407,8 @@ impl crate::Database for TursoDatabase {
 
         let mut stmt = self
             .connection
+            .lock()
+            .await
             .prepare(query)
             .await
             .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
@@ -1443,6 +1445,8 @@ impl crate::Database for TursoDatabase {
 
         let mut stmt = self
             .connection
+            .lock()
+            .await
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1475,6 +1479,8 @@ impl crate::Database for TursoDatabase {
         log::trace!("exec_raw: query:\n{statement}");
 
         self.connection
+            .lock()
+            .await
             .execute(statement, ())
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1497,6 +1503,8 @@ impl crate::Database for TursoDatabase {
 
         let mut stmt = self
             .connection
+            .lock()
+            .await
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1515,9 +1523,10 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
         log::debug!("begin_transaction: creating new connection for transaction");
 
+        let operation_guard = self.connection.clone().lock_owned().await;
         let connection = self.database.connect()?;
 
-        let tx = TursoTransaction::new(connection)
+        let tx = TursoTransaction::new(connection, operation_guard)
             .await
             .map_err(crate::DatabaseError::Turso)?;
 
@@ -1530,7 +1539,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(select(
-            &self.connection,
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1548,7 +1557,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(find_row(
-            &self.connection,
+            &*self.connection.lock().await,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1565,7 +1574,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_rows(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1580,7 +1589,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_row(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1594,11 +1603,13 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
-        Ok(
-            insert_and_get_row(&self.connection, statement.table_name, &statement.values)
-                .await
-                .map_err(crate::DatabaseError::Turso)?,
+        Ok(insert_and_get_row(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
         )
+        .await
+        .map_err(crate::DatabaseError::Turso)?)
     }
 
     async fn exec_upsert(
@@ -1606,7 +1617,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(upsert(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1622,7 +1633,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
         Ok(upsert_and_get_row(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1638,7 +1649,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(upsert_multi(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             &statement.values,
             statement.unique.as_deref(),
@@ -1652,7 +1663,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(delete(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -1666,7 +1677,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         let rows = delete(
-            &self.connection,
+            &*self.connection.lock().await,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -1681,7 +1692,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_table(&self.connection, statement).await
+        exec_create_table(&*self.connection.lock().await, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1689,7 +1700,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_table(&self.connection, statement).await
+        exec_drop_table(&*self.connection.lock().await, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1697,7 +1708,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_index(&self.connection, statement).await
+        exec_create_index(&*self.connection.lock().await, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1705,7 +1716,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_index(&self.connection, statement).await
+        exec_drop_index(&*self.connection.lock().await, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1713,7 +1724,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_alter_table(&self.connection, statement).await
+        exec_alter_table(&*self.connection.lock().await, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -3596,6 +3607,41 @@ mod tests {
     }
 
     #[switchy_async::test]
+    async fn concurrent_regular_queries_are_serialized() {
+        let db = std::sync::Arc::new(create_test_db().await);
+        db.exec_raw("CREATE TABLE values_table (value INTEGER NOT NULL)")
+            .await
+            .expect("table creates");
+        db.exec_raw("INSERT INTO values_table (value) VALUES (1)")
+            .await
+            .expect("row inserts");
+        let (first, second) = futures::join!(
+            db.query_raw("SELECT value FROM values_table"),
+            db.query_raw("SELECT value FROM values_table")
+        );
+        assert_eq!(first.expect("first queries").len(), 1);
+        assert_eq!(second.expect("second queries").len(), 1);
+    }
+
+    #[switchy_async::test]
+    async fn transaction_blocks_regular_query_until_commit() {
+        let db = std::sync::Arc::new(create_test_db().await);
+        db.exec_raw("CREATE TABLE values_table (value INTEGER NOT NULL)")
+            .await
+            .expect("table creates");
+        let transaction = db.begin_transaction().await.expect("transaction begins");
+        transaction
+            .exec_raw("INSERT INTO values_table (value) VALUES (1)")
+            .await
+            .expect("transaction inserts");
+        let reader = db.query_raw("SELECT value FROM values_table");
+        let commit = transaction.commit();
+        let (reader, commit) = futures::join!(reader, commit);
+        commit.expect("transaction commits");
+        assert_eq!(reader.expect("reader queries").len(), 1);
+    }
+
+    #[switchy_async::test]
     async fn test_database_creation_memory() {
         let db = TursoDatabase::new(":memory:").await;
         assert!(db.is_ok(), "Should create in-memory database");
@@ -5434,7 +5480,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&db.connection, "parent")
+        let dependents = find_cascade_dependents(&*db.connection.lock().await, "parent")
             .await
             .expect("Failed to find dependents");
 
@@ -5461,7 +5507,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let has_deps = has_dependents(&db.connection, "parent")
+        let has_deps = has_dependents(&*db.connection.lock().await, "parent")
             .await
             .expect("Failed to check dependents");
 
@@ -5480,7 +5526,7 @@ mod tests {
             .await
             .expect("Failed to create standalone table");
 
-        let has_deps = has_dependents(&db.connection, "standalone")
+        let has_deps = has_dependents(&*db.connection.lock().await, "standalone")
             .await
             .expect("Failed to check dependents");
 
@@ -5511,7 +5557,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&db.connection, "grandparent")
+        let dependents = find_cascade_dependents(&*db.connection.lock().await, "grandparent")
             .await
             .expect("Failed to find dependents");
 

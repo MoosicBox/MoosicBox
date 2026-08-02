@@ -42,6 +42,7 @@ static ON_DELETE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// Turso database transaction with commit/rollback capabilities
 pub struct TursoTransaction {
     connection: turso::Connection,
+    operation_guard: tokio::sync::OwnedMutexGuard<turso::Connection>,
     committed: AtomicBool,
     rolled_back: AtomicBool,
 }
@@ -50,6 +51,7 @@ impl std::fmt::Debug for TursoTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TursoTransaction")
             .field("connection", &"<turso::Connection>")
+            .field("operation_guard", &"<turso::Connection guard>")
             .field("committed", &self.committed.load(Ordering::SeqCst))
             .field("rolled_back", &self.rolled_back.load(Ordering::SeqCst))
             .finish()
@@ -62,7 +64,10 @@ impl TursoTransaction {
     /// # Errors
     ///
     /// * Returns error if transaction cannot be started
-    pub async fn new(connection: turso::Connection) -> Result<Self, TursoDatabaseError> {
+    pub async fn new(
+        connection: turso::Connection,
+        operation_guard: tokio::sync::OwnedMutexGuard<turso::Connection>,
+    ) -> Result<Self, TursoDatabaseError> {
         connection
             .execute("BEGIN DEFERRED", ())
             .await
@@ -72,6 +77,7 @@ impl TursoTransaction {
 
         Ok(Self {
             connection,
+            operation_guard,
             committed: AtomicBool::new(false),
             rolled_back: AtomicBool::new(false),
         })
@@ -95,6 +101,7 @@ impl crate::DatabaseTransaction for TursoTransaction {
             .map_err(|e| DatabaseError::Turso(e.into()))?;
 
         self.committed.store(true, Ordering::SeqCst);
+        drop(self.operation_guard);
         Ok(())
     }
 
@@ -113,6 +120,7 @@ impl crate::DatabaseTransaction for TursoTransaction {
             .map_err(|e| DatabaseError::Turso(e.into()))?;
 
         self.rolled_back.store(true, Ordering::SeqCst);
+        drop(self.operation_guard);
         Ok(())
     }
 
