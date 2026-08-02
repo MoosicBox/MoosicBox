@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as FmtWrite;
 use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::{env, fs, str};
 
 use clippier_md::{
@@ -1128,6 +1128,10 @@ fn run_prettier_command(
     args: &[&str],
     stdin: Option<&str>,
 ) -> std::io::Result<std::process::Output> {
+    static COMMAND_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = COMMAND_LOCK
+        .lock()
+        .expect("Prettier command lock must not be poisoned");
     let mut command = Command::new(runner.program);
     command
         .args(&runner.base_args)
@@ -1160,6 +1164,44 @@ fn read_fixture_file(dir: &Path, stem: &str) -> Option<(PathBuf, String)> {
 }
 
 #[test]
+fn curated_gfm_constructs_match_prettier_and_are_idempotent() {
+    let cases = collect_parity_cases()
+        .into_iter()
+        .filter(|case| case.kind == CaseKind::Fixture && case.name.starts_with("fixture:gfm/"))
+        .collect::<Vec<_>>();
+    let expected_fixtures = BTreeSet::from([
+        "fixture:gfm/autolinks".to_string(),
+        "fixture:gfm/checklist_paragraphs".to_string(),
+        "fixture:gfm/footnotes".to_string(),
+        "fixture:gfm/footnotes_multiline".to_string(),
+        "fixture:gfm/strikethrough".to_string(),
+        "fixture:gfm/table".to_string(),
+        "fixture:gfm/table_alignment".to_string(),
+        "fixture:gfm/table_escaped_pipe".to_string(),
+        "fixture:gfm/task_list".to_string(),
+        "fixture:gfm/task_nested".to_string(),
+    ]);
+    let actual_fixtures = cases
+        .iter()
+        .map(|case| case.name.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(actual_fixtures, expected_fixtures);
+
+    let config = parity_config();
+    for case in cases {
+        let expected = oracle_output(&case, OracleMode::from_env().unwrap_or(OracleMode::Live));
+        let actual = format_markdown(&case.input, &config);
+        assert_eq!(actual, expected, "GFM fixture '{}' diverged", case.name);
+        assert_eq!(
+            format_markdown(&actual, &config),
+            actual,
+            "GFM fixture '{}' was not idempotent",
+            case.name
+        );
+    }
+}
+
+#[test]
 fn frontmatter_is_preserved_byte_for_byte() {
     let fixtures_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/parity/fixtures/frontmatter");
@@ -1180,7 +1222,7 @@ fn frontmatter_is_preserved_byte_for_byte() {
                 dir.display()
             )
         });
-        let (frontmatter_output, _) = split_frontmatter(&output).unwrap_or_else(|| {
+        let (frontmatter_output, body_output) = split_frontmatter(&output).unwrap_or_else(|| {
             panic!(
                 "Formatted frontmatter fixture '{}' has no recognized frontmatter",
                 dir.display()
@@ -1192,6 +1234,20 @@ fn frontmatter_is_preserved_byte_for_byte() {
             "Frontmatter changed for fixture '{}'",
             dir.display()
         );
+        assert_eq!(
+            format_markdown(&output, &config),
+            output,
+            "Frontmatter fixture '{}' should be idempotent",
+            dir.display()
+        );
+        if dir.ends_with("thematic_break_not_frontmatter") {
+            assert_eq!(
+                body_output,
+                "\n---\n\nText\n",
+                "Body thematic break was misclassified for fixture '{}'",
+                dir.display()
+            );
+        }
     }
 }
 

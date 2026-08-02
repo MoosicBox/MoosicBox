@@ -16,15 +16,15 @@ git submodule update --init --recursive -- packages/clippier/md/tests/vendor/com
 
 The harness accepts these environment variables:
 
-| Variable | Meaning | Example |
-| --- | --- | --- |
-| `CLIPPIER_MD_PARITY_ID` | One CommonMark example ID | `1` |
-| `CLIPPIER_MD_PARITY_RANGE` | Inclusive ID range | `1-25` |
-| `CLIPPIER_MD_PARITY_SECTION` | Case-insensitive section/subsection match | `Emphasis` |
-| `CLIPPIER_MD_PARITY_FIXTURE` | Case-insensitive curated fixture path match | `gfm/table` |
-| `CLIPPIER_MD_PARITY_CATEGORY` | Case-insensitive formatter-subsystem match | `whitespace` |
+| Variable                      | Meaning                                                                      | Example               |
+| ----------------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `CLIPPIER_MD_PARITY_ID`       | One CommonMark example ID                                                    | `1`                   |
+| `CLIPPIER_MD_PARITY_RANGE`    | Inclusive ID range                                                           | `1-25`                |
+| `CLIPPIER_MD_PARITY_SECTION`  | Case-insensitive section/subsection match                                    | `Emphasis`            |
+| `CLIPPIER_MD_PARITY_FIXTURE`  | Case-insensitive curated fixture path match                                  | `gfm/table`           |
+| `CLIPPIER_MD_PARITY_CATEGORY` | Case-insensitive formatter-subsystem match                                   | `whitespace`          |
 | `CLIPPIER_MD_PARITY_MISMATCH` | Post-evaluation match: `parity`, `idempotence`, `passing`, or mismatch shape | `delimiter-or-escape` |
-| `CLIPPIER_MD_PARITY_REPORT` | JSON report path, relative to the workspace root | `target/report.json` |
+| `CLIPPIER_MD_PARITY_REPORT`   | JSON report path, relative to the workspace root                             | `target/report.json`  |
 
 Filters compose with logical AND. A run fails clearly if no cases match.
 For a focused live-oracle run:
@@ -78,9 +78,47 @@ CLIPPIER_MD_PARITY_ORACLE=cache \
   cargo test -p clippier_md --test parity prettier_parity_commonmark_gfm_fixtures -- --nocapture
 ```
 
+Generated reports and cache entries under `target/clippier-md-parity/` are local
+artifacts and must never replace live Prettier as the authority.
+
 Verify all cached values independently against Prettier 3.8.1:
 
 ```bash
 CLIPPIER_MD_PARITY_ORACLE=verify \
   cargo test -p clippier_md --test parity prettier_parity_commonmark_gfm_fixtures -- --nocapture
 ```
+
+## Oracle workflow policy
+
+Cached oracle evaluation is the routine local and pull-request path because it
+runs the complete formatter corpus quickly and requires no package-manager
+network access. Cache entries remain local development artifacts and are never
+the compatibility authority.
+
+Run full `verify` mode before releases, whenever Prettier/CommonMark versions or
+oracle-generation code changes, and when investigating suspected cache drift.
+Scheduled CI may run `verify` only on workers that provision a supported runner
+and network/cache access; ordinary CI should run explicit `cache` mode with a
+validated generated cache or omit the external-oracle test rather than silently
+falling back to live package installation. The measured full verification time
+is several minutes, so it is intentionally not required for every pull request.
+
+`refresh` is a maintenance operation followed by `verify`; generated entries
+must not be reviewed or accepted without independent live verification.
+
+## Updating Prettier or CommonMark
+
+Treat either version change as a compatibility migration:
+
+1. Change `PRETTIER_VERSION`, `COMMONMARK_REVISION`, and, if the corpus changed,
+   `COMMONMARK_EXAMPLE_COUNT` in `tests/parity.rs`.
+2. Checkout the intended CommonMark submodule revision and run the parser unit
+   test to confirm the exact count and stable section/ID extraction.
+3. Regenerate all entries with `CLIPPIER_MD_PARITY_ORACLE=refresh`; cache keys
+   include both versions and exact input, so stale entries must not be reused.
+4. Run the independent `verify` mode against every regenerated entry.
+5. Review all report differences and deliberate-divergence predicates. A new
+   divergence must remain visible in strict counts and requires an exact,
+   documented semantic and idempotence justification.
+6. Run the complete package tests, formatting check, and warning-free Clippy
+   before updating the compatibility statement in the package README.

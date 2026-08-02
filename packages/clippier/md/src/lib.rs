@@ -1,10 +1,27 @@
 //! Core formatting and diff-reporting APIs for `clippier-md`.
+//!
+//! # AST formatter architecture
+//!
+//! [`format_markdown`] is the public formatting boundary. It preserves frontmatter
+//! before selecting the legacy or AST engine. The AST engine applies narrowly
+//! guarded source-form normalization only where parsing would discard lexical
+//! information required for canonical Markdown, parses with GFM/MDX constructs,
+//! and passes the resulting tree plus the original source to the document
+//! renderer. Block renderers own structural layout; inline renderers own
+//! delimiter and escaping choices; `finalize_markdown_output` is the sole owner
+//! of line-ending, trailing-whitespace, blank-line, and final-newline policy.
+//!
+//! Source slices are intentionally retained for nodes that do not require
+//! normalization and as the lossless fallback for supported parser nodes. A
+//! normalization guard must describe a complete semantic source shape, produce
+//! idempotent output, and be covered by focused and full-corpus parity tests. It
+//! must never branch on a fixture name or `CommonMark` example number.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -273,7 +290,7 @@ pub fn collect_markdown_files(
         paths.to_vec()
     };
     let filters = Arc::new(PathFilters::new(config, working_dir)?);
-    let files: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
+    let files: Arc<Mutex<BTreeSet<PathBuf>>> = Arc::new(Mutex::new(BTreeSet::new()));
 
     for path in &candidates {
         let mut builder = WalkBuilder::new(path);
@@ -1031,6 +1048,73 @@ fn normalize_whitespace_edge_source(input: &str) -> Option<String> {
     Some(output.to_string())
 }
 
+fn normalize_nested_asterisk_emphasis_in_strong(input: &str) -> Option<String> {
+    let root = to_mdast(input, &ParseOptions::gfm()).ok()?;
+    let Node::Root(root) = root else {
+        return None;
+    };
+    let [Node::Paragraph(paragraph)] = root.children.as_slice() else {
+        return None;
+    };
+    let [Node::Strong(strong)] = paragraph.children.as_slice() else {
+        return None;
+    };
+    let strong_position = strong.position.as_ref()?;
+    if strong_position.start.offset != 0
+        || !input[strong_position.end.offset..]
+            .chars()
+            .all(char::is_whitespace)
+    {
+        return None;
+    }
+
+    let emphasis_ranges = strong
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(index, child)| {
+            let Node::Emphasis(emphasis) = child else {
+                return None;
+            };
+            if emphasis
+                .children
+                .iter()
+                .any(|child| matches!(child, Node::Strong(_) | Node::Emphasis(_)))
+            {
+                return None;
+            }
+            let previous_is_word = index.checked_sub(1).and_then(|index| strong.children.get(index)).is_some_and(
+                |node| matches!(node, Node::Text(text) if text.value.chars().next_back().is_some_and(char::is_alphanumeric)),
+            );
+            let next_is_word = strong.children.get(index + 1).is_some_and(
+                |node| matches!(node, Node::Text(text) if text.value.chars().next().is_some_and(char::is_alphanumeric)),
+            );
+            if previous_is_word || next_is_word {
+                return None;
+            }
+            let position = emphasis.position.as_ref()?;
+            let source = &input[position.start.offset..position.end.offset];
+            (source.starts_with('*')
+                && source.ends_with('*')
+                && !source.starts_with("**")
+                && !source.ends_with("**")
+                && !source[1..source.len() - 1].contains('*')
+                && !source.contains('\n'))
+            .then_some((position.start.offset, position.end.offset))
+        })
+        .collect::<Vec<_>>();
+    if emphasis_ranges.is_empty() {
+        return None;
+    }
+
+    let mut output = input.to_string();
+    for (start, end) in emphasis_ranges.into_iter().rev() {
+        output.replace_range(end - 1..end, "_");
+        output.replace_range(start..=start, "_");
+    }
+    Some(output)
+}
+
 #[allow(clippy::match_same_arms)]
 fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
     match input {
@@ -1052,7 +1136,6 @@ fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
         }
         "____foo__ bar__\n" => Some("\\_**\\_foo** bar\\_\\_\n"),
         "**foo **bar****\n" => Some("**foo **bar\\*\\*\\*\\*\n"),
-        "**foo *bar* baz**\n" => Some("**foo _bar_ baz**\n"),
         "***foo* bar**\n" => Some("**_foo_ bar**\n"),
         "**foo *bar***\n" => Some("**foo _bar_**\n"),
         "**foo *bar **baz**\nbim* bop**\n" => Some("**foo \\*bar **baz**\nbim\\* bop**\n"),
@@ -1117,6 +1200,9 @@ fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
 }
 
 fn normalize_common_inline_source(input: &str) -> Option<String> {
+    if let Some(output) = normalize_nested_asterisk_emphasis_in_strong(input) {
+        return Some(output);
+    }
     if let Some(output) = normalize_direct_emphasis_source(input) {
         return Some(output.to_string());
     }
@@ -1895,7 +1981,15 @@ fn render_normalized_ast_node(
                     .trim_end_matches(['\n', '\r'])
                     .to_string()
             } else {
-                render_paragraph_node(paragraph, source, config.line_width)
+                let container_width = context
+                    .quote_depth
+                    .saturating_mul(2)
+                    .saturating_add(context.base_indent);
+                render_paragraph_node(
+                    paragraph,
+                    source,
+                    config.line_width.saturating_sub(container_width).max(1),
+                )
             }
         }
         Node::List(list) => render_list_node(list, source, config, context),
@@ -2732,7 +2826,17 @@ fn render_inline_text(node: &Node) -> String {
         Node::Html(html) => html.value.clone(),
         Node::MdxTextExpression(expression) => format!("{{{}}}", expression.value),
         Node::Break(_) => "  \n".to_string(),
-        _ => String::new(),
+        _ => {
+            let fallback = node.children().map_or_else(
+                || node.to_string(),
+                |children| children.iter().map(render_inline_text).collect::<String>(),
+            );
+            debug_assert!(
+                !fallback.is_empty(),
+                "inline renderer encountered an unsupported node without recoverable content: {node:?}"
+            );
+            fallback
+        }
     }
 }
 
@@ -3868,6 +3972,26 @@ mod tests {
     }
 
     #[test]
+    fn nested_emphasis_delimiters_are_normalized_from_ast_context() {
+        for (input, expected) in [
+            ("**foo *bar* baz**\n", "**foo _bar_ baz**\n"),
+            (
+                "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n",
+                "**Gomphocarpus (_Gomphocarpus physocarpus_, syn.\n_Asclepias physocarpa_)**\n",
+            ),
+        ] {
+            assert_eq!(
+                normalize_nested_asterisk_emphasis_in_strong(input),
+                Some(expected.to_string())
+            );
+        }
+        assert_eq!(
+            normalize_nested_asterisk_emphasis_in_strong("prefix **foo *bar* baz**\n"),
+            None
+        );
+    }
+
+    #[test]
     fn inline_code_and_escape_source_forms_are_stable() {
         let config = Config {
             engine: FormatterEngine::Ast,
@@ -4071,6 +4195,237 @@ mod tests {
             "aaa  \nbbb\n"
         );
         assert_eq!(format_markdown("foo  \n", &config), "foo\n");
+    }
+
+    #[test]
+    fn wrapping_and_indentation_do_not_create_markdown_constructs() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            line_width: 16,
+            list_indentation: ListIndentationMode::Normalize,
+            list_style: ListStyle::Dash,
+            ..Config::default()
+        };
+        let cases = [
+            "prefix words before 1. literal ordered marker text\n",
+            "prefix words before - literal bullet marker text\n",
+            "prefix words before # literal heading marker text\n",
+            "> prefix words before * literal emphasis marker text\n",
+        ];
+
+        for input in cases {
+            let output = format_markdown(input, &config);
+            assert_eq!(format_markdown(&output, &config), output);
+            for content in ["literal", "marker", "text"] {
+                assert!(
+                    output.contains(content),
+                    "wrapped output dropped {content:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn block_and_inline_interactions_compose_without_content_loss() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Always,
+            heading_indentation: HeadingIndentationMode::Normalize,
+            list_indentation: ListIndentationMode::Normalize,
+            list_style: ListStyle::Dash,
+            ..Config::default()
+        };
+        let cases = [
+            "> quoted **text**\n>\n> ```md\n> <tag>value</tag>\n> ```\n",
+            "> - item with [*emphasis*](https://example.com) and `code`\n>\n>   <span>raw</span>\n",
+            "1. paragraph with **strong [link](https://example.com)**\n\n    - nested ~~item~~ with `code`\n",
+        ];
+
+        for input in cases {
+            let output = format_markdown(input, &config);
+            let second = format_markdown(&output, &config);
+            assert_eq!(second, output, "interaction output was not idempotent");
+            for content in ["text", "value", "item", "example.com", "code"] {
+                if input.contains(content) {
+                    assert!(
+                        output.contains(content),
+                        "interaction output dropped {content:?}: {output:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn inline_fallback_preserves_unsupported_child_content() {
+        let unsupported = Node::MdxJsxTextElement(markdown::mdast::MdxJsxTextElement {
+            children: vec![Node::Text(markdown::mdast::Text {
+                value: "preserved".to_string(),
+                position: None,
+            })],
+            position: None,
+            name: Some("Component".to_string()),
+            attributes: Vec::new(),
+        });
+
+        assert_eq!(render_inline_text(&unsupported), "preserved");
+    }
+
+    #[test]
+    fn ast_engine_preserves_mdx_constructs_without_content_loss() {
+        let input = "export const answer = 42\n\n# Hello {name}\n\n<Component value={answer}>\n  **content**\n</Component>\n";
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Preserve,
+            heading_indentation: HeadingIndentationMode::Normalize,
+            ..Config::default()
+        };
+
+        let output = format_markdown(input, &config);
+
+        assert_eq!(output, input);
+        assert_eq!(format_markdown(&output, &config), output);
+    }
+
+    #[test]
+    fn legacy_and_ast_engine_selection_remain_independent() {
+        let input = "**foo *bar* baz**\n";
+        let legacy = format_markdown(
+            input,
+            &Config {
+                engine: FormatterEngine::Legacy,
+                ..Config::default()
+            },
+        );
+        let ast = format_markdown(
+            input,
+            &Config {
+                engine: FormatterEngine::Ast,
+                prose_wrap: ProseWrapMode::Always,
+                heading_indentation: HeadingIndentationMode::Normalize,
+                ..Config::default()
+            },
+        );
+
+        assert_eq!(legacy, input);
+        assert_eq!(ast, "**foo _bar_ baz**\n");
+        assert_eq!(
+            format_markdown(
+                &legacy,
+                &Config {
+                    engine: FormatterEngine::Legacy,
+                    ..Config::default()
+                }
+            ),
+            legacy
+        );
+    }
+
+    #[test]
+    fn configuration_profiles_apply_independently() {
+        let wrapped = format_markdown(
+            "one two three four\n",
+            &Config {
+                line_width: 10,
+                ..Config::default()
+            },
+        );
+        assert_eq!(wrapped, "one two\nthree four\n");
+
+        let preserved = format_markdown(
+            "one two three four\n",
+            &Config {
+                line_width: 10,
+                prose_wrap: ProseWrapMode::Preserve,
+                ..Config::default()
+            },
+        );
+        assert_eq!(preserved, "one two three four\n");
+
+        let list_style = format_markdown(
+            "* one\n",
+            &Config {
+                list_style: ListStyle::Plus,
+                ..Config::default()
+            },
+        );
+        assert_eq!(list_style, "+ one\n");
+
+        let frontmatter = "---\ntitle:  preserved  \n---\nbody\n";
+        let preserved_frontmatter = format_markdown(frontmatter, &Config::default());
+        assert!(preserved_frontmatter.starts_with("---\ntitle:  preserved  \n---\n"));
+        let normalized_frontmatter = format_markdown(
+            frontmatter,
+            &Config {
+                frontmatter_mode: FrontmatterMode::Normalize,
+                ..Config::default()
+            },
+        );
+        assert_eq!(normalized_frontmatter, frontmatter);
+        assert_eq!(
+            format_markdown(
+                &normalized_frontmatter,
+                &Config {
+                    frontmatter_mode: FrontmatterMode::Normalize,
+                    ..Config::default()
+                }
+            ),
+            normalized_frontmatter
+        );
+
+        assert_eq!(
+            format_markdown(
+                "    ### Heading\n",
+                &Config {
+                    heading_indentation: HeadingIndentationMode::Normalize,
+                    ..Config::default()
+                }
+            ),
+            "### Heading\n"
+        );
+        assert_eq!(
+            format_markdown(
+                "- one\n  - two\n",
+                &Config {
+                    list_indentation: ListIndentationMode::Normalize,
+                    list_indent_width: 3,
+                    ..Config::default()
+                }
+            ),
+            "- one\n   - two\n"
+        );
+    }
+
+    #[test]
+    fn run_fmt_check_and_write_cover_product_integration() {
+        let dir = temp_dir("clippier-md-run-fmt");
+        let path = dir.join("input.md");
+        std::fs::write(&path, "one two three four\n").expect("failed to write markdown");
+        let config = Config {
+            line_width: 10,
+            ..Config::default()
+        };
+
+        let checked = run_fmt(std::slice::from_ref(&path), true, true, &config)
+            .expect("check mode must succeed");
+        assert_eq!(checked.checked, 1);
+        assert_eq!(checked.changed, vec![path.clone()]);
+        assert_eq!(checked.diff_reports.len(), 1);
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("failed to read checked markdown"),
+            "one two three four\n"
+        );
+
+        let written = run_fmt(std::slice::from_ref(&path), false, false, &config)
+            .expect("write mode must succeed");
+        assert_eq!(written.changed, vec![path.clone()]);
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("failed to read formatted markdown"),
+            "one two\nthree four\n"
+        );
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
     }
 
     #[test]
