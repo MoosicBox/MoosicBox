@@ -17,10 +17,17 @@ fn cli_check_and_write_cover_exit_status_and_file_output() {
     let path = dir.join("input.md");
     let input = format!("{} {}\n", "word".repeat(12), "tail".repeat(12));
     std::fs::write(&path, &input).expect("failed to write markdown fixture");
+    let config_path = dir.join("clippier-md.toml");
+    std::fs::write(
+        &config_path,
+        "line-width = 80\n\n[prose]\nwrap = \"always\"\n",
+    )
+    .expect("failed to write formatter config");
     let binary = env!("CARGO_BIN_EXE_clippier-md");
 
     let check = Command::new(binary)
-        .args(["fmt", "--check", "--color", "never"])
+        .args(["fmt", "--check", "--color", "never", "--config"])
+        .arg(&config_path)
         .arg(&path)
         .output()
         .expect("failed to run clippier-md check");
@@ -34,7 +41,8 @@ fn cli_check_and_write_cover_exit_status_and_file_output() {
     );
 
     let write = Command::new(binary)
-        .arg("fmt")
+        .args(["fmt", "--config"])
+        .arg(&config_path)
         .arg(&path)
         .output()
         .expect("failed to run clippier-md write");
@@ -43,7 +51,8 @@ fn cli_check_and_write_cover_exit_status_and_file_output() {
     assert_ne!(formatted, input);
 
     let clean_check = Command::new(binary)
-        .args(["fmt", "--check", "--no-diff"])
+        .args(["fmt", "--check", "--no-diff", "--config"])
+        .arg(&config_path)
         .arg(&path)
         .output()
         .expect("failed to rerun clippier-md check");

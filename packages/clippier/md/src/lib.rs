@@ -253,20 +253,26 @@ pub fn load_config(working_dir: &Path, explicit_config: Option<&Path>) -> Result
         apply_root_config(&mut config, &value);
     }
 
-    if let Some(path) = find_upward(working_dir, "clippier.toml") {
-        let value = parse_toml_file(&path)?;
-        if let Some(tool_value) =
-            value
-                .get("tools")
-                .and_then(toml::Value::as_table)
-                .and_then(|table| {
-                    table
-                        .get("clippier-md")
-                        .or_else(|| table.get("clippier_md"))
-                })
-        {
-            apply_root_config(&mut config, tool_value);
+    let mut current = Some(working_dir);
+    while let Some(dir) = current {
+        let path = dir.join("clippier.toml");
+        if path.exists() {
+            let value = parse_toml_file(&path)?;
+            if let Some(tool_value) =
+                value
+                    .get("tools")
+                    .and_then(toml::Value::as_table)
+                    .and_then(|table| {
+                        table
+                            .get("clippier-md")
+                            .or_else(|| table.get("clippier_md"))
+                    })
+            {
+                apply_root_config(&mut config, tool_value);
+                break;
+            }
         }
+        current = dir.parent();
     }
 
     Ok(config)
@@ -4403,6 +4409,28 @@ mod tests {
             ),
             "- one\n   - two\n"
         );
+    }
+
+    #[test]
+    fn load_config_skips_unrelated_nested_clippier_config() {
+        let dir = temp_dir("clippier-md-config-discovery");
+        let nested = dir.join("packages").join("clippier").join("md");
+        std::fs::create_dir_all(&nested).expect("failed to create nested config directory");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            "[tools.clippier-md]\nline-width = 123\n",
+        )
+        .expect("failed to write root config");
+        std::fs::write(
+            dir.join("packages").join("clippier").join("clippier.toml"),
+            "[tools]\nskip = [\"gofmt\"]\n",
+        )
+        .expect("failed to write unrelated nested config");
+
+        let config = load_config(&nested, None).expect("failed to load config");
+
+        assert_eq!(config.line_width, 123);
+        std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
     }
 
     #[test]
