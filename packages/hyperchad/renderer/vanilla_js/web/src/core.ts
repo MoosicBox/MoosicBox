@@ -55,6 +55,7 @@ export type EventPayloads = {
     swapDom: {
         html: string | HTMLElement;
         url?: string | undefined;
+        replace?: boolean | undefined;
     };
     swapHtml: {
         target: string | HTMLElement;
@@ -128,6 +129,14 @@ export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
     }
 
     array.push(handler);
+    document.querySelectorAll<HTMLElement>(`[${attr}]`).forEach((element) => {
+        const value = element.getAttribute(attr);
+        if (value) {
+            handleError(`attr:${attr}`, () =>
+                handler({ element, attr: decodeHtml(value) }),
+            );
+        }
+    });
 }
 
 export function onAttrValue(
@@ -325,6 +334,10 @@ on('domLoad', ({ elements }) =>
         processElement(element);
     }),
 );
+
+if (document.readyState !== 'loading') {
+    processElement(document.documentElement);
+}
 on('swapStyle', ({ id, style }) => {
     removeElementStyles(id);
 

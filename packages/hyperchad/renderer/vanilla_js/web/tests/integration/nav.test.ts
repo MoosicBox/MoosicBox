@@ -14,6 +14,66 @@ describe('nav', () => {
     });
 
     describe('navigation', () => {
+        test('refreshes the current route instead of serving a cached document', async ({
+            worker,
+        }) => {
+            window.history.replaceState({}, '', '/game');
+            let revision = 1;
+            worker.use(
+                http.get('/game', () =>
+                    HttpResponse.html(
+                        `<html><body><div id="revision">${revision}</div></body></html>`,
+                    ),
+                ),
+            );
+
+            const core = await import('../../src/core');
+            await import('../../src/idiomorph');
+            const { navigate } = await import('../../src/nav');
+            const { cache } = await import('../../src/nav-base');
+            cache['/game'] =
+                '<html><body><div id="revision">stale</div></body></html>';
+            revision = 2;
+
+            const swaps: Array<{ url?: string; replace?: boolean }> = [];
+            core.on('swapDom', ({ url, replace }) => {
+                swaps.push({ url, replace });
+            });
+
+            navigate('/game');
+
+            await expect
+                .poll(() => document.querySelector('#revision')?.textContent)
+                .toBe('2');
+            expect(swaps).toContainEqual({ url: '/game', replace: true });
+        });
+        test('action navigation fetches fresh content instead of using prefetched cache', async ({
+            worker,
+        }) => {
+            window.history.replaceState({}, '', '/register');
+            worker.use(
+                http.get('/dashboard', () =>
+                    HttpResponse.html(
+                        '<html><body><div id="fresh-dashboard">Fresh</div></body></html>',
+                    ),
+                ),
+            );
+
+            await import('../../src/core');
+            await import('../../src/idiomorph');
+            const { navigate } = await import('../../src/nav');
+            const { cache } = await import('../../src/nav-base');
+            cache['/dashboard'] =
+                '<html><body><div id="stale-dashboard">Stale</div></body></html>';
+
+            navigate('/dashboard');
+
+            await expect
+                .poll(() => Boolean(document.querySelector('#fresh-dashboard')))
+                .toBe(true);
+            expect(document.querySelector('#stale-dashboard')).toBeNull();
+        });
+
         test('caches fetched documents', async ({ worker }) => {
             let fetchCount = 0;
 

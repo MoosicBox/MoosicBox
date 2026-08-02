@@ -1,4 +1,4 @@
-import { appendQueryParams } from './core';
+import { appendQueryParams, elementFetch } from './core';
 import { withCsrfHeader } from './csrf';
 import { handleNavigation } from './nav-base';
 import { processRoute, waitForPendingRoutes } from './routing';
@@ -36,7 +36,7 @@ function beginSubmission(form: HTMLFormElement): () => void {
 }
 
 function initFormHandler() {
-    document.body.addEventListener(
+    document.addEventListener(
         'submit',
         async (e) => {
             const element = e.target as HTMLElement;
@@ -100,7 +100,11 @@ function initFormHandler() {
                     }
 
                     // Fetch and trigger swapDom (same as anchor navigation)
-                    const response = await fetch(url, fetchOptions);
+                    const response = await elementFetch(
+                        url,
+                        fetchOptions,
+                        element,
+                    );
                     const html = await response.text();
 
                     handleNavigation(url, html);

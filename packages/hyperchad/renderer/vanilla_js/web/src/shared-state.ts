@@ -153,20 +153,26 @@ function toSerializedPayload(payload: unknown): string {
     }
 }
 
-function updateLastSeenRevision(payload: unknown): void {
+function updateLastSeenRevision(payload: unknown): boolean {
     const record = asRecord(payload);
     if (!record) {
-        return;
+        return false;
     }
 
     const channelId = record['channel_id'];
     const revision = record['revision'];
 
     if (typeof channelId !== 'string' || typeof revision !== 'number') {
-        return;
+        return false;
+    }
+
+    const lastSeenRevision = lastSeenRevisionByChannel.get(channelId);
+    if (lastSeenRevision !== undefined && revision <= lastSeenRevision) {
+        return false;
     }
 
     lastSeenRevisionByChannel.set(channelId, revision);
+    return true;
 }
 
 function handleSharedStateInboundPayload(serializedInbound: string): void {
@@ -193,12 +199,16 @@ function handleSharedStateInboundPayload(serializedInbound: string): void {
 
     switch (type) {
         case 'Snapshot':
-            updateLastSeenRevision(value);
-            dispatchSharedStateEvent('shared-state-snapshot', valueJson);
+            if (updateLastSeenRevision(value)) {
+                dispatchSharedStateEvent('shared-state-snapshot', valueJson);
+                dispatchSharedStateEvent('shared-state-update', valueJson);
+            }
             break;
         case 'Event':
-            updateLastSeenRevision(value);
-            dispatchSharedStateEvent('shared-state-event', valueJson);
+            if (updateLastSeenRevision(value)) {
+                dispatchSharedStateEvent('shared-state-event', valueJson);
+                dispatchSharedStateEvent('shared-state-update', valueJson);
+            }
             break;
         case 'CommandAccepted':
             dispatchSharedStateEvent(
@@ -355,6 +365,10 @@ async function reconcileChannelSubscriptions(): Promise<void> {
         if (!subscribedChannels.has(channelId)) {
             if (await subscribeChannel(channelId)) {
                 subscribedChannels.add(channelId);
+                dispatchSharedStateEvent(
+                    'shared-state-subscribed',
+                    JSON.stringify({ channel_id: channelId }),
+                );
             }
         }
     }
@@ -376,6 +390,10 @@ function setDesiredChannels(channels: Set<string>): void {
 function connectSharedStateTransportStream(): void {
     if (!hasActiveEventSourceStream(SHARED_STATE_STREAM_KEY)) {
         sharedStateConnected = false;
+        subscribedChannels.clear();
+    } else if (sharedStateConnected) {
+        void reconcileChannelSubscriptions();
+        return;
     }
 
     sharedStateSessionId = startEventSourceStream(
@@ -397,6 +415,7 @@ function connectSharedStateTransportStream(): void {
                 }
 
                 sharedStateConnected = true;
+                subscribedChannels.clear();
                 dispatchSharedStateEvent(
                     'shared-state-connected',
                     JSON.stringify({ session_id: sharedStateSessionId }),
@@ -407,6 +426,7 @@ function connectSharedStateTransportStream(): void {
                 handleSharedStateInboundPayload(message.data),
             onerror: (error) => {
                 sharedStateConnected = false;
+                subscribedChannels.clear();
                 if (error && typeof error === 'object' && 'message' in error) {
                     console.error(
                         'Shared-state SSE stream error',
@@ -418,6 +438,7 @@ function connectSharedStateTransportStream(): void {
             },
             streamIdStorageKey: SHARED_STATE_SESSION_STORAGE_KEY,
             streamIdCookieName: SHARED_STATE_SESSION_COOKIE_NAME,
+            openWhenHidden: true,
         },
     );
 }

@@ -87,6 +87,8 @@ pub struct HtmlActixResponseProcessor<T: HtmlTagRenderer + Clone> {
     pub inline_css: Vec<String>,
     /// CSRF token exposed in renderer-owned full-page HTML metadata.
     pub csrf_token: Option<String>,
+    /// Browser cookie synchronized with the rendered CSRF token on full-page responses.
+    pub csrf_cookie_name: Option<String>,
 }
 
 impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
@@ -104,6 +106,7 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
             css_paths: vec![],
             inline_css: vec![],
             csrf_token: None,
+            csrf_cookie_name: None,
         }
     }
 
@@ -111,12 +114,20 @@ impl<T: HtmlTagRenderer + Clone> HtmlActixResponseProcessor<T> {
     pub fn set_csrf_token(&mut self, csrf_token: impl Into<String>) {
         self.csrf_token = Some(csrf_token.into());
     }
+
+    /// Sets the browser cookie synchronized with the rendered CSRF token.
+    pub fn set_csrf_cookie_name(&mut self, csrf_cookie_name: impl Into<String>) {
+        self.csrf_cookie_name = Some(csrf_cookie_name.into());
+    }
 }
 
 /// Runtime controls specific to the HTML/Actix adapter.
 pub trait HtmlActixRuntime {
     /// Sets the CSRF token rendered into full-page HTML metadata.
     fn set_html_csrf_token(&mut self, csrf_token: impl Into<String>);
+
+    /// Sets the browser cookie synchronized with the rendered CSRF token.
+    fn set_html_csrf_cookie_name(&mut self, csrf_cookie_name: impl Into<String>);
 }
 
 impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlActixRuntime
@@ -124,6 +135,10 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlActixRuntime
 {
     fn set_html_csrf_token(&mut self, csrf_token: impl Into<String>) {
         self.processor.set_csrf_token(csrf_token);
+    }
+
+    fn set_html_csrf_cookie_name(&mut self, csrf_cookie_name: impl Into<String>) {
+        self.processor.set_csrf_cookie_name(csrf_cookie_name);
     }
 }
 
@@ -401,11 +416,23 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                     None
                 };
 
+                let full = req.full;
                 let (body, content_type) = self.to_body(content, req).await?;
 
                 let mut response = HttpResponse::Ok();
                 response.content_type(content_type.as_str());
 
+                if full
+                    && let (Some(csrf_cookie_name), Some(csrf_token)) =
+                        (&self.csrf_cookie_name, &self.csrf_token)
+                {
+                    let mut cookie = hyperchad_renderer::ResponseCookie::secure(
+                        csrf_cookie_name.clone(),
+                        csrf_token.clone(),
+                    );
+                    cookie.http_only = false;
+                    response.cookie(response_cookie(cookie));
+                }
                 if has_fragments {
                     response.append_header(("X-HyperChad-Fragments", "true"));
                 }
@@ -538,6 +565,69 @@ mod tests {
     use hyperchad_renderer::View;
     use hyperchad_router::{RequestInfo, RouteRequest};
     use hyperchad_transformer::{Element, HeaderSize};
+
+    #[test_log::test(switchy_async::test)]
+    async fn full_page_response_synchronizes_csrf_cookie() {
+        let router = Router::new().with_route("/", |_req| async { "CSRF test" });
+        let mut processor =
+            HtmlActixResponseProcessor::new(DefaultHtmlTagRenderer::default(), router);
+        processor.set_csrf_token("new-token");
+        processor.set_csrf_cookie_name("custom-csrf");
+
+        let request = actix_web::test::TestRequest::get()
+            .uri("/")
+            .cookie(actix_web::cookie::Cookie::new("custom-csrf", "old-token"))
+            .to_http_request();
+        let prepared = hyperchad_renderer_html_actix::ActixResponseProcessor::prepare_request(
+            &processor, request, None,
+        )
+        .expect("request should prepare");
+        let response = hyperchad_renderer_html_actix::ActixResponseProcessor::to_response(
+            &processor, prepared,
+        )
+        .await
+        .expect("response should render");
+        let set_cookie = response
+            .headers()
+            .get(actix_web::http::header::SET_COOKIE)
+            .and_then(|value| value.to_str().ok())
+            .expect("full page should synchronize the CSRF cookie");
+
+        assert!(set_cookie.starts_with("custom-csrf=new-token;"));
+        assert!(set_cookie.contains("Secure"));
+        assert!(set_cookie.contains("SameSite=Strict"));
+        assert!(!set_cookie.contains("HttpOnly"));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn partial_response_does_not_synchronize_csrf_cookie() {
+        let router = Router::new().with_route("/", |_req| async { "CSRF test" });
+        let mut processor =
+            HtmlActixResponseProcessor::new(DefaultHtmlTagRenderer::default(), router);
+        processor.set_csrf_token("new-token");
+        processor.set_csrf_cookie_name("custom-csrf");
+
+        let request = actix_web::test::TestRequest::get()
+            .uri("/")
+            .insert_header(("hx-request", "true"))
+            .to_http_request();
+        let prepared = hyperchad_renderer_html_actix::ActixResponseProcessor::prepare_request(
+            &processor, request, None,
+        )
+        .expect("request should prepare");
+        let response = hyperchad_renderer_html_actix::ActixResponseProcessor::to_response(
+            &processor, prepared,
+        )
+        .await
+        .expect("response should render");
+
+        assert!(
+            response
+                .headers()
+                .get(actix_web::http::header::SET_COOKIE)
+                .is_none()
+        );
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_to_fragment_body_renders_outer_element() {

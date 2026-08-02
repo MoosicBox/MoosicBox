@@ -106,6 +106,57 @@ describe('actions-event', () => {
         expect(elementId).toBe('my-element');
     });
 
+    it('updates a remorphed element listener without duplicating it', async () => {
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
+        await import('../../src/actions');
+        await import('../../src/actions-event');
+
+        clearProcessedElements();
+
+        const div = document.createElement('div');
+        div.id = 'target';
+        div.setAttribute(
+            'v-onevent',
+            'refresh:window.__refreshCount = (window.__refreshCount ?? 0) + 1',
+        );
+        document.body.appendChild(div);
+
+        processElement(div, true);
+        processElement(div, true);
+        window.dispatchEvent(new CustomEvent('v-refresh'));
+
+        expect(
+            (window as unknown as Record<string, number>).__refreshCount,
+        ).toBe(1);
+    });
+
+    it('ignores listeners whose element was removed', async () => {
+        const { processElement, clearProcessedElements } = await import(
+            '../../src/core'
+        );
+        await import('../../src/actions');
+        await import('../../src/actions-event');
+
+        clearProcessedElements();
+
+        const removed = document.createElement('div');
+        removed.setAttribute(
+            'v-onevent',
+            'refresh:window.__removedListenerTriggered = true',
+        );
+        document.body.appendChild(removed);
+        processElement(removed, true);
+        removed.remove();
+
+        window.dispatchEvent(new CustomEvent('v-refresh'));
+
+        expect(
+            (window as unknown as Record<string, boolean>)
+                .__removedListenerTriggered,
+        ).toBeUndefined();
+    });
     it('provides event detail in context value', async () => {
         const { processElement, clearProcessedElements } = await import(
             '../../src/core'

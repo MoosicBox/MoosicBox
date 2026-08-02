@@ -131,8 +131,16 @@ describe('shared-state plugin', () => {
         await import('../../src/uuid');
 
         const inboundEventDetails: string[] = [];
+        const inboundUpdateDetails: string[] = [];
+        const subscribedDetails: string[] = [];
         window.addEventListener('v-shared-state-event', (event) => {
             inboundEventDetails.push((event as CustomEvent<string>).detail);
+        });
+        window.addEventListener('v-shared-state-update', (event) => {
+            inboundUpdateDetails.push((event as CustomEvent<string>).detail);
+        });
+        window.addEventListener('v-shared-state-subscribed', (event) => {
+            subscribedDetails.push((event as CustomEvent<string>).detail);
         });
 
         await import('../../src/sse');
@@ -160,6 +168,11 @@ describe('shared-state plugin', () => {
         expect(sessions.sse).toBeTruthy();
         expect(sessions.post).toBe(sessions.sse);
         expect(requestHeaders[0]).toBe('csrf-test-token');
+        expect(
+            subscribedDetails.map((detail) => JSON.parse(detail)),
+        ).toContainEqual({
+            channel_id: 'room:alpha',
+        });
 
         await vi.waitFor(
             () => {
@@ -172,6 +185,7 @@ describe('shared-state plugin', () => {
             channel_id: 'room:alpha',
             revision: 2,
         });
+        expect(inboundUpdateDetails).toEqual(inboundEventDetails);
 
         document.body.innerHTML = `<div id="app"></div>`;
         core.triggerHandlers('domLoad', {

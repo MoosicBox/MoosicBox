@@ -634,6 +634,7 @@ pub async fn handle_shared_state_transport_sse<
 
     Ok(HttpResponse::Ok()
         .content_type("text/event-stream")
+        .insert_header((actix_web::http::header::CONTENT_ENCODING, "identity"))
         .insert_header(CacheControl(vec![CacheDirective::NoCache]))
         .streaming(stream))
 }
@@ -1711,6 +1712,14 @@ mod tests {
                 .get("content-type")
                 .and_then(|x| x.to_str().ok()),
             Some("text/event-stream")
+        );
+
+        assert_eq!(
+            response
+                .headers()
+                .get("content-encoding")
+                .and_then(|x| x.to_str().ok()),
+            Some("identity")
         );
 
         let body = to_bytes(response.into_body())

@@ -171,6 +171,30 @@ describe('idiomorph', () => {
             expect(scroller.scrollTop).toBe(1600);
         });
 
+        it('processes attributes added to an existing morphed root', async () => {
+            const { triggerHandlers, onAttr, clearProcessedElements } =
+                await import('../../src/core');
+            await import('../../src/idiomorph');
+
+            clearProcessedElements();
+            const processedAttrs: string[] = [];
+            onAttr('v-test-root', ({ attr }) => {
+                processedAttrs.push(attr);
+            });
+
+            const target = document.createElement('div');
+            target.id = 'target';
+            document.body.appendChild(target);
+
+            triggerHandlers('swapHtml', {
+                target: '#target',
+                html: '<div id="target" v-test-root="ready">New</div>',
+                strategy: 'this',
+            });
+
+            expect(processedAttrs).toContain('ready');
+        });
+
         it('processes new elements after swap', async () => {
             const { triggerHandlers, onAttr, clearProcessedElements } =
                 await import('../../src/core');

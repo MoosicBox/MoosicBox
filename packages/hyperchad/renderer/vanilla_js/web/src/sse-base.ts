@@ -14,6 +14,7 @@ export interface EventSourceStreamOptions {
     signal?: AbortSignal;
     includeSessionIdQuery?: boolean;
     headers?: Record<string, string>;
+    openWhenHidden?: boolean;
     onopen?: FetchEventSourceInit['onopen'];
     onmessage: NonNullable<FetchEventSourceInit['onmessage']>;
     onerror?: FetchEventSourceInit['onerror'];
@@ -129,6 +130,7 @@ export function startEventSourceStream(
             method: 'GET',
             headers: options.headers,
             signal: controller.signal,
+            openWhenHidden: options.openWhenHidden,
             onopen:
                 options.onopen ??
                 (async (response: Response) => {

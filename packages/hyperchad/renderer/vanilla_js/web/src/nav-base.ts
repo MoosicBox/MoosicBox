@@ -7,10 +7,15 @@ export function isSelfTarget(target: string | null): boolean {
     return target === null || target === 'self';
 }
 
-export function handleNavigation(url: string, html: string) {
+export function handleNavigation(
+    url: string,
+    html: string,
+    replace: boolean = false,
+) {
     triggerHandlers('swapDom', {
         html,
         url,
+        replace,
     });
 }
 

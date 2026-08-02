@@ -14,6 +14,40 @@ describe('form', () => {
     });
 
     describe('form submission', () => {
+        test('handles submissions after the document body is replaced', async ({
+            worker,
+        }) => {
+            let submitted = false;
+            worker.use(
+                http.post('/api/replaced-body', () => {
+                    submitted = true;
+                    return HttpResponse.html('<div>Submitted</div>');
+                }),
+            );
+
+            await import('../../src/core');
+            await import('../../src/routing');
+            await import('../../src/form');
+
+            const replacementBody = document.createElement('body');
+            replacementBody.innerHTML = `
+                <form hx-post="/api/replaced-body">
+                    <button type="submit">Submit</button>
+                </form>
+            `;
+            document.documentElement.replaceChild(
+                replacementBody,
+                document.body,
+            );
+            replacementBody
+                .querySelector('form')
+                ?.dispatchEvent(
+                    new Event('submit', { bubbles: true, cancelable: true }),
+                );
+
+            await vi.waitFor(() => expect(submitted).toBe(true));
+        });
+
         test('prevents duplicate submissions and restores submit controls', async ({
             worker,
         }) => {

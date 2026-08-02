@@ -18,30 +18,14 @@ async function initiateFetchDocument(url: string): Promise<string | void> {
 }
 
 export function navigate(url: string) {
-    const existing = cache[url];
-
-    if (typeof existing === 'string') {
-        handleNavigation(url, existing);
-        return false;
-    } else if (typeof cache[url] !== 'string' && !pending[url]) {
-        pending[url] = initiateFetchDocument(url);
-    }
-
-    const request = pending[url];
-
-    if (request) {
-        console.debug('Awaiting pending request', url);
-        request.then((html) => {
-            if (typeof html === 'string') {
-                handleNavigation(url, html);
-                return;
-            }
-            console.debug('Invalid response', url, html);
-        });
-        return false;
-    }
-
-    console.debug('no document for anchor');
+    const replace =
+        url === `${window.location.pathname}${window.location.search}`;
+    void initiateFetchDocument(url).then((html) => {
+        if (typeof html === 'string') {
+            handleNavigation(url, html, replace);
+        }
+    });
+    return false;
 }
 
 declare global {

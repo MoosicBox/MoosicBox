@@ -5,10 +5,14 @@ import {
     restoreReadingPosition,
 } from './reading-position';
 
-on('swapDom', ({ html, url }) => {
+on('swapDom', ({ html, url, replace }) => {
     if (typeof url === 'string') {
         console.debug('Navigating to', url);
-        history.pushState({}, '', url);
+        if (replace) {
+            history.replaceState({}, '', url);
+        } else {
+            history.pushState({}, '', url);
+        }
     }
     if (typeof html === 'string' && html.indexOf('<!DOCTYPE') === 0) {
         html = html.substring(html.indexOf('>') + 1);
@@ -70,37 +74,26 @@ on('swapHtml', ({ target, html, strategy }) => {
         return;
     }
 
-    const addedElements: HTMLElement[] = [];
-    const readingPosition = captureReadingPosition(target);
+    const resolvedTarget = target;
+    const readingPosition = captureReadingPosition(resolvedTarget);
 
     // Handle morph strategies (children, this) using Idiomorph
     // Map to idiomorph's innerHTML/outerHTML terminology
-    Idiomorph.morph(target, html, {
+    Idiomorph.morph(resolvedTarget, html, {
         morphStyle: strategy === 'children' ? 'innerHTML' : 'outerHTML',
-        callbacks: {
-            afterNodeAdded(node: Node) {
-                if (node instanceof HTMLElement) {
-                    addedElements.push(node);
-                }
-            },
-            afterNodeMorphed(oldNode: Node, newNode: Node) {
-                if (
-                    oldNode instanceof HTMLElement &&
-                    newNode instanceof HTMLElement
-                ) {
-                    // Could track morphed elements if needed
-                }
-            },
-        },
     });
 
     restoreReadingPosition(readingPosition);
 
-    if (addedElements.length > 0) {
+    const morphedTarget = resolvedTarget.isConnected
+        ? resolvedTarget
+        : undefined;
+    if (morphedTarget) {
+        clearProcessedElements();
         triggerHandlers('domLoad', {
             initial: false,
             navigation: false,
-            elements: addedElements,
+            elements: [morphedTarget],
         });
     }
 });
