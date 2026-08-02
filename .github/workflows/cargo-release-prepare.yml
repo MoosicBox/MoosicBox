@@ -40,6 +40,16 @@ jobs:
                   git fetch origin "$branch" || true
                   git checkout -B "$branch" "origin/${{ github.event.repository.default_branch }}"
 
+            - name: Set up Cargo release environment
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: workspace-setup
+                  workspace-path: .
+                  os: ubuntu
+                  skip-checkout: "true"
+                  clippier-version: master
+                  clippier-features: release
+
             - name: Reconstruct Cargo release status
               id: status
               uses: MoosicBox/MoosicBox/.github/actions/clippier@master

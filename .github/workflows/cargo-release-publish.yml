@@ -49,6 +49,16 @@ jobs:
                       exit 1
                   fi
 
+            - name: Set up Cargo release environment
+              uses: MoosicBox/MoosicBox/.github/actions/clippier@master
+              with:
+                  command: workspace-setup
+                  workspace-path: .
+                  os: ubuntu
+                  skip-checkout: "true"
+                  clippier-version: master
+                  clippier-features: release
+
             - name: Verify reconstructed Cargo release
               uses: MoosicBox/MoosicBox/.github/actions/clippier@master
               with:
