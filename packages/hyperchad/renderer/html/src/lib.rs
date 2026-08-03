@@ -568,6 +568,9 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     @if let Some(csrf_token) = headers.get("hyperchad-shared-state-csrf") {
                         meta name="hyperchad-shared-state-csrf" content=(csrf_token);
                     }
+                    @if let Some(csrf_cookie_name) = headers.get("hyperchad-shared-state-csrf-cookie") {
+                        meta name="hyperchad-shared-state-csrf-cookie" content=(csrf_cookie_name);
+                    }
                     @for url in css_urls {
                         link rel="stylesheet" href=(url);
                     }
@@ -1152,6 +1155,38 @@ mod tests {
         },
     };
     use std::collections::BTreeMap;
+
+    #[test_log::test]
+    fn root_html_renders_csrf_cookie_name() {
+        let renderer = DefaultHtmlTagRenderer::default();
+        let container = Container::default();
+        let headers = BTreeMap::from([
+            (
+                "hyperchad-shared-state-csrf".to_string(),
+                "csrf-token".to_string(),
+            ),
+            (
+                "hyperchad-shared-state-csrf-cookie".to_string(),
+                "custom-csrf".to_string(),
+            ),
+        ]);
+
+        let html = renderer.root_html(
+            &headers,
+            &container,
+            String::new(),
+            None,
+            None,
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+        );
+
+        assert!(html.contains("name=\"hyperchad-shared-state-csrf-cookie\""));
+        assert!(html.contains("content=\"custom-csrf\""));
+    }
 
     #[test_log::test]
     fn test_reactive_conditions_to_css_max_width_trigger() {

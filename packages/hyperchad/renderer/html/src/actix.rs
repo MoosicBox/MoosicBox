@@ -469,6 +469,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 csrf_token.clone(),
             );
         }
+        if let Some(csrf_cookie_name) = self.csrf_cookie_name.as_ref() {
+            headers.insert(
+                "hyperchad-shared-state-csrf-cookie".to_string(),
+                csrf_cookie_name.clone(),
+            );
+        }
 
         Ok(match content {
             hyperchad_renderer::Content::View(view) => {

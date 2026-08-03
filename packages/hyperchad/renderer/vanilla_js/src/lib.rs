@@ -1086,6 +1086,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     @if let Some(csrf_token) = headers.get("hyperchad-shared-state-csrf") {
                         meta name="hyperchad-shared-state-csrf" content=(csrf_token);
                     }
+                    @if let Some(csrf_cookie_name) = headers.get("hyperchad-shared-state-csrf-cookie") {
+                        meta name="hyperchad-shared-state-csrf-cookie" content=(csrf_cookie_name);
+                    }
                     @for url in css_urls {
                         link rel="stylesheet" href=(url);
                     }

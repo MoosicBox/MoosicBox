@@ -13,6 +13,7 @@ describe('shared-state plugin', () => {
                     '=;expires=' + new Date().toUTCString() + ';path=/',
                 );
         });
+        document.head.innerHTML = '';
         document.body.innerHTML = '';
 
         Object.keys(window)
@@ -81,6 +82,45 @@ describe('shared-state plugin', () => {
                 payload: { turn: 7 },
             },
         });
+    });
+
+    test('uses the current CSRF cookie after page metadata becomes stale', async ({
+        worker,
+    }) => {
+        document.head.innerHTML = `
+            <meta name="hyperchad-shared-state-csrf" content="stale-token">
+            <meta name="hyperchad-shared-state-csrf-cookie" content="custom-csrf">
+        `;
+        document.cookie = 'custom-csrf=current-token;path=/';
+        document.body.innerHTML = `
+            <div data-shared-state-channel="room:csrf"></div>
+        `;
+
+        const requestHeaders: string[] = [];
+        worker.use(
+            sse('/$shared-state/transport/sse', () => {}),
+            http.post('/$shared-state/transport', ({ request }) => {
+                requestHeaders.push(
+                    request.headers.get('x-hyperchad-csrf-token') ?? '',
+                );
+                return HttpResponse.json({});
+            }),
+        );
+
+        const core = await import('../../src/core');
+        await import('../../src/sse');
+        await import('../../src/shared-state');
+
+        core.triggerHandlers('domLoad', {
+            elements: [document.documentElement],
+            initial: false,
+            navigation: false,
+        });
+
+        await vi.waitFor(() => {
+            expect(requestHeaders).toContain('current-token');
+        });
+        expect(requestHeaders).not.toContain('stale-token');
     });
 
     test('subscribes, dispatches events, and unsubscribes removed channels', async ({
