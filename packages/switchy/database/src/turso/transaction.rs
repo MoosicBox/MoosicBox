@@ -7,6 +7,10 @@
 //! This module provides `DatabaseTransaction` support for Turso connections,
 //! including `BEGIN`, `COMMIT`, and `ROLLBACK` lifecycle management.
 
+// The operation guard intentionally remains held for the full transaction lifetime so regular
+// operations and graceful close serialize behind the transaction.
+#![allow(clippy::significant_drop_tightening)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
@@ -42,7 +46,7 @@ static ON_DELETE_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// Turso database transaction with commit/rollback capabilities
 pub struct TursoTransaction {
     connection: turso::Connection,
-    operation_guard: tokio::sync::OwnedMutexGuard<turso::Connection>,
+    operation_guard: tokio::sync::OwnedMutexGuard<Option<turso::Connection>>,
     committed: AtomicBool,
     rolled_back: AtomicBool,
 }
@@ -51,7 +55,14 @@ impl std::fmt::Debug for TursoTransaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TursoTransaction")
             .field("connection", &"<turso::Connection>")
-            .field("operation_guard", &"<turso::Connection guard>")
+            .field(
+                "operation_guard",
+                &if self.operation_guard.is_some() {
+                    "<open Turso connection guard>"
+                } else {
+                    "<closed Turso connection guard>"
+                },
+            )
             .field("committed", &self.committed.load(Ordering::SeqCst))
             .field("rolled_back", &self.rolled_back.load(Ordering::SeqCst))
             .finish()
@@ -66,7 +77,7 @@ impl TursoTransaction {
     /// * Returns error if transaction cannot be started
     pub async fn new(
         connection: turso::Connection,
-        operation_guard: tokio::sync::OwnedMutexGuard<turso::Connection>,
+        operation_guard: tokio::sync::OwnedMutexGuard<Option<turso::Connection>>,
     ) -> Result<Self, TursoDatabaseError> {
         connection
             .execute("BEGIN DEFERRED", ())
@@ -101,7 +112,6 @@ impl crate::DatabaseTransaction for TursoTransaction {
             .map_err(|e| DatabaseError::Turso(e.into()))?;
 
         self.committed.store(true, Ordering::SeqCst);
-        drop(self.operation_guard);
         Ok(())
     }
 
@@ -120,7 +130,6 @@ impl crate::DatabaseTransaction for TursoTransaction {
             .map_err(|e| DatabaseError::Turso(e.into()))?;
 
         self.rolled_back.store(true, Ordering::SeqCst);
-        drop(self.operation_guard);
         Ok(())
     }
 

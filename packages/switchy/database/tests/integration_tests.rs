@@ -1393,7 +1393,36 @@ mod turso {
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
     async fn test_turso_transaction_isolation() {
         let suite = TursoIntegrationTests;
-        suite.test_transaction_isolation().await;
+        let db = suite.get_database().await.expect("Turso database");
+        let tx = db.begin_transaction().await.expect("first transaction");
+        tx.insert("users")
+            .value("name", "IsolatedUser")
+            .execute(&*tx)
+            .await
+            .expect("transaction insert");
+
+        let reader_db = Arc::clone(&db);
+        let reader = switchy_async::task::spawn(async move {
+            reader_db
+                .select("users")
+                .where_eq("name", "IsolatedUser")
+                .execute(&**reader_db)
+                .await
+        });
+        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
+        assert!(
+            !reader.is_finished(),
+            "regular access must serialize behind the active Turso transaction"
+        );
+        tx.commit().await.expect("transaction commit");
+        assert_eq!(
+            reader
+                .await
+                .expect("reader joins")
+                .expect("reader queries")
+                .len(),
+            1
+        );
     }
 
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
@@ -1405,7 +1434,21 @@ mod turso {
     #[test_log::test(switchy_async::test(no_simulator, real_time))]
     async fn test_turso_concurrent_transactions() {
         let suite = TursoIntegrationTests;
-        suite.test_concurrent_transactions().await;
+        let db = suite.get_database().await.expect("Turso database");
+        let tx1 = db.begin_transaction().await.expect("first transaction");
+        let second_db = Arc::clone(&db);
+        let second = switchy_async::task::spawn(async move { second_db.begin_transaction().await });
+        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
+        assert!(
+            !second.is_finished(),
+            "a second Turso transaction must wait for the operation guard"
+        );
+        tx1.commit().await.expect("first transaction commits");
+        let tx2 = second
+            .await
+            .expect("second transaction task joins")
+            .expect("second transaction begins");
+        tx2.rollback().await.expect("second transaction rolls back");
     }
 
     #[ignore = "Turso doesn't properly handle transaction operations in the way we expect yet"]

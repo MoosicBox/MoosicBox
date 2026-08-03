@@ -252,11 +252,23 @@ impl TursoDatabaseBuilder {
     }
 }
 
+struct TursoConnectionGuard<'a>(tokio::sync::MutexGuard<'a, Option<turso::Connection>>);
+
+impl std::ops::Deref for TursoConnectionGuard<'_> {
+    type Target = turso::Connection;
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+            .as_ref()
+            .expect("Turso connection guard must contain an open connection")
+    }
+}
+
 /// Turso Database implementation providing `SQLite`-compatible API
 #[derive(Debug)]
 pub struct TursoDatabase {
     database: turso::Database,
-    connection: std::sync::Arc<tokio::sync::Mutex<turso::Connection>>,
+    connection: std::sync::Arc<tokio::sync::Mutex<Option<turso::Connection>>>,
 }
 
 impl TursoDatabase {
@@ -310,8 +322,16 @@ impl TursoDatabase {
         log::debug!("Turso database initialized: path={path}");
         Ok(Self {
             database,
-            connection: std::sync::Arc::new(tokio::sync::Mutex::new(connection)),
+            connection: std::sync::Arc::new(tokio::sync::Mutex::new(Some(connection))),
         })
+    }
+
+    async fn connection(&self) -> Result<TursoConnectionGuard<'_>, crate::DatabaseError> {
+        let connection = self.connection.lock().await;
+        if connection.is_none() {
+            return Err(crate::DatabaseError::ConnectionClosed);
+        }
+        Ok(TursoConnectionGuard(connection))
     }
 }
 
@@ -1406,9 +1426,8 @@ impl crate::Database for TursoDatabase {
         log::trace!("query_raw: query:\n{query}");
 
         let mut stmt = self
-            .connection
-            .lock()
-            .await
+            .connection()
+            .await?
             .prepare(query)
             .await
             .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
@@ -1444,9 +1463,8 @@ impl crate::Database for TursoDatabase {
         let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
 
         let mut stmt = self
-            .connection
-            .lock()
-            .await
+            .connection()
+            .await?
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1478,14 +1496,54 @@ impl crate::Database for TursoDatabase {
     async fn exec_raw(&self, statement: &str) -> Result<(), crate::DatabaseError> {
         log::trace!("exec_raw: query:\n{statement}");
 
-        self.connection
-            .lock()
-            .await
+        self.connection()
+            .await?
             .execute(statement, ())
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
 
         log::trace!("exec_raw: completed");
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn close(&self) -> Result<(), crate::DatabaseError> {
+        let mut connection = self.connection.lock().await;
+        let Some(open_connection) = connection.as_ref() else {
+            return Ok(());
+        };
+
+        let mut statement = open_connection
+            .prepare("PRAGMA wal_checkpoint(TRUNCATE)")
+            .await
+            .map_err(|error| crate::DatabaseError::Turso(error.into()))?;
+        let mut rows = statement
+            .query(())
+            .await
+            .map_err(|error| crate::DatabaseError::Turso(error.into()))?;
+        if let Some(row) = rows
+            .next()
+            .await
+            .map_err(|error| crate::DatabaseError::Turso(error.into()))?
+        {
+            let busy = row
+                .get::<i64>(0)
+                .map_err(|error| crate::DatabaseError::Turso(error.into()))?;
+            if busy != 0 {
+                return Err(crate::DatabaseError::QueryFailed(
+                    "Turso WAL checkpoint remained busy during close".to_string(),
+                ));
+            }
+        }
+        while rows
+            .next()
+            .await
+            .map_err(|error| crate::DatabaseError::Turso(error.into()))?
+            .is_some()
+        {}
+        drop(rows);
+        drop(statement);
+        connection.take();
         Ok(())
     }
 
@@ -1502,9 +1560,8 @@ impl crate::Database for TursoDatabase {
             to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
 
         let mut stmt = self
-            .connection
-            .lock()
-            .await
+            .connection()
+            .await?
             .prepare(&transformed_query)
             .await
             .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
@@ -1518,12 +1575,16 @@ impl crate::Database for TursoDatabase {
         Ok(affected_rows)
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, crate::DatabaseError> {
         log::debug!("begin_transaction: creating new connection for transaction");
 
         let operation_guard = self.connection.clone().lock_owned().await;
+        if operation_guard.is_none() {
+            return Err(crate::DatabaseError::ConnectionClosed);
+        }
         let connection = self.database.connect()?;
 
         let tx = TursoTransaction::new(connection, operation_guard)
@@ -1539,7 +1600,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(select(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1557,7 +1618,7 @@ impl crate::Database for TursoDatabase {
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(find_row(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             query.table_name,
             query.distinct,
             query.columns,
@@ -1574,7 +1635,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_rows(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1589,7 +1650,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(update_and_get_row(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1604,7 +1665,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::InsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
         Ok(insert_and_get_row(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
         )
@@ -1617,7 +1678,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(upsert(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1633,7 +1694,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertStatement<'_>,
     ) -> Result<crate::Row, crate::DatabaseError> {
         Ok(upsert_and_get_row(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -1649,7 +1710,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(upsert_multi(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             &statement.values,
             statement.unique.as_deref(),
@@ -1663,7 +1724,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(delete(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -1677,7 +1738,7 @@ impl crate::Database for TursoDatabase {
         statement: &crate::query::DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         let rows = delete(
-            &*self.connection.lock().await,
+            &*self.connection().await?,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -1692,7 +1753,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_table(&*self.connection.lock().await, statement).await
+        exec_create_table(&*self.connection().await?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1700,7 +1761,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_table(&*self.connection.lock().await, statement).await
+        exec_drop_table(&*self.connection().await?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1708,7 +1769,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_create_index(&*self.connection.lock().await, statement).await
+        exec_create_index(&*self.connection().await?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1716,7 +1777,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_drop_index(&*self.connection.lock().await, statement).await
+        exec_drop_index(&*self.connection().await?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1724,7 +1785,7 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
-        exec_alter_table(&*self.connection.lock().await, statement).await
+        exec_alter_table(&*self.connection().await?, statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -3606,6 +3667,184 @@ mod tests {
             .expect("Failed to create in-memory Turso database")
     }
 
+    fn unique_test_database_path(label: &str) -> std::path::PathBuf {
+        let id = uuid::Uuid::new_v4();
+        std::env::temp_dir().join(format!("switchy-turso-{label}-{id}.db"))
+    }
+
+    #[switchy_async::test]
+    async fn close_is_idempotent_and_rejects_later_operations() {
+        let db_path = unique_test_database_path("close");
+        let db: Box<dyn Database> = Box::new(
+            TursoDatabase::new(&db_path.to_string_lossy())
+                .await
+                .expect("file database opens"),
+        );
+        db.exec_raw("CREATE TABLE values_table (value INTEGER NOT NULL)")
+            .await
+            .expect("table creates");
+        db.exec_raw("INSERT INTO values_table (value) VALUES (1)")
+            .await
+            .expect("row inserts");
+
+        db.close().await.expect("database closes");
+        db.close().await.expect("repeated close is idempotent");
+        assert!(matches!(
+            db.query_raw("SELECT value FROM values_table").await,
+            Err(crate::DatabaseError::ConnectionClosed)
+        ));
+        assert!(matches!(
+            db.begin_transaction().await,
+            Err(crate::DatabaseError::ConnectionClosed)
+        ));
+        assert_eq!(
+            std::fs::metadata(db_path.with_extension("db-wal"))
+                .map_or(0, |metadata| metadata.len()),
+            0
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[switchy_async::test]
+    async fn dropped_transaction_releases_close_waiter() {
+        let db_path = unique_test_database_path("dropped-transaction-close");
+        let db = std::sync::Arc::new(
+            TursoDatabase::new(&db_path.to_string_lossy())
+                .await
+                .expect("file database opens"),
+        );
+        db.exec_raw("CREATE TABLE values_table (value INTEGER NOT NULL)")
+            .await
+            .expect("table creates");
+        let transaction = db.begin_transaction().await.expect("transaction begins");
+        let closing = std::sync::Arc::clone(&db);
+        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
+        assert!(!close_task.is_finished());
+        drop(transaction);
+        close_task
+            .await
+            .expect("close task joins")
+            .expect("database closes after transaction drop");
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[switchy_async::test]
+    async fn close_waits_for_transaction_completion() {
+        let db_path = unique_test_database_path("transaction-close");
+        let db = std::sync::Arc::new(
+            TursoDatabase::new(&db_path.to_string_lossy())
+                .await
+                .expect("file database opens"),
+        );
+        db.exec_raw("CREATE TABLE values_table (value INTEGER NOT NULL)")
+            .await
+            .expect("table creates");
+        let transaction = db.begin_transaction().await.expect("transaction begins");
+        transaction
+            .exec_raw("INSERT INTO values_table (value) VALUES (1)")
+            .await
+            .expect("transaction inserts");
+
+        let closing = std::sync::Arc::clone(&db);
+        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
+        assert!(!close_task.is_finished());
+        transaction.commit().await.expect("transaction commits");
+        close_task
+            .await
+            .expect("close task joins")
+            .expect("database closes");
+        assert_eq!(
+            std::fs::metadata(db_path.with_extension("db-wal"))
+                .map_or(0, |metadata| metadata.len()),
+            0
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    struct WalWorkloadObservation {
+        operations: u64,
+        database_bytes: u64,
+        wal_bytes: u64,
+    }
+
+    fn observe_workload(db_path: &std::path::Path, operations: u64) -> WalWorkloadObservation {
+        WalWorkloadObservation {
+            operations,
+            database_bytes: std::fs::metadata(db_path).map_or(0, |metadata| metadata.len()),
+            wal_bytes: std::fs::metadata(db_path.with_extension("db-wal"))
+                .map_or(0, |metadata| metadata.len()),
+        }
+    }
+
+    #[switchy_async::test]
+    async fn abstract_catalog_workload_records_bounded_lifecycle_sizes() {
+        const OPERATIONS: u32 = 128;
+        let db_path = unique_test_database_path("lifecycle-observation");
+        for operation in 0..OPERATIONS {
+            let db: Box<dyn Database> = Box::new(
+                TursoDatabase::new(&db_path.to_string_lossy())
+                    .await
+                    .expect("file database opens"),
+            );
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS values_table (id INTEGER PRIMARY KEY, value INTEGER NOT NULL)",
+            )
+            .await
+            .expect("table exists");
+            db.upsert("values_table")
+                .unique(&["id"])
+                .value("id", i64::from(operation % 8))
+                .value("value", i64::from(operation))
+                .execute(&*db)
+                .await
+                .expect("row upserts");
+            db.close().await.expect("database closes");
+        }
+        let observation = observe_workload(&db_path, u64::from(OPERATIONS));
+        assert_eq!(observation.operations, u64::from(OPERATIONS));
+        assert!(observation.database_bytes > 0);
+        assert_eq!(observation.wal_bytes, 0);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[switchy_async::test]
+    async fn repeated_abstract_open_write_close_cycles_keep_wal_bounded() {
+        let db_path = unique_test_database_path("bounded-wal");
+        for iteration in 0..256 {
+            let db: Box<dyn Database> = Box::new(
+                TursoDatabase::new(&db_path.to_string_lossy())
+                    .await
+                    .expect("file database opens"),
+            );
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS values_table (id INTEGER PRIMARY KEY, value INTEGER NOT NULL)",
+            )
+            .await
+            .expect("table exists");
+            db.upsert("values_table")
+                .unique(&["id"])
+                .value("id", i64::from(iteration % 8))
+                .value("value", i64::from(iteration))
+                .execute(&*db)
+                .await
+                .expect("row upserts");
+            db.close().await.expect("database closes");
+            let wal_bytes = std::fs::metadata(db_path.with_extension("db-wal"))
+                .map_or(0, |metadata| metadata.len());
+            assert_eq!(wal_bytes, 0, "iteration {iteration} left WAL bytes");
+        }
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn concurrent_regular_queries_are_serialized() {
         let db = std::sync::Arc::new(create_test_db().await);
@@ -3623,6 +3862,7 @@ mod tests {
         assert_eq!(second.expect("second queries").len(), 1);
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn transaction_blocks_regular_query_until_commit() {
         let db = std::sync::Arc::new(create_test_db().await);
@@ -5480,9 +5720,10 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&*db.connection.lock().await, "parent")
-            .await
-            .expect("Failed to find dependents");
+        let dependents =
+            find_cascade_dependents(&*db.connection().await.expect("open connection"), "parent")
+                .await
+                .expect("Failed to find dependents");
 
         assert_eq!(dependents.len(), 2, "Should find child and parent");
         assert_eq!(dependents[0], "child", "Child should be first");
@@ -5507,7 +5748,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let has_deps = has_dependents(&*db.connection.lock().await, "parent")
+        let has_deps = has_dependents(&*db.connection().await.expect("open connection"), "parent")
             .await
             .expect("Failed to check dependents");
 
@@ -5526,9 +5767,12 @@ mod tests {
             .await
             .expect("Failed to create standalone table");
 
-        let has_deps = has_dependents(&*db.connection.lock().await, "standalone")
-            .await
-            .expect("Failed to check dependents");
+        let has_deps = has_dependents(
+            &*db.connection().await.expect("open connection"),
+            "standalone",
+        )
+        .await
+        .expect("Failed to check dependents");
 
         assert!(!has_deps, "Standalone table should have no dependents");
         drop(db);
@@ -5557,9 +5801,12 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let dependents = find_cascade_dependents(&*db.connection.lock().await, "grandparent")
-            .await
-            .expect("Failed to find dependents");
+        let dependents = find_cascade_dependents(
+            &*db.connection().await.expect("open connection"),
+            "grandparent",
+        )
+        .await
+        .expect("Failed to find dependents");
 
         assert_eq!(
             dependents.len(),

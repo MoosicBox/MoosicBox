@@ -910,6 +910,9 @@ pub enum DatabaseError {
     /// Error from Turso backend
     #[error(transparent)]
     Turso(#[from] turso::TursoDatabaseError),
+    /// Database connection has been closed.
+    #[error("Database connection is closed")]
+    ConnectionClosed,
     /// Query returned no rows when at least one was expected
     #[error("No row")]
     NoRow,
@@ -973,6 +976,7 @@ impl DatabaseError {
     #[allow(clippy::missing_const_for_fn)]
     pub fn is_connection_error(&self) -> bool {
         match &self {
+            Self::ConnectionClosed => true,
             #[cfg(feature = "postgres-sqlx")]
             Self::PostgresSqlx(sqlx::postgres::SqlxDatabaseError::Sqlx(::sqlx::Error::Io(
                 _io_err,
@@ -1294,16 +1298,23 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// * If there are connection errors
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
 
-    /// Triggers the database connection to close
+    /// Initiates graceful backend-specific connection shutdown.
+    ///
+    /// Implementations with stateful connections should override this method. Calling close more
+    /// than once must be safe, and successful close makes later operations fail as closed.
     ///
     /// # Errors
     ///
-    /// * If the close failed to trigger
+    /// * If shutdown cannot be initiated
     fn trigger_close(&self) -> Result<(), DatabaseError> {
         Ok(())
     }
 
-    /// Closes the database connection
+    /// Completes graceful backend-specific connection shutdown.
+    ///
+    /// Calling this method more than once must be safe. After it succeeds, later operations should
+    /// fail with a closed-connection error. Backends may flush or checkpoint as part of their
+    /// normal close semantics.
     ///
     /// # Errors
     ///
