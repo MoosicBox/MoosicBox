@@ -1790,7 +1790,8 @@ fn normalize_blockquote_cross_block_boundaries(input: &str) -> std::borrow::Cow<
             continue;
         };
         let next = next.trim_end_matches(['\r', '\n']);
-        let quote_to_block = current.trim_start().starts_with('>')
+        let quote_to_block = !in_fence
+            && current.trim_start().starts_with('>')
             && !next.trim_start().starts_with('>')
             && (next.trim_start().starts_with("---")
                 || is_unordered_list_line(next.trim_start()).is_some()
@@ -2644,6 +2645,7 @@ fn list_item_source_marker(item_node: &Node, source: &str) -> Option<String> {
     (!marker.is_empty()).then(|| marker.to_string())
 }
 
+#[allow(clippy::too_many_lines)]
 fn render_list_item(
     item: &markdown::mdast::ListItem,
     marker: &str,
@@ -2723,26 +2725,48 @@ fn render_list_item(
         }
 
         let block_lines = block.lines().collect::<Vec<_>>();
-        let fence_prefix = if block_is_fenced {
-            let first_indent = block_lines
-                .first()
-                .map_or(0, |line| line.len() - line.trim_start().len());
-            " ".repeat(first_indent)
+        let source_fence_indent = if block_is_fenced {
+            block_lines
+                .last()
+                .map_or(0, |line| line.len() - line.trim_start().len())
         } else {
-            String::new()
+            0
         };
+        let continuation_width = if block_is_fenced {
+            block_lines
+                .first()
+                .map_or(config.list_indent_width, |line| {
+                    let indent = line.len() - line.trim_start().len();
+                    if indent == 0 {
+                        source_fence_indent
+                    } else {
+                        indent
+                    }
+                })
+        } else {
+            config.list_indent_width
+        };
+        let block_continuation = " ".repeat(base_indent + continuation_width);
 
         for (line_index, line) in block_lines.iter().enumerate() {
             if block_index == 0 && line_index == 0 {
                 out.push_str(&item_indent);
                 out.push_str(marker);
                 out.push_str(checkbox_prefix);
+                out.push_str(line);
             } else if block_is_fenced {
-                out.push_str(&fence_prefix);
+                if !line.is_empty() {
+                    out.push_str(&block_continuation);
+                }
+                if line_index == 0 {
+                    out.push_str(line);
+                } else {
+                    out.push_str(strip_source_indent(line, source_fence_indent));
+                }
             } else {
                 out.push_str(&continuation);
+                out.push_str(line);
             }
-            out.push_str(line);
             if line_index + 1 < block_lines.len() {
                 out.push('\n');
             }
@@ -2750,6 +2774,12 @@ fn render_list_item(
     }
 
     out
+}
+
+fn strip_source_indent(line: &str, width: usize) -> &str {
+    line.char_indices()
+        .nth(width)
+        .map_or("", |(offset, _)| &line[offset..])
 }
 
 fn node_source_without_trailing_newlines(node: &Node, source: &str) -> Option<String> {
@@ -3829,6 +3859,43 @@ mod tests {
             format_markdown("> foo\nbar\n===\n", &config),
             "> foo\n\n# bar\n"
         );
+    }
+
+    #[test]
+    fn preserves_fenced_rust_code_inside_checklist_items() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Preserve,
+            list_indentation: ListIndentationMode::Preserve,
+            list_style: ListStyle::Preserve,
+            line_width: 999_999,
+            ..Config::default()
+        };
+        let input = concat!(
+            "- [x] **Implement stereo weight decoding:**\n",
+            "\n",
+            "    ```rust\n",
+            "    let w1_q13 = STEREO_WEIGHT_TABLE_Q13[wi1]\n",
+            "        + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi1 + 1])\n",
+            "            - i32::from(STEREO_WEIGHT_TABLE_Q13[wi1]))\n",
+            "            * 6554)\n",
+            "            >> 16)\n",
+            "            * i32::from(2 * i3 + 1);\n",
+            "\n",
+            "    let w0_q13 = STEREO_WEIGHT_TABLE_Q13[wi0]\n",
+            "        + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi0 + 1])\n",
+            "            - i32::from(STEREO_WEIGHT_TABLE_Q13[wi0]))\n",
+            "            * 6554)\n",
+            "            >> 16)\n",
+            "            * i32::from(2 * i1 + 1)\n",
+            "        - w1_q13;\n",
+            "    ```\n",
+        );
+
+        let output = format_markdown(input, &config);
+
+        assert_eq!(output, input);
+        assert_eq!(format_markdown(&output, &config), output);
     }
 
     #[test]
