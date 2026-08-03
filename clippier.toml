@@ -1,3 +1,10 @@
+# Per-package overrides preserve broad default analysis while handling packages
+# whose published/default feature sets cannot be built together.
+[release.semver.packages.hyperchad]
+# The published default feature graph cannot build because moosicbox_app_native_image@0.4.0
+# omitted its required public/ assets. The heuristic also combines mutually exclusive profilers.
+feature-policy = "explicit-only"
+
 # Workspace-level clippier configuration
 # This defines common toolchains and dependencies for workspace-level CI setup
 

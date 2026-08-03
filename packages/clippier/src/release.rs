@@ -101,6 +101,17 @@ struct ReleaseSemverFileConfig {
     current_features: Vec<String>,
     #[serde(default)]
     baseline_features: Vec<String>,
+    #[serde(default)]
+    packages: BTreeMap<String, ReleaseSemverPackageConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct ReleaseSemverPackageConfig {
+    feature_policy: Option<SemverFeaturePolicy>,
+    features: Option<Vec<String>>,
+    current_features: Option<Vec<String>>,
+    baseline_features: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -115,6 +126,31 @@ struct EffectiveSemverConfig {
     features: Vec<String>,
     current_features: Vec<String>,
     baseline_features: Vec<String>,
+    packages: BTreeMap<String, ReleaseSemverPackageConfig>,
+}
+
+impl EffectiveSemverConfig {
+    fn for_package(&self, package: &str) -> Self {
+        let Some(package_config) = self.packages.get(package) else {
+            return self.clone();
+        };
+        Self {
+            feature_policy: package_config.feature_policy.unwrap_or(self.feature_policy),
+            features: package_config
+                .features
+                .clone()
+                .unwrap_or_else(|| self.features.clone()),
+            current_features: package_config
+                .current_features
+                .clone()
+                .unwrap_or_else(|| self.current_features.clone()),
+            baseline_features: package_config
+                .baseline_features
+                .clone()
+                .unwrap_or_else(|| self.baseline_features.clone()),
+            packages: BTreeMap::new(),
+        }
+    }
 }
 
 fn effective_semver_config(
@@ -129,6 +165,25 @@ fn effective_semver_config(
     } else {
         ReleaseSemverFileConfig::default()
     };
+    let packages = file
+        .packages
+        .into_iter()
+        .map(|(package, mut package_config)| {
+            if config.semver_feature_policy.is_some() {
+                package_config.feature_policy = None;
+            }
+            if !config.semver_features.is_empty() {
+                package_config.features = None;
+            }
+            if !config.semver_current_features.is_empty() {
+                package_config.current_features = None;
+            }
+            if !config.semver_baseline_features.is_empty() {
+                package_config.baseline_features = None;
+            }
+            (package, package_config)
+        })
+        .collect();
     Ok(EffectiveSemverConfig {
         feature_policy: config
             .semver_feature_policy
@@ -149,6 +204,7 @@ fn effective_semver_config(
         } else {
             config.semver_baseline_features.clone()
         },
+        packages,
     })
 }
 
@@ -397,11 +453,13 @@ fn reconstruct_release_status(
                         "packageable contents differ from crates.io {baseline_version}"
                     ));
                     if package.targets.iter().any(checkable_library_target) {
+                        let package_semver_config =
+                            semver_config.for_package(package.name.as_str());
                         let analysis = semver_checks::analyze(
                             &workspace_root,
                             package.name.as_str(),
                             baseline_version,
-                            &semver_config,
+                            &package_semver_config,
                         )?;
                         let minimum = target_version(baseline_version, analysis.compatibility)?;
                         let target =
@@ -845,11 +903,13 @@ fn propagate_release_graph(
                     let (target_version, unpublished, compatibility, semver, mut reasons) =
                         if let Some(baseline) = baseline.as_deref() {
                             let analysis = if checkable {
+                                let package_semver_config =
+                                    semver_config.for_package(package.name.as_str());
                                 Some(semver_checks::analyze(
                                     workspace_root,
                                     package.name.as_str(),
                                     baseline,
-                                    semver_config,
+                                    &package_semver_config,
                                 )?)
                             } else {
                                 None
@@ -1882,6 +1942,75 @@ fn restore_migrations(migrations: &[&Migration]) -> Result<(), BoxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn release_status_config(workspace_root: PathBuf) -> ReleaseStatusConfig {
+        ReleaseStatusConfig {
+            workspace_root,
+            packages: None,
+            #[cfg(feature = "git-diff")]
+            git_base: None,
+            #[cfg(feature = "git-diff")]
+            git_head: None,
+            semver_feature_policy: None,
+            semver_features: Vec::new(),
+            semver_current_features: Vec::new(),
+            semver_baseline_features: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn semver_package_config_overrides_workspace_defaults() {
+        let directory = switchy_fs::tempdir().expect("temp config workspace");
+        fs::write(
+            directory.path().join("clippier.toml"),
+            r#"[release.semver]
+feature-policy = "all"
+features = ["workspace-feature"]
+
+[release.semver.packages.hyperchad]
+feature-policy = "explicit-only"
+features = []
+"#,
+        )
+        .expect("release config");
+
+        let config = effective_semver_config(
+            directory.path(),
+            &release_status_config(directory.path().to_path_buf()),
+        )
+        .expect("effective config");
+        let package_config = config.for_package("hyperchad");
+        assert_eq!(
+            package_config.feature_policy,
+            SemverFeaturePolicy::ExplicitOnly
+        );
+        assert!(package_config.features.is_empty());
+        assert_eq!(
+            config.for_package("other").feature_policy,
+            SemverFeaturePolicy::All
+        );
+    }
+
+    #[test]
+    fn command_semver_config_overrides_package_config_per_field() {
+        let directory = switchy_fs::tempdir().expect("temp config workspace");
+        fs::write(
+            directory.path().join("clippier.toml"),
+            r#"[release.semver.packages.hyperchad]
+feature-policy = "explicit-only"
+features = ["package-feature"]
+"#,
+        )
+        .expect("release config");
+        let mut status_config = release_status_config(directory.path().to_path_buf());
+        status_config.semver_feature_policy = Some(SemverFeaturePolicy::DefaultOnly);
+
+        let config = effective_semver_config(directory.path(), &status_config)
+            .expect("effective config")
+            .for_package("hyperchad");
+        assert_eq!(config.feature_policy, SemverFeaturePolicy::DefaultOnly);
+        assert_eq!(config.features, vec!["package-feature"]);
+    }
 
     #[test]
     fn release_graph_models_aliases_and_orders_dependencies() {

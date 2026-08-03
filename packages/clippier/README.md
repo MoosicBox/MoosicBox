@@ -503,8 +503,11 @@ feature policy. Override it when needed with `--semver-feature-policy all`,
 `--semver-feature-policy default-only`, or `--semver-feature-policy explicit-only`, plus
 `--semver-features`, `--semver-current-features`, and `--semver-baseline-features`. Persistent
 settings use `[release.semver]` in the workspace `clippier.toml` with `feature-policy`, `features`,
-`current-features`, and `baseline-features`. `cargo-semver-checks` does not detect every theoretical Rust API incompatibility;
-analysis failures fail the release rather than silently guessing. Changed packages without a
+`current-features`, and `baseline-features`. Packages that require narrower coverage can override
+those fields under `[release.semver.packages.<cargo-package-name>]`; explicit CLI flags take
+precedence over the corresponding package override. `cargo-semver-checks` does not detect every
+theoretical Rust API incompatibility; analysis failures fail the release rather than silently
+guessing. Changed packages without a
 checkable library target use the smallest patch-compatible Cargo release.
 
 Cargo pre-1.0 compatibility follows the left-most-non-zero convention:
