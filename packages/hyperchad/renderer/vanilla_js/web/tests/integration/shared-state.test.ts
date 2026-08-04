@@ -96,13 +96,21 @@ describe('shared-state plugin', () => {
             <div data-shared-state-channel="room:csrf"></div>
         `;
 
-        const requestHeaders: string[] = [];
+        const requestDiagnostics: Record<string, string>[] = [];
         worker.use(
             sse('/$shared-state/transport/sse', () => {}),
             http.post('/$shared-state/transport', ({ request }) => {
-                requestHeaders.push(
-                    request.headers.get('x-hyperchad-csrf-token') ?? '',
-                );
+                requestDiagnostics.push({
+                    token: request.headers.get('x-hyperchad-csrf-token') ?? '',
+                    source:
+                        request.headers.get('x-hyperchad-csrf-source') ?? '',
+                    cookieCount:
+                        request.headers.get('x-hyperchad-csrf-cookie-count') ??
+                        '',
+                    metaMatch:
+                        request.headers.get('x-hyperchad-csrf-meta-match') ??
+                        '',
+                });
                 return HttpResponse.json({});
             }),
         );
@@ -118,9 +126,16 @@ describe('shared-state plugin', () => {
         });
 
         await vi.waitFor(() => {
-            expect(requestHeaders).toContain('current-token');
+            expect(requestDiagnostics).toContainEqual({
+                token: 'current-token',
+                source: 'cookie',
+                cookieCount: '1',
+                metaMatch: 'false',
+            });
         });
-        expect(requestHeaders).not.toContain('stale-token');
+        expect(requestDiagnostics).not.toContainEqual(
+            expect.objectContaining({ token: 'stale-token' }),
+        );
     });
 
     test('subscribes, dispatches events, and unsubscribes removed channels', async ({

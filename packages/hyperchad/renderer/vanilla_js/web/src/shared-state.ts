@@ -260,9 +260,15 @@ async function postSharedStateTransport(
         });
 
         if (response.status >= 400) {
+            const responseText = await response.text();
             console.error('Shared-state transport post failed', {
                 status: response.status,
                 statusText: response.statusText,
+                requestId: response.headers.get('x-request-id') ?? '',
+                diagnostic: response.headers.get(
+                    'x-hyperchad-transport-diagnostic',
+                ),
+                responseText,
             });
             return false;
         }

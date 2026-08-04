@@ -6,7 +6,10 @@ use std::{
 use actix_web::{
     HttpRequest, HttpResponse,
     error::{ErrorBadRequest, ErrorInternalServerError},
-    http::header::{CacheControl, CacheDirective},
+    http::{
+        StatusCode,
+        header::{CacheControl, CacheDirective, HeaderName, HeaderValue},
+    },
     web,
 };
 use async_trait::async_trait;
@@ -88,6 +91,61 @@ impl CookieCsrfWebSecurityConfig {
     }
 }
 
+const REQUEST_ID_HEADER: &str = "x-request-id";
+const TRANSPORT_DIAGNOSTIC_HEADER: &str = "x-hyperchad-transport-diagnostic";
+const CSRF_SOURCE_HEADER: &str = "x-hyperchad-csrf-source";
+const CSRF_COOKIE_COUNT_HEADER: &str = "x-hyperchad-csrf-cookie-count";
+const CSRF_META_MATCH_HEADER: &str = "x-hyperchad-csrf-meta-match";
+
+fn request_header<'a>(request: &'a HttpRequest, name: &str) -> &'a str {
+    request
+        .headers()
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("missing")
+}
+
+fn request_id(request: &HttpRequest) -> &str {
+    request_header(request, REQUEST_ID_HEADER)
+}
+
+fn named_cookie_count(request: &HttpRequest, cookie_name: &str) -> usize {
+    request
+        .headers()
+        .get_all(actix_web::http::header::COOKIE)
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(';'))
+        .filter_map(|cookie| cookie.trim().split_once('='))
+        .filter(|(name, _)| *name == cookie_name)
+        .count()
+}
+
+const fn transport_operation(outbound: &TransportOutbound) -> &'static str {
+    match outbound {
+        TransportOutbound::Command(_) => "command",
+        TransportOutbound::Subscribe(_) => "subscribe",
+        TransportOutbound::Unsubscribe(_) => "unsubscribe",
+        TransportOutbound::Ping(_) => "ping",
+    }
+}
+
+fn diagnostic_response(
+    status: StatusCode,
+    request: &HttpRequest,
+    diagnostic: &'static str,
+) -> HttpResponse {
+    let mut response = HttpResponse::build(status);
+    response.insert_header((TRANSPORT_DIAGNOSTIC_HEADER, diagnostic));
+    if let Some(value) = request
+        .headers()
+        .get(REQUEST_ID_HEADER)
+        .and_then(|value| HeaderValue::from_bytes(value.as_bytes()).ok())
+    {
+        response.insert_header((HeaderName::from_static(REQUEST_ID_HEADER), value));
+    }
+    response.body(diagnostic)
+}
+
 /// HTML/Actix authentication and CSRF adapter with application-configured names and identity.
 #[derive(Clone)]
 pub struct CookieCsrfWebSecurity {
@@ -117,10 +175,29 @@ impl WebSharedStateSecurity for CookieCsrfWebSecurity {
     ) -> Result<AuthenticatedTransportContext, actix_web::Error> {
         let opaque_session = request
             .cookie(&self.config.session_cookie_name)
-            .ok_or_else(|| actix_web::error::ErrorUnauthorized("missing web session"))?;
+            .ok_or_else(|| {
+                log::warn!(
+                    target: "hyperchad::shared_state_security",
+                    "shared_state_auth_rejected request_id={} reason=missing_session_cookie state_changing={is_state_changing}",
+                    request_id(request)
+                );
+                actix_web::error::ErrorUnauthorized("missing web session")
+            })?;
         let csrf_cookie = request
             .cookie(&self.config.csrf_cookie_name)
-            .ok_or_else(|| actix_web::error::ErrorForbidden("missing CSRF cookie"))?;
+            .ok_or_else(|| {
+                log::warn!(
+                    target: "hyperchad::shared_state_security",
+                    "shared_state_auth_rejected request_id={} reason=missing_csrf_cookie state_changing={is_state_changing} header_present={} server_cookie_count={} client_source={} client_cookie_count={} client_meta_match={}",
+                    request_id(request),
+                    request.headers().contains_key(&self.config.csrf_header_name),
+                    named_cookie_count(request, &self.config.csrf_cookie_name),
+                    request_header(request, CSRF_SOURCE_HEADER),
+                    request_header(request, CSRF_COOKIE_COUNT_HEADER),
+                    request_header(request, CSRF_META_MATCH_HEADER)
+                );
+                actix_web::error::ErrorForbidden("missing CSRF cookie")
+            })?;
 
         if is_state_changing {
             let csrf_header = request
@@ -128,6 +205,21 @@ impl WebSharedStateSecurity for CookieCsrfWebSecurity {
                 .get(&self.config.csrf_header_name)
                 .and_then(|value| value.to_str().ok());
             if csrf_header != Some(csrf_cookie.value()) {
+                let reason = if csrf_header.is_some() {
+                    "csrf_mismatch"
+                } else {
+                    "missing_csrf_header"
+                };
+                log::warn!(
+                    target: "hyperchad::shared_state_security",
+                    "shared_state_auth_rejected request_id={} reason={reason} state_changing=true header_present={} server_cookie_count={} client_source={} client_cookie_count={} client_meta_match={}",
+                    request_id(request),
+                    csrf_header.is_some(),
+                    named_cookie_count(request, &self.config.csrf_cookie_name),
+                    request_header(request, CSRF_SOURCE_HEADER),
+                    request_header(request, CSRF_COOKIE_COUNT_HEADER),
+                    request_header(request, CSRF_META_MATCH_HEADER)
+                );
                 return Err(actix_web::error::ErrorForbidden("CSRF validation failed"));
             }
         }
@@ -135,15 +227,27 @@ impl WebSharedStateSecurity for CookieCsrfWebSecurity {
         self.identity_resolver
             .resolve_session(opaque_session.value())
             .await
-            .map_err(|error| match error {
-                WebSessionIdentityError::Unauthenticated => {
-                    actix_web::error::ErrorUnauthorized(error.to_string())
-                }
-                WebSessionIdentityError::Forbidden(_) => {
-                    actix_web::error::ErrorForbidden(error.to_string())
-                }
-                WebSessionIdentityError::Operation(_) => {
-                    ErrorInternalServerError(error.to_string())
+            .map_err(|error| {
+                let reason = match &error {
+                    WebSessionIdentityError::Unauthenticated => "invalid_session",
+                    WebSessionIdentityError::Forbidden(_) => "forbidden_session",
+                    WebSessionIdentityError::Operation(_) => "session_resolution_failed",
+                };
+                log::warn!(
+                    target: "hyperchad::shared_state_security",
+                    "shared_state_auth_rejected request_id={} reason={reason} state_changing={is_state_changing}",
+                    request_id(request)
+                );
+                match error {
+                    WebSessionIdentityError::Unauthenticated => {
+                        actix_web::error::ErrorUnauthorized(error.to_string())
+                    }
+                    WebSessionIdentityError::Forbidden(_) => {
+                        actix_web::error::ErrorForbidden(error.to_string())
+                    }
+                    WebSessionIdentityError::Operation(_) => {
+                        ErrorInternalServerError(error.to_string())
+                    }
                 }
             })
     }
@@ -532,7 +636,7 @@ fn parse_ws_transport_outbound(message: &actix_ws::Message) -> Option<TransportO
     }
 }
 
-#[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn handle_shared_state_transport_post<
     T: Send + Sync + Clone + 'static,
     R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
@@ -546,23 +650,71 @@ pub async fn handle_shared_state_transport_post<
     };
 
     if let Some(dispatcher) = shared_state_transport.dispatcher.clone() {
-        let session_id = session_id_from_request(&req).ok_or_else(|| {
-            ErrorBadRequest("Missing shared-state session id (query 'session_id' or cookie)")
-        })?;
+        let operation = transport_operation(&outbound);
+        let Some(session_id) = session_id_from_request(&req) else {
+            log::warn!(
+                target: "hyperchad::shared_state_transport",
+                "shared_state_post_rejected request_id={} reason=missing_transport_session operation={operation}",
+                request_id(&req)
+            );
+            return Ok(diagnostic_response(
+                StatusCode::BAD_REQUEST,
+                &req,
+                "missing_transport_session",
+            ));
+        };
         let Some(session) = lookup_sse_session(shared_state_transport, &session_id)? else {
-            return Ok(HttpResponse::Conflict().finish());
+            log::warn!(
+                target: "hyperchad::shared_state_transport",
+                "shared_state_post_rejected request_id={} reason=unknown_transport_session operation={operation}",
+                request_id(&req)
+            );
+            return Ok(diagnostic_response(
+                StatusCode::CONFLICT,
+                &req,
+                "unknown_transport_session",
+            ));
         };
 
-        let request_context =
-            resolve_authenticated_context(shared_state_transport, &req, true).await?;
+        let request_context = match resolve_authenticated_context(
+            shared_state_transport,
+            &req,
+            true,
+        )
+        .await
+        {
+            Ok(context) => context,
+            Err(error) => {
+                let status = error.as_response_error().status_code();
+                let diagnostic = match status {
+                    StatusCode::UNAUTHORIZED => "authentication_rejected",
+                    StatusCode::FORBIDDEN => "csrf_rejected",
+                    _ => "security_adapter_failed",
+                };
+                log::warn!(
+                    target: "hyperchad::shared_state_transport",
+                    "shared_state_post_rejected request_id={} reason={diagnostic} operation={operation} status={}",
+                    request_id(&req),
+                    status.as_u16()
+                );
+                return Ok(diagnostic_response(status, &req, diagnostic));
+            }
+        };
         let context = session
             .lock()
             .map_err(|_| lock_poison_error("sse session lock"))?
             .context
             .clone();
         if context != request_context {
-            return Err(ErrorBadRequest(
-                "shared-state session identity does not match authenticated request",
+            log::warn!(
+                target: "hyperchad::shared_state_transport",
+                "shared_state_post_rejected request_id={} reason=transport_identity_mismatch operation={operation}",
+                request_id(&req)
+            );
+            return Ok(diagnostic_response(
+                StatusCode::BAD_REQUEST,
+                &req,
+                "transport_identity_mismatch",
             ));
         }
         let outbound = outbound.0;
@@ -886,8 +1038,10 @@ mod tests {
     };
 
     use super::{
-        AuthenticatedTransportContext, SharedStateTransportDispatcher, WebSharedStateSecurity,
-        handle_shared_state_transport_post, handle_shared_state_transport_sse,
+        AuthenticatedTransportContext, CSRF_COOKIE_COUNT_HEADER, CSRF_META_MATCH_HEADER,
+        CSRF_SOURCE_HEADER, REQUEST_ID_HEADER, SharedStateTransportDispatcher,
+        TRANSPORT_DIAGNOSTIC_HEADER, WebSharedStateSecurity, handle_shared_state_transport_post,
+        handle_shared_state_transport_sse,
     };
     use crate::{ActixApp, ActixResponseProcessor};
 
@@ -1273,6 +1427,64 @@ mod tests {
                 .map_err(|_| Self::lock_poison_error("snapshots lock"))?
                 .insert(snapshot.channel_id.to_string(), snapshot.clone());
             Ok(())
+        }
+    }
+
+    #[actix_web::test]
+    async fn counts_duplicate_named_cookies_without_logging_values() {
+        let request = test::TestRequest::get()
+            .insert_header((
+                actix_web::http::header::COOKIE,
+                "custom-csrf=first-secret; other=value; custom-csrf=second-secret",
+            ))
+            .to_http_request();
+
+        assert_eq!(super::named_cookie_count(&request, "custom-csrf"), 2);
+        assert_eq!(super::named_cookie_count(&request, "other"), 1);
+    }
+
+    #[actix_web::test]
+    async fn cookie_csrf_rejection_does_not_expose_credentials() {
+        let security = super::CookieCsrfWebSecurity::new(
+            super::CookieCsrfWebSecurityConfig::new(
+                "custom-session",
+                "custom-csrf",
+                "x-custom-csrf",
+            ),
+            Arc::new(TestSessionIdentityResolver),
+        );
+        let request = test::TestRequest::post()
+            .insert_header((REQUEST_ID_HEADER, "request-42"))
+            .insert_header((CSRF_SOURCE_HEADER, "cookie"))
+            .insert_header((CSRF_COOKIE_COUNT_HEADER, "2"))
+            .insert_header((CSRF_META_MATCH_HEADER, "false"))
+            .insert_header(("x-custom-csrf", "header-secret"))
+            .cookie(actix_web::cookie::Cookie::new(
+                "custom-session",
+                "session-secret",
+            ))
+            .cookie(actix_web::cookie::Cookie::new(
+                "custom-csrf",
+                "cookie-secret",
+            ))
+            .to_http_request();
+
+        let error = security
+            .authenticate_request(&request, true)
+            .await
+            .expect_err("mismatched CSRF credentials should fail");
+        let response = error.error_response();
+        let body = actix_web::body::to_bytes(response.into_body())
+            .await
+            .expect("error body should read");
+        let body = std::str::from_utf8(&body).expect("error body should be UTF-8");
+
+        assert_eq!(
+            error.as_response_error().status_code(),
+            StatusCode::FORBIDDEN
+        );
+        for secret in ["header-secret", "cookie-secret", "session-secret"] {
+            assert!(!body.contains(secret));
         }
     }
 
@@ -1776,13 +1988,30 @@ mod tests {
             );
 
         let response = handle_shared_state_transport_post(
-            test::TestRequest::post().to_http_request(),
+            test::TestRequest::post()
+                .insert_header((REQUEST_ID_HEADER, "request-42"))
+                .to_http_request(),
             web::Data::new(app),
             web::Json(TransportOutbound::Ping(TransportPing { sent_at_ms: 1 })),
         )
-        .await;
+        .await
+        .expect("missing transport session should return a diagnostic response");
 
-        assert!(response.is_err());
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response
+                .headers()
+                .get(TRANSPORT_DIAGNOSTIC_HEADER)
+                .and_then(|value| value.to_str().ok()),
+            Some("missing_transport_session")
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(REQUEST_ID_HEADER)
+                .and_then(|value| value.to_str().ok()),
+            Some("request-42")
+        );
     }
 
     #[actix_web::test]
