@@ -8,7 +8,7 @@ use std::{env, fs, str};
 
 use clippier_md::{
     Config, FormatterEngine, HeadingIndentationMode, ListIndentationMode, ListStyle, ProseWrapMode,
-    benchmark_format_outcome_changed, format_markdown,
+    benchmark_format_metrics, benchmark_format_outcome_changed, format_markdown,
 };
 use serde_json::{Value, json};
 
@@ -26,6 +26,18 @@ fn format_outcome_classification_matches_full_parity_corpus() {
     let cases = collect_parity_cases();
     for case in cases {
         let output = format_markdown(&case.input, &config);
+        let metrics = benchmark_format_metrics(&case.input, &config);
+        assert!(
+            metrics.parse_count <= 1,
+            "excess normal parses for {}",
+            case.name
+        );
+        assert!(
+            metrics.exceptional_reparse_count <= 1,
+            "excess exceptional reparses for {}",
+            case.name
+        );
+        assert_eq!(metrics.changed, output != case.input, "case: {}", case.name);
         assert_eq!(
             benchmark_format_outcome_changed(&case.input, &config),
             output != case.input,

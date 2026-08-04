@@ -1794,6 +1794,72 @@ mod tests {
     }
 
     #[test]
+    fn clippier_md_scope_uses_runner_working_directory_and_exclusions() {
+        let dir = temp_dir("clippier-md-delegation-scope");
+        let docs = dir.join("docs");
+        let excluded = docs.join("generated");
+        std::fs::create_dir_all(&excluded).expect("failed to create delegation fixtures");
+        std::fs::write(docs.join("guide.md"), "# Guide\n").expect("failed to write guide");
+        std::fs::write(excluded.join("ignored.md"), "# Ignored\n")
+            .expect("failed to write excluded file");
+        let mut config = ToolsConfig::default();
+        config.scope.exclude = vec!["/docs/generated/**".to_string()];
+        config.scope_base = Some(dir.clone());
+        let registry = ToolRegistry::new(config, Some(&dir)).expect("failed to create registry");
+        let runner = ToolRunner::new(&registry).with_working_dir(&dir);
+        let tool = Tool::new(
+            "clippier_md",
+            "clippier-md",
+            "cargo",
+            ToolKind::Cargo,
+            vec![ToolCapability::Format],
+            vec![
+                "fmt".to_string(),
+                "--".to_string(),
+                "fmt".to_string(),
+                ".".to_string(),
+            ],
+            vec![],
+        );
+
+        assert_eq!(runner.working_dir_path(), dir);
+        assert_eq!(
+            runner.scoped_file_args(&tool),
+            Some(vec!["docs/guide.md".to_string()])
+        );
+
+        std::fs::remove_dir_all(runner.working_dir_path())
+            .expect("failed to clean delegation fixtures");
+    }
+
+    #[test]
+    fn clippier_md_delegation_replaces_default_path_with_scoped_files() {
+        let tool = Tool::new(
+            "clippier_md",
+            "clippier-md",
+            "cargo",
+            ToolKind::Cargo,
+            vec![ToolCapability::Format],
+            vec![
+                "fmt".to_string(),
+                "--".to_string(),
+                "fmt".to_string(),
+                ".".to_string(),
+            ],
+            vec![],
+        );
+        let mut args = tool.check_args.clone();
+        let files = vec!["README.md".to_string(), "docs/guide.md".to_string()];
+
+        ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+
+        assert_eq!(
+            args,
+            vec!["fmt", "--", "fmt", "README.md", "docs/guide.md",]
+        );
+    }
+
+    #[test]
     fn scope_excludes_apply_to_collected_files_without_skipping_nested_repositories() {
         let dir = temp_dir("clippier-runner-scope");
         let excluded = dir.join("vendor").join("checkout");

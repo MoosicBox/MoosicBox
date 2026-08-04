@@ -335,6 +335,31 @@ pub fn benchmark_format_outcome_changed(input: &str, config: &Config) -> bool {
     )
 }
 
+/// Per-call parser metrics exposed only for benchmark and parity validation.
+#[cfg(feature = "benchmark-instrumentation")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BenchmarkFormatMetrics {
+    /// Parser calls against the original source in this session.
+    pub parse_count: usize,
+    /// Parser calls required after a source transform invalidated offsets.
+    pub exceptional_reparse_count: usize,
+    /// Whether formatting produced different bytes.
+    pub changed: bool,
+}
+
+/// Formats once and returns session-local parser metrics.
+#[cfg(feature = "benchmark-instrumentation")]
+#[must_use]
+pub fn benchmark_format_metrics(input: &str, config: &Config) -> BenchmarkFormatMetrics {
+    let mut session = FormatSession::new(input, config);
+    let output = format_markdown_session(&mut session);
+    BenchmarkFormatMetrics {
+        parse_count: session.parse_count.get(),
+        exceptional_reparse_count: session.exceptional_reparse_count.get(),
+        changed: output != input,
+    }
+}
+
 #[cfg(feature = "benchmark-instrumentation")]
 fn record_parse() {
     BENCHMARK_PARSE_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -1070,7 +1095,7 @@ struct SourceLine {
 #[derive(Debug)]
 struct SourceIndex {
     lines: Vec<SourceLine>,
-    #[allow(dead_code)]
+    #[cfg(test)]
     line_ending: SourceLineEnding,
     frontmatter: Option<(usize, usize)>,
     fenced_ranges: Vec<(usize, usize)>,
@@ -1078,6 +1103,10 @@ struct SourceIndex {
 }
 
 impl SourceIndex {
+    const fn contains_byte(&self, byte: u8) -> bool {
+        byte == b'_' && self.has_underscore
+    }
+
     fn new(source: &str) -> Self {
         let mut lines = Vec::new();
         let mut fenced_ranges = Vec::new();
@@ -1129,6 +1158,7 @@ impl SourceIndex {
         let frontmatter = frontmatter_range(source, &lines);
         Self {
             lines,
+            #[cfg(test)]
             line_ending,
             frontmatter,
             fenced_ranges,
@@ -1249,7 +1279,7 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
     let input = session.source;
     let config = session.config;
     if config.engine == FormatterEngine::Ast
-        && session.source_index.has_underscore
+        && session.source_index.contains_byte(b'_')
         && let Some(output) = normalize_literal_underscore_emphasis(input, session.ast())
     {
         return output;
@@ -1361,9 +1391,6 @@ fn split_frontmatter<'a>(input: &'a str, index: &SourceIndex) -> Option<(&'a str
 }
 
 fn normalize_literal_underscore_emphasis(input: &str, root: Option<&Node>) -> Option<String> {
-    if !input.contains('_') {
-        return None;
-    }
     let root = root?;
     let mut ranges = Vec::new();
     collect_literal_underscore_emphasis_ranges(root, &mut ranges);
@@ -1451,11 +1478,14 @@ fn format_markdown_ast(
         let Ok(root) = parse_mdast!(input, &markdown_parse_options()) else {
             return finalize_markdown_output(input, config);
         };
-        let rendered = render_ast_document(&root, input, config);
-        return finalize_markdown_output(&rendered, config);
+        return render_and_finalize_ast(&root, input, config);
     };
 
-    let rendered = render_ast_document(&root, input, config);
+    render_and_finalize_ast(&root, input, config)
+}
+
+fn render_and_finalize_ast(root: &Node, source: &str, config: &Config) -> String {
+    let rendered = render_ast_document(root, source, config);
     finalize_markdown_output(&rendered, config)
 }
 
@@ -3980,7 +4010,8 @@ fn absolute_path(path: &Path, working_dir: &Path) -> PathBuf {
     } else {
         working_dir.join(path.strip_prefix(Path::new(".")).unwrap_or(path))
     };
-    normalize_path(&path)
+    let normalized = normalize_path(&path);
+    normalized.canonicalize().unwrap_or(normalized)
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
@@ -5121,6 +5152,19 @@ mod tests {
         assert_eq!(index.lines.len(), 3);
         assert_eq!(index.lines.last().map(|line| line.end), Some(source.len()));
         assert_eq!(index.fenced_ranges, vec![(10, source.len())]);
+    }
+
+    #[test]
+    fn source_index_handles_long_fences_and_opaque_mdx_html() {
+        let source = "<Component value={some_value}>\n~~~~~~~text\n<div>_literal_</div>\n~~~~~~~\n";
+        let index = SourceIndex::new(source);
+        assert_eq!(index.fenced_ranges.len(), 1);
+        let (start, end) = index.fenced_ranges[0];
+        assert_eq!(
+            &source[start..end],
+            "~~~~~~~text\n<div>_literal_</div>\n~~~~~~~\n"
+        );
+        assert!(index.contains_byte(b'_'));
     }
 
     #[test]
