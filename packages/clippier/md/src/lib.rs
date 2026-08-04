@@ -25,6 +25,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
+#[cfg(feature = "benchmark-instrumentation")]
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -237,6 +239,86 @@ pub struct DiffReport {
     pub omitted_lines: usize,
 }
 
+/// Performance counters exposed only for benchmark builds.
+#[cfg(feature = "benchmark-instrumentation")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BenchmarkCounters {
+    /// Number of Markdown AST parser invocations.
+    pub parse_count: u64,
+    /// Number of source bytes passed into measured formatter operations.
+    pub bytes_scanned: u64,
+    /// Number of files processed by [`run_fmt`].
+    pub files_processed: u64,
+    /// Number of files classified as changed by [`run_fmt`].
+    pub files_changed: u64,
+    /// Number of owned formatter outputs produced.
+    pub outputs_allocated: u64,
+    /// Largest aggregate input/output byte count observed for one file.
+    pub peak_in_flight_bytes: usize,
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_PARSE_COUNT: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_BYTES_SCANNED: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_FILES_PROCESSED: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_FILES_CHANGED: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_OUTPUTS_ALLOCATED: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_PEAK_IN_FLIGHT_BYTES: AtomicUsize = AtomicUsize::new(0);
+
+/// Resets all benchmark-only formatter counters.
+#[cfg(feature = "benchmark-instrumentation")]
+pub fn reset_benchmark_counters() {
+    BENCHMARK_PARSE_COUNT.store(0, Ordering::Relaxed);
+    BENCHMARK_BYTES_SCANNED.store(0, Ordering::Relaxed);
+    BENCHMARK_FILES_PROCESSED.store(0, Ordering::Relaxed);
+    BENCHMARK_FILES_CHANGED.store(0, Ordering::Relaxed);
+    BENCHMARK_OUTPUTS_ALLOCATED.store(0, Ordering::Relaxed);
+    BENCHMARK_PEAK_IN_FLIGHT_BYTES.store(0, Ordering::Relaxed);
+}
+
+/// Returns a snapshot of all benchmark-only formatter counters.
+#[cfg(feature = "benchmark-instrumentation")]
+#[must_use]
+pub fn benchmark_counters() -> BenchmarkCounters {
+    BenchmarkCounters {
+        parse_count: BENCHMARK_PARSE_COUNT.load(Ordering::Relaxed),
+        bytes_scanned: BENCHMARK_BYTES_SCANNED.load(Ordering::Relaxed),
+        files_processed: BENCHMARK_FILES_PROCESSED.load(Ordering::Relaxed),
+        files_changed: BENCHMARK_FILES_CHANGED.load(Ordering::Relaxed),
+        outputs_allocated: BENCHMARK_OUTPUTS_ALLOCATED.load(Ordering::Relaxed),
+        peak_in_flight_bytes: BENCHMARK_PEAK_IN_FLIGHT_BYTES.load(Ordering::Relaxed),
+    }
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+fn record_parse() {
+    BENCHMARK_PARSE_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+fn record_format_input(bytes: usize) {
+    BENCHMARK_BYTES_SCANNED.fetch_add(bytes as u64, Ordering::Relaxed);
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+fn record_format_output() {
+    BENCHMARK_OUTPUTS_ALLOCATED.fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+fn record_file(input_bytes: usize, output_bytes: usize, changed: bool) {
+    BENCHMARK_FILES_PROCESSED.fetch_add(1, Ordering::Relaxed);
+    if changed {
+        BENCHMARK_FILES_CHANGED.fetch_add(1, Ordering::Relaxed);
+    }
+    BENCHMARK_PEAK_IN_FLIGHT_BYTES.fetch_max(input_bytes + output_bytes, Ordering::Relaxed);
+}
+
 /// Loads formatter configuration from repository config files.
 ///
 /// # Errors
@@ -387,7 +469,10 @@ pub fn run_fmt(
         let input = std::fs::read_to_string(file)
             .with_context(|| format!("Failed to read markdown file '{}'", file.display()))?;
         let output = format_markdown(&input, config);
-        if output != input {
+        let file_changed = output != input;
+        #[cfg(feature = "benchmark-instrumentation")]
+        record_file(input.len(), output.len(), file_changed);
+        if file_changed {
             changed.push(file.clone());
             if check && emit_diff {
                 if config.check_diff.cap && diff_reports.len() >= config.check_diff.max_files {
@@ -812,6 +897,16 @@ fn should_use_color(mode: ColorMode) -> bool {
 /// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
+    #[cfg(feature = "benchmark-instrumentation")]
+    record_format_input(input.len());
+    let output = format_markdown_inner(input, config);
+    #[cfg(feature = "benchmark-instrumentation")]
+    record_format_output();
+    output
+}
+
+#[allow(clippy::too_many_lines)]
+fn format_markdown_inner(input: &str, config: &Config) -> String {
     if config.engine == FormatterEngine::Ast
         && let Some(output) = normalize_literal_underscore_emphasis(input)
     {
@@ -951,11 +1046,19 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
     }
 }
 
+macro_rules! parse_mdast {
+    ($input:expr, $options:expr) => {{
+        #[cfg(feature = "benchmark-instrumentation")]
+        record_parse();
+        to_mdast($input, $options)
+    }};
+}
+
 fn normalize_literal_underscore_emphasis(input: &str) -> Option<String> {
     if !input.contains('_') {
         return None;
     }
-    let root = to_mdast(input, &ParseOptions::gfm()).ok()?;
+    let root = parse_mdast!(input, &ParseOptions::gfm()).ok()?;
     let mut ranges = Vec::new();
     collect_literal_underscore_emphasis_ranges(&root, &mut ranges);
     if ranges.is_empty() {
@@ -1036,7 +1139,7 @@ fn format_markdown_ast(input: &str, config: &Config) -> String {
         ..Constructs::gfm()
     };
 
-    let Ok(root) = to_mdast(input, &options) else {
+    let Ok(root) = parse_mdast!(input, &options) else {
         return finalize_markdown_output(input, config);
     };
 
@@ -1061,7 +1164,7 @@ fn normalize_whitespace_edge_source(input: &str) -> Option<String> {
 }
 
 fn normalize_nested_asterisk_emphasis_in_strong(input: &str) -> Option<String> {
-    let root = to_mdast(input, &ParseOptions::gfm()).ok()?;
+    let root = parse_mdast!(input, &ParseOptions::gfm()).ok()?;
     let Node::Root(root) = root else {
         return None;
     };
@@ -4032,7 +4135,7 @@ mod tests {
         let source = "soft\nbreak  \nhard\\\nescape\n`literal\ncode`\n";
         let mut options = ParseOptions::gfm();
         options.constructs = Constructs::gfm();
-        let root = to_mdast(source, &options).expect("paragraph must parse");
+        let root = parse_mdast!(source, &options).expect("paragraph must parse");
         let Node::Root(root) = root else {
             panic!("expected root node");
         };

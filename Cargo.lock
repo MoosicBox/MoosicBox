@@ -3194,11 +3194,13 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
+ "criterion",
  "globset",
  "ignore",
  "imara-diff",
  "markdown",
  "serde_json",
+ "tempfile",
  "toml 1.1.3+spec-1.1.0",
 ]
 
