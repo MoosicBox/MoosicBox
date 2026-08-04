@@ -272,7 +272,7 @@ describe('getMessages', () => {
         expect(messages[0].data).toBe('hello');
     });
 
-    it('initializes message with empty strings', () => {
+    it('does not emit comment-only heartbeat events', () => {
         const messages: EventSourceMessage[] = [];
         const onLine = getMessages(
             () => {},
@@ -280,14 +280,24 @@ describe('getMessages', () => {
             (msg) => messages.push(msg),
         );
 
-        // Empty message (just send empty line)
+        const encoder = new TextEncoder();
+        onLine(encoder.encode(': keepalive'), 0);
         onLine(new Uint8Array(0), -1);
 
-        expect(messages).toHaveLength(1);
-        expect(messages[0].data).toBe('');
-        expect(messages[0].event).toBe('');
-        expect(messages[0].id).toBe('');
-        expect(messages[0].retry).toBeUndefined();
+        expect(messages).toHaveLength(0);
+    });
+
+    it('does not emit empty messages', () => {
+        const messages: EventSourceMessage[] = [];
+        const onLine = getMessages(
+            () => {},
+            () => {},
+            (msg) => messages.push(msg),
+        );
+
+        onLine(new Uint8Array(0), -1);
+
+        expect(messages).toHaveLength(0);
     });
 });
 

@@ -184,6 +184,9 @@ function updateLastSeenRevision(payload: unknown): boolean {
 }
 
 function handleSharedStateInboundPayload(serializedInbound: string): void {
+    if (!serializedInbound.trim()) {
+        return;
+    }
     dispatchSharedStateEvent('shared-state-message', serializedInbound);
 
     let payload: unknown;

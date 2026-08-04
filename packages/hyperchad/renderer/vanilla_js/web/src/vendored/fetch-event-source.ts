@@ -133,8 +133,11 @@ export function getMessages(
     // return a function that can process each incoming line buffer:
     return function onLine(line: Uint8Array, fieldLength: number) {
         if (line.length === 0) {
-            // empty line denotes end of message. Trigger the callback and start a new message:
-            onMessage?.(message);
+            // Empty lines terminate events. Heartbeat comments and other events without data are
+            // not messages and must not reach application payload parsers.
+            if (message.data !== '') {
+                onMessage?.(message);
+            }
             message = newMessage();
         } else if (fieldLength > 0) {
             // exclude comments and lines with no values
