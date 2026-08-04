@@ -21,6 +21,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::io::IsTerminal;
@@ -253,6 +254,8 @@ pub struct DiffReport {
 pub struct BenchmarkCounters {
     /// Number of Markdown AST parser invocations.
     pub parse_count: u64,
+    /// Number of exceptional reparses after source transforms invalidate offsets.
+    pub exceptional_reparse_count: u64,
     /// Number of source bytes passed into measured formatter operations.
     pub bytes_scanned: u64,
     /// Number of files processed by [`run_fmt`].
@@ -268,6 +271,8 @@ pub struct BenchmarkCounters {
 #[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_PARSE_COUNT: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_EXCEPTIONAL_REPARSE_COUNT: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_BYTES_SCANNED: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_FILES_PROCESSED: AtomicU64 = AtomicU64::new(0);
@@ -282,6 +287,7 @@ static BENCHMARK_PEAK_IN_FLIGHT_BYTES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
 pub fn reset_benchmark_counters() {
     BENCHMARK_PARSE_COUNT.store(0, Ordering::Relaxed);
+    BENCHMARK_EXCEPTIONAL_REPARSE_COUNT.store(0, Ordering::Relaxed);
     BENCHMARK_BYTES_SCANNED.store(0, Ordering::Relaxed);
     BENCHMARK_FILES_PROCESSED.store(0, Ordering::Relaxed);
     BENCHMARK_FILES_CHANGED.store(0, Ordering::Relaxed);
@@ -295,12 +301,26 @@ pub fn reset_benchmark_counters() {
 pub fn benchmark_counters() -> BenchmarkCounters {
     BenchmarkCounters {
         parse_count: BENCHMARK_PARSE_COUNT.load(Ordering::Relaxed),
+        exceptional_reparse_count: BENCHMARK_EXCEPTIONAL_REPARSE_COUNT.load(Ordering::Relaxed),
         bytes_scanned: BENCHMARK_BYTES_SCANNED.load(Ordering::Relaxed),
         files_processed: BENCHMARK_FILES_PROCESSED.load(Ordering::Relaxed),
         files_changed: BENCHMARK_FILES_CHANGED.load(Ordering::Relaxed),
         outputs_allocated: BENCHMARK_OUTPUTS_ALLOCATED.load(Ordering::Relaxed),
         peak_in_flight_bytes: BENCHMARK_PEAK_IN_FLIGHT_BYTES.load(Ordering::Relaxed),
     }
+}
+
+/// Returns whether the internal formatting outcome owns changed output.
+///
+/// This benchmark-only hook verifies borrowed outcome classification against
+/// the public byte-producing API without exposing the internal outcome type.
+#[cfg(feature = "benchmark-instrumentation")]
+#[must_use]
+pub fn benchmark_format_outcome_changed(input: &str, config: &Config) -> bool {
+    matches!(
+        format_markdown_outcome(input, config),
+        FormatOutcome::Changed(_)
+    )
 }
 
 #[cfg(feature = "benchmark-instrumentation")]
@@ -1139,8 +1159,8 @@ struct FormatSession<'a> {
     config: &'a Config,
     source_index: SourceIndex,
     ast: LazyAst,
-    #[cfg(test)]
-    parse_count: usize,
+    parse_count: Cell<usize>,
+    exceptional_reparse_count: Cell<usize>,
 }
 
 impl<'a> FormatSession<'a> {
@@ -1150,17 +1170,14 @@ impl<'a> FormatSession<'a> {
             config,
             source_index: SourceIndex::new(source),
             ast: LazyAst::Unparsed,
-            #[cfg(test)]
-            parse_count: 0,
+            parse_count: Cell::new(0),
+            exceptional_reparse_count: Cell::new(0),
         }
     }
 
     fn ast(&mut self) -> Option<&Node> {
         if matches!(self.ast, LazyAst::Unparsed) {
-            #[cfg(test)]
-            {
-                self.parse_count += 1;
-            }
+            self.parse_count.set(self.parse_count.get() + 1);
             self.ast = parse_mdast!(self.source, &markdown_parse_options())
                 .map_or(LazyAst::Invalid, LazyAst::Parsed);
         }
@@ -1168,6 +1185,14 @@ impl<'a> FormatSession<'a> {
             LazyAst::Parsed(root) => Some(root),
             LazyAst::Unparsed | LazyAst::Invalid => None,
         }
+    }
+
+    fn reparse_transformed(&self, transformed: &str) -> Option<Node> {
+        self.exceptional_reparse_count
+            .set(self.exceptional_reparse_count.get() + 1);
+        #[cfg(feature = "benchmark-instrumentation")]
+        BENCHMARK_EXCEPTIONAL_REPARSE_COUNT.fetch_add(1, Ordering::Relaxed);
+        parse_mdast!(transformed, &markdown_parse_options()).ok()
     }
 
     fn finish(mut self) -> FormatOutcome<'a> {
@@ -1306,7 +1331,7 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
         let mut formatted_body = if config.engine == FormatterEngine::Legacy {
             format_markdown_legacy(body, config)
         } else {
-            format_markdown_ast(body, config, None)
+            FormatSession::new(body, config).finish().into_string()
         };
 
         if !formatted_body.is_empty() && !formatted_body.starts_with('\n') {
@@ -1320,7 +1345,8 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
         return format_markdown_legacy(input, config);
     }
 
-    format_markdown_ast(input, config, session.ast())
+    let root = session.ast().cloned();
+    format_markdown_ast(input, config, root.as_ref(), Some(session))
 }
 
 fn split_frontmatter<'a>(input: &'a str, index: &SourceIndex) -> Option<(&'a str, &'a str)> {
@@ -1361,7 +1387,12 @@ fn collect_literal_underscore_emphasis_ranges(node: &Node, ranges: &mut Vec<(usi
     }
 }
 
-fn format_markdown_ast(input: &str, config: &Config, parsed_root: Option<&Node>) -> String {
+fn format_markdown_ast(
+    input: &str,
+    config: &Config,
+    parsed_root: Option<&Node>,
+    session: Option<&FormatSession<'_>>,
+) -> String {
     let original_input = input;
     if let Some(output) = normalize_whitespace_edge_source(input) {
         return finalize_markdown_output(&output, config);
@@ -1406,9 +1437,9 @@ fn format_markdown_ast(input: &str, config: &Config, parsed_root: Option<&Node>)
     let parsed_root = if input.len() == original_input.len()
         && std::ptr::eq(input.as_ptr(), original_input.as_ptr())
     {
-        parsed_root
+        parsed_root.cloned()
     } else {
-        None
+        session.and_then(|session| session.reparse_transformed(input))
     };
     let Some(root) = parsed_root else {
         let Ok(root) = parse_mdast!(input, &markdown_parse_options()) else {
@@ -1418,7 +1449,7 @@ fn format_markdown_ast(input: &str, config: &Config, parsed_root: Option<&Node>)
         return finalize_markdown_output(&rendered, config);
     };
 
-    let rendered = render_ast_document(root, input, config);
+    let rendered = render_ast_document(&root, input, config);
     finalize_markdown_output(&rendered, config)
 }
 
@@ -5087,10 +5118,85 @@ mod tests {
     fn format_session_reuses_its_lazy_ast() {
         let config = Config::default();
         let mut session = FormatSession::new("# Heading\n", &config);
-        assert_eq!(session.parse_count, 0);
+        assert_eq!(session.parse_count.get(), 0);
         assert!(session.ast().is_some());
         assert!(session.ast().is_some());
-        assert_eq!(session.parse_count, 1);
+        assert_eq!(session.parse_count.get(), 1);
+    }
+
+    #[test]
+    fn format_session_parse_counts_cover_normal_and_transformed_paths() {
+        let config = Config::default();
+        for input in [
+            "# Canonical\n",
+            "#Heading\n",
+            "<Component enabled={true}>MDX</Component>\n",
+            "```rust\nlet value = 1;\n```\n",
+            "[label]: /url\n\n[label]\n",
+        ] {
+            let mut session = FormatSession::new(input, &config);
+            let _ = format_markdown_session(&mut session);
+            assert_eq!(session.parse_count.get(), 1, "input: {input:?}");
+            assert!(
+                session.exceptional_reparse_count.get() <= 1,
+                "input: {input:?}"
+            );
+        }
+
+        let input = "---\ntitle: Test\n---\n\n# Heading\n";
+        let mut session = FormatSession::new(input, &config);
+        let _ = format_markdown_session(&mut session);
+        assert!(session.parse_count.get() <= 1);
+        assert_eq!(session.exceptional_reparse_count.get(), 0);
+    }
+
+    #[test]
+    fn format_outcome_classification_matches_byte_comparison() {
+        let config = Config::default();
+        for input in [
+            "# Canonical\n",
+            "#Heading\n",
+            "paragraph with **strong** text\n",
+            "---\ntitle: Test\n---\n\n# Heading\n",
+            "```rust\nlet value = 1;\n```\n",
+            "<Component enabled={true}>MDX</Component>\n",
+            "- one\n- two\n",
+            "> quote\n",
+        ] {
+            let public_output = format_markdown(input, &config);
+            let outcome = format_markdown_outcome(input, &config);
+            assert_eq!(
+                matches!(outcome, FormatOutcome::Unchanged(_)),
+                public_output == input,
+                "input: {input:?}"
+            );
+            assert_eq!(outcome.into_string(), public_output);
+        }
+    }
+
+    #[test]
+    fn format_outcome_classification_matches_representative_real_files() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .expect("package must be nested below repository root");
+        let config = Config::default();
+        for relative in [
+            "spec/opus-native/plan.md",
+            "spec/generic-schema-migrations/plan.md",
+            "packages/clippier/md/README.md",
+        ] {
+            let input = std::fs::read_to_string(root.join(relative))
+                .unwrap_or_else(|error| panic!("failed to read {relative}: {error}"));
+            let public_output = format_markdown(&input, &config);
+            let outcome = format_markdown_outcome(&input, &config);
+            assert_eq!(
+                matches!(outcome, FormatOutcome::Changed(_)),
+                public_output != input,
+                "path: {relative}"
+            );
+            assert_eq!(outcome.into_string(), public_output, "path: {relative}");
+        }
     }
 
     #[test]

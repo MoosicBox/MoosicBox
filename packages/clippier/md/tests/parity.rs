@@ -8,7 +8,7 @@ use std::{env, fs, str};
 
 use clippier_md::{
     Config, FormatterEngine, HeadingIndentationMode, ListIndentationMode, ListStyle, ProseWrapMode,
-    format_markdown,
+    benchmark_format_outcome_changed, format_markdown,
 };
 use serde_json::{Value, json};
 
@@ -18,6 +18,22 @@ const COMMONMARK_REVISION: &str = "31c0ca2d294ea60ab4438004da410e2e590a46f2";
 const COMMONMARK_EXAMPLE_COUNT: usize = 655;
 const ORACLE_SCHEMA_VERSION: u64 = 1;
 const REPORT_SCHEMA_VERSION: u64 = 1;
+
+#[test]
+fn format_outcome_classification_matches_full_parity_corpus() {
+    verify_commonmark_checkout();
+    let config = parity_config();
+    let cases = collect_parity_cases();
+    for case in cases {
+        let output = format_markdown(&case.input, &config);
+        assert_eq!(
+            benchmark_format_outcome_changed(&case.input, &config),
+            output != case.input,
+            "outcome classification mismatch for {}",
+            case.name
+        );
+    }
+}
 
 #[test]
 fn prettier_parity_commonmark_gfm_fixtures() {
