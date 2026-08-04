@@ -1019,6 +1019,115 @@ fn markdown_parse_options() -> ParseOptions {
     options
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SourceLineEnding {
+    None,
+    Lf,
+    Crlf,
+    Cr,
+    Mixed,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SourceLine {
+    start: usize,
+    content_end: usize,
+    end: usize,
+}
+
+#[derive(Debug)]
+struct SourceIndex {
+    lines: Vec<SourceLine>,
+    line_ending: SourceLineEnding,
+    frontmatter: Option<(usize, usize)>,
+    fenced_ranges: Vec<(usize, usize)>,
+    has_underscore: bool,
+    has_mdx_or_html: bool,
+}
+
+impl SourceIndex {
+    fn new(source: &str) -> Self {
+        let mut lines = Vec::new();
+        let mut fenced_ranges = Vec::new();
+        let mut line_ending = SourceLineEnding::None;
+        let mut offset = 0usize;
+        let mut fence = None::<(usize, FenceDelimiter)>;
+
+        while offset < source.len() {
+            let rest = &source[offset..];
+            let relative_end = rest
+                .char_indices()
+                .find_map(|(index, character)| matches!(character, '\r' | '\n').then_some(index));
+            let (content_end, end, ending) = relative_end.map_or(
+                (source.len(), source.len(), SourceLineEnding::None),
+                |relative| {
+                    let content_end = offset + relative;
+                    if source.as_bytes()[content_end] == b'\r'
+                        && source.as_bytes().get(content_end + 1) == Some(&b'\n')
+                    {
+                        (content_end, content_end + 2, SourceLineEnding::Crlf)
+                    } else if source.as_bytes()[content_end] == b'\r' {
+                        (content_end, content_end + 1, SourceLineEnding::Cr)
+                    } else {
+                        (content_end, content_end + 1, SourceLineEnding::Lf)
+                    }
+                },
+            );
+            line_ending = merge_line_ending(line_ending, ending);
+            let line = &source[offset..content_end];
+            if let Some((start, delimiter)) = fence {
+                if delimiter.closes(line) {
+                    fenced_ranges.push((start, end));
+                    fence = None;
+                }
+            } else if let Some(delimiter) = FenceDelimiter::opens(line) {
+                fence = Some((offset, delimiter));
+            }
+            lines.push(SourceLine {
+                start: offset,
+                content_end,
+                end,
+            });
+            offset = end;
+        }
+        if let Some((start, _)) = fence {
+            fenced_ranges.push((start, source.len()));
+        }
+
+        let frontmatter = frontmatter_range(source, &lines);
+        Self {
+            lines,
+            line_ending,
+            frontmatter,
+            fenced_ranges,
+            has_underscore: source.contains('_'),
+            has_mdx_or_html: source.contains('<') || source.contains('{'),
+        }
+    }
+}
+
+const fn merge_line_ending(current: SourceLineEnding, next: SourceLineEnding) -> SourceLineEnding {
+    match (current, next) {
+        (current, SourceLineEnding::None) => current,
+        (SourceLineEnding::None, next) => next,
+        (SourceLineEnding::Lf, SourceLineEnding::Lf) => SourceLineEnding::Lf,
+        (SourceLineEnding::Crlf, SourceLineEnding::Crlf) => SourceLineEnding::Crlf,
+        (SourceLineEnding::Cr, SourceLineEnding::Cr) => SourceLineEnding::Cr,
+        _ => SourceLineEnding::Mixed,
+    }
+}
+
+fn frontmatter_range(source: &str, lines: &[SourceLine]) -> Option<(usize, usize)> {
+    let first = lines.first()?;
+    let delimiter = &source[first.start..first.content_end];
+    if !matches!(delimiter, "---" | "+++") {
+        return None;
+    }
+    lines.iter().skip(1).find_map(|line| {
+        (&source[line.start..line.content_end] == delimiter).then_some((0, line.end))
+    })
+}
+
 enum LazyAst {
     Unparsed,
     Parsed(Node),
@@ -1028,16 +1137,18 @@ enum LazyAst {
 struct FormatSession<'a> {
     source: &'a str,
     config: &'a Config,
+    source_index: SourceIndex,
     ast: LazyAst,
     #[cfg(test)]
     parse_count: usize,
 }
 
 impl<'a> FormatSession<'a> {
-    const fn new(source: &'a str, config: &'a Config) -> Self {
+    fn new(source: &'a str, config: &'a Config) -> Self {
         Self {
             source,
             config,
+            source_index: SourceIndex::new(source),
             ast: LazyAst::Unparsed,
             #[cfg(test)]
             parse_count: 0,
@@ -1060,6 +1171,11 @@ impl<'a> FormatSession<'a> {
     }
 
     fn finish(mut self) -> FormatOutcome<'a> {
+        let _source_facts = (
+            self.source_index.lines.len(),
+            self.source_index.line_ending,
+            self.source_index.has_mdx_or_html,
+        );
         let output = format_markdown_session(&mut self);
         if output == self.source {
             FormatOutcome::Unchanged(self.source)
@@ -1102,6 +1218,7 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
     let input = session.source;
     let config = session.config;
     if config.engine == FormatterEngine::Ast
+        && session.source_index.has_underscore
         && let Some(output) = normalize_literal_underscore_emphasis(input, session.ast())
     {
         return output;
@@ -1184,7 +1301,7 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
         return finalize_markdown_output(input, config);
     }
     if config.frontmatter_mode == FrontmatterMode::Preserve
-        && let Some((frontmatter, body)) = split_frontmatter(input)
+        && let Some((frontmatter, body)) = split_frontmatter(input, &session.source_index)
     {
         let mut formatted_body = if config.engine == FormatterEngine::Legacy {
             format_markdown_legacy(body, config)
@@ -1206,38 +1323,9 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
     format_markdown_ast(input, config, session.ast())
 }
 
-fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
-    let first_newline = input.find('\n')?;
-    let first_line = &input[..=first_newline];
-    let delimiter = if first_line.trim_end_matches(['\r', '\n']) == "---" {
-        "---"
-    } else if first_line.trim_end_matches(['\r', '\n']) == "+++" {
-        "+++"
-    } else {
-        return None;
-    };
-
-    let mut offset = first_newline + 1;
-    loop {
-        let remaining = &input[offset..];
-        if remaining.is_empty() {
-            return None;
-        }
-
-        if let Some(next_newline) = remaining.find('\n') {
-            let line_end = offset + next_newline + 1;
-            let line = &input[offset..line_end];
-            if line.trim_end_matches(['\r', '\n']) == delimiter {
-                return Some(input.split_at(line_end));
-            }
-            offset = line_end;
-        } else {
-            if remaining.trim_end_matches(['\r', '\n']) == delimiter {
-                return Some(input.split_at(input.len()));
-            }
-            return None;
-        }
-    }
+fn split_frontmatter<'a>(input: &'a str, index: &SourceIndex) -> Option<(&'a str, &'a str)> {
+    let (_, end) = index.frontmatter?;
+    Some(input.split_at(end))
 }
 
 fn normalize_literal_underscore_emphasis(input: &str, root: Option<&Node>) -> Option<String> {
@@ -1808,24 +1896,7 @@ fn normalize_code_and_html_source_forms(input: &str) -> Option<String> {
 }
 
 fn fenced_code_ranges(input: &str) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
-    let mut open = None::<(usize, FenceDelimiter)>;
-    let mut offset = 0usize;
-    for line in input.split_inclusive('\n') {
-        if let Some((start, delimiter)) = open {
-            if delimiter.closes(line.trim_end_matches(['\r', '\n'])) {
-                ranges.push((start, offset + line.len()));
-                open = None;
-            }
-        } else if let Some(delimiter) = FenceDelimiter::opens(line) {
-            open = Some((offset, delimiter));
-        }
-        offset += line.len();
-    }
-    if let Some((start, _)) = open {
-        ranges.push((start, input.len()));
-    }
-    ranges
+    SourceIndex::new(input).fenced_ranges
 }
 
 fn normalize_html_block_source(input: &str) -> Option<String> {
@@ -3450,104 +3521,107 @@ fn format_markdown_legacy(input: &str, config: &Config) -> String {
 }
 
 fn finalize_markdown_output(input: &str, config: &Config) -> String {
-    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
-    let mut lines = normalized
-        .lines()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
+    let index = SourceIndex::new(input);
+    finalize_markdown_output_indexed(input, config, &index)
+}
 
-    let mut in_fence = false;
-    let mut fence_prefix = String::new();
-    for line in &mut lines {
-        if is_fence_start(line) {
-            let trimmed = line.trim_start();
-            if !in_fence {
-                in_fence = true;
-                fence_prefix = trimmed
-                    .chars()
-                    .take_while(|c| *c == '`' || *c == '~')
-                    .collect();
-            } else if trimmed.starts_with(&fence_prefix) {
-                in_fence = false;
-                fence_prefix.clear();
-            }
-            continue;
-        }
+struct FinalWriter<'a> {
+    config: &'a Config,
+    output: String,
+    pending_blank_lines: usize,
+    fence: Option<FenceDelimiter>,
+    wrote_line: bool,
+}
 
-        if !in_fence && let Some(updated) = normalize_heading_line(line, config) {
-            *line = updated;
+impl<'a> FinalWriter<'a> {
+    fn new(config: &'a Config, capacity: usize) -> Self {
+        Self {
+            config,
+            output: String::with_capacity(capacity.saturating_add(1)),
+            pending_blank_lines: 0,
+            fence: None,
+            wrote_line: false,
         }
     }
 
-    if config.trim_trailing_whitespace {
-        let mut in_fence = false;
-        let mut fence_prefix = String::new();
-        let line_count = lines.len();
-        for (index, line) in lines.iter_mut().enumerate() {
-            if is_fence_start(line) {
-                let trimmed = line.trim_start();
-                if !in_fence {
-                    in_fence = true;
-                    fence_prefix = trimmed
-                        .chars()
-                        .take_while(|character| matches!(character, '`' | '~'))
-                        .collect();
-                } else if trimmed.starts_with(&fence_prefix) {
-                    in_fence = false;
-                    fence_prefix.clear();
-                }
-                continue;
-            }
-            if !in_fence {
-                let is_terminal_line = index + 1 == line_count;
-                let trailing = line.len() - line.trim_end_matches([' ', '\t']).len();
-                if line.trim().is_empty() {
-                    line.clear();
-                } else if trailing >= 2 && !is_terminal_line {
-                    *line = format!("{}  ", line.trim_end_matches([' ', '\t']));
-                } else {
-                    *line = trim_markdown_trailing_whitespace(line);
-                }
-            }
-        }
-    }
-
-    let mut squeezed = Vec::new();
-    let mut blanks = 0usize;
-    let mut fence = None::<FenceDelimiter>;
-    for line in lines {
-        if let Some(current) = fence {
-            let closes_fence = current.closes(&line);
-            squeezed.push(line);
+    fn write_source_line(&mut self, line: &str, is_terminal_line: bool) {
+        if let Some(current) = self.fence {
+            let closes_fence = current.closes(line);
+            self.write_line(line);
             if closes_fence {
-                fence = None;
+                self.fence = None;
             }
-            continue;
+            return;
         }
-        if let Some(opened) = FenceDelimiter::opens(&line) {
-            fence = Some(opened);
-            blanks = 0;
-            squeezed.push(line);
-        } else if line.is_empty() {
-            blanks += 1;
-            if blanks <= config.blank_lines_max_consecutive {
-                squeezed.push(line);
+        if let Some(opened) = FenceDelimiter::opens(line) {
+            self.flush_blank_lines();
+            self.write_line(line);
+            self.fence = Some(opened);
+            return;
+        }
+
+        let normalized_heading = normalize_heading_line(line, self.config);
+        let mut line = normalized_heading.as_deref().unwrap_or(line);
+        let trailing = line.len() - line.trim_end_matches([' ', '\t']).len();
+        let mut hard_break = None;
+        if self.config.trim_trailing_whitespace {
+            if line.trim().is_empty() {
+                line = "";
+            } else if trailing >= 2 && !is_terminal_line {
+                line = line.trim_end_matches([' ', '\t']);
+                hard_break = Some("  ");
+            } else {
+                line = line.trim_end_matches([' ', '\t']);
             }
-        } else {
-            blanks = 0;
-            squeezed.push(line);
+        }
+
+        if line.is_empty() {
+            self.pending_blank_lines = self.pending_blank_lines.saturating_add(1);
+            return;
+        }
+        self.flush_blank_lines();
+        self.write_line(line);
+        if let Some(suffix) = hard_break {
+            self.output.push_str(suffix);
         }
     }
 
-    while squeezed.last().is_some_and(String::is_empty) {
-        squeezed.pop();
+    fn flush_blank_lines(&mut self) {
+        let count = self
+            .pending_blank_lines
+            .min(self.config.blank_lines_max_consecutive);
+        for _ in 0..count {
+            self.write_line("");
+        }
+        self.pending_blank_lines = 0;
     }
 
-    let mut formatted = squeezed.join("\n");
-    if config.end_of_file_newline {
-        formatted.push('\n');
+    fn write_line(&mut self, line: &str) {
+        if self.wrote_line {
+            self.output.push('\n');
+        }
+        self.output.push_str(line);
+        self.wrote_line = true;
     }
-    formatted
+
+    fn finish(mut self) -> String {
+        if self.config.end_of_file_newline {
+            self.output.push('\n');
+        }
+        self.output
+    }
+}
+
+fn finalize_markdown_output_indexed(input: &str, config: &Config, index: &SourceIndex) -> String {
+    let mut writer = FinalWriter::new(config, input.len());
+    let line_count = index.lines.len();
+    for (line_index, source_line) in index.lines.iter().enumerate() {
+        writer.write_source_line(
+            &input[source_line.start..source_line.content_end],
+            line_index + 1 == line_count,
+        );
+    }
+    writer.finish()
 }
 
 fn parse_toml_file(path: &Path) -> Result<toml::Value> {
@@ -4971,6 +5045,42 @@ mod tests {
 
         assert_eq!(config.line_width, 123);
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
+    }
+
+    #[test]
+    fn source_index_tracks_newlines_frontmatter_and_fences_by_byte() {
+        let source = "---\r\ntitle: café\r\n---\r\n\r\n~~~~text\r\n``` literal\r\n~~~~\r\n尾\r\n";
+        let index = SourceIndex::new(source);
+        let frontmatter_end = source.find("\r\n\r\n").expect("frontmatter separator") + 2;
+        assert_eq!(index.line_ending, SourceLineEnding::Crlf);
+        assert_eq!(index.frontmatter, Some((0, frontmatter_end)));
+        assert_eq!(index.lines.last().map(|line| line.end), Some(source.len()));
+        assert_eq!(index.fenced_ranges.len(), 1);
+        let (start, end) = index.fenced_ranges[0];
+        assert_eq!(&source[start..end], "~~~~text\r\n``` literal\r\n~~~~\r\n");
+        assert!(source.is_char_boundary(start));
+        assert!(source.is_char_boundary(end));
+        assert!(!index.has_underscore);
+        assert!(!index.has_mdx_or_html);
+    }
+
+    #[test]
+    fn source_index_handles_cr_no_final_newline_and_unclosed_fence() {
+        let source = "# heading\r~~~rust\rlet value = 1;";
+        let index = SourceIndex::new(source);
+        assert_eq!(index.line_ending, SourceLineEnding::Cr);
+        assert_eq!(index.lines.len(), 3);
+        assert_eq!(index.lines.last().map(|line| line.end), Some(source.len()));
+        assert_eq!(index.fenced_ranges, vec![(10, source.len())]);
+    }
+
+    #[test]
+    fn source_index_detects_mixed_line_endings_and_construct_flags() {
+        let source = "<Component value={some_value}>\ntext\r\n";
+        let index = SourceIndex::new(source);
+        assert_eq!(index.line_ending, SourceLineEnding::Mixed);
+        assert!(index.has_underscore);
+        assert!(index.has_mdx_or_html);
     }
 
     #[test]
