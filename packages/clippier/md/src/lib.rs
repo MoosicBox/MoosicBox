@@ -27,11 +27,14 @@ use std::io::IsTerminal;
 use std::path::{Component, Path, PathBuf};
 #[cfg(feature = "benchmark-instrumentation")]
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::thread;
 
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use ignore::{WalkBuilder, WalkState};
+use ignore::{
+    DirEntry, Error as WalkError, ParallelVisitor, ParallelVisitorBuilder, WalkBuilder, WalkState,
+};
 use imara_diff::{Algorithm, BasicLineDiffPrinter, Diff, InternedInput, UnifiedDiffConfig};
 use markdown::{
     Constructs, ParseOptions,
@@ -147,6 +150,10 @@ pub struct Config {
     pub exclude_base: Option<PathBuf>,
     /// Directory names to skip while walking paths.
     pub skip_dirs: Vec<String>,
+    /// Maximum number of files formatted concurrently.
+    ///
+    /// A value of zero derives a bounded default from available parallelism.
+    pub max_concurrency: usize,
     /// Diff rendering controls used by check mode.
     pub check_diff: CheckDiffConfig,
     /// Prose wrapping policy.
@@ -205,6 +212,7 @@ impl Default for Config {
             exclude: Vec::new(),
             exclude_base: None,
             skip_dirs: Vec::new(),
+            max_concurrency: 0,
             check_diff: CheckDiffConfig::default(),
             prose_wrap: ProseWrapMode::Always,
             heading_indentation: HeadingIndentationMode::Preserve,
@@ -372,7 +380,6 @@ pub fn load_config(working_dir: &Path, explicit_config: Option<&Path>) -> Result
 ///
 /// * Returns an error when any traversed directory cannot be read.
 /// * Returns an error when `files.exclude` contains an invalid glob pattern.
-/// * Returns an error when internal synchronization for file collection fails.
 pub fn collect_markdown_files(
     paths: &[PathBuf],
     config: &Config,
@@ -383,8 +390,8 @@ pub fn collect_markdown_files(
     } else {
         paths.to_vec()
     };
-    let filters = Arc::new(PathFilters::new(config, working_dir)?);
-    let files: Arc<Mutex<BTreeSet<PathBuf>>> = Arc::new(Mutex::new(BTreeSet::new()));
+    let filters = PathFilters::new(config, working_dir)?;
+    let mut files = Vec::new();
 
     for path in &candidates {
         let mut builder = WalkBuilder::new(path);
@@ -396,53 +403,72 @@ pub fn collect_markdown_files(
         builder.git_exclude(config.respect_gitignore);
         builder.ignore(config.respect_gitignore);
 
-        let filters = Arc::clone(&filters);
-        let files = Arc::clone(&files);
-        builder.build_parallel().run(|| {
-            let filters = Arc::clone(&filters);
-            let files = Arc::clone(&files);
-            Box::new(move |result| {
-                let Ok(entry) = result else {
-                    return WalkState::Continue;
-                };
-
-                let entry_path = entry.path();
-                if entry
-                    .file_type()
-                    .is_some_and(|file_type| file_type.is_dir())
-                    && filters.should_skip_dir(entry_path)
-                {
-                    return WalkState::Skip;
-                }
-
-                if filters.should_skip_path(entry_path) {
-                    return WalkState::Continue;
-                }
-
-                if !entry
-                    .file_type()
-                    .is_some_and(|file_type| file_type.is_file())
-                {
-                    return WalkState::Continue;
-                }
-
-                if !is_markdown_path(entry_path) {
-                    return WalkState::Continue;
-                }
-
-                if let Ok(mut guard) = files.lock() {
-                    guard.insert(entry_path.to_path_buf());
-                }
-
-                WalkState::Continue
-            })
-        });
+        let (sender, receiver) = mpsc::channel();
+        let mut visitor_builder = MarkdownVisitorBuilder {
+            filters: &filters,
+            sender,
+        };
+        builder.build_parallel().visit(&mut visitor_builder);
+        drop(visitor_builder);
+        files.extend(receiver.into_iter().flatten());
     }
 
-    let files = files
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Failed to acquire markdown file collection lock"))?;
-    Ok(files.iter().cloned().collect())
+    files.sort_unstable();
+    files.dedup();
+    Ok(files)
+}
+
+struct MarkdownVisitorBuilder<'a> {
+    filters: &'a PathFilters,
+    sender: mpsc::Sender<Vec<PathBuf>>,
+}
+
+impl<'scope> ParallelVisitorBuilder<'scope> for MarkdownVisitorBuilder<'scope> {
+    fn build(&mut self) -> Box<dyn ParallelVisitor + 'scope> {
+        Box::new(MarkdownVisitor {
+            filters: self.filters,
+            files: Vec::new(),
+            sender: self.sender.clone(),
+        })
+    }
+}
+
+struct MarkdownVisitor<'scope> {
+    filters: &'scope PathFilters,
+    files: Vec<PathBuf>,
+    sender: mpsc::Sender<Vec<PathBuf>>,
+}
+
+impl ParallelVisitor for MarkdownVisitor<'_> {
+    fn visit(&mut self, result: std::result::Result<DirEntry, WalkError>) -> WalkState {
+        let Ok(entry) = result else {
+            return WalkState::Continue;
+        };
+        let entry_path = entry.path();
+        if entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_dir())
+            && self.filters.should_skip_dir(entry_path)
+        {
+            return WalkState::Skip;
+        }
+        if self.filters.should_skip_path(entry_path)
+            || !entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_file())
+            || !is_markdown_path(entry_path)
+        {
+            return WalkState::Continue;
+        }
+        self.files.push(entry_path.to_path_buf());
+        WalkState::Continue
+    }
+}
+
+impl Drop for MarkdownVisitor<'_> {
+    fn drop(&mut self) {
+        let _ = self.sender.send(std::mem::take(&mut self.files));
+    }
 }
 
 /// Runs markdown formatting or strict checking for the provided paths.
@@ -453,6 +479,11 @@ pub fn collect_markdown_files(
 /// * Returns an error when a formatted file cannot be written.
 /// * Returns an error when directory traversal fails.
 /// * Returns an error when path filtering contains invalid glob configuration.
+///
+/// Write mode processes bounded batches. If one worker fails, work already
+/// completed by earlier workers or peers in that batch remains written; the
+/// returned error identifies the failing file.
+#[allow(clippy::needless_collect)]
 pub fn run_fmt(
     paths: &[PathBuf],
     check: bool,
@@ -464,42 +495,54 @@ pub fn run_fmt(
     let mut changed = Vec::new();
     let mut diff_reports = Vec::new();
     let mut diff_omitted_files = 0usize;
+    let worker_count = formatter_worker_count(config, files.len());
 
-    for file in &files {
-        let input = std::fs::read_to_string(file)
-            .with_context(|| format!("Failed to read markdown file '{}'", file.display()))?;
-        let output = format_markdown(&input, config);
-        let file_changed = output != input;
-        #[cfg(feature = "benchmark-instrumentation")]
-        record_file(input.len(), output.len(), file_changed);
-        if file_changed {
-            changed.push(file.clone());
-            if check && emit_diff {
-                if config.check_diff.cap && diff_reports.len() >= config.check_diff.max_files {
-                    diff_omitted_files += 1;
-                } else {
-                    let raw_diff =
-                        render_unified_diff(file, &input, &output, config.check_diff.context);
-                    let enhanced_diff =
-                        enhance_unified_diff_presentation(&raw_diff, &config.check_diff);
-                    let (diff, truncated, omitted_lines) = truncate_diff_lines(
-                        &enhanced_diff,
-                        config.check_diff.cap,
-                        config.check_diff.max_lines_per_file,
-                    );
-                    diff_reports.push(DiffReport {
-                        path: file.clone(),
-                        diff,
-                        truncated,
-                        omitted_lines,
-                    });
-                }
+    for batch in files.chunks(worker_count) {
+        let results = thread::scope(|scope| {
+            let handles = batch
+                .iter()
+                .map(|file| {
+                    scope.spawn(move || process_markdown_file(file, check, emit_diff, config))
+                })
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|handle| {
+                    handle.join().map_or_else(
+                        |_| Err(anyhow::anyhow!("Markdown formatter worker panicked")),
+                        std::convert::identity,
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+
+        for result in results {
+            let result = result?;
+            if !result.changed {
+                continue;
             }
-            if !check {
-                std::fs::write(file, output).with_context(|| {
-                    format!("Failed to write markdown file '{}'", file.display())
-                })?;
+            changed.push(result.path.clone());
+            let Some((input, output)) = result.diff_content else {
+                continue;
+            };
+            if config.check_diff.cap && diff_reports.len() >= config.check_diff.max_files {
+                diff_omitted_files += 1;
+                continue;
             }
+            let raw_diff =
+                render_unified_diff(&result.path, &input, &output, config.check_diff.context);
+            let enhanced_diff = enhance_unified_diff_presentation(&raw_diff, &config.check_diff);
+            let (diff, truncated, omitted_lines) = truncate_diff_lines(
+                &enhanced_diff,
+                config.check_diff.cap,
+                config.check_diff.max_lines_per_file,
+            );
+            diff_reports.push(DiffReport {
+                path: result.path,
+                diff,
+                truncated,
+                omitted_lines,
+            });
         }
     }
 
@@ -508,6 +551,63 @@ pub fn run_fmt(
         changed,
         diff_reports,
         diff_omitted_files,
+    })
+}
+
+struct FileWorkResult {
+    path: PathBuf,
+    changed: bool,
+    diff_content: Option<(String, String)>,
+}
+
+fn formatter_worker_count(config: &Config, file_count: usize) -> usize {
+    let configured = if config.max_concurrency == 0 {
+        thread::available_parallelism()
+            .map_or(1, usize::from)
+            .min(8)
+    } else {
+        config.max_concurrency
+    };
+    configured.max(1).min(file_count.max(1))
+}
+
+fn process_markdown_file(
+    file: &Path,
+    check: bool,
+    emit_diff: bool,
+    config: &Config,
+) -> Result<FileWorkResult> {
+    let input = std::fs::read_to_string(file)
+        .with_context(|| format!("Failed to read markdown file '{}'", file.display()))?;
+    let outcome = format_markdown_outcome(&input, config);
+    let changed = matches!(outcome, FormatOutcome::Changed(_));
+    let output = match outcome {
+        FormatOutcome::Unchanged(_) => None,
+        FormatOutcome::Changed(output) => Some(output),
+    };
+    #[cfg(feature = "benchmark-instrumentation")]
+    record_file(
+        input.len(),
+        output.as_ref().map_or(input.len(), String::len),
+        changed,
+    );
+    if !changed {
+        return Ok(FileWorkResult {
+            path: file.to_path_buf(),
+            changed: false,
+            diff_content: None,
+        });
+    }
+    let output = output.expect("changed outcome must contain output");
+    if !check {
+        std::fs::write(file, &output)
+            .with_context(|| format!("Failed to write markdown file '{}'", file.display()))?;
+    }
+    let diff_content = (changed && check && emit_diff).then_some((input, output));
+    Ok(FileWorkResult {
+        path: file.to_path_buf(),
+        changed,
+        diff_content,
     })
 }
 
@@ -883,6 +983,92 @@ fn should_use_color(mode: ColorMode) -> bool {
     }
 }
 
+macro_rules! parse_mdast {
+    ($input:expr, $options:expr) => {{
+        #[cfg(feature = "benchmark-instrumentation")]
+        record_parse();
+        to_mdast($input, $options)
+    }};
+}
+
+enum FormatOutcome<'a> {
+    Unchanged(&'a str),
+    Changed(String),
+}
+
+impl FormatOutcome<'_> {
+    fn into_string(self) -> String {
+        match self {
+            Self::Unchanged(input) => input.to_string(),
+            Self::Changed(output) => output,
+        }
+    }
+}
+
+fn markdown_parse_options() -> ParseOptions {
+    let mut options = ParseOptions::gfm();
+    options.constructs = Constructs {
+        frontmatter: true,
+        mdx_esm: true,
+        mdx_expression_flow: true,
+        mdx_expression_text: true,
+        mdx_jsx_flow: true,
+        mdx_jsx_text: true,
+        ..Constructs::gfm()
+    };
+    options
+}
+
+enum LazyAst {
+    Unparsed,
+    Parsed(Node),
+    Invalid,
+}
+
+struct FormatSession<'a> {
+    source: &'a str,
+    config: &'a Config,
+    ast: LazyAst,
+    #[cfg(test)]
+    parse_count: usize,
+}
+
+impl<'a> FormatSession<'a> {
+    const fn new(source: &'a str, config: &'a Config) -> Self {
+        Self {
+            source,
+            config,
+            ast: LazyAst::Unparsed,
+            #[cfg(test)]
+            parse_count: 0,
+        }
+    }
+
+    fn ast(&mut self) -> Option<&Node> {
+        if matches!(self.ast, LazyAst::Unparsed) {
+            #[cfg(test)]
+            {
+                self.parse_count += 1;
+            }
+            self.ast = parse_mdast!(self.source, &markdown_parse_options())
+                .map_or(LazyAst::Invalid, LazyAst::Parsed);
+        }
+        match &self.ast {
+            LazyAst::Parsed(root) => Some(root),
+            LazyAst::Unparsed | LazyAst::Invalid => None,
+        }
+    }
+
+    fn finish(mut self) -> FormatOutcome<'a> {
+        let output = format_markdown_session(&mut self);
+        if output == self.source {
+            FormatOutcome::Unchanged(self.source)
+        } else {
+            FormatOutcome::Changed(output)
+        }
+    }
+}
+
 #[must_use]
 #[allow(clippy::too_many_lines)]
 /// Formats markdown content according to the provided configuration.
@@ -897,18 +1083,26 @@ fn should_use_color(mode: ColorMode) -> bool {
 /// assert_eq!(output, "#Title\n\nhello world\n");
 /// ```
 pub fn format_markdown(input: &str, config: &Config) -> String {
+    format_markdown_outcome(input, config).into_string()
+}
+
+fn format_markdown_outcome<'a>(input: &'a str, config: &'a Config) -> FormatOutcome<'a> {
     #[cfg(feature = "benchmark-instrumentation")]
     record_format_input(input.len());
-    let output = format_markdown_inner(input, config);
+    let output = FormatSession::new(input, config).finish();
     #[cfg(feature = "benchmark-instrumentation")]
-    record_format_output();
+    if matches!(output, FormatOutcome::Changed(_)) {
+        record_format_output();
+    }
     output
 }
 
 #[allow(clippy::too_many_lines)]
-fn format_markdown_inner(input: &str, config: &Config) -> String {
+fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
+    let input = session.source;
+    let config = session.config;
     if config.engine == FormatterEngine::Ast
-        && let Some(output) = normalize_literal_underscore_emphasis(input)
+        && let Some(output) = normalize_literal_underscore_emphasis(input, session.ast())
     {
         return output;
     }
@@ -995,7 +1189,7 @@ fn format_markdown_inner(input: &str, config: &Config) -> String {
         let mut formatted_body = if config.engine == FormatterEngine::Legacy {
             format_markdown_legacy(body, config)
         } else {
-            format_markdown_ast(body, config)
+            format_markdown_ast(body, config, None)
         };
 
         if !formatted_body.is_empty() && !formatted_body.starts_with('\n') {
@@ -1009,7 +1203,7 @@ fn format_markdown_inner(input: &str, config: &Config) -> String {
         return format_markdown_legacy(input, config);
     }
 
-    format_markdown_ast(input, config)
+    format_markdown_ast(input, config, session.ast())
 }
 
 fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
@@ -1046,21 +1240,13 @@ fn split_frontmatter(input: &str) -> Option<(&str, &str)> {
     }
 }
 
-macro_rules! parse_mdast {
-    ($input:expr, $options:expr) => {{
-        #[cfg(feature = "benchmark-instrumentation")]
-        record_parse();
-        to_mdast($input, $options)
-    }};
-}
-
-fn normalize_literal_underscore_emphasis(input: &str) -> Option<String> {
+fn normalize_literal_underscore_emphasis(input: &str, root: Option<&Node>) -> Option<String> {
     if !input.contains('_') {
         return None;
     }
-    let root = parse_mdast!(input, &ParseOptions::gfm()).ok()?;
+    let root = root?;
     let mut ranges = Vec::new();
-    collect_literal_underscore_emphasis_ranges(&root, &mut ranges);
+    collect_literal_underscore_emphasis_ranges(root, &mut ranges);
     if ranges.is_empty() {
         return None;
     }
@@ -1087,11 +1273,12 @@ fn collect_literal_underscore_emphasis_ranges(node: &Node, ranges: &mut Vec<(usi
     }
 }
 
-fn format_markdown_ast(input: &str, config: &Config) -> String {
+fn format_markdown_ast(input: &str, config: &Config, parsed_root: Option<&Node>) -> String {
+    let original_input = input;
     if let Some(output) = normalize_whitespace_edge_source(input) {
         return finalize_markdown_output(&output, config);
     }
-    if let Some(output) = normalize_common_inline_source(input) {
+    if let Some(output) = normalize_common_inline_source(input, parsed_root) {
         return finalize_markdown_output(&output, config);
     }
     if let Some(output) = normalize_inline_code_and_escape_source(input) {
@@ -1128,22 +1315,22 @@ fn format_markdown_ast(input: &str, config: &Config) -> String {
     let input = normalize_blockquote_cross_block_boundaries(input.as_ref());
     let input = normalize_lazy_blockquote_blank_continuation(input.as_ref());
     let input = input.as_ref();
-    let mut options = ParseOptions::gfm();
-    options.constructs = Constructs {
-        frontmatter: true,
-        mdx_esm: true,
-        mdx_expression_flow: true,
-        mdx_expression_text: true,
-        mdx_jsx_flow: true,
-        mdx_jsx_text: true,
-        ..Constructs::gfm()
+    let parsed_root = if input.len() == original_input.len()
+        && std::ptr::eq(input.as_ptr(), original_input.as_ptr())
+    {
+        parsed_root
+    } else {
+        None
+    };
+    let Some(root) = parsed_root else {
+        let Ok(root) = parse_mdast!(input, &markdown_parse_options()) else {
+            return finalize_markdown_output(input, config);
+        };
+        let rendered = render_ast_document(&root, input, config);
+        return finalize_markdown_output(&rendered, config);
     };
 
-    let Ok(root) = parse_mdast!(input, &options) else {
-        return finalize_markdown_output(input, config);
-    };
-
-    let rendered = render_ast_document(&root, input, config);
+    let rendered = render_ast_document(root, input, config);
     finalize_markdown_output(&rendered, config)
 }
 
@@ -1163,9 +1350,11 @@ fn normalize_whitespace_edge_source(input: &str) -> Option<String> {
     Some(output.to_string())
 }
 
-fn normalize_nested_asterisk_emphasis_in_strong(input: &str) -> Option<String> {
-    let root = parse_mdast!(input, &ParseOptions::gfm()).ok()?;
-    let Node::Root(root) = root else {
+fn normalize_nested_asterisk_emphasis_in_strong(
+    input: &str,
+    root: Option<&Node>,
+) -> Option<String> {
+    let Node::Root(root) = root? else {
         return None;
     };
     let [Node::Paragraph(paragraph)] = root.children.as_slice() else {
@@ -1314,8 +1503,8 @@ fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
     }
 }
 
-fn normalize_common_inline_source(input: &str) -> Option<String> {
-    if let Some(output) = normalize_nested_asterisk_emphasis_in_strong(input) {
+fn normalize_common_inline_source(input: &str, root: Option<&Node>) -> Option<String> {
+    if let Some(output) = normalize_nested_asterisk_emphasis_in_strong(input, root) {
         return Some(output);
     }
     if let Some(output) = normalize_direct_emphasis_source(input) {
@@ -3490,6 +3679,14 @@ fn apply_root_config(config: &mut Config, value: &toml::Value, config_dir: PathB
             .map(ToString::to_string)
             .collect();
     }
+    if let Some(max_concurrency) = value
+        .get("files")
+        .and_then(|section| section.get("max-concurrency"))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+    {
+        config.max_concurrency = max_concurrency;
+    }
     if let Some(mode) = value
         .get("headings")
         .and_then(|section| section.get("indentation"))
@@ -4318,13 +4515,16 @@ mod tests {
                 "**Gomphocarpus (_Gomphocarpus physocarpus_, syn.\n_Asclepias physocarpa_)**\n",
             ),
         ] {
+            let root = parse_mdast!(input, &ParseOptions::gfm()).expect("input must parse");
             assert_eq!(
-                normalize_nested_asterisk_emphasis_in_strong(input),
+                normalize_nested_asterisk_emphasis_in_strong(input, Some(&root)),
                 Some(expected.to_string())
             );
         }
+        let input = "prefix **foo *bar* baz**\n";
+        let root = parse_mdast!(input, &ParseOptions::gfm()).expect("input must parse");
         assert_eq!(
-            normalize_nested_asterisk_emphasis_in_strong("prefix **foo *bar* baz**\n"),
+            normalize_nested_asterisk_emphasis_in_strong(input, Some(&root)),
             None
         );
     }
@@ -4774,6 +4974,25 @@ mod tests {
     }
 
     #[test]
+    fn format_session_reuses_its_lazy_ast() {
+        let config = Config::default();
+        let mut session = FormatSession::new("# Heading\n", &config);
+        assert_eq!(session.parse_count, 0);
+        assert!(session.ast().is_some());
+        assert!(session.ast().is_some());
+        assert_eq!(session.parse_count, 1);
+    }
+
+    #[test]
+    fn format_outcome_borrows_unchanged_input() {
+        let input = "# Canonical\n";
+        match format_markdown_outcome(input, &Config::default()) {
+            FormatOutcome::Unchanged(borrowed) => assert!(std::ptr::eq(input, borrowed)),
+            FormatOutcome::Changed(output) => panic!("unexpected changed output: {output}"),
+        }
+    }
+
+    #[test]
     fn run_fmt_check_and_write_cover_product_integration() {
         let dir = temp_dir("clippier-md-run-fmt");
         let path = dir.join("input.md");
@@ -4802,6 +5021,86 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
+    }
+
+    #[test]
+    fn run_fmt_parallel_pipeline_is_deterministic_and_caps_diffs() {
+        let dir = temp_dir("clippier-md-run-fmt-parallel");
+        let mut expected_changed = Vec::new();
+        for index in (0..12).rev() {
+            let path = dir.join(format!("{index:02}.md"));
+            let input = if index % 3 == 0 {
+                "already short\n"
+            } else {
+                "one two three four\n"
+            };
+            std::fs::write(&path, input).expect("failed to write parallel fixture");
+            if format_markdown(
+                input,
+                &Config {
+                    line_width: 10,
+                    ..Config::default()
+                },
+            ) != input
+            {
+                expected_changed.push(path);
+            }
+        }
+        expected_changed.sort_unstable();
+        let config = Config {
+            line_width: 10,
+            max_concurrency: 3,
+            check_diff: CheckDiffConfig {
+                max_files: 2,
+                ..CheckDiffConfig::default()
+            },
+            ..Config::default()
+        };
+
+        for _ in 0..5 {
+            let checked = run_fmt(std::slice::from_ref(&dir), true, true, &config)
+                .expect("parallel check must succeed");
+            assert_eq!(checked.checked, 12);
+            assert_eq!(checked.changed, expected_changed);
+            assert_eq!(checked.diff_reports.len(), 2);
+            assert_eq!(checked.diff_omitted_files, expected_changed.len() - 2);
+            assert_eq!(checked.diff_reports[0].path, expected_changed[0]);
+            assert_eq!(checked.diff_reports[1].path, expected_changed[1]);
+        }
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean parallel fixture");
+    }
+
+    #[test]
+    fn run_fmt_parallel_pipeline_attributes_worker_errors() {
+        let dir = temp_dir("clippier-md-run-fmt-error");
+        let valid = dir.join("valid.md");
+        let invalid = dir.join("invalid.md");
+        std::fs::write(&valid, "valid\n").expect("failed to write valid fixture");
+        std::fs::write(&invalid, [0xff]).expect("failed to write invalid fixture");
+        let config = Config {
+            max_concurrency: 2,
+            ..Config::default()
+        };
+
+        let error = run_fmt(&[valid, invalid.clone()], true, false, &config)
+            .expect_err("invalid UTF-8 must fail");
+        assert!(error.to_string().contains(&invalid.display().to_string()));
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean error fixture");
+    }
+
+    #[test]
+    fn load_config_reads_file_concurrency() {
+        let dir = temp_dir("clippier-md-concurrency-config");
+        let path = dir.join("clippier-md.toml");
+        std::fs::write(&path, "[files]\nmax-concurrency = 3\n")
+            .expect("failed to write concurrency config");
+
+        let config = load_config(&dir, Some(&path)).expect("failed to load concurrency config");
+        assert_eq!(config.max_concurrency, 3);
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean concurrency fixture");
     }
 
     #[test]

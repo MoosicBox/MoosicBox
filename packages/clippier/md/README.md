@@ -42,6 +42,7 @@ indentation = "preserve"
 
 [files]
 respect-gitignore = true
+max-concurrency = 0 # 0 derives a bounded default, otherwise sets the worker limit
 exclude = ["/generated/**", "/vendor/**"]
 skip-dirs = ["node_modules", "target", ".direnv"]
 
@@ -100,6 +101,7 @@ independently of the locked Prettier parity profile:
 | `files.respect-gitignore`     | boolean, default `true`                   | Applies nested gitignore rules during discovery.                           |
 | `files.exclude`               | glob array                                | Excludes matching paths.                                                   |
 | `files.skip-dirs`             | directory-name array                      | Prunes named directories during traversal.                                 |
+| `files.max-concurrency`       | integer, default `0`                      | Bounds formatting workers; `0` derives a bounded host default.             |
 
 The AST engine enables GFM and MDX parsing. Unsupported or intentionally
 unmodified constructs, including MDX ESM, expressions, and JSX, are preserved
