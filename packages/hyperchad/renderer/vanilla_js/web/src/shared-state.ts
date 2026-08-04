@@ -286,6 +286,19 @@ async function postSharedStateTransport(
             const diagnostic = response.headers.get(
                 'x-hyperchad-transport-diagnostic',
             );
+            const recoverable =
+                response.status === 409 ||
+                (response.status === 400 &&
+                    (diagnostic === 'transport_identity_mismatch' ||
+                        responseText === 'transport_identity_mismatch'));
+            if (recoverable && recoverSharedStateIdentity()) {
+                console.info('Shared-state transport session recovered', {
+                    status: response.status,
+                    requestId: response.headers.get('x-request-id') ?? '',
+                    diagnostic,
+                });
+                return false;
+            }
             console.error('Shared-state transport post failed', {
                 status: response.status,
                 statusText: response.statusText,
@@ -293,14 +306,6 @@ async function postSharedStateTransport(
                 diagnostic,
                 responseText,
             });
-            if (
-                (response.status === 400 &&
-                    diagnostic === 'transport_identity_mismatch') ||
-                (response.status === 409 &&
-                    diagnostic === 'unknown_transport_session')
-            ) {
-                recoverSharedStateIdentity();
-            }
             return false;
         }
 

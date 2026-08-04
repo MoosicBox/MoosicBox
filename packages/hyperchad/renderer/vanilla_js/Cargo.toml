@@ -148,7 +148,7 @@ plugin-routing = ["hyperchad_renderer_vanilla_js_hash/plugin-routing"]
 plugin-shared-state = [
     "hyperchad_renderer_vanilla_js_hash/plugin-shared-state",
     "plugin-actions-event",
-    "plugin-sse",
+    "plugin-uuid",
 ]
 plugin-sse = ["hyperchad_renderer_vanilla_js_hash/plugin-sse", "plugin-uuid"]
 plugin-tauri-event = ["hyperchad_renderer_vanilla_js_hash/plugin-tauri-event"]

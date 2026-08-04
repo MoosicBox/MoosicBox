@@ -198,6 +198,56 @@ describe('shared-state plugin', () => {
         );
     });
 
+    test('recovers a missing post session even without exposed diagnostic headers', async ({
+        worker,
+    }) => {
+        document.body.innerHTML = `
+            <div data-shared-state-channel="room:post-recovery"></div>
+        `;
+
+        let streamSessionId = '';
+        let recoveredSessionId = '';
+        let postAttempts = 0;
+        worker.use(
+            http.get('/$shared-state/transport/sse', ({ request }) => {
+                const sessionId =
+                    new URL(request.url).searchParams.get('session_id') ?? '';
+                if (!streamSessionId) {
+                    streamSessionId = sessionId;
+                } else if (sessionId !== streamSessionId) {
+                    recoveredSessionId = sessionId;
+                }
+                return new HttpResponse(
+                    new ReadableStream({
+                        start() {},
+                    }),
+                    {
+                        status: 200,
+                        headers: { 'content-type': 'text/event-stream' },
+                    },
+                );
+            }),
+            http.post('/$shared-state/transport', () => {
+                postAttempts++;
+                return postAttempts === 1
+                    ? new HttpResponse(null, { status: 409 })
+                    : new HttpResponse(null, { status: 204 });
+            }),
+        );
+
+        const core = await import('../../src/core');
+        await import('../../src/sse');
+        await import('../../src/shared-state');
+        core.triggerHandlers('domLoad', {
+            elements: [document.documentElement],
+            initial: false,
+            navigation: false,
+        });
+
+        await vi.waitFor(() => expect(recoveredSessionId).toBeTruthy());
+        expect(recoveredSessionId).not.toBe(streamSessionId);
+    });
+
     test('subscribes, dispatches events, and unsubscribes removed channels', async ({
         worker,
     }) => {
