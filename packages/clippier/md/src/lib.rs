@@ -1070,11 +1070,11 @@ struct SourceLine {
 #[derive(Debug)]
 struct SourceIndex {
     lines: Vec<SourceLine>,
+    #[allow(dead_code)]
     line_ending: SourceLineEnding,
     frontmatter: Option<(usize, usize)>,
     fenced_ranges: Vec<(usize, usize)>,
     has_underscore: bool,
-    has_mdx_or_html: bool,
 }
 
 impl SourceIndex {
@@ -1133,7 +1133,6 @@ impl SourceIndex {
             frontmatter,
             fenced_ranges,
             has_underscore: source.contains('_'),
-            has_mdx_or_html: source.contains('<') || source.contains('{'),
         }
     }
 }
@@ -1208,11 +1207,6 @@ impl<'a> FormatSession<'a> {
     }
 
     fn finish(mut self) -> FormatOutcome<'a> {
-        let _source_facts = (
-            self.source_index.lines.len(),
-            self.source_index.line_ending,
-            self.source_index.has_mdx_or_html,
-        );
         let output = format_markdown_session(&mut self);
         if output == self.source {
             FormatOutcome::Unchanged(self.source)
@@ -5117,7 +5111,6 @@ mod tests {
         assert!(source.is_char_boundary(start));
         assert!(source.is_char_boundary(end));
         assert!(!index.has_underscore);
-        assert!(!index.has_mdx_or_html);
     }
 
     #[test]
@@ -5131,12 +5124,11 @@ mod tests {
     }
 
     #[test]
-    fn source_index_detects_mixed_line_endings_and_construct_flags() {
+    fn source_index_detects_mixed_line_endings_and_underscore() {
         let source = "<Component value={some_value}>\ntext\r\n";
         let index = SourceIndex::new(source);
         assert_eq!(index.line_ending, SourceLineEnding::Mixed);
         assert!(index.has_underscore);
-        assert!(index.has_mdx_or_html);
     }
 
     #[test]
