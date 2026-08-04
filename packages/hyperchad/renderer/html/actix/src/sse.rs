@@ -22,7 +22,11 @@ use flate2::{
     Compression,
     write::{DeflateEncoder, GzEncoder, ZlibEncoder},
 };
-use futures_util::{StreamExt as _, TryStreamExt};
+use futures_util::{
+    FutureExt as _, StreamExt as _, TryStreamExt,
+    future::{Either, select},
+    pin_mut,
+};
 use hyperchad_renderer::{Content, RendererEvent};
 
 use crate::{ActixApp, ActixResponseProcessor};
@@ -347,6 +351,20 @@ pub async fn handle_sse<
         })
         .inspect_ok(|_| log::debug!("handle_sse: sending data"))
         .inspect_err(|e| log::error!("handle_sse: error: {e:?}"));
+    let stream = Box::pin(stream);
+    let stream = futures_util::stream::unfold(stream, |mut stream| async move {
+        let next = stream.next().fuse();
+        let heartbeat = actix_web::rt::time::sleep(std::time::Duration::from_secs(20)).fuse();
+        pin_mut!(next, heartbeat);
+        match select(next, heartbeat).await {
+            Either::Left((Some(item), _)) => Some((item, stream)),
+            Either::Left((None, _)) => None,
+            Either::Right(((), _)) => Some((
+                Ok::<_, actix_web::Error>(Bytes::from_static(b": keepalive\n\n")),
+                stream,
+            )),
+        }
+    });
 
     Ok::<_, actix_web::Error>(
         HttpResponse::Ok()

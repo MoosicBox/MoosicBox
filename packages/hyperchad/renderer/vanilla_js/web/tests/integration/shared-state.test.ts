@@ -5,6 +5,7 @@ import { test } from '../helpers/test-extend';
 describe('shared-state plugin', () => {
     beforeEach(() => {
         localStorage.clear();
+        sessionStorage.clear();
         document.cookie.split(';').forEach((c) => {
             document.cookie = c
                 .replace(/^ +/, '')
@@ -135,6 +136,65 @@ describe('shared-state plugin', () => {
         });
         expect(requestDiagnostics).not.toContainEqual(
             expect.objectContaining({ token: 'stale-token' }),
+        );
+    });
+
+    test('recovers once when a persisted session belongs to another identity', async ({
+        worker,
+    }) => {
+        document.body.innerHTML = `
+            <div data-shared-state-channel="room:recovery"></div>
+        `;
+        sessionStorage.setItem('sharedStateSessionId', 'stale-session-id');
+
+        const originalSessionId = sessionStorage.getItem(
+            'sharedStateSessionId',
+        );
+        expect(originalSessionId).toBeTruthy();
+        let attempts = 0;
+        let recoveredSessionId = '';
+        worker.use(
+            http.get('/$shared-state/transport/sse', ({ request }) => {
+                attempts++;
+                const sessionId =
+                    new URL(request.url).searchParams.get('session_id') ?? '';
+                if (attempts === 1) {
+                    expect(sessionId).toBe(originalSessionId);
+                    return new HttpResponse('transport_identity_mismatch', {
+                        status: 400,
+                        headers: {
+                            'x-hyperchad-transport-diagnostic':
+                                'transport_identity_mismatch',
+                            'x-request-id': 'request-recovery',
+                        },
+                    });
+                }
+                recoveredSessionId = sessionId;
+                return new HttpResponse(
+                    new ReadableStream({
+                        start() {},
+                    }),
+                    {
+                        status: 200,
+                        headers: { 'content-type': 'text/event-stream' },
+                    },
+                );
+            }),
+        );
+
+        const core = await import('../../src/core');
+        await import('../../src/sse');
+        await import('../../src/shared-state');
+        core.triggerHandlers('domLoad', {
+            elements: [document.documentElement],
+            initial: false,
+            navigation: false,
+        });
+
+        await vi.waitFor(() => expect(recoveredSessionId).toBeTruthy());
+        expect(recoveredSessionId).not.toBe(originalSessionId);
+        expect(sessionStorage.getItem('sharedStateSessionId')).toBe(
+            recoveredSessionId,
         );
     });
 

@@ -1,6 +1,13 @@
 import { on } from './core';
 import { csrfToken, withCsrfHeader } from './csrf';
-import { hasActiveEventSourceStream, startEventSourceStream } from './sse-base';
+import {
+    clearClientStreamId,
+    createEventSourcePath,
+    getOrCreateClientStreamId,
+    hasActiveEventSourceStream,
+    startEventSourceStream,
+    stopEventSourceStream,
+} from './sse-base';
 
 const SHARED_STATE_CHANNEL_ATTR = 'data-shared-state-channel';
 const SHARED_STATE_COMMAND_ATTR = 'data-shared-state-command';
@@ -79,6 +86,7 @@ const lastSeenRevisionByChannel = new Map<string, number>();
 
 let sharedStateSessionId: string | null = null;
 let sharedStateConnected = false;
+let sharedStateIdentityRecoveryAttempted = false;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -230,6 +238,17 @@ function handleSharedStateInboundPayload(serializedInbound: string): void {
     }
 }
 
+export function sharedStateEventSourcePath(): string {
+    return createEventSourcePath(
+        SHARED_STATE_TRANSPORT_SSE_PATH,
+        getOrCreateClientStreamId(
+            SHARED_STATE_SESSION_STORAGE_KEY,
+            sessionStorage,
+        ),
+        true,
+    );
+}
+
 function sharedStateTransportPath(): string {
     if (!sharedStateSessionId) {
         return SHARED_STATE_TRANSPORT_POST_PATH;
@@ -261,15 +280,24 @@ async function postSharedStateTransport(
 
         if (response.status >= 400) {
             const responseText = await response.text();
+            const diagnostic = response.headers.get(
+                'x-hyperchad-transport-diagnostic',
+            );
             console.error('Shared-state transport post failed', {
                 status: response.status,
                 statusText: response.statusText,
                 requestId: response.headers.get('x-request-id') ?? '',
-                diagnostic: response.headers.get(
-                    'x-hyperchad-transport-diagnostic',
-                ),
+                diagnostic,
                 responseText,
             });
+            if (
+                (response.status === 400 &&
+                    diagnostic === 'transport_identity_mismatch') ||
+                (response.status === 409 &&
+                    diagnostic === 'unknown_transport_session')
+            ) {
+                recoverSharedStateIdentity();
+            }
             return false;
         }
 
@@ -393,6 +421,37 @@ function setDesiredChannels(channels: Set<string>): void {
     channels.forEach((channel) => desiredChannels.add(channel));
 }
 
+function resetSharedStateSession(): void {
+    stopEventSourceStream(SHARED_STATE_STREAM_KEY);
+    clearClientStreamId(
+        SHARED_STATE_SESSION_STORAGE_KEY,
+        SHARED_STATE_SESSION_COOKIE_NAME,
+        sessionStorage,
+    );
+    sharedStateSessionId = null;
+    sharedStateConnected = false;
+    subscribedChannels.clear();
+}
+
+function isRecoverableIdentityResponse(response: Response): boolean {
+    const diagnostic = response.headers.get('x-hyperchad-transport-diagnostic');
+    return (
+        (response.status === 400 &&
+            diagnostic === 'transport_identity_mismatch') ||
+        (response.status === 409 && diagnostic === 'unknown_transport_session')
+    );
+}
+
+function recoverSharedStateIdentity(): boolean {
+    if (sharedStateIdentityRecoveryAttempted) {
+        return false;
+    }
+    sharedStateIdentityRecoveryAttempted = true;
+    resetSharedStateSession();
+    window.setTimeout(connectSharedStateTransportStream, 0);
+    return true;
+}
+
 function connectSharedStateTransportStream(): void {
     if (!hasActiveEventSourceStream(SHARED_STATE_STREAM_KEY)) {
         sharedStateConnected = false;
@@ -411,15 +470,33 @@ function connectSharedStateTransportStream(): void {
                 ? Object.fromEntries(withCsrfHeader().entries())
                 : undefined,
             onopen: async (response) => {
+                if (isRecoverableIdentityResponse(response)) {
+                    if (!recoverSharedStateIdentity()) {
+                        console.error(
+                            'Shared-state identity recovery already attempted',
+                            {
+                                requestId:
+                                    response.headers.get('x-request-id') ?? '',
+                            },
+                        );
+                    }
+                    throw new Error('shared-state transport identity changed');
+                }
                 if (response.status >= 400) {
                     const status = response.status.toString();
                     console.error('Failed to open shared-state SSE stream', {
                         status,
+                        requestId: response.headers.get('x-request-id') ?? '',
+                        diagnostic: response.headers.get(
+                            'x-hyperchad-transport-diagnostic',
+                        ),
+                        responseText: await response.text(),
                     });
                     sharedStateConnected = false;
-                    return;
+                    throw new Error(`shared-state SSE rejected with ${status}`);
                 }
 
+                sharedStateIdentityRecoveryAttempted = false;
                 sharedStateConnected = true;
                 subscribedChannels.clear();
                 dispatchSharedStateEvent(
@@ -443,6 +520,7 @@ function connectSharedStateTransportStream(): void {
                 }
             },
             streamIdStorageKey: SHARED_STATE_SESSION_STORAGE_KEY,
+            streamIdStorage: sessionStorage,
             streamIdCookieName: SHARED_STATE_SESSION_COOKIE_NAME,
             openWhenHidden: true,
         },

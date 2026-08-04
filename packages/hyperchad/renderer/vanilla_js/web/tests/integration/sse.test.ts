@@ -263,9 +263,29 @@ describe('SSE', () => {
             await vi.waitFor(() => expect(queries).toHaveLength(2));
 
             expect(queries).toEqual([
-                '?token=one&hyperchad-event-scope=one',
-                '?token=one&hyperchad-event-scope=two',
+                '?hyperchad-event-scope=one',
+                '?hyperchad-event-scope=two',
             ]);
+        });
+
+        test('does not copy unrelated page query parameters to the stream', async ({
+            worker,
+        }) => {
+            const queries: string[] = [];
+            worker.use(
+                sse('/$sse', ({ request }) => {
+                    queries.push(new URL(request.url).search);
+                }),
+            );
+
+            history.replaceState({}, '', '/games/one?draft_revision=6');
+            await import('../../src/core');
+            await import('../../src/uuid');
+            const { initSSE } = await import('../../src/sse');
+            initSSE();
+
+            await vi.waitFor(() => expect(queries).toHaveLength(1));
+            expect(queries[0]).toBe('');
         });
 
         test('handles connection errors gracefully', async ({ worker }) => {

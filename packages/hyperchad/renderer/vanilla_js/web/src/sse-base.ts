@@ -9,6 +9,7 @@ export const DEFAULT_SSE_STREAM_ID_COOKIE_NAME = 'v-sse-stream-id';
 
 export interface EventSourceStreamOptions {
     streamIdStorageKey?: string;
+    streamIdStorage?: Storage;
     streamIdCookieName?: string;
     streamKey?: string;
     signal?: AbortSignal;
@@ -60,13 +61,23 @@ export function stopAllEventSourceStreams(): void {
 
 export function getOrCreateClientStreamId(
     streamIdStorageKey: string = DEFAULT_SSE_STREAM_ID_STORAGE_KEY,
+    storage: Storage = localStorage,
 ): string {
-    let id = localStorage.getItem(streamIdStorageKey);
+    let id = storage.getItem(streamIdStorageKey);
     if (!id) {
         id = v.genUuid();
-        localStorage.setItem(streamIdStorageKey, id);
+        storage.setItem(streamIdStorageKey, id);
     }
     return id;
+}
+
+export function clearClientStreamId(
+    streamIdStorageKey: string = DEFAULT_SSE_STREAM_ID_STORAGE_KEY,
+    streamIdCookieName: string = DEFAULT_SSE_STREAM_ID_COOKIE_NAME,
+    storage: Storage = localStorage,
+): void {
+    storage.removeItem(streamIdStorageKey);
+    document.cookie = `${streamIdCookieName}=; path=/; SameSite=Strict; max-age=0`;
 }
 
 export function setStreamIdCookie(cookieName: string, streamId: string): void {
@@ -102,7 +113,10 @@ export function startEventSourceStream(
         activeEventSourceStreams.delete(streamKey);
     }
 
-    const streamId = getOrCreateClientStreamId(options.streamIdStorageKey);
+    const streamId = getOrCreateClientStreamId(
+        options.streamIdStorageKey,
+        options.streamIdStorage,
+    );
     const controller = new AbortController();
 
     if (options.signal) {

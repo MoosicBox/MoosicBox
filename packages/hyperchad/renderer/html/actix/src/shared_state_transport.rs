@@ -773,7 +773,22 @@ pub async fn handle_shared_state_transport_sse<
             ErrorBadRequest("Missing shared-state session id (query 'session_id' or cookie)")
         })?;
         let context = resolve_authenticated_context(&shared_state_transport, &req, false).await?;
-        upsert_sse_session_stream(&shared_state_transport, &session_id, context)?
+        match upsert_sse_session_stream(&shared_state_transport, &session_id, context) {
+            Ok(receiver) => receiver,
+            Err(error) if error.as_response_error().status_code() == StatusCode::BAD_REQUEST => {
+                log::warn!(
+                    target: "hyperchad::shared_state_transport",
+                    "shared_state_sse_rejected request_id={} reason=transport_identity_mismatch",
+                    request_id(&req)
+                );
+                return Ok(diagnostic_response(
+                    StatusCode::BAD_REQUEST,
+                    &req,
+                    "transport_identity_mismatch",
+                ));
+            }
+            Err(error) => return Err(error),
+        }
     } else {
         (shared_state_transport.inbound_receiver_factory)()
     };
@@ -782,6 +797,20 @@ pub async fn handle_shared_state_transport_sse<
         serde_json::to_string(&inbound)
             .map(|payload| Bytes::from(format!("data: {payload}\n\n")))
             .map_err(ErrorInternalServerError)
+    });
+    let stream = Box::pin(stream);
+    let stream = futures_util::stream::unfold(stream, |mut stream| async move {
+        let next = stream.next().fuse();
+        let heartbeat = actix_web::rt::time::sleep(std::time::Duration::from_secs(20)).fuse();
+        pin_mut!(next, heartbeat);
+        match select(next, heartbeat).await {
+            Either::Left((Some(item), _)) => Some((item, stream)),
+            Either::Left((None, _)) => None,
+            Either::Right(((), _)) => Some((
+                Ok::<_, actix_web::Error>(Bytes::from_static(b": keepalive\n\n")),
+                stream,
+            )),
+        }
     });
 
     Ok(HttpResponse::Ok()
