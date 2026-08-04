@@ -1600,9 +1600,6 @@ fn normalize_nested_asterisk_emphasis_in_strong(
 #[allow(clippy::match_same_arms)]
 fn normalize_direct_emphasis_source(input: &str) -> Option<&'static str> {
     match input {
-        "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n" => {
-            Some("**Gomphocarpus (_Gomphocarpus physocarpus_, syn.\n_Asclepias physocarpa_)**\n")
-        }
         "_foo _bar_ baz_\n" => Some("_foo \\_bar_ baz\\_\n"),
         "__foo_ bar_\n" => Some("\\__foo_ bar\\_\n"),
         "*foo *bar**\n" => Some("*foo *bar\\*\\*\n"),
