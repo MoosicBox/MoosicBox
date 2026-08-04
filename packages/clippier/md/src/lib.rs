@@ -1515,7 +1515,58 @@ fn normalize_code_and_html_source_forms(input: &str) -> Option<String> {
     Some(output.to_string())
 }
 
+fn fenced_code_ranges(input: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    let mut open = None::<(usize, FenceDelimiter)>;
+    let mut offset = 0usize;
+    for line in input.split_inclusive('\n') {
+        if let Some((start, delimiter)) = open {
+            if delimiter.closes(line.trim_end_matches(['\r', '\n'])) {
+                ranges.push((start, offset + line.len()));
+                open = None;
+            }
+        } else if let Some(delimiter) = FenceDelimiter::opens(line) {
+            open = Some((offset, delimiter));
+        }
+        offset += line.len();
+    }
+    if let Some((start, _)) = open {
+        ranges.push((start, input.len()));
+    }
+    ranges
+}
+
 fn normalize_html_block_source(input: &str) -> Option<String> {
+    let ranges = fenced_code_ranges(input);
+    if ranges.is_empty() {
+        return normalize_html_block_segment(input);
+    }
+
+    let mut output = String::with_capacity(input.len());
+    let mut cursor = 0usize;
+    let mut changed = false;
+    for (start, end) in ranges {
+        let segment = &input[cursor..start];
+        if let Some(normalized) = normalize_html_block_segment(segment) {
+            output.push_str(&normalized);
+            changed = true;
+        } else {
+            output.push_str(segment);
+        }
+        output.push_str(&input[start..end]);
+        cursor = end;
+    }
+    let segment = &input[cursor..];
+    if let Some(normalized) = normalize_html_block_segment(segment) {
+        output.push_str(&normalized);
+        changed = true;
+    } else {
+        output.push_str(segment);
+    }
+    changed.then_some(output)
+}
+
+fn normalize_html_block_segment(input: &str) -> Option<String> {
     let mut output = input.to_string();
     let original = output.clone();
 
@@ -1865,7 +1916,7 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
                 && matches!(child, Node::Paragraph(_))
                 && !gap.contains("\n\n")
                 || previous.is_some_and(|node| matches!(node, Node::List(_)))
-                    && matches!(child, Node::List(_))
+                    && matches!(child, Node::List(_) | Node::Code(_))
                 || previous
                     .is_some_and(|node| matches!(node, Node::Heading(_) | Node::ThematicBreak(_)))
                     && !matches!(child, Node::List(_))
@@ -3171,8 +3222,21 @@ fn finalize_markdown_output(input: &str, config: &Config) -> String {
 
     let mut squeezed = Vec::new();
     let mut blanks = 0usize;
+    let mut fence = None::<FenceDelimiter>;
     for line in lines {
-        if line.is_empty() {
+        if let Some(current) = fence {
+            let closes_fence = current.closes(&line);
+            squeezed.push(line);
+            if closes_fence {
+                fence = None;
+            }
+            continue;
+        }
+        if let Some(opened) = FenceDelimiter::opens(&line) {
+            fence = Some(opened);
+            blanks = 0;
+            squeezed.push(line);
+        } else if line.is_empty() {
             blanks += 1;
             if blanks <= config.blank_lines_max_consecutive {
                 squeezed.push(line);
@@ -3540,9 +3604,39 @@ fn finish_line(line: &str, config: &Config) -> String {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FenceDelimiter {
+    marker: char,
+    length: usize,
+}
+
+impl FenceDelimiter {
+    fn opens(line: &str) -> Option<Self> {
+        let trimmed = line.trim_start();
+        let marker = trimmed.chars().next()?;
+        if !matches!(marker, '`' | '~') {
+            return None;
+        }
+        let length = trimmed.chars().take_while(|value| *value == marker).count();
+        (length >= 3).then_some(Self { marker, length })
+    }
+
+    fn closes(self, line: &str) -> bool {
+        let trimmed = line.trim_start();
+        trimmed
+            .chars()
+            .take_while(|value| *value == self.marker)
+            .count()
+            >= self.length
+            && trimmed
+                .trim_matches(self.marker)
+                .trim_matches([' ', '\t'])
+                .is_empty()
+    }
+}
+
 fn is_fence_start(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with("```") || trimmed.starts_with("~~~")
+    FenceDelimiter::opens(line).is_some()
 }
 
 fn is_non_wrappable_block_line(line: &str) -> bool {
@@ -3896,6 +3990,28 @@ mod tests {
 
         assert_eq!(output, input);
         assert_eq!(format_markdown(&output, &config), output);
+    }
+
+    #[test]
+    fn preserves_blank_lines_and_html_comments_inside_fenced_code() {
+        let config = Config {
+            engine: FormatterEngine::Ast,
+            prose_wrap: ProseWrapMode::Preserve,
+            list_indentation: ListIndentationMode::Preserve,
+            list_style: ListStyle::Preserve,
+            line_width: 999_999,
+            ..Config::default()
+        };
+        for input in [
+            "```html\n<!-- Development -->\n<script src=\"/app.js\"></script>\n```\n",
+            "```toml\n[dev-dependencies]\ntokio = { workspace = true }\n\n\n[features]\ndefault = []\n```\n",
+            "```rust\nlet value = 1;\n\n\n```\n",
+            "~~~~text\n``` is literal\n\n\n* literal marker\n~~~~\n",
+        ] {
+            let output = format_markdown(input, &config);
+            assert_eq!(output, input);
+            assert_eq!(format_markdown(&output, &config), output);
+        }
     }
 
     #[test]

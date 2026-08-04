@@ -26,3 +26,23 @@ fenced with tildes
             * i32::from(2 * i1 + 1)
         - w1_q13;
     ```
+
+```html
+<!-- Development -->
+<script src="/app.js"></script>
+```
+
+```toml
+[dev-dependencies]
+tokio = { workspace = true }
+
+
+[features]
+default = []
+```
+
+```rust
+let value = 1;
+
+
+```
