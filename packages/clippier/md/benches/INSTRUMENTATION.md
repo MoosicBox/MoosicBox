@@ -19,8 +19,9 @@ Interpretation:
   byte offsets and require an explicit replacement parse.
 - `outputs_allocated` counts owned changed outcomes, not allocator calls.
 - `peak_in_flight_bytes` is the largest logical input-plus-output pair for one
-  worker; multiply by configured worker count for the conservative pipeline
-  bound.
+  worker; `peak_batch_in_flight_bytes` measures all retained diff content in a
+  completed bounded batch and must remain at most worker-count times that
+  per-file bound.
 - `output_bytes_written` and `peak_output_capacity` expose final-writer copy and
   growth behavior. They do not replace an external allocation/RSS profiler.
 

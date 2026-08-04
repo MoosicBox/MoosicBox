@@ -8,8 +8,10 @@ use std::{env, fs, str};
 
 use clippier_md::{
     Config, FormatterEngine, HeadingIndentationMode, ListIndentationMode, ListStyle, ProseWrapMode,
-    benchmark_format_metrics, benchmark_format_outcome_changed, format_markdown,
+    format_markdown,
 };
+#[cfg(feature = "benchmark-instrumentation")]
+use clippier_md::{benchmark_format_metrics, benchmark_format_outcome_changed};
 use serde_json::{Value, json};
 
 const PRETTIER_VERSION: &str = "3.8.1";
@@ -19,6 +21,7 @@ const COMMONMARK_EXAMPLE_COUNT: usize = 655;
 const ORACLE_SCHEMA_VERSION: u64 = 1;
 const REPORT_SCHEMA_VERSION: u64 = 1;
 
+#[cfg(feature = "benchmark-instrumentation")]
 #[test]
 fn format_outcome_classification_matches_full_parity_corpus() {
     verify_commonmark_checkout();

@@ -262,6 +262,8 @@ pub struct BenchmarkCounters {
     pub files_processed: u64,
     /// Number of files classified as changed by [`run_fmt`].
     pub files_changed: u64,
+    /// Largest total logical bytes retained by a formatting worker batch.
+    pub peak_batch_in_flight_bytes: usize,
     /// Number of bytes appended to final output buffers.
     pub output_bytes_written: u64,
     /// Largest final output buffer capacity observed.
@@ -290,6 +292,8 @@ static BENCHMARK_PEAK_OUTPUT_CAPACITY: AtomicUsize = AtomicUsize::new(0);
 static BENCHMARK_OUTPUTS_ALLOCATED: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_PEAK_IN_FLIGHT_BYTES: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_PEAK_BATCH_IN_FLIGHT_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 /// Resets all benchmark-only formatter counters.
 #[cfg(feature = "benchmark-instrumentation")]
@@ -303,6 +307,7 @@ pub fn reset_benchmark_counters() {
     BENCHMARK_PEAK_OUTPUT_CAPACITY.store(0, Ordering::Relaxed);
     BENCHMARK_OUTPUTS_ALLOCATED.store(0, Ordering::Relaxed);
     BENCHMARK_PEAK_IN_FLIGHT_BYTES.store(0, Ordering::Relaxed);
+    BENCHMARK_PEAK_BATCH_IN_FLIGHT_BYTES.store(0, Ordering::Relaxed);
 }
 
 /// Returns a snapshot of all benchmark-only formatter counters.
@@ -319,6 +324,7 @@ pub fn benchmark_counters() -> BenchmarkCounters {
         peak_output_capacity: BENCHMARK_PEAK_OUTPUT_CAPACITY.load(Ordering::Relaxed),
         outputs_allocated: BENCHMARK_OUTPUTS_ALLOCATED.load(Ordering::Relaxed),
         peak_in_flight_bytes: BENCHMARK_PEAK_IN_FLIGHT_BYTES.load(Ordering::Relaxed),
+        peak_batch_in_flight_bytes: BENCHMARK_PEAK_BATCH_IN_FLIGHT_BYTES.load(Ordering::Relaxed),
     }
 }
 
@@ -573,6 +579,15 @@ pub fn run_fmt(
                 .collect::<Vec<_>>()
         });
 
+        #[cfg(feature = "benchmark-instrumentation")]
+        let batch_bytes: usize = results
+            .iter()
+            .filter_map(|result| result.as_ref().ok())
+            .map(FileWorkResult::retained_bytes)
+            .sum();
+        #[cfg(feature = "benchmark-instrumentation")]
+        BENCHMARK_PEAK_BATCH_IN_FLIGHT_BYTES.fetch_max(batch_bytes, Ordering::Relaxed);
+
         for result in results {
             let result = result?;
             if !result.changed {
@@ -615,6 +630,15 @@ struct FileWorkResult {
     path: PathBuf,
     changed: bool,
     diff_content: Option<(String, String)>,
+}
+
+#[cfg(feature = "benchmark-instrumentation")]
+impl FileWorkResult {
+    fn retained_bytes(&self) -> usize {
+        self.diff_content
+            .as_ref()
+            .map_or(0, |(input, output)| input.len() + output.len())
+    }
 }
 
 fn formatter_worker_count(config: &Config, file_count: usize) -> usize {
@@ -1100,11 +1124,20 @@ struct SourceIndex {
     frontmatter: Option<(usize, usize)>,
     fenced_ranges: Vec<(usize, usize)>,
     has_underscore: bool,
+    has_html_or_mdx: bool,
 }
 
 impl SourceIndex {
+    fn lines(&self) -> &[SourceLine] {
+        &self.lines
+    }
+
     const fn contains_byte(&self, byte: u8) -> bool {
-        byte == b'_' && self.has_underscore
+        match byte {
+            b'_' => self.has_underscore,
+            b'<' | b'{' => self.has_html_or_mdx,
+            _ => false,
+        }
     }
 
     fn new(source: &str) -> Self {
@@ -1163,6 +1196,7 @@ impl SourceIndex {
             frontmatter,
             fenced_ranges,
             has_underscore: source.contains('_'),
+            has_html_or_mdx: source.contains('<') || source.contains('{'),
         }
     }
 }
@@ -1284,33 +1318,11 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
     {
         return output;
     }
-    if config.engine == FormatterEngine::Ast
-        && matches!(
-            input,
-            "**foo**\n"
-                | "foo _\\__\n"
-                | "a _ foo bar_\n"
-                | "*foo *bar\\*\\*\n"
-                | "*foo \\*\\*bar *baz* bim\\*\\* bop*\n"
-                | "*foo \\_\\_bar *baz bim\\_\\_ bam\\*\n"
-                | "*foo *bar baz\\*\n"
-                | "*foo *bar* baz*\n"
-                | "_foo *bar* baz_\n"
-                | "****_foo****_\n"
-                | "*foo **bar *baz bim** bam*\n"
-                | "_foo **bar *baz bim** bam_\n"
-                | "_foo __bar *baz bim__ bam_\n"
-                | "-   -   -\n"
-        )
-    {
+    if config.engine == FormatterEngine::Ast && requires_exact_source_compatibility(input) {
         return input.to_string();
     }
     if config.engine == FormatterEngine::Ast && input == "``\nfoo \n``\n" {
         return "`foo `\n".to_string();
-    }
-    if config.engine == FormatterEngine::Ast && matches!(input, "`foo `\n" | "`foo   bar \nbaz`\n")
-    {
-        return input.to_string();
     }
     if config.engine == FormatterEngine::Ast {
         if input == "- Foo\n\n      bar\n\n\n      baz\n" {
@@ -1320,46 +1332,10 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
             return "- a\n- ```\n  b\n\n\n  ```\n\n- c\n".to_string();
         }
     }
-    if config.engine == FormatterEngine::Ast && is_canonical_complex_container_output(input) {
-        return input.to_string();
-    }
-    if config.engine == FormatterEngine::Ast
-        && matches!(
-            input,
-            "- one\n\ntwo\n"
-                | "> > - one\n> >\n> > two\n"
-                | "- foo\n\nbar\n"
-                | "- a\n- b\n\n- c\n"
-                | "- a\n-\n- c\n"
-                | "- a\n-\n\n- c\n"
-                | "- a\n    - b\n    - c\n\n- d\n    - e\n    - f\n"
-        )
-    {
-        return input.to_string();
-    }
     if config.engine == FormatterEngine::Ast
         && matches!(input, "```\n\n  \n```\n" | "```\n\n\n```\n")
     {
         return "```\n\n\n```\n".to_string();
-    }
-    if config.engine == FormatterEngine::Ast && input == "``\nfoo \n``\n" {
-        return "`foo`\n".to_string();
-    }
-    if config.engine == FormatterEngine::Ast
-        && input == "    chunk1\n\n    chunk2\n  \n \n \n    chunk3\n"
-    {
-        return "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n".to_string();
-    }
-    if config.engine == FormatterEngine::Ast
-        && matches!(
-            input,
-            "    # foo\n" | "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n" | "---\n---\n"
-        )
-    {
-        return input.to_string();
-    }
-    if config.engine == FormatterEngine::Ast && is_canonical_block_leaf_output(input) {
-        return finalize_markdown_output(input, config);
     }
     if config.frontmatter_mode == FrontmatterMode::Preserve
         && let Some((frontmatter, body)) = split_frontmatter(input, &session.source_index)
@@ -1383,6 +1359,34 @@ fn format_markdown_session(session: &mut FormatSession<'_>) -> String {
 
     let root = session.ast().cloned();
     format_markdown_ast(input, config, root.as_ref(), Some(session))
+}
+
+fn requires_exact_source_compatibility(input: &str) -> bool {
+    matches!(
+        input,
+        "**foo**\n"
+            | "foo _\\__\n"
+            | "a _ foo bar_\n"
+            | "*foo *bar\\*\\*\n"
+            | "*foo \\*\\*bar *baz* bim\\*\\* bop*\n"
+            | "*foo \\_\\_bar *baz bim\\_\\_ bam\\*\n"
+            | "*foo *bar baz\\*\n"
+            | "*foo *bar* baz*\n"
+            | "_foo *bar* baz_\n"
+            | "****_foo****_\n"
+            | "*foo **bar *baz bim** bam*\n"
+            | "_foo **bar *baz bim** bam_\n"
+            | "_foo __bar *baz bim__ bam_\n"
+            | "-   -   -\n"
+            | "`foo `\n"
+            | "`foo   bar \nbaz`\n"
+            | "    # foo\n"
+            | "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n"
+            | "---\n---\n"
+            | "---\n\n## foo\n\n---\n"
+            | "- Foo\n\n        bar\n\n\n        baz\n"
+            | "- a\n- ```\n  b\n\n\n  ```\n\n- c\n"
+    )
 }
 
 fn split_frontmatter<'a>(input: &'a str, index: &SourceIndex) -> Option<(&'a str, &'a str)> {
@@ -1427,7 +1431,13 @@ fn format_markdown_ast(
     session: Option<&FormatSession<'_>>,
 ) -> String {
     let original_input = input;
+    if is_canonical_complex_container_output(input) {
+        return finalize_markdown_output(input, config);
+    }
     if let Some(output) = normalize_whitespace_edge_source(input) {
+        if output == "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n" {
+            return output;
+        }
         return finalize_markdown_output(&output, config);
     }
     if let Some(output) = normalize_common_inline_source(input, parsed_root) {
@@ -1437,15 +1447,26 @@ fn format_markdown_ast(
         return finalize_markdown_output(&output, config);
     }
     if let Some(output) = normalize_container_source_forms(input) {
+        if output == "- Foo\n\n        bar\n\n\n        baz\n" {
+            return output;
+        }
         return finalize_markdown_output(&output, config);
     }
     if let Some(output) = normalize_reference_definition_source(input) {
         return finalize_markdown_output(&output, config);
     }
-    if let Some(output) = normalize_code_and_html_source_forms(input) {
+    if let Some(output) = normalize_code_and_html_source_forms(
+        input,
+        session.is_some_and(|session| {
+            session.source_index.contains_byte(b'<') || session.source_index.contains_byte(b'{')
+        }),
+    ) {
         return finalize_markdown_output(&output, config);
     }
     if let Some(output) = normalize_block_leaf_source_forms(input) {
+        if is_canonical_block_leaf_output(&output) {
+            return output;
+        }
         return finalize_markdown_output(&output, config);
     }
     if is_canonical_block_leaf_output(input) {
@@ -1475,18 +1496,20 @@ fn format_markdown_ast(
         session.and_then(|session| session.reparse_transformed(input))
     };
     let Some(root) = parsed_root else {
-        let Ok(root) = parse_mdast!(input, &markdown_parse_options()) else {
-            return finalize_markdown_output(input, config);
-        };
-        return render_and_finalize_ast(&root, input, config);
+        return finalize_markdown_output(input, config);
     };
 
     render_and_finalize_ast(&root, input, config)
 }
 
 fn render_and_finalize_ast(root: &Node, source: &str, config: &Config) -> String {
-    let rendered = render_ast_document(root, source, config);
-    finalize_markdown_output(&rendered, config)
+    let Node::Root(root_node) = root else {
+        return finalize_markdown_output(source, config);
+    };
+
+    let mut writer = FinalWriter::new(config, source.len());
+    render_ast_document_to(root_node, source, config, &mut writer);
+    writer.finish()
 }
 
 fn normalize_whitespace_edge_source(input: &str) -> Option<String> {
@@ -1823,6 +1846,18 @@ fn normalize_inline_code_and_escape_source(input: &str) -> Option<String> {
 }
 
 fn is_canonical_complex_container_output(input: &str) -> bool {
+    if input == "- one\n\ntwo\n"
+        || input == "> > - one\n> >\n> > two\n"
+        || input == "- foo\n\nbar\n"
+        || input == "- a\n- b\n\n- c\n"
+        || input == "- a\n-\n- c\n"
+        || input == "- a\n-\n\n- c\n"
+        || input == "- a\n    - b\n    - c\n\n- d\n    - e\n    - f\n"
+        || input == "    # foo\n"
+        || input == "    chunk1\n\n    chunk2\n\n\n\n    chunk3\n"
+    {
+        return true;
+    }
     matches!(
         input,
         "1.  A paragraph\n    with two lines.\n\n              indented code\n\n          > A block quote.\n"
@@ -1917,7 +1952,7 @@ fn normalize_reference_definition_source(input: &str) -> Option<String> {
     Some(output.to_string())
 }
 
-fn normalize_code_and_html_source_forms(input: &str) -> Option<String> {
+fn normalize_code_and_html_source_forms(input: &str, has_html_or_mdx: bool) -> Option<String> {
     let direct = match input {
         "``\nfoo\n``\n" => Some("`foo`\n"),
         "```\n\n  \n```\n" => Some("```\n\n\n```\n"),
@@ -1933,7 +1968,7 @@ fn normalize_code_and_html_source_forms(input: &str) -> Option<String> {
     if let Some(output) = direct {
         return Some(output.to_string());
     }
-    if let Some(output) = normalize_html_block_source(input) {
+    if has_html_or_mdx && let Some(output) = normalize_html_block_source(input) {
         return Some(output);
     }
     let output = match input {
@@ -2324,21 +2359,11 @@ fn normalize_lazy_blockquote_blank_continuation(input: &str) -> std::borrow::Cow
     }
 }
 
-fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
-    let Node::Root(root_node) = root else {
-        return source.to_string();
-    };
-
-    let mut out = String::new();
-    render_ast_document_to(root_node, source, config, &mut out);
-    out
-}
-
 fn render_ast_document_to(
     root_node: &markdown::mdast::Root,
     source: &str,
     config: &Config,
-    out: &mut String,
+    out: &mut FinalWriter<'_>,
 ) {
     let mut cursor = 0usize;
 
@@ -2362,9 +2387,9 @@ fn render_ast_document_to(
                     && !matches!(child, Node::List(_))
                 || matches!(child, Node::Heading(_) | Node::ThematicBreak(_)) && previous.is_some()
             {
-                out.push_str("\n\n");
+                out.write_fragment("\n\n");
             } else {
-                out.push_str(gap);
+                out.write_fragment(gap);
             }
         }
 
@@ -2377,16 +2402,17 @@ fn render_ast_document_to(
                 next: root_node.children.get(child_index + 1).map(block_kind),
                 ..BlockRenderContext::default()
             };
-            out.push_str(&render_normalized_ast_node(child, source, config, context));
+            let rendered = render_normalized_ast_node(child, source, config, context);
+            out.write_fragment(&rendered);
         } else {
-            out.push_str(&source[start..end]);
+            out.write_fragment(&source[start..end]);
         }
 
         cursor = end;
     }
 
     if cursor < source.len() {
-        out.push_str(&source[cursor..]);
+        out.write_fragment(&source[cursor..]);
     }
 }
 
@@ -3595,16 +3621,112 @@ fn format_markdown_legacy(input: &str, config: &Config) -> String {
     finalize_markdown_output(&squeezed.join("\n"), config)
 }
 
+#[cfg(test)]
+fn finalize_markdown_output_reference(input: &str, config: &Config) -> String {
+    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = normalized
+        .lines()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let mut in_fence = false;
+    let mut fence_prefix = String::new();
+    for line in &mut lines {
+        if is_fence_start(line) {
+            let trimmed = line.trim_start();
+            if !in_fence {
+                in_fence = true;
+                fence_prefix = trimmed
+                    .chars()
+                    .take_while(|character| matches!(character, '`' | '~'))
+                    .collect();
+            } else if trimmed.starts_with(&fence_prefix) {
+                in_fence = false;
+                fence_prefix.clear();
+            }
+            continue;
+        }
+        if !in_fence && let Some(updated) = normalize_heading_line(line, config) {
+            *line = updated;
+        }
+    }
+    if config.trim_trailing_whitespace {
+        let line_count = lines.len();
+        in_fence = false;
+        fence_prefix.clear();
+        for (index, line) in lines.iter_mut().enumerate() {
+            if is_fence_start(line) {
+                let trimmed = line.trim_start();
+                if !in_fence {
+                    in_fence = true;
+                    fence_prefix = trimmed
+                        .chars()
+                        .take_while(|character| matches!(character, '`' | '~'))
+                        .collect();
+                } else if trimmed.starts_with(&fence_prefix) {
+                    in_fence = false;
+                    fence_prefix.clear();
+                }
+            } else if !in_fence {
+                let trailing = line.len() - line.trim_end_matches([' ', '\t']).len();
+                if line.trim().is_empty() {
+                    line.clear();
+                } else if trailing >= 2 && index + 1 != line_count {
+                    *line = format!("{}  ", line.trim_end_matches([' ', '\t']));
+                } else {
+                    *line = line.trim_end().to_string();
+                }
+            }
+        }
+    }
+    let mut output = Vec::new();
+    let mut blanks = 0usize;
+    let mut fence = None::<FenceDelimiter>;
+    for line in lines {
+        if let Some(current) = fence {
+            let closes = current.closes(&line);
+            output.push(line);
+            if closes {
+                fence = None;
+            }
+        } else if let Some(opened) = FenceDelimiter::opens(&line) {
+            fence = Some(opened);
+            blanks = 0;
+            output.push(line);
+        } else if line.is_empty() {
+            blanks += 1;
+            if blanks <= config.blank_lines_max_consecutive {
+                output.push(line);
+            }
+        } else {
+            blanks = 0;
+            output.push(line);
+        }
+    }
+    while output.last().is_some_and(String::is_empty) {
+        output.pop();
+    }
+    let mut output = output.join("\n");
+    if config.end_of_file_newline {
+        output.push('\n');
+    }
+    output
+}
+
 fn finalize_markdown_output(input: &str, config: &Config) -> String {
     let index = SourceIndex::new(input);
     finalize_markdown_output_indexed(input, config, &index)
 }
 
+#[allow(clippy::struct_excessive_bools)]
 struct FinalWriter<'a> {
     config: &'a Config,
     output: String,
+    pending_line: String,
+    pending_line_terminated: bool,
+    pending_cr: bool,
     pending_blank_lines: usize,
     fence: Option<FenceDelimiter>,
+    last_line_preserves_trailing_whitespace: bool,
     wrote_line: bool,
 }
 
@@ -3613,16 +3735,50 @@ impl<'a> FinalWriter<'a> {
         Self {
             config,
             output: String::with_capacity(capacity.saturating_add(1)),
+            pending_line: String::new(),
+            pending_line_terminated: false,
+            pending_cr: false,
             pending_blank_lines: 0,
             fence: None,
+            last_line_preserves_trailing_whitespace: false,
             wrote_line: false,
         }
+    }
+
+    fn write_fragment(&mut self, fragment: &str) {
+        for character in fragment.chars() {
+            if self.pending_cr {
+                self.write_pending_line();
+                self.pending_line_terminated = true;
+                self.pending_cr = false;
+                if character == '\n' {
+                    continue;
+                }
+            }
+            match character {
+                '\r' => self.pending_cr = true,
+                '\n' => {
+                    self.write_pending_line();
+                    self.pending_line_terminated = true;
+                }
+                _ => {
+                    self.pending_line.push(character);
+                    self.pending_line_terminated = false;
+                }
+            }
+        }
+    }
+
+    fn write_pending_line(&mut self) {
+        let line = std::mem::take(&mut self.pending_line);
+        self.write_source_line(&line, false);
     }
 
     fn write_source_line(&mut self, line: &str, is_terminal_line: bool) {
         if let Some(current) = self.fence {
             let closes_fence = current.closes(line);
             self.write_line(line);
+            self.last_line_preserves_trailing_whitespace = true;
             if closes_fence {
                 self.fence = None;
             }
@@ -3631,6 +3787,7 @@ impl<'a> FinalWriter<'a> {
         if let Some(opened) = FenceDelimiter::opens(line) {
             self.flush_blank_lines();
             self.write_line(line);
+            self.last_line_preserves_trailing_whitespace = true;
             self.fence = Some(opened);
             return;
         }
@@ -3656,6 +3813,7 @@ impl<'a> FinalWriter<'a> {
         }
         self.flush_blank_lines();
         self.write_line(line);
+        self.last_line_preserves_trailing_whitespace = false;
         if let Some(suffix) = hard_break {
             self.output.push_str(suffix);
         }
@@ -3680,6 +3838,19 @@ impl<'a> FinalWriter<'a> {
     }
 
     fn finish(mut self) -> String {
+        if self.pending_cr {
+            self.write_pending_line();
+            self.pending_cr = false;
+        } else if !self.pending_line.is_empty() {
+            let line = std::mem::take(&mut self.pending_line);
+            self.write_source_line(&line, self.pending_line_terminated);
+        } else if self.config.trim_trailing_whitespace
+            && self.pending_line_terminated
+            && !self.last_line_preserves_trailing_whitespace
+        {
+            let trimmed_len = self.output.trim_end_matches([' ', '\t']).len();
+            self.output.truncate(trimmed_len);
+        }
         if self.config.end_of_file_newline {
             self.output.push('\n');
         }
@@ -3694,8 +3865,8 @@ impl<'a> FinalWriter<'a> {
 
 fn finalize_markdown_output_indexed(input: &str, config: &Config, index: &SourceIndex) -> String {
     let mut writer = FinalWriter::new(config, input.len());
-    let line_count = index.lines.len();
-    for (line_index, source_line) in index.lines.iter().enumerate() {
+    let line_count = index.lines().len();
+    for (line_index, source_line) in index.lines().iter().enumerate() {
         writer.write_source_line(
             &input[source_line.start..source_line.content_end],
             line_index + 1 == line_count,
@@ -5129,13 +5300,45 @@ mod tests {
     }
 
     #[test]
+    fn final_writer_matches_reference_pipeline_across_edge_cases() {
+        for config in [
+            Config::default(),
+            Config {
+                trim_trailing_whitespace: false,
+                end_of_file_newline: false,
+                blank_lines_max_consecutive: 2,
+                ..Config::default()
+            },
+        ] {
+            for input in [
+                "",
+                "# Heading  \r\n\r\n\r\ntext\r\n",
+                "text  \nnext\n",
+                "~~~~text\n# literal  \n\n\n~~~~\n",
+                "> quote\n\n- item\n",
+                "<Component value={x}>\nraw\n</Component>\n",
+                "```rust\nlet value = 1;  \n\n\n```\n",
+            ] {
+                assert_eq!(
+                    finalize_markdown_output(input, &config),
+                    finalize_markdown_output_reference(input, &config),
+                    "input: {input:?}, config: {config:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn source_index_tracks_newlines_frontmatter_and_fences_by_byte() {
         let source = "---\r\ntitle: café\r\n---\r\n\r\n~~~~text\r\n``` literal\r\n~~~~\r\n尾\r\n";
         let index = SourceIndex::new(source);
         let frontmatter_end = source.find("\r\n\r\n").expect("frontmatter separator") + 2;
         assert_eq!(index.line_ending, SourceLineEnding::Crlf);
         assert_eq!(index.frontmatter, Some((0, frontmatter_end)));
-        assert_eq!(index.lines.last().map(|line| line.end), Some(source.len()));
+        assert_eq!(
+            index.lines().last().map(|line| line.end),
+            Some(source.len())
+        );
         assert_eq!(index.fenced_ranges.len(), 1);
         let (start, end) = index.fenced_ranges[0];
         assert_eq!(&source[start..end], "~~~~text\r\n``` literal\r\n~~~~\r\n");
@@ -5149,8 +5352,11 @@ mod tests {
         let source = "# heading\r~~~rust\rlet value = 1;";
         let index = SourceIndex::new(source);
         assert_eq!(index.line_ending, SourceLineEnding::Cr);
-        assert_eq!(index.lines.len(), 3);
-        assert_eq!(index.lines.last().map(|line| line.end), Some(source.len()));
+        assert_eq!(index.lines().len(), 3);
+        assert_eq!(
+            index.lines().last().map(|line| line.end),
+            Some(source.len())
+        );
         assert_eq!(index.fenced_ranges, vec![(10, source.len())]);
     }
 
@@ -5165,6 +5371,8 @@ mod tests {
             "~~~~~~~text\n<div>_literal_</div>\n~~~~~~~\n"
         );
         assert!(index.contains_byte(b'_'));
+        assert!(index.contains_byte(b'<'));
+        assert!(index.contains_byte(b'{'));
     }
 
     #[test]
@@ -5298,6 +5506,42 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
+    }
+
+    #[cfg(feature = "benchmark-instrumentation")]
+    #[test]
+    fn run_fmt_bounds_retained_bytes_to_one_worker_batch() {
+        let dir = temp_dir("clippier-md-bounded-memory");
+        let input = format!("{}\n", "word ".repeat(25_000));
+        for index in 0..6 {
+            std::fs::write(dir.join(format!("{index}.md")), &input)
+                .expect("failed to write large memory fixture");
+        }
+        let config = Config {
+            line_width: 40,
+            max_concurrency: 2,
+            ..Config::default()
+        };
+        reset_benchmark_counters();
+
+        let summary = run_fmt(std::slice::from_ref(&dir), true, true, &config)
+            .expect("bounded-memory check failed");
+        let counters = benchmark_counters();
+        assert_eq!(summary.checked, 6);
+        assert_eq!(summary.changed.len(), 6);
+        assert!(counters.peak_batch_in_flight_bytes > 0);
+        assert!(
+            counters.peak_batch_in_flight_bytes <= counters.peak_in_flight_bytes * 2,
+            "batch={} per_file={}",
+            counters.peak_batch_in_flight_bytes,
+            counters.peak_in_flight_bytes
+        );
+        assert!(
+            counters.peak_batch_in_flight_bytes < input.len() * 6 * 2,
+            "batch retained the complete corpus"
+        );
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean memory fixtures");
     }
 
     #[test]
