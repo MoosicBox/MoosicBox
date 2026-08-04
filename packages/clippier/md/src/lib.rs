@@ -262,6 +262,10 @@ pub struct BenchmarkCounters {
     pub files_processed: u64,
     /// Number of files classified as changed by [`run_fmt`].
     pub files_changed: u64,
+    /// Number of bytes appended to final output buffers.
+    pub output_bytes_written: u64,
+    /// Largest final output buffer capacity observed.
+    pub peak_output_capacity: usize,
     /// Number of owned formatter outputs produced.
     pub outputs_allocated: u64,
     /// Largest aggregate input/output byte count observed for one file.
@@ -279,6 +283,10 @@ static BENCHMARK_FILES_PROCESSED: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_FILES_CHANGED: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_OUTPUT_BYTES_WRITTEN: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
+static BENCHMARK_PEAK_OUTPUT_CAPACITY: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_OUTPUTS_ALLOCATED: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "benchmark-instrumentation")]
 static BENCHMARK_PEAK_IN_FLIGHT_BYTES: AtomicUsize = AtomicUsize::new(0);
@@ -291,6 +299,8 @@ pub fn reset_benchmark_counters() {
     BENCHMARK_BYTES_SCANNED.store(0, Ordering::Relaxed);
     BENCHMARK_FILES_PROCESSED.store(0, Ordering::Relaxed);
     BENCHMARK_FILES_CHANGED.store(0, Ordering::Relaxed);
+    BENCHMARK_OUTPUT_BYTES_WRITTEN.store(0, Ordering::Relaxed);
+    BENCHMARK_PEAK_OUTPUT_CAPACITY.store(0, Ordering::Relaxed);
     BENCHMARK_OUTPUTS_ALLOCATED.store(0, Ordering::Relaxed);
     BENCHMARK_PEAK_IN_FLIGHT_BYTES.store(0, Ordering::Relaxed);
 }
@@ -305,6 +315,8 @@ pub fn benchmark_counters() -> BenchmarkCounters {
         bytes_scanned: BENCHMARK_BYTES_SCANNED.load(Ordering::Relaxed),
         files_processed: BENCHMARK_FILES_PROCESSED.load(Ordering::Relaxed),
         files_changed: BENCHMARK_FILES_CHANGED.load(Ordering::Relaxed),
+        output_bytes_written: BENCHMARK_OUTPUT_BYTES_WRITTEN.load(Ordering::Relaxed),
+        peak_output_capacity: BENCHMARK_PEAK_OUTPUT_CAPACITY.load(Ordering::Relaxed),
         outputs_allocated: BENCHMARK_OUTPUTS_ALLOCATED.load(Ordering::Relaxed),
         peak_in_flight_bytes: BENCHMARK_PEAK_IN_FLIGHT_BYTES.load(Ordering::Relaxed),
     }
@@ -2294,6 +2306,16 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
     };
 
     let mut out = String::new();
+    render_ast_document_to(root_node, source, config, &mut out);
+    out
+}
+
+fn render_ast_document_to(
+    root_node: &markdown::mdast::Root,
+    source: &str,
+    config: &Config,
+    out: &mut String,
+) {
     let mut cursor = 0usize;
 
     for (child_index, child) in root_node.children.iter().enumerate() {
@@ -2342,8 +2364,6 @@ fn render_ast_document(root: &Node, source: &str, config: &Config) -> String {
     if cursor < source.len() {
         out.push_str(&source[cursor..]);
     }
-
-    out
 }
 
 fn should_normalize_ast_node(node: &Node, config: &Config) -> bool {
@@ -3638,6 +3658,11 @@ impl<'a> FinalWriter<'a> {
     fn finish(mut self) -> String {
         if self.config.end_of_file_newline {
             self.output.push('\n');
+        }
+        #[cfg(feature = "benchmark-instrumentation")]
+        {
+            BENCHMARK_OUTPUT_BYTES_WRITTEN.fetch_add(self.output.len() as u64, Ordering::Relaxed);
+            BENCHMARK_PEAK_OUTPUT_CAPACITY.fetch_max(self.output.capacity(), Ordering::Relaxed);
         }
         self.output
     }
