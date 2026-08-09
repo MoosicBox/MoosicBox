@@ -205,14 +205,27 @@ impl Context {
                         switchy_async::runtime::Handle::current().spawn_with_name(
                             "moosicbox_app_tauri_bundled: create_download_location",
                             async move {
-                                let downloads_path_str = downloads_path.to_str().unwrap();
+                                let downloads_path_str = downloads_path.to_string_lossy();
 
                                 for profile in switchy_database::profiles::PROFILES.names() {
-                                    let db =
-                                        switchy_database::profiles::PROFILES.get(&profile).unwrap();
-                                    moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
-                                        .await
-                                        .unwrap();
+                                    let Some(db) =
+                                        switchy_database::profiles::PROFILES.get(&profile)
+                                    else {
+                                        log::warn!(
+                                            "Skipping download scan path for missing profile '{profile}'"
+                                        );
+                                        continue;
+                                    };
+                                    if let Err(error) = moosicbox_scan::db::add_scan_path(
+                                        &db,
+                                        downloads_path_str.as_ref(),
+                                    )
+                                    .await
+                                    {
+                                        log::warn!(
+                                            "Failed to add bundled download scan path for profile '{profile}': {error}"
+                                        );
+                                    }
                                 }
 
                                 moosicbox_profiles::events::on_profiles_updated_event(
@@ -222,18 +235,28 @@ impl Context {
 
                                         Box::pin(async move {
                                             let downloads_path_str =
-                                                downloads_path.to_str().unwrap();
+                                                downloads_path.to_string_lossy();
 
                                             for profile in &added {
-                                                let db = switchy_database::profiles::PROFILES
-                                                    .get(profile)
-                                                    .unwrap();
-                                                moosicbox_scan::db::add_scan_path(
-                                                    &db,
-                                                    downloads_path_str,
-                                                )
-                                                .await
-                                                .unwrap();
+                                                let Some(db) =
+                                                    switchy_database::profiles::PROFILES.get(profile)
+                                                else {
+                                                    log::warn!(
+                                                        "Skipping download scan path for missing profile '{profile}'"
+                                                    );
+                                                    continue;
+                                                };
+                                                if let Err(error) =
+                                                    moosicbox_scan::db::add_scan_path(
+                                                        &db,
+                                                        downloads_path_str.as_ref(),
+                                                    )
+                                                    .await
+                                                {
+                                                    log::warn!(
+                                                        "Failed to add bundled download scan path for profile '{profile}': {error}"
+                                                    );
+                                                }
                                             }
 
                                             Ok(())

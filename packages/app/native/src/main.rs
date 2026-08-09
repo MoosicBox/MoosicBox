@@ -168,13 +168,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         app_server_handle
             .send_command(moosicbox_app_native_bundled::Command::WaitForStartup { sender: tx })
-            .expect("Failed to send WaitForStartup command");
+            .map_err(|error| Box::<dyn std::error::Error>::from(error.to_string()))?;
 
         log::debug!("Waiting for app server to start");
 
-        let ready = runtime
-            .block_on(rx)
-            .expect("Bundled server startup channel closed")?;
+        let ready = runtime.block_on(rx).map_err(|error| {
+            Box::<dyn std::error::Error>::from(format!(
+                "Bundled server startup channel closed: {error}"
+            ))
+        })??;
 
         log::debug!("App server started at {}", ready.endpoint);
 
