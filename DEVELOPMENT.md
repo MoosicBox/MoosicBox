@@ -24,14 +24,12 @@ nix develop .#tunnel-server    # Tunnel server (minimal)
 # GTK-based applications
 nix develop .#gtk-marketing-site    # Marketing site
 
-# Tauri applications (all use GTK/WebKit base)
-nix develop .#tauri-solidjs              # Tauri with SolidJS/Astro frontend
-nix develop .#tauri-hyperchad-fltk       # Tauri with HyperChad FLTK backend
-nix develop .#tauri-hyperchad-egui       # Tauri with HyperChad Egui backend
-nix develop .#tauri-solidjs-bundled      # Tauri SolidJS with embedded server
-nix develop .#tauri-hyperchad-fltk-bundled  # Tauri HyperChad FLTK with embedded server
-nix develop .#tauri-hyperchad-egui-bundled  # Tauri HyperChad Egui with embedded server
-nix develop .#tauri-full                 # Full Tauri development (all backends)
+# Tauri applications (Linux uses GTK/WebKitGTK; macOS uses the system WebKit)
+nix develop .#tauri-solidjs                       # Tauri with SolidJS/Astro frontend
+nix develop .#tauri-hyperchad-vanilla-js          # Tauri with HyperChad Vanilla JS frontend
+nix develop .#tauri-solidjs-bundled               # Tauri SolidJS with embedded server
+nix develop .#tauri-hyperchad-vanilla-js-bundled  # Tauri HyperChad Vanilla JS with embedded server
+nix develop .#tauri-full                          # Full Tauri development (all backends)
 
 # FLTK-based applications
 nix develop .#fltk-renderer        # FLTK renderer
@@ -116,8 +114,12 @@ nix develop .#fltk-renderer --command cargo run --bin fltk_renderer
 # Work on Tauri app with SolidJS
 nix develop .#tauri-solidjs --command cargo tauri dev
 
-# Work on Tauri app with HyperChad
-nix develop .#tauri-hyperchad-fltk --command cargo run --features moosicbox-app-native
+# Work on Tauri app with HyperChad Vanilla JS
+cd packages/app/tauri
+nix develop ../../..#tauri-hyperchad-vanilla-js --command pnpm tauri dev \
+  --config src-tauri/tauri.hyperchad.conf.json \
+  --features desktop,client,moosicbox-app-native
+cd ../../..
 
 # Work on Android development
 nix develop .#android --command bash -c 'cargo tauri android init && cargo tauri android build'
@@ -300,10 +302,9 @@ MoosicBox Project
 │   └── tunnel-server (minimal)
 ├── GTK Backend Apps
 │   └── marketing-site (WebKit)
-├── Tauri Apps (GTK/WebKit base + specific backends)
+├── Tauri Apps (system webview)
 │   ├── tauri-solidjs (SolidJS/Astro frontend)
-│   ├── tauri-hyperchad-fltk (FLTK native backend)
-│   ├── tauri-hyperchad-egui (Egui native backend)
+│   ├── tauri-hyperchad-vanilla-js (generated HyperChad HTML/Vanilla JS frontend)
 │   └── tauri-*-bundled (with embedded server)
 ├── FLTK Backend Apps
 │   ├── renderer (OpenGL)

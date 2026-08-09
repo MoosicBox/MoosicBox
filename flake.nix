@@ -368,23 +368,52 @@
             '';
           };
 
-        # Tauri-based app shell (extends GTK shell with Tauri needs)
+        # Tauri-based app shell using the host platform's system webview
         mkTauriShell =
           {
             name,
             extraPackages ? [ ],
           }:
-          mkGtkShell {
-            name = "Tauri ${name}";
-            extraPackages =
-              with pkgs;
-              [
-                # Node.js ecosystem for Tauri development
-                nodejs
-                nodePackages.pnpm
-                # Tauri CLI will be installed via package.json
-              ]
-              ++ extraPackages;
+          pkgs.mkShell {
+            buildInputs = [
+              rustToolchain
+              pkgs.fish
+              pkgs.nodejs
+              pkgs.pnpm
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ displayServerPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ]
+            ++ extraPackages;
+
+            shellHook = ''
+              echo "🎵 MoosicBox Tauri ${name} Environment"
+              echo "Rust: $(rustc --version)"
+              echo "Node: $(node --version)"
+
+              export TUNNEL_ACCESS_TOKEN=123
+              export STATIC_TOKEN=123
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
+                  pkgs.lib.makeLibraryPath (gtkPackages ++ displayServerPackages)
+                }"
+                export GDK_BACKEND=x11,wayland
+              ''}
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export CC="${pkgs.clang}/bin/clang"
+                export CXX="${pkgs.clang}/bin/clang++"
+              ''}
+
+              # Only exec fish if we're in an interactive shell (not running a command)
+              if [ -z "$IN_NIX_SHELL_FISH" ] && [ -z "$BASH_EXECUTION_STRING" ]; then
+                case "$-" in
+                  *i*) export IN_NIX_SHELL_FISH=1; exec fish ;;
+                esac
+              fi
+            '';
           };
 
         # HyperChad web development shell (with Playwright for testing)
@@ -398,7 +427,7 @@
               rustToolchain
               pkgs.fish
               pkgs.nodejs
-              pkgs.nodePackages.pnpm
+              pkgs.pnpm
               pkgs.playwright
             ]
             ++ baseBuildTools
@@ -461,8 +490,8 @@
               echo "Available environments:"
               echo "  Server: .#server, .#tunnel-server"
               echo "  Coverage: .#coverage (nightly with llvm-tools-preview)"
-              echo "  Tauri: .#tauri-solidjs, .#tauri-hyperchad-fltk, .#tauri-hyperchad-egui"
-              echo "  Tauri Bundled: .#tauri-solidjs-bundled, .#tauri-hyperchad-fltk-bundled, .#tauri-hyperchad-egui-bundled"
+              echo "  Tauri: .#tauri-solidjs, .#tauri-hyperchad-vanilla-js"
+              echo "  Tauri Bundled: .#tauri-solidjs-bundled, .#tauri-hyperchad-vanilla-js-bundled"
               echo "  GUI: .#fltk-*, .#egui-*, .#gtk-*"
               echo "  Android: .#android (compose with Tauri shells)"
               echo "  Full: .#tauri-full (all Tauri variants)"
@@ -585,14 +614,9 @@
             extraPackages = [ ];
           };
 
-          tauri-hyperchad-fltk = mkTauriShell {
-            name = "HyperChad FLTK";
-            extraPackages = fltkPackages;
-          };
-
-          tauri-hyperchad-egui = mkTauriShell {
-            name = "HyperChad Egui";
-            extraPackages = eguiPackages;
+          tauri-hyperchad-vanilla-js = mkTauriShell {
+            name = "HyperChad Vanilla JS";
+            extraPackages = [ ];
           };
 
           # Bundled variants (with embedded server)
@@ -605,26 +629,13 @@
             ];
           };
 
-          tauri-hyperchad-fltk-bundled = mkTauriShell {
-            name = "HyperChad FLTK Bundled";
-            extraPackages =
-              fltkPackages
-              ++ (with pkgs; [
-                postgresql
-                sqlite
-                vips
-              ]);
-          };
-
-          tauri-hyperchad-egui-bundled = mkTauriShell {
-            name = "HyperChad Egui Bundled";
-            extraPackages =
-              eguiPackages
-              ++ (with pkgs; [
-                postgresql
-                sqlite
-                vips
-              ]);
+          tauri-hyperchad-vanilla-js-bundled = mkTauriShell {
+            name = "HyperChad Vanilla JS Bundled";
+            extraPackages = with pkgs; [
+              postgresql
+              sqlite
+              vips
+            ];
           };
 
           # Full Tauri development (everything)
