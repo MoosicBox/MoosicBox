@@ -1186,27 +1186,6 @@ pub fn run() {
 
                 HTTP_APP.set(app).unwrap();
 
-                runtime_handle.spawn(async move {
-                    let api_url = STATE
-                        .get_current_connection()
-                        .await
-                        .unwrap()
-                        .map(|x| x.api_url);
-                    let connection_name = STATE.get_connection_name().await.unwrap();
-                    let connection_id = STATE.get_or_init_connection_id().await.unwrap();
-
-                    STATE
-                        .set_state(moosicbox_app_state::UpdateAppState {
-                            connection_id: Some(Some(connection_id)),
-                            connection_name: Some(connection_name),
-                            api_url: Some(api_url),
-                            profile: Some(Some(moosicbox_app_native::PROFILE.to_string())),
-                            ..Default::default()
-                        })
-                        .await?;
-
-                    Ok::<_, moosicbox_app_state::AppStateError>(())
-                });
             }
 
             #[cfg(feature = "client")]
@@ -1243,6 +1222,12 @@ pub fn run() {
                 *JOIN_APP_SERVER.lock().unwrap() = Some(join_app_server);
                 *APP_SERVER_HANDLE.lock().unwrap() = Some(app_server_handle);
             };
+
+            #[cfg(feature = "moosicbox-app-native")]
+            RT.block_on(STATE.activate_persisted_connection(
+                moosicbox_app_native::PROFILE,
+            ))
+            .unwrap();
 
             moosicbox_player::on_playback_event(crate::on_playback_event);
 

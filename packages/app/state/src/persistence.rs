@@ -142,10 +142,35 @@ impl AppState {
     }
 
     async fn init_persistence(&self) -> Result<(), AppStateError> {
-        if let Some(connection) = self.get_current_connection().await? {
-            self.current_connection_updated(&connection).await?;
-        }
         Ok(())
+    }
+
+    /// Activates the persisted connection with a complete runtime context.
+    ///
+    /// The endpoint, profile, connection name, and stable connection identifier are
+    /// applied in one state update so connection-dependent services cannot observe a
+    /// partially initialized context.
+    ///
+    /// # Errors
+    ///
+    /// * If the persistence layer cannot load the current connection or identity
+    /// * If activating the connection state fails
+    pub async fn activate_persisted_connection(
+        &self,
+        profile: impl Into<String>,
+    ) -> Result<(), AppStateError> {
+        let connection = self.get_current_connection().await?;
+        let connection_name = self.get_connection_name().await?;
+        let connection_id = self.get_or_init_connection_id().await?;
+
+        self.set_state(UpdateAppState {
+            connection_id: Some(Some(connection_id)),
+            connection_name: Some(connection_name),
+            api_url: Some(connection.map(|connection| connection.api_url)),
+            profile: Some(Some(profile.into())),
+            ..Default::default()
+        })
+        .await
     }
 
     /// Retrieves all saved connections from persistent storage.
@@ -423,6 +448,48 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_activate_persisted_connection_applies_complete_context() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let connection = Connection {
+            name: "Test Server".to_string(),
+            api_url: "http://127.0.0.1:9".to_string(),
+        };
+        let persistence = state.persistence().await;
+        persistence
+            .set(PersistenceKey::Connection, &connection)
+            .await
+            .expect("Failed to persist current connection");
+        persistence
+            .set(PersistenceKey::ConnectionName, &connection.name)
+            .await
+            .expect("Failed to persist connection name");
+
+        state
+            .activate_persisted_connection("master")
+            .await
+            .expect("Failed to activate persisted connection");
+
+        assert_eq!(
+            state.api_url.read().await.as_deref(),
+            Some("http://127.0.0.1:9")
+        );
+        assert_eq!(state.profile.read().await.as_deref(), Some("master"));
+        assert_eq!(
+            state.connection_name.read().await.as_deref(),
+            Some("Test Server")
+        );
+        assert!(state.connection_id.read().await.is_some());
+
+        state
+            .close_ws_connection()
+            .await
+            .expect("Failed to close websocket connection");
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_app_state_with_persistence_in_memory() {

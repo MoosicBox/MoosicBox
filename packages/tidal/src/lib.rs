@@ -2336,14 +2336,16 @@ impl TidalMusicApiBuilder {
             })
             .build();
 
-        switchy::unsync::task::spawn({
-            let auth = auth.clone();
-            async move {
-                if let Err(e) = auth.validate_credentials().await {
-                    moosicbox_assert::die_or_error!("Failed to validate credentials: {e:?}");
+        if logged_in {
+            switchy::unsync::task::spawn({
+                let auth = auth.clone();
+                async move {
+                    if let Err(e) = auth.validate_credentials().await {
+                        log::warn!("Failed to validate stored Tidal credentials: {e}");
+                    }
                 }
-            }
-        });
+            });
+        }
 
         Ok(TidalMusicApi {
             #[cfg(feature = "db")]

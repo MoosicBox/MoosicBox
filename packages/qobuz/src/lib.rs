@@ -2174,14 +2174,16 @@ impl QobuzMusicApiBuilder {
             })
             .build();
 
-        switchy::unsync::task::spawn({
-            let auth = auth.clone();
-            async move {
-                if let Err(e) = auth.validate_credentials().await {
-                    moosicbox_assert::die_or_error!("Failed to validate credentials: {e:?}");
+        if logged_in {
+            switchy::unsync::task::spawn({
+                let auth = auth.clone();
+                async move {
+                    if let Err(e) = auth.validate_credentials().await {
+                        log::warn!("Failed to validate stored Qobuz credentials: {e}");
+                    }
                 }
-            }
-        });
+            });
+        }
 
         Ok(QobuzMusicApi {
             #[cfg(feature = "db")]

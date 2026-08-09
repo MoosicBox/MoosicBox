@@ -194,27 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Already set RENDERER"
     );
 
-    runtime.spawn(async move {
-        let api_url = STATE
-            .get_current_connection()
-            .await
-            .unwrap()
-            .map(|x| x.api_url);
-        let connection_name = STATE.get_connection_name().await.unwrap();
-        let connection_id = STATE.get_or_init_connection_id().await.unwrap();
-
-        STATE
-            .set_state(moosicbox_app_state::UpdateAppState {
-                connection_id: Some(Some(connection_id)),
-                connection_name: Some(connection_name),
-                api_url: Some(api_url),
-                profile: Some(Some(PROFILE.to_string())),
-                ..Default::default()
-            })
-            .await?;
-
-        Ok::<_, moosicbox_app_state::AppStateError>(())
-    });
+    runtime.block_on(STATE.activate_persisted_connection(PROFILE))?;
 
     log::debug!("app_native: running");
     app.run()?;
