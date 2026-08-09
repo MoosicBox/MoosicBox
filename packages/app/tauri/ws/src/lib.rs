@@ -248,7 +248,7 @@ impl WsClient {
         tx: Sender<WsMessage>,
         m: Message,
     ) -> Result<(), SendError<WsMessage>> {
-        log::trace!("Message from ws server: {m:?}");
+        log::trace!("Received WebSocket message");
         tx.send_async(match m {
             Message::Text(m) => WsMessage::TextMessage(m.to_string()),
             Message::Binary(m) => WsMessage::Message(m),
@@ -297,12 +297,34 @@ impl WsClient {
         on_start: impl Fn() + Send + 'static,
         tx: Sender<WsMessage>,
     ) -> Result<(), ConnectWsError> {
+        self.start_with_lifecycle(client_id, signature_token, profile, on_start, |_| {}, tx)
+            .await
+    }
+
+    /// Starts the websocket connection and reports reconnect attempts.
+    ///
+    /// `on_reconnect` receives the one-based retry attempt after a failed
+    /// handshake. Cancellation prevents further callback publication.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ConnectWsError::Unauthorized`] if authentication is rejected
+    pub async fn start_with_lifecycle(
+        &self,
+        client_id: Option<String>,
+        signature_token: Option<String>,
+        profile: String,
+        on_start: impl Fn() + Send + 'static,
+        on_reconnect: impl Fn(u32) + Send + 'static,
+        tx: Sender<WsMessage>,
+    ) -> Result<(), ConnectWsError> {
         self.start_handler(
             client_id,
             signature_token,
             profile,
             Self::message_handler,
             on_start,
+            on_reconnect,
             tx,
         )
         .await
@@ -316,6 +338,7 @@ impl WsClient {
         profile: String,
         handler: fn(sender: Sender<T>, m: Message) -> O,
         on_start: impl Fn() + Send + 'static,
+        on_reconnect: impl Fn(u32) + Send + 'static,
         tx: Sender<T>,
     ) -> Result<(), ConnectWsError>
     where
@@ -347,7 +370,7 @@ impl WsClient {
                 String::new()
             };
             let url = format!("{url}{profile_param}{client_id_param}{signature_token_param}");
-            log::debug!("Connecting to websocket '{url}'...");
+            log::debug!("Connecting to WebSocket server");
             #[allow(clippy::redundant_pub_crate)]
             match select!(
                 resp = connect_async(url) => resp,
@@ -453,6 +476,7 @@ impl WsClient {
                 }
                 Err(err) => {
                     retry_attempt = retry_attempt.saturating_add(1);
+                    on_reconnect(retry_attempt);
                     if retry_attempt == 1 {
                         log::warn!("WebSocket connection unavailable; reconnecting");
                     } else {
@@ -460,17 +484,14 @@ impl WsClient {
                     }
                     if let Error::Http(response) = err {
                         if response.status() == StatusCode::UNAUTHORIZED {
-                            log::error!("Unauthorized ws connection");
+                            log::warn!("WebSocket authentication required");
                             return Err(ConnectWsError::Unauthorized);
                         }
 
-                        if let Ok(body) =
-                            std::str::from_utf8(response.body().as_ref().unwrap_or(&vec![]))
-                        {
-                            log::error!("error ({}): {body}", response.status());
-                        } else {
-                            log::error!("body: (unable to get body)");
-                        }
+                        log::warn!(
+                            "WebSocket handshake rejected with status {}",
+                            response.status()
+                        );
                     } else {
                         log::debug!("Failed to connect to websocket server: {err}");
                     }
@@ -509,6 +530,64 @@ mod tests {
         assert!(second > first);
         assert!(late <= Duration::from_secs(10));
         assert!(first >= Duration::from_millis(250));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_reconnect_cancellation_settles_promptly() {
+        let (client, handle) = WsClient::new("ws://127.0.0.1:0".to_string());
+        let (tx, _rx) = mpsc::unbounded();
+        let task = switchy_async::runtime::Handle::current().spawn_with_name(
+            "ws reconnect cancellation test",
+            async move {
+                client
+                    .start(None, None, "master".to_string(), || {}, tx)
+                    .await
+            },
+        );
+
+        switchy_async::time::sleep(Duration::from_millis(50)).await;
+        handle.close();
+
+        switchy_async::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("WebSocket retry did not settle after cancellation")
+            .expect("WebSocket retry task failed")
+            .expect("WebSocket retry returned an unexpected error");
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_reconnect_callback_precedes_cancellation() {
+        let (client, handle) = WsClient::new("ws://127.0.0.1:0".to_string());
+        let attempts = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let callback_attempts = attempts.clone();
+        let (tx, _rx) = mpsc::unbounded();
+        let task = switchy_async::runtime::Handle::current().spawn_with_name(
+            "ws reconnect callback test",
+            async move {
+                client
+                    .start_with_lifecycle(
+                        None,
+                        None,
+                        "master".to_string(),
+                        || {},
+                        move |attempt| {
+                            callback_attempts.store(attempt, std::sync::atomic::Ordering::SeqCst);
+                        },
+                        tx,
+                    )
+                    .await
+            },
+        );
+
+        switchy_async::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        handle.close();
+
+        switchy_async::time::timeout(Duration::from_secs(1), task)
+            .await
+            .expect("WebSocket retry did not settle after cancellation")
+            .expect("WebSocket retry task failed")
+            .expect("WebSocket retry returned an unexpected error");
     }
 
     #[test_log::test(switchy_async::test)]

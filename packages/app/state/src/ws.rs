@@ -224,7 +224,7 @@ impl AppState {
         });
 
         Ok(client
-            .start(
+            .start_with_lifecycle(
                 client_id,
                 signature_token,
                 profile,
@@ -264,6 +264,21 @@ impl AppState {
                                     if let Err(e) = state.flush_ws_message_buffer().await {
                                         log::error!("Failed to flush WS message buffer: {e:?}");
                                     }
+                                }
+                            },
+                        );
+                    }
+                },
+                {
+                    let state = self.clone();
+                    move |attempt| {
+                        let state = state.clone();
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "moosicbox_app_state: ws reconnecting",
+                            async move {
+                                if state.is_active_connection_generation(generation) {
+                                    *state.connection_status.write().await =
+                                        crate::ConnectionStatus::Reconnecting { attempt };
                                 }
                             },
                         );
