@@ -1225,6 +1225,28 @@ mod bundled_lifecycle_tests {
     use super::*;
 
     #[test]
+    fn bundled_listener_selects_an_authoritative_dynamic_loopback_endpoint() {
+        let (listener, ready) = bind_bundled_listener().unwrap();
+        let address = listener.local_addr().unwrap();
+
+        assert!(address.ip().is_loopback());
+        assert_ne!(address.port(), 0);
+        assert_eq!(ready.endpoint, format!("http://{address}"));
+    }
+
+    #[test]
+    fn each_bundled_listener_reserves_a_distinct_endpoint() {
+        let (first_listener, first_ready) = bind_bundled_listener().unwrap();
+        let (second_listener, second_ready) = bind_bundled_listener().unwrap();
+
+        assert_ne!(first_ready.endpoint, second_ready.endpoint);
+        assert_ne!(
+            first_listener.local_addr().unwrap(),
+            second_listener.local_addr().unwrap()
+        );
+    }
+
+    #[test]
     fn bind_failure_is_typed_startup_failure() {
         let error = bind_bundled_listener_with(|| {
             Err(std::io::Error::new(
@@ -1235,6 +1257,27 @@ mod bundled_lifecycle_tests {
         .unwrap_err();
 
         assert!(error.to_string().contains("injected bind failure"));
+    }
+
+    #[switchy_async::test]
+    async fn startup_waits_for_delayed_terminal_result() {
+        let (mut startup, sender) = BundledStartup::pending();
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "delayed bundled startup result",
+            async move {
+                switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
+                sender.ready(BundledReadyServer {
+                    endpoint: "http://127.0.0.1:1234".to_string(),
+                });
+            },
+        );
+
+        let ready = switchy_async::time::timeout(std::time::Duration::from_secs(1), startup.wait())
+            .await
+            .expect("startup wait timed out")
+            .expect("startup failed");
+
+        assert_eq!(ready.endpoint, "http://127.0.0.1:1234");
     }
 
     #[switchy_async::test]

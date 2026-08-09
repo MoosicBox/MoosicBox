@@ -385,12 +385,19 @@ impl ApiAuth {
         &self,
         func: Func,
     ) -> Result<bool, Box<dyn std::error::Error + Send>> {
-        let logged_in = func(&self.auth).await?;
-
-        self.logged_in
-            .store(logged_in, std::sync::atomic::Ordering::SeqCst);
-
-        Ok(logged_in)
+        self.set_state(AuthState::Validating);
+        match func(&self.auth).await {
+            Ok(logged_in) => {
+                self.set_logged_in(logged_in);
+                Ok(logged_in)
+            }
+            Err(error) => {
+                self.set_state(AuthState::Failed {
+                    message: error.to_string(),
+                });
+                Err(error)
+            }
+        }
     }
 
     /// Returns a reference to poll authentication if applicable.
@@ -618,6 +625,7 @@ mod test {
 
         assert!(result);
         assert!(auth.is_logged_in().await.unwrap());
+        assert_eq!(auth.state(), AuthState::Authenticated);
     }
 
     #[test_log::test(switchy_async::test)]
@@ -631,6 +639,7 @@ mod test {
 
         assert!(!result);
         assert!(!auth.is_logged_in().await.unwrap());
+        assert_eq!(auth.state(), AuthState::AuthenticationRequired);
     }
 
     #[test_log::test(switchy_async::test)]
@@ -645,6 +654,7 @@ mod test {
             .await;
 
         assert!(result.is_err());
+        assert!(matches!(auth.state(), AuthState::Failed { .. }));
     }
 
     #[test_log::test]

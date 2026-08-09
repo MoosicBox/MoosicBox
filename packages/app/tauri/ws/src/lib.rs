@@ -330,7 +330,11 @@ impl WsClient {
         .await
     }
 
-    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        clippy::cognitive_complexity
+    )]
     async fn start_handler<T, O>(
         &self,
         client_id: Option<String>,
@@ -474,6 +478,10 @@ impl WsClient {
                     }
                     log::info!("WebSocket connection closed");
                 }
+                Err(Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED => {
+                    log::warn!("WebSocket authentication required");
+                    return Err(ConnectWsError::Unauthorized);
+                }
                 Err(err) => {
                     retry_attempt = retry_attempt.saturating_add(1);
                     on_reconnect(retry_attempt);
@@ -483,11 +491,6 @@ impl WsClient {
                         log::debug!("WebSocket reconnect attempt {retry_attempt} failed: {err}");
                     }
                     if let Error::Http(response) = err {
-                        if response.status() == StatusCode::UNAUTHORIZED {
-                            log::warn!("WebSocket authentication required");
-                            return Err(ConnectWsError::Unauthorized);
-                        }
-
                         log::warn!(
                             "WebSocket handshake rejected with status {}",
                             response.status()
@@ -518,6 +521,8 @@ impl WsClient {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read as _, Write as _};
+
     use super::*;
     use switchy_async::sync::mpsc;
 
@@ -530,6 +535,47 @@ mod tests {
         assert!(second > first);
         assert!(late <= Duration::from_secs(10));
         assert!(first >= Duration::from_millis(250));
+    }
+
+    #[test_log::test]
+    fn test_authentication_rejection_is_terminal_without_reconnect() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+                let address = listener.local_addr().unwrap();
+                let server = std::thread::spawn(move || {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    let mut request = [0_u8; 1024];
+                    assert!(stream.read(&mut request).unwrap() > 0);
+                    stream
+                        .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
+                        .unwrap();
+                });
+                let (client, _handle) = WsClient::new(format!("ws://{address}"));
+                let reconnects = Arc::new(std::sync::atomic::AtomicU32::new(0));
+                let callback_reconnects = reconnects.clone();
+                let (tx, _rx) = mpsc::unbounded();
+
+                let result = client
+                    .start_with_lifecycle(
+                        None,
+                        None,
+                        "master".to_string(),
+                        || {},
+                        move |_| {
+                            callback_reconnects.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        },
+                        tx,
+                    )
+                    .await;
+
+                server.join().unwrap();
+                assert!(matches!(result, Err(ConnectWsError::Unauthorized)));
+                assert_eq!(reconnects.load(std::sync::atomic::Ordering::SeqCst), 0);
+            });
     }
 
     #[test_log::test(switchy_async::test)]

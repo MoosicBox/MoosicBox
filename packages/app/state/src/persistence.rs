@@ -477,6 +477,137 @@ mod tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    async fn unchanged_connection_does_not_restart_lifecycle() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let config = ConnectionConfig::new("http://127.0.0.1:9", "master", "stable")
+            .expect("Invalid connection");
+
+        assert!(
+            state
+                .replace_connection_if_changed(config.clone())
+                .await
+                .expect("Failed to activate connection")
+        );
+        let generation = state.connection_generation();
+        assert!(
+            !state
+                .replace_connection_if_changed(config)
+                .await
+                .expect("Failed to compare connection")
+        );
+        assert_eq!(state.connection_generation(), generation);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn changed_credentials_replace_connection_atomically() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let first = ConnectionConfig::new("http://127.0.0.1:9", "master", "stable")
+            .expect("Invalid connection")
+            .with_credentials(Some("client".to_string()), None, None);
+        let replacement = first.clone().with_credentials(
+            Some("client".to_string()),
+            Some("signature".to_string()),
+            None,
+        );
+
+        state
+            .replace_connection(first)
+            .await
+            .expect("Failed to activate connection");
+        let generation = state.connection_generation();
+        assert!(
+            state
+                .replace_connection_if_changed(replacement.clone())
+                .await
+                .expect("Failed to replace credentials")
+        );
+        assert!(state.connection_generation() > generation);
+        assert_eq!(
+            state.connection_config.read().await.as_ref(),
+            Some(&replacement)
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn switching_while_retrying_invalidates_the_retry_generation() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let first = ConnectionConfig::new("http://127.0.0.1:9", "master", "first")
+            .expect("Invalid first connection");
+        let second = ConnectionConfig::new("http://127.0.0.1:10", "master", "second")
+            .expect("Invalid second connection");
+
+        state
+            .activate_connection(first)
+            .await
+            .expect("Failed to activate first connection");
+        state
+            .retry_connection()
+            .await
+            .expect("Failed to retry connection");
+        let retry_generation = state.connection_generation();
+
+        state
+            .replace_connection(second.clone())
+            .await
+            .expect("Failed to switch connection");
+
+        assert!(!state.is_active_connection_generation(retry_generation));
+        assert!(
+            !state
+                .fail_connection(retry_generation, "stale retry failed")
+                .await
+        );
+        assert_eq!(state.connection_config.read().await.as_ref(), Some(&second));
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Connecting
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn shutdown_during_retry_clears_runtime_ownership() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let config = ConnectionConfig::new("http://127.0.0.1:9", "master", "connection")
+            .expect("Invalid connection");
+
+        state
+            .activate_connection(config)
+            .await
+            .expect("Failed to activate connection");
+        state
+            .retry_connection()
+            .await
+            .expect("Failed to retry connection");
+        let retry_generation = state.connection_generation();
+
+        state.disconnect().await.expect("Failed to disconnect");
+
+        assert!(!state.is_active_connection_generation(retry_generation));
+        assert!(state.connection_config.read().await.is_none());
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Unconfigured
+        );
+        assert!(
+            !state
+                .fail_connection(retry_generation, "stale retry failed")
+                .await
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
     async fn test_replace_retry_and_disconnect_advance_generation() {
         let state = AppState::new()
             .with_persistence_in_memory()

@@ -165,8 +165,8 @@ async fn on_startup() -> Result<(), tauri::Error> {
 
 /// Application state update structure for Tauri IPC.
 ///
-/// This structure is used to update various parts of the application state
-/// via Tauri commands. All fields are optional to allow partial updates.
+/// Connection fields are assembled into a validated runtime configuration before
+/// activation; incomplete connection updates affect playback state only.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TauriUpdateAppState {
@@ -193,31 +193,45 @@ pub struct TauriUpdateAppState {
 impl From<TauriUpdateAppState> for UpdateAppState {
     fn from(value: TauriUpdateAppState) -> Self {
         Self {
-            connection_id: Some(value.connection_id),
-            connection_name: Some(value.connection_name),
-            api_url: Some(value.api_url),
-            client_id: Some(value.client_id),
-            signature_token: Some(value.signature_token),
-            api_token: Some(value.api_token),
-            profile: Some(value.profile),
             playback_target: Some(value.playback_target),
             current_session_id: Some(value.current_session_id),
+            ..Default::default()
         }
     }
 }
 
 /// Tauri command to update the application state.
 ///
-/// This command allows the frontend to update various aspects of the
-/// application state, such as connection details, API credentials, and
-/// playback configuration.
+/// This command updates frontend-owned playback state. Connection selection,
+/// endpoints, profile, identity, and credentials are owned by lifecycle APIs.
 ///
 /// # Errors
 ///
 /// * If the state update fails in the underlying `AppState`
 #[tauri::command]
 async fn set_state(state: TauriUpdateAppState) -> Result<(), TauriPlayerError> {
-    Ok(STATE.set_state(state.into()).await?)
+    let connection_config = match (
+        state.api_url.clone(),
+        state.profile.clone(),
+        state.connection_id.clone(),
+    ) {
+        (Some(api_url), Some(profile), Some(connection_id)) => Some(
+            moosicbox_app_state::ConnectionConfig::new(api_url, profile, connection_id)?
+                .with_connection_name(state.connection_name.clone())
+                .with_credentials(
+                    state.client_id.clone(),
+                    state.signature_token.clone(),
+                    state.api_token.clone(),
+                ),
+        ),
+        _ => None,
+    };
+
+    STATE.set_state(state.into()).await?;
+    if let Some(config) = connection_config {
+        STATE.replace_connection_if_changed(config).await?;
+    }
+    Ok(())
 }
 
 async fn update_log_layer(state: UpdateAppState) {

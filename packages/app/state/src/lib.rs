@@ -709,7 +709,6 @@ impl AppState {
         use moosicbox_remote_library::RemoteLibraryMusicApi;
 
         let apis = ApiSource::all()
-            .into_iter()
             .map(|source| {
                 let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(
                     moosicbox_music_api::CachedMusicApi::new(RemoteLibraryMusicApi::new(
@@ -736,6 +735,25 @@ impl AppState {
     /// * If activating the replacement connection fails
     pub async fn replace_connection(&self, config: ConnectionConfig) -> Result<(), AppStateError> {
         self.activate_connection(config).await
+    }
+
+    /// Replaces the active connection only when its complete configuration changed.
+    ///
+    /// Returns `true` when a new lifecycle generation was activated.
+    ///
+    /// # Errors
+    ///
+    /// * If existing connection resources cannot be closed
+    /// * If activating the replacement connection fails
+    pub async fn replace_connection_if_changed(
+        &self,
+        config: ConnectionConfig,
+    ) -> Result<bool, AppStateError> {
+        if self.connection_config.read().await.as_ref() == Some(&config) {
+            return Ok(false);
+        }
+        self.replace_connection(config).await?;
+        Ok(true)
     }
 
     /// Retries the current connection using a new lifecycle generation.
