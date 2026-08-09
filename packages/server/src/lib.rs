@@ -71,8 +71,10 @@ use moosicbox_config::{AppType, get_or_init_server_identity};
 use moosicbox_files::files::track_pool::service::Commander as _;
 use moosicbox_music_models::ApiSource;
 use std::{
+    io::{Read as _, Write as _},
     net::TcpListener,
     sync::{Arc, LazyLock},
+    time::{Duration, Instant},
 };
 use switchy_async::util::CancellationToken;
 use switchy_database::{Database, config::ConfigDatabase, profiles::PROFILES};
@@ -86,6 +88,51 @@ static UPNP_LISTENER_HANDLE: LazyLock<
 
 static WS_SERVER_HANDLE: LazyLock<switchy_async::sync::RwLock<Option<ws::server::WsServerHandle>>> =
     LazyLock::new(|| switchy_async::sync::RwLock::new(None));
+
+const READINESS_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn await_http_response(
+    addr: &str,
+    request: &str,
+    expected_status: &str,
+    deadline: Instant,
+) -> std::io::Result<()> {
+    loop {
+        match std::net::TcpStream::connect(addr) {
+            Ok(mut stream) => {
+                stream.set_read_timeout(Some(Duration::from_millis(250)))?;
+                stream.write_all(request.as_bytes())?;
+                let mut response = [0_u8; 1024];
+                let length = stream.read(&mut response)?;
+                let response = String::from_utf8_lossy(&response[..length]);
+                if response.starts_with(expected_status) {
+                    return Ok(());
+                }
+                return Err(std::io::Error::other(format!(
+                    "unexpected readiness response: {response}"
+                )));
+            }
+            Err(error) if Instant::now() < deadline => {
+                log::trace!("Waiting for bundled endpoint readiness: {error}");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn await_endpoint_readiness(addr: &str, profile: &str) -> std::io::Result<()> {
+    let deadline = Instant::now() + READINESS_TIMEOUT;
+    let host = addr;
+    let health_request =
+        format!("GET /health HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    await_http_response(addr, &health_request, "HTTP/1.1 200", deadline)?;
+
+    let websocket_request = format!(
+        "GET /ws?moosicboxProfile={profile} HTTP/1.1\r\nHost: {host}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n"
+    );
+    await_http_response(addr, &websocket_request, "HTTP/1.1 101", deadline)
+}
 
 #[allow(clippy::type_complexity)]
 static CONFIG_DB: LazyLock<std::sync::RwLock<Option<ConfigDatabase>>> =
@@ -166,6 +213,8 @@ pub async fn run_basic_with_listener<T>(
     #[cfg(feature = "telemetry")]
     let request_metrics = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
 
+    let verify_endpoint_readiness = listener.is_some();
+
     run(
         app_type,
         addr,
@@ -178,6 +227,7 @@ pub async fn run_basic_with_listener<T>(
         false,
         #[cfg(feature = "telemetry")]
         request_metrics,
+        verify_endpoint_readiness,
         on_startup,
     )
     .await
@@ -241,6 +291,7 @@ pub async fn run<T>(
     #[cfg(feature = "telemetry")] metrics_handler: Arc<
         Box<dyn switchy_telemetry::HttpMetricsHandler>,
     >,
+    verify_endpoint_readiness: bool,
     on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "profiling-tracing")]
@@ -595,8 +646,6 @@ pub async fn run<T>(
         } else {
             #[cfg(feature = "tls")]
             {
-                use std::io::Write as _;
-
                 use openssl::ssl::{SslAcceptor, SslMethod};
 
                 let config_dir =
@@ -686,6 +735,22 @@ pub async fn run<T>(
 
     if let Err(e) = switchy_mdns::register_service(&server_id, &ip, service_port).await {
         moosicbox_assert::die_or_error!("Failed to register mdns service: {e:?}");
+    }
+
+    if verify_endpoint_readiness {
+        let server_addr = format!("{addr}:{service_port}");
+        let Some(profile) = PROFILES.names().into_iter().next() else {
+            http_server.handle().stop(true).await;
+            return Err(std::io::Error::other(
+                "server has no profile available for endpoint readiness checks",
+            ));
+        };
+        if let Err(error) = await_endpoint_readiness(&server_addr, &profile) {
+            http_server.handle().stop(true).await;
+            return Err(std::io::Error::other(format!(
+                "server failed endpoint readiness checks: {error}"
+            )));
+        }
     }
 
     let resp = on_startup(http_server.handle());
@@ -923,5 +988,50 @@ fn start_puffin_server() {
         Err(err) => {
             log::error!("Failed to start puffin server: {err}");
         }
+    }
+}
+
+#[cfg(test)]
+mod readiness_tests {
+    use super::*;
+
+    fn spawn_readiness_server(
+        responses: [&'static str; 2],
+    ) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let handle = std::thread::spawn(move || {
+            for response in responses {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 1024];
+                let length = stream.read(&mut request).unwrap();
+                assert!(length > 0);
+                stream.write_all(response.as_bytes()).unwrap();
+            }
+        });
+        (addr, handle)
+    }
+
+    #[test]
+    fn readiness_requires_http_health_and_websocket_handshake() {
+        let (addr, handle) = spawn_readiness_server([
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}",
+            "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+        ]);
+
+        await_endpoint_readiness(&addr, "master").unwrap();
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn readiness_rejects_failed_websocket_handshake() {
+        let (addr, handle) = spawn_readiness_server([
+            "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}",
+            "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n",
+        ]);
+
+        let error = await_endpoint_readiness(&addr, "master").unwrap_err();
+        assert!(error.to_string().contains("unexpected readiness response"));
+        handle.join().unwrap();
     }
 }

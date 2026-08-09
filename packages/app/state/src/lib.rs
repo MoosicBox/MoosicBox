@@ -468,6 +468,9 @@ pub struct AppState {
     pub connection_status: Arc<RwLock<ConnectionStatus>>,
     /// Monotonically increasing identifier used to invalidate stale connection tasks.
     pub connection_generation: Arc<AtomicU64>,
+    /// Join handles for output/player/fetch work owned by the active generation.
+    pub connection_task_handles:
+        Arc<RwLock<Vec<switchy_async::task::JoinHandle<Result<(), AppStateError>>>>>,
     /// `MoosicBox` API server URL
     pub api_url: Arc<RwLock<Option<String>>>,
     /// `MoosicBox` profile name
@@ -608,6 +611,7 @@ impl std::fmt::Debug for AppState {
                 "connection_generation",
                 &self.connection_generation.load(Ordering::SeqCst),
             )
+            .field("connection_task_handles", &self.connection_task_handles)
             .field("api_url", &self.api_url)
             .field("profile", &self.profile)
             .field("ws_url", &self.ws_url)
@@ -657,6 +661,15 @@ impl AppState {
         self.connection_generation() == generation
     }
 
+    async fn cancel_connection_tasks(&self) {
+        for handle in self.connection_task_handles.write().await.drain(..) {
+            handle.abort();
+            if let Err(error) = handle.await {
+                log::debug!("Connection task finished while cancelling: {error}");
+            }
+        }
+    }
+
     /// Activates a complete validated runtime connection configuration.
     ///
     /// This is the canonical entry point for starting connection-dependent
@@ -670,6 +683,7 @@ impl AppState {
     pub async fn activate_connection(&self, config: ConnectionConfig) -> Result<(), AppStateError> {
         self.connection_generation.fetch_add(1, Ordering::SeqCst);
         self.close_ws_connection().await?;
+        self.cancel_connection_tasks().await;
         *self.connection_status.write().await = ConnectionStatus::Connecting;
         *self.connection_config.write().await = Some(config.clone());
 
@@ -722,6 +736,7 @@ impl AppState {
         self.connection_generation.fetch_add(1, Ordering::SeqCst);
         *self.connection_status.write().await = ConnectionStatus::ShuttingDown;
         self.close_ws_connection().await?;
+        self.cancel_connection_tasks().await;
         self.connection_config.write().await.take();
         *self.connection_status.write().await = ConnectionStatus::Unconfigured;
         Ok(())
@@ -2308,54 +2323,40 @@ impl AppState {
         log::debug!("update_connection_state: has_connection_id={has_connection_id}");
 
         if has_connection_id {
-            switchy_async::runtime::Handle::current().spawn_with_name("set_state: scan_outputs", {
-                let state = self.clone();
+            let generation = self.connection_generation();
+            let state = self.clone();
+            let task = switchy_async::runtime::Handle::current().spawn_with_name(
+                "set_state: initialize connection dependencies",
                 async move {
+                    if !state.is_active_connection_generation(generation) {
+                        return Ok(());
+                    }
                     log::debug!("Attempting to scan_outputs...");
-                    state.scan_outputs().await
-                }
-            });
+                    state.scan_outputs().await?;
 
-            #[cfg(feature = "upnp")]
-            let inited_upnp_players = switchy_async::runtime::Handle::current().spawn_with_name(
-                "set_state: init_upnp_players",
-                {
-                    let state = self.clone();
-                    async move {
+                    #[cfg(feature = "upnp")]
+                    {
+                        if !state.is_active_connection_generation(generation) {
+                            return Ok(());
+                        }
                         log::debug!("Attempting to init_upnp_players...");
-                        state.init_upnp_players().await
+                        state.init_upnp_players().await?;
                     }
-                },
-            );
 
-            let reinited_players = switchy_async::runtime::Handle::current().spawn_with_name(
-                "set_state: reinit_players",
-                {
-                    let state = self.clone();
-                    async move {
-                        #[cfg(feature = "upnp")]
-                        inited_upnp_players
-                            .await
-                            .map_err(|e| AppStateError::unknown(e.to_string()))??;
-                        log::debug!("Attempting to reinit_players...");
-                        state.reinit_players().await
+                    if !state.is_active_connection_generation(generation) {
+                        return Ok(());
                     }
-                },
-            );
+                    log::debug!("Attempting to reinit_players...");
+                    state.reinit_players().await?;
 
-            switchy_async::runtime::Handle::current().spawn_with_name(
-                "set_state: fetch_audio_zones",
-                {
-                    let state = self.clone();
-                    async move {
-                        reinited_players
-                            .await
-                            .map_err(|e| AppStateError::unknown(e.to_string()))??;
-                        log::debug!("Attempting to fetch_audio_zones...");
-                        state.fetch_audio_zones().await
+                    if !state.is_active_connection_generation(generation) {
+                        return Ok(());
                     }
+                    log::debug!("Attempting to fetch_audio_zones...");
+                    state.fetch_audio_zones().await
                 },
             );
+            self.connection_task_handles.write().await.push(task);
         }
 
         self.close_ws_connection().await?;

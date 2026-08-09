@@ -21,6 +21,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+use std::sync::{Arc as StdArc, Mutex};
+
 use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
 use moosicbox_config::AppType;
 use strum_macros::AsRefStr;
@@ -40,6 +42,16 @@ impl StartupError {
             message: message.into(),
         }
     }
+}
+
+async fn receive_startup(
+    receiver: switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>,
+) -> Result<ReadyServer, StartupError> {
+    receiver.await.unwrap_or_else(|error| {
+        Err(StartupError::new(format!(
+            "startup channel closed before readiness: {error}"
+        )))
+    })
 }
 
 /// Authoritative result of successfully starting the bundled server.
@@ -141,22 +153,26 @@ impl service::Processor for service::Service {
                 let receiver = ctx.write().await.receiver.take();
                 if let Some(receiver) = receiver {
                     log::debug!("process_command: Waiting for startup...");
-                    if let Err(e) = receiver.await {
-                        log::error!(
-                            "process_command: Failed to wait for on_startup response: {e:?}"
-                        );
-                    }
+                    let result = receive_startup(receiver).await;
+                    *ctx.read().await.ready.lock().unwrap() = Some(result);
                     log::debug!("process_command: Finished waiting for startup");
                 } else {
-                    log::debug!("process_command: Already started up");
+                    log::debug!("process_command: Already finished startup");
                 }
-                let ready = ctx.read().await.ready.clone();
+                let ready = ctx
+                    .read()
+                    .await
+                    .ready
+                    .lock()
+                    .unwrap()
+                    .clone()
+                    .unwrap_or_else(|| Err(StartupError::new("startup has not completed")));
                 if let Err(e) = sender.send(ready) {
                     log::error!("process_command: Failed to send WaitForStartup response: {e:?}");
                 }
             }
             Command::WaitForShutdown { sender } => {
-                let handle = ctx.write().await.server_handle.take();
+                let handle = ctx.read().await.server_handle.lock().unwrap().take();
                 if let Some(handle) = handle {
                     handle.await??;
                 }
@@ -174,9 +190,9 @@ impl service::Processor for service::Service {
 /// Holds the runtime state of the embedded server, including its join handle
 /// and startup notification channel.
 pub struct Context {
-    server_handle: Option<JoinHandle<std::io::Result<()>>>,
+    server_handle: StdArc<Mutex<Option<JoinHandle<std::io::Result<()>>>>>,
     receiver: Option<switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>>,
-    ready: Result<ReadyServer, StartupError>,
+    ready: StdArc<Mutex<Option<Result<ReadyServer, StartupError>>>>,
 }
 
 impl Context {
@@ -277,9 +293,9 @@ impl Context {
         );
 
         Ok(Self {
-            server_handle: Some(server_handle),
+            server_handle: StdArc::new(Mutex::new(Some(server_handle))),
             receiver: Some(receiver),
-            ready: Ok(ready),
+            ready: StdArc::new(Mutex::new(None)),
         })
     }
 
@@ -301,9 +317,39 @@ impl Context {
     ///
     /// * Currently always succeeds, but returns `Result` for API consistency and to allow for future error conditions
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
-        if let Some(handle) = &self.server_handle {
+        if let Some(handle) = self.server_handle.lock().unwrap().as_ref() {
             handle.abort();
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[switchy_async::test]
+    async fn startup_channel_closure_is_an_error() {
+        let (sender, receiver) = switchy_async::sync::oneshot::channel();
+        drop(sender);
+
+        let error = receive_startup(receiver).await.unwrap_err();
+
+        assert!(error.to_string().contains("startup channel closed"));
+    }
+
+    #[switchy_async::test]
+    async fn startup_channel_preserves_server_failure() {
+        let (sender, receiver) = switchy_async::sync::oneshot::channel();
+        sender
+            .send(Err(StartupError::new("migration failed")))
+            .unwrap();
+
+        let error = receive_startup(receiver).await.unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Bundled server failed to start: migration failed"
+        );
     }
 }

@@ -88,6 +88,7 @@ pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
                     true,
                     #[cfg(feature = "telemetry")]
                     metrics_handler,
+                    false,
                     move |handle| {
                         *HANDLE.lock().unwrap() = Some(handle);
                         if token.is_cancelled() {
