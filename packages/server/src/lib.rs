@@ -112,6 +112,16 @@ pub struct BundledStartup {
     result: Option<Result<BundledReadyServer, BundledStartupError>>,
 }
 
+async fn ensure_bundled_app_profile(
+    app_type: AppType,
+    config_database: &ConfigDatabase,
+) -> Result<(), moosicbox_json_utils::database::DatabaseFetchError> {
+    if matches!(app_type, AppType::App) {
+        moosicbox_config::upsert_profile(config_database, "master").await?;
+    }
+    Ok(())
+}
+
 type BundledStartupResult = Result<BundledReadyServer, BundledStartupError>;
 type BundledStartupChannel =
     Arc<std::sync::Mutex<Option<switchy_async::sync::oneshot::Sender<BundledStartupResult>>>>;
@@ -528,6 +538,10 @@ pub async fn run<T>(
         .expect("Failed to get or init server identity");
 
     switchy_database::config::init(config_database.clone().into());
+
+    ensure_bundled_app_profile(app_type, &config_database)
+        .await
+        .expect("Failed to ensure bundled app profile");
 
     events::profiles_event::init(app_type, config_database.clone())
         .await
@@ -1243,6 +1257,53 @@ mod bundled_lifecycle_tests {
         assert_ne!(
             first_listener.local_addr().unwrap(),
             second_listener.local_addr().unwrap()
+        );
+    }
+
+    #[switchy_async::test]
+    async fn bundled_app_profile_is_created_and_reused() {
+        let database = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        moosicbox_schema::migrate_config(&*database).await.unwrap();
+        let config_database: ConfigDatabase = Arc::new(database as Box<dyn Database>).into();
+
+        ensure_bundled_app_profile(AppType::App, &config_database)
+            .await
+            .unwrap();
+        ensure_bundled_app_profile(AppType::App, &config_database)
+            .await
+            .unwrap();
+
+        let profiles = moosicbox_config::get_profiles(&config_database)
+            .await
+            .unwrap();
+        assert_eq!(
+            profiles
+                .iter()
+                .filter(|profile| profile.name == "master")
+                .count(),
+            1
+        );
+    }
+
+    #[switchy_async::test]
+    async fn remote_server_startup_does_not_create_bundled_profile() {
+        let database = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        moosicbox_schema::migrate_config(&*database).await.unwrap();
+        let config_database: ConfigDatabase = Arc::new(database as Box<dyn Database>).into();
+
+        ensure_bundled_app_profile(AppType::Server, &config_database)
+            .await
+            .unwrap();
+
+        assert!(
+            moosicbox_config::get_profiles(&config_database)
+                .await
+                .unwrap()
+                .is_empty()
         );
     }
 
