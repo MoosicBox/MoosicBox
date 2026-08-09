@@ -578,6 +578,77 @@ mod tests {
             });
     }
 
+    #[test_log::test]
+    fn test_successful_recovery_resets_retry_state_and_settles() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+                let address = listener.local_addr().unwrap();
+                let server = std::thread::spawn(move || {
+                    let (mut first, _) = listener.accept().unwrap();
+                    let mut request = [0_u8; 1024];
+                    assert!(first.read(&mut request).unwrap() > 0);
+                    first
+                        .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n")
+                        .unwrap();
+
+                    let (mut second, _) = listener.accept().unwrap();
+                    let mut request = [0_u8; 4096];
+                    let length = second.read(&mut request).unwrap();
+                    let request = std::str::from_utf8(&request[..length]).unwrap();
+                    let key = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Sec-WebSocket-Key: "))
+                        .expect("Missing WebSocket key");
+                    let accept = tokio_tungstenite::tungstenite::handshake::derive_accept_key(
+                        key.as_bytes(),
+                    );
+                    second
+                        .write_all(
+                            format!(
+                                "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+                            )
+                            .as_bytes(),
+                        )
+                        .unwrap();
+                });
+                let (client, handle) = WsClient::new(format!("ws://{address}"));
+                let starts = Arc::new(std::sync::atomic::AtomicU32::new(0));
+                let callback_starts = starts.clone();
+                let reconnects = Arc::new(std::sync::atomic::AtomicU32::new(0));
+                let callback_reconnects = reconnects.clone();
+                let callback_handle = handle.clone();
+                let (tx, _rx) = mpsc::unbounded();
+
+                let result = switchy_async::time::timeout(
+                    Duration::from_secs(2),
+                    client.start_with_lifecycle(
+                        None,
+                        None,
+                        "master".to_string(),
+                        move || {
+                            callback_starts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            callback_handle.close();
+                        },
+                        move |attempt| {
+                            callback_reconnects.store(attempt, std::sync::atomic::Ordering::SeqCst);
+                        },
+                        tx,
+                    ),
+                )
+                .await
+                .expect("WebSocket recovery timed out");
+
+                server.join().unwrap();
+                result.expect("WebSocket recovery failed");
+                assert_eq!(starts.load(std::sync::atomic::Ordering::SeqCst), 1);
+                assert_eq!(reconnects.load(std::sync::atomic::Ordering::SeqCst), 1);
+            });
+    }
+
     #[test_log::test(switchy_async::test)]
     async fn test_reconnect_cancellation_settles_promptly() {
         let (client, handle) = WsClient::new("ws://127.0.0.1:0".to_string());

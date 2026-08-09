@@ -1017,6 +1017,26 @@ mod sqlite_tests {
     }
 
     #[test_log::test(switchy_async::test)]
+    async fn sqlx_config_migrations_are_idempotent_for_upgraded_startup() {
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+
+        migrate_config_sqlite(&*db).await.unwrap();
+        migrate_config_sqlite(&*db).await.unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn sqlx_library_migrations_are_idempotent_for_upgraded_startup() {
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+
+        migrate_library_sqlite(&*db).await.unwrap();
+        migrate_library_sqlite(&*db).await.unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
     async fn sqlx_library_migrations() {
         let db = switchy_database_connection::init_sqlite_sqlx(None)
             .await
