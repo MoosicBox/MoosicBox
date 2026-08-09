@@ -34,7 +34,7 @@ use hyperchad::state::{StatePersistence as _, sqlite::SqlitePersistence};
 use moosicbox_app_models::Connection;
 use strum::{AsRefStr, EnumString};
 
-use crate::{AppState, AppStateError, UpdateAppState};
+use crate::{AppState, AppStateError, ConnectionConfig, UpdateAppState};
 
 /// Keys used for persisting application state to storage.
 ///
@@ -159,18 +159,38 @@ impl AppState {
         &self,
         profile: impl Into<String>,
     ) -> Result<(), AppStateError> {
-        let connection = self.get_current_connection().await?;
+        let Some(connection) = self.get_current_connection().await? else {
+            self.disconnect().await?;
+            return Ok(());
+        };
         let connection_name = self.get_connection_name().await?;
         let connection_id = self.get_or_init_connection_id().await?;
+        let config = ConnectionConfig::new(connection.api_url, profile, connection_id)?
+            .with_connection_name(connection_name);
 
-        self.set_state(UpdateAppState {
-            connection_id: Some(Some(connection_id)),
-            connection_name: Some(connection_name),
-            api_url: Some(connection.map(|connection| connection.api_url)),
-            profile: Some(Some(profile.into())),
-            ..Default::default()
-        })
-        .await
+        self.activate_connection(config).await
+    }
+
+    /// Activates a runtime endpoint while preserving the persisted connection identity.
+    ///
+    /// This is used by bundled mode, where the endpoint is selected at runtime and
+    /// must not be stored as a synthetic remote connection.
+    ///
+    /// # Errors
+    ///
+    /// * If the persistence layer cannot load or create the connection identity
+    /// * If the endpoint cannot form a valid runtime connection configuration
+    /// * If activating the connection fails
+    pub async fn activate_endpoint(
+        &self,
+        endpoint: impl Into<String>,
+        profile: impl Into<String>,
+        connection_name: impl Into<String>,
+    ) -> Result<(), AppStateError> {
+        let connection_id = self.get_or_init_connection_id().await?;
+        let config = ConnectionConfig::new(endpoint, profile, connection_id)?
+            .with_connection_name(Some(connection_name.into()));
+        self.activate_connection(config).await
     }
 
     /// Retrieves all saved connections from persistent storage.
@@ -448,6 +468,61 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ConnectionConfig, ConnectionStatus};
+
+    #[test]
+    fn test_connection_config_rejects_incomplete_values() {
+        assert!(ConnectionConfig::new("", "master", "connection").is_err());
+        assert!(ConnectionConfig::new("ftp://example.com", "master", "connection").is_err());
+        assert!(ConnectionConfig::new("https://example.com", "", "connection").is_err());
+        assert!(ConnectionConfig::new("https://example.com", "master", "").is_err());
+    }
+
+    #[test]
+    fn test_connection_status_defaults_to_unconfigured() {
+        assert_eq!(ConnectionStatus::default(), ConnectionStatus::Unconfigured);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_replace_retry_and_disconnect_advance_generation() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let first = ConnectionConfig::new("http://127.0.0.1:9", "master", "first")
+            .expect("Invalid first connection");
+        let second = ConnectionConfig::new("http://127.0.0.1:10", "master", "second")
+            .expect("Invalid second connection");
+
+        state
+            .activate_connection(first)
+            .await
+            .expect("Failed to activate first connection");
+        let first_generation = state.connection_generation();
+
+        state
+            .replace_connection(second)
+            .await
+            .expect("Failed to replace connection");
+        let second_generation = state.connection_generation();
+        assert!(second_generation > first_generation);
+        assert!(!state.is_active_connection_generation(first_generation));
+
+        state
+            .retry_connection()
+            .await
+            .expect("Failed to retry connection");
+        let retry_generation = state.connection_generation();
+        assert!(retry_generation > second_generation);
+
+        state.disconnect().await.expect("Failed to disconnect");
+        assert!(state.connection_generation() > retry_generation);
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Unconfigured
+        );
+        assert!(state.connection_config.read().await.is_none());
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_activate_persisted_connection_applies_complete_context() {
@@ -484,6 +559,19 @@ mod tests {
             Some("Test Server")
         );
         assert!(state.connection_id.read().await.is_some());
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Connecting
+        );
+        let config = state
+            .connection_config
+            .read()
+            .await
+            .clone()
+            .expect("Missing active connection configuration");
+        assert_eq!(config.api_url(), "http://127.0.0.1:9");
+        assert_eq!(config.profile(), "master");
+        assert!(!config.connection_id().is_empty());
 
         state
             .close_ws_connection()

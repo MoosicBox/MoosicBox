@@ -152,12 +152,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     #[cfg(feature = "bundled")]
-    let (join_app_server, app_server_handle) = {
+    let bundled_ready = {
         use moosicbox_app_native_bundled::service::Commander as _;
 
         log::debug!("Starting app server");
 
-        let context = moosicbox_app_native_bundled::Context::new(&runtime.handle());
+        let context = moosicbox_app_native_bundled::Context::new(&runtime.handle())?;
         let server = moosicbox_app_native_bundled::service::Service::new(context);
 
         let app_server_handle = server.handle();
@@ -171,12 +171,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         log::debug!("Waiting for app server to start");
 
-        runtime.block_on(rx).expect("Failed to start app server");
+        let ready = runtime
+            .block_on(rx)
+            .expect("Bundled server startup channel closed")?;
 
-        log::debug!("App server started");
+        log::debug!("App server started at {}", ready.endpoint);
 
-        (join_app_server, app_server_handle)
+        (ready, join_app_server, app_server_handle)
     };
+
+    #[cfg(feature = "bundled")]
+    let (ready, join_app_server, app_server_handle) = bundled_ready;
 
     if let (Some(x), Some(y)) = (
         var_parse_opt::<i32>("WINDOW_X").unwrap_or(None),
@@ -194,6 +199,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Already set RENDERER"
     );
 
+    #[cfg(feature = "bundled")]
+    runtime.block_on(STATE.activate_endpoint(ready.endpoint, PROFILE, "Bundled server"))?;
+    #[cfg(not(feature = "bundled"))]
     runtime.block_on(STATE.activate_persisted_connection(PROFILE))?;
 
     log::debug!("app_native: running");

@@ -689,15 +689,33 @@ pub fn main(slot: &Containers) -> Containers {
     }
 }
 
+/// Returns intentional UI content for a connection lifecycle state that is not ready.
+#[must_use]
+pub fn connection_status_content(
+    status: &moosicbox_app_models::ConnectionStatus,
+) -> hyperchad::template::Containers {
+    let message = match status {
+        moosicbox_app_models::ConnectionStatus::Unconfigured => {
+            "Configure a server connection in Settings"
+        }
+        moosicbox_app_models::ConnectionStatus::StartingBackend => "Starting bundled server…",
+        moosicbox_app_models::ConnectionStatus::Connecting => "Connecting to server…",
+        moosicbox_app_models::ConnectionStatus::Ready => "Server connection is ready",
+        moosicbox_app_models::ConnectionStatus::Reconnecting { .. } => "Reconnecting to server…",
+        moosicbox_app_models::ConnectionStatus::AuthenticationRequired => {
+            "Server authentication required"
+        }
+        moosicbox_app_models::ConnectionStatus::Failed { .. } => "Unable to connect to server",
+        moosicbox_app_models::ConnectionStatus::ShuttingDown => "Shutting down…",
+    };
+    container! { (message) }
+}
+
 /// Renders the home page.
 #[must_use]
 pub fn home(state: &State) -> Containers {
-    page(
-        state,
-        &container! {
-            "home"
-        },
-    )
+    let content = connection_status_content(&state.connection_status);
+    page(state, &content)
 }
 
 /// Renders the downloads page.
@@ -869,6 +887,26 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
 mod tests {
     use super::*;
     use moosicbox_music_models::id::Id;
+
+    #[test]
+    fn test_connection_status_content_covers_every_status() {
+        let statuses = [
+            state::ConnectionStatus::Unconfigured,
+            state::ConnectionStatus::StartingBackend,
+            state::ConnectionStatus::Connecting,
+            state::ConnectionStatus::Ready,
+            state::ConnectionStatus::Reconnecting { attempt: 2 },
+            state::ConnectionStatus::AuthenticationRequired,
+            state::ConnectionStatus::Failed {
+                message: "failed".to_string(),
+            },
+            state::ConnectionStatus::ShuttingDown,
+        ];
+
+        for status in statuses {
+            assert!(!connection_status_content(&status).is_empty());
+        }
+    }
 
     mod action_serialization_tests {
         use super::*;

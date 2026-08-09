@@ -42,7 +42,10 @@ use std::{
     collections::BTreeMap,
     future::Future,
     pin::Pin,
-    sync::{Arc, LazyLock},
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use hyperchad::state::sqlite::SqlitePersistence;
@@ -230,6 +233,9 @@ pub enum AppStateError {
     /// Async task join error
     #[error(transparent)]
     Join(#[from] switchy_async::task::JoinError),
+    /// Runtime connection configuration is incomplete or invalid.
+    #[error("Invalid connection configuration: {0}")]
+    InvalidConnectionConfiguration(&'static str),
     /// Persistence layer error
     #[error(transparent)]
     Persistence(#[from] hyperchad::state::Error),
@@ -245,6 +251,111 @@ impl AppStateError {
         Self::Unknown(message.into())
     }
 }
+
+/// Complete immutable configuration required to activate a server connection.
+///
+/// Construction validates every connection prerequisite together, preventing
+/// connection-dependent services from observing a partially populated state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionConfig {
+    api_url: String,
+    profile: String,
+    connection_id: String,
+    connection_name: Option<String>,
+    client_id: Option<String>,
+    signature_token: Option<String>,
+    api_token: Option<String>,
+}
+
+impl ConnectionConfig {
+    /// Creates a validated runtime connection configuration.
+    ///
+    /// # Errors
+    ///
+    /// * If `api_url`, `profile`, or `connection_id` is empty
+    pub fn new(
+        api_url: impl Into<String>,
+        profile: impl Into<String>,
+        connection_id: impl Into<String>,
+    ) -> Result<Self, AppStateError> {
+        let api_url = api_url.into();
+        let profile = profile.into();
+        let connection_id = connection_id.into();
+
+        if api_url.trim().is_empty() {
+            return Err(AppStateError::InvalidConnectionConfiguration(
+                "empty API URL",
+            ));
+        }
+        if !api_url.starts_with("http://") && !api_url.starts_with("https://") {
+            return Err(AppStateError::InvalidConnectionConfiguration(
+                "API URL must use HTTP or HTTPS",
+            ));
+        }
+        if profile.trim().is_empty() {
+            return Err(AppStateError::InvalidConnectionConfiguration(
+                "empty profile",
+            ));
+        }
+        if connection_id.trim().is_empty() {
+            return Err(AppStateError::InvalidConnectionConfiguration(
+                "empty connection ID",
+            ));
+        }
+
+        Ok(Self {
+            api_url,
+            profile,
+            connection_id,
+            connection_name: None,
+            client_id: None,
+            signature_token: None,
+            api_token: None,
+        })
+    }
+
+    /// Sets the connection display name.
+    #[must_use]
+    pub fn with_connection_name(mut self, connection_name: Option<String>) -> Self {
+        self.connection_name = connection_name;
+        self
+    }
+
+    /// Sets optional authentication values used by HTTP and WebSocket clients.
+    #[must_use]
+    pub fn with_credentials(
+        mut self,
+        client_id: Option<String>,
+        signature_token: Option<String>,
+        api_token: Option<String>,
+    ) -> Self {
+        self.client_id = client_id;
+        self.signature_token = signature_token;
+        self.api_token = api_token;
+        self
+    }
+
+    /// Returns the API endpoint.
+    #[must_use]
+    pub fn api_url(&self) -> &str {
+        &self.api_url
+    }
+
+    /// Returns the profile name.
+    #[must_use]
+    pub fn profile(&self) -> &str {
+        &self.profile
+    }
+
+    /// Returns the stable connection identifier.
+    #[must_use]
+    pub fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+}
+
+/// Observable lifecycle state for the active server connection.
+pub use moosicbox_app_models::ConnectionStatus;
 
 /// Parameters for updating application state.
 ///
@@ -351,6 +462,12 @@ pub struct PlaybackTargetSessionPlayer {
 pub struct AppState {
     /// `SQLite` persistence layer for storing configuration
     pub persistence: Arc<RwLock<Option<Arc<SqlitePersistence>>>>,
+    /// Canonical validated configuration for the active connection.
+    pub connection_config: Arc<RwLock<Option<ConnectionConfig>>>,
+    /// Observable lifecycle state for the active connection.
+    pub connection_status: Arc<RwLock<ConnectionStatus>>,
+    /// Monotonically increasing identifier used to invalidate stale connection tasks.
+    pub connection_generation: Arc<AtomicU64>,
     /// `MoosicBox` API server URL
     pub api_url: Arc<RwLock<Option<String>>>,
     /// `MoosicBox` profile name
@@ -485,6 +602,12 @@ pub struct AppState {
 impl std::fmt::Debug for AppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppState")
+            .field("connection_config", &self.connection_config)
+            .field("connection_status", &self.connection_status)
+            .field(
+                "connection_generation",
+                &self.connection_generation.load(Ordering::SeqCst),
+            )
             .field("api_url", &self.api_url)
             .field("profile", &self.profile)
             .field("ws_url", &self.ws_url)
@@ -516,6 +639,94 @@ impl std::fmt::Debug for AppState {
 }
 
 impl AppState {
+    /// Returns the current connection lifecycle status.
+    #[must_use]
+    pub async fn connection_status(&self) -> ConnectionStatus {
+        self.connection_status.read().await.clone()
+    }
+
+    /// Returns the active connection generation.
+    #[must_use]
+    pub fn connection_generation(&self) -> u64 {
+        self.connection_generation.load(Ordering::SeqCst)
+    }
+
+    /// Returns whether `generation` still owns the active connection lifecycle.
+    #[must_use]
+    pub fn is_active_connection_generation(&self, generation: u64) -> bool {
+        self.connection_generation() == generation
+    }
+
+    /// Activates a complete validated runtime connection configuration.
+    ///
+    /// This is the canonical entry point for starting connection-dependent
+    /// services. All prerequisite fields are published before connection work is
+    /// scheduled.
+    ///
+    /// # Errors
+    ///
+    /// * If existing connection resources cannot be closed
+    /// * If connection-dependent startup cannot be scheduled
+    pub async fn activate_connection(&self, config: ConnectionConfig) -> Result<(), AppStateError> {
+        self.connection_generation.fetch_add(1, Ordering::SeqCst);
+        self.close_ws_connection().await?;
+        *self.connection_status.write().await = ConnectionStatus::Connecting;
+        *self.connection_config.write().await = Some(config.clone());
+
+        self.set_state(UpdateAppState {
+            connection_id: Some(Some(config.connection_id.clone())),
+            connection_name: Some(config.connection_name.clone()),
+            api_url: Some(Some(config.api_url.clone())),
+            client_id: Some(config.client_id.clone()),
+            signature_token: Some(config.signature_token.clone()),
+            api_token: Some(config.api_token.clone()),
+            profile: Some(Some(config.profile.clone())),
+            ..Default::default()
+        })
+        .await
+    }
+
+    /// Replaces the active connection with a new complete configuration.
+    ///
+    /// All tasks owned by the previous generation are invalidated before the new
+    /// configuration is activated.
+    ///
+    /// # Errors
+    ///
+    /// * If existing connection resources cannot be closed
+    /// * If activating the replacement connection fails
+    pub async fn replace_connection(&self, config: ConnectionConfig) -> Result<(), AppStateError> {
+        self.activate_connection(config).await
+    }
+
+    /// Retries the current connection using a new lifecycle generation.
+    ///
+    /// # Errors
+    ///
+    /// * If no active connection configuration exists
+    /// * If existing connection resources cannot be closed
+    /// * If reactivating the connection fails
+    pub async fn retry_connection(&self) -> Result<(), AppStateError> {
+        let config = self.connection_config.read().await.clone().ok_or(
+            AppStateError::InvalidConnectionConfiguration("no active connection to retry"),
+        )?;
+        self.activate_connection(config).await
+    }
+
+    /// Disconnects the active runtime connection and clears its configuration.
+    ///
+    /// # Errors
+    ///
+    /// * If closing the active WebSocket connection fails
+    pub async fn disconnect(&self) -> Result<(), AppStateError> {
+        self.connection_generation.fetch_add(1, Ordering::SeqCst);
+        *self.connection_status.write().await = ConnectionStatus::ShuttingDown;
+        self.close_ws_connection().await?;
+        self.connection_config.write().await.take();
+        *self.connection_status.write().await = ConnectionStatus::Unconfigured;
+        Ok(())
+    }
+
     /// Creates a new application state with default values.
     ///
     /// All fields are initialized to empty/default values. Use builder methods
@@ -2152,9 +2363,14 @@ impl AppState {
         let ws = switchy_async::runtime::Handle::current().spawn_with_name(
             "set_state: init_ws_connection",
             {
+                let generation = self.connection_generation();
                 let state = self.clone();
                 async move {
                     loop {
+                        if !state.is_active_connection_generation(generation) {
+                            log::debug!("Ignoring stale connection generation {generation}");
+                            break;
+                        }
                         log::debug!("Attempting to init_ws_connection...");
                         match state.start_ws_connection().await {
                             Ok(()) => {
@@ -2172,10 +2388,20 @@ impl AppState {
                                     }
 
                                     log::error!("ws connection Unauthorized: {e:?}");
+                                    if state.is_active_connection_generation(generation) {
+                                        *state.connection_status.write().await =
+                                            ConnectionStatus::AuthenticationRequired;
+                                    }
                                     return Err(e);
                                 }
 
                                 log::error!("ws connection error: {e:?}");
+                                if state.is_active_connection_generation(generation) {
+                                    *state.connection_status.write().await =
+                                        ConnectionStatus::Failed {
+                                            message: e.to_string(),
+                                        };
+                                }
 
                                 return Err(e);
                             }

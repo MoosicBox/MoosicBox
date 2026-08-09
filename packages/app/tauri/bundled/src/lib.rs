@@ -11,7 +11,7 @@
 //!
 //! # fn main() {
 //! let runtime_handle = moosicbox_async_service::runtime::Handle::current();
-//! let ctx = Context::new(&runtime_handle);
+//! let ctx = Context::new(&runtime_handle).expect("Failed to initialize bundled server");
 //! let service = service::Service::new(ctx);
 //! let _handle = service.start();
 //! # }
@@ -26,6 +26,28 @@ use moosicbox_config::AppType;
 use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
+
+/// Error returned when the bundled server cannot reach readiness.
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+#[error("Bundled server failed to start: {message}")]
+pub struct StartupError {
+    message: String,
+}
+
+impl StartupError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+/// Authoritative result of successfully starting the bundled server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyServer {
+    /// Loopback HTTP endpoint selected for this server instance.
+    pub endpoint: String,
+}
 
 /// Commands for the Tauri bundled app service.
 ///
@@ -46,7 +68,9 @@ pub enum Command {
     /// Process a Tauri run event.
     RunEvent { event: Arc<RunEvent> },
     /// Wait for the server to complete startup.
-    WaitForStartup { sender: oneshot::Sender<()> },
+    WaitForStartup {
+        sender: oneshot::Sender<Result<ReadyServer, StartupError>>,
+    },
     /// Wait for the server to complete shutdown.
     WaitForShutdown { sender: oneshot::Sender<()> },
 }
@@ -126,7 +150,8 @@ impl service::Processor for service::Service {
                 } else {
                     log::debug!("process_command: Already started up");
                 }
-                if let Err(e) = sender.send(()) {
+                let ready = ctx.read().await.ready.clone();
+                if let Err(e) = sender.send(ready) {
                     log::error!("process_command: Failed to send WaitForStartup response: {e:?}");
                 }
             }
@@ -150,7 +175,8 @@ impl service::Processor for service::Service {
 /// and startup notification channel.
 pub struct Context {
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
-    receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
+    receiver: Option<switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>>,
+    ready: Result<ReadyServer, StartupError>,
 }
 
 impl Context {
@@ -168,71 +194,93 @@ impl Context {
     ///
     /// ```rust,no_run
     /// let runtime_handle = moosicbox_async_service::runtime::Handle::current();
-    /// let context = moosicbox_app_tauri_bundled::Context::new(&runtime_handle);
+    /// let context = moosicbox_app_tauri_bundled::Context::new(&runtime_handle)?;
     ///
     /// let _ = context;
     /// ```
     #[must_use]
-    pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
-        let downloads_path = moosicbox_downloader::get_default_download_path().unwrap();
-        std::fs::create_dir_all(&downloads_path).unwrap();
+    pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Result<Self, StartupError> {
+        let downloads_path = moosicbox_downloader::get_default_download_path()
+            .map_err(|error| StartupError::new(error.to_string()))?;
+        std::fs::create_dir_all(&downloads_path)
+            .map_err(|error| StartupError::new(error.to_string()))?;
 
         let (sender, receiver) = switchy_async::sync::oneshot::channel();
 
-        let addr = "0.0.0.0";
-        let port = 8016;
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .map_err(|error| StartupError::new(error.to_string()))?;
+        let port = listener
+            .local_addr()
+            .map_err(|error| StartupError::new(error.to_string()))?
+            .port();
+        let ready = ReadyServer {
+            endpoint: format!("http://127.0.0.1:{port}"),
+        };
+        let startup_ready = ready.clone();
 
         let server_handle = handle.spawn_with_name(
             "moosicbox_app_tauri_bundled server",
-            moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
-                switchy_async::runtime::Handle::current().spawn_with_name(
-                    "moosicbox_app_tauri_bundled: create_download_location",
-                    async move {
-                        let downloads_path_str = downloads_path.to_str().unwrap();
+            moosicbox_server::run_basic_with_listener(
+                AppType::App,
+                "127.0.0.1",
+                port,
+                None,
+                Some(listener),
+                move |_| {
+                    switchy_async::runtime::Handle::current().spawn_with_name(
+                        "moosicbox_app_tauri_bundled: create_download_location",
+                        async move {
+                            let downloads_path_str = downloads_path.to_str().unwrap();
 
-                        for profile in switchy_database::profiles::PROFILES.names() {
-                            let db = switchy_database::profiles::PROFILES.get(&profile).unwrap();
-                            moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
-                                .await
-                                .unwrap();
-                        }
+                            for profile in switchy_database::profiles::PROFILES.names() {
+                                let db =
+                                    switchy_database::profiles::PROFILES.get(&profile).unwrap();
+                                moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                                    .await
+                                    .unwrap();
+                            }
 
-                        moosicbox_profiles::events::on_profiles_updated_event(
-                            move |added, _removed| {
-                                let added = added.to_vec();
-                                let downloads_path = downloads_path.clone();
+                            moosicbox_profiles::events::on_profiles_updated_event(
+                                move |added, _removed| {
+                                    let added = added.to_vec();
+                                    let downloads_path = downloads_path.clone();
 
-                                Box::pin(async move {
-                                    let downloads_path_str = downloads_path.to_str().unwrap();
+                                    Box::pin(async move {
+                                        let downloads_path_str = downloads_path.to_str().unwrap();
 
-                                    for profile in &added {
-                                        let db = switchy_database::profiles::PROFILES
-                                            .get(profile)
-                                            .unwrap();
-                                        moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                                        for profile in &added {
+                                            let db = switchy_database::profiles::PROFILES
+                                                .get(profile)
+                                                .unwrap();
+                                            moosicbox_scan::db::add_scan_path(
+                                                &db,
+                                                downloads_path_str,
+                                            )
                                             .await
                                             .unwrap();
-                                    }
+                                        }
 
-                                    Ok(())
-                                })
-                            },
-                        )
-                        .await;
-                    },
-                );
+                                        Ok(())
+                                    })
+                                },
+                            )
+                            .await;
+                        },
+                    );
 
-                log::info!("App server listening on {addr}:{port}");
-                if let Err(e) = sender.send(()) {
-                    log::error!("Failed to send on_startup response: {e:?}");
-                }
-            }),
+                    log::info!("App server listening at {}", startup_ready.endpoint);
+                    if let Err(e) = sender.send(Ok(startup_ready)) {
+                        log::error!("Failed to send on_startup response: {e:?}");
+                    }
+                },
+            ),
         );
 
-        Self {
+        Ok(Self {
             server_handle: Some(server_handle),
             receiver: Some(receiver),
-        }
+            ready: Ok(ready),
+        })
     }
 
     /// Handles a Tauri run event, initiating shutdown on exit requests.

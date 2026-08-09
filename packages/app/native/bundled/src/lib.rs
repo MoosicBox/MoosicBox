@@ -17,7 +17,7 @@
 //! # use moosicbox_async_service::runtime::Handle;
 //! # async fn example(runtime_handle: &Handle) {
 //! // Create context and start embedded server
-//! let ctx = Context::new(runtime_handle);
+//! let ctx = Context::new(runtime_handle).expect("Failed to initialize bundled server");
 //!
 //! // Server starts listening on 0.0.0.0:8016
 //! // and processes music streaming requests
@@ -34,13 +34,37 @@ use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
 
+/// Error returned when the bundled server cannot reach readiness.
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+#[error("Bundled server failed to start: {message}")]
+pub struct StartupError {
+    message: String,
+}
+
+impl StartupError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+/// Authoritative result of successfully starting the bundled server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadyServer {
+    /// Loopback HTTP endpoint selected for this server instance.
+    pub endpoint: String,
+}
+
 /// Commands for controlling the bundled native application service.
 #[derive(Debug, AsRefStr)]
 pub enum Command {
     /// Process a Tauri run event.
     RunEvent { event: Arc<RunEvent> },
     /// Wait for the application server to start up.
-    WaitForStartup { sender: oneshot::Sender<()> },
+    WaitForStartup {
+        sender: oneshot::Sender<Result<ReadyServer, StartupError>>,
+    },
     /// Wait for the application server to shut down.
     WaitForShutdown { sender: oneshot::Sender<()> },
 }
@@ -114,7 +138,8 @@ impl service::Processor for service::Service {
                 } else {
                     log::debug!("process_command: Already started up");
                 }
-                if let Err(e) = sender.send(()) {
+                let ready = ctx.read().await.ready.clone();
+                if let Err(e) = sender.send(ready) {
                     log::error!("process_command: Failed to send WaitForStartup response: {e:?}");
                 }
             }
@@ -137,14 +162,16 @@ pub struct Context {
     /// Handle to the server task, used to wait for completion or abort the server.
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
     /// Oneshot receiver for server startup notification.
-    receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
+    receiver: Option<switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>>,
+    /// Last authoritative ready result.
+    ready: Result<ReadyServer, StartupError>,
 }
 
 impl Context {
     /// Creates a new application context and starts the embedded server.
     ///
-    /// The server listens on `0.0.0.0:8016` and signals startup completion
-    /// through an internal channel.
+    /// The server reserves an OS-assigned loopback port and reports the
+    /// authoritative endpoint through its startup channel.
     ///
     /// # Examples
     ///
@@ -152,30 +179,46 @@ impl Context {
     /// use moosicbox_app_native_bundled::Context;
     ///
     /// # fn example(handle: &moosicbox_async_service::runtime::Handle) {
-    /// let _ctx = Context::new(handle);
+    /// let _ctx = Context::new(handle).expect("Failed to initialize bundled server");
     /// # }
     /// ```
     #[must_use]
-    pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
+    pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Result<Self, StartupError> {
         let (sender, receiver) = switchy_async::sync::oneshot::channel();
 
-        let addr = "0.0.0.0";
-        let port = 8016;
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .map_err(|error| StartupError::new(error.to_string()))?;
+        let port = listener
+            .local_addr()
+            .map_err(|error| StartupError::new(error.to_string()))?
+            .port();
+        let ready = ReadyServer {
+            endpoint: format!("http://127.0.0.1:{port}"),
+        };
+        let startup_ready = ready.clone();
 
         let server_handle = handle.spawn_with_name(
             "moosicbox_app_tauri_bundled server",
-            moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
-                log::info!("App server listening on {addr}:{port}");
-                if let Err(e) = sender.send(()) {
-                    log::error!("Failed to send on_startup response: {e:?}");
-                }
-            }),
+            moosicbox_server::run_basic_with_listener(
+                AppType::App,
+                "127.0.0.1",
+                port,
+                None,
+                Some(listener),
+                move |_| {
+                    log::info!("App server listening at {}", startup_ready.endpoint);
+                    if let Err(e) = sender.send(Ok(startup_ready)) {
+                        log::error!("Failed to send on_startup response: {e:?}");
+                    }
+                },
+            ),
         );
 
-        Self {
+        Ok(Self {
             server_handle: Some(server_handle),
             receiver: Some(receiver),
-        }
+            ready: Ok(ready),
+        })
     }
 
     /// Handles Tauri run events, triggering appropriate lifecycle actions.

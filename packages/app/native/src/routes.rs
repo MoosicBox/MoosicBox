@@ -46,6 +46,9 @@ pub enum RouteError {
     /// A required query parameter is missing from the request.
     #[error("Missing query param: '{0}'")]
     MissingQueryParam(&'static str),
+    /// The backend is not ready for this route yet.
+    #[error("Backend unavailable while connection is {0:?}")]
+    BackendUnavailable(moosicbox_app_models::ConnectionStatus),
     /// No server connection is configured.
     #[error("Missing connection")]
     MissingConnection,
@@ -82,6 +85,38 @@ pub enum RouteError {
     /// Search error
     #[error(transparent)]
     Search(#[from] SearchError),
+}
+
+/// Converts expected backend readiness errors into intentional non-error content.
+#[must_use]
+pub fn handle_route_result<T: Into<Content>>(
+    result: Result<T, RouteError>,
+) -> Result<Content, RouteError> {
+    match result {
+        Ok(content) => Ok(content.into()),
+        Err(RouteError::BackendUnavailable(status)) => Ok(Content::builder()
+            .with_fragment(moosicbox_app_native_ui::connection_status_content(&status))
+            .build()),
+        Err(error) => Err(error),
+    }
+}
+
+fn require_ready_connection(
+    state: &State,
+) -> Result<&moosicbox_app_models::Connection, RouteError> {
+    if !matches!(
+        state.connection_status,
+        moosicbox_app_models::ConnectionStatus::Ready
+    ) {
+        return Err(RouteError::BackendUnavailable(
+            state.connection_status.clone(),
+        ));
+    }
+
+    state
+        .connection
+        .as_ref()
+        .ok_or(RouteError::MissingConnection)
 }
 
 /// Parses a comma-separated string of track API sources.
@@ -144,9 +179,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
         .unwrap_or(AlbumSort::NameAsc);
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -236,9 +269,7 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         .unwrap_or(AlbumSort::NameAsc);
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -314,9 +345,7 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
     let size = size.parse::<u16>()?;
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let url = format!(
@@ -354,9 +383,7 @@ pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
     }
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let url = format!("{host}/audio-zone/with-session?moosicboxProfile={PROFILE}");
@@ -387,9 +414,7 @@ pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteErr
     }
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let url = format!("{host}/session/sessions?moosicboxProfile={PROFILE}");
@@ -548,9 +573,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
     }
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     Ok(if let Some(artist_id) = req.query.get("artistId") {
@@ -640,9 +663,7 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         .unwrap_or(DownloadTab::Current);
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let tasks_response = match active_tab {
@@ -998,6 +1019,37 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
         .build())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moosicbox_app_models::ConnectionStatus;
+
+    #[test]
+    fn test_handle_route_result_converts_backend_unavailable_to_content() {
+        for status in [
+            ConnectionStatus::Unconfigured,
+            ConnectionStatus::StartingBackend,
+            ConnectionStatus::Connecting,
+            ConnectionStatus::Reconnecting { attempt: 1 },
+            ConnectionStatus::AuthenticationRequired,
+            ConnectionStatus::Failed {
+                message: "failed".to_string(),
+            },
+            ConnectionStatus::ShuttingDown,
+        ] {
+            let result =
+                handle_route_result::<Content>(Err(RouteError::BackendUnavailable(status)));
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_handle_route_result_preserves_real_errors() {
+        let result = handle_route_result::<Content>(Err(RouteError::UnsupportedMethod));
+        assert!(matches!(result, Err(RouteError::UnsupportedMethod)));
+    }
+}
+
 /// Handles enabling scan origins for a music API.
 ///
 /// # Errors
@@ -1173,9 +1225,7 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
     let query = &request.query;
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let api_sources = API_SOURCES
@@ -1256,9 +1306,7 @@ pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
     };
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -1307,9 +1355,7 @@ pub async fn library_route(req: RouteRequest) -> Result<Content, RouteError> {
     };
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -1343,9 +1389,7 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
     }
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -1407,9 +1451,7 @@ pub async fn settings_downloads_download_location_route(
     let location = &request.location;
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -1473,9 +1515,7 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
     }
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT
@@ -1527,9 +1567,7 @@ pub async fn settings_scan_scan_path_route(req: RouteRequest) -> Result<Content,
     let path = &request.path;
 
     let state = convert_state(&STATE).await;
-    let Some(connection) = &state.connection else {
-        return Err(RouteError::MissingConnection);
-    };
+    let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
     let response = CLIENT

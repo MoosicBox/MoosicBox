@@ -62,6 +62,13 @@ use tokio_tungstenite::{
     tungstenite::{Error, Message},
 };
 
+fn reconnect_delay(retry_attempt: u32) -> Duration {
+    let exponent = retry_attempt.saturating_sub(1).min(5);
+    let base_ms = 250_u64.saturating_mul(1_u64 << exponent);
+    let jitter_ms = u64::from(retry_attempt.wrapping_mul(97) % 251);
+    Duration::from_millis((base_ms + jitter_ms).min(10_000))
+}
+
 /// Error type for sending bytes over a websocket connection.
 #[derive(Debug, Error)]
 pub enum SendBytesError {
@@ -319,7 +326,7 @@ impl WsClient {
         let sender_arc = self.sender.clone();
         let cancellation_token = self.cancellation_token.clone();
 
-        let mut just_retried = false;
+        let mut retry_attempt = 0_u32;
 
         loop {
             let close_token = CancellationToken::new();
@@ -353,9 +360,9 @@ impl WsClient {
                     log::debug!("WebSocket handshake has been successfully completed");
                     on_start();
 
-                    if just_retried {
+                    if retry_attempt > 0 {
                         log::info!("WebSocket successfully reconnected");
-                        just_retried = false;
+                        retry_attempt = 0;
                     }
 
                     let (write, read) = ws_stream.split();
@@ -445,7 +452,12 @@ impl WsClient {
                     log::info!("WebSocket connection closed");
                 }
                 Err(err) => {
-                    log::error!("Websocket error: {err:?}");
+                    retry_attempt = retry_attempt.saturating_add(1);
+                    if retry_attempt == 1 {
+                        log::warn!("WebSocket connection unavailable; reconnecting");
+                    } else {
+                        log::debug!("WebSocket reconnect attempt {retry_attempt} failed: {err}");
+                    }
                     if let Error::Http(response) = err {
                         if response.status() == StatusCode::UNAUTHORIZED {
                             log::error!("Unauthorized ws connection");
@@ -460,22 +472,20 @@ impl WsClient {
                             log::error!("body: (unable to get body)");
                         }
                     } else {
-                        log::error!("Failed to connect to websocket server: {err:?}");
+                        log::debug!("Failed to connect to websocket server: {err}");
                     }
                 }
             }
 
-            #[allow(clippy::redundant_pub_crate)]
-            if just_retried {
+            if retry_attempt > 0 {
+                let delay = reconnect_delay(retry_attempt);
                 select!(
-                    () = sleep(Duration::from_secs(5)) => {}
+                    () = sleep(delay) => {}
                     () = cancellation_token.cancelled() => {
                         log::debug!("Cancelling retry");
                         break;
                     }
                 );
-            } else {
-                just_retried = true;
             }
         }
 
@@ -489,6 +499,17 @@ impl WsClient {
 mod tests {
     use super::*;
     use switchy_async::sync::mpsc;
+
+    #[test]
+    fn test_reconnect_delay_is_bounded_and_increases() {
+        let first = reconnect_delay(1);
+        let second = reconnect_delay(2);
+        let late = reconnect_delay(100);
+
+        assert!(second > first);
+        assert!(late <= Duration::from_secs(10));
+        assert!(first >= Duration::from_millis(250));
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_message_handler_text_message() {

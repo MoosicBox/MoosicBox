@@ -6,6 +6,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use moosicbox_app_models::Connection;
+pub use moosicbox_app_models::ConnectionStatus;
 use moosicbox_music_models::api::ApiTrack;
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +42,8 @@ pub struct PlayerState {
 pub struct State {
     /// The current server connection, if established.
     pub connection: Option<Connection>,
+    /// Observable lifecycle state of the server connection.
+    pub connection_status: ConnectionStatus,
     /// The current player state.
     pub player: PlayerState,
 }

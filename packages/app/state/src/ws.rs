@@ -137,12 +137,11 @@ impl AppState {
     #[allow(clippy::too_many_lines)]
     pub async fn start_ws_connection(&self) -> Result<(), AppStateError> {
         log::debug!("init_ws_connection: attempting to connect to ws");
-        {
-            if self.api_url.as_ref().read().await.is_none() {
-                log::debug!("init_ws_connection: missing API_URL");
-                return Ok(());
-            }
-        }
+        let generation = self.connection_generation();
+        let Some(config) = self.connection_config.read().await.clone() else {
+            log::debug!("init_ws_connection: no active connection configuration");
+            return Ok(());
+        };
         {
             let token = self.ws_token.read().await.clone();
             if let Some(token) = token {
@@ -155,13 +154,8 @@ impl AppState {
             token
         };
 
-        let api_url = self.api_url.read().await.clone().unwrap();
-        let profile = self
-            .profile
-            .read()
-            .await
-            .clone()
-            .ok_or(InitWsError::MissingProfile)?;
+        let api_url = config.api_url().to_string();
+        let profile = config.profile().to_string();
 
         let client_id = self.client_id.read().await.clone();
         let signature_token = self.signature_token.read().await.clone();
@@ -238,6 +232,16 @@ impl AppState {
                     let handle = handle.clone();
                     let state = self.clone();
                     move || {
+                        let status_state = state.clone();
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "moosicbox_app_state: ws ready",
+                            async move {
+                                if status_state.is_active_connection_generation(generation) {
+                                    *status_state.connection_status.write().await =
+                                        crate::ConnectionStatus::Ready;
+                                }
+                            },
+                        );
                         switchy_async::runtime::Handle::current().spawn_with_name(
                             "moosicbox_app_state: ws GetConnectionId",
                             {

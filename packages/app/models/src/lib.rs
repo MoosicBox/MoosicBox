@@ -24,6 +24,35 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "music-api-api")]
 pub use moosicbox_music_api_api::models::AuthMethod;
 
+/// Observable lifecycle state for a server connection.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConnectionStatus {
+    /// No runtime connection has been configured.
+    #[default]
+    Unconfigured,
+    /// A bundled backend is starting.
+    StartingBackend,
+    /// The client is establishing its initial connection.
+    Connecting,
+    /// HTTP, WebSocket, and dependent services may be used.
+    Ready,
+    /// A previously usable connection is being restored.
+    Reconnecting {
+        /// One-based reconnect attempt number.
+        attempt: u32,
+    },
+    /// User authentication is required before activation can complete.
+    AuthenticationRequired,
+    /// Connection activation reached a terminal failure.
+    Failed {
+        /// User-presentable failure description.
+        message: String,
+    },
+    /// Owned connection resources are shutting down.
+    ShuttingDown,
+}
+
 /// Represents a connection to a `MoosicBox` server.
 ///
 /// Contains the server name and API URL for establishing connections.

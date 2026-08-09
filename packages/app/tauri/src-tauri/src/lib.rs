@@ -1194,12 +1194,13 @@ pub fn run() {
             }
 
             #[cfg(feature = "bundled")]
-            {
+            let bundled_endpoint = {
                 use moosicbox_app_tauri_bundled::service::Commander as _;
 
                 log::debug!("Starting app server");
 
-                let context = moosicbox_app_tauri_bundled::Context::new(&RT.handle());
+                let context = moosicbox_app_tauri_bundled::Context::new(&RT.handle())
+                    .expect("Failed to initialize bundled app server");
                 let server = moosicbox_app_tauri_bundled::service::Service::new(context);
 
                 let app_server_handle = server.handle();
@@ -1215,15 +1216,26 @@ pub fn run() {
 
                 log::debug!("Waiting for app server to start");
 
-                RT.block_on(rx).expect("Failed to start app server");
+                let ready = RT
+                    .block_on(rx)
+                    .expect("Bundled server startup channel closed")
+                    .expect("Failed to start app server");
 
-                log::debug!("App server started");
+                log::debug!("App server started at {}", ready.endpoint);
 
                 *JOIN_APP_SERVER.lock().unwrap() = Some(join_app_server);
                 *APP_SERVER_HANDLE.lock().unwrap() = Some(app_server_handle);
+                ready.endpoint
             };
 
-            #[cfg(feature = "moosicbox-app-native")]
+            #[cfg(all(feature = "moosicbox-app-native", feature = "bundled"))]
+            RT.block_on(STATE.activate_endpoint(
+                bundled_endpoint,
+                moosicbox_app_native::PROFILE,
+                "Bundled server",
+            ))
+            .unwrap();
+            #[cfg(all(feature = "moosicbox-app-native", not(feature = "bundled")))]
             RT.block_on(STATE.activate_persisted_connection(
                 moosicbox_app_native::PROFILE,
             ))

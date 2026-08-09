@@ -174,16 +174,79 @@ impl VersionTracker {
         &self.table_name
     }
 
-    /// Ensure the migrations tracking table exists
+    /// Ensure the migrations tracking table exists and upgrade recognized legacy schemas.
     ///
-    /// **Breaking Change:** This method now creates a table with enhanced schema
-    /// for error recovery tracking. If an old schema table exists, manual cleanup
-    /// is required.
+    /// Tables using the historical `name`/`run_on` schema are upgraded in place.
+    /// Existing migration identifiers and timestamps are preserved, while fields
+    /// unavailable in the legacy schema receive completed/unknown defaults.
+    /// Interrupted compatible upgrades are completed idempotently.
     ///
     /// # Errors
     ///
-    /// * If the table creation fails
+    /// * If table inspection, creation, or upgrade fails
+    /// * If an existing table does not contain `run_on` and either `id` or `name`
     pub async fn ensure_table_exists(&self, db: &dyn Database) -> Result<()> {
+        if let Some(table) = db.get_table_info(&self.table_name).await? {
+            let has_id = table.columns.contains_key("id");
+            let has_name = table.columns.contains_key("name");
+            if !table.columns.contains_key("run_on") || !has_id && !has_name {
+                return Err(crate::MigrationError::Validation(format!(
+                    "Migration tracking table '{}' has an incompatible schema",
+                    self.table_name
+                )));
+            }
+
+            let unknown_checksum = DatabaseValue::String(hex::encode([0_u8; 32]));
+            let mut statement = switchy_database::schema::alter_table(&self.table_name);
+            if !has_id {
+                statement = statement.rename_column("name".to_string(), "id".to_string());
+            }
+            if !table.columns.contains_key("finished_on") {
+                statement =
+                    statement.add_column("finished_on".to_string(), DataType::DateTime, true, None);
+            }
+            if !table.columns.contains_key("up_checksum") {
+                statement = statement.add_column(
+                    "up_checksum".to_string(),
+                    DataType::VarChar(64),
+                    false,
+                    Some(unknown_checksum.clone()),
+                );
+            }
+            if !table.columns.contains_key("down_checksum") {
+                statement = statement.add_column(
+                    "down_checksum".to_string(),
+                    DataType::VarChar(64),
+                    false,
+                    Some(unknown_checksum),
+                );
+            }
+            if !table.columns.contains_key("status") {
+                statement = statement.add_column(
+                    "status".to_string(),
+                    DataType::Text,
+                    false,
+                    Some(DatabaseValue::String(
+                        MigrationStatus::Completed.to_string(),
+                    )),
+                );
+            }
+            if !table.columns.contains_key("failure_reason") {
+                statement =
+                    statement.add_column("failure_reason".to_string(), DataType::Text, true, None);
+            }
+
+            if !statement.operations.is_empty() {
+                let transaction = db.begin_transaction().await?;
+                if let Err(error) = statement.execute(&*transaction).await {
+                    transaction.rollback().await?;
+                    return Err(error.into());
+                }
+                transaction.commit().await?;
+            }
+            return Ok(());
+        }
+
         // Create table with new enhanced schema
         db.create_table(&self.table_name)
             .if_not_exists(true)
@@ -665,6 +728,123 @@ impl Default for VersionTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_ensure_table_exists_upgrades_legacy_schema() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+        db.exec_raw(
+            "CREATE TABLE __switchy_migrations(\
+                name TEXT NOT NULL,\
+                run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\
+            )",
+        )
+        .await
+        .expect("Failed to create legacy table");
+        db.exec_raw("INSERT INTO __switchy_migrations(name) VALUES ('001_legacy_migration')")
+            .await
+            .expect("Failed to insert legacy migration");
+        db.clear_connection_cache().await;
+
+        let tracker = VersionTracker::new();
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to upgrade legacy version table");
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Legacy upgrade was not idempotent");
+
+        assert!(db.column_exists(tracker.table_name(), "id").await.unwrap());
+        assert!(
+            !db.column_exists(tracker.table_name(), "name")
+                .await
+                .unwrap()
+        );
+        for column in [
+            "finished_on",
+            "up_checksum",
+            "down_checksum",
+            "status",
+            "failure_reason",
+        ] {
+            assert!(
+                db.column_exists(tracker.table_name(), column)
+                    .await
+                    .unwrap()
+            );
+        }
+        assert!(
+            tracker
+                .is_migration_applied(&*db, "001_legacy_migration")
+                .await
+                .unwrap()
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_ensure_table_exists_completes_partial_legacy_upgrade() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+        db.exec_raw(
+            "CREATE TABLE __switchy_migrations(\
+                id TEXT NOT NULL,\
+                run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                status TEXT NOT NULL DEFAULT 'completed'\
+            )",
+        )
+        .await
+        .expect("Failed to create partially upgraded table");
+        db.exec_raw("INSERT INTO __switchy_migrations(id) VALUES ('001_partial')")
+            .await
+            .expect("Failed to insert partial migration");
+        db.clear_connection_cache().await;
+
+        let tracker = VersionTracker::new();
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to complete partial upgrade");
+
+        assert!(
+            tracker
+                .is_migration_applied(&*db, "001_partial")
+                .await
+                .unwrap()
+        );
+        for column in [
+            "finished_on",
+            "up_checksum",
+            "down_checksum",
+            "failure_reason",
+        ] {
+            assert!(
+                db.column_exists(tracker.table_name(), column)
+                    .await
+                    .unwrap()
+            );
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_ensure_table_exists_rejects_unknown_schema() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+        db.exec_raw("CREATE TABLE __switchy_migrations(version TEXT NOT NULL)")
+            .await
+            .expect("Failed to create incompatible table");
+        db.clear_connection_cache().await;
+
+        let error = VersionTracker::new()
+            .ensure_table_exists(&*db)
+            .await
+            .expect_err("Unexpected schema should fail");
+        assert!(matches!(error, crate::MigrationError::Validation(_)));
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn test_remove_migration_record_success() {

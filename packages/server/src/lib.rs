@@ -135,6 +135,34 @@ pub async fn run_basic<T>(
     actix_workers: Option<usize>,
     on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
+    run_basic_with_listener(
+        app_type,
+        addr,
+        service_port,
+        actix_workers,
+        None,
+        on_startup,
+    )
+    .await
+}
+
+/// Starts the `MoosicBox` server with a pre-bound listener.
+///
+/// A pre-bound listener allows callers to reserve an OS-assigned port and know
+/// the authoritative endpoint before asynchronous server startup begins.
+///
+/// # Errors
+///
+/// * If server initialization fails
+/// * If the listener cannot be registered with the HTTP server
+pub async fn run_basic_with_listener<T>(
+    #[allow(unused)] app_type: AppType,
+    addr: &str,
+    service_port: u16,
+    actix_workers: Option<usize>,
+    listener: Option<TcpListener>,
+    on_startup: impl FnOnce(ServerHandle) -> T + Send,
+) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
     let request_metrics = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
 
@@ -143,7 +171,7 @@ pub async fn run_basic<T>(
         addr,
         service_port,
         actix_workers,
-        None,
+        listener,
         #[cfg(feature = "player")]
         false,
         #[cfg(feature = "upnp")]
