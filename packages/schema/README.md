@@ -144,6 +144,24 @@ This ensures that if you have failed migrations tracked, they won't be incorrect
 switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
 ```
 
+### Emergency migration recovery
+
+Normal startup automatically creates the tracking table and upgrades recognized
+historical schemas. Leave both recovery variables unset during normal startup.
+
+* `MOOSICBOX_DROP_MIGRATIONS_TABLE=1` destructively removes migration history.
+  Use it only after backing up the database and confirming the tracking table is
+  corrupted rather than merely historical.
+* `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` records pending migrations as completed
+  without executing their SQL. Use it only after independently verifying that
+  the physical schema already matches those migrations.
+* Combining the variables is especially dangerous: back up first, verify the
+  complete physical schema, run once, then unset both variables immediately.
+
+These controls are not a workaround for ordinary upgrade errors. Preserve the
+failing database and investigate the migration when schema compatibility has not
+been independently established.
+
 ### Migration Testing
 
 For testing migrations, use the provided test utilities:

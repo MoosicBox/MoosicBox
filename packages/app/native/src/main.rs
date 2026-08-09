@@ -158,6 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::debug!("Starting app server");
 
         let context = moosicbox_app_native_bundled::Context::new(&runtime.handle())?;
+        let server_task = context.server_task();
         let server = moosicbox_app_native_bundled::service::Service::new(context);
 
         let app_server_handle = server.handle();
@@ -177,11 +178,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         log::debug!("App server started at {}", ready.endpoint);
 
-        (ready, join_app_server, app_server_handle)
+        (ready, join_app_server, app_server_handle, server_task)
     };
 
     #[cfg(feature = "bundled")]
-    let (ready, join_app_server, app_server_handle) = bundled_ready;
+    let (ready, join_app_server, app_server_handle, server_task) = bundled_ready;
 
     if let (Some(x), Some(y)) = (
         var_parse_opt::<i32>("WINDOW_X").unwrap_or(None),
@@ -203,6 +204,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     runtime.block_on(STATE.activate_endpoint(ready.endpoint, PROFILE, "Bundled server"))?;
     #[cfg(not(feature = "bundled"))]
     runtime.block_on(STATE.activate_persisted_connection(PROFILE))?;
+
+    #[cfg(feature = "bundled")]
+    {
+        let generation = STATE.connection_generation();
+        runtime.spawn(async move {
+            let result = server_task.wait().await;
+            if !server_task.abort_requested() {
+                let message = result.map_or_else(
+                    |error| format!("Bundled server terminated: {error}"),
+                    |()| "Bundled server terminated unexpectedly".to_string(),
+                );
+                log::error!("{message}");
+                STATE.fail_connection(generation, message).await;
+            }
+        });
+    }
 
     log::debug!("app_native: running");
     app.run()?;

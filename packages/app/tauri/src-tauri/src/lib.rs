@@ -1201,6 +1201,7 @@ pub fn run() {
 
                 let context = moosicbox_app_tauri_bundled::Context::new(&RT.handle())
                     .expect("Failed to initialize bundled app server");
+                let server_task = context.server_task();
                 let server = moosicbox_app_tauri_bundled::service::Service::new(context);
 
                 let app_server_handle = server.handle();
@@ -1225,16 +1226,31 @@ pub fn run() {
 
                 *JOIN_APP_SERVER.lock().unwrap() = Some(join_app_server);
                 *APP_SERVER_HANDLE.lock().unwrap() = Some(app_server_handle);
-                ready.endpoint
+                (ready.endpoint, server_task)
             };
 
             #[cfg(all(feature = "moosicbox-app-native", feature = "bundled"))]
-            RT.block_on(STATE.activate_endpoint(
-                bundled_endpoint,
-                moosicbox_app_native::PROFILE,
-                "Bundled server",
-            ))
-            .unwrap();
+            {
+                let (bundled_endpoint, server_task) = bundled_endpoint;
+                RT.block_on(STATE.activate_endpoint(
+                    bundled_endpoint,
+                    moosicbox_app_native::PROFILE,
+                    "Bundled server",
+                ))
+                .unwrap();
+                let generation = STATE.connection_generation();
+                RT.spawn(async move {
+                    let result = server_task.wait().await;
+                    if !server_task.abort_requested() {
+                        let message = result.map_or_else(
+                            |error| format!("Bundled server terminated: {error}"),
+                            |()| "Bundled server terminated unexpectedly".to_string(),
+                        );
+                        log::error!("{message}");
+                        STATE.fail_connection(generation, message).await;
+                    }
+                });
+            }
             #[cfg(all(feature = "moosicbox-app-native", not(feature = "bundled")))]
             RT.block_on(STATE.activate_persisted_connection(
                 moosicbox_app_native::PROFILE,

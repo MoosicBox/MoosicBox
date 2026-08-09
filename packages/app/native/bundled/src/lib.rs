@@ -78,9 +78,15 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
-    /// Cancels the bundled server if the command service stops first.
+    /// Cancels and settles the bundled server if the command service stops first.
     async fn on_shutdown(ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
-        ctx.read().await.server_handle.abort();
+        let handle = ctx.read().await.server_handle.clone();
+        handle.abort();
+        if let Err(error) = handle.wait().await
+            && error.kind() != std::io::ErrorKind::Interrupted
+        {
+            return Err(error.into());
+        }
         Ok(())
     }
 
@@ -182,6 +188,12 @@ impl Context {
             server_handle: moosicbox_server::BundledServerTask::new(server_handle),
             startup,
         })
+    }
+
+    /// Returns shared ownership of the bundled server task.
+    #[must_use]
+    pub fn server_task(&self) -> moosicbox_server::BundledServerTask {
+        self.server_handle.clone()
     }
 
     /// Handles Tauri run events, triggering appropriate lifecycle actions.

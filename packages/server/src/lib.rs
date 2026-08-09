@@ -172,6 +172,7 @@ fn bind_bundled_listener_with(
 #[derive(Clone)]
 pub struct BundledServerTask {
     handle: Arc<std::sync::Mutex<Option<switchy_async::task::JoinHandle<std::io::Result<()>>>>>,
+    abort_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl BundledServerTask {
@@ -180,6 +181,7 @@ impl BundledServerTask {
     pub fn new(handle: switchy_async::task::JoinHandle<std::io::Result<()>>) -> Self {
         Self {
             handle: Arc::new(std::sync::Mutex::new(Some(handle))),
+            abort_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -189,9 +191,18 @@ impl BundledServerTask {
     ///
     /// * If the server task lock is poisoned
     pub fn abort(&self) {
+        self.abort_requested
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         if let Some(handle) = self.handle.lock().unwrap().as_ref() {
             handle.abort();
         }
+    }
+
+    /// Returns whether shutdown explicitly requested task cancellation.
+    #[must_use]
+    pub fn abort_requested(&self) -> bool {
+        self.abort_requested
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Waits for the server task to finish, at most once.
@@ -1279,7 +1290,19 @@ mod bundled_lifecycle_tests {
         let task = BundledServerTask::new(handle);
 
         task.abort();
+        assert!(task.abort_requested());
         assert!(task.wait().await.is_err());
         task.wait().await.unwrap();
+    }
+
+    #[switchy_async::test]
+    async fn unexpected_server_exit_is_distinct_from_requested_shutdown() {
+        let handle = switchy_async::runtime::Handle::current()
+            .spawn_with_name("bundled unexpected exit test", async { Ok(()) });
+        let task = BundledServerTask::new(handle);
+
+        task.wait().await.unwrap();
+
+        assert!(!task.abort_requested());
     }
 }

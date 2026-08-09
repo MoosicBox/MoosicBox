@@ -34,7 +34,7 @@ use hyperchad::state::{StatePersistence as _, sqlite::SqlitePersistence};
 use moosicbox_app_models::Connection;
 use strum::{AsRefStr, EnumString};
 
-use crate::{AppState, AppStateError, ConnectionConfig, UpdateAppState};
+use crate::{AppState, AppStateError, ConnectionConfig};
 
 /// Keys used for persisting application state to storage.
 ///
@@ -141,6 +141,7 @@ impl AppState {
         self.persistence.read().await.clone().unwrap()
     }
 
+    #[allow(clippy::unused_async)]
     async fn init_persistence(&self) -> Result<(), AppStateError> {
         Ok(())
     }
@@ -169,6 +170,37 @@ impl AppState {
             .with_connection_name(connection_name);
 
         self.activate_connection(config).await
+    }
+
+    /// Selects and immediately activates a persisted remote connection.
+    ///
+    /// Persistence remains the owner of the user's backend selection while the
+    /// runtime lifecycle receives one complete validated configuration.
+    ///
+    /// # Errors
+    ///
+    /// * If persistence cannot save the selected connection
+    /// * If the connection identity cannot be loaded or created
+    /// * If the connection cannot form a valid runtime configuration
+    /// * If activation fails
+    pub async fn select_connection(
+        &self,
+        connection: impl AsRef<Connection>,
+        profile: impl Into<String>,
+    ) -> Result<(), AppStateError> {
+        let connection = connection.as_ref();
+        let persistence = self.persistence().await;
+        persistence
+            .set(PersistenceKey::Connection, connection)
+            .await?;
+        persistence
+            .set(PersistenceKey::ConnectionName, &connection.name)
+            .await?;
+
+        let connection_id = self.get_or_init_connection_id().await?;
+        let config = ConnectionConfig::new(connection.api_url.clone(), profile, connection_id)?
+            .with_connection_name(Some(connection.name.clone()));
+        self.replace_connection(config).await
     }
 
     /// Activates a runtime endpoint while preserving the persisted connection identity.
@@ -220,10 +252,10 @@ impl AppState {
         Ok(persistence.get(PersistenceKey::Connection).await?)
     }
 
-    /// Sets the currently active connection and saves it to persistent storage.
+    /// Saves the currently selected remote connection without changing runtime state.
     ///
-    /// This also updates the application state with the connection's API URL and
-    /// initializes the music API profiles for the connection.
+    /// Use [`Self::select_connection`] when a user action must both persist and
+    /// activate a remote connection.
     ///
     /// # Errors
     ///
@@ -238,46 +270,6 @@ impl AppState {
             .await
             .set(PersistenceKey::Connection, connection)
             .await?;
-
-        self.current_connection_updated(connection).await?;
-
-        Ok(())
-    }
-
-    async fn current_connection_updated(
-        &self,
-        connection: &Connection,
-    ) -> Result<(), AppStateError> {
-        use std::collections::BTreeMap;
-
-        use moosicbox_music_api::{MusicApi, profiles::PROFILES};
-        use moosicbox_music_models::ApiSource;
-        use moosicbox_remote_library::RemoteLibraryMusicApi;
-
-        static PROFILE: &str = "master";
-
-        let mut apis_map: BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>> = BTreeMap::new();
-
-        for api_source in ApiSource::all() {
-            apis_map.insert(
-                api_source.clone(),
-                Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
-                    RemoteLibraryMusicApi::new(
-                        connection.api_url.clone(),
-                        api_source,
-                        PROFILE.to_string(),
-                    ),
-                ))),
-            );
-        }
-
-        PROFILES.upsert(PROFILE.to_string(), Arc::new(apis_map));
-
-        self.set_state(UpdateAppState {
-            api_url: Some(Some(connection.api_url.clone())),
-            ..Default::default()
-        })
-        .await?;
 
         Ok(())
     }
@@ -401,6 +393,7 @@ impl AppState {
             && current_connection.name == name
         {
             self.remove_current_connection().await?;
+            self.disconnect().await?;
         }
 
         connections.retain(|x| x.name != name);
@@ -436,7 +429,7 @@ impl AppState {
         if let Some(current_connection) = self.get_current_connection().await?
             && current_connection.name == name
         {
-            self.set_current_connection(connection.clone()).await?;
+            self.select_connection(&connection, "master").await?;
         }
 
         for existing in &mut connections {
@@ -642,6 +635,48 @@ mod tests {
             .expect("No current connection found");
 
         assert_eq!(current, connection);
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Unconfigured
+        );
+        assert!(state.connection_config.read().await.is_none());
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_select_connection_persists_and_replaces_runtime_atomically() {
+        let state = AppState::new()
+            .with_persistence_in_memory()
+            .await
+            .expect("Failed to create in-memory persistence");
+        let connection = Connection {
+            name: "Selected Server".to_string(),
+            api_url: "http://127.0.0.1:9".to_string(),
+        };
+
+        state
+            .select_connection(&connection, "master")
+            .await
+            .expect("Failed to select connection");
+
+        assert_eq!(
+            state
+                .get_current_connection()
+                .await
+                .expect("Failed to load selected connection"),
+            Some(connection.clone())
+        );
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Connecting
+        );
+        let config = state
+            .connection_config
+            .read()
+            .await
+            .clone()
+            .expect("Missing active runtime connection");
+        assert_eq!(config.api_url(), connection.api_url);
+        assert_eq!(config.profile(), "master");
     }
 
     #[test_log::test(switchy_async::test)]

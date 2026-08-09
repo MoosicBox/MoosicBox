@@ -447,6 +447,9 @@ pub struct PlaybackTargetSessionPlayer {
     pub player_type: PlayerType,
 }
 
+type ConnectionTask = switchy_async::task::JoinHandle<Result<(), AppStateError>>;
+type ConnectionTasks = Arc<RwLock<Vec<ConnectionTask>>>;
+
 /// Central application state container.
 ///
 /// This struct holds all runtime state for a `MoosicBox` application, including:
@@ -469,8 +472,7 @@ pub struct AppState {
     /// Monotonically increasing identifier used to invalidate stale connection tasks.
     pub connection_generation: Arc<AtomicU64>,
     /// Join handles for output/player/fetch work owned by the active generation.
-    pub connection_task_handles:
-        Arc<RwLock<Vec<switchy_async::task::JoinHandle<Result<(), AppStateError>>>>>,
+    pub connection_task_handles: ConnectionTasks,
     /// `MoosicBox` API server URL
     pub api_url: Arc<RwLock<Option<String>>>,
     /// `MoosicBox` profile name
@@ -686,6 +688,7 @@ impl AppState {
         self.cancel_connection_tasks().await;
         *self.connection_status.write().await = ConnectionStatus::Connecting;
         *self.connection_config.write().await = Some(config.clone());
+        Self::configure_remote_music_apis(&config);
 
         self.set_state(UpdateAppState {
             connection_id: Some(Some(config.connection_id.clone())),
@@ -698,6 +701,28 @@ impl AppState {
             ..Default::default()
         })
         .await
+    }
+
+    fn configure_remote_music_apis(config: &ConnectionConfig) {
+        use moosicbox_music_api::{MusicApi, profiles::PROFILES};
+        use moosicbox_music_models::ApiSource;
+        use moosicbox_remote_library::RemoteLibraryMusicApi;
+
+        let apis = ApiSource::all()
+            .into_iter()
+            .map(|source| {
+                let api: Arc<Box<dyn MusicApi>> = Arc::new(Box::new(
+                    moosicbox_music_api::CachedMusicApi::new(RemoteLibraryMusicApi::new(
+                        config.api_url.clone(),
+                        source.clone(),
+                        config.profile.clone(),
+                    )),
+                ));
+                (source, api)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        PROFILES.upsert(config.profile.clone(), Arc::new(apis));
     }
 
     /// Replaces the active connection with a new complete configuration.
@@ -725,6 +750,19 @@ impl AppState {
             AppStateError::InvalidConnectionConfiguration("no active connection to retry"),
         )?;
         self.activate_connection(config).await
+    }
+
+    /// Marks the active generation as terminally failed.
+    ///
+    /// Returns `false` when the failure belongs to a stale connection generation.
+    pub async fn fail_connection(&self, generation: u64, message: impl Into<String>) -> bool {
+        if !self.is_active_connection_generation(generation) {
+            return false;
+        }
+        *self.connection_status.write().await = ConnectionStatus::Failed {
+            message: message.into(),
+        };
+        true
     }
 
     /// Disconnects the active runtime connection and clears its configuration.
@@ -1826,7 +1864,10 @@ impl AppState {
         if success {
             Ok(serde_json::from_str(&text)?)
         } else {
-            log::error!("Failure response: ({text:?})");
+            log::error!(
+                "API request failed: status={status} response_body_bytes={}",
+                text.len()
+            );
             Err(ProxyRequestError::FailureResponse {
                 status: status.into(),
                 text,
@@ -2388,7 +2429,7 @@ impl AppState {
                                         continue;
                                     }
 
-                                    log::error!("ws connection Unauthorized: {e:?}");
+                                    log::warn!("WebSocket authentication required");
                                     if state.is_active_connection_generation(generation) {
                                         *state.connection_status.write().await =
                                             ConnectionStatus::AuthenticationRequired;
@@ -2396,7 +2437,7 @@ impl AppState {
                                     return Err(e);
                                 }
 
-                                log::error!("ws connection error: {e:?}");
+                                log::error!("WebSocket connection reached terminal failure: {e}");
                                 if state.is_active_connection_generation(generation) {
                                     *state.connection_status.write().await =
                                         ConnectionStatus::Failed {
@@ -2486,6 +2527,33 @@ mod tests {
                 tracks: vec![],
             },
         }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn connection_failure_only_updates_active_generation() {
+        let state = AppState::new();
+        let generation = state.connection_generation();
+
+        assert!(
+            state
+                .fail_connection(generation, "bundled server exited")
+                .await
+        );
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Failed {
+                message: "bundled server exited".to_string()
+            }
+        );
+
+        state.connection_generation.fetch_add(1, Ordering::SeqCst);
+        assert!(!state.fail_connection(generation, "stale server exit").await);
+        assert_eq!(
+            state.connection_status().await,
+            ConnectionStatus::Failed {
+                message: "bundled server exited".to_string()
+            }
+        );
     }
 
     #[test_log::test(switchy_async::test)]

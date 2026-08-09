@@ -903,7 +903,7 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
         .cloned()
         .ok_or(RouteError::MissingConnection)?;
 
-    STATE.set_current_connection(connection.clone()).await?;
+    STATE.select_connection(&connection, PROFILE).await?;
 
     Ok(
         moosicbox_app_native_ui::settings::connections_content(&connections, Some(&connection))
