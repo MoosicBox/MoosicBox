@@ -55,6 +55,12 @@ pub enum MigrateError {
 
 /// Check if migration execution should be skipped based on environment variable
 ///
+/// `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` is an emergency recovery mechanism
+/// for operators who have independently verified that the database schema is
+/// already compatible. Normal fresh and upgraded startup must leave it unset;
+/// using it incorrectly records unapplied migrations as completed and can make
+/// the database unusable.
+///
 /// Returns `true` if `MOOSICBOX_SKIP_MIGRATION_EXECUTION` is set to "1".
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 #[must_use]
@@ -66,6 +72,12 @@ fn should_skip_migrations() -> bool {
 }
 
 /// Check if migrations table should be dropped based on environment variable
+///
+/// `MOOSICBOX_DROP_MIGRATIONS_TABLE=1` is a destructive emergency recovery
+/// mechanism for a corrupted tracking table. Normal startup upgrades recognized
+/// historical tables in place and must leave it unset. Operators must back up
+/// the database and verify the physical schema before combining this with
+/// `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1`.
 ///
 /// Returns `true` if `MOOSICBOX_DROP_MIGRATIONS_TABLE` is set to "1".
 #[cfg(any(feature = "postgres", feature = "sqlite"))]

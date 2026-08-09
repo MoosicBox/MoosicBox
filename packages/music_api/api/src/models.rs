@@ -7,6 +7,44 @@
 use moosicbox_music_api::{MusicApi, auth::Auth};
 use serde::{Deserialize, Serialize};
 
+/// Observable authentication lifecycle for a music source.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum AuthState {
+    /// No stored source configuration exists.
+    #[default]
+    NotConfigured,
+    /// User interaction is required to authenticate.
+    AuthenticationRequired,
+    /// Credentials are being checked.
+    Validating,
+    /// Credentials are accepted.
+    Authenticated,
+    /// Previously accepted credentials have expired.
+    Expired,
+    /// Authentication failed for another actionable reason.
+    Failed {
+        /// User-presentable failure description.
+        message: String,
+    },
+}
+
+impl From<moosicbox_music_api::auth::AuthState> for AuthState {
+    fn from(value: moosicbox_music_api::auth::AuthState) -> Self {
+        match value {
+            moosicbox_music_api::auth::AuthState::NotConfigured => Self::NotConfigured,
+            moosicbox_music_api::auth::AuthState::AuthenticationRequired => {
+                Self::AuthenticationRequired
+            }
+            moosicbox_music_api::auth::AuthState::Validating => Self::Validating,
+            moosicbox_music_api::auth::AuthState::Authenticated => Self::Authenticated,
+            moosicbox_music_api::auth::AuthState::Expired => Self::Expired,
+            moosicbox_music_api::auth::AuthState::Failed { message } => Self::Failed { message },
+        }
+    }
+}
+
 /// API representation of a music service provider.
 ///
 /// Contains the current state and capabilities of a music API provider,
@@ -21,6 +59,8 @@ pub struct ApiMusicApi {
     pub name: String,
     /// Whether the user is currently authenticated with this API
     pub logged_in: bool,
+    /// Observable authentication lifecycle state.
+    pub auth_state: AuthState,
     /// Whether this API supports library scanning
     pub supports_scan: bool,
     /// Whether library scanning is currently enabled for this API
@@ -58,6 +98,7 @@ pub async fn convert_to_api_music_api(
         id: api.source().to_string(),
         name: api.source().to_string_display(),
         auth_method: auth.and_then(|x| auth_method(x)),
+        auth_state: auth.map_or(AuthState::NotConfigured, |auth| auth.state().into()),
         logged_in: if let Some(auth) = auth {
             auth.is_logged_in().await?
         } else {
@@ -131,6 +172,7 @@ mod tests {
             id: "qobuz".to_string(),
             name: "Qobuz".to_string(),
             logged_in: true,
+            auth_state: AuthState::Authenticated,
             supports_scan: true,
             scan_enabled: false,
             auth_method: Some(AuthMethod::UsernamePassword),
@@ -148,6 +190,7 @@ mod tests {
             id: "tidal".to_string(),
             name: "Tidal".to_string(),
             logged_in: false,
+            auth_state: AuthState::NotConfigured,
             supports_scan: true,
             scan_enabled: true,
             auth_method: None,
@@ -156,6 +199,7 @@ mod tests {
         let json = serde_json::to_string(&api).unwrap();
 
         assert!(json.contains("\"loggedIn\":false"));
+        assert!(json.contains("\"authState\":{\"type\":\"NOT_CONFIGURED\"}"));
         assert!(json.contains("\"supportsScan\":true"));
         assert!(json.contains("\"scanEnabled\":true"));
         assert!(json.contains("\"authMethod\":null"));

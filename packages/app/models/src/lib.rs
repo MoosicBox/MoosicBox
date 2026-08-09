@@ -71,6 +71,9 @@ impl AsRef<Self> for Connection {
     }
 }
 
+#[cfg(feature = "music-api-api")]
+pub use moosicbox_music_api_api::models::AuthState;
+
 /// Settings for a music API integration.
 ///
 /// Stores configuration and capabilities for integrating with external music APIs.
@@ -83,6 +86,9 @@ pub struct MusicApiSettings {
     pub name: String,
     /// Whether the user is currently logged in to the API
     pub logged_in: bool,
+    /// Observable authentication lifecycle state.
+    #[cfg(feature = "music-api-api")]
+    pub auth_state: AuthState,
     /// Whether the API supports library scanning
     pub supports_scan: bool,
     /// Whether library scanning is enabled for this API
@@ -120,6 +126,7 @@ pub mod music_api_api {
         fn from(value: ApiMusicApi) -> Self {
             Self {
                 logged_in: value.logged_in,
+                auth_state: value.auth_state,
                 supports_scan: value.supports_scan,
                 scan_enabled: value.scan_enabled,
                 run_scan_endpoint: value

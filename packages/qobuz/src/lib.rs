@@ -2129,6 +2129,7 @@ impl QobuzMusicApiBuilder {
             .is_ok_and(|x| x.is_some());
 
         let auth = ApiAuth::builder()
+            .with_configured(logged_in)
             .with_logged_in(logged_in)
             .with_auth(
                 UsernamePasswordAuth::builder()
@@ -2207,6 +2208,11 @@ impl QobuzMusicApi {
     #[must_use]
     pub const fn builder() -> QobuzMusicApiBuilder {
         QobuzMusicApiBuilder::new()
+    }
+
+    #[cfg(test)]
+    fn auth_state(&self) -> moosicbox_music_api::auth::AuthState {
+        self.auth.state()
     }
 }
 
@@ -2699,7 +2705,7 @@ impl MusicApi for QobuzMusicApi {
 mod tests {
     use std::collections::BTreeMap;
 
-    use moosicbox_music_api::models::TrackAudioQuality;
+    use moosicbox_music_api::{auth::AuthState, models::TrackAudioQuality};
     use moosicbox_music_models::AlbumType;
 
     use crate::*;
@@ -2741,6 +2747,23 @@ mod tests {
                 ])
             }
         );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn qobuz_auth_state_covers_stored_credential_outcomes() {
+        let api = QobuzMusicApi::builder().build().await.unwrap();
+        assert_eq!(api.auth_state(), AuthState::NotConfigured);
+
+        api.auth.set_state(AuthState::Authenticated);
+        assert_eq!(api.auth_state(), AuthState::Authenticated);
+
+        api.auth.set_state(AuthState::Expired);
+        assert_eq!(api.auth_state(), AuthState::Expired);
+
+        api.auth.set_state(AuthState::Failed {
+            message: "stored Qobuz credentials rejected".to_string(),
+        });
+        assert!(matches!(api.auth_state(), AuthState::Failed { .. }));
     }
 
     #[test_log::test]

@@ -200,10 +200,10 @@ pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
     }
 }
 
-/// Authentication state for music API services.
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
+/// Authentication state while interacting with a music API.
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub enum AuthState {
-    /// Initial state before authentication starts.
+    /// Render the provider's canonical status.
     #[default]
     Initial,
     /// Currently polling for authentication completion.
@@ -221,6 +221,14 @@ pub fn music_api_settings_content(
     container! {
         @let id = format!("settings-{}", classify_name(&settings.id));
         div id=(id) {
+            @match &settings.auth_state {
+                moosicbox_app_models::AuthState::Validating => { div { "Validating credentials..." } }
+                moosicbox_app_models::AuthState::Expired => { div { "Stored credentials expired. Please log in again." } }
+                moosicbox_app_models::AuthState::Failed { message } => { div { (message) } }
+                moosicbox_app_models::AuthState::NotConfigured
+                | moosicbox_app_models::AuthState::AuthenticationRequired
+                | moosicbox_app_models::AuthState::Authenticated => {}
+            }
             @if settings.auth_method.is_none() || settings.logged_in {
                 div gap=10 {
                     @if settings.logged_in {

@@ -174,6 +174,65 @@ impl VersionTracker {
         &self.table_name
     }
 
+    async fn upgrade_existing_table(
+        &self,
+        db: &dyn Database,
+        table: &switchy_database::schema::TableInfo,
+    ) -> Result<()> {
+        let has_id = table.columns.contains_key("id");
+        let has_name = table.columns.contains_key("name");
+        if !table.columns.contains_key("run_on") || !has_id && !has_name {
+            return Err(crate::MigrationError::Validation(format!(
+                "Migration tracking table '{}' has an incompatible schema",
+                self.table_name
+            )));
+        }
+
+        let unknown_checksum = DatabaseValue::String(hex::encode([0_u8; 32]));
+        let mut statement = switchy_database::schema::alter_table(&self.table_name);
+        if !has_id {
+            statement = statement.rename_column("name".to_string(), "id".to_string());
+        }
+        for (name, data_type, nullable, default) in [
+            ("finished_on", DataType::DateTime, true, None),
+            (
+                "up_checksum",
+                DataType::VarChar(64),
+                false,
+                Some(unknown_checksum.clone()),
+            ),
+            (
+                "down_checksum",
+                DataType::VarChar(64),
+                false,
+                Some(unknown_checksum),
+            ),
+            (
+                "status",
+                DataType::Text,
+                false,
+                Some(DatabaseValue::String(
+                    MigrationStatus::Completed.to_string(),
+                )),
+            ),
+            ("failure_reason", DataType::Text, true, None),
+        ] {
+            if !table.columns.contains_key(name) {
+                statement = statement.add_column(name.to_string(), data_type, nullable, default);
+            }
+        }
+
+        if !statement.operations.is_empty() {
+            let transaction = db.begin_transaction().await?;
+            if let Err(error) = statement.execute(&*transaction).await {
+                transaction.rollback().await?;
+                return Err(error.into());
+            }
+            transaction.commit().await?;
+        }
+        Ok(())
+    }
+
     /// Ensure the migrations tracking table exists and upgrade recognized legacy schemas.
     ///
     /// Tables using the historical `name`/`run_on` schema are upgraded in place.
@@ -187,64 +246,7 @@ impl VersionTracker {
     /// * If an existing table does not contain `run_on` and either `id` or `name`
     pub async fn ensure_table_exists(&self, db: &dyn Database) -> Result<()> {
         if let Some(table) = db.get_table_info(&self.table_name).await? {
-            let has_id = table.columns.contains_key("id");
-            let has_name = table.columns.contains_key("name");
-            if !table.columns.contains_key("run_on") || !has_id && !has_name {
-                return Err(crate::MigrationError::Validation(format!(
-                    "Migration tracking table '{}' has an incompatible schema",
-                    self.table_name
-                )));
-            }
-
-            let unknown_checksum = DatabaseValue::String(hex::encode([0_u8; 32]));
-            let mut statement = switchy_database::schema::alter_table(&self.table_name);
-            if !has_id {
-                statement = statement.rename_column("name".to_string(), "id".to_string());
-            }
-            if !table.columns.contains_key("finished_on") {
-                statement =
-                    statement.add_column("finished_on".to_string(), DataType::DateTime, true, None);
-            }
-            if !table.columns.contains_key("up_checksum") {
-                statement = statement.add_column(
-                    "up_checksum".to_string(),
-                    DataType::VarChar(64),
-                    false,
-                    Some(unknown_checksum.clone()),
-                );
-            }
-            if !table.columns.contains_key("down_checksum") {
-                statement = statement.add_column(
-                    "down_checksum".to_string(),
-                    DataType::VarChar(64),
-                    false,
-                    Some(unknown_checksum),
-                );
-            }
-            if !table.columns.contains_key("status") {
-                statement = statement.add_column(
-                    "status".to_string(),
-                    DataType::Text,
-                    false,
-                    Some(DatabaseValue::String(
-                        MigrationStatus::Completed.to_string(),
-                    )),
-                );
-            }
-            if !table.columns.contains_key("failure_reason") {
-                statement =
-                    statement.add_column("failure_reason".to_string(), DataType::Text, true, None);
-            }
-
-            if !statement.operations.is_empty() {
-                let transaction = db.begin_transaction().await?;
-                if let Err(error) = statement.execute(&*transaction).await {
-                    transaction.rollback().await?;
-                    return Err(error.into());
-                }
-                transaction.commit().await?;
-            }
-            return Ok(());
+            return self.upgrade_existing_table(db, &table).await;
         }
 
         // Create table with new enhanced schema

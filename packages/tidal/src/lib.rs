@@ -2316,6 +2316,7 @@ impl TidalMusicApiBuilder {
             .is_ok_and(|x| x.is_some());
 
         let auth = ApiAuth::builder()
+            .with_configured(logged_in)
             .with_logged_in(logged_in)
             .with_auth(PollAuth::new())
             .with_validate_credentials({
@@ -2367,6 +2368,11 @@ impl TidalMusicApi {
     #[must_use]
     pub fn builder() -> TidalMusicApiBuilder {
         TidalMusicApiBuilder::default()
+    }
+
+    #[cfg(test)]
+    fn auth_state(&self) -> moosicbox_music_api::auth::AuthState {
+        self.auth.state()
     }
 }
 
@@ -2982,8 +2988,27 @@ impl MusicApi for TidalMusicApi {
 
 #[cfg(test)]
 mod tests {
+    use moosicbox_music_api::auth::AuthState;
+
     use super::*;
     use pretty_assertions::assert_eq;
+
+    #[test_log::test(switchy_async::test)]
+    async fn tidal_auth_state_covers_stored_credential_outcomes() {
+        let api = TidalMusicApi::builder().build().await.unwrap();
+        assert_eq!(api.auth_state(), AuthState::NotConfigured);
+
+        api.auth.set_state(AuthState::Authenticated);
+        assert_eq!(api.auth_state(), AuthState::Authenticated);
+
+        api.auth.set_state(AuthState::Expired);
+        assert_eq!(api.auth_state(), AuthState::Expired);
+
+        api.auth.set_state(AuthState::Failed {
+            message: "stored Tidal credentials rejected".to_string(),
+        });
+        assert!(matches!(api.auth_state(), AuthState::Failed { .. }));
+    }
 
     #[test_log::test]
     fn test_replace_all_single_replacement() {

@@ -2,7 +2,7 @@
 //!
 //! This crate provides the bundled server component for Tauri-based `MoosicBox` applications,
 //! managing an embedded HTTP server that handles music streaming and API requests. The server
-//! runs on `0.0.0.0:8016` and integrates with the Tauri application lifecycle.
+//! binds an OS-assigned loopback port and integrates with the Tauri application lifecycle.
 //!
 //! # Main Components
 //!
@@ -19,8 +19,8 @@
 //! // Create context and start embedded server
 //! let ctx = Context::new(runtime_handle).expect("Failed to initialize bundled server");
 //!
-//! // Server starts listening on 0.0.0.0:8016
-//! // and processes music streaming requests
+//! // Server reserves an OS-assigned loopback port and reports it through readiness.
+//! // The application activates that runtime endpoint after startup completes.
 //! # }
 //! ```
 
@@ -28,45 +28,14 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::{Arc as StdArc, Mutex};
-
-use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
+use moosicbox_async_service::{Arc, sync::RwLock};
 use moosicbox_config::AppType;
+pub use moosicbox_server::{
+    BundledReadyServer as ReadyServer, BundledStartupError as StartupError,
+};
 use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
-
-/// Error returned when the bundled server cannot reach readiness.
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
-#[error("Bundled server failed to start: {message}")]
-pub struct StartupError {
-    message: String,
-}
-
-impl StartupError {
-    fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-async fn receive_startup(
-    receiver: switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>,
-) -> Result<ReadyServer, StartupError> {
-    receiver.await.unwrap_or_else(|error| {
-        Err(StartupError::new(format!(
-            "startup channel closed before readiness: {error}"
-        )))
-    })
-}
-
-/// Authoritative result of successfully starting the bundled server.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadyServer {
-    /// Loopback HTTP endpoint selected for this server instance.
-    pub endpoint: String,
-}
 
 /// Commands for controlling the bundled native application service.
 #[derive(Debug, AsRefStr)]
@@ -105,16 +74,13 @@ impl service::Processor for service::Service {
     type Error = service::Error;
 
     /// Initializes the service on startup.
-    ///
-    /// Currently performs no initialization and always succeeds.
     async fn on_start(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    /// Cleans up resources on service shutdown.
-    ///
-    /// Currently performs no cleanup and always succeeds.
-    async fn on_shutdown(_ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
+    /// Cancels the bundled server if the command service stops first.
+    async fn on_shutdown(ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
+        ctx.read().await.server_handle.abort();
         Ok(())
     }
 
@@ -138,32 +104,14 @@ impl service::Processor for service::Service {
                 }
             }
             Command::WaitForStartup { sender } => {
-                let receiver = ctx.write().await.receiver.take();
-                if let Some(receiver) = receiver {
-                    log::debug!("process_command: Waiting for startup...");
-                    let result = receive_startup(receiver).await;
-                    *ctx.read().await.ready.lock().unwrap() = Some(result);
-                    log::debug!("process_command: Finished waiting for startup");
-                } else {
-                    log::debug!("process_command: Already finished startup");
-                }
-                let ready = ctx
-                    .read()
-                    .await
-                    .ready
-                    .lock()
-                    .unwrap()
-                    .clone()
-                    .unwrap_or_else(|| Err(StartupError::new("startup has not completed")));
-                if let Err(e) = sender.send(ready) {
+                let result = ctx.write().await.startup.wait().await;
+                if let Err(e) = sender.send(result) {
                     log::error!("process_command: Failed to send WaitForStartup response: {e:?}");
                 }
             }
             Command::WaitForShutdown { sender } => {
-                let handle = ctx.read().await.server_handle.lock().unwrap().take();
-                if let Some(handle) = handle {
-                    handle.await??;
-                }
+                let handle = ctx.read().await.server_handle.clone();
+                handle.wait().await?;
                 if let Err(e) = sender.send(()) {
                     log::error!("process_command: Failed to send WaitForShutdown response: {e:?}");
                 }
@@ -176,11 +124,9 @@ impl service::Processor for service::Service {
 /// Application context managing the embedded server and startup lifecycle.
 pub struct Context {
     /// Handle to the server task, used to wait for completion or abort the server.
-    server_handle: StdArc<Mutex<Option<JoinHandle<std::io::Result<()>>>>>,
-    /// Oneshot receiver for server startup notification.
-    receiver: Option<switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>>,
-    /// Last authoritative startup result.
-    ready: StdArc<Mutex<Option<Result<ReadyServer, StartupError>>>>,
+    server_handle: moosicbox_server::BundledServerTask,
+    /// Authoritative startup coordinator.
+    startup: moosicbox_server::BundledStartup,
 }
 
 impl Context {
@@ -198,42 +144,43 @@ impl Context {
     /// let _ctx = Context::new(handle).expect("Failed to initialize bundled server");
     /// # }
     /// ```
-    #[must_use]
+    /// # Errors
+    ///
+    /// * If a loopback listener cannot be reserved
+    /// * If the selected listener address cannot be read
     pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Result<Self, StartupError> {
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
-
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
-            .map_err(|error| StartupError::new(error.to_string()))?;
+        let (startup, startup_sender) = moosicbox_server::BundledStartup::pending();
+        let (listener, ready) = moosicbox_server::bind_bundled_listener()?;
         let port = listener
             .local_addr()
             .map_err(|error| StartupError::new(error.to_string()))?
             .port();
-        let ready = ReadyServer {
-            endpoint: format!("http://127.0.0.1:{port}"),
-        };
-        let startup_ready = ready.clone();
+        let startup_ready = ready;
+        let failure_sender = startup_sender.clone();
 
-        let server_handle = handle.spawn_with_name(
-            "moosicbox_app_native_bundled server",
-            moosicbox_server::run_basic_with_listener(
-                AppType::App,
-                "127.0.0.1",
-                port,
-                None,
-                Some(listener),
-                move |_| {
-                    log::info!("App server listening at {}", startup_ready.endpoint);
-                    if let Err(e) = sender.send(Ok(startup_ready)) {
-                        log::error!("Failed to send on_startup response: {e:?}");
-                    }
-                },
-            ),
-        );
+        let server_handle =
+            handle.spawn_with_name("moosicbox_app_native_bundled server", async move {
+                let result = moosicbox_server::run_basic_with_listener(
+                    AppType::App,
+                    "127.0.0.1",
+                    port,
+                    None,
+                    Some(listener),
+                    move |_| {
+                        log::info!("App server listening at {}", startup_ready.endpoint);
+                        startup_sender.ready(startup_ready);
+                    },
+                )
+                .await;
+                if let Err(error) = &result {
+                    failure_sender.failed(error.to_string());
+                }
+                result
+            });
 
         Ok(Self {
-            server_handle: StdArc::new(Mutex::new(Some(server_handle))),
-            receiver: Some(receiver),
-            ready: StdArc::new(Mutex::new(None)),
+            server_handle: moosicbox_server::BundledServerTask::new(server_handle),
+            startup,
         })
     }
 
@@ -267,35 +214,30 @@ impl Context {
     ///
     /// * Currently always returns `Ok(())`
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
-        if let Some(handle) = self.server_handle.lock().unwrap().as_ref() {
-            handle.abort();
-        }
+        self.server_handle.abort();
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[switchy_async::test]
     async fn startup_channel_closure_is_an_error() {
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
+        let (mut startup, sender) = moosicbox_server::BundledStartup::pending();
         drop(sender);
 
-        let error = receive_startup(receiver).await.unwrap_err();
+        let error = startup.wait().await.unwrap_err();
 
         assert!(error.to_string().contains("startup channel closed"));
     }
 
     #[switchy_async::test]
     async fn startup_channel_preserves_server_failure() {
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
-        sender
-            .send(Err(StartupError::new("migration failed")))
-            .unwrap();
+        let (mut startup, sender) = moosicbox_server::BundledStartup::pending();
+        sender.failed("migration failed");
 
-        let error = receive_startup(receiver).await.unwrap_err();
+        let error = startup.wait().await.unwrap_err();
 
         assert_eq!(
             error.to_string(),

@@ -10,10 +10,31 @@ use std::{
     future::Future,
     ops::{Deref, DerefMut},
     pin::Pin,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{Arc, RwLock, atomic::AtomicBool},
 };
 
 use crate::Error;
+
+/// Observable authentication lifecycle for a music source.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum AuthState {
+    /// No stored source configuration exists.
+    #[default]
+    NotConfigured,
+    /// User interaction is required to authenticate.
+    AuthenticationRequired,
+    /// Stored or newly supplied credentials are being checked.
+    Validating,
+    /// Credentials are accepted.
+    Authenticated,
+    /// Previously accepted credentials have expired.
+    Expired,
+    /// Authentication failed for another actionable reason.
+    Failed {
+        /// User-presentable failure description.
+        message: String,
+    },
+}
 
 /// Poll-based authentication implementation.
 #[cfg(feature = "auth-poll")]
@@ -135,6 +156,7 @@ impl AuthExt for Auth {
 pub struct ApiAuthBuilder {
     auth: Option<Auth>,
     logged_in: Option<bool>,
+    configured: Option<bool>,
     validate_credentials: Option<
         Arc<
             dyn Fn() -> Pin<
@@ -169,6 +191,7 @@ impl ApiAuthBuilder {
         Self {
             auth: None,
             logged_in: None,
+            configured: None,
             validate_credentials: None,
         }
     }
@@ -191,6 +214,13 @@ impl ApiAuthBuilder {
     /// Sets the authentication configuration (mutable version).
     pub fn auth(&mut self, auth: impl Into<Auth>) -> &mut Self {
         self.auth = Some(auth.into());
+        self
+    }
+
+    /// Sets whether stored source configuration exists.
+    #[must_use]
+    pub const fn with_configured(mut self, configured: bool) -> Self {
+        self.configured = Some(configured);
         self
     }
 
@@ -222,10 +252,19 @@ impl ApiAuthBuilder {
     #[must_use]
     pub fn build(self) -> ApiAuth {
         let auth = self.auth.unwrap();
-        let logged_in = Arc::new(AtomicBool::new(self.logged_in.unwrap_or(false)));
+        let logged_in = self.logged_in.unwrap_or(false);
+        let state = if logged_in {
+            AuthState::Authenticated
+        } else if self.configured.unwrap_or(false) {
+            AuthState::AuthenticationRequired
+        } else {
+            AuthState::NotConfigured
+        };
+        let logged_in = Arc::new(AtomicBool::new(logged_in));
 
         ApiAuth {
             logged_in,
+            state: Arc::new(RwLock::new(state)),
             auth,
             validate_credentials: self.validate_credentials,
         }
@@ -236,6 +275,7 @@ impl ApiAuthBuilder {
 #[derive(Clone)]
 pub struct ApiAuth {
     logged_in: Arc<AtomicBool>,
+    state: Arc<RwLock<AuthState>>,
     auth: Auth,
     validate_credentials: Option<
         Arc<
@@ -253,6 +293,7 @@ impl std::fmt::Debug for ApiAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApiAuth")
             .field("logged_in", &self.logged_in)
+            .field("state", &self.state)
             .field("auth", &self.auth)
             .finish_non_exhaustive()
     }
@@ -275,10 +316,39 @@ impl ApiAuth {
         Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
     }
 
+    /// Returns the observable source authentication state.
+    ///
+    /// # Panics
+    ///
+    /// * If the authentication state lock is poisoned
+    #[must_use]
+    pub fn state(&self) -> AuthState {
+        self.state.read().unwrap().clone()
+    }
+
+    /// Replaces the observable source authentication state.
+    ///
+    /// # Panics
+    ///
+    /// * If the authentication state lock is poisoned
+    pub fn set_state(&self, state: AuthState) {
+        self.set_logged_in(matches!(state, AuthState::Authenticated));
+        *self.state.write().unwrap() = state;
+    }
+
     /// Sets the logged-in state.
+    ///
+    /// # Panics
+    ///
+    /// * If the authentication state lock is poisoned
     pub fn set_logged_in(&self, logged_in: bool) {
         self.logged_in
             .store(logged_in, std::sync::atomic::Ordering::SeqCst);
+        *self.state.write().unwrap() = if logged_in {
+            AuthState::Authenticated
+        } else {
+            AuthState::AuthenticationRequired
+        };
     }
 
     /// Validates the configured credentials.
@@ -288,16 +358,19 @@ impl ApiAuth {
     /// * If credential validation fails
     pub async fn validate_credentials(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         if let Some(validate_credentials) = &self.validate_credentials {
+            self.set_state(AuthState::Validating);
             match validate_credentials().await {
                 Ok(valid) => self.set_logged_in(valid),
                 Err(e) => {
-                    self.set_logged_in(false);
+                    self.set_state(AuthState::Failed {
+                        message: e.to_string(),
+                    });
                     return Err(e);
                 }
             }
         }
 
-        Ok(false)
+        Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     /// Attempts to log in using the provided function.
@@ -389,7 +462,79 @@ impl DerefMut for ApiAuth {
 
 #[cfg(test)]
 mod test {
-    use super::{ApiAuth, Auth};
+    use super::{ApiAuth, Auth, AuthState};
+
+    #[test_log::test]
+    fn api_auth_exposes_configuration_states() {
+        let unconfigured = ApiAuth::builder().without_auth().build();
+        assert_eq!(unconfigured.state(), AuthState::NotConfigured);
+
+        let required = ApiAuth::builder()
+            .without_auth()
+            .with_configured(true)
+            .build();
+        assert_eq!(required.state(), AuthState::AuthenticationRequired);
+
+        let authenticated = ApiAuth::builder()
+            .without_auth()
+            .with_configured(true)
+            .with_logged_in(true)
+            .build();
+        assert_eq!(authenticated.state(), AuthState::Authenticated);
+    }
+
+    #[test_log::test]
+    fn api_auth_supports_expired_and_failed_states() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_configured(true)
+            .build();
+
+        auth.set_state(AuthState::Expired);
+        assert_eq!(auth.state(), AuthState::Expired);
+
+        auth.set_state(AuthState::Failed {
+            message: "rejected credentials".to_string(),
+        });
+        assert_eq!(
+            auth.state(),
+            AuthState::Failed {
+                message: "rejected credentials".to_string()
+            }
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn api_auth_validation_transitions_to_authenticated() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_configured(true)
+            .with_validate_credentials(|| async { Ok(true) })
+            .build();
+
+        assert!(auth.validate_credentials().await.unwrap());
+        assert_eq!(auth.state(), AuthState::Authenticated);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn api_auth_validation_transitions_to_failed() {
+        let auth = ApiAuth::builder()
+            .without_auth()
+            .with_configured(true)
+            .with_validate_credentials(|| async {
+                Err(Box::new(std::io::Error::other("rejected credentials"))
+                    as Box<dyn std::error::Error + Send>)
+            })
+            .build();
+
+        assert!(auth.validate_credentials().await.is_err());
+        assert_eq!(
+            auth.state(),
+            AuthState::Failed {
+                message: "rejected credentials".to_string()
+            }
+        );
+    }
 
     #[test_log::test(switchy_async::test)]
     async fn api_auth_builder_builds_with_no_auth() {

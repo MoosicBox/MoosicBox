@@ -21,45 +21,14 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::sync::{Arc as StdArc, Mutex};
-
-use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
+use moosicbox_async_service::{Arc, sync::RwLock};
 use moosicbox_config::AppType;
+pub use moosicbox_server::{
+    BundledReadyServer as ReadyServer, BundledStartupError as StartupError,
+};
 use strum_macros::AsRefStr;
 use switchy_async::sync::oneshot;
 use tauri::RunEvent;
-
-/// Error returned when the bundled server cannot reach readiness.
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
-#[error("Bundled server failed to start: {message}")]
-pub struct StartupError {
-    message: String,
-}
-
-impl StartupError {
-    fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-async fn receive_startup(
-    receiver: switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>,
-) -> Result<ReadyServer, StartupError> {
-    receiver.await.unwrap_or_else(|error| {
-        Err(StartupError::new(format!(
-            "startup channel closed before readiness: {error}"
-        )))
-    })
-}
-
-/// Authoritative result of successfully starting the bundled server.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReadyServer {
-    /// Loopback HTTP endpoint selected for this server instance.
-    pub endpoint: String,
-}
 
 /// Commands for the Tauri bundled app service.
 ///
@@ -122,12 +91,13 @@ impl service::Processor for service::Service {
         Ok(())
     }
 
-    /// Called when the service shuts down to clean up resources.
+    /// Cancels the bundled server if the command service stops first.
     ///
     /// # Errors
     ///
     /// * Currently always succeeds
-    async fn on_shutdown(_ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
+    async fn on_shutdown(ctx: Arc<RwLock<Context>>) -> Result<(), Self::Error> {
+        ctx.read().await.server_handle.abort();
         Ok(())
     }
 
@@ -150,32 +120,14 @@ impl service::Processor for service::Service {
                 }
             }
             Command::WaitForStartup { sender } => {
-                let receiver = ctx.write().await.receiver.take();
-                if let Some(receiver) = receiver {
-                    log::debug!("process_command: Waiting for startup...");
-                    let result = receive_startup(receiver).await;
-                    *ctx.read().await.ready.lock().unwrap() = Some(result);
-                    log::debug!("process_command: Finished waiting for startup");
-                } else {
-                    log::debug!("process_command: Already finished startup");
-                }
-                let ready = ctx
-                    .read()
-                    .await
-                    .ready
-                    .lock()
-                    .unwrap()
-                    .clone()
-                    .unwrap_or_else(|| Err(StartupError::new("startup has not completed")));
-                if let Err(e) = sender.send(ready) {
+                let result = ctx.write().await.startup.wait().await;
+                if let Err(e) = sender.send(result) {
                     log::error!("process_command: Failed to send WaitForStartup response: {e:?}");
                 }
             }
             Command::WaitForShutdown { sender } => {
-                let handle = ctx.read().await.server_handle.lock().unwrap().take();
-                if let Some(handle) = handle {
-                    handle.await??;
-                }
+                let handle = ctx.read().await.server_handle.clone();
+                handle.wait().await?;
                 if let Err(e) = sender.send(()) {
                     log::error!("process_command: Failed to send WaitForShutdown response: {e:?}");
                 }
@@ -190,9 +142,8 @@ impl service::Processor for service::Service {
 /// Holds the runtime state of the embedded server, including its join handle
 /// and startup notification channel.
 pub struct Context {
-    server_handle: StdArc<Mutex<Option<JoinHandle<std::io::Result<()>>>>>,
-    receiver: Option<switchy_async::sync::oneshot::Receiver<Result<ReadyServer, StartupError>>>,
-    ready: StdArc<Mutex<Option<Result<ReadyServer, StartupError>>>>,
+    server_handle: moosicbox_server::BundledServerTask,
+    startup: moosicbox_server::BundledStartup,
 }
 
 impl Context {
@@ -214,88 +165,91 @@ impl Context {
     ///
     /// let _ = context;
     /// ```
-    #[must_use]
+    /// # Errors
+    ///
+    /// * If the default download path cannot be determined or created
+    /// * If a loopback listener cannot be reserved
+    /// * If the selected listener address cannot be read
     pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Result<Self, StartupError> {
         let downloads_path = moosicbox_downloader::get_default_download_path()
             .map_err(|error| StartupError::new(error.to_string()))?;
         std::fs::create_dir_all(&downloads_path)
             .map_err(|error| StartupError::new(error.to_string()))?;
 
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
-
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
-            .map_err(|error| StartupError::new(error.to_string()))?;
+        let (startup, startup_sender) = moosicbox_server::BundledStartup::pending();
+        let (listener, ready) = moosicbox_server::bind_bundled_listener()?;
         let port = listener
             .local_addr()
             .map_err(|error| StartupError::new(error.to_string()))?
             .port();
-        let ready = ReadyServer {
-            endpoint: format!("http://127.0.0.1:{port}"),
-        };
-        let startup_ready = ready.clone();
+        let startup_ready = ready;
+        let failure_sender = startup_sender.clone();
 
-        let server_handle = handle.spawn_with_name(
-            "moosicbox_app_tauri_bundled server",
-            moosicbox_server::run_basic_with_listener(
-                AppType::App,
-                "127.0.0.1",
-                port,
-                None,
-                Some(listener),
-                move |_| {
-                    switchy_async::runtime::Handle::current().spawn_with_name(
-                        "moosicbox_app_tauri_bundled: create_download_location",
-                        async move {
-                            let downloads_path_str = downloads_path.to_str().unwrap();
+        let server_handle =
+            handle.spawn_with_name("moosicbox_app_tauri_bundled server", async move {
+                let result = moosicbox_server::run_basic_with_listener(
+                    AppType::App,
+                    "127.0.0.1",
+                    port,
+                    None,
+                    Some(listener),
+                    move |_| {
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "moosicbox_app_tauri_bundled: create_download_location",
+                            async move {
+                                let downloads_path_str = downloads_path.to_str().unwrap();
 
-                            for profile in switchy_database::profiles::PROFILES.names() {
-                                let db =
-                                    switchy_database::profiles::PROFILES.get(&profile).unwrap();
-                                moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
-                                    .await
-                                    .unwrap();
-                            }
+                                for profile in switchy_database::profiles::PROFILES.names() {
+                                    let db =
+                                        switchy_database::profiles::PROFILES.get(&profile).unwrap();
+                                    moosicbox_scan::db::add_scan_path(&db, downloads_path_str)
+                                        .await
+                                        .unwrap();
+                                }
 
-                            moosicbox_profiles::events::on_profiles_updated_event(
-                                move |added, _removed| {
-                                    let added = added.to_vec();
-                                    let downloads_path = downloads_path.clone();
+                                moosicbox_profiles::events::on_profiles_updated_event(
+                                    move |added, _removed| {
+                                        let added = added.to_vec();
+                                        let downloads_path = downloads_path.clone();
 
-                                    Box::pin(async move {
-                                        let downloads_path_str = downloads_path.to_str().unwrap();
+                                        Box::pin(async move {
+                                            let downloads_path_str =
+                                                downloads_path.to_str().unwrap();
 
-                                        for profile in &added {
-                                            let db = switchy_database::profiles::PROFILES
-                                                .get(profile)
+                                            for profile in &added {
+                                                let db = switchy_database::profiles::PROFILES
+                                                    .get(profile)
+                                                    .unwrap();
+                                                moosicbox_scan::db::add_scan_path(
+                                                    &db,
+                                                    downloads_path_str,
+                                                )
+                                                .await
                                                 .unwrap();
-                                            moosicbox_scan::db::add_scan_path(
-                                                &db,
-                                                downloads_path_str,
-                                            )
-                                            .await
-                                            .unwrap();
-                                        }
+                                            }
 
-                                        Ok(())
-                                    })
-                                },
-                            )
-                            .await;
-                        },
-                    );
+                                            Ok(())
+                                        })
+                                    },
+                                )
+                                .await;
+                            },
+                        );
 
-                    log::info!("App server listening at {}", startup_ready.endpoint);
-                    if let Err(e) = sender.send(Ok(startup_ready)) {
-                        log::error!("Failed to send on_startup response: {e:?}");
-                    }
-                },
-            ),
-        );
+                        log::info!("App server listening at {}", startup_ready.endpoint);
+                        startup_sender.ready(startup_ready);
+                    },
+                )
+                .await;
+                if let Err(error) = &result {
+                    failure_sender.failed(error.to_string());
+                }
+                result
+            });
 
         Ok(Self {
-            server_handle: StdArc::new(Mutex::new(Some(server_handle))),
-            receiver: Some(receiver),
-            ready: StdArc::new(Mutex::new(None)),
+            server_handle: moosicbox_server::BundledServerTask::new(server_handle),
+            startup,
         })
     }
 
@@ -317,35 +271,30 @@ impl Context {
     ///
     /// * Currently always succeeds, but returns `Result` for API consistency and to allow for future error conditions
     pub fn shutdown(&self) -> Result<(), std::io::Error> {
-        if let Some(handle) = self.server_handle.lock().unwrap().as_ref() {
-            handle.abort();
-        }
+        self.server_handle.abort();
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[switchy_async::test]
     async fn startup_channel_closure_is_an_error() {
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
+        let (mut startup, sender) = moosicbox_server::BundledStartup::pending();
         drop(sender);
 
-        let error = receive_startup(receiver).await.unwrap_err();
+        let error = startup.wait().await.unwrap_err();
 
         assert!(error.to_string().contains("startup channel closed"));
     }
 
     #[switchy_async::test]
     async fn startup_channel_preserves_server_failure() {
-        let (sender, receiver) = switchy_async::sync::oneshot::channel();
-        sender
-            .send(Err(StartupError::new("migration failed")))
-            .unwrap();
+        let (mut startup, sender) = moosicbox_server::BundledStartup::pending();
+        sender.failed("migration failed");
 
-        let error = receive_startup(receiver).await.unwrap_err();
+        let error = startup.wait().await.unwrap_err();
 
         assert_eq!(
             error.to_string(),

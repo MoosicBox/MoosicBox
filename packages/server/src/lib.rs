@@ -80,6 +80,179 @@ use switchy_async::util::CancellationToken;
 use switchy_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use tokio::try_join;
 
+/// Error returned when a bundled server cannot reach readiness.
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+#[error("Bundled server failed to start: {message}")]
+pub struct BundledStartupError {
+    message: String,
+}
+
+impl BundledStartupError {
+    /// Creates a bundled startup error.
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+/// Authoritative result of successfully starting a bundled server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundledReadyServer {
+    /// Loopback HTTP endpoint selected for this server instance.
+    pub endpoint: String,
+}
+
+/// Owns the single authoritative bundled-server startup result.
+pub struct BundledStartup {
+    receiver: Option<
+        switchy_async::sync::oneshot::Receiver<Result<BundledReadyServer, BundledStartupError>>,
+    >,
+    result: Option<Result<BundledReadyServer, BundledStartupError>>,
+}
+
+type BundledStartupResult = Result<BundledReadyServer, BundledStartupError>;
+type BundledStartupChannel =
+    Arc<std::sync::Mutex<Option<switchy_async::sync::oneshot::Sender<BundledStartupResult>>>>;
+
+/// Publishes exactly one terminal bundled startup result.
+#[derive(Clone)]
+pub struct BundledStartupSender {
+    sender: BundledStartupChannel,
+}
+
+impl BundledStartupSender {
+    /// Publishes endpoint readiness if startup has not already terminated.
+    pub fn ready(&self, ready: BundledReadyServer) {
+        self.send(Ok(ready));
+    }
+
+    /// Publishes a startup failure if startup has not already terminated.
+    pub fn failed(&self, error: impl Into<String>) {
+        self.send(Err(BundledStartupError::new(error)));
+    }
+
+    fn send(&self, result: Result<BundledReadyServer, BundledStartupError>) {
+        if let Some(sender) = self.sender.lock().unwrap().take()
+            && let Err(error) = sender.send(result)
+        {
+            log::debug!("Bundled startup result receiver was dropped: {error:?}");
+        }
+    }
+}
+
+/// Binds an OS-assigned loopback endpoint for a bundled server.
+///
+/// # Errors
+///
+/// * If the loopback listener cannot be bound
+/// * If the listener's selected local address cannot be read
+pub fn bind_bundled_listener() -> Result<(TcpListener, BundledReadyServer), BundledStartupError> {
+    bind_bundled_listener_with(|| TcpListener::bind(("127.0.0.1", 0)))
+}
+
+fn bind_bundled_listener_with(
+    bind: impl FnOnce() -> std::io::Result<TcpListener>,
+) -> Result<(TcpListener, BundledReadyServer), BundledStartupError> {
+    let listener = bind().map_err(|error| BundledStartupError::new(error.to_string()))?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| BundledStartupError::new(error.to_string()))?
+        .port();
+    Ok((
+        listener,
+        BundledReadyServer {
+            endpoint: format!("http://127.0.0.1:{port}"),
+        },
+    ))
+}
+
+/// Owns the task running a bundled server.
+#[derive(Clone)]
+pub struct BundledServerTask {
+    handle: Arc<std::sync::Mutex<Option<switchy_async::task::JoinHandle<std::io::Result<()>>>>>,
+}
+
+impl BundledServerTask {
+    /// Creates lifecycle ownership for a bundled server task.
+    #[must_use]
+    pub fn new(handle: switchy_async::task::JoinHandle<std::io::Result<()>>) -> Self {
+        Self {
+            handle: Arc::new(std::sync::Mutex::new(Some(handle))),
+        }
+    }
+
+    /// Requests immediate server shutdown.
+    ///
+    /// # Panics
+    ///
+    /// * If the server task lock is poisoned
+    pub fn abort(&self) {
+        if let Some(handle) = self.handle.lock().unwrap().as_ref() {
+            handle.abort();
+        }
+    }
+
+    /// Waits for the server task to finish, at most once.
+    ///
+    /// # Errors
+    ///
+    /// * If joining the server task fails
+    /// * If the server task returns an I/O error
+    ///
+    /// # Panics
+    ///
+    /// * If the server task lock is poisoned
+    pub async fn wait(&self) -> std::io::Result<()> {
+        let handle = self.handle.lock().unwrap().take();
+        if let Some(handle) = handle {
+            handle.await.map_err(std::io::Error::other)??;
+        }
+        Ok(())
+    }
+}
+
+impl BundledStartup {
+    /// Creates a pending startup result and the sender used by the server task.
+    #[must_use]
+    pub fn pending() -> (Self, BundledStartupSender) {
+        let (sender, receiver) = switchy_async::sync::oneshot::channel();
+        (
+            Self {
+                receiver: Some(receiver),
+                result: None,
+            },
+            BundledStartupSender {
+                sender: Arc::new(std::sync::Mutex::new(Some(sender))),
+            },
+        )
+    }
+
+    /// Waits for startup once and returns the retained authoritative result on subsequent calls.
+    ///
+    /// # Errors
+    ///
+    /// * If startup reports a failure
+    /// * If the startup channel closes before a result is published
+    pub async fn wait(&mut self) -> Result<BundledReadyServer, BundledStartupError> {
+        if let Some(result) = &self.result {
+            return result.clone();
+        }
+
+        let result = match self.receiver.take() {
+            Some(receiver) => receiver.await.unwrap_or_else(|error| {
+                Err(BundledStartupError::new(format!(
+                    "startup channel closed before readiness: {error}"
+                )))
+            }),
+            None => Err(BundledStartupError::new("startup has not completed")),
+        };
+        self.result = Some(result.clone());
+        result
+    }
+}
+
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
 static UPNP_LISTENER_HANDLE: LazyLock<
@@ -1033,5 +1206,80 @@ mod readiness_tests {
         let error = await_endpoint_readiness(&addr, "master").unwrap_err();
         assert!(error.to_string().contains("unexpected readiness response"));
         handle.join().unwrap();
+    }
+}
+
+#[cfg(test)]
+mod bundled_lifecycle_tests {
+    use super::*;
+
+    #[test]
+    fn bind_failure_is_typed_startup_failure() {
+        let error = bind_bundled_listener_with(|| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::AddrInUse,
+                "injected bind failure",
+            ))
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("injected bind failure"));
+    }
+
+    #[switchy_async::test]
+    async fn injected_startup_failures_are_retained() {
+        for failure in [
+            "migration failed",
+            "profile initialization failed",
+            "server exited before readiness",
+        ] {
+            let (mut startup, sender) = BundledStartup::pending();
+            sender.failed(failure);
+
+            let first = startup.wait().await.unwrap_err();
+            let second = startup.wait().await.unwrap_err();
+
+            assert_eq!(first, second);
+            assert!(first.to_string().contains(failure));
+        }
+    }
+
+    #[switchy_async::test]
+    async fn startup_result_is_retained() {
+        let (mut startup, sender) = BundledStartup::pending();
+        sender.ready(BundledReadyServer {
+            endpoint: "http://127.0.0.1:1234".to_string(),
+        });
+
+        let first = startup.wait().await.unwrap();
+        let second = startup.wait().await.unwrap();
+
+        assert_eq!(first, second);
+    }
+
+    #[switchy_async::test]
+    async fn startup_channel_closure_is_a_typed_error() {
+        let (mut startup, sender) = BundledStartup::pending();
+        drop(sender);
+
+        let error = startup.wait().await.unwrap_err();
+
+        assert!(error.to_string().contains("startup channel closed"));
+    }
+
+    #[switchy_async::test]
+    async fn server_task_abort_and_wait_settles_once() {
+        let handle = switchy_async::runtime::Handle::current().spawn_with_name(
+            "bundled lifecycle test",
+            async {
+                std::future::pending::<()>().await;
+                Ok(())
+            },
+        );
+        let task = BundledServerTask::new(handle);
+
+        task.abort();
+        assert!(task.wait().await.is_err());
+        task.wait().await.unwrap();
     }
 }
