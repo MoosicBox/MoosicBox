@@ -1214,7 +1214,7 @@ pub fn run() {
                 log::debug!("Starting app server");
 
                 let context = moosicbox_app_tauri_bundled::Context::new(&RT.handle())
-                    .expect("Failed to initialize bundled app server");
+                    .map_err(|error| AppError::Unknown(error.to_string()))?;
                 let server_task = context.server_task();
                 let server = moosicbox_app_tauri_bundled::service::Service::new(context);
 
@@ -1227,14 +1227,14 @@ pub fn run() {
                     .send_command(moosicbox_app_tauri_bundled::Command::WaitForStartup {
                         sender: tx,
                     })
-                    .expect("Failed to send WaitForStartup command");
+                    .map_err(|error| AppError::Unknown(error.to_string()))?;
 
                 log::debug!("Waiting for app server to start");
 
                 let ready = RT
                     .block_on(rx)
-                    .expect("Bundled server startup channel closed")
-                    .expect("Failed to start app server");
+                    .map_err(|error| AppError::Unknown(error.to_string()))?
+                    .map_err(|error| AppError::Unknown(error.to_string()))?;
 
                 log::debug!("App server started at {}", ready.endpoint);
 
@@ -1250,8 +1250,7 @@ pub fn run() {
                     bundled_endpoint,
                     moosicbox_app_native::PROFILE,
                     "Bundled server",
-                ))
-                .unwrap();
+                ))?;
                 let generation = STATE.connection_generation();
                 RT.spawn(async move {
                     let result = server_task.wait().await;
@@ -1268,8 +1267,7 @@ pub fn run() {
             #[cfg(all(feature = "moosicbox-app-native", not(feature = "bundled")))]
             RT.block_on(STATE.activate_persisted_connection(
                 moosicbox_app_native::PROFILE,
-            ))
-            .unwrap();
+            ))?;
 
             moosicbox_player::on_playback_event(crate::on_playback_event);
 

@@ -2754,16 +2754,34 @@ mod tests {
         let api = QobuzMusicApi::builder().build().await.unwrap();
         assert_eq!(api.auth_state(), AuthState::NotConfigured);
 
-        api.auth.set_state(AuthState::Authenticated);
+        assert!(
+            api.auth
+                .attempt_login(|_| async { Ok(true) })
+                .await
+                .unwrap()
+        );
         assert_eq!(api.auth_state(), AuthState::Authenticated);
 
         api.auth.set_state(AuthState::Expired);
         assert_eq!(api.auth_state(), AuthState::Expired);
 
-        api.auth.set_state(AuthState::Failed {
-            message: "stored Qobuz credentials rejected".to_string(),
-        });
-        assert!(matches!(api.auth_state(), AuthState::Failed { .. }));
+        assert!(
+            api.auth
+                .attempt_login(|_| async {
+                    Err(
+                        Box::new(std::io::Error::other("stored Qobuz credentials rejected"))
+                            as Box<dyn std::error::Error + Send>,
+                    )
+                })
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            api.auth_state(),
+            AuthState::Failed {
+                message: "stored Qobuz credentials rejected".to_string()
+            }
+        );
     }
 
     #[test_log::test]
