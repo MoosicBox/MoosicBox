@@ -7432,6 +7432,7 @@ dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
  "moosicbox_env_utils",
+ "open",
  "pretty_assertions",
  "serde_json",
  "switchy",

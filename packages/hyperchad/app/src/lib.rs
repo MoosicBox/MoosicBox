@@ -35,8 +35,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
-use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
-use hyperchad_router::{Navigation, RoutePath, Router};
+use hyperchad_renderer::{Color, RenderRunner, Renderer, ResponseNavigation, ToRenderRunner};
+use hyperchad_router::{DEFAULT_CLIENT_INFO, Navigation, RoutePath, Router};
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 use switchy_env::var_parse_or;
 
@@ -63,6 +63,12 @@ pub enum Error {
     /// App builder configuration error.
     #[error(transparent)]
     Builder(#[from] BuilderError),
+    /// Static generation cannot represent a runtime navigation response.
+    #[error("static route '{0}' returned runtime navigation")]
+    StaticNavigation(String),
+    /// Failed to open an external navigation target.
+    #[error("failed to open external navigation target: {0}")]
+    ExternalNavigation(String),
     /// Generic error from another component.
     #[error(transparent)]
     OtherSend(#[from] Box<dyn std::error::Error + Send>),
@@ -881,6 +887,30 @@ pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'sta
     initial_route: Option<Navigation>,
 }
 
+async fn apply_native_view_response<R: Renderer>(
+    renderer: &R,
+    router: &Router,
+    view: hyperchad_renderer::View,
+) -> Result<(), Error> {
+    match view.response.navigation.as_ref() {
+        Some(ResponseNavigation::Internal(location)) => router
+            .navigate_send((
+                location.as_str(),
+                hyperchad_router::RequestInfo {
+                    client: DEFAULT_CLIENT_INFO.clone(),
+                },
+            ))
+            .await
+            .map_err(|error| Error::OtherSend(Box::new(error))),
+        Some(ResponseNavigation::External(location)) => {
+            open::that_detached(location)
+                .map_err(|error| Error::ExternalNavigation(error.to_string()))?;
+            Ok(())
+        }
+        None => renderer.render(view).await.map_err(Error::OtherSend),
+    }
+}
+
 impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R> {
     /// Runs the application by parsing command-line arguments and executing the appropriate command.
     ///
@@ -1084,7 +1114,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
                     log::debug!("app_native_lib::start: router received content");
                     match content {
                         hyperchad_renderer::Content::View(boxed_view) => {
-                            renderer.render(*boxed_view).await?;
+                            apply_native_view_response(&renderer, &router, *boxed_view).await?;
                         }
                         hyperchad_renderer::Content::Raw { .. } => {
                             moosicbox_assert::die_or_warn!("Received invalid content type");

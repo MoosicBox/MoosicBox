@@ -504,6 +504,11 @@ pub mod html {
                             .open(&output_path)?;
 
                         match content {
+                            Content::View(boxed_view)
+                                if boxed_view.response.navigation.is_some() =>
+                            {
+                                return Err(Error::StaticNavigation(path_str.to_string()));
+                            }
                             Content::View(boxed_view) if boxed_view.primary.is_some() => {
                                 let view = boxed_view.primary.as_ref().unwrap();
                                 let html = container_element_to_html_response(
