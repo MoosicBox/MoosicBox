@@ -7566,6 +7566,8 @@ dependencies = [
  "switchy_async",
  "tempfile",
  "test-log",
+ "thiserror 2.0.19",
+ "url 2.5.8",
 ]
 
 [[package]]

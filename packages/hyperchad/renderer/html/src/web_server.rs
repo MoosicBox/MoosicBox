@@ -342,11 +342,17 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
 
                 match content {
                     hyperchad_renderer::Content::View(view) => {
+                        let full = req.full;
                         let (body, _content_type) = self
                             .to_body(hyperchad_renderer::Content::View(view), req)
                             .await?;
-                        let mut response =
-                            HttpResponse::new(StatusCode::Ok).with_body(body.to_vec());
+                        let navigation = response_metadata.navigation.as_ref();
+                        let mut response = HttpResponse::new(if full && navigation.is_some() {
+                            StatusCode::SeeOther
+                        } else {
+                            StatusCode::Ok
+                        })
+                        .with_body(body.to_vec());
 
                         if has_fragments {
                             response
@@ -364,8 +370,15 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
                                 .headers
                                 .insert("Set-Cookie".to_string(), response_cookie(cookie));
                         }
-                        if let Some(redirect) = response_metadata.redirect {
-                            response.headers.insert("HX-Redirect".to_string(), redirect);
+                        if let Some(navigation) = navigation {
+                            if full {
+                                response = response.with_location(navigation.location());
+                            } else {
+                                response.headers.insert(
+                                    "HX-Redirect".to_string(),
+                                    navigation.location().to_string(),
+                                );
+                            }
                         }
 
                         Ok(response)

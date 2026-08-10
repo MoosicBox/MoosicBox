@@ -41,8 +41,12 @@
 //!     async fn to_response(
 //!         &self,
 //!         data: String,
-//!     ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
-//!         Ok(Some((Content::Html(format!("<h1>Path: {}</h1>", data)), None)))
+//!     ) -> Result<Option<PreparedResponse>, lambda_runtime::Error> {
+//!         Ok(Some(PreparedResponse {
+//!             content: Content::Html(format!("<h1>Path: {data}</h1>")),
+//!             headers: vec![],
+//!             status: 200,
+//!         }))
 //!     }
 //!
 //!     async fn to_body(
@@ -115,6 +119,16 @@ pub enum Content {
     Json(serde_json::Value),
 }
 
+/// Fully prepared Lambda response before compression and runtime conversion.
+pub struct PreparedResponse {
+    /// Response body content.
+    pub content: Content,
+    /// Additional response headers.
+    pub headers: Vec<(String, String)>,
+    /// HTTP status code.
+    pub status: u16,
+}
+
 /// Processes Lambda HTTP requests and generates responses.
 ///
 /// This trait defines the interface for handling Lambda HTTP events, allowing
@@ -148,9 +162,9 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
 
     /// Generates the response content and headers from processed data.
     ///
-    /// Produces the final response content and optional headers from the
-    /// prepared request data. Returns `None` to indicate no response should
-    /// be sent (for handling by other middleware or routes).
+    /// Produces the final response content, headers, and status from the prepared request data.
+    /// Returns `None` to indicate no response should be sent (for handling by other middleware or
+    /// routes).
     ///
     /// # Errors
     ///
@@ -158,10 +172,8 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     /// * Data fetching or database query failures
     /// * Business logic validation errors
     /// * Template rendering failures
-    async fn to_response(
-        &self,
-        data: T,
-    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>;
+    async fn to_response(&self, data: T)
+    -> Result<Option<PreparedResponse>, lambda_runtime::Error>;
 
     /// Converts rendered content to the appropriate response body type.
     ///
@@ -213,7 +225,7 @@ impl<T: Send + Sync + Clone, R: LambdaResponseProcessor<T> + Send + Sync + Clone
     /// # impl LambdaResponseProcessor<String> for MyProcessor {
     /// #     fn prepare_request(&self, req: lambda_http::Request, body: Option<std::sync::Arc<bytes::Bytes>>) -> Result<String, lambda_runtime::Error> { Ok(String::new()) }
     /// #     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> { None }
-    /// #     async fn to_response(&self, data: String) -> Result<Option<(hyperchad_renderer_html_lambda::Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> { Ok(None) }
+    /// #     async fn to_response(&self, data: String) -> Result<Option<hyperchad_renderer_html_lambda::PreparedResponse>, lambda_runtime::Error> { Ok(None) }
     /// #     async fn to_body(&self, content: hyperchad_renderer::Content, data: String) -> Result<hyperchad_renderer_html_lambda::Content, lambda_runtime::Error> { Ok(hyperchad_renderer_html_lambda::Content::Html(String::new())) }
     /// # }
     /// let processor = MyProcessor;
@@ -302,17 +314,19 @@ impl<
                 let data = app.processor.prepare_request(event, body)?;
                 let content = app.processor.to_response(data).await?;
 
+                let status = content.as_ref().map_or(200, |response| response.status);
                 let mut response = Response::builder()
-                    .status(200)
+                    .status(status)
                     .header(CONTENT_ENCODING, "gzip");
 
                 let mut gz = GzEncoder::new(vec![], Compression::default());
 
-                if let Some((content, headers)) = content {
-                    if let Some(headers) = headers {
-                        for (key, value) in headers {
-                            response = response.header(key, value);
-                        }
+                if let Some(PreparedResponse {
+                    content, headers, ..
+                }) = content
+                {
+                    for (key, value) in headers {
+                        response = response.header(key, value);
                     }
                     match content {
                         Content::Html(x) => {
@@ -380,8 +394,7 @@ mod tests {
         async fn to_response(
             &self,
             _data: String,
-        ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>
-        {
+        ) -> Result<Option<PreparedResponse>, lambda_runtime::Error> {
             Ok(None)
         }
 

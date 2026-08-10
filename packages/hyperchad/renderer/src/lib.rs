@@ -198,13 +198,87 @@ impl ResponseCookie {
     }
 }
 
+/// Renderer-neutral navigation requested after applying a response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResponseNavigation {
+    /// Navigate within the current application.
+    Internal(String),
+    /// Navigate to an absolute HTTP(S) URL outside the application.
+    External(String),
+}
+
+impl ResponseNavigation {
+    /// Creates navigation to an application-local absolute path.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ResponseNavigationError::InvalidInternalPath`] unless `location` starts with one
+    ///   `/`, contains no control characters, and is not a scheme-relative URL.
+    pub fn internal(location: impl Into<String>) -> Result<Self, ResponseNavigationError> {
+        let location = location.into();
+        if !location.starts_with('/')
+            || location.starts_with("//")
+            || location.chars().any(char::is_control)
+        {
+            return Err(ResponseNavigationError::InvalidInternalPath);
+        }
+        Ok(Self::Internal(location))
+    }
+
+    /// Creates navigation to an absolute HTTP(S) URL.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`ResponseNavigationError::InvalidExternalUrl`] unless `location` is an absolute
+    ///   HTTP(S) URL without user information or control characters.
+    pub fn external(location: impl Into<String>) -> Result<Self, ResponseNavigationError> {
+        let location = location.into();
+        let url =
+            url::Url::parse(&location).map_err(|_| ResponseNavigationError::InvalidExternalUrl)?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || location.chars().any(char::is_control)
+        {
+            return Err(ResponseNavigationError::InvalidExternalUrl);
+        }
+        Ok(Self::External(location))
+    }
+
+    /// Returns the navigation location.
+    #[must_use]
+    pub fn location(&self) -> &str {
+        match self {
+            Self::Internal(location) | Self::External(location) => location,
+        }
+    }
+
+    /// Returns whether this navigation leaves the current application.
+    #[must_use]
+    pub const fn is_external(&self) -> bool {
+        matches!(self, Self::External(_))
+    }
+}
+
+/// Invalid renderer-neutral response navigation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ResponseNavigationError {
+    /// Application-local navigation must use one safe absolute path.
+    #[error("internal navigation must use a safe application-local absolute path")]
+    InvalidInternalPath,
+    /// External navigation must use an absolute HTTP(S) URL without credentials.
+    #[error("external navigation must use a safe absolute HTTP(S) URL")]
+    InvalidExternalUrl,
+}
+
 /// Renderer-neutral HTTP response effects attached to a view.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResponseMetadata {
     /// Cookies to append to the response.
     pub cookies: Vec<ResponseCookie>,
     /// Client navigation requested after applying the response.
-    pub redirect: Option<String>,
+    pub navigation: Option<ResponseNavigation>,
 }
 
 /// Unified view structure - handles full pages, partials, and composite responses
@@ -1219,6 +1293,24 @@ mod tests {
             Content::Json(_) => panic!("Expected View, got Json"),
             Content::Raw { .. } => panic!("Expected View, got Raw"),
         }
+    }
+
+    #[test_log::test]
+    fn response_navigation_validates_internal_and_external_targets() {
+        let internal = ResponseNavigation::internal("/games/one?tab=history")
+            .expect("safe application path is accepted");
+        assert_eq!(internal.location(), "/games/one?tab=history");
+        assert!(!internal.is_external());
+        assert!(ResponseNavigation::internal("//attacker.example").is_err());
+        assert!(ResponseNavigation::internal("relative").is_err());
+
+        let external = ResponseNavigation::external(
+            "https://accounts.google.com/o/oauth2/v2/auth?client_id=test",
+        )
+        .expect("safe HTTPS URL is accepted");
+        assert!(external.is_external());
+        assert!(ResponseNavigation::external("javascript:alert(1)").is_err());
+        assert!(ResponseNavigation::external("https://user:secret@example.com").is_err());
     }
 
     #[test_log::test]

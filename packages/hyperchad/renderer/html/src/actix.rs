@@ -423,7 +423,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 let full = req.full;
                 let (body, content_type) = self.to_body(content, req).await?;
 
-                let mut response = HttpResponse::Ok();
+                let navigation = response_metadata.navigation.clone();
+                let mut response = if full && navigation.is_some() {
+                    HttpResponse::SeeOther()
+                } else {
+                    HttpResponse::Ok()
+                };
                 response.content_type(content_type.as_str());
 
                 if full
@@ -447,8 +452,12 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 for cookie in response_metadata.cookies {
                     response.cookie(response_cookie(cookie));
                 }
-                if let Some(redirect) = response_metadata.redirect {
-                    response.append_header(("HX-Redirect", redirect));
+                if let Some(navigation) = navigation {
+                    if full {
+                        response.append_header(("Location", navigation.location()));
+                    } else {
+                        response.append_header(("HX-Redirect", navigation.location()));
+                    }
                 }
 
                 Ok(response.body(body))
