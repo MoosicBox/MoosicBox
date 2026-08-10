@@ -1230,6 +1230,7 @@ impl Generator {
     fn generate_form_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
         let mut action = None;
         let mut method = None;
+        let mut multipart = false;
 
         for (attr_name, attr_type) in element_attrs {
             let name_str = attr_name.to_string();
@@ -1244,6 +1245,10 @@ impl Generator {
                     "method" => {
                         method = Some(Self::markup_to_string_tokens(attr_value));
                     }
+                    "enctype" => {
+                        multipart = Self::extract_compile_time_input_type(&attr_value).as_deref()
+                            == Some("multipart/form-data");
+                    }
                     _ => {}
                 }
             }
@@ -1255,7 +1260,8 @@ impl Generator {
         quote! {
             hyperchad_transformer::Element::Form {
                 action: #action_field,
-                method: #method_field
+                method: #method_field,
+                multipart: #multipart
             }
         }
     }
@@ -3092,7 +3098,7 @@ impl Generator {
             "header" => quote! { hyperchad_transformer::Element::Header },
             "footer" => quote! { hyperchad_transformer::Element::Footer },
             "form" => {
-                quote! { hyperchad_transformer::Element::Form { action: None, method: None } }
+                quote! { hyperchad_transformer::Element::Form { action: None, method: None, multipart: false } }
             }
             "span" => quote! { hyperchad_transformer::Element::Span },
             "button" => quote! { hyperchad_transformer::Element::Button { r#type: None } },

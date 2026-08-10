@@ -1793,6 +1793,8 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     container.element = crate::Element::Form {
                         action: get_tag_attr_value_owned(tag, "action"),
                         method: get_tag_attr_value_owned(tag, "method"),
+                        multipart: get_tag_attr_value_lower(tag, "enctype").as_deref()
+                            == Some("multipart/form-data"),
                     }
                 }
                 "button" => {

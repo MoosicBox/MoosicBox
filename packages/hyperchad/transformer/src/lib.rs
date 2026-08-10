@@ -4112,6 +4112,8 @@ pub enum Element {
         action: Option<String>,
         /// HTTP method for form submission (GET, POST, etc.).
         method: Option<String>,
+        /// Whether the form submits file data using multipart encoding.
+        multipart: bool,
     },
     /// Inline span element for text styling.
     Span,
@@ -5149,17 +5151,27 @@ impl Container {
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;
                 f.write_fmt(format_args!("</section>"))?;
             }
-            Element::Form { action, method } => {
+            Element::Form {
+                action,
+                method,
+                multipart,
+            } => {
                 let action_attr = action
                     .as_ref()
                     .map_or_else(String::new, |a| format!(r#" action="{a}""#));
                 let method_attr = method
                     .as_ref()
                     .map_or_else(String::new, |m| format!(r#" method="{m}""#));
+                let enctype_attr = if *multipart {
+                    r#" enctype="multipart/form-data""#
+                } else {
+                    ""
+                };
                 f.write_fmt(format_args!(
-                    "<form{action}{method}{attrs}>",
+                    "<form{action}{method}{enctype}{attrs}>",
                     action = action_attr,
                     method = method_attr,
+                    enctype = enctype_attr,
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
                 ))?;
                 display_elements(&self.children, f, with_debug_attrs, wrap_raw_in_element)?;

@@ -1057,7 +1057,11 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Form { action, method } => {
+        Element::Form {
+            action,
+            method,
+            multipart,
+        } => {
             const TAG_NAME: &[u8] = b"form";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
@@ -1070,6 +1074,9 @@ pub fn element_to_html(
                 f.write_all(b" method=\"")?;
                 f.write_all(method.as_bytes())?;
                 f.write_all(b"\"")?;
+            }
+            if *multipart {
+                f.write_all(b" enctype=\"multipart/form-data\"")?;
             }
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b">")?;
@@ -2795,6 +2802,7 @@ mod tests {
                 hyperchad_transformer::Element::Form {
                     action: None,
                     method: None,
+                    multipart: false,
                 },
                 "form",
             ),
