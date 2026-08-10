@@ -922,6 +922,9 @@ pub async fn run<T>(
 
         http_server.run()
     };
+    let http_server_handle = http_server.handle();
+    let http_server =
+        switchy_async::runtime::Handle::current().spawn_with_name("server: http", http_server);
 
     let ip = local_ip_address::local_ip().map_or_else(
         |e| {
@@ -938,20 +941,25 @@ pub async fn run<T>(
     if verify_endpoint_readiness {
         let server_addr = format!("{addr}:{service_port}");
         let Some(profile) = PROFILES.names().into_iter().next() else {
-            http_server.handle().stop(true).await;
+            http_server_handle.stop(true).await;
             return Err(std::io::Error::other(
                 "server has no profile available for endpoint readiness checks",
             ));
         };
-        if let Err(error) = await_endpoint_readiness(&server_addr, &profile) {
-            http_server.handle().stop(true).await;
+        let readiness = switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("server: verify endpoint readiness", move || {
+                await_endpoint_readiness(&server_addr, &profile)
+            });
+        let readiness = readiness.await.map_err(std::io::Error::other)?;
+        if let Err(error) = readiness {
+            http_server_handle.stop(true).await;
             return Err(std::io::Error::other(format!(
                 "server failed endpoint readiness checks: {error}"
             )));
         }
     }
 
-    let resp = on_startup(http_server.handle());
+    let resp = on_startup(http_server_handle);
 
     log::info!("MoosicBox Server started on {ip}:{service_port}");
 
@@ -959,7 +967,10 @@ pub async fn run<T>(
 
     if let Err(err) = try_join!(
         async move {
-            let resp = http_server.await;
+            let resp = http_server
+                .await
+                .map_err(std::io::Error::other)
+                .and_then(|result| result);
 
             #[cfg(feature = "player")]
             {
