@@ -160,6 +160,36 @@ fn test_mixed_raw_and_quoted() {
 }
 
 #[test]
+fn test_file_input_and_multipart_form() {
+    let result = container! {
+        form method="post" action="/upload" enctype="multipart/form-data" {
+            input type="file" name="avatar";
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let Element::Form {
+        action,
+        method,
+        multipart,
+    } = &result[0].element
+    else {
+        panic!("Expected multipart form, got {:?}", result[0].element);
+    };
+    assert_eq!(action.as_deref(), Some("/upload"));
+    assert_eq!(method.as_deref(), Some("post"));
+    assert!(multipart);
+    assert!(matches!(
+        result[0].children.first().map(|child| &child.element),
+        Some(Element::Input {
+            input: Input::File,
+            name: Some(name),
+            ..
+        }) if name == "avatar"
+    ));
+}
+
+#[test]
 fn test_invalid_unsupported_type() {
     // Test that unsupported types are properly rejected
     // This would fail at compile time with our implementation

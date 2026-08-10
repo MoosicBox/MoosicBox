@@ -565,7 +565,7 @@ impl Generator {
                         | "required"
                 ),
                 "button" => matches!(name_str.as_str(), "type" | "disabled"),
-                "form" => matches!(name_str.as_str(), "action" | "method"),
+                "form" => matches!(name_str.as_str(), "action" | "method" | "enctype"),
                 "anchor" => matches!(name_str.as_str(), "href" | "target"),
                 "image" => matches!(
                     name_str.as_str(),

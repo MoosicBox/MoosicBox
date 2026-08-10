@@ -2092,6 +2092,33 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_element_to_html_file_input_and_multipart_form() {
+        let tag_renderer = DefaultHtmlTagRenderer::default();
+        let container = Container {
+            element: hyperchad_transformer::Element::Form {
+                action: Some("/upload".to_string()),
+                method: Some("post".to_string()),
+                multipart: true,
+            },
+            children: vec![Container {
+                element: hyperchad_transformer::Element::Input {
+                    input: Input::File,
+                    name: Some("avatar".to_string()),
+                    autofocus: None,
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut buffer = Vec::new();
+        element_to_html(&mut buffer, &container, &tag_renderer, false).unwrap();
+        let html = std::str::from_utf8(&buffer).unwrap();
+        assert!(html.contains("enctype=\"multipart/form-data\""));
+        assert!(html.contains("<input type=\"file\" name=\"avatar\""));
+    }
+
+    #[test_log::test]
     fn test_element_to_html_heading_sizes() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
 
