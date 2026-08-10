@@ -1125,6 +1125,9 @@ pub fn element_to_html(
                         f.write_all(b"\"")?;
                     }
                 }
+                Input::File => {
+                    f.write_all(b" type=\"file\"")?;
+                }
                 Input::Hidden { value } => {
                     f.write_all(b" type=\"hidden\"")?;
                     if let Some(value) = value {

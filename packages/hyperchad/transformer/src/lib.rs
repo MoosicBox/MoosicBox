@@ -5940,6 +5940,8 @@ pub enum Input {
         /// Placeholder text.
         placeholder: Option<String>,
     },
+    /// File upload input.
+    File,
     /// Hidden input field.
     Hidden {
         /// Hidden value.
@@ -5976,6 +5978,7 @@ impl Input {
                     attrs = attrs.to_string_pad_left(),
                 ))?;
             }
+            Self::File => f.write_all(b"<input type=\"file\" />")?,
             Self::Hidden { value } => {
                 let attrs = attrs.with_attr_opt("value", value.to_owned());
                 f.write_fmt(format_args!(
@@ -6018,6 +6021,7 @@ impl std::fmt::Display for Input {
                     attrs = attrs.to_string_pad_left(),
                 ))
             }
+            Self::File => f.write_str("<input type=\"file\" />"),
             Self::Hidden { value } => {
                 let attrs = Attrs::new().with_attr_opt("value", value.to_owned());
                 f.write_fmt(format_args!(

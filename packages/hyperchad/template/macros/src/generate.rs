@@ -636,7 +636,7 @@ impl Generator {
                         {
                             input_type = Some(compile_time_type);
                         } else {
-                            return Err("Input type must be a compile-time constant (literal string or identifier). Dynamic input types are not supported. Use one of: text, tel, email, checkbox, password, hidden".to_string());
+                            return Err("Input type must be a compile-time constant (literal string or identifier). Dynamic input types are not supported. Use one of: text, tel, email, checkbox, password, file, hidden".to_string());
                         }
                     }
                     "value" => {
@@ -729,6 +729,9 @@ impl Generator {
                     placeholder: #placeholder_field
                 }
             },
+            "file" => quote! {
+                hyperchad_transformer::Input::File
+            },
             "hidden" => quote! {
                 hyperchad_transformer::Input::Hidden {
                     value: #value_field
@@ -736,7 +739,7 @@ impl Generator {
             },
             _ => {
                 return Err(format!(
-                    "Unsupported input type '{input_type}'. Supported types are: text, tel, email, checkbox, password, hidden"
+                    "Unsupported input type '{input_type}'. Supported types are: text, tel, email, checkbox, password, file, hidden"
                 ));
             }
         };
