@@ -31,6 +31,8 @@
 //! let results = registry.run_linters(&["src/"])?;
 //! ```
 
+#[cfg(feature = "format")]
+mod format_selection;
 mod registry;
 mod runner;
 mod scope;
@@ -40,12 +42,14 @@ mod types;
 
 use serde::Deserialize;
 
+#[cfg(feature = "format")]
+pub use format_selection::resolve_format_selection;
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
 pub use scope::ScopeConfig;
 pub use types::{
-    OverlapWarningCapability, OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind,
-    ToolsConfig,
+    FormatConfig, FormatScope, FormatSelection, OverlapWarningCapability,
+    OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind, ToolsConfig,
 };
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -813,6 +817,46 @@ pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsC
     Ok(config)
 }
 
+/// Applies formatter CLI overrides to loaded runner configuration.
+///
+/// When a CLI scope overrides a configured branch scope, its configured base is
+/// cleared unless the CLI also supplies a base. Validation can be skipped for
+/// metadata-only operations such as `fmt --list`.
+///
+/// # Errors
+///
+/// * If branch scope is executed without a base revision
+/// * If a base revision is supplied for changed or all scope
+pub fn apply_format_cli_overrides(
+    config: &mut ToolsConfig,
+    scope: Option<FormatScope>,
+    git_base: Option<String>,
+    validate: bool,
+) -> Result<(), BoxError> {
+    if let Some(scope) = scope {
+        config.format.scope = scope;
+        if scope != FormatScope::Branch && git_base.is_none() {
+            config.format.git_base = None;
+        }
+    }
+    if let Some(git_base) = git_base {
+        config.format.git_base = Some(git_base);
+    }
+    if !validate {
+        return Ok(());
+    }
+
+    match (config.format.scope, config.format.git_base.is_some()) {
+        (FormatScope::Branch, false) => {
+            Err("branch format scope requires --git-base or runner.format.git-base".into())
+        }
+        (FormatScope::Changed | FormatScope::All, true) => {
+            Err("--git-base/runner.format.git-base requires branch format scope".into())
+        }
+        (FormatScope::Branch, true) | (FormatScope::Changed | FormatScope::All, false) => Ok(()),
+    }
+}
+
 /// Builds final tool config from file defaults plus CLI overrides.
 ///
 /// CLI `required` and `skip` values are merged additively with de-duplication.
@@ -1052,6 +1096,57 @@ mod tests {
         assert_eq!(loaded.skip, vec!["gofmt"]);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn load_tools_config_reads_format_scope() {
+        let dir = temp_dir("clippier-format-config");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            "[runner.format]\nscope = \"branch\"\ngit-base = \"origin/main\"\n",
+        )
+        .expect("failed to write clippier.toml");
+
+        let loaded = load_tools_config(Some(&dir)).expect("failed to load format config");
+        assert_eq!(loaded.format.scope, FormatScope::Branch);
+        assert_eq!(loaded.format.git_base.as_deref(), Some("origin/main"));
+        std::fs::remove_dir_all(dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn format_cli_overrides_config_and_validates_scope_base_combinations() {
+        let mut config = ToolsConfig::default();
+        config.format.scope = FormatScope::Branch;
+        config.format.git_base = Some("origin/main".to_string());
+
+        apply_format_cli_overrides(&mut config, Some(FormatScope::All), None, true).unwrap();
+        assert_eq!(config.format.scope, FormatScope::All);
+        assert_eq!(config.format.git_base, None);
+
+        let error = apply_format_cli_overrides(
+            &mut ToolsConfig::default(),
+            Some(FormatScope::Branch),
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("requires --git-base"));
+
+        let error = apply_format_cli_overrides(
+            &mut ToolsConfig::default(),
+            Some(FormatScope::Changed),
+            Some("HEAD~1".to_string()),
+            true,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("requires branch format scope"));
+    }
+
+    #[test]
+    fn format_list_override_does_not_require_git_base() {
+        let mut config = ToolsConfig::default();
+        apply_format_cli_overrides(&mut config, Some(FormatScope::Branch), None, false).unwrap();
+        assert_eq!(config.format.scope, FormatScope::Branch);
     }
 
     #[test]

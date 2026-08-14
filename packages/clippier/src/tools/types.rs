@@ -1,8 +1,34 @@
 //! Type definitions for the tools module.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+
+/// File-selection mode used by the format command.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum FormatScope {
+    /// Format staged, unstaged, renamed, and untracked Git files.
+    #[default]
+    Changed,
+    /// Format files changed from a Git merge base plus local changes.
+    Branch,
+    /// Preserve each formatter's native recursive/all-files behavior.
+    All,
+}
+
+/// Configuration specific to formatter file selection.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct FormatConfig {
+    /// File-selection mode for formatter invocations.
+    #[serde(default)]
+    pub scope: FormatScope,
+    /// Base revision used by branch scope.
+    pub git_base: Option<String>,
+}
 
 /// Capabilities that a tool can have
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -139,6 +165,17 @@ impl Tool {
     }
 }
 
+/// Resolved formatter selection for a command invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormatSelection {
+    /// Run formatters with their native recursive/all-files behavior.
+    All,
+    /// Run formatters only for these paths, relative to the working directory.
+    Files(BTreeSet<PathBuf>),
+    /// No repository could be discovered from the working directory.
+    NoRepository,
+}
+
 /// Configuration for tool detection and execution
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -184,6 +221,10 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub scope: super::ScopeConfig,
 
+    /// Formatter-specific file-selection policy.
+    #[serde(default)]
+    pub format: FormatConfig,
+
     /// Directory containing the configuration that defined runner scope.
     #[serde(skip)]
     pub scope_base: Option<PathBuf>,
@@ -206,6 +247,7 @@ impl Default for ToolsConfig {
             nix_fallback: true,
             nix_packages: std::collections::BTreeMap::new(),
             scope: super::ScopeConfig::default(),
+            format: FormatConfig::default(),
             scope_base: None,
         }
     }

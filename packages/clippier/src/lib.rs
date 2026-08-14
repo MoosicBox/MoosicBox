@@ -5623,7 +5623,7 @@ pub fn handle_check_command(
 /// * If a required tool is not found
 /// * If tool execution fails
 #[cfg(feature = "format")]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn handle_fmt_command(
     working_dir: Option<&Path>,
     tool_names: Option<&[String]>,
@@ -5638,6 +5638,7 @@ pub fn handle_fmt_command(
 
     let required_tools = config.required.clone();
     let overlap_warning_suppress = config.overlap_warning_suppress.clone();
+    let format_config = config.format.clone();
     let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
@@ -5690,14 +5691,32 @@ pub fn handle_fmt_command(
         };
     }
 
+    let effective_working_dir =
+        working_dir.map_or_else(std::env::current_dir, |dir| Ok(dir.to_path_buf()))?;
+    let selection = tools::resolve_format_selection(
+        &effective_working_dir,
+        format_config.scope,
+        format_config.git_base.as_deref(),
+    )?;
+    let (selection, selection_fallback) = match selection {
+        tools::FormatSelection::NoRepository => {
+            eprintln!("warning: no Git repository found; falling back to all-files formatting");
+            (tools::FormatSelection::All, true)
+        }
+        selection => (selection, false),
+    };
+
     let runner = working_dir.map_or_else(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
-    let runner = runner.with_color_mode(match (output, color) {
-        (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
-        (_, value) => value,
-    });
+    let runner = runner
+        .with_format_selection(selection)
+        .with_selection_fallback(selection_fallback)
+        .with_color_mode(match (output, color) {
+            (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
+            (_, value) => value,
+        });
 
     let names = if let Some(names) = tool_names {
         names.to_vec()

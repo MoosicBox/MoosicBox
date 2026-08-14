@@ -37,6 +37,8 @@ use clippier::handle_check_command;
 use clippier::handle_fmt_command;
 #[cfg(any(feature = "check", feature = "format"))]
 use clippier::tools::build_tools_config;
+#[cfg(feature = "format")]
+use clippier::tools::{FormatScope, apply_format_cli_overrides};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -834,6 +836,14 @@ enum Commands {
         #[arg(long)]
         check: bool,
 
+        /// Files to format: changed Git files, branch changes, or all files
+        #[arg(long, value_enum)]
+        scope: Option<FormatScope>,
+
+        /// Base revision for --scope branch
+        #[arg(long)]
+        git_base: Option<String>,
+
         /// Specific tools to run (comma-separated)
         #[arg(long, value_delimiter = ',')]
         tools: Option<Vec<String>>,
@@ -1158,9 +1168,13 @@ async fn run() -> Result<(), BoxError> {
             git_head,
             #[cfg(feature = "git-diff")]
             include_reasoning,
+            #[cfg(not(feature = "git-diff"))]
+                include_reasoning: _,
             max_parallel,
             #[cfg(feature = "git-diff")]
             ignore,
+            #[cfg(not(feature = "git-diff"))]
+                ignore: _,
             skip_if,
             include_if,
             #[cfg(feature = "_workspace")]
@@ -1480,6 +1494,8 @@ async fn run() -> Result<(), BoxError> {
         Commands::Fmt {
             working_dir,
             check,
+            scope,
+            git_base,
             tools,
             list,
             required,
@@ -1519,7 +1535,7 @@ async fn run() -> Result<(), BoxError> {
             } else {
                 None
             };
-            let config = build_tools_config(
+            let mut config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
                 skip.as_deref(),
@@ -1529,6 +1545,7 @@ async fn run() -> Result<(), BoxError> {
                 biome_editorconfig_override,
                 biome_vcs_ignore_override,
             )?;
+            apply_format_cli_overrides(&mut config, scope, git_base, !list)?;
             handle_fmt_command(
                 working_dir.as_deref(),
                 tools.as_deref(),

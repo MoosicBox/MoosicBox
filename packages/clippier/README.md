@@ -1163,13 +1163,19 @@ By default, `check` auto-selects tools based on manifest/config files in the wor
 Run all available formatters to fix formatting issues:
 
 ```bash
-# Format all files
+# Format staged, unstaged, renamed, and untracked Git files (default)
 clippier fmt
 
-# Check formatting without modifying files
+# Check changed files without modifying them
 clippier fmt --check
 
-# Run in a specific directory
+# Format files changed on the current branch since its merge base, plus local changes
+clippier fmt --scope branch --git-base origin/main
+
+# Preserve the previous recursive/all-files behavior
+clippier fmt --scope all
+
+# Run in a specific directory (Git selections are restricted to this subtree)
 clippier fmt --working-dir /path/to/project
 
 # Run only specific formatters
@@ -1190,6 +1196,25 @@ clippier fmt --skip "gofmt"
 # JSON output for CI integration
 clippier fmt --output json
 ```
+
+The default `changed` scope gets its candidates from Git and includes staged,
+unstaged, renamed, and non-ignored untracked files. Deleted files are skipped,
+and rename destinations are formatted. A clean repository is a successful
+no-op. Outside a Git repository, the default scope prints a warning and falls
+back to `all`.
+
+Configure the default behavior in `clippier.toml`:
+
+```toml
+[runner.format]
+scope = "all" # "changed" (default), "branch", or "all"
+# git-base = "origin/main" # required for branch scope
+```
+
+CLI values override `[runner.format]`. Branch scope uses the merge base of the
+configured base and `HEAD`, then unions those committed paths with current local
+changes. Clippier does not fetch missing refs; an invalid or missing branch base
+is an error.
 
 The `fmt` command automatically detects and runs:
 
@@ -1343,7 +1368,7 @@ jobs:
                   npm install -g prettier
 
             - name: Check formatting
-              run: clippier fmt --check
+              run: clippier fmt --check --scope all
 
             - name: Run linters
               run: clippier check

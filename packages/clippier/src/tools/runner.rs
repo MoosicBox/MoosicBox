@@ -1,6 +1,8 @@
 //! Tool execution and result aggregation.
 
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(feature = "format")]
+use std::io::Write;
 use std::io::{BufRead, BufReader, IsTerminal};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -18,12 +20,12 @@ use std::thread;
 use rayon::prelude::*;
 
 use crate::ColorMode;
-use crate::tools::default_extensions_for_tool;
 use crate::tools::registry::{ToolError, ToolRegistry};
 use crate::tools::scope::ScopeMatcher;
 #[cfg(feature = "tools-tui")]
 use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
+use crate::tools::{FormatSelection, default_extensions_for_tool};
 
 /// Live tool execution events used by the TUI.
 #[cfg(feature = "tools-tui")]
@@ -123,6 +125,10 @@ pub struct AggregatedResults {
     pub success_count: usize,
     /// Number of tools that failed
     pub failure_count: usize,
+    /// Number of files selected before per-tool extension filtering.
+    pub selected_file_count: Option<usize>,
+    /// Whether Git-aware selection fell back to all files.
+    pub selection_fallback: bool,
 }
 
 impl AggregatedResults {
@@ -153,6 +159,10 @@ pub struct ToolRunner<'a> {
     color_mode: ColorMode,
     /// Global repository scope shared by file-oriented tools.
     scope: Option<ScopeMatcher>,
+    /// Resolved formatter file selection.
+    format_selection: FormatSelection,
+    /// Whether Git-aware selection fell back to all files.
+    selection_fallback: bool,
 }
 
 impl<'a> ToolRunner<'a> {
@@ -178,6 +188,8 @@ impl<'a> ToolRunner<'a> {
             parallel: true,
             color_mode: ColorMode::Auto,
             scope,
+            format_selection: FormatSelection::All,
+            selection_fallback: false,
         }
     }
 
@@ -185,6 +197,20 @@ impl<'a> ToolRunner<'a> {
     #[must_use]
     pub const fn with_working_dir(mut self, dir: &'a Path) -> Self {
         self.working_dir = Some(dir);
+        self
+    }
+
+    /// Sets the resolved formatter file selection.
+    #[must_use]
+    pub fn with_format_selection(mut self, selection: FormatSelection) -> Self {
+        self.format_selection = selection;
+        self
+    }
+
+    /// Records that Git-aware formatting fell back to all-files selection.
+    #[must_use]
+    pub const fn with_selection_fallback(mut self, fallback: bool) -> Self {
+        self.selection_fallback = fallback;
         self
     }
 
@@ -209,6 +235,24 @@ impl<'a> ToolRunner<'a> {
         self
     }
 
+    fn selected_file_count(&self) -> Option<usize> {
+        match &self.format_selection {
+            FormatSelection::Files(files) => Some(files.len()),
+            FormatSelection::All | FormatSelection::NoRepository => None,
+        }
+    }
+
+    fn empty_results(&self) -> AggregatedResults {
+        AggregatedResults {
+            results: Vec::new(),
+            total_duration: Duration::ZERO,
+            success_count: 0,
+            failure_count: 0,
+            selected_file_count: self.selected_file_count(),
+            selection_fallback: self.selection_fallback,
+        }
+    }
+
     fn working_dir_path(&self) -> PathBuf {
         self.working_dir.map_or_else(
             || self.registry.working_dir().to_path_buf(),
@@ -217,8 +261,10 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn scoped_file_args(&self, tool: &Tool) -> Option<Vec<String>> {
-        let scope = self.scope.as_ref()?;
-        if matches!(tool.kind, ToolKind::Cargo) && tool.name != "clippier_md" {
+        if matches!(tool.kind, ToolKind::Cargo)
+            && tool.name != "clippier_md"
+            && tool.name != "rustfmt"
+        {
             return None;
         }
         let mut extensions = BTreeSet::new();
@@ -229,17 +275,37 @@ impl<'a> ToolRunner<'a> {
             return None;
         }
         let working_dir = self.working_dir_path();
-        Some(
-            scope
-                .collect_files(std::slice::from_ref(&working_dir), &extensions)
-                .into_iter()
-                .filter_map(|path| {
-                    path.strip_prefix(&working_dir)
-                        .ok()
-                        .map(|relative| relative.to_string_lossy().to_string())
+        let paths = match &self.format_selection {
+            FormatSelection::Files(files) => files
+                .iter()
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|extension| extension.to_str())
+                        .is_some_and(|extension| {
+                            extensions.contains(&extension.to_ascii_lowercase())
+                        })
                 })
+                .filter(|path| {
+                    self.scope
+                        .as_ref()
+                        .is_none_or(|scope| !scope.is_excluded(&working_dir.join(path)))
+                })
+                .map(|path| path.to_string_lossy().to_string())
                 .collect(),
-        )
+            FormatSelection::All | FormatSelection::NoRepository => {
+                let scope = self.scope.as_ref()?;
+                scope
+                    .collect_files(std::slice::from_ref(&working_dir), &extensions)
+                    .into_iter()
+                    .filter_map(|path| {
+                        path.strip_prefix(&working_dir)
+                            .ok()
+                            .map(|relative| relative.to_string_lossy().to_string())
+                    })
+                    .collect()
+            }
+        };
+        Some(paths)
     }
 
     fn replace_default_path_args(tool: &Tool, args: &mut Vec<String>, files: &[String]) {
@@ -417,6 +483,9 @@ impl<'a> ToolRunner<'a> {
 
     /// Runs a collection of tools and aggregates results
     fn run_tools(&self, tools: &[&Tool], _paths: &[&str], check_mode: bool) -> AggregatedResults {
+        if matches!(&self.format_selection, FormatSelection::Files(files) if files.is_empty()) {
+            return self.empty_results();
+        }
         let start_time = Instant::now();
 
         let results: Vec<ToolResult> = if self.parallel {
@@ -442,6 +511,8 @@ impl<'a> ToolRunner<'a> {
             total_duration,
             success_count,
             failure_count,
+            selected_file_count: self.selected_file_count(),
+            selection_fallback: self.selection_fallback,
         }
     }
 
@@ -452,6 +523,9 @@ impl<'a> ToolRunner<'a> {
         _paths: &[&str],
         check_mode: bool,
     ) -> AggregatedResults {
+        if matches!(&self.format_selection, FormatSelection::Files(files) if files.is_empty()) {
+            return self.empty_results();
+        }
         let start_time = Instant::now();
         let (tx, rx) = mpsc::channel::<ToolEvent>();
         let cancel_requested = Arc::new(AtomicBool::new(false));
@@ -503,6 +577,8 @@ impl<'a> ToolRunner<'a> {
             total_duration,
             success_count,
             failure_count,
+            selected_file_count: self.selected_file_count(),
+            selection_fallback: self.selection_fallback,
         }
     }
 
@@ -1185,6 +1261,27 @@ impl<'a> ToolRunner<'a> {
     ) -> ToolResult {
         let start_time = Instant::now();
 
+        #[cfg(feature = "format")]
+        if let Some(files) = self.selected_rust_files(tool) {
+            let _ = tx.send(ToolEvent::Started {
+                tool_name: tool.name.clone(),
+                display_name: tool.display_name.clone(),
+            });
+            let result = self.run_selected_rustfmt(tool, &files, check_mode, start_time);
+            for line in result.stderr.lines() {
+                let _ = tx.send(ToolEvent::StderrLine {
+                    tool_name: tool.name.clone(),
+                    line: line.to_string(),
+                    overwrite: false,
+                });
+            }
+            let _ = tx.send(ToolEvent::Finished {
+                tool_name: tool.name.clone(),
+                success: result.success,
+            });
+            return result;
+        }
+
         if check_mode && tool.name == "remark" {
             let _ = tx.send(ToolEvent::Started {
                 tool_name: tool.name.clone(),
@@ -1362,10 +1459,206 @@ impl<'a> ToolRunner<'a> {
         }
     }
 
-    /// Runs a single tool
+    #[cfg(feature = "format")]
+    fn resolve_rustfmt() -> Result<PathBuf, String> {
+        if let Some(value) = std::env::var_os("RUSTFMT") {
+            let configured = PathBuf::from(value);
+            return if configured.is_file() {
+                Ok(configured)
+            } else {
+                which::which(&configured).map_err(|error| {
+                    format!(
+                        "RUSTFMT points to '{}', but it could not be executed: {error}",
+                        configured.display()
+                    )
+                })
+            };
+        }
+
+        which::which("rustfmt").map_err(|error| {
+            format!("rustfmt was not found; install the rustfmt component or set RUSTFMT: {error}")
+        })
+    }
+
+    #[cfg(feature = "format")]
+    fn write_formatted_source_atomically(path: &Path, source: &[u8]) -> std::io::Result<()> {
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        let permissions = std::fs::metadata(path)?.permissions();
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        temporary.write_all(source)?;
+        temporary.as_file().sync_all()?;
+        temporary.as_file().set_permissions(permissions)?;
+        temporary
+            .persist(path)
+            .map_err(|error| error.error)
+            .map(|_| ())
+    }
+
+    #[cfg(feature = "format")]
+    #[allow(clippy::too_many_lines)]
+    fn run_selected_rustfmt(
+        &self,
+        tool: &Tool,
+        files: &[String],
+        check_mode: bool,
+        start_time: Instant,
+    ) -> ToolResult {
+        let working_dir = self.working_dir_path();
+        let metadata = cargo_metadata::MetadataCommand::new()
+            .current_dir(&working_dir)
+            .no_deps()
+            .exec();
+        let metadata = match metadata {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                return ToolResult::failure(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    None,
+                    String::new(),
+                    format!("Failed to resolve Cargo metadata for selected Rust files: {error}"),
+                    start_time.elapsed(),
+                );
+            }
+        };
+
+        let rustfmt = match Self::resolve_rustfmt() {
+            Ok(rustfmt) => rustfmt,
+            Err(error) => {
+                return ToolResult::failure(
+                    tool.name.clone(),
+                    tool.display_name.clone(),
+                    None,
+                    String::new(),
+                    error,
+                    start_time.elapsed(),
+                );
+            }
+        };
+        let mut mismatched = Vec::new();
+        let mut errors = Vec::new();
+
+        for relative in files {
+            let path = working_dir.join(relative);
+            let source = match std::fs::read(&path) {
+                Ok(source) => source,
+                Err(error) => {
+                    errors.push(format!("{relative}: failed to read file: {error}"));
+                    continue;
+                }
+            };
+            let absolute = path.canonicalize().unwrap_or_else(|_| path.clone());
+            let edition = metadata
+                .packages
+                .iter()
+                .filter(|package| {
+                    package
+                        .manifest_path
+                        .parent()
+                        .is_some_and(|root| absolute.starts_with(root.as_std_path()))
+                })
+                .max_by_key(|package| package.manifest_path.as_str().len())
+                .map_or_else(|| "2015".to_string(), |package| package.edition.to_string());
+
+            let mut command = Command::new(&rustfmt);
+            command
+                .arg("--emit")
+                .arg("stdout")
+                .arg("--edition")
+                .arg(&edition);
+            if let Some(config_path) = Self::find_file_in_ancestors(
+                path.parent().unwrap_or(&working_dir),
+                &["rustfmt.toml", ".rustfmt.toml"],
+            ) {
+                command.arg("--config-path").arg(config_path);
+            }
+            command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    errors.push(format!("{relative}: failed to spawn rustfmt: {error}"));
+                    continue;
+                }
+            };
+            if let Some(mut stdin) = child.stdin.take()
+                && let Err(error) = stdin.write_all(&source)
+            {
+                errors.push(format!(
+                    "{relative}: failed to send source to rustfmt: {error}"
+                ));
+                continue;
+            }
+            let output = match child.wait_with_output() {
+                Ok(output) => output,
+                Err(error) => {
+                    errors.push(format!("{relative}: failed to wait for rustfmt: {error}"));
+                    continue;
+                }
+            };
+            if !output.status.success() {
+                errors.push(format!(
+                    "{relative}: rustfmt failed: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ));
+                continue;
+            }
+            if output.stdout != source {
+                if check_mode {
+                    mismatched.push(relative.clone());
+                } else if let Err(error) =
+                    Self::write_formatted_source_atomically(&path, &output.stdout)
+                {
+                    errors.push(format!(
+                        "{relative}: failed to atomically replace formatted source: {error}"
+                    ));
+                }
+            }
+        }
+
+        if errors.is_empty() && mismatched.is_empty() {
+            ToolResult::success(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                start_time.elapsed(),
+            )
+        } else {
+            if !mismatched.is_empty() {
+                errors.push(format!(
+                    "Rust formatting required for:\n  - {}",
+                    mismatched.join("\n  - ")
+                ));
+            }
+            ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                Some(1),
+                String::new(),
+                errors.join("\n"),
+                start_time.elapsed(),
+            )
+        }
+    }
+
+    #[cfg(feature = "format")]
+    fn selected_rust_files(&self, tool: &Tool) -> Option<Vec<String>> {
+        if tool.name != "rustfmt" || !matches!(self.format_selection, FormatSelection::Files(_)) {
+            return None;
+        }
+        self.scoped_file_args(tool)
+    }
+
+    /// Runs a single tool.
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
         let start_time = Instant::now();
+
+        #[cfg(feature = "format")]
+        if let Some(files) = self.selected_rust_files(tool) {
+            return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
+        }
 
         if check_mode && tool.name == "remark" {
             return self.run_remark_strict_check(tool, start_time);
@@ -1559,6 +1852,11 @@ impl<'a> ToolRunner<'a> {
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
         let start_time = Instant::now();
 
+        #[cfg(feature = "format")]
+        if let Some(files) = self.selected_rust_files(tool) {
+            return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
+        }
+
         if check_mode && tool.name == "remark" {
             return self.run_remark_strict_check(tool, start_time);
         }
@@ -1715,6 +2013,14 @@ pub fn print_summary(results: &AggregatedResults) {
         results.failure_count
     );
     println!("Duration: {:.2?}", results.total_duration);
+    if let Some(count) = results.selected_file_count {
+        println!("Selected files: {count}");
+    } else {
+        println!("Selection: all files");
+    }
+    if results.selection_fallback {
+        println!("Fallback: no Git repository; formatted all files");
+    }
     println!();
 
     for result in &results.results {
@@ -1769,6 +2075,11 @@ pub fn results_to_json(
         "passed": results.success_count,
         "failed": results.failure_count,
         "duration_ms": results.total_duration.as_millis(),
+        "selection": {
+            "mode": if results.selected_file_count.is_some() { "files" } else { "all" },
+            "file_count": results.selected_file_count,
+            "fallback": results.selection_fallback,
+        },
         "results": json_results,
     });
 
@@ -1791,6 +2102,110 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
         std::fs::create_dir_all(&path).expect("failed to create temp dir");
         path
+    }
+
+    #[cfg(all(feature = "format", feature = "tools-tui"))]
+    #[test]
+    fn tui_and_non_tui_paths_report_the_same_selected_file_count() {
+        let dir = temp_dir("clippier-tui-selection-parity");
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nname = \"selection-parity\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/lib.rs"), "pub fn selected() {}\n").unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(&dir)).unwrap();
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(&dir)
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                "src/lib.rs",
+            )])));
+
+        let normal = runner.run_specific(&["rustfmt"], &[], true).unwrap();
+        let tui = runner
+            .run_specific_with_tui(&["rustfmt"], &[], true)
+            .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_str(&results_to_json(&normal).unwrap()).unwrap();
+
+        assert_eq!(normal.selected_file_count, Some(1));
+        assert_eq!(tui.selected_file_count, normal.selected_file_count);
+        assert_eq!(json["selection"]["file_count"], 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn json_results_include_bounded_selection_metadata() {
+        let results = AggregatedResults {
+            results: Vec::new(),
+            total_duration: Duration::ZERO,
+            success_count: 0,
+            failure_count: 0,
+            selected_file_count: Some(3),
+            selection_fallback: false,
+        };
+        let output = results_to_json(&results).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(value["selection"]["mode"], "files");
+        assert_eq!(value["selection"]["file_count"], 3);
+        assert!(value.get("files").is_none());
+    }
+
+    #[cfg(all(feature = "format", unix))]
+    #[test]
+    fn atomic_source_replacement_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = temp_dir("clippier-atomic-rustfmt");
+        let path = dir.join("source.rs");
+        std::fs::write(&path, "fn before() {}\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+
+        ToolRunner::write_formatted_source_atomically(&path, b"fn after() {}\n").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"fn after() {}\n");
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn selected_files_are_filtered_by_extension_and_global_exclusions() {
+        let dir = temp_dir("clippier-selected-scope");
+        std::fs::create_dir_all(dir.join("generated")).unwrap();
+        std::fs::write(dir.join("included.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("other.rs"), "fn other() {}\n").unwrap();
+        std::fs::write(dir.join("generated/excluded.json"), "{}\n").unwrap();
+        let mut config = ToolsConfig::default();
+        config.scope.exclude = vec!["/generated/**".to_string()];
+        config.scope_base = Some(dir.clone());
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(&dir)
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([
+                PathBuf::from("included.json"),
+                PathBuf::from("other.rs"),
+                PathBuf::from("generated/excluded.json"),
+            ])));
+        let tool = Tool::new(
+            "dprint",
+            "Dprint",
+            "dprint",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec!["check".to_string()],
+            vec!["fmt".to_string()],
+        );
+
+        assert_eq!(
+            runner.scoped_file_args(&tool),
+            Some(vec!["included.json".to_string()])
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -1830,6 +2245,51 @@ mod tests {
 
         std::fs::remove_dir_all(runner.working_dir_path())
             .expect("failed to clean delegation fixtures");
+    }
+
+    #[test]
+    fn every_file_oriented_formatter_receives_only_selected_files() {
+        let files = vec!["src/input.ext".to_string(), "docs/guide.ext".to_string()];
+        for name in [
+            "taplo",
+            "biome",
+            "dprint",
+            "clippier_md",
+            "prettier",
+            "remark",
+            "mdformat",
+            "yamlfmt",
+            "ruff",
+            "black",
+            "gofmt",
+            "shfmt",
+        ] {
+            let mut args = if matches!(name, "biome" | "dprint") {
+                vec!["fmt".to_string()]
+            } else {
+                vec!["fmt".to_string(), ".".to_string()]
+            };
+            let tool = Tool::new(
+                name,
+                name,
+                name,
+                ToolKind::Binary,
+                vec![ToolCapability::Format],
+                Vec::new(),
+                args.clone(),
+            );
+
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+
+            assert!(
+                !args.iter().any(|arg| arg == "."),
+                "{name} retained recursive path"
+            );
+            assert!(
+                args.ends_with(&files),
+                "{name} did not receive selected files"
+            );
+        }
     }
 
     #[test]

@@ -3181,6 +3181,7 @@ dependencies = [
  "switchy_fs",
  "switchy_random",
  "tar",
+ "tempfile",
  "test-log",
  "thiserror 2.0.19",
  "toml 1.1.3+spec-1.1.0",
