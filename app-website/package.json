@@ -51,7 +51,7 @@
         "@astrojs/check": "^0.9.10",
         "@astrojs/node": "^9.5.5",
         "@astrojs/solid-js": "^5.1.3",
-        "@aws-sdk/client-ssm": "^3.1111.0",
+        "@aws-sdk/client-ssm": "^3.1112.0",
         "@hotwired/turbo": "^8.0.23",
         "@nanostores/persistent": "^0.9.1",
         "@nanostores/solid": "^0.4.2",
@@ -64,7 +64,7 @@
         "howler": "^2.2.4",
         "htmx.org": "^2.0.10",
         "nanostores": "^0.9.5",
-        "solid-js": "^1.9.14"
+        "solid-js": "^1.9.15"
     },
     "description": "",
     "version": "0.1.0",
