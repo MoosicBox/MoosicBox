@@ -5574,6 +5574,7 @@ pub fn handle_check_command(
                             "evidence": t.evidence,
                             "format_extensions": t.format_extensions,
                             "format_order": t.format_order,
+                            "automatic_exclusions": t.automatic_exclusions,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5582,34 +5583,7 @@ pub fn handle_check_command(
                 use std::fmt::Write;
                 let mut output = String::new();
                 for tool in tool_info {
-                    let status = if tool.skipped {
-                        "SKIPPED"
-                    } else if tool.available {
-                        "AVAILABLE"
-                    } else if tool.required {
-                        "REQUIRED (missing)"
-                    } else {
-                        "not found"
-                    };
-                    let mode = if let Some(runner) = &tool.runner {
-                        format!("{} ({runner})", tool.execution_mode)
-                    } else {
-                        tool.execution_mode.clone()
-                    };
-                    let selection = if tool.selected {
-                        "SELECTED"
-                    } else if tool.relevant {
-                        "RELEVANT"
-                    } else if tool.configured {
-                        "CONFIGURED"
-                    } else {
-                        "not relevant"
-                    };
-                    let _ = writeln!(
-                        output,
-                        "{}: {} [{}] {selection}",
-                        tool.display_name, status, mode
-                    );
+                    let _ = writeln!(output, "{}", tool.raw_summary());
                 }
                 Ok(output)
             }
@@ -5750,6 +5724,7 @@ pub fn handle_fmt_command(
                             "evidence": t.evidence,
                             "format_extensions": t.format_extensions,
                             "format_order": t.format_order,
+                            "automatic_exclusions": t.automatic_exclusions,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5758,34 +5733,7 @@ pub fn handle_fmt_command(
                 use std::fmt::Write;
                 let mut output = String::new();
                 for tool in tool_info {
-                    let status = if tool.skipped {
-                        "SKIPPED"
-                    } else if tool.available {
-                        "AVAILABLE"
-                    } else if tool.required {
-                        "REQUIRED (missing)"
-                    } else {
-                        "not found"
-                    };
-                    let mode = if let Some(runner) = &tool.runner {
-                        format!("{} ({runner})", tool.execution_mode)
-                    } else {
-                        tool.execution_mode.clone()
-                    };
-                    let selection = if tool.selected {
-                        "SELECTED"
-                    } else if tool.relevant {
-                        "RELEVANT"
-                    } else if tool.configured {
-                        "CONFIGURED"
-                    } else {
-                        "not relevant"
-                    };
-                    let _ = writeln!(
-                        output,
-                        "{}: {} [{}] {selection}",
-                        tool.display_name, status, mode
-                    );
+                    let _ = writeln!(output, "{}", tool.raw_summary());
                 }
                 Ok(output)
             }

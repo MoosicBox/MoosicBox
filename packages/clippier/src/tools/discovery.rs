@@ -32,6 +32,7 @@ pub struct SelectionEvidence {
 /// Ignore-aware repository facts shared by check and format planning.
 #[derive(Debug, Clone, Default)]
 pub struct RepositoryDiscovery {
+    root: PathBuf,
     files: BTreeSet<PathBuf>,
     basenames: BTreeMap<String, BTreeSet<PathBuf>>,
     extensions: BTreeMap<String, BTreeSet<PathBuf>>,
@@ -63,10 +64,15 @@ impl RepositoryDiscovery {
             .map(|glob| glob.compile_matcher())
             .collect::<Vec<_>>();
         let filter_root = root.clone();
-        let mut result = Self::default();
+        let mut result = Self {
+            root: root.clone(),
+            ..Self::default()
+        };
         let mut builder = WalkBuilder::new(&root);
         builder
             .hidden(false)
+            .require_git(false)
+            .ignore(true)
             .git_ignore(true)
             .git_global(true)
             .git_exclude(true)
@@ -120,6 +126,41 @@ impl RepositoryDiscovery {
         }
     }
 
+    fn manifest_contains_tool_config(&self, manifest: &str, tool_name: &str) -> Option<PathBuf> {
+        for path in self.basenames.get(manifest)? {
+            let contents = std::fs::read_to_string(self.root.join(path)).ok()?;
+            let configured = match manifest {
+                "pyproject.toml" => toml::from_str::<toml::Value>(&contents)
+                    .ok()
+                    .and_then(|value| {
+                        value
+                            .get("tool")
+                            .and_then(|tools| tools.get(tool_name))
+                            .cloned()
+                    })
+                    .is_some(),
+                "package.json" => serde_json::from_str::<serde_json::Value>(&contents)
+                    .ok()
+                    .is_some_and(|value| value.get(tool_name).is_some()),
+                _ => false,
+            };
+            if configured {
+                return Some(path.clone());
+            }
+        }
+        None
+    }
+
+    fn embedded_config_for(&self, tool_name: &str) -> Option<PathBuf> {
+        match tool_name {
+            "ruff" | "black" | "mdformat" => {
+                self.manifest_contains_tool_config("pyproject.toml", tool_name)
+            }
+            "prettier" => self.manifest_contains_tool_config("package.json", tool_name),
+            _ => None,
+        }
+    }
+
     fn evidence_for(&self, tool_name: &str) -> Option<SelectionEvidence> {
         let entry = TOOL_CATALOG.iter().find(|entry| entry.name == tool_name)?;
         for config in entry.signals.configs {
@@ -129,6 +170,12 @@ impl RepositoryDiscovery {
                     path,
                 });
             }
+        }
+        if let Some(path) = self.embedded_config_for(tool_name) {
+            return Some(SelectionEvidence {
+                kind: SelectionEvidenceKind::NativeConfig,
+                path,
+            });
         }
         for manifest in entry.signals.manifests {
             if let Some(path) = self.matching_signal(manifest) {
@@ -354,6 +401,82 @@ fn is_universal_excluded_dir(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_manifest_configuration_is_native_evidence() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("pyproject.toml"),
+            "[project]\nname = \"test\"\n[tool.ruff]\nline-length = 100\n",
+        )
+        .unwrap();
+        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        let evidence = discovery.evidence_for("ruff").unwrap();
+
+        assert_eq!(evidence.kind, SelectionEvidenceKind::NativeConfig);
+        assert_eq!(evidence.path, PathBuf::from("pyproject.toml"));
+    }
+
+    #[test]
+    fn nested_embedded_configuration_preserves_source_location() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("packages/web")).unwrap();
+        std::fs::write(
+            root.path().join("packages/web/package.json"),
+            r#"{"prettier":{"semi":false}}"#,
+        )
+        .unwrap();
+        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        let evidence = discovery.evidence_for("prettier").unwrap();
+
+        assert_eq!(evidence.kind, SelectionEvidenceKind::NativeConfig);
+        assert_eq!(evidence.path, PathBuf::from("packages/web/package.json"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn discovery_skips_symlinked_files_outside_repository() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("rustfmt.toml"), "").unwrap();
+        symlink(
+            outside.path().join("rustfmt.toml"),
+            root.path().join("rustfmt.toml"),
+        )
+        .unwrap();
+
+        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        assert!(discovery.matching_signal("rustfmt.toml").is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn discovery_tolerates_unreadable_directories() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let unreadable = root.path().join("private");
+        std::fs::create_dir(&unreadable).unwrap();
+        std::fs::write(unreadable.join("rustfmt.toml"), "").unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(discovery.root, root.path().canonicalize().unwrap());
+    }
+
+    #[test]
+    fn ignored_native_configuration_is_not_discovered() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(".gitignore"), "generated/\n").unwrap();
+        std::fs::create_dir(root.path().join("generated")).unwrap();
+        std::fs::write(root.path().join("generated/rustfmt.toml"), "").unwrap();
+
+        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        assert!(discovery.matching_signal("rustfmt.toml").is_none());
+    }
 
     #[test]
     fn automatic_planning_reports_relevant_missing_tools_without_fallback() {

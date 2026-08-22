@@ -90,31 +90,6 @@ struct PrettierLanguage {
     extensions: Vec<String>,
 }
 
-const KNOWN_TOOL_NAMES: &[&str] = &[
-    "rustfmt",
-    "clippy",
-    "taplo",
-    "prettier",
-    "biome",
-    "eslint",
-    "dprint",
-    "clippier_md",
-    "remark",
-    "mdformat",
-    "yamlfmt",
-    "ruff",
-    "black",
-    "gofmt",
-    "shfmt",
-    "shellcheck",
-    "clang-format",
-    "clang-tidy",
-    "stylua",
-    "luacheck",
-    "terraform",
-    "tofu",
-];
-
 fn parse_tool_path_overrides(
     tool_paths: &[String],
 ) -> Result<std::collections::BTreeMap<String, String>, BoxError> {
@@ -132,10 +107,14 @@ fn parse_tool_path_overrides(
             .into());
         }
 
-        if !KNOWN_TOOL_NAMES.iter().any(|name| name == &key) {
+        if tool_catalog_entry(key).is_none() {
             return Err(format!(
                 "Unknown tool '{key}' in --tool-path. Supported tools: {}",
-                KNOWN_TOOL_NAMES.join(", ")
+                TOOL_CATALOG
+                    .iter()
+                    .map(|entry| entry.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
             .into());
         }
@@ -1012,6 +991,13 @@ pub fn build_tools_config(
         config
             .skip
             .retain(|tool| !explicit.iter().any(|requested| requested == tool));
+        for name in explicit {
+            if let Some(policy) = config.tools.get_mut(name)
+                && policy.mode == ToolSelectionMode::Disabled
+            {
+                policy.mode = ToolSelectionMode::Enabled;
+            }
+        }
     }
 
     Ok(config)
@@ -1361,6 +1347,37 @@ mod tests {
     }
 
     #[test]
+    fn explicit_cli_tools_override_legacy_and_typed_skip() {
+        let dir = temp_dir("clippier-tools-explicit-typed-skip");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            concat!(
+                "[runner]\n",
+                "skip = [\"prettier\"]\n",
+                "[tools.prettier]\n",
+                "mode = \"disabled\"\n",
+            ),
+        )
+        .unwrap();
+        let explicit = vec!["prettier".to_string()];
+        let config = build_tools_config(
+            Some(&dir),
+            None,
+            None,
+            Some(&explicit),
+            false,
+            &[],
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!config.should_skip("prettier"));
+        assert_eq!(config.tools["prettier"].mode, ToolSelectionMode::Enabled);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn build_tools_config_explicit_tools_override_skip() {
         let dir = temp_dir("clippier-tools-skip-override");
         let config_path = dir.join("clippier.toml");
@@ -1584,6 +1601,18 @@ mod tests {
         assert!(!merged.runner_fallback);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn tool_path_validation_is_driven_by_catalog_ids() {
+        for entry in TOOL_CATALOG {
+            let parsed = parse_tool_path_overrides(&[format!("{}=/tmp/tool", entry.name)])
+                .unwrap_or_else(|error| panic!("catalog tool {} rejected: {error}", entry.name));
+            assert_eq!(
+                parsed.get(entry.name).map(String::as_str),
+                Some("/tmp/tool")
+            );
+        }
     }
 
     #[test]

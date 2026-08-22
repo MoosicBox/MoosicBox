@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::tools::automatic_exclusion_patterns;
 use crate::tools::catalog::TOOL_CATALOG;
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
@@ -87,16 +88,55 @@ impl ToolRegistry {
             .map_err(|e| ToolError::DetectionFailed("cwd".to_string(), e.to_string()))
     }
 
+    fn node_project_boundary(base_dir: &Path) -> PathBuf {
+        let mut nearest_package = None;
+        let mut current = Some(base_dir);
+        while let Some(dir) = current {
+            if dir.join(".git").exists() {
+                return dir.to_path_buf();
+            }
+            let package_json = dir.join("package.json");
+            if package_json.exists() {
+                nearest_package.get_or_insert_with(|| dir.to_path_buf());
+                if std::fs::read_to_string(&package_json)
+                    .ok()
+                    .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok())
+                    .is_some_and(|value| value.get("workspaces").is_some())
+                {
+                    return dir.to_path_buf();
+                }
+            }
+            current = dir.parent();
+        }
+        nearest_package.unwrap_or_else(|| base_dir.to_path_buf())
+    }
+
     fn resolve_node_bin_in_ancestors(base_dir: &Path, bin_name: &str) -> Option<PathBuf> {
+        let boundary = Self::node_project_boundary(base_dir);
         let mut current = Some(base_dir);
         while let Some(dir) = current {
             let candidate = dir.join("node_modules").join(".bin").join(bin_name);
             if candidate.exists() {
                 return Some(candidate);
             }
+            if dir == boundary {
+                break;
+            }
             current = dir.parent();
         }
         None
+    }
+
+    fn resolve_configured_executable(base_dir: &Path, configured: &str) -> Option<PathBuf> {
+        let path = PathBuf::from(configured);
+        if path.is_absolute() && path.exists() {
+            return Some(path);
+        }
+        let project_relative = base_dir.join(&path);
+        if project_relative.exists() {
+            return Some(project_relative);
+        }
+        which::which(configured).ok()
     }
 
     fn is_nix_system() -> bool {
@@ -698,9 +738,12 @@ impl ToolRegistry {
 
             // Check if there's an explicit path configured
             if let Some(path) = self.config.get_path(name) {
-                let path_buf = PathBuf::from(path);
-                if path_buf.exists() || which::which(path).is_ok() {
-                    log::debug!("Tool '{name}' found at configured path: {path}");
+                if let Some(path_buf) = Self::resolve_configured_executable(&self.working_dir, path)
+                {
+                    log::debug!(
+                        "Tool '{name}' found at configured path: {}",
+                        path_buf.display()
+                    );
                     let mut available_tool = tool.clone();
                     available_tool.detected_path = Some(path_buf);
                     Self::maybe_apply_biome_settings(
@@ -874,6 +917,13 @@ impl ToolRegistry {
                     evidence: None,
                     format_extensions: Vec::new(),
                     format_order: None,
+                    automatic_exclusions: automatic_exclusion_patterns(
+                        self.config
+                            .scope_base
+                            .as_deref()
+                            .unwrap_or(&self.working_dir),
+                        &self.config.effective_scope(),
+                    ),
                 }
             })
             .collect()
@@ -914,6 +964,63 @@ pub struct ToolInfo {
     pub format_extensions: Vec<String>,
     /// Configured formatter pipeline order.
     pub format_order: Option<i32>,
+    /// Effective automatic exclusion patterns used by planning and execution.
+    pub automatic_exclusions: Vec<String>,
+}
+
+impl ToolInfo {
+    /// Formats selection, evidence, ownership, and execution metadata for raw
+    /// tool-list output.
+    #[must_use]
+    pub fn raw_summary(&self) -> String {
+        let status = if self.skipped {
+            "SKIPPED"
+        } else if self.available {
+            "AVAILABLE"
+        } else if self.required {
+            "REQUIRED (missing)"
+        } else {
+            "not found"
+        };
+        let mode = self.runner.as_ref().map_or_else(
+            || self.execution_mode.clone(),
+            |runner| format!("{} ({runner})", self.execution_mode),
+        );
+        let selection = if self.selected {
+            "SELECTED"
+        } else if self.relevant {
+            "RELEVANT"
+        } else if self.configured {
+            "CONFIGURED"
+        } else {
+            "not relevant"
+        };
+        let mut details = Vec::new();
+        if let Some(evidence) = &self.evidence {
+            details.push(format!("evidence={evidence}"));
+        }
+        if !self.format_extensions.is_empty() {
+            details.push(format!("owns={}", self.format_extensions.join(",")));
+        }
+        if let Some(order) = self.format_order {
+            details.push(format!("format-order={order}"));
+        }
+        if !self.automatic_exclusions.is_empty() {
+            details.push(format!(
+                "automatic-exclusions={}",
+                self.automatic_exclusions.join(",")
+            ));
+        }
+        let details = if details.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", details.join(" "))
+        };
+        format!(
+            "{}: {} [{}] {selection}{details}",
+            self.display_name, status, mode
+        )
+    }
 }
 
 fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
@@ -937,6 +1044,46 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
         std::fs::create_dir_all(&path).expect("failed to create temp dir");
         path
+    }
+
+    #[test]
+    fn configured_executable_resolves_relative_to_working_directory_before_path() {
+        let root = tempfile::tempdir().unwrap();
+        let local = root.path().join("bin/prettier");
+        std::fs::create_dir_all(local.parent().unwrap()).unwrap();
+        std::fs::write(&local, "").unwrap();
+
+        let resolved = ToolRegistry::resolve_configured_executable(root.path(), "bin/prettier");
+        assert_eq!(resolved.as_deref(), Some(local.as_path()));
+    }
+
+    #[test]
+    fn raw_summary_includes_plan_metadata() {
+        let info = ToolInfo {
+            name: "prettier".to_string(),
+            display_name: "Prettier".to_string(),
+            available: true,
+            required: false,
+            skipped: false,
+            capabilities: vec![ToolCapability::Format],
+            path: Some(PathBuf::from("/bin/prettier")),
+            execution_mode: "binary".to_string(),
+            runner: None,
+            relevant: true,
+            selected: true,
+            configured: true,
+            evidence: Some("NativeConfig:.prettierrc".to_string()),
+            format_extensions: vec!["js".to_string(), "md".to_string()],
+            format_order: Some(20),
+            automatic_exclusions: vec!["node_modules/**".to_string()],
+        };
+
+        let summary = info.raw_summary();
+        assert!(summary.contains("SELECTED"));
+        assert!(summary.contains("evidence=NativeConfig:.prettierrc"));
+        assert!(summary.contains("owns=js,md"));
+        assert!(summary.contains("format-order=20"));
+        assert!(summary.contains("automatic-exclusions=node_modules/**"));
     }
 
     #[test]
@@ -981,6 +1128,11 @@ mod tests {
         let nested = dir.join("packages").join("service");
         std::fs::create_dir_all(&root_bin).expect("failed to create root node bin dir");
         std::fs::create_dir_all(&nested).expect("failed to create nested dir");
+        std::fs::write(
+            dir.join("package.json"),
+            r#"{"private":true,"workspaces":["packages/*"]}"#,
+        )
+        .unwrap();
         std::fs::write(root_bin.join("prettier"), "").expect("failed to write prettier file");
 
         let tool = Tool::new(
@@ -1009,6 +1161,20 @@ mod tests {
 
         assert!(path.ends_with("node_modules/.bin/prettier"));
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn node_bin_lookup_stops_at_nearest_unrelated_package_boundary() {
+        let outer = tempfile::tempdir().unwrap();
+        let outer_bin = outer.path().join("node_modules/.bin");
+        let project = outer.path().join("project");
+        let nested = project.join("src");
+        std::fs::create_dir_all(&outer_bin).unwrap();
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(outer_bin.join("prettier"), "").unwrap();
+        std::fs::write(project.join("package.json"), "{}").unwrap();
+
+        assert!(ToolRegistry::resolve_node_bin_in_ancestors(&nested, "prettier").is_none());
     }
 
     #[test]
