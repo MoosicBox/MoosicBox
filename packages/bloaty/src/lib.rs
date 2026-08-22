@@ -5,6 +5,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 pub mod build;
+pub mod compare;
 pub mod model;
 pub mod render;
 pub mod workspace;
@@ -14,6 +15,7 @@ use std::{collections::BTreeSet, fs, process::Command, time::UNIX_EPOCH};
 use anyhow::{Context, Result, bail};
 use cargo_metadata::Metadata;
 
+pub use compare::{ComparisonKey, ReportComparison, ScenarioComparison, compare_reports};
 pub use model::{
     AnalysisReport, ArtifactKind, BuildEnvironment, FeatureConfig, Measurement, Scenario,
     ScenarioReport, ScenarioStatus, TargetSelection,

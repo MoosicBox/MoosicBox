@@ -135,6 +135,20 @@ JSON reports include a schema version, selected build dimensions, environment pr
 explicit baseline, each comparison scenario, exact artifact paths, byte sizes, signed deltas,
 percentage deltas, and structured build failures.
 
+### Compare saved reports
+
+Compatible JSON reports can be compared locally without rebuilding:
+
+```bash
+bloaty --compare-reports baseline.json candidate.json
+```
+
+Comparison requires matching schema version, package, target, target kind, Cargo profile,
+compilation target, Rust compiler, host operating system, host architecture, and metric. Bloaty
+rejects incompatible reports instead of presenting misleading deltas. Compatible reports show
+absolute and percentage drift for each scenario and classify added, removed, or unavailable
+scenarios.
+
 ## Target selection
 
 Bloaty supports final artifacts produced by binary, `cdylib`, `dylib`, and `staticlib` targets. If

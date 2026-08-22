@@ -8,8 +8,9 @@ use std::{collections::BTreeSet, fs};
 
 use anyhow::{Context, Result, bail};
 use bloaty::{
-    Scenario, analyze, feature_scenario, parse_feature_config, parse_named_scenario, render,
-    validate_scenarios, workspace, write_json, write_jsonl,
+    AnalysisReport, ReportComparison, Scenario, ScenarioComparison, analyze, compare_reports,
+    feature_scenario, parse_feature_config, parse_named_scenario, render, validate_scenarios,
+    workspace, write_json, write_jsonl,
 };
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, ValueEnum};
@@ -32,8 +33,8 @@ enum OutputFormat {
 )]
 struct Args {
     /// Workspace package to analyze.
-    #[arg(short, long)]
-    package: String,
+    #[arg(short, long, required_unless_present = "compare_reports")]
+    package: Option<String>,
 
     /// Final artifact target name. May be omitted when the package has one supported target.
     #[arg(long)]
@@ -66,13 +67,24 @@ struct Args {
     /// Base report path without an extension.
     #[arg(long)]
     report_file: Option<String>,
+
+    /// Compare two previously generated JSON reports instead of building artifacts.
+    #[arg(long, value_names = ["BASELINE_REPORT", "CANDIDATE_REPORT"], num_args = 2, conflicts_with_all = ["package", "target", "baseline", "feature", "scenario"])]
+    compare_reports: Option<Vec<String>>,
 }
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
+    if let Some(paths) = &args.compare_reports {
+        return compare_saved_reports(paths);
+    }
+    let package = args
+        .package
+        .as_deref()
+        .context("--package is required for analysis")?;
     let metadata = MetadataCommand::new().no_deps().exec()?;
-    let target = workspace::resolve_target(&metadata, &args.package, args.target.as_deref())?;
+    let target = workspace::resolve_target(&metadata, package, args.target.as_deref())?;
 
     let baseline = Scenario {
         name: "baseline".to_owned(),
@@ -124,6 +136,58 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn compare_saved_reports(paths: &[String]) -> Result<()> {
+    let [baseline_path, candidate_path] = paths else {
+        bail!("--compare-reports requires baseline and candidate report paths");
+    };
+    let baseline: AnalysisReport = serde_json::from_slice(
+        &fs::read(baseline_path)
+            .with_context(|| format!("failed to read baseline report {baseline_path}"))?,
+    )
+    .with_context(|| format!("failed to parse baseline report {baseline_path}"))?;
+    let candidate: AnalysisReport = serde_json::from_slice(
+        &fs::read(candidate_path)
+            .with_context(|| format!("failed to read candidate report {candidate_path}"))?,
+    )
+    .with_context(|| format!("failed to parse candidate report {candidate_path}"))?;
+    let comparison = compare_reports(&baseline, &candidate);
+    print_comparison(&comparison);
+    if !comparison.is_compatible() {
+        bail!("reports are incompatible");
+    }
+    Ok(())
+}
+
+fn print_comparison(comparison: &ReportComparison) {
+    if !comparison.is_compatible() {
+        eprintln!("Reports are incompatible:");
+        for incompatibility in &comparison.incompatibilities {
+            eprintln!("  - {incompatibility}");
+        }
+        return;
+    }
+    println!("Bloaty report comparison");
+    for scenario in &comparison.scenarios {
+        match scenario {
+            ScenarioComparison::Compared {
+                name,
+                baseline_size_bytes,
+                candidate_size_bytes,
+                delta_bytes,
+                delta_percent,
+            } => println!(
+                "  {name:<20} {baseline_size_bytes} -> {candidate_size_bytes} ({delta_bytes:+} bytes, {}%)",
+                delta_percent.as_deref().unwrap_or("undefined")
+            ),
+            ScenarioComparison::Added { name } => println!("  {name:<20} ADDED"),
+            ScenarioComparison::Removed { name } => println!("  {name:<20} REMOVED"),
+            ScenarioComparison::Unavailable { name, .. } => {
+                println!("  {name:<20} UNAVAILABLE");
+            }
+        }
+    }
 }
 
 fn ensure_unique_names(scenarios: &[Scenario]) -> Result<()> {
