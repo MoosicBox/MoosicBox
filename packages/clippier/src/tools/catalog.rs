@@ -40,6 +40,19 @@ pub fn compatible_overlap_extensions(
         .collect()
 }
 
+/// Location and shape of configuration embedded in a repository manifest.
+#[derive(Debug, Clone, Copy)]
+pub struct EmbeddedConfigSignal {
+    /// Tool ID configured by this signal.
+    pub tool: &'static str,
+    /// Manifest basename.
+    pub manifest: &'static str,
+    /// Top-level object or table containing the tool configuration.
+    pub container: Option<&'static str>,
+    /// Configuration key within the container.
+    pub key: &'static str,
+}
+
 /// Repository evidence used to decide whether a tool is relevant.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolSignals {
@@ -120,6 +133,40 @@ const FORMAT: &[ToolCapability] = &[ToolCapability::Format];
 const LINT: &[ToolCapability] = &[ToolCapability::Lint];
 const BOTH: &[ToolCapability] = &[ToolCapability::Format, ToolCapability::Lint];
 const NONE: &[&str] = &[];
+const EMBEDDED_CONFIG_SIGNALS: &[EmbeddedConfigSignal] = &[
+    EmbeddedConfigSignal {
+        tool: "black",
+        manifest: "pyproject.toml",
+        container: Some("tool"),
+        key: "black",
+    },
+    EmbeddedConfigSignal {
+        tool: "mdformat",
+        manifest: "pyproject.toml",
+        container: Some("tool"),
+        key: "mdformat",
+    },
+    EmbeddedConfigSignal {
+        tool: "prettier",
+        manifest: "package.json",
+        container: None,
+        key: "prettier",
+    },
+    EmbeddedConfigSignal {
+        tool: "ruff",
+        manifest: "pyproject.toml",
+        container: Some("tool"),
+        key: "ruff",
+    },
+];
+
+/// Returns native configurations embedded in repository manifests for a tool.
+#[must_use]
+pub fn embedded_config_signals(name: &str) -> &'static [EmbeddedConfigSignal] {
+    let start = EMBEDDED_CONFIG_SIGNALS.partition_point(|signal| signal.tool < name);
+    let end = EMBEDDED_CONFIG_SIGNALS.partition_point(|signal| signal.tool <= name);
+    &EMBEDDED_CONFIG_SIGNALS[start..end]
+}
 
 macro_rules! entry {
     ($name:literal, $display:literal, $binary:literal, $kind:ident, $caps:expr,
@@ -550,6 +597,14 @@ mod tests {
                     .iter()
                     .all(|signal| !signal.is_empty())
             );
+            assert!(embedded_config_signals(entry.name).iter().all(|signal| {
+                signal.tool == entry.name
+                    && !signal.manifest.is_empty()
+                    && !signal.key.is_empty()
+                    && signal
+                        .container
+                        .is_none_or(|container| !container.is_empty())
+            }));
             assert!(
                 entry
                     .signals

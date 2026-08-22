@@ -126,22 +126,30 @@ impl RepositoryDiscovery {
         }
     }
 
-    fn manifest_contains_tool_config(&self, manifest: &str, tool_name: &str) -> Option<PathBuf> {
-        for path in self.basenames.get(manifest)? {
+    fn manifest_contains_tool_config(
+        &self,
+        signal: super::EmbeddedConfigSignal,
+    ) -> Option<PathBuf> {
+        for path in self.basenames.get(signal.manifest)? {
             let contents = std::fs::read_to_string(self.root.join(path)).ok()?;
-            let configured = match manifest {
+            let configured = match signal.manifest {
                 "pyproject.toml" => toml::from_str::<toml::Value>(&contents)
                     .ok()
                     .and_then(|value| {
-                        value
-                            .get("tool")
-                            .and_then(|tools| tools.get(tool_name))
-                            .cloned()
+                        let container = signal
+                            .container
+                            .map_or(Some(&value), |container| value.get(container));
+                        container.and_then(|value| value.get(signal.key)).cloned()
                     })
                     .is_some(),
                 "package.json" => serde_json::from_str::<serde_json::Value>(&contents)
                     .ok()
-                    .is_some_and(|value| value.get(tool_name).is_some()),
+                    .is_some_and(|value| {
+                        let container = signal
+                            .container
+                            .map_or(Some(&value), |container| value.get(container));
+                        container.is_some_and(|value| value.get(signal.key).is_some())
+                    }),
                 _ => false,
             };
             if configured {
@@ -151,14 +159,10 @@ impl RepositoryDiscovery {
         None
     }
 
-    fn embedded_config_for(&self, tool_name: &str) -> Option<PathBuf> {
-        match tool_name {
-            "ruff" | "black" | "mdformat" => {
-                self.manifest_contains_tool_config("pyproject.toml", tool_name)
-            }
-            "prettier" => self.manifest_contains_tool_config("package.json", tool_name),
-            _ => None,
-        }
+    fn embedded_config_for(&self, entry: &super::ToolCatalogEntry) -> Option<PathBuf> {
+        super::embedded_config_signals(entry.name)
+            .iter()
+            .find_map(|signal| self.manifest_contains_tool_config(*signal))
     }
 
     fn evidence_for(&self, tool_name: &str) -> Option<SelectionEvidence> {
@@ -171,7 +175,7 @@ impl RepositoryDiscovery {
                 });
             }
         }
-        if let Some(path) = self.embedded_config_for(tool_name) {
+        if let Some(path) = self.embedded_config_for(entry) {
             return Some(SelectionEvidence {
                 kind: SelectionEvidenceKind::NativeConfig,
                 path,

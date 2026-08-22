@@ -139,6 +139,10 @@ pub struct AggregatedResults {
     pub format_order: BTreeMap<String, i32>,
     /// Effective automatic exclusion patterns.
     pub automatic_exclusions: Vec<String>,
+    /// Relevant tools which were unavailable during automatic planning.
+    pub unavailable_tools: Vec<String>,
+    /// Formatter overlap decisions which still require user attention.
+    pub overlap_warnings: Vec<String>,
 }
 
 impl AggregatedResults {
@@ -162,6 +166,8 @@ struct ResultPlanMetadata {
     formatter_ownership: BTreeMap<String, BTreeSet<String>>,
     format_order: BTreeMap<String, i32>,
     automatic_exclusions: Vec<String>,
+    unavailable_tools: Vec<String>,
+    overlap_warnings: Vec<String>,
 }
 
 /// Runs tools and aggregates results
@@ -190,6 +196,10 @@ pub struct ToolRunner<'a> {
     format_order: BTreeMap<String, i32>,
     /// Effective automatic exclusion patterns.
     automatic_exclusions: Vec<String>,
+    /// Relevant tools unavailable during automatic planning.
+    unavailable_tools: Vec<String>,
+    /// Formatter overlap decisions emitted for the execution plan.
+    overlap_warnings: Vec<String>,
     /// Whether Git-aware selection fell back to all files.
     selection_fallback: bool,
 }
@@ -240,6 +250,8 @@ impl<'a> ToolRunner<'a> {
             selection_evidence: BTreeMap::new(),
             format_order: BTreeMap::new(),
             automatic_exclusions: global_excludes,
+            unavailable_tools: Vec::new(),
+            overlap_warnings: Vec::new(),
             selection_fallback: false,
         }
     }
@@ -282,6 +294,14 @@ impl<'a> ToolRunner<'a> {
             .iter()
             .filter_map(|tool| tool.format_order.map(|order| (tool.name.clone(), order)))
             .collect();
+        self.unavailable_tools.clone_from(&plan.unavailable);
+        self
+    }
+
+    /// Sets overlap decisions for machine-readable execution reporting.
+    #[must_use]
+    pub fn with_overlap_warnings(mut self, warnings: Vec<String>) -> Self {
+        self.overlap_warnings = warnings;
         self
     }
 
@@ -335,6 +355,8 @@ impl<'a> ToolRunner<'a> {
             formatter_ownership: self.formatter_ownership.clone().unwrap_or_default(),
             format_order: self.format_order.clone(),
             automatic_exclusions: self.automatic_exclusions.clone(),
+            unavailable_tools: self.unavailable_tools.clone(),
+            overlap_warnings: self.overlap_warnings.clone(),
         }
     }
 
@@ -359,6 +381,8 @@ impl<'a> ToolRunner<'a> {
             formatter_ownership: metadata.formatter_ownership,
             format_order: metadata.format_order,
             automatic_exclusions: metadata.automatic_exclusions,
+            unavailable_tools: metadata.unavailable_tools,
+            overlap_warnings: metadata.overlap_warnings,
         }
     }
 
@@ -371,6 +395,13 @@ impl<'a> ToolRunner<'a> {
             || self.registry.working_dir().to_path_buf(),
             Path::to_path_buf,
         )
+    }
+
+    /// Produces successful empty results for an automatic plan with no installed
+    /// selected tools.
+    #[must_use]
+    pub fn automatic_noop_results(&self) -> AggregatedResults {
+        self.empty_results()
     }
 
     /// Returns the scoped file arguments that would be passed to a tool.
@@ -2195,6 +2226,8 @@ pub fn results_to_json(
             "formatter_ownership": results.formatter_ownership,
             "format_order": results.format_order,
             "automatic_exclusions": results.automatic_exclusions,
+            "unavailable_tools": results.unavailable_tools,
+            "overlap_warnings": results.overlap_warnings,
         },
         "results": json_results,
     });
@@ -2222,7 +2255,7 @@ mod tests {
 
     #[cfg(all(feature = "format", feature = "tools-tui"))]
     #[test]
-    fn tui_and_non_tui_paths_report_the_same_selected_file_count() {
+    fn tui_non_tui_and_json_paths_report_the_same_plan_metadata() {
         let dir = temp_dir("clippier-tui-selection-parity");
         std::fs::create_dir_all(dir.join("src")).unwrap();
         std::fs::write(
@@ -2232,8 +2265,23 @@ mod tests {
         .unwrap();
         std::fs::write(dir.join("src/lib.rs"), "pub fn selected() {}\n").unwrap();
         let registry = ToolRegistry::new(ToolsConfig::default(), Some(&dir)).unwrap();
+        let plan = ToolPlan {
+            tools: vec![crate::tools::PlannedTool {
+                name: "rustfmt".to_string(),
+                evidence: crate::tools::SelectionEvidence {
+                    kind: crate::tools::SelectionEvidenceKind::Manifest,
+                    path: PathBuf::from("Cargo.toml"),
+                },
+                format_extensions: BTreeSet::from(["rs".to_string()]),
+                format_order: Some(10),
+            }],
+            unavailable: vec!["taplo".to_string()],
+        };
+        let warnings = vec!["WARNING: configured formatter overlap".to_string()];
         let runner = ToolRunner::new(&registry)
             .with_working_dir(&dir)
+            .with_tool_plan(&plan)
+            .with_overlap_warnings(warnings)
             .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
                 "src/lib.rs",
             )])));
@@ -2247,7 +2295,27 @@ mod tests {
 
         assert_eq!(normal.selected_file_count, Some(1));
         assert_eq!(tui.selected_file_count, normal.selected_file_count);
+        assert_eq!(tui.selection_fallback, normal.selection_fallback);
+        assert_eq!(tui.execution_modes, normal.execution_modes);
+        assert_eq!(tui.selection_evidence, normal.selection_evidence);
+        assert_eq!(tui.formatter_ownership, normal.formatter_ownership);
+        assert_eq!(tui.format_order, normal.format_order);
+        assert_eq!(tui.automatic_exclusions, normal.automatic_exclusions);
+        assert_eq!(tui.unavailable_tools, normal.unavailable_tools);
+        assert_eq!(tui.overlap_warnings, normal.overlap_warnings);
         assert_eq!(json["selection"]["file_count"], 1);
+        assert_eq!(json["plan"]["execution_modes"]["rustfmt"], "cargo");
+        assert_eq!(
+            json["plan"]["selection_evidence"]["rustfmt"],
+            "Manifest:Cargo.toml"
+        );
+        assert_eq!(json["plan"]["formatter_ownership"]["rustfmt"][0], "rs");
+        assert_eq!(json["plan"]["format_order"]["rustfmt"], 10);
+        assert_eq!(json["plan"]["unavailable_tools"][0], "taplo");
+        assert_eq!(
+            json["plan"]["overlap_warnings"][0],
+            "WARNING: configured formatter overlap"
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -2271,6 +2339,8 @@ mod tests {
             )]),
             format_order: BTreeMap::from([("prettier".to_string(), 10)]),
             automatic_exclusions: vec!["node_modules/**".to_string()],
+            unavailable_tools: vec!["dprint".to_string()],
+            overlap_warnings: vec!["WARNING: formatter overlap".to_string()],
         };
         let output = results_to_json(&results).unwrap();
         let value: serde_json::Value = serde_json::from_str(&output).unwrap();
@@ -2286,6 +2356,11 @@ mod tests {
         assert_eq!(value["plan"]["formatter_ownership"]["prettier"][0], "md");
         assert_eq!(value["plan"]["format_order"]["prettier"], 10);
         assert_eq!(value["plan"]["automatic_exclusions"][0], "node_modules/**");
+        assert_eq!(value["plan"]["unavailable_tools"][0], "dprint");
+        assert_eq!(
+            value["plan"]["overlap_warnings"][0],
+            "WARNING: formatter overlap"
+        );
     }
 
     #[cfg(all(feature = "format", unix))]
@@ -2306,6 +2381,154 @@ mod tests {
             0o640
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn write_order_capture_tool(dir: &Path, name: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let executable = dir.join(format!("capture-{name}"));
+        std::fs::write(
+            &executable,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' '{name}' >> \"$(dirname \"$0\")/execution-order\"\n"
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        executable
+    }
+
+    #[cfg(unix)]
+    fn ordered_markdown_pipeline(
+        root: &Path,
+        suppress_overlap: bool,
+    ) -> (Vec<String>, Vec<String>) {
+        let mut config = ToolsConfig::default();
+        for (name, order) in [("dprint", 10), ("prettier", 20)] {
+            let executable = write_order_capture_tool(root, name);
+            config.tools.insert(
+                name.to_string(),
+                crate::tools::ToolPolicy {
+                    mode: crate::tools::ToolSelectionMode::Enabled,
+                    executable: Some(executable.to_string_lossy().to_string()),
+                    format_extensions: BTreeSet::from(["md".to_string()]),
+                    format_order: Some(order),
+                    ..Default::default()
+                },
+            );
+        }
+        if suppress_overlap {
+            config.overlap_warning_suppress = vec![crate::tools::OverlapWarningSuppressRule {
+                capability: crate::tools::OverlapWarningCapability::Format,
+                tools: vec!["dprint".to_string(), "prettier".to_string()],
+                extensions: vec!["md".to_string()],
+            }];
+        }
+        let registry = ToolRegistry::new(config, Some(root)).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+        let warnings = crate::tools::overlap_warnings_for_plan(
+            &registry,
+            &plan,
+            &registry.config().overlap_warning_suppress,
+        );
+        let names = plan.names();
+        let name_refs = names.iter().map(String::as_str).collect::<Vec<_>>();
+        let results = ToolRunner::new(&registry)
+            .with_working_dir(root)
+            .with_tool_plan(&plan)
+            .with_parallel(!plan.has_ordered_formatters())
+            .run_specific(&name_refs, &[], false)
+            .unwrap();
+        assert!(results.all_success());
+        let order = std::fs::read_to_string(root.join("execution-order"))
+            .unwrap()
+            .lines()
+            .map(ToString::to_string)
+            .collect();
+        (order, warnings)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn configured_pipeline_executes_in_order_and_suppression_changes_only_warnings() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("document.md"), "# test\n").unwrap();
+
+        let (order, warnings) = ordered_markdown_pipeline(root.path(), false);
+        assert_eq!(order, vec!["dprint", "prettier"]);
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings[0].contains("dprint"));
+        assert!(warnings[0].contains("prettier"));
+
+        std::fs::remove_file(root.path().join("execution-order")).unwrap();
+        let (suppressed_order, suppressed_warnings) = ordered_markdown_pipeline(root.path(), true);
+        assert_eq!(suppressed_order, order);
+        assert!(suppressed_warnings.is_empty());
+    }
+
+    #[cfg(unix)]
+    fn write_argument_capture_tool(dir: &Path) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let executable = dir.join("capture-tool");
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/captured-args\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        executable
+    }
+
+    #[cfg(unix)]
+    fn run_dprint_argument_capture(root: &Path, include: Vec<String>) -> Vec<String> {
+        let executable = write_argument_capture_tool(root);
+        let mut config = ToolsConfig::default();
+        config.tools.insert(
+            "dprint".to_string(),
+            crate::tools::ToolPolicy {
+                executable: Some(executable.to_string_lossy().to_string()),
+                include,
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(root)).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+        assert_eq!(plan.names(), vec!["dprint"]);
+        let results = ToolRunner::new(&registry)
+            .with_working_dir(root)
+            .with_tool_plan(&plan)
+            .run_specific(&["dprint"], &[], false)
+            .unwrap();
+        assert!(results.all_success());
+        std::fs::read_to_string(root.join("captured-args"))
+            .unwrap()
+            .lines()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn automatic_exclusion_and_explicit_reinclusion_reach_actual_tool_arguments() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("package.json"), "{}\n").unwrap();
+        std::fs::write(root.path().join("dprint.json"), "{}\n").unwrap();
+        std::fs::write(root.path().join("source.json"), "{}\n").unwrap();
+        std::fs::create_dir(root.path().join("node_modules")).unwrap();
+        std::fs::write(root.path().join("node_modules/dependency.json"), "{}\n").unwrap();
+
+        let excluded_args = run_dprint_argument_capture(root.path(), Vec::new());
+        assert!(excluded_args.contains(&"source.json".to_string()));
+        assert!(!excluded_args.iter().any(|arg| arg.contains("node_modules")));
+
+        let reincluded_args =
+            run_dprint_argument_capture(root.path(), vec!["node_modules/**".to_string()]);
+        assert!(
+            reincluded_args.contains(&"node_modules/dependency.json".to_string()),
+            "explicit profile re-inclusion did not reach execution: {reincluded_args:?}"
+        );
     }
 
     #[test]

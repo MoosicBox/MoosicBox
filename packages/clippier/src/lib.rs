@@ -5629,31 +5629,35 @@ pub fn handle_check_command(
     } else {
         runner
     };
-    let runner = runner.with_color_mode(match (output, color) {
-        (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
-        (_, value) => value,
-    });
+    let warnings = automatic_plan.as_ref().map_or_else(
+        || {
+            tools::overlap_warnings_for_selected_tools(
+                &registry,
+                &names,
+                &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+                &overlap_warning_suppress,
+                working_dir,
+            )
+        },
+        |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
+    );
     if output == OutputType::Raw {
-        let warnings = automatic_plan.as_ref().map_or_else(
-            || {
-                tools::overlap_warnings_for_selected_tools(
-                    &registry,
-                    &names,
-                    &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
-                    &overlap_warning_suppress,
-                    working_dir,
-                )
-            },
-            |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
-        );
-        for warning in warnings {
+        for warning in &warnings {
             eprintln!("{warning}");
         }
     }
+    let runner = runner
+        .with_overlap_warnings(warnings)
+        .with_color_mode(match (output, color) {
+            (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
+            (_, value) => value,
+        });
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let should_use_tui =
         enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();
-    let results = if should_use_tui {
+    let results = if name_refs.is_empty() && automatic_plan.is_some() {
+        runner.automatic_noop_results()
+    } else if should_use_tui {
         runner.run_specific_with_tui(&name_refs, &[], true)?
     } else {
         runner.run_specific(&name_refs, &[], true)?
@@ -5794,34 +5798,37 @@ pub fn handle_fmt_command(
     } else {
         runner
     };
+    let warnings = automatic_plan.as_ref().map_or_else(
+        || {
+            tools::overlap_warnings_for_selected_tools(
+                &registry,
+                &names,
+                &[tools::ToolCapability::Format],
+                &overlap_warning_suppress,
+                working_dir,
+            )
+        },
+        |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
+    );
+    if output == OutputType::Raw {
+        for warning in &warnings {
+            eprintln!("{warning}");
+        }
+    }
     let runner = runner
+        .with_overlap_warnings(warnings)
         .with_format_selection(selection)
         .with_selection_fallback(selection_fallback)
         .with_color_mode(match (output, color) {
             (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
             (_, value) => value,
         });
-    if output == OutputType::Raw {
-        let warnings = automatic_plan.as_ref().map_or_else(
-            || {
-                tools::overlap_warnings_for_selected_tools(
-                    &registry,
-                    &names,
-                    &[tools::ToolCapability::Format],
-                    &overlap_warning_suppress,
-                    working_dir,
-                )
-            },
-            |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
-        );
-        for warning in warnings {
-            eprintln!("{warning}");
-        }
-    }
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let should_use_tui =
         enable_tui && !list_tools && output == OutputType::Raw && can_use_interactive_tui();
-    let results = if should_use_tui {
+    let results = if name_refs.is_empty() && automatic_plan.is_some() {
+        runner.automatic_noop_results()
+    } else if should_use_tui {
         runner.run_specific_with_tui(&name_refs, &[], check_only)?
     } else {
         runner.run_specific(&name_refs, &[], check_only)?

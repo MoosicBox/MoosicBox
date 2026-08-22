@@ -1,6 +1,6 @@
 #![cfg(feature = "format")]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use git2::{IndexAddOption, Repository, Signature};
@@ -65,6 +65,108 @@ fn run_fmt(root: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .output()
         .expect("failed to run clippier fmt")
+}
+
+#[cfg(unix)]
+fn write_failing_acquisition_runner(root: &Path, name: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = root.join(name);
+    std::fs::write(
+        &path,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' '{name}' >> \"$(dirname \"$0\")/acquisition-invocations\"\nexit 99\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[cfg(unix)]
+#[test]
+fn default_fmt_and_list_never_invoke_acquisition_runners() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join(".prettierrc"), "{}\n").unwrap();
+    std::fs::write(temp.path().join("document.md"), "# test\n").unwrap();
+    for runner in ["bunx", "pnpm", "npx", "uvx", "nix"] {
+        write_failing_acquisition_runner(temp.path(), runner);
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--output")
+        .arg("json")
+        .env("PATH", temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["total"], 0);
+    let unavailable = json["plan"]["unavailable_tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<Vec<_>>();
+    assert!(unavailable.contains(&"prettier"));
+
+    let checked = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("check")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--output")
+        .arg("json")
+        .env("PATH", temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let check_json: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(check_json["total"], 0);
+    assert!(
+        check_json["plan"]["unavailable_tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tool| tool == "prettier")
+    );
+
+    let listed = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--list")
+        .arg("--output")
+        .arg("json")
+        .env("PATH", temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        listed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&listed.stderr)
+    );
+    let list: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    let prettier = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "prettier")
+        .unwrap();
+    assert_eq!(prettier["relevant"], true);
+    assert_eq!(prettier["available"], false);
+    assert_eq!(prettier["selected"], false);
+    assert!(!temp.path().join("acquisition-invocations").exists());
 }
 
 #[test]
