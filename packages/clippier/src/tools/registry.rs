@@ -848,6 +848,16 @@ impl ToolRegistry {
         &self.working_dir
     }
 
+    /// Returns the effective execution mode for one tool.
+    #[must_use]
+    pub fn execution_mode(&self, name: &str) -> Option<String> {
+        self.available.get(name).map(|tool| match &tool.kind {
+            ToolKind::Cargo => "cargo".to_string(),
+            ToolKind::Binary => "binary".to_string(),
+            ToolKind::Runner { runner, .. } => format!("runner:{runner}"),
+        })
+    }
+
     /// Returns true if a tool is available
     #[must_use]
     pub fn is_available(&self, name: &str) -> bool {

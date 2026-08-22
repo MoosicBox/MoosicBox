@@ -1283,9 +1283,12 @@ Tool resolution precedence (for `prettier`, `biome`, `eslint`, `dprint`, `remark
 2. Configured path in `runner.executables.<tool>`
 3. `node_modules/.bin/<tool>` in the working directory or ancestors
 4. Standalone `<tool>` in PATH
-5. Package-manager runner fallback (enabled by default): `bunx`, then `pnpm dlx`, then `npx --yes`
+5. Explicitly enabled package-manager/Nix fallback: `bunx`, then `pnpm dlx`, then `npx --yes`, or configured Nix packages
 
-Use `--no-runner-fallback` to disable runner fallback for a command.
+Runner and Nix fallbacks are disabled by default. Enable `runner-fallback = true`
+or `nix-fallback = true` in `[runner]` only when ephemeral acquisition is
+intentional. `--no-runner-fallback` can disable a configured runner fallback for
+a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
 `clippier_md` provides native strict check behavior for markdown in `fmt --check` and is the default markdown formatter in this workspace.
 
@@ -1339,24 +1342,35 @@ TUI behavior for tool output:
 
 #### Supported Tools
 
-| Tool          | Language/Format         | Capabilities | Detection                                                                 |
-| ------------- | ----------------------- | ------------ | ------------------------------------------------------------------------- |
-| `rustfmt`     | Rust                    | Format       | `cargo` in PATH                                                           |
-| `clippy`      | Rust                    | Lint         | `cargo` in PATH                                                           |
-| `taplo`       | TOML                    | Format, Lint | `taplo` binary                                                            |
-| `prettier`    | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
-| `biome`       | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
-| `eslint`      | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `dprint`      | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `clippier_md` | Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                         |
-| `remark`      | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `mdformat`    | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
-| `yamlfmt`     | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
-| `ruff`        | Python                  | Format, Lint | `ruff` binary                                                             |
-| `black`       | Python                  | Format       | `black` binary                                                            |
-| `gofmt`       | Go                      | Format       | `gofmt` binary                                                            |
-| `shfmt`       | Shell                   | Format       | `shfmt` binary                                                            |
-| `shellcheck`  | Shell                   | Lint         | `shellcheck` binary                                                       |
+| Tool           | Language/Format         | Capabilities | Detection                                                                 |
+| -------------- | ----------------------- | ------------ | ------------------------------------------------------------------------- |
+| `rustfmt`      | Rust                    | Format       | `cargo` in PATH                                                           |
+| `clippy`       | Rust                    | Lint         | `cargo` in PATH                                                           |
+| `taplo`        | TOML                    | Format, Lint | `taplo` binary                                                            |
+| `prettier`     | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
+| `biome`        | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
+| `eslint`       | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `dprint`       | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `clippier_md`  | Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                         |
+| `remark`       | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
+| `mdformat`     | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
+| `yamlfmt`      | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
+| `ruff`         | Python                  | Format, Lint | `ruff` binary                                                             |
+| `black`        | Python                  | Format       | `black` binary                                                            |
+| `gofmt`        | Go                      | Format       | `gofmt` binary                                                            |
+| `shfmt`        | Shell                   | Format       | `shfmt` binary                                                            |
+| `shellcheck`   | Shell                   | Lint         | `shellcheck` binary                                                       |
+| `clang-format` | C/C++/Objective-C       | Format       | Installed `clang-format`; native `.clang-format`/`_clang-format` config   |
+| `clang-tidy`   | C/C++                   | Lint         | Installed `clang-tidy`; compile database or `.clang-tidy` config          |
+| `stylua`       | Lua/Luau                | Format       | Installed `stylua`; requires `stylua.toml` or `.stylua.toml`              |
+| `luacheck`     | Lua                     | Lint         | Installed `luacheck`; requires `.luacheckrc`                              |
+| `terraform`    | Terraform               | Format, Lint | Installed `terraform`; `.terraform.lock.hcl` project evidence             |
+| `tofu`         | OpenTofu                | Format, Lint | Installed `tofu`; `.terraform.lock.hcl` project evidence                  |
+
+Every automatic integration uses cataloged signals, capabilities, coverage, and
+ownership priority. Tools with no safe ecosystem-wide convention require native
+configuration evidence. Missing relevant tools are reported but never acquired
+unless fallback was explicitly enabled.
 
 #### Output Format (JSON)
 

@@ -129,6 +129,16 @@ pub struct AggregatedResults {
     pub selected_file_count: Option<usize>,
     /// Whether Git-aware selection fell back to all files.
     pub selection_fallback: bool,
+    /// Effective execution mode by selected tool.
+    pub execution_modes: BTreeMap<String, String>,
+    /// Selection evidence by automatically planned tool.
+    pub selection_evidence: BTreeMap<String, String>,
+    /// Formatter ownership extensions by tool.
+    pub formatter_ownership: BTreeMap<String, BTreeSet<String>>,
+    /// Explicit formatter pipeline order by tool.
+    pub format_order: BTreeMap<String, i32>,
+    /// Effective automatic exclusion patterns.
+    pub automatic_exclusions: Vec<String>,
 }
 
 impl AggregatedResults {
@@ -143,6 +153,15 @@ impl AggregatedResults {
     pub const fn exit_code(&self) -> i32 {
         if self.failure_count == 0 { 0 } else { 1 }
     }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ResultPlanMetadata {
+    execution_modes: BTreeMap<String, String>,
+    selection_evidence: BTreeMap<String, String>,
+    formatter_ownership: BTreeMap<String, BTreeSet<String>>,
+    format_order: BTreeMap<String, i32>,
+    automatic_exclusions: Vec<String>,
 }
 
 /// Runs tools and aggregates results
@@ -165,6 +184,12 @@ pub struct ToolRunner<'a> {
     format_selection: FormatSelection,
     /// Automatic formatter ownership by tool.
     formatter_ownership: Option<BTreeMap<String, BTreeSet<String>>>,
+    /// Selection evidence by automatically planned tool.
+    selection_evidence: BTreeMap<String, String>,
+    /// Explicit formatter pipeline order by tool.
+    format_order: BTreeMap<String, i32>,
+    /// Effective automatic exclusion patterns.
+    automatic_exclusions: Vec<String>,
     /// Whether Git-aware selection fell back to all files.
     selection_fallback: bool,
 }
@@ -212,6 +237,9 @@ impl<'a> ToolRunner<'a> {
             tool_scopes,
             format_selection: FormatSelection::All,
             formatter_ownership: None,
+            selection_evidence: BTreeMap::new(),
+            format_order: BTreeMap::new(),
+            automatic_exclusions: global_excludes,
             selection_fallback: false,
         }
     }
@@ -239,6 +267,21 @@ impl<'a> ToolRunner<'a> {
                 .map(|tool| (tool.name.clone(), tool.format_extensions.clone()))
                 .collect(),
         );
+        self.selection_evidence = plan
+            .tools
+            .iter()
+            .map(|tool| {
+                (
+                    tool.name.clone(),
+                    format!("{:?}:{}", tool.evidence.kind, tool.evidence.path.display()),
+                )
+            })
+            .collect();
+        self.format_order = plan
+            .tools
+            .iter()
+            .filter_map(|tool| tool.format_order.map(|order| (tool.name.clone(), order)))
+            .collect();
         self
     }
 
@@ -277,15 +320,50 @@ impl<'a> ToolRunner<'a> {
         }
     }
 
-    fn empty_results(&self) -> AggregatedResults {
+    fn result_metadata(&self, tools: &[&Tool]) -> ResultPlanMetadata {
+        let execution_modes = tools
+            .iter()
+            .filter_map(|tool| {
+                self.registry
+                    .execution_mode(&tool.name)
+                    .map(|mode| (tool.name.clone(), mode))
+            })
+            .collect();
+        ResultPlanMetadata {
+            execution_modes,
+            selection_evidence: self.selection_evidence.clone(),
+            formatter_ownership: self.formatter_ownership.clone().unwrap_or_default(),
+            format_order: self.format_order.clone(),
+            automatic_exclusions: self.automatic_exclusions.clone(),
+        }
+    }
+
+    fn aggregate_results(
+        &self,
+        tools: &[&Tool],
+        results: Vec<ToolResult>,
+        total_duration: Duration,
+    ) -> AggregatedResults {
+        let success_count = results.iter().filter(|result| result.success).count();
+        let failure_count = results.len() - success_count;
+        let metadata = self.result_metadata(tools);
         AggregatedResults {
-            results: Vec::new(),
-            total_duration: Duration::ZERO,
-            success_count: 0,
-            failure_count: 0,
+            results,
+            total_duration,
+            success_count,
+            failure_count,
             selected_file_count: self.selected_file_count(),
             selection_fallback: self.selection_fallback,
+            execution_modes: metadata.execution_modes,
+            selection_evidence: metadata.selection_evidence,
+            formatter_ownership: metadata.formatter_ownership,
+            format_order: metadata.format_order,
+            automatic_exclusions: metadata.automatic_exclusions,
         }
+    }
+
+    fn empty_results(&self) -> AggregatedResults {
+        self.aggregate_results(&[], Vec::new(), Duration::ZERO)
     }
 
     fn working_dir_path(&self) -> PathBuf {
@@ -555,18 +633,7 @@ impl<'a> ToolRunner<'a> {
                 .collect()
         };
 
-        let total_duration = start_time.elapsed();
-        let success_count = results.iter().filter(|r| r.success).count();
-        let failure_count = results.len() - success_count;
-
-        AggregatedResults {
-            results,
-            total_duration,
-            success_count,
-            failure_count,
-            selected_file_count: self.selected_file_count(),
-            selection_fallback: self.selection_fallback,
-        }
+        self.aggregate_results(tools, results, start_time.elapsed())
     }
 
     #[cfg(feature = "tools-tui")]
@@ -621,18 +688,7 @@ impl<'a> ToolRunner<'a> {
             results
         });
 
-        let total_duration = start_time.elapsed();
-        let success_count = results.iter().filter(|r| r.success).count();
-        let failure_count = results.len() - success_count;
-
-        AggregatedResults {
-            results,
-            total_duration,
-            success_count,
-            failure_count,
-            selected_file_count: self.selected_file_count(),
-            selection_fallback: self.selection_fallback,
-        }
+        self.aggregate_results(tools, results, start_time.elapsed())
     }
 
     #[cfg(feature = "tools-tui")]
@@ -2133,6 +2189,13 @@ pub fn results_to_json(
             "file_count": results.selected_file_count,
             "fallback": results.selection_fallback,
         },
+        "plan": {
+            "execution_modes": results.execution_modes,
+            "selection_evidence": results.selection_evidence,
+            "formatter_ownership": results.formatter_ownership,
+            "format_order": results.format_order,
+            "automatic_exclusions": results.automatic_exclusions,
+        },
         "results": json_results,
     });
 
@@ -2197,6 +2260,17 @@ mod tests {
             failure_count: 0,
             selected_file_count: Some(3),
             selection_fallback: false,
+            execution_modes: BTreeMap::from([("prettier".to_string(), "binary".to_string())]),
+            selection_evidence: BTreeMap::from([(
+                "prettier".to_string(),
+                "NativeConfig:.prettierrc".to_string(),
+            )]),
+            formatter_ownership: BTreeMap::from([(
+                "prettier".to_string(),
+                BTreeSet::from(["md".to_string()]),
+            )]),
+            format_order: BTreeMap::from([("prettier".to_string(), 10)]),
+            automatic_exclusions: vec!["node_modules/**".to_string()],
         };
         let output = results_to_json(&results).unwrap();
         let value: serde_json::Value = serde_json::from_str(&output).unwrap();
@@ -2204,6 +2278,14 @@ mod tests {
         assert_eq!(value["selection"]["mode"], "files");
         assert_eq!(value["selection"]["file_count"], 3);
         assert!(value.get("files").is_none());
+        assert_eq!(value["plan"]["execution_modes"]["prettier"], "binary");
+        assert_eq!(
+            value["plan"]["selection_evidence"]["prettier"],
+            "NativeConfig:.prettierrc"
+        );
+        assert_eq!(value["plan"]["formatter_ownership"]["prettier"][0], "md");
+        assert_eq!(value["plan"]["format_order"]["prettier"], 10);
+        assert_eq!(value["plan"]["automatic_exclusions"][0], "node_modules/**");
     }
 
     #[cfg(all(feature = "format", unix))]
