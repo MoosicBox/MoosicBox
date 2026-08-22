@@ -635,6 +635,24 @@ mod tests {
     }
 
     #[test]
+    fn planning_and_runner_share_automatic_exclusion_boundaries() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::write(root.path().join("included.rs"), "fn included() {}\n").unwrap();
+        std::fs::create_dir(root.path().join("target")).unwrap();
+        std::fs::write(root.path().join("target/excluded.rs"), "fn excluded() {}\n").unwrap();
+        let registry =
+            ToolRegistry::new(crate::tools::ToolsConfig::default(), Some(root.path())).unwrap();
+        let plan = plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+        let runner = crate::tools::ToolRunner::new(&registry).with_tool_plan(&plan);
+        let rustfmt = registry.get("rustfmt").unwrap();
+        let files = runner.scoped_files_for(rustfmt).unwrap();
+
+        assert!(files.contains(&"included.rs".to_string()));
+        assert!(!files.contains(&"target/excluded.rs".to_string()));
+    }
+
+    #[test]
     fn discovery_prunes_dependency_trees() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();

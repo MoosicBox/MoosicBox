@@ -295,6 +295,12 @@ impl<'a> ToolRunner<'a> {
         )
     }
 
+    /// Returns the scoped file arguments that would be passed to a tool.
+    #[must_use]
+    pub fn scoped_files_for(&self, tool: &Tool) -> Option<Vec<String>> {
+        self.scoped_file_args(tool)
+    }
+
     fn scoped_file_args(&self, tool: &Tool) -> Option<Vec<String>> {
         if matches!(tool.kind, ToolKind::Cargo)
             && tool.name != "clippier_md"
