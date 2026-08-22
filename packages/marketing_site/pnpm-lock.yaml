@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.4
         version: 6.83.4(supports-color@7.2.0)(typescript@5.9.3)
       '@pulumi/pulumi':
-        specifier: ^3.258.0
-        version: 3.258.0(supports-color@7.2.0)(typescript@5.9.3)
+        specifier: ^3.259.0
+        version: 3.259.0(supports-color@7.2.0)(typescript@5.9.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -350,8 +350,8 @@ packages:
   '@pulumi/aws@6.83.4':
     resolution: {integrity: sha512-mk3LhRJF6BdOq7VAWtrZpv+loLdaPxvbOVTESommiYXlSX87xXA8mytQCaeIXaivtpdj+xcBOJ8vz0A0Ktmw9g==}
 
-  '@pulumi/pulumi@3.258.0':
-    resolution: {integrity: sha512-IUds2PGz92YiaOSvegK6p5JjPdu0we+IcS9iClyaXRWWjxn7Po+omRoe/NJ58A0fpZFIZUUKM8+Lg7gYd1RczA==}
+  '@pulumi/pulumi@3.259.0':
+    resolution: {integrity: sha512-DRc1bDHWTofZGkKcs/bx98LujCZJNoKRkOdeEhQZNz7wPUX/obhuzmWJezew2FUCEAy1xXHtQj1CTcANHoLn3A==}
     engines: {node: '>=22'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -1451,9 +1451,9 @@ packages:
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
-  negotiator@1.0.0:
-    resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
-    engines: {node: '>= 0.6'}
+  negotiator@1.1.0:
+    resolution: {integrity: sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==}
+    engines: {node: '>=18'}
 
   node-exports-info@1.6.2:
     resolution: {integrity: sha512-kXs9Go0cah0qHVV2v389IXQLdLCeE1xfFtjOAF+iobu0OIoG1pje8At2vMHyaPMiPMnG/LWP50twML21eMcAag==}
@@ -2523,14 +2523,14 @@ snapshots:
 
   '@pulumi/aws@6.83.4(supports-color@7.2.0)(typescript@5.9.3)':
     dependencies:
-      '@pulumi/pulumi': 3.258.0(supports-color@7.2.0)(typescript@5.9.3)
+      '@pulumi/pulumi': 3.259.0(supports-color@7.2.0)(typescript@5.9.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - supports-color
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.258.0(supports-color@7.2.0)(typescript@5.9.3)':
+  '@pulumi/pulumi@3.259.0(supports-color@7.2.0)(typescript@5.9.3)':
     dependencies:
       '@grpc/grpc-js': 1.14.4
       '@logdna/tail-file': 2.2.0
@@ -2717,7 +2717,7 @@ snapshots:
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
-      negotiator: 1.0.0
+      negotiator: 1.1.0
 
   acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:
@@ -3728,7 +3728,7 @@ snapshots:
       minipass-fetch: 5.0.2
       minipass-flush: 1.0.7
       minipass-pipeline: 1.2.4
-      negotiator: 1.0.0
+      negotiator: 1.1.0
       proc-log: 6.1.0
       ssri: 13.0.1
     transitivePeerDependencies:
@@ -3802,7 +3802,9 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  negotiator@1.0.0: {}
+  negotiator@1.1.0:
+    dependencies:
+      content-type: 2.1.0
 
   node-exports-info@1.6.2:
     dependencies:
