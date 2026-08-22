@@ -21,11 +21,11 @@ use rayon::prelude::*;
 
 use crate::ColorMode;
 use crate::tools::registry::{ToolError, ToolRegistry};
-use crate::tools::scope::ScopeMatcher;
+use crate::tools::scope::{ScopeMatcher, automatic_exclusion_patterns};
 #[cfg(feature = "tools-tui")]
 use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
-use crate::tools::{FormatSelection, default_extensions_for_tool};
+use crate::tools::{FormatSelection, ToolPlan, default_extensions_for_tool, tool_catalog_entry};
 
 /// Live tool execution events used by the TUI.
 #[cfg(feature = "tools-tui")]
@@ -159,8 +159,12 @@ pub struct ToolRunner<'a> {
     color_mode: ColorMode,
     /// Global repository scope shared by file-oriented tools.
     scope: Option<ScopeMatcher>,
+    /// Per-tool include and exclusion scopes.
+    tool_scopes: BTreeMap<String, ScopeMatcher>,
     /// Resolved formatter file selection.
     format_selection: FormatSelection,
+    /// Automatic formatter ownership by tool.
+    formatter_ownership: Option<BTreeMap<String, BTreeSet<String>>>,
     /// Whether Git-aware selection fell back to all files.
     selection_fallback: bool,
 }
@@ -174,13 +178,30 @@ impl<'a> ToolRunner<'a> {
             .scope_base
             .as_deref()
             .unwrap_or_else(|| registry.working_dir());
-        let scope = if registry.config().scope.exclude.is_empty() {
+        let scope_config = registry.config().effective_scope();
+        let mut global_excludes = scope_config.exclude.clone();
+        global_excludes.extend(automatic_exclusion_patterns(scope_root, &scope_config));
+        let scope = if global_excludes.is_empty() {
             None
         } else {
-            ScopeMatcher::new(scope_root, &registry.config().scope.exclude)
+            ScopeMatcher::new(scope_root, &global_excludes)
                 .map_err(|error| log::error!("failed to build runner scope: {error}"))
                 .ok()
         };
+        let tool_scopes = registry
+            .config()
+            .tools
+            .iter()
+            .filter(|(_, policy)| !policy.include.is_empty() || !policy.exclude.is_empty())
+            .filter_map(|(name, policy)| {
+                ScopeMatcher::with_patterns(scope_root, &policy.include, &policy.exclude)
+                    .map(|matcher| (name.clone(), matcher))
+                    .map_err(|error| {
+                        log::error!("failed to build scope for tool '{name}': {error}");
+                    })
+                    .ok()
+            })
+            .collect();
         Self {
             registry,
             working_dir: None,
@@ -188,7 +209,9 @@ impl<'a> ToolRunner<'a> {
             parallel: true,
             color_mode: ColorMode::Auto,
             scope,
+            tool_scopes,
             format_selection: FormatSelection::All,
+            formatter_ownership: None,
             selection_fallback: false,
         }
     }
@@ -204,6 +227,18 @@ impl<'a> ToolRunner<'a> {
     #[must_use]
     pub fn with_format_selection(mut self, selection: FormatSelection) -> Self {
         self.format_selection = selection;
+        self
+    }
+
+    /// Sets formatter ownership from an automatic tool plan.
+    #[must_use]
+    pub fn with_tool_plan(mut self, plan: &ToolPlan) -> Self {
+        self.formatter_ownership = Some(
+            plan.tools
+                .iter()
+                .map(|tool| (tool.name.clone(), tool.format_extensions.clone()))
+                .collect(),
+        );
         self
     }
 
@@ -267,14 +302,31 @@ impl<'a> ToolRunner<'a> {
         {
             return None;
         }
-        let mut extensions = BTreeSet::new();
+        let mut extensions = self
+            .formatter_ownership
+            .as_ref()
+            .and_then(|ownership| ownership.get(&tool.name))
+            .cloned()
+            .unwrap_or_default();
         for capability in &tool.capabilities {
+            if *capability == crate::tools::ToolCapability::Format
+                && self.formatter_ownership.is_some()
+            {
+                continue;
+            }
             extensions.extend(default_extensions_for_tool(&tool.name, *capability));
         }
         if extensions.is_empty() {
             return None;
         }
         let working_dir = self.working_dir_path();
+        let tool_scope = self.tool_scopes.get(&tool.name);
+        let is_excluded = |path: &Path| {
+            self.scope
+                .as_ref()
+                .is_some_and(|scope| scope.is_excluded(path))
+                || tool_scope.is_some_and(|scope| scope.is_excluded(path))
+        };
         let paths = match &self.format_selection {
             FormatSelection::Files(files) => files
                 .iter()
@@ -285,18 +337,23 @@ impl<'a> ToolRunner<'a> {
                             extensions.contains(&extension.to_ascii_lowercase())
                         })
                 })
-                .filter(|path| {
-                    self.scope
-                        .as_ref()
-                        .is_none_or(|scope| !scope.is_excluded(&working_dir.join(path)))
-                })
+                .filter(|path| !is_excluded(&working_dir.join(path)))
                 .map(|path| path.to_string_lossy().to_string())
                 .collect(),
             FormatSelection::All | FormatSelection::NoRepository => {
-                let scope = self.scope.as_ref()?;
-                scope
+                let default_scope;
+                let collection_scope = if let Some(tool_scope) = tool_scope {
+                    tool_scope
+                } else if let Some(scope) = self.scope.as_ref() {
+                    scope
+                } else {
+                    default_scope = ScopeMatcher::new(&working_dir, &[]).ok()?;
+                    &default_scope
+                };
+                collection_scope
                     .collect_files(std::slice::from_ref(&working_dir), &extensions)
                     .into_iter()
+                    .filter(|path| !is_excluded(path))
                     .filter_map(|path| {
                         path.strip_prefix(&working_dir)
                             .ok()
@@ -309,22 +366,12 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn replace_default_path_args(tool: &Tool, args: &mut Vec<String>, files: &[String]) {
-        if files.is_empty() {
+        if files.is_empty() || tool_catalog_entry(&tool.name).is_none() {
             return;
         }
-        match tool.name.as_str() {
-            "biome" | "dprint" => args.extend(files.iter().cloned()),
-            "clippier_md" => {
-                args.retain(|arg| arg != ".");
-                args.extend(files.iter().cloned());
-            }
-            "taplo" | "prettier" | "remark" | "mdformat" | "yamlfmt" | "ruff" | "black"
-            | "gofmt" | "shfmt" | "eslint" => {
-                args.retain(|arg| arg != ".");
-                args.extend(files.iter().cloned());
-            }
-            _ => {}
-        }
+
+        args.retain(|arg| arg != ".");
+        args.extend(files.iter().cloned());
     }
 
     fn should_use_color_auto() -> bool {
@@ -1644,7 +1691,7 @@ impl<'a> ToolRunner<'a> {
 
     #[cfg(feature = "format")]
     fn selected_rust_files(&self, tool: &Tool) -> Option<Vec<String>> {
-        if tool.name != "rustfmt" || !matches!(self.format_selection, FormatSelection::Files(_)) {
+        if tool.name != "rustfmt" {
             return None;
         }
         self.scoped_file_args(tool)
@@ -2204,6 +2251,50 @@ mod tests {
         assert_eq!(
             runner.scoped_file_args(&tool),
             Some(vec!["included.json".to_string()])
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn selected_files_apply_per_tool_include_and_exclude_policy() {
+        let dir = temp_dir("clippier-per-tool-scope");
+        std::fs::create_dir_all(dir.join("src/generated")).unwrap();
+        std::fs::write(dir.join("src/included.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("outside.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("src/generated/excluded.json"), "{}\n").unwrap();
+        let mut config = ToolsConfig {
+            scope_base: Some(dir.clone()),
+            ..Default::default()
+        };
+        config.tools.insert(
+            "dprint".to_string(),
+            crate::tools::ToolPolicy {
+                include: vec!["src/**".to_string()],
+                exclude: vec!["src/generated/**".to_string()],
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(&dir)
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([
+                PathBuf::from("src/included.json"),
+                PathBuf::from("outside.json"),
+                PathBuf::from("src/generated/excluded.json"),
+            ])));
+        let tool = Tool::new(
+            "dprint",
+            "Dprint",
+            "dprint",
+            ToolKind::Binary,
+            vec![ToolCapability::Format],
+            vec!["check".to_string()],
+            vec!["fmt".to_string()],
+        );
+
+        assert_eq!(
+            runner.scoped_file_args(&tool),
+            Some(vec!["src/included.json".to_string()])
         );
         std::fs::remove_dir_all(dir).unwrap();
     }

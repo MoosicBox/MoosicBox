@@ -419,9 +419,33 @@ pub struct ClippierConf {
     /// Runner configuration for check/format commands.
     #[cfg(feature = "_tools")]
     pub runner: Option<tools::ToolsConfig>,
-    /// Tool-specific configuration keyed by arbitrary registered tool IDs.
+    /// Tool-specific configuration keyed by registered tool IDs.
     #[cfg(feature = "_tools")]
-    pub tools: Option<toml::Value>,
+    pub tools: Option<BTreeMap<String, tools::ToolPolicy>>,
+}
+
+#[cfg(all(test, feature = "_tools"))]
+mod typed_tools_config_tests {
+    use super::*;
+
+    #[test]
+    fn typed_tools_table_preserves_unrelated_clippier_configuration() {
+        let parsed: ClippierConf = toml::from_str(
+            r#"
+                git-submodules = true
+
+                [tools.prettier]
+                mode = "enabled"
+                format-extensions = ["md"]
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(parsed.git_submodules, Some(true));
+        let tools = parsed.tools.unwrap();
+        assert_eq!(tools["prettier"].mode, tools::ToolSelectionMode::Enabled);
+        assert!(tools["prettier"].format_extensions.contains("md"));
+    }
 }
 
 /// Workspace-level configuration (root clippier.toml)
@@ -5508,6 +5532,7 @@ pub fn handle_workspace_toolchains_command(
 /// * If a required tool is not found
 /// * If tool execution fails
 #[cfg(feature = "check")]
+#[allow(clippy::too_many_lines)]
 pub fn handle_check_command(
     working_dir: Option<&Path>,
     tool_names: Option<&[String]>,
@@ -5524,7 +5549,11 @@ pub fn handle_check_command(
     let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
-        let tool_info = registry.list_tools();
+        let list_plan = tools::plan_tools(
+            &registry,
+            &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+        )?;
+        let tool_info = registry.list_tools_with_plan(&list_plan);
         return match output {
             OutputType::Json => Ok(serde_json::to_string_pretty(
                 &tool_info
@@ -5539,6 +5568,12 @@ pub fn handle_check_command(
                             "path": t.path,
                             "execution_mode": t.execution_mode,
                             "runner": t.runner,
+                            "relevant": t.relevant,
+                            "selected": t.selected,
+                            "configured": t.configured,
+                            "evidence": t.evidence,
+                            "format_extensions": t.format_extensions,
+                            "format_order": t.format_order,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5561,35 +5596,81 @@ pub fn handle_check_command(
                     } else {
                         tool.execution_mode.clone()
                     };
-                    let _ = writeln!(output, "{}: {} [{}]", tool.display_name, status, mode);
+                    let selection = if tool.selected {
+                        "SELECTED"
+                    } else if tool.relevant {
+                        "RELEVANT"
+                    } else if tool.configured {
+                        "CONFIGURED"
+                    } else {
+                        "not relevant"
+                    };
+                    let _ = writeln!(
+                        output,
+                        "{}: {} [{}] {selection}",
+                        tool.display_name, status, mode
+                    );
                 }
                 Ok(output)
             }
         };
     }
 
+    let automatic_plan = if tool_names.is_none() {
+        Some(tools::plan_tools(
+            &registry,
+            &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+        )?)
+    } else {
+        None
+    };
+    if output == OutputType::Raw {
+        for name in automatic_plan
+            .iter()
+            .flat_map(|plan| plan.unavailable.iter())
+        {
+            eprintln!("info: relevant tool '{name}' is not installed; skipping");
+        }
+    }
+    let names = tool_names.map_or_else(
+        || {
+            tools::merge_tool_names(
+                &automatic_plan
+                    .as_ref()
+                    .map_or_else(Vec::new, tools::ToolPlan::names),
+                &required_tools,
+            )
+        },
+        <[String]>::to_vec,
+    );
+
     let runner = working_dir.map_or_else(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
+    let runner = if let Some(plan) = &automatic_plan {
+        runner
+            .with_tool_plan(plan)
+            .with_parallel(!plan.has_ordered_formatters())
+    } else {
+        runner
+    };
     let runner = runner.with_color_mode(match (output, color) {
         (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
         (_, value) => value,
     });
-
-    let names = if let Some(names) = tool_names {
-        names.to_vec()
-    } else {
-        let auto_detected = tools::auto_detect_check_tools(working_dir)?;
-        tools::merge_tool_names(&auto_detected, &required_tools)
-    };
     if output == OutputType::Raw {
-        let warnings = tools::overlap_warnings_for_selected_tools(
-            &registry,
-            &names,
-            &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
-            &overlap_warning_suppress,
-            working_dir,
+        let warnings = automatic_plan.as_ref().map_or_else(
+            || {
+                tools::overlap_warnings_for_selected_tools(
+                    &registry,
+                    &names,
+                    &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+                    &overlap_warning_suppress,
+                    working_dir,
+                )
+            },
+            |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
         );
         for warning in warnings {
             eprintln!("{warning}");
@@ -5642,8 +5723,9 @@ pub fn handle_fmt_command(
     let registry = ToolRegistry::new(config, working_dir)?;
 
     if list_tools {
+        let list_plan = tools::plan_tools(&registry, &[tools::ToolCapability::Format])?;
         let tool_info: Vec<_> = registry
-            .list_tools()
+            .list_tools_with_plan(&list_plan)
             .into_iter()
             .filter(|t| t.capabilities.contains(&tools::ToolCapability::Format))
             .collect();
@@ -5662,6 +5744,12 @@ pub fn handle_fmt_command(
                             "path": t.path,
                             "execution_mode": t.execution_mode,
                             "runner": t.runner,
+                            "relevant": t.relevant,
+                            "selected": t.selected,
+                            "configured": t.configured,
+                            "evidence": t.evidence,
+                            "format_extensions": t.format_extensions,
+                            "format_order": t.format_order,
                         })
                     })
                     .collect::<Vec<_>>(),
@@ -5684,7 +5772,20 @@ pub fn handle_fmt_command(
                     } else {
                         tool.execution_mode.clone()
                     };
-                    let _ = writeln!(output, "{}: {} [{}]", tool.display_name, status, mode);
+                    let selection = if tool.selected {
+                        "SELECTED"
+                    } else if tool.relevant {
+                        "RELEVANT"
+                    } else if tool.configured {
+                        "CONFIGURED"
+                    } else {
+                        "not relevant"
+                    };
+                    let _ = writeln!(
+                        output,
+                        "{}: {} [{}] {selection}",
+                        tool.display_name, status, mode
+                    );
                 }
                 Ok(output)
             }
@@ -5706,10 +5807,45 @@ pub fn handle_fmt_command(
         selection => (selection, false),
     };
 
+    let automatic_plan = if tool_names.is_none() {
+        Some(tools::plan_tools(
+            &registry,
+            &[tools::ToolCapability::Format],
+        )?)
+    } else {
+        None
+    };
+    if output == OutputType::Raw {
+        for name in automatic_plan
+            .iter()
+            .flat_map(|plan| plan.unavailable.iter())
+        {
+            eprintln!("info: relevant tool '{name}' is not installed; skipping");
+        }
+    }
+    let names = tool_names.map_or_else(
+        || {
+            tools::merge_tool_names(
+                &automatic_plan
+                    .as_ref()
+                    .map_or_else(Vec::new, tools::ToolPlan::names),
+                &required_tools,
+            )
+        },
+        <[String]>::to_vec,
+    );
+
     let runner = working_dir.map_or_else(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
+    let runner = if let Some(plan) = &automatic_plan {
+        runner
+            .with_tool_plan(plan)
+            .with_parallel(!plan.has_ordered_formatters())
+    } else {
+        runner
+    };
     let runner = runner
         .with_format_selection(selection)
         .with_selection_fallback(selection_fallback)
@@ -5717,20 +5853,18 @@ pub fn handle_fmt_command(
             (OutputType::Json, ColorMode::Auto) => ColorMode::Never,
             (_, value) => value,
         });
-
-    let names = if let Some(names) = tool_names {
-        names.to_vec()
-    } else {
-        let auto_detected = tools::auto_detect_fmt_tools(working_dir)?;
-        tools::merge_tool_names(&auto_detected, &required_tools)
-    };
     if output == OutputType::Raw {
-        let warnings = tools::overlap_warnings_for_selected_tools(
-            &registry,
-            &names,
-            &[tools::ToolCapability::Format],
-            &overlap_warning_suppress,
-            working_dir,
+        let warnings = automatic_plan.as_ref().map_or_else(
+            || {
+                tools::overlap_warnings_for_selected_tools(
+                    &registry,
+                    &names,
+                    &[tools::ToolCapability::Format],
+                    &overlap_warning_suppress,
+                    working_dir,
+                )
+            },
+            |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
         );
         for warning in warnings {
             eprintln!("{warning}");

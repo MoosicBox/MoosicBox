@@ -31,7 +31,8 @@ pub struct FormatConfig {
 }
 
 /// Capabilities that a tool can have
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum ToolCapability {
     /// Tool can format files
     Format,
@@ -176,6 +177,52 @@ pub enum FormatSelection {
     NoRepository,
 }
 
+/// Automatic selection policy for one registered tool.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolSelectionMode {
+    /// Select the tool from repository evidence.
+    #[default]
+    Auto,
+    /// Select the tool whenever it is available.
+    Enabled,
+    /// Never select the tool automatically.
+    Disabled,
+}
+
+/// Per-tool selection, coverage, and execution policy.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ToolPolicy {
+    /// Automatic selection policy.
+    #[serde(default)]
+    pub mode: ToolSelectionMode,
+    /// Capabilities enabled for this tool. Empty means all catalog capabilities.
+    #[serde(default)]
+    pub capabilities: BTreeSet<ToolCapability>,
+    /// Additional file globs included for this tool.
+    #[serde(default)]
+    pub include: Vec<String>,
+    /// File globs excluded for this tool.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+    /// Explicit executable path for this tool.
+    pub executable: Option<String>,
+    /// Explicit formatter ownership extensions.
+    #[serde(default)]
+    pub format_extensions: BTreeSet<String>,
+    /// Formatter pipeline order. Tools with the same value may overlap and warn.
+    pub format_order: Option<i32>,
+}
+
+impl ToolPolicy {
+    /// Returns whether this policy enables a capability.
+    #[must_use]
+    pub fn enables(&self, capability: ToolCapability) -> bool {
+        self.capabilities.is_empty() || self.capabilities.contains(&capability)
+    }
+}
+
 /// Configuration for tool detection and execution
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -194,7 +241,7 @@ pub struct ToolsConfig {
     pub executables: std::collections::BTreeMap<String, String>,
 
     /// Allow executing missing tools through package manager runners
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub runner_fallback: bool,
 
     /// Make biome read `.editorconfig` when formatting/linting
@@ -210,12 +257,16 @@ pub struct ToolsConfig {
     pub overlap_warning_suppress: Vec<OverlapWarningSuppressRule>,
 
     /// Allow Nix-based ephemeral tool fallback when running on Nix systems
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub nix_fallback: bool,
 
     /// Optional per-tool Nix package overrides (e.g. `nixpkgs#yamlfmt`)
     #[serde(default)]
     pub nix_packages: std::collections::BTreeMap<String, String>,
+
+    /// Typed policy keyed by registered tool ID.
+    #[serde(default)]
+    pub tools: std::collections::BTreeMap<String, ToolPolicy>,
 
     /// Repository content boundaries shared by file-oriented tools.
     #[serde(default)]
@@ -240,12 +291,13 @@ impl Default for ToolsConfig {
             required: Vec::new(),
             skip: Vec::new(),
             executables: std::collections::BTreeMap::new(),
-            runner_fallback: true,
+            runner_fallback: false,
             biome_use_editorconfig: true,
             biome_use_vcs_ignore: true,
             overlap_warning_suppress: Vec::new(),
-            nix_fallback: true,
+            nix_fallback: false,
             nix_packages: std::collections::BTreeMap::new(),
+            tools: std::collections::BTreeMap::new(),
             scope: super::ScopeConfig::default(),
             format: FormatConfig::default(),
             scope_base: None,
@@ -281,10 +333,55 @@ impl ToolsConfig {
         self
     }
 
+    /// Whether an automatic exclusion profile should be disabled when its
+    /// excluded path is explicitly included by a per-tool policy.
+    #[must_use]
+    pub fn explicitly_includes_exclusion_profile(&self, profile_id: &str) -> bool {
+        self.tools.values().any(|policy| {
+            policy.include.iter().any(|pattern| {
+                let normalized = pattern.trim_start_matches('/');
+                match profile_id {
+                    "rust" => normalized == "target/**" || normalized.ends_with("/target/**"),
+                    "node" => {
+                        normalized == "node_modules/**" || normalized.ends_with("/node_modules/**")
+                    }
+                    "python" => {
+                        normalized == ".venv/**"
+                            || normalized.ends_with("/.venv/**")
+                            || normalized == "venv/**"
+                            || normalized.ends_with("/venv/**")
+                    }
+                    "go" => normalized == "vendor/**" || normalized.ends_with("/vendor/**"),
+                    "terraform" => {
+                        normalized == ".terraform/**" || normalized.ends_with("/.terraform/**")
+                    }
+                    _ => false,
+                }
+            })
+        })
+    }
+
+    /// Returns the effective global scope after applying explicit automatic
+    /// profile re-inclusion policy.
+    #[must_use]
+    pub fn effective_scope(&self) -> super::ScopeConfig {
+        let mut scope = self.scope.clone();
+        for profile in ["rust", "node", "python", "go", "terraform"] {
+            if self.explicitly_includes_exclusion_profile(profile) {
+                scope.disable_profiles.insert(profile.to_string());
+            }
+        }
+        scope
+    }
+
     /// Returns true if a tool is in the skip list
     #[must_use]
     pub fn should_skip(&self, tool_name: &str) -> bool {
         self.skip.iter().any(|s| s == tool_name)
+            || self
+                .tools
+                .get(tool_name)
+                .is_some_and(|policy| policy.mode == ToolSelectionMode::Disabled)
     }
 
     /// Returns true if a tool is required
@@ -296,6 +393,40 @@ impl ToolsConfig {
     /// Gets the explicit path for a tool, if any
     #[must_use]
     pub fn get_path(&self, tool_name: &str) -> Option<&str> {
-        self.executables.get(tool_name).map(String::as_str)
+        self.tools
+            .get(tool_name)
+            .and_then(|policy| policy.executable.as_deref())
+            .or_else(|| self.executables.get(tool_name).map(String::as_str))
+    }
+
+    /// Gets typed policy for one tool.
+    #[must_use]
+    pub fn tool_policy(&self, tool_name: &str) -> Option<&ToolPolicy> {
+        self.tools.get(tool_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explicit_include_disables_only_its_automatic_profile() {
+        let mut config = ToolsConfig::default();
+        config.tools.insert(
+            "rustfmt".to_string(),
+            ToolPolicy {
+                include: vec!["target/generated/**".to_string()],
+                ..Default::default()
+            },
+        );
+        assert!(!config.explicitly_includes_exclusion_profile("rust"));
+
+        config.tools.get_mut("rustfmt").unwrap().include = vec!["target/**".to_string()];
+        assert!(config.explicitly_includes_exclusion_profile("rust"));
+        assert!(!config.explicitly_includes_exclusion_profile("node"));
+        let effective = config.effective_scope();
+        assert!(effective.disable_profiles.contains("rust"));
+        assert!(!effective.disable_profiles.contains("node"));
     }
 }

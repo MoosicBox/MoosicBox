@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::tools::catalog::TOOL_CATALOG;
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
 #[derive(Debug, Clone)]
@@ -679,216 +680,11 @@ impl ToolRegistry {
         self.tools.insert(tool.name.clone(), tool);
     }
 
-    /// Registers all built-in tool definitions
-    #[allow(clippy::too_many_lines)]
+    /// Registers all built-in tool definitions.
     fn register_builtin_tools(&mut self) {
-        // Rust tools
-        self.register(Tool::new(
-            "rustfmt",
-            "Rust Formatter",
-            "cargo",
-            ToolKind::Cargo,
-            vec![ToolCapability::Format],
-            vec!["fmt".to_string(), "--check".to_string()],
-            vec!["fmt".to_string()],
-        ));
-
-        self.register(Tool::new(
-            "clippy",
-            "Rust Linter",
-            "cargo",
-            ToolKind::Cargo,
-            vec![ToolCapability::Lint],
-            vec![
-                "clippy".to_string(),
-                "--all-targets".to_string(),
-                "--".to_string(),
-                "-D".to_string(),
-                "warnings".to_string(),
-            ],
-            vec![], // Clippy doesn't have a "fix" mode in the same way
-        ));
-
-        // TOML
-        self.register(Tool::new(
-            "taplo",
-            "TOML Formatter",
-            "taplo",
-            ToolKind::Binary,
-            vec![ToolCapability::Format, ToolCapability::Lint],
-            vec!["fmt".to_string(), "--check".to_string()],
-            vec!["fmt".to_string()],
-        ));
-
-        // JavaScript/TypeScript - Prettier
-        self.register(Tool::new(
-            "prettier",
-            "Prettier",
-            "prettier",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec![
-                "--check".to_string(),
-                "--ignore-unknown".to_string(),
-                ".".to_string(),
-            ],
-            vec![
-                "--write".to_string(),
-                "--ignore-unknown".to_string(),
-                ".".to_string(),
-            ],
-        ));
-
-        // JavaScript/TypeScript - Biome
-        self.register(Tool::new(
-            "biome",
-            "Biome",
-            "biome",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["format".to_string()],
-            vec!["format".to_string(), "--write".to_string()],
-        ));
-
-        // JavaScript/TypeScript - ESLint
-        self.register(Tool::new(
-            "eslint",
-            "ESLint",
-            "eslint",
-            ToolKind::Binary,
-            vec![ToolCapability::Lint],
-            vec![".".to_string()],
-            vec!["--fix".to_string(), ".".to_string()],
-        ));
-
-        // Dprint
-        self.register(Tool::new(
-            "dprint",
-            "Dprint",
-            "dprint",
-            ToolKind::Binary,
-            vec![ToolCapability::Format, ToolCapability::Lint],
-            vec!["check".to_string()],
-            vec!["fmt".to_string()],
-        ));
-
-        // Markdown/MDX - clippier_md
-        self.register(Tool::new(
-            "clippier_md",
-            "Clippier MD",
-            "cargo",
-            ToolKind::Cargo,
-            vec![ToolCapability::Format],
-            vec![
-                "run".to_string(),
-                "-p".to_string(),
-                "clippier_md".to_string(),
-                "--".to_string(),
-                "fmt".to_string(),
-                "--check".to_string(),
-                ".".to_string(),
-            ],
-            vec![
-                "run".to_string(),
-                "-p".to_string(),
-                "clippier_md".to_string(),
-                "--".to_string(),
-                "fmt".to_string(),
-                ".".to_string(),
-            ],
-        ));
-
-        // Markdown/MDX - remark
-        self.register(Tool::new(
-            "remark",
-            "remark",
-            "remark",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec![".".to_string(), "--ext".to_string(), "md,mdx".to_string()],
-            vec![
-                ".".to_string(),
-                "--output".to_string(),
-                "--ext".to_string(),
-                "md,mdx".to_string(),
-            ],
-        ));
-
-        // Markdown - mdformat
-        self.register(Tool::new(
-            "mdformat",
-            "mdformat",
-            "mdformat",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["--check".to_string(), ".".to_string()],
-            vec![".".to_string()],
-        ));
-
-        // YAML - yamlfmt
-        self.register(Tool::new(
-            "yamlfmt",
-            "yamlfmt",
-            "yamlfmt",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["-lint".to_string(), ".".to_string()],
-            vec![".".to_string()],
-        ));
-
-        // Python - Ruff
-        self.register(Tool::new(
-            "ruff",
-            "Ruff",
-            "ruff",
-            ToolKind::Binary,
-            vec![ToolCapability::Format, ToolCapability::Lint],
-            vec!["check".to_string(), ".".to_string()],
-            vec!["format".to_string(), ".".to_string()],
-        ));
-
-        // Python - Black
-        self.register(Tool::new(
-            "black",
-            "Black",
-            "black",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["--check".to_string(), ".".to_string()],
-            vec![".".to_string()],
-        ));
-
-        // Go
-        self.register(Tool::new(
-            "gofmt",
-            "Go Formatter",
-            "gofmt",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["-l".to_string(), ".".to_string()],
-            vec!["-w".to_string(), ".".to_string()],
-        ));
-
-        // Shell
-        self.register(Tool::new(
-            "shfmt",
-            "Shell Formatter",
-            "shfmt",
-            ToolKind::Binary,
-            vec![ToolCapability::Format],
-            vec!["-d".to_string(), ".".to_string()],
-            vec!["-w".to_string(), ".".to_string()],
-        ));
-
-        self.register(Tool::new(
-            "shellcheck",
-            "ShellCheck",
-            "shellcheck",
-            ToolKind::Binary,
-            vec![ToolCapability::Lint],
-            vec![], // ShellCheck needs specific files, handled differently
-            vec![],
-        ));
+        for entry in TOOL_CATALOG {
+            self.register(entry.tool());
+        }
     }
 
     /// Detects which tools are available on the system
@@ -1021,6 +817,36 @@ impl ToolRegistry {
         self.available.len()
     }
 
+    /// Lists tools enriched with one automatic selection plan.
+    #[must_use]
+    pub fn list_tools_with_plan(&self, plan: &crate::tools::ToolPlan) -> Vec<ToolInfo> {
+        let selected = plan
+            .tools
+            .iter()
+            .map(|tool| (tool.name.as_str(), tool))
+            .collect::<BTreeMap<_, _>>();
+        let unavailable = plan.unavailable.iter().collect::<BTreeSet<_>>();
+        self.list_tools()
+            .into_iter()
+            .map(|mut info| {
+                if let Some(planned) = selected.get(info.name.as_str()) {
+                    info.relevant = true;
+                    info.selected = true;
+                    info.evidence = Some(format!(
+                        "{:?}:{}",
+                        planned.evidence.kind,
+                        planned.evidence.path.display()
+                    ));
+                    info.format_extensions = planned.format_extensions.iter().cloned().collect();
+                    info.format_order = planned.format_order;
+                } else if unavailable.contains(&info.name) {
+                    info.relevant = true;
+                }
+                info
+            })
+            .collect()
+    }
+
     /// Lists all known tools with their availability status
     #[must_use]
     pub fn list_tools(&self) -> Vec<ToolInfo> {
@@ -1042,6 +868,12 @@ impl ToolRegistry {
                         .and_then(|t| t.detected_path.clone()),
                     execution_mode,
                     runner,
+                    relevant: false,
+                    selected: false,
+                    configured: self.config.tools.contains_key(&tool.name),
+                    evidence: None,
+                    format_extensions: Vec::new(),
+                    format_order: None,
                 }
             })
             .collect()
@@ -1050,6 +882,7 @@ impl ToolRegistry {
 
 /// Information about a tool for display purposes
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ToolInfo {
     /// Tool identifier
     pub name: String,
@@ -1069,6 +902,18 @@ pub struct ToolInfo {
     pub execution_mode: String,
     /// Runner command when execution mode is `runner` (e.g. `bunx`, `uvx`, `nix`)
     pub runner: Option<String>,
+    /// Whether repository evidence makes the tool relevant.
+    pub relevant: bool,
+    /// Whether the automatic plan selected the tool.
+    pub selected: bool,
+    /// Whether typed repository configuration exists for the tool.
+    pub configured: bool,
+    /// Human-readable strongest selection evidence.
+    pub evidence: Option<String>,
+    /// Formatter extensions owned by this tool.
+    pub format_extensions: Vec<String>,
+    /// Configured formatter pipeline order.
+    pub format_order: Option<i32>,
 }
 
 fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
@@ -1227,6 +1072,62 @@ mod tests {
     }
 
     #[test]
+    fn default_resolution_never_uses_download_capable_runners() {
+        let dir = temp_dir("clippier-installed-only-default");
+        let config = ToolsConfig::default();
+        assert!(!config.runner_fallback);
+        assert!(!config.nix_fallback);
+
+        for entry in TOOL_CATALOG {
+            let resolution = ToolRegistry::resolve_preferred_tool(
+                entry.name,
+                &entry.tool(),
+                &dir,
+                config.runner_fallback,
+                &config,
+            );
+            assert!(
+                !matches!(resolution, Some(ToolResolution::Runner { .. })),
+                "{} unexpectedly resolved through a runner",
+                entry.name
+            );
+        }
+
+        std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn automatic_registry_paths_never_resolve_through_acquisition_runners() {
+        let root = tempfile::tempdir().unwrap();
+        for (manifest, tool_name) in [
+            (".prettierrc", "prettier"),
+            (".mdformat.toml", "mdformat"),
+            (".yamlfmt", "yamlfmt"),
+        ] {
+            std::fs::write(root.path().join(manifest), "").unwrap();
+            let mut config = ToolsConfig::default();
+            config.tools.insert(
+                tool_name.to_string(),
+                crate::tools::ToolPolicy {
+                    executable: Some(
+                        root.path()
+                            .join(format!("missing-{tool_name}"))
+                            .to_string_lossy()
+                            .to_string(),
+                    ),
+                    ..Default::default()
+                },
+            );
+            let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+            assert!(
+                registry
+                    .get(tool_name)
+                    .is_none_or(|tool| !matches!(tool.kind, ToolKind::Runner { .. }))
+            );
+        }
+    }
+
+    #[test]
     fn resolve_preferred_prettier_returns_none_when_runner_fallback_disabled() {
         let dir = temp_dir("clippier-prettier-runner-disabled");
 
@@ -1352,6 +1253,48 @@ mod tests {
             ToolRegistry::nix_package_for_tool(&config, "yamlfmt"),
             Some("flake#custom-yamlfmt".to_string())
         );
+    }
+
+    #[test]
+    fn list_tools_with_plan_reports_configured_and_selected_states() {
+        let mut tools = BTreeMap::new();
+        let available = BTreeMap::new();
+        let tool = TOOL_CATALOG
+            .iter()
+            .find(|entry| entry.name == "prettier")
+            .unwrap()
+            .tool();
+        tools.insert(tool.name.clone(), tool);
+        let mut config = ToolsConfig::default();
+        config
+            .tools
+            .insert("prettier".to_string(), crate::tools::ToolPolicy::default());
+        let registry = ToolRegistry {
+            tools,
+            available,
+            config,
+            working_dir: std::env::temp_dir(),
+        };
+        let plan = crate::tools::ToolPlan {
+            tools: vec![crate::tools::PlannedTool {
+                name: "prettier".to_string(),
+                evidence: crate::tools::SelectionEvidence {
+                    kind: crate::tools::SelectionEvidenceKind::NativeConfig,
+                    path: PathBuf::from(".prettierrc"),
+                },
+                format_extensions: BTreeSet::from(["md".to_string()]),
+                format_order: Some(10),
+            }],
+            unavailable: Vec::new(),
+        };
+
+        let info = registry.list_tools_with_plan(&plan);
+        assert!(info[0].configured);
+        assert!(info[0].relevant);
+        assert!(info[0].selected);
+        assert_eq!(info[0].format_extensions, vec!["md"]);
+        assert_eq!(info[0].format_order, Some(10));
+        assert!(info[0].evidence.as_deref().unwrap().contains(".prettierrc"));
     }
 
     #[test]

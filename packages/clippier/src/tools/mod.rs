@@ -31,6 +31,8 @@
 //! let results = registry.run_linters(&["src/"])?;
 //! ```
 
+mod catalog;
+mod discovery;
 #[cfg(feature = "format")]
 mod format_selection;
 mod registry;
@@ -42,14 +44,24 @@ mod types;
 
 use serde::Deserialize;
 
+use catalog::tool_catalog_entry as catalog_entry;
+pub use catalog::{
+    COMPATIBLE_OVERLAPS, CompatibleOverlap, TOOL_CATALOG, ToolCatalogEntry, ToolSignals,
+    compatible_overlap_extensions, tool_catalog_entry,
+};
+pub use discovery::{
+    PlannedTool, RepositoryDiscovery, SelectionEvidence, SelectionEvidenceKind, ToolPlan,
+    plan_tools,
+};
 #[cfg(feature = "format")]
 pub use format_selection::resolve_format_selection;
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
-pub use scope::ScopeConfig;
+pub use scope::{ScopeConfig, automatic_exclusion_patterns};
 pub use types::{
     FormatConfig, FormatScope, FormatSelection, OverlapWarningCapability,
-    OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind, ToolsConfig,
+    OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind, ToolPolicy, ToolSelectionMode,
+    ToolsConfig,
 };
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -95,6 +107,12 @@ const KNOWN_TOOL_NAMES: &[&str] = &[
     "gofmt",
     "shfmt",
     "shellcheck",
+    "clang-format",
+    "clang-tidy",
+    "stylua",
+    "luacheck",
+    "terraform",
+    "tofu",
 ];
 
 fn parse_tool_path_overrides(
@@ -161,14 +179,10 @@ fn normalized_tool_pair(a: &str, b: &str) -> (String, String) {
     (pair[0].clone(), pair[1].clone())
 }
 
-fn should_skip_overlap_scan_dir(name: &str) -> bool {
-    matches!(
-        name,
-        ".git" | "target" | "node_modules" | "dist" | "build" | ".next" | ".direnv"
-    )
-}
-
-fn collect_workspace_files(base_dir: &std::path::Path) -> Vec<WorkspaceFile> {
+fn collect_workspace_files(
+    base_dir: &std::path::Path,
+    scope: Option<&scope::ScopeMatcher>,
+) -> Vec<WorkspaceFile> {
     let mut files = Vec::new();
     let mut stack = vec![base_dir.to_path_buf()];
 
@@ -184,16 +198,14 @@ fn collect_workspace_files(base_dir: &std::path::Path) -> Vec<WorkspaceFile> {
             let path = entry.path();
 
             if file_type.is_dir() {
-                if let Some(name) = entry.file_name().to_str()
-                    && should_skip_overlap_scan_dir(name)
-                {
+                if scope.is_some_and(|matcher| matcher.is_excluded(&path)) {
                     continue;
                 }
                 stack.push(path);
                 continue;
             }
 
-            if !file_type.is_file() {
+            if !file_type.is_file() || scope.is_some_and(|matcher| matcher.is_excluded(&path)) {
                 continue;
             }
 
@@ -385,8 +397,10 @@ fn dynamic_extensions_for_tools(
     base_dir: &std::path::Path,
     tools: &[&Tool],
     capabilities: &[ToolCapability],
+    global_scope: Option<&scope::ScopeMatcher>,
+    tool_scopes: &std::collections::BTreeMap<String, scope::ScopeMatcher>,
 ) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
-    let workspace_files = collect_workspace_files(base_dir);
+    let workspace_files = collect_workspace_files(base_dir, global_scope);
     let prettier_ignore_rules = parse_prettier_ignore_rules(base_dir);
     let biome_includes = parse_biome_include_rules(base_dir).unwrap_or_default();
 
@@ -406,7 +420,11 @@ fn dynamic_extensions_for_tools(
             }
 
             for file in &workspace_files {
-                if !default_extensions.contains(&file.extension) {
+                if !default_extensions.contains(&file.extension)
+                    || tool_scopes
+                        .get(&normalized_name)
+                        .is_some_and(|scope| scope.is_excluded(&base_dir.join(&file.relative_path)))
+                {
                     continue;
                 }
 
@@ -603,44 +621,9 @@ pub(crate) fn default_extensions_for_tool(
     tool_name: &str,
     capability: ToolCapability,
 ) -> std::collections::BTreeSet<String> {
-    let normalized = normalize_tool_name(tool_name);
-    let entries: &[&str] = match capability {
-        ToolCapability::Format => match normalized.as_str() {
-            "rustfmt" => &["rs"],
-            "taplo" => &["toml"],
-            "prettier" => &[
-                "js", "jsx", "ts", "tsx", "json", "md", "mdx", "yaml", "yml", "html", "css",
-                "scss", "less",
-            ],
-            "biome" => &[
-                "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
-            ],
-            "dprint" => &[
-                "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml",
-            ],
-            "clippier_md" | "remark" => &["md", "mdx"],
-            "mdformat" => &["md"],
-            "yamlfmt" => &["yaml", "yml"],
-            "ruff" | "black" => &["py", "pyi", "ipynb"],
-            "gofmt" => &["go"],
-            "shfmt" => &["sh", "bash"],
-            _ => &[],
-        },
-        ToolCapability::Lint => match normalized.as_str() {
-            "clippy" => &["rs"],
-            "taplo" => &["toml"],
-            "biome" => &[
-                "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html",
-            ],
-            "eslint" => &["js", "jsx", "ts", "tsx"],
-            "dprint" => &["ts", "tsx", "js", "jsx", "json", "md", "toml"],
-            "ruff" => &["py", "pyi", "ipynb"],
-            "shellcheck" => &["sh", "bash"],
-            _ => &[],
-        },
-    };
-
-    entries.iter().map(|value| (*value).to_string()).collect()
+    catalog_entry(tool_name).map_or_else(std::collections::BTreeSet::new, |entry| {
+        entry.extensions(capability)
+    })
 }
 
 fn apply_overlap_suppressions(
@@ -725,6 +708,17 @@ fn overlap_warnings_for_tools(
                     continue;
                 }
 
+                let compatible =
+                    compatible_overlap_extensions(&left.name, &right.name, *capability);
+                if compatible.is_empty() {
+                    // No cataloged compatibility for this pair.
+                } else {
+                    overlap_extensions.retain(|extension| !compatible.contains(extension));
+                }
+                if overlap_extensions.is_empty() {
+                    continue;
+                }
+
                 apply_overlap_suppressions(
                     &mut overlap_extensions,
                     *capability,
@@ -757,6 +751,57 @@ fn overlap_warnings_for_tools(
     warnings
 }
 
+/// Computes formatter overlap warnings from resolved ownership and pipeline data.
+#[must_use]
+pub fn overlap_warnings_for_plan(
+    registry: &ToolRegistry,
+    plan: &ToolPlan,
+    suppressions: &[OverlapWarningSuppressRule],
+) -> Vec<String> {
+    let selected = plan
+        .tools
+        .iter()
+        .filter_map(|planned| registry.get(&planned.name).map(|tool| (tool, planned)))
+        .collect::<Vec<_>>();
+    let mut warnings = Vec::new();
+    for (index, (left_tool, left)) in selected.iter().enumerate() {
+        for (right_tool, right) in selected.iter().skip(index + 1) {
+            let mut overlap_extensions = left
+                .format_extensions
+                .intersection(&right.format_extensions)
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>();
+            if overlap_extensions.is_empty() {
+                continue;
+            }
+            let compatible =
+                compatible_overlap_extensions(&left.name, &right.name, ToolCapability::Format);
+            overlap_extensions.retain(|extension| !compatible.contains(extension));
+            apply_overlap_suppressions(
+                &mut overlap_extensions,
+                ToolCapability::Format,
+                &left.name,
+                &right.name,
+                suppressions,
+            );
+            if overlap_extensions.is_empty() {
+                continue;
+            }
+            warnings.push(format!(
+                "WARNING: configured format pipeline overlap between '{}' and '{}' on extensions: {}",
+                left_tool.name,
+                right_tool.name,
+                overlap_extensions.into_iter().collect::<Vec<_>>().join(", ")
+            ));
+            warnings.push(format!(
+                "HINT: suppress this intentional overlap via [[runner.overlap-warning-suppress]] with capability='format', tools=['{}','{}'], and extensions=[...].",
+                left_tool.name, right_tool.name
+            ));
+        }
+    }
+    warnings
+}
+
 /// Computes overlap warnings for selected and available tools.
 #[must_use]
 pub fn overlap_warnings_for_selected_tools(
@@ -783,9 +828,69 @@ pub fn overlap_warnings_for_selected_tools(
         || std::env::current_dir().unwrap_or_else(|_| std::path::Path::new(".").to_path_buf()),
         std::path::Path::to_path_buf,
     );
-    let dynamic_extensions = dynamic_extensions_for_tools(&base_dir, &selected, capabilities);
+    let effective_scope = registry.config().effective_scope();
+    let mut excludes = effective_scope.exclude.clone();
+    excludes.extend(automatic_exclusion_patterns(&base_dir, &effective_scope));
+    let overlap_scope = scope::ScopeMatcher::new(&base_dir, &excludes).ok();
+    let tool_scopes = registry
+        .config()
+        .tools
+        .iter()
+        .filter(|(_, policy)| !policy.include.is_empty() || !policy.exclude.is_empty())
+        .filter_map(|(name, policy)| {
+            scope::ScopeMatcher::with_patterns(&base_dir, &policy.include, &policy.exclude)
+                .ok()
+                .map(|matcher| (normalize_tool_name(name), matcher))
+        })
+        .collect();
+    let dynamic_extensions = dynamic_extensions_for_tools(
+        &base_dir,
+        &selected,
+        capabilities,
+        overlap_scope.as_ref(),
+        &tool_scopes,
+    );
 
     overlap_warnings_for_tools(&selected, capabilities, suppressions, &dynamic_extensions)
+}
+
+fn validate_tool_policies(
+    tools: &std::collections::BTreeMap<String, ToolPolicy>,
+) -> Result<(), BoxError> {
+    for (name, policy) in tools {
+        let Some(entry) = tool_catalog_entry(name) else {
+            return Err(format!(
+                "Unknown tool '{name}' in [tools]. Known tools: {}",
+                TOOL_CATALOG
+                    .iter()
+                    .map(|entry| entry.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+            .into());
+        };
+        for capability in &policy.capabilities {
+            if !entry.capabilities.contains(capability) {
+                return Err(
+                    format!("Tool '{name}' does not support capability '{capability:?}'").into(),
+                );
+            }
+        }
+        if (policy.format_order.is_some() || !policy.format_extensions.is_empty())
+            && !entry.capabilities.contains(&ToolCapability::Format)
+        {
+            return Err(format!(
+                "Tool '{name}' cannot configure formatter ownership because it does not format"
+            )
+            .into());
+        }
+        for pattern in policy.include.iter().chain(&policy.exclude) {
+            globset::Glob::new(pattern).map_err(|error| {
+                format!("Invalid scope pattern '{pattern}' for tool '{name}': {error}")
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// Loads tool defaults from `clippier.toml` in the working directory.
@@ -808,11 +913,11 @@ pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsC
 
     let source = std::fs::read_to_string(config_path)?;
     let conf: crate::ClippierConf = toml::from_str(&source)?;
-    let has_runner = conf.runner.is_some();
-    if conf.tools.is_some() && !has_runner {
-        log::debug!("[tools] contains tool-specific settings; runner policy defaults apply");
-    }
     let mut config = conf.runner.unwrap_or_default();
+    if let Some(tools) = conf.tools {
+        validate_tool_policies(&tools)?;
+        config.tools = tools;
+    }
     config.scope_base = Some(base_dir);
     Ok(config)
 }
@@ -1150,15 +1255,16 @@ mod tests {
     }
 
     #[test]
-    fn load_tools_config_reads_runner_scope_and_keeps_tools_namespace_independent() {
+    fn load_tools_config_reads_runner_scope_and_typed_tool_policy() {
         let dir = temp_dir("clippier-runner-scope-config");
         std::fs::write(
             dir.join("clippier.toml"),
             concat!(
                 "[runner.scope]\n",
                 "exclude = [\"/vendor/**\"]\n",
-                "[tools.paths]\n",
-                "custom = true\n",
+                "[tools.prettier]\n",
+                "mode = \"enabled\"\n",
+                "exclude = [\"generated/**\"]\n",
             ),
         )
         .expect("failed to write clippier.toml");
@@ -1167,8 +1273,60 @@ mod tests {
 
         assert_eq!(loaded.scope.exclude, vec!["/vendor/**"]);
         assert_eq!(loaded.scope_base.as_deref(), Some(dir.as_path()));
-        assert!(loaded.executables.is_empty());
+        assert_eq!(loaded.tools["prettier"].mode, ToolSelectionMode::Enabled);
+        assert_eq!(loaded.tools["prettier"].exclude, vec!["generated/**"]);
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn load_tools_config_preserves_legacy_runner_settings_with_typed_tools() {
+        let dir = temp_dir("clippier-tools-legacy-migration");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            concat!(
+                "[runner]\n",
+                "required = [\"rustfmt\"]\n",
+                "skip = [\"gofmt\"]\n",
+                "runner-fallback = true\n",
+                "nix-fallback = true\n",
+                "biome-use-editorconfig = false\n",
+                "biome-use-vcs-ignore = false\n",
+                "[runner.executables]\n",
+                "prettier = \"/legacy/prettier\"\n",
+                "[runner.nix-packages]\n",
+                "prettier = \"nixpkgs#nodePackages.prettier\"\n",
+                "[runner.scope]\n",
+                "exclude = [\"vendor/**\"]\n",
+                "[[runner.overlap-warning-suppress]]\n",
+                "capability = \"format\"\n",
+                "tools = [\"biome\", \"prettier\"]\n",
+                "extensions = [\"js\"]\n",
+                "[tools.prettier]\n",
+                "mode = \"enabled\"\n",
+                "executable = \"/typed/prettier\"\n",
+            ),
+        )
+        .unwrap();
+
+        let config = load_tools_config(Some(&dir)).unwrap();
+        assert_eq!(config.required, ["rustfmt"]);
+        assert_eq!(config.skip, ["gofmt"]);
+        assert!(config.runner_fallback);
+        assert!(config.nix_fallback);
+        assert!(!config.biome_use_editorconfig);
+        assert!(!config.biome_use_vcs_ignore);
+        assert_eq!(config.executables["prettier"], "/legacy/prettier");
+        assert_eq!(
+            config.nix_packages["prettier"],
+            "nixpkgs#nodePackages.prettier"
+        );
+        assert_eq!(config.scope.exclude, ["vendor/**"]);
+        assert_eq!(config.overlap_warning_suppress.len(), 1);
+        assert_eq!(config.get_path("prettier"), Some("/typed/prettier"));
+        assert_eq!(config.tools["prettier"].mode, ToolSelectionMode::Enabled);
+        assert_eq!(config.scope_base.as_deref(), Some(dir.as_path()));
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -1472,6 +1630,19 @@ mod tests {
     }
 
     #[test]
+    fn load_tools_config_rejects_invalid_tool_capabilities_and_ownership() {
+        let dir = temp_dir("clippier-invalid-tool-policy");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            "[tools.shellcheck]\ncapabilities = [\"format\"]\nformat-order = 1\n",
+        )
+        .unwrap();
+        let error = load_tools_config(Some(&dir)).unwrap_err();
+        assert!(error.to_string().contains("does not support capability"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn build_tools_config_cli_override_sets_biome_editorconfig_behavior() {
         let dir = temp_dir("clippier-tools-biome-editorconfig-override");
         let merged = build_tools_config(
@@ -1490,6 +1661,108 @@ mod tests {
         assert!(!merged.biome_use_vcs_ignore);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn configured_pipeline_overlap_warns_without_changing_execution() {
+        let dir = temp_dir("clippier-pipeline-overlap");
+        let binary = dir.join("formatter");
+        std::fs::write(&binary, "").unwrap();
+        let mut config = ToolsConfig::default();
+        for name in ["prettier", "dprint"] {
+            config
+                .executables
+                .insert(name.to_string(), binary.to_string_lossy().to_string());
+        }
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let plan = ToolPlan {
+            tools: vec![
+                PlannedTool {
+                    name: "dprint".to_string(),
+                    evidence: SelectionEvidence {
+                        kind: SelectionEvidenceKind::ClippierConfig,
+                        path: std::path::PathBuf::from("clippier.toml"),
+                    },
+                    format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
+                    format_order: Some(10),
+                },
+                PlannedTool {
+                    name: "prettier".to_string(),
+                    evidence: SelectionEvidence {
+                        kind: SelectionEvidenceKind::ClippierConfig,
+                        path: std::path::PathBuf::from("clippier.toml"),
+                    },
+                    format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
+                    format_order: Some(20),
+                },
+            ],
+            unavailable: Vec::new(),
+        };
+        let warnings = overlap_warnings_for_plan(&registry, &plan, &[]);
+        assert_eq!(warnings.len(), 2);
+        assert_eq!(plan.names(), vec!["dprint", "prettier"]);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn overlap_analysis_uses_per_tool_scope() {
+        let dir = temp_dir("clippier-overlap-per-tool-scope");
+        std::fs::write(dir.join("included.js"), "const value=1;\n").unwrap();
+        let binary = dir.join("formatter");
+        std::fs::write(&binary, "").unwrap();
+        let mut config = ToolsConfig::default();
+        for name in ["biome", "prettier"] {
+            config
+                .executables
+                .insert(name.to_string(), binary.to_string_lossy().to_string());
+        }
+        config.tools.insert(
+            "prettier".to_string(),
+            ToolPolicy {
+                exclude: vec!["**/*.js".to_string()],
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let names = vec!["biome".to_string(), "prettier".to_string()];
+        let warnings = overlap_warnings_for_selected_tools(
+            &registry,
+            &names,
+            &[ToolCapability::Format],
+            &[],
+            Some(&dir),
+        );
+
+        assert!(warnings.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn overlap_analysis_uses_effective_automatic_scope() {
+        let dir = temp_dir("clippier-overlap-effective-scope");
+        std::fs::write(dir.join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::create_dir(dir.join("target")).unwrap();
+        std::fs::write(dir.join("target/generated.js"), "const value=1;\n").unwrap();
+        let binary = dir.join("formatter");
+        std::fs::write(&binary, "").unwrap();
+        let mut config = ToolsConfig::default();
+        for name in ["biome", "prettier"] {
+            config
+                .executables
+                .insert(name.to_string(), binary.to_string_lossy().to_string());
+        }
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let names = vec!["biome".to_string(), "prettier".to_string()];
+        let warnings = overlap_warnings_for_selected_tools(
+            &registry,
+            &names,
+            &[ToolCapability::Format],
+            &[],
+            Some(&dir),
+        );
+
+        assert!(warnings.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

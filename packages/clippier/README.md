@@ -1111,14 +1111,35 @@ clippier check --output json
 [runner]
 skip = ["gofmt"]
 required = ["rustfmt", "taplo"]
-runner-fallback = true
+# Automatic execution is installed-only. These acquisition-capable fallbacks
+# must be explicitly enabled when desired.
+runner-fallback = false
+nix-fallback = false
 biome-use-editorconfig = true
 biome-use-vcs-ignore = true
 
 [runner.scope]
+# Evidence-backed dependency/cache/build profiles are enabled by default.
+automatic-excludes = true
+# disable-profiles = ["node"]
 exclude = [
     "/vendor/checkouts/**",
 ]
+
+[tools.prettier]
+mode = "auto" # "auto" (default), "enabled", or "disabled"
+capabilities = ["format"]
+include = ["docs/**"]
+exclude = ["docs/generated/**"]
+format-extensions = ["md", "mdx"]
+format-order = 20
+# executable = "./node_modules/.bin/prettier"
+
+[tools.dprint]
+mode = "enabled"
+capabilities = ["format"]
+format-extensions = ["md", "mdx"]
+format-order = 10
 
 [[runner.overlap-warning-suppress]]
 capability = "format"
@@ -1127,12 +1148,28 @@ extensions = ["md", "mdx"]
 ```
 
 CLI values are additive: `--skip` and `--required` are merged with config values.
+Automatic planning considers native configuration, manifests, and relevant files,
+but executes only explicitly configured, project-local, or `PATH`-available
+binaries. Missing relevant tools are reported and skipped; Clippier never enables
+package-manager or Nix acquisition implicitly. Existing repositories that relied
+on the old fallback behavior must explicitly set `runner-fallback = true` or
+`nix-fallback = true`.
 
 `runner.scope.exclude` defines paths that no file-oriented runner tool may
 process. Patterns are based on the directory containing `clippier.toml`; a
-leading `/` anchors a pattern to that directory. Tool-specific configuration
-continues to live under `[tools.<tool-id>]` and can add narrower exclusions for
-tools that support them.
+leading `/` anchors a pattern to that directory. Evidence-backed ecosystem
+profiles also exclude dependency, cache, generated, and build trees by default.
+Set `automatic-excludes = false` to disable every profile, or list individual
+profile names in `disable-profiles`. Tool-specific configuration lives under
+`[tools.<tool-id>]` and can add narrower includes and exclusions.
+
+When multiple automatic formatters support an extension, Clippier assigns one
+deterministic owner using evidence strength and catalog priority. Explicit
+`format-order` values instead create an ordered formatter pipeline and may
+intentionally assign the same extension to multiple tools. Such overlaps warn
+unless a verified catalog relationship or an `overlap-warning-suppress` rule
+covers them; warnings never prevent configured execution. Linters remain
+additive.
 
 The `check` command automatically detects and runs:
 
