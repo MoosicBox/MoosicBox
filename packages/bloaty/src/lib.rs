@@ -1,42 +1,258 @@
-//! Binary size analysis tool for Rust workspace packages.
-//!
-//! `bloaty` is a command-line tool that measures and compares the size impact of Cargo features
-//! on both library and binary targets in a Rust workspace. It builds packages with different
-//! feature combinations and generates detailed size reports in multiple formats.
-//!
-//! This crate provides only a binary executable. For usage documentation, run:
-//!
-//! ```bash
-//! bloaty --help
-//! ```
-//!
-//! # Features
-//!
-//! * Feature size analysis for rlib and binary targets
-//! * Multiple output formats (text, JSON, JSONL)
-//! * Package and feature filtering with regex patterns
-//! * Integration with cargo-bloat, cargo-llvm-lines, and cargo-size
-//!
-//! # Example Usage
-//!
-//! Analyze all workspace packages:
-//!
-//! ```bash
-//! bloaty
-//! ```
-//!
-//! Analyze specific packages with feature filtering:
-//!
-//! ```bash
-//! bloaty --package moosicbox_core --skip-features fail-on-warnings
-//! ```
-//!
-//! Generate JSON report:
-//!
-//! ```bash
-//! bloaty --output-format json --report-file analysis
-//! ```
+//! Typed analysis scenarios and reports for the Bloaty CLI.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+
+pub mod build;
+pub mod model;
+pub mod render;
+pub mod workspace;
+
+use std::{collections::BTreeSet, fs, process::Command, time::UNIX_EPOCH};
+
+use anyhow::{Context, Result, bail};
+use cargo_metadata::Metadata;
+
+pub use model::{
+    AnalysisReport, ArtifactKind, BuildEnvironment, FeatureConfig, Measurement, Scenario,
+    ScenarioReport, ScenarioStatus, TargetSelection,
+};
+
+/// Parses a feature configuration.
+///
+/// `default` enables default features, `none` disables them, and any other comma-separated
+/// entries are explicit package features. `default` can be combined with explicit features.
+///
+/// # Errors
+///
+/// * The specification is empty or combines `none` with another value
+pub fn parse_feature_config(value: &str) -> Result<FeatureConfig> {
+    let values = value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if values.is_empty() {
+        bail!("feature configuration cannot be empty");
+    }
+    if values.contains(&"none") && values.len() != 1 {
+        bail!("'none' cannot be combined with other features");
+    }
+
+    let default_features = values.contains(&"default");
+    let features = values
+        .into_iter()
+        .filter(|value| *value != "default" && *value != "none")
+        .map(ToOwned::to_owned)
+        .collect();
+    Ok(FeatureConfig {
+        default_features,
+        features,
+    })
+}
+
+/// Creates an individual-feature scenario by adding a feature to a baseline configuration.
+#[must_use]
+pub fn feature_scenario(baseline: &FeatureConfig, feature: &str) -> Scenario {
+    let mut config = baseline.clone();
+    config.features.insert(feature.to_owned());
+    Scenario {
+        name: feature.to_owned(),
+        config,
+    }
+}
+
+/// Parses a named scenario in `NAME=FEATURE_SPECIFICATION` form.
+///
+/// # Errors
+///
+/// * The name or feature specification is missing or invalid
+pub fn parse_named_scenario(value: &str) -> Result<Scenario> {
+    let (name, config) = value
+        .split_once('=')
+        .context("scenario must use NAME=FEATURE_SPECIFICATION syntax")?;
+    let name = name.trim();
+    if name.is_empty() {
+        bail!("scenario name cannot be empty");
+    }
+    Ok(Scenario {
+        name: name.to_owned(),
+        config: parse_feature_config(config)?,
+    })
+}
+
+/// Validates scenarios against package features.
+///
+/// Cargo remains authoritative for target `required-features` because aggregate features can
+/// activate required features transitively.
+///
+/// # Errors
+///
+/// * A scenario names an unknown package feature
+pub fn validate_scenarios(available: &BTreeSet<String>, scenarios: &[Scenario]) -> Result<()> {
+    for scenario in scenarios {
+        for feature in &scenario.config.features {
+            if !available.contains(feature) {
+                bail!(
+                    "scenario '{}' enables unknown feature '{feature}'",
+                    scenario.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Runs the baseline and comparison scenarios and returns a canonical report.
+///
+/// # Errors
+///
+/// * Build environment discovery or report setup fails
+pub fn analyze(
+    metadata: &Metadata,
+    target: &TargetSelection,
+    profile: &str,
+    compilation_target: Option<&str>,
+    baseline: Scenario,
+    comparisons: Vec<Scenario>,
+) -> Result<AnalysisReport> {
+    let started_at = switchy_time::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system clock is before the Unix epoch")?
+        .as_secs();
+    let environment = environment(metadata);
+
+    let baseline_build =
+        build::build_scenario(metadata, target, profile, compilation_target, &baseline);
+    let baseline_size = baseline_build.as_ref().ok().map(|artifact| artifact.size);
+    let baseline_report = ScenarioReport::from_build(baseline, baseline_build, None);
+
+    let comparison_reports = comparisons
+        .into_iter()
+        .map(|scenario| {
+            let result =
+                build::build_scenario(metadata, target, profile, compilation_target, &scenario);
+            ScenarioReport::from_build(scenario, result, baseline_size)
+        })
+        .collect();
+
+    Ok(AnalysisReport {
+        schema_version: 1,
+        started_at,
+        package: target.package_name.clone(),
+        target_name: target.target_name.clone(),
+        target_kind: target.kind,
+        profile: profile.to_owned(),
+        compilation_target: compilation_target.map(ToOwned::to_owned),
+        environment,
+        baseline: baseline_report,
+        comparisons: comparison_reports,
+    })
+}
+
+fn environment(metadata: &Metadata) -> BuildEnvironment {
+    fn output(command: &mut Command) -> Option<String> {
+        let output = command.output().ok()?;
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    }
+
+    let workspace = metadata.workspace_root.as_std_path();
+    let rustc = output(Command::new("rustc").arg("-Vv")).unwrap_or_default();
+    let cargo = output(Command::new("cargo").arg("-V")).unwrap_or_default();
+    let git_revision = output(
+        Command::new("git")
+            .current_dir(workspace)
+            .args(["rev-parse", "HEAD"]),
+    );
+    let git_dirty = Command::new("git")
+        .current_dir(workspace)
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| !output.stdout.is_empty());
+
+    BuildEnvironment {
+        rustc,
+        cargo,
+        host_os: std::env::consts::OS.to_owned(),
+        host_arch: std::env::consts::ARCH.to_owned(),
+        git_revision,
+        git_dirty,
+    }
+}
+
+/// Writes a report as pretty JSON.
+///
+/// # Errors
+///
+/// * Serialization or writing fails
+pub fn write_json(path: &str, report: &AnalysisReport) -> Result<()> {
+    fs::write(path, serde_json::to_vec_pretty(report)?)
+        .with_context(|| format!("failed to write JSON report to {path}"))
+}
+
+/// Writes a report as reconstructable JSONL records.
+///
+/// # Errors
+///
+/// * Serialization or writing fails
+pub fn write_jsonl(path: &str, report: &AnalysisReport) -> Result<()> {
+    let records = render::jsonl(report)?;
+    fs::write(path, records).with_context(|| format!("failed to write JSONL report to {path}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_feature_configurations() {
+        assert_eq!(
+            parse_feature_config("default,qobuz").unwrap(),
+            FeatureConfig {
+                default_features: true,
+                features: BTreeSet::from(["qobuz".to_owned()]),
+            }
+        );
+        assert_eq!(
+            parse_feature_config("none").unwrap(),
+            FeatureConfig::default()
+        );
+        assert!(parse_feature_config("none,qobuz").is_err());
+    }
+
+    #[test]
+    fn parses_named_combinations() {
+        let scenario = parse_named_scenario("sources=qobuz,tidal").unwrap();
+        assert_eq!(scenario.name, "sources");
+        assert_eq!(scenario.config.features.len(), 2);
+        assert!(!scenario.config.default_features);
+    }
+
+    #[test]
+    fn rejects_unknown_features() {
+        let scenarios = [Scenario {
+            name: "unknown".to_owned(),
+            config: FeatureConfig {
+                default_features: false,
+                features: BTreeSet::from(["missing".to_owned()]),
+            },
+        }];
+        let error =
+            validate_scenarios(&BTreeSet::from(["known".to_owned()]), &scenarios).unwrap_err();
+        assert!(error.to_string().contains("unknown feature 'missing'"));
+    }
+
+    #[test]
+    fn feature_scenarios_extend_the_baseline() {
+        let baseline = parse_feature_config("default,qobuz").unwrap();
+        let scenario = feature_scenario(&baseline, "tidal");
+        assert!(scenario.config.default_features);
+        assert_eq!(scenario.config.features.len(), 2);
+    }
+}

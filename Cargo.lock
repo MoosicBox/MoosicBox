@@ -2316,8 +2316,10 @@ dependencies = [
  "log 0.4.33",
  "pretty_env_logger",
  "regex",
+ "serde",
  "serde_json",
  "switchy_time",
+ "tempfile",
 ]
 
 [[package]]

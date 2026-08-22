@@ -1,934 +1,145 @@
 //! Binary size analysis CLI for Rust workspace packages.
-//!
-//! This module provides the command-line interface for the `bloaty` tool, which analyzes
-//! the size impact of Cargo features on library and binary targets. It coordinates
-//! package discovery, feature iteration, artifact building, and report generation.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use anyhow::{Context, Result};
-use bytesize::ByteSize;
-use cargo_metadata::{MetadataCommand, TargetKind, camino::Utf8Path};
-use clap::Parser;
-use glob::glob;
-use regex::Regex;
-use serde_json::json;
-use std::{
-    fs,
-    io::Write,
-    process::{Command, Stdio},
-    time::UNIX_EPOCH,
-};
+use std::{collections::BTreeSet, fs};
 
-/// Command-line arguments for the bloaty binary size analysis tool.
+use anyhow::{Context, Result, bail};
+use bloaty::{
+    Scenario, analyze, feature_scenario, parse_feature_config, parse_named_scenario, render,
+    validate_scenarios, workspace, write_json, write_jsonl,
+};
+use cargo_metadata::MetadataCommand;
+use clap::{Parser, ValueEnum};
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum OutputFormat {
+    Text,
+    Json,
+    Jsonl,
+    All,
+}
+
+/// Command-line arguments for final-artifact feature analysis.
 #[derive(Parser)]
 #[command(
     author,
     version,
-    about = "Run cargo-bloat, cargo-llvm-lines, or cargo size across workspace members"
+    about = "Measure final Cargo artifact size across feature scenarios",
+    after_help = "FEATURE SPECIFICATIONS:\n  none                 Disable default features\n  default              Enable default features\n  qobuz,tidal          Disable defaults and enable a combination\n  default,qobuz        Enable defaults plus an explicit feature\n\nEXAMPLES:\n  bloaty -p app --target app --baseline none --feature qobuz\n  bloaty -p app --target app --baseline default --scenario sources=qobuz,tidal"
 )]
 struct Args {
-    #[arg(short, long, value_name = "PACKAGE")]
-    package: Vec<String>,
+    /// Workspace package to analyze.
+    #[arg(short, long)]
+    package: String,
 
-    #[arg(long, value_name = "PACKAGE_PATTERN")]
-    package_pattern: Option<String>,
+    /// Final artifact target name. May be omitted when the package has one supported target.
+    #[arg(long)]
+    target: Option<String>,
 
-    #[arg(long, value_name = "SKIP_PACKAGES")]
-    skip_packages: Vec<String>,
+    /// Cargo profile (for example dev, release, debug-release, or small).
+    #[arg(long, default_value = "release")]
+    profile: String,
 
-    #[arg(long, value_name = "SKIP_PACKAGE_PATTERN")]
-    skip_package_pattern: Option<String>,
+    /// Optional Rust compilation target triple.
+    #[arg(long)]
+    compilation_target: Option<String>,
 
-    #[arg(long, value_name = "SKIP_FEATURES")]
-    skip_features: Vec<String>,
+    /// Baseline feature specification.
+    #[arg(long, default_value = "none")]
+    baseline: String,
 
-    #[arg(long, value_name = "SKIP_FEATURE_PATTERN")]
-    skip_feature_pattern: Option<String>,
+    /// Compare an individual feature added to the baseline. Repeatable or comma-separated.
+    #[arg(long, value_delimiter = ',')]
+    feature: Vec<String>,
 
-    #[arg(short, long, value_parser = ["bloat", "llvm-lines", "size"], value_name = "TOOL")]
-    tool: Vec<String>,
+    /// Named comparison in `NAME=FEATURE_SPECIFICATION` form. Repeatable.
+    #[arg(long)]
+    scenario: Vec<String>,
 
-    #[arg(long, value_name = "REPORT_FILE")]
+    /// Output format. Text prints to stdout; file formats require --report-file.
+    #[arg(long, value_enum, default_value = "text")]
+    output_format: OutputFormat,
+
+    /// Base report path without an extension.
+    #[arg(long)]
     report_file: Option<String>,
-
-    #[arg(long, value_parser = ["text", "json", "jsonl", "all"], default_value = "all", value_name = "FORMAT")]
-    output_format: Vec<String>,
 }
 
-/// File handles for the different output report formats.
-struct ReportFiles {
-    /// Optional text format report file handle.
-    text: Option<fs::File>,
-    /// Optional JSONL format report file handle.
-    jsonl: Option<fs::File>,
-}
-
-/// Context for tracking analysis state and output files across package analysis runs.
-struct AnalysisContext {
-    /// Unix timestamp when the analysis was started.
-    timestamp: u64,
-    /// Base filename for output reports (without extension).
-    base_filename: String,
-    /// File handles for active report outputs.
-    report_files: ReportFiles,
-    /// In-memory JSON report structure being built during analysis.
-    json_report: serde_json::Value,
-}
-
-/// Parses and normalizes command-line arguments.
-///
-/// Expands comma-separated values in package, skip-packages, skip-features, tool, and
-/// output-format arguments into individual items.
-#[must_use]
-fn parse_args() -> Args {
-    let mut args = Args::parse();
-
-    args.package = args
-        .package
-        .into_iter()
-        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
-        .collect();
-
-    args.skip_packages = args
-        .skip_packages
-        .into_iter()
-        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
-        .collect();
-
-    args.skip_features = args
-        .skip_features
-        .into_iter()
-        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
-        .collect();
-
-    args.tool = args
-        .tool
-        .into_iter()
-        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
-        .collect();
-
-    args.output_format = args
-        .output_format
-        .into_iter()
-        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
-        .collect();
-
-    args
-}
-
-/// Verifies that all requested cargo tools are installed.
-///
-/// # Panics
-///
-/// Exits the process with status code 1 if any required tools are not available.
-fn check_tools_availability(tools: &[String]) {
-    let mut any_unavailable = false;
-
-    for tool in tools {
-        if !tool_available(tool) {
-            eprintln!("[error] cargo {tool} not found; install cargo-{tool}");
-            any_unavailable = true;
-        }
-    }
-
-    if any_unavailable {
-        std::process::exit(1);
-    }
-}
-
-/// Creates report output files based on command-line arguments.
-///
-/// # Errors
-///
-/// * File creation fails
-/// * Writing initial report headers fails
-fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
-    let timestamp = switchy_time::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let base_filename = args
-        .report_file
-        .clone()
-        .unwrap_or_else(|| format!("bloaty_report_{timestamp}"));
-
-    let should_output_text = args.output_format.contains(&"text".to_string())
-        || args.output_format.contains(&"all".to_string());
-    let should_output_jsonl = args.output_format.contains(&"jsonl".to_string())
-        || args.output_format.contains(&"all".to_string());
-
-    let mut text_report_file = if should_output_text {
-        Some(fs::File::create(format!("{base_filename}.txt"))?)
-    } else {
-        None
-    };
-
-    let jsonl_report_file = if should_output_jsonl {
-        Some(fs::File::create(format!("{base_filename}.jsonl"))?)
-    } else {
-        None
-    };
-
-    if let Some(report) = &mut text_report_file {
-        writeln!(report, "Bloaty Analysis Report")?;
-        writeln!(report, "===================\n")?;
-    }
-
-    let json_report = json!({
-        "timestamp": timestamp,
-        "packages": []
-    });
-
-    Ok(AnalysisContext {
-        timestamp,
-        base_filename,
-        report_files: ReportFiles {
-            text: text_report_file,
-            jsonl: jsonl_report_file,
-        },
-        json_report,
-    })
-}
-
-/// Writes a JSONL package start event to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_package_start(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "package_start",
-                "name": package_name,
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL package end event to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_package_end(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "package_end",
-                "name": package_name,
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL target start event to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_target_start(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "target_start",
-                "package": package_name,
-                "target": target_name,
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL target end event to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_target_end(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "target_end",
-                "package": package_name,
-                "target": target_name,
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL base rlib size record to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_base_size(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-    base_size: u64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "base_size",
-                "package": package_name,
-                "target": target_name,
-                "size": base_size,
-                "size_formatted": ByteSize(base_size).to_string(),
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL feature rlib size record to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_feature(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-    feature: &str,
-    size: u64,
-    diff: i64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        let sign = if diff >= 0 { '+' } else { '-' };
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "feature",
-                "package": package_name,
-                "target": target_name,
-                "feature": feature,
-                "size": size,
-                "diff": diff,
-                "diff_formatted": format!("{sign}{}", ByteSize(diff.unsigned_abs())),
-                "size_formatted": ByteSize(size).to_string(),
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a package header to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_package_header(ctx: &mut AnalysisContext, package_name: &str) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        writeln!(report, "\nPackage: {package_name}")?;
-        writeln!(report, "===================")?;
-    }
-    Ok(())
-}
-
-/// Writes a target header to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_target_header(ctx: &mut AnalysisContext, target_name: &str) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        writeln!(report, "\nTarget: {target_name}")?;
-        writeln!(report, "-------------------")?;
-    }
-    Ok(())
-}
-
-/// Writes a base rlib size to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_base_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        writeln!(report, "Base size: {}", ByteSize(base_size))?;
-    }
-    Ok(())
-}
-
-/// Writes a feature rlib size to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_feature(
-    ctx: &mut AnalysisContext,
-    feature: &str,
-    size: u64,
-    diff: i64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        let sign = if diff >= 0 { '+' } else { '-' };
-        writeln!(
-            report,
-            "Feature: {:<15} | Size: {} | Diff: {}{}",
-            feature,
-            ByteSize(size),
-            sign,
-            ByteSize(diff.unsigned_abs())
-        )?;
-    }
-    Ok(())
-}
-
-/// Determines whether a feature should be skipped based on filter patterns.
-///
-/// # Errors
-///
-/// * Invalid regex pattern in `skip_feature_pattern`
-fn should_skip_feature(feature: &str, args: &Args) -> Result<bool> {
-    if args.skip_features.contains(&feature.to_string()) {
-        return Ok(true);
-    }
-
-    if let Some(pattern) = &args.skip_feature_pattern {
-        let re = Regex::new(pattern).context(format!("invalid regex pattern: {pattern}"))?;
-        if re.is_match(feature) {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
-/// Determines whether a package should be analyzed based on include/exclude filters.
-///
-/// # Errors
-///
-/// * Invalid regex pattern in `package_pattern` or `skip_package_pattern`
-fn should_analyze_package(pkg_name: &str, args: &Args) -> Result<bool> {
-    // If specific packages are specified, check if this package is in the list
-    if !args.package.is_empty() && !args.package.contains(&pkg_name.to_string()) {
-        return Ok(false);
-    }
-
-    // Check package pattern if specified
-    if let Some(pattern) = &args.package_pattern {
-        let re = Regex::new(pattern).context(format!("invalid package pattern: {pattern}"))?;
-        if !re.is_match(pkg_name) {
-            return Ok(false);
-        }
-    }
-
-    // Check skip packages list
-    if args.skip_packages.contains(&pkg_name.to_string()) {
-        return Ok(false);
-    }
-
-    // Check skip package pattern if specified
-    if let Some(pattern) = &args.skip_package_pattern {
-        let re = Regex::new(pattern).context(format!("invalid skip package pattern: {pattern}"))?;
-        if re.is_match(pkg_name) {
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
-/// Analyzes a single target, measuring size impact of all features.
-///
-/// Builds the target with no features (base size), then with each feature individually,
-/// recording both rlib and binary sizes (if applicable).
-///
-/// # Errors
-///
-/// * Building the target fails
-/// * Measuring the built artifact fails
-/// * Writing to report files fails
-fn analyze_target(
-    ctx: &mut AnalysisContext,
-    pkg: &cargo_metadata::Package,
-    target: &cargo_metadata::Target,
-    available_features: &[String],
-    args: &Args,
-    metadata: &cargo_metadata::Metadata,
-) -> Result<serde_json::Value> {
-    let mut target_json = json!({
-        "name": target.name,
-        "base_size": 0,
-        "base_binary_size": 0,
-        "features": []
-    });
-
-    write_text_target_header(ctx, &target.name)?;
-    write_jsonl_target_start(ctx, &pkg.name, &target.name)?;
-
-    // Build and measure base rlib
-    let base_size = build_and_measure_rlib(
-        &pkg.manifest_path,
-        &metadata.target_directory,
-        &pkg.name,
-        None,
-    )?;
-    println!("  base rlib: {}", ByteSize(base_size));
-    write_text_base_size(ctx, base_size)?;
-    write_jsonl_base_size(ctx, &pkg.name, &target.name, base_size)?;
-
-    // Build and measure base binary if it's a binary target
-    let base_binary_size = if target.kind.iter().any(|k| k == &TargetKind::Bin) {
-        let size = build_and_measure_binary(
-            &pkg.manifest_path,
-            &metadata.target_directory,
-            &target.name,
-            None,
-        )?;
-        println!("  base binary: {}", ByteSize(size));
-        write_text_base_binary_size(ctx, size)?;
-        write_jsonl_base_binary_size(ctx, &pkg.name, &target.name, size)?;
-        size
-    } else {
-        0
-    };
-
-    target_json["base_size"] = json!(base_size);
-    target_json["base_binary_size"] = json!(base_binary_size);
-
-    for feat in available_features {
-        if should_skip_feature(feat, args)? {
-            continue;
-        }
-
-        // Build and measure rlib with feature
-        let size = build_and_measure_rlib(
-            &pkg.manifest_path,
-            &metadata.target_directory,
-            &pkg.name,
-            Some(feat),
-        )?;
-
-        #[allow(clippy::cast_possible_wrap)]
-        let diff = size as i64 - base_size as i64;
-
-        println!(
-            "  feature {feat:<15} rlib: {} ({}{})",
-            ByteSize(size),
-            if diff >= 0 { '+' } else { '-' },
-            ByteSize(diff.unsigned_abs()),
-        );
-
-        write_text_feature(ctx, feat, size, diff)?;
-        write_jsonl_feature(ctx, &pkg.name, &target.name, feat, size, diff)?;
-
-        // Build and measure binary with feature if it's a binary target
-        let binary_size = if target.kind.iter().any(|k| k == &TargetKind::Bin) {
-            let size = build_and_measure_binary(
-                &pkg.manifest_path,
-                &metadata.target_directory,
-                &target.name,
-                Some(feat),
-            )?;
-            #[allow(clippy::cast_possible_wrap)]
-            let binary_diff = size as i64 - base_binary_size as i64;
-            println!(
-                "  feature {:<15} binary: {} ({}{})",
-                feat,
-                ByteSize(size),
-                if binary_diff >= 0 { '+' } else { '-' },
-                ByteSize(binary_diff.unsigned_abs()),
-            );
-            write_text_binary_feature(ctx, feat, size, binary_diff)?;
-            write_jsonl_binary_feature(ctx, &pkg.name, &target.name, feat, size, binary_diff)?;
-            size
-        } else {
-            0
-        };
-
-        #[allow(clippy::cast_possible_wrap)]
-        target_json["features"].as_array_mut().unwrap().push(json!({
-            "name": feat,
-            "size": size,
-            "diff": diff,
-            "diff_formatted": format!("{}{}", if diff >= 0 { '+' } else { '-' }, ByteSize(diff.unsigned_abs())),
-            "size_formatted": ByteSize(size).to_string(),
-            "binary_size": binary_size,
-            "binary_diff": binary_size as i64 - base_binary_size as i64,
-            "binary_diff_formatted": format!("{}{}", if binary_size >= base_binary_size { '+' } else { '-' }, ByteSize((binary_size as i64 - base_binary_size as i64).unsigned_abs())),
-            "binary_size_formatted": ByteSize(binary_size).to_string()
-        }));
-    }
-
-    write_jsonl_target_end(ctx, &pkg.name, &target.name)?;
-    Ok(target_json)
-}
-
-/// Writes a base binary size to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_base_binary_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        writeln!(report, "Base binary size: {}", ByteSize(base_size))?;
-    }
-    Ok(())
-}
-
-/// Writes a feature binary size to the text report.
-///
-/// # Errors
-///
-/// * Writing to the text report file fails
-fn write_text_binary_feature(
-    ctx: &mut AnalysisContext,
-    feature: &str,
-    size: u64,
-    diff: i64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.text {
-        let sign = if diff >= 0 { '+' } else { '-' };
-        writeln!(
-            report,
-            "Feature: {:<15} | Binary Size: {} | Binary Diff: {}{}",
-            feature,
-            ByteSize(size),
-            sign,
-            ByteSize(diff.unsigned_abs())
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL base binary size record to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_base_binary_size(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-    base_size: u64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "base_binary_size",
-                "package": package_name,
-                "target": target_name,
-                "size": base_size,
-                "size_formatted": ByteSize(base_size).to_string(),
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Writes a JSONL feature binary size record to the report.
-///
-/// # Errors
-///
-/// * JSON serialization fails
-/// * Writing to the JSONL report file fails
-fn write_jsonl_binary_feature(
-    ctx: &mut AnalysisContext,
-    package_name: &str,
-    target_name: &str,
-    feature: &str,
-    size: u64,
-    diff: i64,
-) -> Result<()> {
-    if let Some(report) = &mut ctx.report_files.jsonl {
-        let sign = if diff >= 0 { '+' } else { '-' };
-        writeln!(
-            report,
-            "{}",
-            serde_json::to_string(&json!({
-                "type": "binary_feature",
-                "package": package_name,
-                "target": target_name,
-                "feature": feature,
-                "size": size,
-                "diff": diff,
-                "diff_formatted": format!("{}{}", sign, ByteSize(diff.unsigned_abs())),
-                "size_formatted": ByteSize(size).to_string(),
-                "timestamp": ctx.timestamp
-            }))?
-        )?;
-    }
-    Ok(())
-}
-
-/// Analyzes a workspace package, running requested tools and measuring feature sizes.
-///
-/// # Errors
-///
-/// * Package filtering fails
-/// * Running analysis tools fails
-/// * Writing to report files fails
-fn analyze_package(
-    ctx: &mut AnalysisContext,
-    pkg: &cargo_metadata::Package,
-    args: &Args,
-    metadata: &cargo_metadata::Metadata,
-) -> Result<()> {
-    if !should_analyze_package(&pkg.name, args)? {
-        return Ok(());
-    }
-
-    println!("\n=== Analyzing package: {} ===", pkg.name);
-    write_text_package_header(ctx, &pkg.name)?;
-    write_jsonl_package_start(ctx, &pkg.name)?;
-
-    let mut package_json = json!({
-        "name": pkg.name,
-        "targets": []
-    });
-
-    let available_features: Vec<String> = pkg.features.keys().cloned().collect();
-
-    for target in &pkg.targets {
-        if target
-            .kind
-            .iter()
-            .any(|k| matches!(k, TargetKind::Bin | TargetKind::CDyLib | TargetKind::DyLib))
-        {
-            for tool in &args.tool {
-                let mut cmd = Command::new("cargo");
-
-                cmd.current_dir(pkg.manifest_path.parent().unwrap())
-                    .arg(tool)
-                    .arg("--release");
-
-                if target.kind.iter().any(|k| k == &TargetKind::Bin) {
-                    cmd.arg("--bin").arg(&target.name);
-                } else {
-                    cmd.arg("--lib");
-                }
-
-                println!("$ {cmd:?}");
-                let status = cmd.status().context("running tool")?;
-                if !status.success() {
-                    eprintln!("[error] {} failed for {} ({})", tool, pkg.name, target.name);
-                }
-            }
-        }
-    }
-
-    let rlib_targets: Vec<_> = pkg
-        .targets
-        .iter()
-        .filter(|t| {
-            t.kind.iter().any(|k| k == &TargetKind::Lib)
-                && !t
-                    .kind
-                    .iter()
-                    .any(|k| matches!(k, TargetKind::CDyLib | TargetKind::DyLib))
-        })
-        .collect();
-
-    if !rlib_targets.is_empty() {
-        for target in rlib_targets {
-            let target_json =
-                analyze_target(ctx, pkg, target, &available_features, args, metadata)?;
-            package_json["targets"]
-                .as_array_mut()
-                .unwrap()
-                .push(target_json);
-        }
-    }
-
-    write_jsonl_package_end(ctx, &pkg.name)?;
-    ctx.json_report["packages"]
-        .as_array_mut()
-        .unwrap()
-        .push(package_json);
-
-    Ok(())
-}
-
-/// Writes the final consolidated JSON report if JSON output is enabled.
-///
-/// # Errors
-///
-/// * Creating the JSON report file fails
-/// * Serializing the JSON report fails
-/// * Writing to the JSON report file fails
-fn write_final_json_report(ctx: &AnalysisContext, args: &Args) -> Result<()> {
-    let should_output_json = args.output_format.contains(&"json".to_string())
-        || args.output_format.contains(&"all".to_string());
-    if should_output_json {
-        let mut json_file = fs::File::create(format!("{}.json", ctx.base_filename))?;
-        writeln!(
-            json_file,
-            "{}",
-            serde_json::to_string_pretty(&ctx.json_report)?
-        )?;
-    }
-    Ok(())
-}
-
-/// Executes bloaty binary size analysis across workspace packages.
-///
-/// # Errors
-///
-/// * Loading workspace metadata fails
-/// * Setting up report files fails
-/// * Analyzing packages fails
-/// * Writing final reports fails
-#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     pretty_env_logger::init();
-
-    let args = parse_args();
-    check_tools_availability(&args.tool);
-    let mut ctx = setup_report_files(&args)?;
+    let args = Args::parse();
     let metadata = MetadataCommand::new().no_deps().exec()?;
+    let target = workspace::resolve_target(&metadata, &args.package, args.target.as_deref())?;
 
-    for pkg in metadata
-        .packages
+    let baseline = Scenario {
+        name: "baseline".to_owned(),
+        config: parse_feature_config(&args.baseline).context("invalid baseline")?,
+    };
+    let mut comparisons = args
+        .feature
         .iter()
-        .filter(|p| metadata.workspace_members.contains(&p.id))
-    {
-        analyze_package(&mut ctx, pkg, &args, &metadata)?;
+        .map(|feature| feature_scenario(&baseline.config, feature))
+        .collect::<Vec<_>>();
+    comparisons.extend(
+        args.scenario
+            .iter()
+            .map(|scenario| parse_named_scenario(scenario))
+            .collect::<Result<Vec<_>>>()?,
+    );
+    if comparisons.is_empty() {
+        bail!("provide at least one --feature or --scenario comparison");
     }
+    ensure_unique_names(&comparisons)?;
 
-    write_final_json_report(&ctx, &args)?;
+    let mut all_scenarios = Vec::with_capacity(comparisons.len() + 1);
+    all_scenarios.push(baseline.clone());
+    all_scenarios.extend(comparisons.iter().cloned());
+    validate_scenarios(&target.available_features, &all_scenarios)?;
+
+    let report = analyze(
+        &metadata,
+        &target,
+        &args.profile,
+        args.compilation_target.as_deref(),
+        baseline,
+        comparisons,
+    )?;
+    let text = render::text(&report);
+    match args.output_format {
+        OutputFormat::Text => print!("{text}"),
+        OutputFormat::Json => write_json(&report_path(&args, "json")?, &report)?,
+        OutputFormat::Jsonl => write_jsonl(&report_path(&args, "jsonl")?, &report)?,
+        OutputFormat::All => {
+            print!("{text}");
+            let base = args
+                .report_file
+                .as_deref()
+                .context("--report-file is required for --output-format all")?;
+            fs::write(format!("{base}.txt"), text)?;
+            write_json(&format!("{base}.json"), &report)?;
+            write_jsonl(&format!("{base}.jsonl"), &report)?;
+        }
+    }
     Ok(())
 }
 
-/// Builds an rlib with optional features and measures its size.
-///
-/// # Errors
-///
-/// * Cargo clean fails
-/// * Cargo build fails
-/// * Finding the built rlib fails
-/// * Reading rlib metadata fails
-fn build_and_measure_rlib(
-    manifest: &Utf8Path,
-    target_dir: &Utf8Path,
-    crate_name: &str,
-    feat: Option<&String>,
-) -> Result<u64> {
-    let _ = Command::new("cargo")
-        .current_dir(manifest.parent().unwrap())
-        .arg("clean")
-        .arg("--release")
-        .status();
-
-    let mut cmd = Command::new("cargo");
-
-    cmd.current_dir(manifest.parent().unwrap())
-        .arg("build")
-        .arg("--release")
-        .arg("--no-default-features");
-
-    if let Some(f) = feat {
-        cmd.arg("--features").arg(f);
-    }
-
-    println!("$ {cmd:?}\n");
-    cmd.status().context("building rlib")?;
-
-    let deps = target_dir.join("release").join("deps");
-    let prefix = format!("lib{}-", crate_name.replace('-', "_"));
-    for entry in glob(&format!("{deps}/*.rlib"))? {
-        let path = entry?;
-        if let Some(fname) = path.file_name().and_then(|f| f.to_str())
-            && fname.starts_with(&prefix)
-        {
-            return Ok(fs::metadata(&path)?.len());
+fn ensure_unique_names(scenarios: &[Scenario]) -> Result<()> {
+    let mut names = BTreeSet::new();
+    for scenario in scenarios {
+        if !names.insert(&scenario.name) {
+            bail!("duplicate comparison scenario name '{}'", scenario.name);
         }
     }
-    Err(anyhow::anyhow!("rlib for {crate_name} not found"))
+    Ok(())
 }
 
-/// Builds a binary with optional features and measures its size.
-///
-/// # Errors
-///
-/// * Cargo clean fails
-/// * Cargo build fails
-/// * Reading binary metadata fails
-fn build_and_measure_binary(
-    manifest: &Utf8Path,
-    target_dir: &Utf8Path,
-    binary_name: &str,
-    feat: Option<&String>,
-) -> Result<u64> {
-    let _ = Command::new("cargo")
-        .current_dir(manifest.parent().unwrap())
-        .arg("clean")
-        .arg("--release")
-        .status();
-
-    let mut cmd = Command::new("cargo");
-
-    cmd.current_dir(manifest.parent().unwrap())
-        .arg("build")
-        .arg("--release")
-        .arg("--no-default-features")
-        .arg("--bin")
-        .arg(binary_name);
-
-    if let Some(f) = feat {
-        cmd.arg("--features").arg(f);
-    }
-
-    println!("$ {cmd:?}\n");
-    cmd.status().context("building binary")?;
-
-    let binary_path = target_dir.join("release").join(binary_name);
-    Ok(fs::metadata(&binary_path)?.len())
-}
-
-/// Checks if a cargo tool is installed and available.
-#[must_use]
-fn tool_available(tool: &str) -> bool {
-    Command::new("cargo")
-        .arg(tool)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+fn report_path(args: &Args, extension: &str) -> Result<String> {
+    let base = args
+        .report_file
+        .as_deref()
+        .context("--report-file is required for file output")?;
+    Ok(format!("{base}.{extension}"))
 }

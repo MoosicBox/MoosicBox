@@ -1,215 +1,162 @@
 # MoosicBox Bloaty
 
-A binary size analysis tool for Rust workspace packages that helps track and compare the size impact of features.
+Bloaty measures how Cargo feature configurations change the size of a final compiled artifact.
+It builds an explicit baseline and one or more comparison scenarios, uses Cargo's structured
+compiler output to identify the exact emitted artifact, and reports absolute and relative size
+differences.
 
-## Overview
+## Current capabilities
 
-The MoosicBox Bloaty package provides binary size analysis for Rust packages in a workspace. It measures the size impact of individual features by building packages with different feature combinations and comparing the resulting library sizes.
-
-## Features
-
-- **Feature size analysis**: Measures the size impact of each feature on rlib targets
-- **Multiple output formats**: Supports text, JSON, and JSONL report formats
-- **Package filtering**: Select specific packages using patterns or explicit lists
-- **Feature filtering**: Skip features using patterns or explicit lists
-- **Workspace integration**: Analyzes all workspace members automatically
-- **External tool integration**: Supports cargo-bloat, cargo-llvm-lines, and cargo-size
+- Measures executables, `cdylib`, `dylib`, and `staticlib` final artifacts
+- Selects packages and targets through Cargo workspace metadata
+- Supports `dev`, `release`, and custom Cargo profiles
+- Supports optional Rust compilation target triples
+- Compares individual features or explicit feature combinations
+- Supports baselines with default features, no default features, or explicit features
+- Produces terminal text, versioned JSON, and reconstructable JSONL reports
+- Records Rust, Cargo, host, Git, profile, target, and scenario provenance
+- Preserves Cargo build caching and records build failures without measuring stale artifacts
 
 ## Installation
 
-### From Source
+From the MoosicBox workspace:
 
 ```bash
-# Clone the repository
-git clone https://github.com/MoosicBox/MoosicBox.git
-cd MoosicBox
-
-# Build the tool
 cargo build --package bloaty --release
-
-# The binary will be at target/release/bloaty
 ```
+
+The executable is written to `target/release/bloaty`.
+
+## Feature specifications
+
+A baseline or named scenario accepts one of these forms:
+
+| Specification   | Meaning                                                  |
+| --------------- | -------------------------------------------------------- |
+| `none`          | Disable default features and enable no explicit features |
+| `default`       | Enable default features                                  |
+| `qobuz,tidal`   | Disable default features and enable both named features  |
+| `default,qobuz` | Enable default features and the named feature            |
+
+Feature deltas are contextual. A feature's cost can change depending on the baseline and other
+enabled features, so individual deltas must not be assumed to be additive.
 
 ## Usage
 
-### Basic Usage
-
-Analyze all workspace packages:
+### Compare an individual feature
 
 ```bash
-bloaty
+bloaty \
+  --package moosicbox_server \
+  --target moosicbox_server \
+  --profile release \
+  --baseline none \
+  --feature qobuz
 ```
 
-### Package Selection
-
-Analyze specific packages:
+`--feature` adds the named feature to the baseline configuration. It is repeatable and also
+accepts comma-delimited values:
 
 ```bash
-# Single package
-bloaty --package moosicbox_core
-
-# Multiple packages
-bloaty --package moosicbox_core --package moosicbox_server
-
-# Using patterns
-bloaty --package-pattern "moosicbox_.*"
+bloaty -p moosicbox_server --baseline none \
+  --feature qobuz --feature tidal
 ```
 
-### Feature Filtering
+### Compare explicit combinations
 
-Skip specific features:
+Named scenarios use `NAME=FEATURE_SPECIFICATION`:
 
 ```bash
-# Skip specific features
-bloaty --skip-features fail-on-warnings --skip-features openssl
-
-# Skip features matching a pattern
-bloaty --skip-feature-pattern ".*-static$"
+bloaty \
+  --package moosicbox_server \
+  --target moosicbox_server \
+  --baseline none \
+  --scenario sources=qobuz,tidal \
+  --scenario all-sources=all-sources
 ```
 
-### External Tools
+Scenarios are explicit; Bloaty does not generate an unbounded feature powerset.
 
-Run external analysis tools (requires installation):
+### Analyze default features
 
 ```bash
-# Run cargo-bloat
-bloaty --tool bloat
-
-# Run multiple tools
-bloaty --tool bloat --tool llvm-lines
+bloaty -p moosicbox_server \
+  --baseline none \
+  --scenario defaults=default
 ```
 
-### Output Formats
+### Select another profile
 
-Control report output:
+Any profile accepted by Cargo can be selected:
 
 ```bash
-# Generate all formats (default)
-bloaty --output-format all
-
-# Only text report
-bloaty --output-format text
-
-# JSON and JSONL reports
-bloaty --output-format json --output-format jsonl
-
-# Custom report filename
-bloaty --report-file my_analysis
+bloaty -p bloaty --profile dev --baseline none --feature fail-on-warnings
+bloaty -p moosicbox_server --profile small --baseline default --feature telemetry
 ```
 
-This generates files like:
-
-- `my_analysis.txt` (text report)
-- `my_analysis.json` (complete JSON report)
-- `my_analysis.jsonl` (streaming JSONL format)
-
-### Skip Packages
-
-Exclude packages from analysis:
+### Select a compilation target
 
 ```bash
-# Skip specific packages
-bloaty --skip-packages moosicbox_test --skip-packages moosicbox_dev
-
-# Skip packages matching pattern
-bloaty --skip-package-pattern ".*_test$"
+bloaty -p bloaty \
+  --compilation-target aarch64-apple-darwin \
+  --baseline none \
+  --feature fail-on-warnings
 ```
 
-## Report Format
+The selected Rust target must already be installed and all required cross-compilation tools must
+be available.
 
-### Text Report
+## Reports
 
-The text report shows base sizes and feature impact:
+Terminal text is the default and does not create files:
 
-```
-Package: moosicbox_core
-===================
-
-Target: moosicbox_core
--------------------
-Base size: 1.2 MB
-Feature: async          | Size: 1.3 MB | Diff: +100 KB
-Feature: db             | Size: 1.5 MB | Diff: +300 KB
+```bash
+bloaty -p bloaty --profile dev --baseline none --feature fail-on-warnings
 ```
 
-### JSON Report
+JSON and JSONL require a report base path:
 
-The JSON report provides structured data:
+```bash
+bloaty -p bloaty --baseline none --feature fail-on-warnings \
+  --output-format json --report-file report
 
-```json
-{
-    "timestamp": 1234567890,
-    "packages": [
-        {
-            "name": "moosicbox_core",
-            "targets": [
-                {
-                    "name": "moosicbox_core",
-                    "base_size": 1258291,
-                    "features": [
-                        {
-                            "name": "async",
-                            "size": 1360384,
-                            "diff": 102093,
-                            "diff_formatted": "+102 KB"
-                        }
-                    ]
-                }
-            ]
-        }
-    ]
-}
+bloaty -p bloaty --baseline none --feature fail-on-warnings \
+  --output-format jsonl --report-file report
 ```
 
-### JSONL Report
+Use `all` to print text and create `report.txt`, `report.json`, and `report.jsonl`:
 
-The JSONL report provides streaming event data for real-time processing:
-
-```jsonl
-{"type":"package_start","name":"moosicbox_core","timestamp":1234567890}
-{"type":"target_start","package":"moosicbox_core","target":"moosicbox_core","timestamp":1234567890}
-{"type":"base_size","package":"moosicbox_core","target":"moosicbox_core","size":1258291,"timestamp":1234567890}
-{"type":"feature","package":"moosicbox_core","target":"moosicbox_core","feature":"async","size":1360384,"diff":102093,"timestamp":1234567890}
-{"type":"target_end","package":"moosicbox_core","target":"moosicbox_core","timestamp":1234567890}
-{"type":"package_end","name":"moosicbox_core","timestamp":1234567890}
+```bash
+bloaty -p bloaty --baseline none --feature fail-on-warnings \
+  --output-format all --report-file report
 ```
 
-## Dependencies
+JSON reports include a schema version, selected build dimensions, environment provenance, the
+explicit baseline, each comparison scenario, exact artifact paths, byte sizes, signed deltas,
+percentage deltas, and structured build failures.
 
-Core dependencies (automatically managed by Cargo):
+## Target selection
 
-- `anyhow` - Error handling
-- `bytesize` - Human-readable size formatting
-- `cargo_metadata` - Workspace metadata access
-- `clap` - Command-line argument parsing
-- `glob` - File pattern matching
-- `log` - Logging facade
-- `pretty_env_logger` - Logging implementation
-- `regex` - Pattern matching for filters
-- `serde_json` - JSON output formatting
-- `switchy_time` - Time utilities
+Bloaty supports final artifacts produced by binary, `cdylib`, `dylib`, and `staticlib` targets. If
+a package has exactly one supported target, `--target` can be omitted. If it has multiple targets,
+Bloaty reports the candidates and requires an explicit selection.
 
-Optional external tools:
+Target `required-features` are preserved from Cargo metadata. Cargo remains authoritative for
+whether a scenario satisfies those requirements, including features activated transitively.
 
-- `cargo-bloat` - For detailed binary bloat analysis
-- `cargo-llvm-lines` - For LLVM IR line count analysis
-- `cargo-size` - For size profiling
+## Metric interpretation
 
-## How It Works
+The built-in metric is the exact final artifact's file size. It reflects the selected profile's
+optimization, debug information, stripping, LTO, target platform, toolchain, and feature context.
+Only reports with compatible build dimensions should be compared.
 
-1. **Package Discovery**: Uses `cargo_metadata` to find workspace members
-2. **Feature Extraction**: Identifies available features from each package's `Cargo.toml`
-3. **Baseline Build**: Builds each target with no features enabled and measures size
-4. **Feature Analysis**: Builds each target with individual features and compares sizes
-5. **Binary Tool Execution**: For binary, cdylib, and dylib targets, runs selected external cargo analysis tools
-6. **Report Generation**: Outputs results in requested formats
+Bloaty does not currently provide section-level, symbol-level, or crate-level attribution. It also
+does not use rlib archive size as a proxy for final binary cost.
 
-## Contributing
+## Development
 
-Contributions are welcome! Areas for improvement:
-
-1. Add support for feature combinations (currently only analyzes individual features)
-2. Implement historical size tracking and regression detection
-3. Add visualization of size trends over time
-4. Optimize build performance with better caching
-5. Add more detailed breakdown of size contributors
+```bash
+cargo fmt --all
+cargo test -p bloaty
+cargo clippy -p bloaty --all-targets -- -D warnings
+```

@@ -33,7 +33,11 @@ glob              = { workspace = true }
 log               = { workspace = true }
 pretty_env_logger = { workspace = true }
 regex             = { workspace = true }
+serde             = { workspace = true, features = ["derive"] }
 serde_json        = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [features]
 fail-on-warnings = ["switchy_time/fail-on-warnings"]
