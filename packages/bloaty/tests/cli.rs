@@ -23,6 +23,50 @@ fn run(directory: &Path, args: &[&str]) -> std::process::Output {
 }
 
 #[test]
+fn analyzes_dev_release_and_custom_profiles() {
+    let workspace = workspace(&[
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers=[\"app\"]\nresolver=\"2\"\n\n[profile.small]\ninherits=\"release\"\nopt-level=\"z\"\n",
+        ),
+        (
+            "app/Cargo.toml",
+            "[package]\nname=\"profiles-app\"\nversion=\"0.1.0\"\nedition=\"2024\"\n\n[features]\nalpha=[]\n",
+        ),
+        ("app/src/main.rs", "fn main() {}"),
+    ]);
+    for profile in ["dev", "release", "small"] {
+        let report = workspace.path().join(format!("report-{profile}"));
+        let output = run(
+            workspace.path(),
+            &[
+                "--package",
+                "profiles-app",
+                "--profile",
+                profile,
+                "--baseline",
+                "none",
+                "--feature",
+                "alpha",
+                "--output-format",
+                "json",
+                "--report-file",
+                report.to_str().unwrap(),
+            ],
+        );
+        assert!(
+            output.status.success(),
+            "profile {profile}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let value: Value =
+            serde_json::from_slice(&fs::read(report.with_extension("json")).unwrap()).unwrap();
+        assert_eq!(value["profile"], profile);
+        assert_eq!(value["baseline"]["status"], "success");
+    }
+}
+
+#[test]
 fn analyzes_binary_features_combinations_and_custom_profiles() {
     let workspace = workspace(&[
         (
@@ -278,6 +322,36 @@ extra = []
         serde_json::from_slice(&fs::read(report.with_extension("json")).unwrap()).unwrap();
     assert_eq!(report["baseline"]["status"], "success");
     assert_eq!(report["comparisons"][0]["status"], "success");
+}
+
+#[test]
+fn enforces_explicit_report_thresholds() {
+    let workspace = workspace(&[]);
+    let baseline = workspace.path().join("baseline.json");
+    let candidate = workspace.path().join("candidate.json");
+    let report = |size: u64| {
+        serde_json::json!({
+            "schema_version": 1, "started_at": 0, "package": "app", "target_name": "app",
+            "target_kind": "binary", "profile": "release", "compilation_target": null,
+            "environment": {"rustc":"rustc 1","cargo":"cargo 1","host_os":"linux","host_arch":"x86_64","git_revision":null,"git_dirty":null},
+            "baseline": {"scenario":{"name":"baseline","config":{"default_features":false,"features":[]}},"status":"success","measurement":{"artifact_path":"app","size_bytes":size,"delta_bytes":null,"delta_percent":null,"fresh":false}},
+            "comparisons": []
+        })
+    };
+    fs::write(&baseline, serde_json::to_vec(&report(100)).unwrap()).unwrap();
+    fs::write(&candidate, serde_json::to_vec(&report(125)).unwrap()).unwrap();
+    let output = run(
+        workspace.path(),
+        &[
+            "--compare-reports",
+            baseline.to_str().unwrap(),
+            candidate.to_str().unwrap(),
+            "--max-increase-bytes",
+            "20",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("exceeding 20 bytes"));
 }
 
 #[test]

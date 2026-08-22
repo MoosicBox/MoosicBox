@@ -6,6 +6,7 @@
 
 pub mod build;
 pub mod compare;
+pub mod metrics;
 pub mod model;
 pub mod render;
 pub mod workspace;
@@ -20,7 +21,13 @@ use std::{
 use anyhow::{Context, Result, bail};
 use cargo_metadata::Metadata;
 
-pub use compare::{ComparisonKey, ReportComparison, ScenarioComparison, compare_reports};
+pub use compare::{
+    ComparisonKey, ReportComparison, ScenarioComparison, ScenarioVariance, VarianceReport,
+    characterize_variance, compare_reports,
+};
+pub use metrics::{
+    MetricCapability, MetricKind, MetricOutcome, MetricRecord, MetricReport, run_external_collector,
+};
 pub use model::{
     AnalysisReport, ArtifactKind, BuildEnvironment, FeatureConfig, Measurement, Scenario,
     ScenarioReport, ScenarioStatus, TargetSelection,
@@ -246,6 +253,51 @@ mod tests {
         assert_eq!(scenario.name, "sources");
         assert_eq!(scenario.config.features.len(), 2);
         assert!(!scenario.config.default_features);
+    }
+
+    #[test]
+    fn parses_multiple_individual_features_as_deterministic_scenarios() {
+        let baseline = FeatureConfig::default();
+        let scenarios = ["tidal", "qobuz"]
+            .into_iter()
+            .map(|feature| feature_scenario(&baseline, feature))
+            .collect::<Vec<_>>();
+        assert_eq!(scenarios[0].name, "tidal");
+        assert_eq!(scenarios[1].name, "qobuz");
+        assert_eq!(
+            scenarios[0].config.features,
+            BTreeSet::from(["tidal".to_owned()])
+        );
+    }
+
+    #[test]
+    fn explicit_scenarios_are_bounded_to_user_input() {
+        let scenarios = ["pair=qobuz,tidal", "all=all-sources"]
+            .into_iter()
+            .map(parse_named_scenario)
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(scenarios.len(), 2);
+        assert_eq!(scenarios[0].config.features.len(), 2);
+        assert_eq!(scenarios[1].config.features.len(), 1);
+    }
+
+    #[test]
+    fn validates_all_explicit_feature_scenarios() {
+        let scenarios = [Scenario {
+            name: "valid".to_owned(),
+            config: FeatureConfig {
+                default_features: false,
+                features: BTreeSet::from(["known".to_owned()]),
+            },
+        }];
+        validate_scenarios(&BTreeSet::from(["known".to_owned()]), &scenarios).unwrap();
+        assert!(
+            validate_scenarios(&BTreeSet::new(), &scenarios)
+                .unwrap_err()
+                .to_string()
+                .contains("unknown feature")
+        );
     }
 
     #[test]

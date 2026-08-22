@@ -8,9 +8,9 @@ use std::{collections::BTreeSet, fs};
 
 use anyhow::{Context, Result, bail};
 use bloaty::{
-    AnalysisReport, ReportComparison, Scenario, ScenarioComparison, analyze, compare_reports,
-    feature_scenario, parse_feature_config, parse_named_scenario, render, validate_scenarios,
-    workspace, write_json, write_jsonl,
+    AnalysisReport, ReportComparison, Scenario, ScenarioComparison, VarianceReport, analyze,
+    characterize_variance, compare_reports, feature_scenario, parse_feature_config,
+    parse_named_scenario, render, validate_scenarios, workspace, write_json, write_jsonl,
 };
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, ValueEnum};
@@ -33,7 +33,7 @@ enum OutputFormat {
 )]
 struct Args {
     /// Workspace package to analyze.
-    #[arg(short, long, required_unless_present = "compare_reports")]
+    #[arg(short, long, required_unless_present_any = ["compare_reports", "characterize_variance"])]
     package: Option<String>,
 
     /// Final artifact target name. May be omitted when the package has one supported target.
@@ -69,15 +69,30 @@ struct Args {
     report_file: Option<String>,
 
     /// Compare two previously generated JSON reports instead of building artifacts.
-    #[arg(long, value_names = ["BASELINE_REPORT", "CANDIDATE_REPORT"], num_args = 2, conflicts_with_all = ["package", "target", "baseline", "feature", "scenario"])]
+    #[arg(long, value_names = ["BASELINE_REPORT", "CANDIDATE_REPORT"], num_args = 2, conflicts_with_all = ["package", "target", "baseline", "feature", "scenario", "characterize_variance"])]
     compare_reports: Option<Vec<String>>,
+
+    /// Characterize variance across two or more compatible JSON reports.
+    #[arg(long, value_name = "REPORT", num_args = 2.., conflicts_with_all = ["package", "target", "baseline", "feature", "scenario", "compare_reports"])]
+    characterize_variance: Option<Vec<String>>,
+
+    /// Fail comparison when a measured scenario grows by more than this many bytes.
+    #[arg(long, requires = "compare_reports")]
+    max_increase_bytes: Option<u64>,
+
+    /// Fail comparison when a measured scenario grows by more than this percentage.
+    #[arg(long, requires = "compare_reports", allow_hyphen_values = true)]
+    max_increase_percent: Option<f64>,
 }
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
     let args = Args::parse();
     if let Some(paths) = &args.compare_reports {
-        return compare_saved_reports(paths);
+        return compare_saved_reports(paths, args.max_increase_bytes, args.max_increase_percent);
+    }
+    if let Some(paths) = &args.characterize_variance {
+        return characterize_saved_reports(paths);
     }
     let package = args
         .package
@@ -138,7 +153,50 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn compare_saved_reports(paths: &[String]) -> Result<()> {
+fn characterize_saved_reports(paths: &[String]) -> Result<()> {
+    let reports = paths
+        .iter()
+        .map(|path| {
+            let bytes = fs::read(path).with_context(|| format!("failed to read report {path}"))?;
+            serde_json::from_slice::<AnalysisReport>(&bytes)
+                .with_context(|| format!("failed to parse report {path}"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let variance = characterize_variance(&reports).map_err(anyhow::Error::msg)?;
+    print_variance(&variance);
+    if !variance.incompatibilities.is_empty() {
+        bail!("variance reports are incompatible");
+    }
+    Ok(())
+}
+
+fn print_variance(variance: &VarianceReport) {
+    if !variance.incompatibilities.is_empty() {
+        eprintln!("Variance reports are incompatible:");
+        for incompatibility in &variance.incompatibilities {
+            eprintln!("  - {incompatibility}");
+        }
+        return;
+    }
+    println!("Bloaty variance across {} reports", variance.report_count);
+    for scenario in &variance.scenarios {
+        println!(
+            "  {:<20} {} samples, {}..{} bytes, spread {} bytes ({}%)",
+            scenario.name,
+            scenario.samples,
+            scenario.minimum_size_bytes,
+            scenario.maximum_size_bytes,
+            scenario.spread_bytes,
+            scenario.spread_percent.as_deref().unwrap_or("undefined")
+        );
+    }
+}
+
+fn compare_saved_reports(
+    paths: &[String],
+    max_increase_bytes: Option<u64>,
+    max_increase_percent: Option<f64>,
+) -> Result<()> {
     let [baseline_path, candidate_path] = paths else {
         bail!("--compare-reports requires baseline and candidate report paths");
     };
@@ -156,6 +214,43 @@ fn compare_saved_reports(paths: &[String]) -> Result<()> {
     print_comparison(&comparison);
     if !comparison.is_compatible() {
         bail!("reports are incompatible");
+    }
+    enforce_thresholds(&comparison, max_increase_bytes, max_increase_percent)?;
+    Ok(())
+}
+
+fn enforce_thresholds(
+    comparison: &ReportComparison,
+    max_increase_bytes: Option<u64>,
+    max_increase_percent: Option<f64>,
+) -> Result<()> {
+    for scenario in &comparison.scenarios {
+        if let ScenarioComparison::Compared {
+            name,
+            delta_bytes,
+            delta_percent,
+            ..
+        } = scenario
+        {
+            if let Some(limit) = max_increase_bytes
+                && *delta_bytes > i64::try_from(limit).unwrap_or(i64::MAX)
+            {
+                bail!(
+                    "scenario '{name}' increased by {delta_bytes} bytes, exceeding {limit} bytes"
+                );
+            }
+            if let Some(limit) = max_increase_percent
+                && delta_percent
+                    .as_deref()
+                    .and_then(|percent| percent.parse::<f64>().ok())
+                    .is_some_and(|percent| percent > limit)
+            {
+                bail!(
+                    "scenario '{name}' increased by {}%, exceeding {limit}%",
+                    delta_percent.as_deref().unwrap_or("undefined")
+                );
+            }
+        }
     }
     Ok(())
 }

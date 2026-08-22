@@ -1,97 +1,101 @@
 name: Bloaty
 
 on:
-    # push:
-    #     branches: ['master']
-    #     paths:
-    #         - packages/**
-    #         - '**/*.toml'
-    #         - '**/Cargo.lock'
-    #         - .github/workflows/bloaty.yml
-    #         - '!packages/marketing_site/*.ts'
-    #         - '!packages/marketing_site/*.json'
-    #         - '!packages/marketing_site/pnpm-lock.yaml'
-    #         - '!packages/marketing_site/*.mjs'
-    #         - '!packages/marketing_site/*.js'
-    #         - '!packages/marketing_site/*.md'
-    #         - '!packages/marketing_site/.prettierignore'
-    #         - '!packages/marketing_site/hyperchad/**'
-    #         - '!packages/marketing_site/infra/**'
-    #         - '!packages/hyperchad/renderer/vanilla_js/web/**'
-    #         - '!**/*.nix'
-    #         - '!**/Dockerfile'
-    #         - '!**/*.Dockerfile'
-    #         - '!**/*.dockerignore'
     workflow_dispatch:
+    push:
+        branches: ["master"]
+        paths:
+            - "packages/**"
+            - "Cargo.toml"
+            - "Cargo.lock"
+            - ".github/workflows/bloaty.yml"
+    pull_request:
+        paths:
+            - "packages/**"
+            - "Cargo.toml"
+            - "Cargo.lock"
+            - ".github/workflows/bloaty.yml"
+
+permissions:
+    actions: read
+    contents: read
 
 env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    build-matrix:
-        name: Build matrix
-        strategy:
-            fail-fast: true
-            matrix:
-                os: ["ubuntu-latest"]
-        runs-on: ${{ matrix.os }}
-        outputs:
-            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
-        steps:
-            - uses: dtolnay/rust-toolchain@stable
-
-            - name: Checkout
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
-
-            - name: Build matrix JSON
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              id: build-matrix-step
-              uses: ./.github/actions/clippier
-              with:
-                  command: features
-                  transform-name-regex: "^(moosicbox|switchy|hyperchad)_"
-
-    bloaty:
-        runs-on: ${{ matrix.package.os }}
-        needs: build-matrix
+    analyze:
+        name: Analyze ${{ matrix.package }} (${{ matrix.profile }})
+        runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
-                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+                include:
+                    - package: moosicbox_aconverter
+                      target: aconverter
+                      profile: release
+                      baseline: none
+                      feature: flac
+                      scenario: audio=flac,mp3
         steps:
             - uses: actions/checkout@v6
 
-            - name: Setup CI environment
-              uses: ./.github/actions/clippier
+            - uses: dtolnay/rust-toolchain@stable
+
+            - uses: Swatinem/rust-cache@v2
               with:
-                  command: setup
-                  package-json: ${{ toJson(matrix.package) }}
-                  skip-checkout: "true"
-                  rust-components: "rustfmt, clippy, llvm-tools-preview"
+                  key: bloaty-${{ matrix.package }}-${{ matrix.profile }}
 
-            - name: Install cargo-bloat
-              run: cargo install cargo-bloat
-
-            - name: Install cargo-binutils
-              run: cargo install cargo-binutils
-
-            - name: Run bloaty ${{ matrix.package.name }}
-              shell: bash
+            - name: Analyze final artifact
               run: |
-                  ${{ matrix.package.env }} cargo run -p bloaty -- \
-                        --skip-features fail-on-warnings,default \
-                        --skip-feature-pattern '_.+' \
-                        --output-format all \
-                        --report-file report
+                  cargo run --package bloaty -- \
+                    --package "${{ matrix.package }}" \
+                    --target "${{ matrix.target }}" \
+                    --profile "${{ matrix.profile }}" \
+                    --baseline "${{ matrix.baseline }}" \
+                    --feature "${{ matrix.feature }}" \
+                    --scenario "${{ matrix.scenario }}" \
+                    --output-format all \
+                    --report-file "bloaty-${{ matrix.package }}-${{ matrix.profile }}"
+
+            - name: Download latest master baseline
+              if: github.event_name == 'pull_request'
+              id: baseline
+              continue-on-error: true
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  ARTIFACT_NAME: bloaty-${{ matrix.package }}-${{ matrix.profile }}-${{ runner.os }}
+              run: |
+                  run_id="$(gh run list \
+                    --workflow Bloaty \
+                    --branch master \
+                    --status success \
+                    --limit 1 \
+                    --json databaseId \
+                    --jq '.[0].databaseId')"
+                  test -n "$run_id"
+                  mkdir baseline
+                  gh run download "$run_id" --name "$ARTIFACT_NAME" --dir baseline
+                  echo "available=true" >> "$GITHUB_OUTPUT"
+
+            - name: Compare with latest master baseline (advisory)
+              if: github.event_name == 'pull_request' && steps.baseline.outputs.available == 'true'
+              continue-on-error: true
+              run: |
+                  cargo run --package bloaty -- \
+                    --compare-reports \
+                    "baseline/bloaty-${{ matrix.package }}-${{ matrix.profile }}.json" \
+                    "bloaty-${{ matrix.package }}-${{ matrix.profile }}.json"
+
+            - name: Explain missing baseline
+              if: github.event_name == 'pull_request' && steps.baseline.outputs.available != 'true'
+              run: echo "No compatible successful master baseline artifact is available yet; comparison is advisory."
 
             - name: Upload reports
-              uses: actions/upload-artifact@v6
               if: always()
+              uses: actions/upload-artifact@v6
               with:
-                  name: reports
-                  path: report.*
-                  if-no-files-found: warn
+                  name: bloaty-${{ matrix.package }}-${{ matrix.profile }}-${{ runner.os }}
+                  path: bloaty-${{ matrix.package }}-${{ matrix.profile }}.*
+                  if-no-files-found: error
                   retention-days: 90

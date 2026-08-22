@@ -149,6 +149,34 @@ rejects incompatible reports instead of presenting misleading deltas. Compatible
 absolute and percentage drift for each scenario and classify added, removed, or unavailable
 scenarios.
 
+### Characterize repeated-report variance
+
+Use two or more compatible reports from unchanged source and build dimensions to measure observed
+noise before selecting CI thresholds:
+
+```bash
+bloaty --characterize-variance run-1.json run-2.json run-3.json
+```
+
+The command reports each scenario's sample count, minimum, maximum, absolute byte spread, and
+percentage spread. It rejects reports from different profiles, targets, platforms, or toolchains.
+CI thresholds should be selected only after enough repeated reports show a stable upper bound.
+
+### Enforce explicit comparison thresholds
+
+Thresholds are opt-in and apply to every successfully measured matching scenario:
+
+```bash
+bloaty --compare-reports baseline.json candidate.json \
+  --max-increase-bytes 1048576 \
+  --max-increase-percent 2.0
+```
+
+A comparison exits unsuccessfully when either configured limit is exceeded. Bloaty has no implicit
+threshold: users and CI must choose limits appropriate for the selected metric and environment.
+Added, removed, unavailable, or incompatible scenarios remain separately classified rather than
+being treated as zero-sized artifacts.
+
 ## Target selection
 
 Bloaty supports final artifacts produced by binary, `cdylib`, `dylib`, and `staticlib` targets. If
@@ -164,8 +192,13 @@ The built-in metric is the exact final artifact's file size. It reflects the sel
 optimization, debug information, stripping, LTO, target platform, toolchain, and feature context.
 Only reports with compatible build dimensions should be compared.
 
-Bloaty does not currently provide section-level, symbol-level, or crate-level attribution. It also
-does not use rlib archive size as a proxy for final binary cost.
+Bloaty currently records capability and version information for optional `cargo-size`, `cargo-bloat`,
+and `cargo-llvm-lines` collectors. Unavailable collectors are represented as unsupported metric
+outcomes and never invalidate the built-in final-artifact measurement. Supported JSON and JSONL
+collector output can be normalized into typed label/value records; LLVM lines are explicitly
+modeled as attribution, not binary bytes. External collectors execute through the same typed
+boundary when explicitly invoked by an integration, producing parsed records or metric-specific
+failures rather than terminal-only side effects.
 
 ## Development
 

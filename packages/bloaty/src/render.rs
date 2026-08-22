@@ -52,6 +52,22 @@ fn render_scenario(output: &mut String, label: &str, report: &ScenarioReport) {
             )
             .expect("writing to String cannot fail");
         }
+        ScenarioStatus::Unsupported { reason } => {
+            writeln!(
+                output,
+                "  {label:<8} {:<20} UNSUPPORTED: {reason}",
+                report.scenario.name
+            )
+            .expect("writing to String cannot fail");
+        }
+        ScenarioStatus::Skipped { reason } => {
+            writeln!(
+                output,
+                "  {label:<8} {:<20} SKIPPED: {reason}",
+                report.scenario.name
+            )
+            .expect("writing to String cannot fail");
+        }
     }
 }
 
@@ -126,6 +142,7 @@ mod tests {
                     measurement: Measurement {
                         artifact_path: "app".to_owned(),
                         size_bytes: 100,
+                        metrics: Vec::new(),
                         delta_bytes: None,
                         delta_percent: None,
                         fresh: false,

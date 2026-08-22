@@ -77,6 +77,106 @@ pub enum ScenarioComparison {
     },
 }
 
+/// Observed spread for one scenario across compatible reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScenarioVariance {
+    /// Scenario name.
+    pub name: String,
+    /// Number of successful measurements.
+    pub samples: usize,
+    /// Smallest observed artifact size.
+    pub minimum_size_bytes: u64,
+    /// Largest observed artifact size.
+    pub maximum_size_bytes: u64,
+    /// Absolute observed spread.
+    pub spread_bytes: u64,
+    /// Spread as a percentage of the minimum, absent when the minimum is zero.
+    pub spread_percent: Option<String>,
+}
+
+/// Compatibility-aware variance characterization for repeated reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VarianceReport {
+    /// Compatibility key shared by all samples.
+    pub key: ComparisonKey,
+    /// Number of reports examined.
+    pub report_count: usize,
+    /// Compatibility errors. Scenario results are empty when this is non-empty.
+    pub incompatibilities: Vec<String>,
+    /// Per-scenario observed spreads.
+    pub scenarios: Vec<ScenarioVariance>,
+}
+
+/// Characterizes observed measurement spread across repeated compatible reports.
+///
+/// # Errors
+///
+/// * Fewer than two reports are provided
+pub fn characterize_variance(reports: &[AnalysisReport]) -> Result<VarianceReport, String> {
+    let Some(first) = reports.first() else {
+        return Err("at least two reports are required".to_owned());
+    };
+    if reports.len() < 2 {
+        return Err("at least two reports are required".to_owned());
+    }
+    let key = ComparisonKey::from(first);
+    let incompatibilities = reports
+        .iter()
+        .skip(1)
+        .enumerate()
+        .flat_map(|(index, report)| {
+            incompatibilities(&key, &ComparisonKey::from(report))
+                .into_iter()
+                .map(move |difference| format!("report {}: {difference}", index + 2))
+        })
+        .collect::<Vec<_>>();
+    let scenarios = if incompatibilities.is_empty() {
+        scenario_variance(reports)
+    } else {
+        Vec::new()
+    };
+    Ok(VarianceReport {
+        key,
+        report_count: reports.len(),
+        incompatibilities,
+        scenarios,
+    })
+}
+
+fn scenario_variance(reports: &[AnalysisReport]) -> Vec<ScenarioVariance> {
+    let names = reports
+        .iter()
+        .flat_map(|report| scenario_map(report).into_keys())
+        .collect::<BTreeSet<_>>();
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let sizes = reports
+                .iter()
+                .filter_map(|report| scenario_map(report).get(&name).copied())
+                .filter_map(|report| match &report.outcome {
+                    ScenarioStatus::Success { measurement } => Some(measurement.size_bytes),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let minimum = sizes.iter().copied().min()?;
+            let maximum = sizes.iter().copied().max()?;
+            let spread = maximum - minimum;
+            #[allow(clippy::cast_precision_loss)]
+            let spread_percent =
+                (minimum != 0).then(|| format!("{:.4}", spread as f64 / minimum as f64 * 100.0));
+            Some(ScenarioVariance {
+                name,
+                samples: sizes.len(),
+                minimum_size_bytes: minimum,
+                maximum_size_bytes: maximum,
+                spread_bytes: spread,
+                spread_percent,
+            })
+        })
+        .collect()
+}
+
 /// Complete compatibility-aware report comparison.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportComparison {
@@ -217,6 +317,9 @@ fn error(status: &ScenarioStatus) -> Option<String> {
     match status {
         ScenarioStatus::Success { .. } => None,
         ScenarioStatus::Failed { error } => Some(error.clone()),
+        ScenarioStatus::Unsupported { reason } | ScenarioStatus::Skipped { reason } => {
+            Some(reason.clone())
+        }
     }
 }
 
@@ -264,6 +367,7 @@ mod tests {
                     measurement: Measurement {
                         artifact_path: "app".to_owned(),
                         size_bytes: size,
+                        metrics: Vec::new(),
                         delta_bytes: None,
                         delta_percent: None,
                         fresh: false,
@@ -272,6 +376,31 @@ mod tests {
             },
             comparisons: Vec::new(),
         }
+    }
+
+    #[test]
+    fn characterizes_compatible_variance() {
+        let variance = characterize_variance(&[
+            report("release", 100),
+            report("release", 101),
+            report("release", 99),
+        ])
+        .unwrap();
+        assert!(variance.incompatibilities.is_empty());
+        assert_eq!(variance.scenarios[0].samples, 3);
+        assert_eq!(variance.scenarios[0].spread_bytes, 2);
+        assert_eq!(
+            variance.scenarios[0].spread_percent.as_deref(),
+            Some("2.0202")
+        );
+    }
+
+    #[test]
+    fn rejects_incompatible_variance_samples() {
+        let variance =
+            characterize_variance(&[report("release", 100), report("dev", 100)]).unwrap();
+        assert!(!variance.incompatibilities.is_empty());
+        assert!(variance.scenarios.is_empty());
     }
 
     #[test]
@@ -300,6 +429,7 @@ mod tests {
                 measurement: Measurement {
                     artifact_path: "removed".to_owned(),
                     size_bytes: 10,
+                    metrics: Vec::new(),
                     delta_bytes: None,
                     delta_percent: None,
                     fresh: false,
@@ -327,6 +457,7 @@ mod tests {
                 measurement: Measurement {
                     artifact_path: "added".to_owned(),
                     size_bytes: 10,
+                    metrics: Vec::new(),
                     delta_bytes: None,
                     delta_percent: None,
                     fresh: false,
@@ -343,6 +474,7 @@ mod tests {
                 measurement: Measurement {
                     artifact_path: "failed".to_owned(),
                     size_bytes: 10,
+                    metrics: Vec::new(),
                     delta_bytes: None,
                     delta_percent: None,
                     fresh: false,

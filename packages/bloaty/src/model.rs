@@ -88,6 +88,9 @@ pub struct Measurement {
     pub artifact_path: String,
     /// Artifact size in bytes.
     pub size_bytes: u64,
+    /// Collected built-in and optional metric outcomes.
+    #[serde(default)]
+    pub metrics: Vec<crate::MetricReport>,
     /// Signed byte difference from the baseline, absent on the baseline itself.
     pub delta_bytes: Option<i64>,
     /// Percentage difference from the baseline, absent when undefined.
@@ -104,6 +107,10 @@ pub enum ScenarioStatus {
     Success { measurement: Measurement },
     /// The scenario build or artifact resolution failed.
     Failed { error: String },
+    /// The scenario cannot run in the current environment.
+    Unsupported { reason: String },
+    /// The scenario was intentionally not run.
+    Skipped { reason: String },
 }
 
 /// Report for one baseline or comparison scenario.
@@ -144,6 +151,12 @@ impl ScenarioReport {
                     measurement: Measurement {
                         artifact_path: artifact.path.to_string(),
                         size_bytes: artifact.size,
+                        metrics: std::iter::once(crate::metrics::artifact_file_size(
+                            &artifact.path,
+                            artifact.size,
+                        ))
+                        .chain(crate::metrics::optional_capabilities())
+                        .collect(),
                         delta_bytes,
                         delta_percent,
                         fresh: artifact.fresh,
@@ -198,6 +211,29 @@ pub struct AnalysisReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serializes_all_scenario_outcomes() {
+        let statuses = [
+            ScenarioStatus::Failed {
+                error: "failed".to_owned(),
+            },
+            ScenarioStatus::Unsupported {
+                reason: "unsupported".to_owned(),
+            },
+            ScenarioStatus::Skipped {
+                reason: "skipped".to_owned(),
+            },
+        ];
+        let serialized = statuses
+            .iter()
+            .map(|status| serde_json::to_value(status).unwrap()["status"].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            serialized,
+            ["failed", "unsupported", "skipped"].map(serde_json::Value::from)
+        );
+    }
 
     #[test]
     fn report_schema_round_trips() {
