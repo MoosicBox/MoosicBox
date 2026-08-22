@@ -132,8 +132,8 @@ bloaty -p bloaty --baseline none --feature fail-on-warnings \
 ```
 
 JSON reports include a schema version, selected build dimensions, environment provenance, the
-explicit baseline, each comparison scenario, exact artifact paths, byte sizes, signed deltas,
-percentage deltas, and structured build failures.
+explicit baseline, each comparison scenario, scenario durations, exact artifact paths, byte
+sizes, signed deltas, percentage deltas, and structured build failures.
 
 ### Compare saved reports
 

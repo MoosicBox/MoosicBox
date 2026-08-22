@@ -2309,6 +2309,7 @@ name = "bloaty"
 version = "0.4.0"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "bytesize",
  "cargo_metadata 0.23.1",
  "clap",

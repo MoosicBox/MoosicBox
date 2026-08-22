@@ -255,6 +255,7 @@ mod tests {
                 git_dirty: None,
             },
             baseline: ScenarioReport {
+                duration_ms: 0,
                 scenario: Scenario {
                     name: "baseline".to_owned(),
                     config: FeatureConfig::default(),
@@ -290,6 +291,7 @@ mod tests {
     fn classifies_added_removed_and_failed_scenarios() {
         let mut baseline = report("release", 100);
         baseline.comparisons.push(ScenarioReport {
+            duration_ms: 0,
             scenario: Scenario {
                 name: "removed".to_owned(),
                 config: FeatureConfig::default(),
@@ -305,6 +307,7 @@ mod tests {
             },
         });
         baseline.comparisons.push(ScenarioReport {
+            duration_ms: 0,
             scenario: Scenario {
                 name: "failed".to_owned(),
                 config: FeatureConfig::default(),
@@ -315,6 +318,7 @@ mod tests {
         });
         let mut candidate = report("release", 100);
         candidate.comparisons.push(ScenarioReport {
+            duration_ms: 0,
             scenario: Scenario {
                 name: "added".to_owned(),
                 config: FeatureConfig::default(),
@@ -330,6 +334,7 @@ mod tests {
             },
         });
         candidate.comparisons.push(ScenarioReport {
+            duration_ms: 0,
             scenario: Scenario {
                 name: "failed".to_owned(),
                 config: FeatureConfig::default(),

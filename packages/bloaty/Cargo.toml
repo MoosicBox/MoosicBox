@@ -37,7 +37,8 @@ serde             = { workspace = true, features = ["derive"] }
 serde_json        = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+tempfile   = { workspace = true }
 
 [features]
 fail-on-warnings = ["switchy_time/fail-on-warnings"]

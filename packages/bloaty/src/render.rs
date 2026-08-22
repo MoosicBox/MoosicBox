@@ -91,3 +91,79 @@ pub fn jsonl(report: &AnalysisReport) -> Result<String> {
     }
     Ok(output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ArtifactKind, BuildEnvironment, FeatureConfig, Measurement, Scenario, ScenarioStatus,
+    };
+
+    fn report() -> AnalysisReport {
+        AnalysisReport {
+            schema_version: 1,
+            started_at: 1,
+            package: "app".to_owned(),
+            target_name: "app".to_owned(),
+            target_kind: ArtifactKind::Binary,
+            profile: "release".to_owned(),
+            compilation_target: None,
+            environment: BuildEnvironment {
+                rustc: "rustc 1".to_owned(),
+                cargo: "cargo 1".to_owned(),
+                host_os: "linux".to_owned(),
+                host_arch: "x86_64".to_owned(),
+                git_revision: None,
+                git_dirty: None,
+            },
+            baseline: ScenarioReport {
+                duration_ms: 0,
+                scenario: Scenario {
+                    name: "baseline".to_owned(),
+                    config: FeatureConfig::default(),
+                },
+                outcome: ScenarioStatus::Success {
+                    measurement: Measurement {
+                        artifact_path: "app".to_owned(),
+                        size_bytes: 100,
+                        delta_bytes: None,
+                        delta_percent: None,
+                        fresh: false,
+                    },
+                },
+            },
+            comparisons: vec![ScenarioReport {
+                duration_ms: 0,
+                scenario: Scenario {
+                    name: "broken".to_owned(),
+                    config: FeatureConfig::default(),
+                },
+                outcome: ScenarioStatus::Failed {
+                    error: "build failed".to_owned(),
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn text_distinguishes_measurements_and_failures() {
+        let output = text(&report());
+        assert!(output.contains("baseline"));
+        assert!(output.contains("100 B"));
+        assert!(output.contains("FAILED: build failed"));
+    }
+
+    #[test]
+    fn jsonl_contains_reconstructable_record_types() {
+        let output = jsonl(&report()).unwrap();
+        let records = output
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0]["type"], "analysis");
+        assert_eq!(records[1]["type"], "baseline");
+        assert_eq!(records[2]["type"], "comparison");
+        assert_eq!(records[2]["report"]["status"], "failed");
+    }
+}

@@ -111,6 +111,9 @@ pub enum ScenarioStatus {
 pub struct ScenarioReport {
     /// Scenario definition.
     pub scenario: Scenario,
+    /// Wall-clock build and measurement duration in milliseconds.
+    #[serde(default)]
+    pub duration_ms: u64,
     /// Structured outcome.
     #[serde(flatten)]
     pub outcome: ScenarioStatus,
@@ -121,6 +124,7 @@ impl ScenarioReport {
         scenario: Scenario,
         result: anyhow::Result<crate::build::BuiltArtifact>,
         baseline_size: Option<u64>,
+        duration_ms: u64,
     ) -> Self {
         let outcome = match result {
             Ok(artifact) => {
@@ -150,7 +154,11 @@ impl ScenarioReport {
                 error: format!("{error:#}"),
             },
         };
-        Self { scenario, outcome }
+        Self {
+            scenario,
+            duration_ms,
+            outcome,
+        }
     }
 }
 
@@ -189,7 +197,42 @@ pub struct AnalysisReport {
 
 #[cfg(test)]
 mod tests {
-    use super::signed_delta;
+    use super::*;
+
+    #[test]
+    fn report_schema_round_trips() {
+        let report = AnalysisReport {
+            schema_version: 1,
+            started_at: 0,
+            package: "app".to_owned(),
+            target_name: "app".to_owned(),
+            target_kind: ArtifactKind::Binary,
+            profile: "release".to_owned(),
+            compilation_target: None,
+            environment: BuildEnvironment {
+                rustc: "rustc".to_owned(),
+                cargo: "cargo".to_owned(),
+                host_os: "linux".to_owned(),
+                host_arch: "x86_64".to_owned(),
+                git_revision: None,
+                git_dirty: None,
+            },
+            baseline: ScenarioReport {
+                duration_ms: 0,
+                scenario: Scenario {
+                    name: "baseline".to_owned(),
+                    config: FeatureConfig::default(),
+                },
+                outcome: ScenarioStatus::Failed {
+                    error: "failure".to_owned(),
+                },
+            },
+            comparisons: Vec::new(),
+        };
+        let serialized = serde_json::to_vec(&report).unwrap();
+        let restored: AnalysisReport = serde_json::from_slice(&serialized).unwrap();
+        assert_eq!(restored, report);
+    }
 
     #[test]
     fn calculates_saturating_signed_deltas() {

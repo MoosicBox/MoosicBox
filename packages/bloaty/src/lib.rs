@@ -10,7 +10,12 @@ pub mod model;
 pub mod render;
 pub mod workspace;
 
-use std::{collections::BTreeSet, fs, process::Command, time::UNIX_EPOCH};
+use std::{
+    collections::BTreeSet,
+    fs,
+    process::Command,
+    time::{Instant, UNIX_EPOCH},
+};
 
 use anyhow::{Context, Result, bail};
 use cargo_metadata::Metadata;
@@ -125,17 +130,24 @@ pub fn analyze(
         .as_secs();
     let environment = environment(metadata);
 
+    let baseline_started = Instant::now();
     let baseline_build =
         build::build_scenario(metadata, target, profile, compilation_target, &baseline);
+    let baseline_duration_ms =
+        u64::try_from(baseline_started.elapsed().as_millis()).unwrap_or(u64::MAX);
     let baseline_size = baseline_build.as_ref().ok().map(|artifact| artifact.size);
-    let baseline_report = ScenarioReport::from_build(baseline, baseline_build, None);
+    let baseline_report =
+        ScenarioReport::from_build(baseline, baseline_build, None, baseline_duration_ms);
 
     let comparison_reports = comparisons
         .into_iter()
         .map(|scenario| {
+            let scenario_started = Instant::now();
             let result =
                 build::build_scenario(metadata, target, profile, compilation_target, &scenario);
-            ScenarioReport::from_build(scenario, result, baseline_size)
+            let duration_ms =
+                u64::try_from(scenario_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            ScenarioReport::from_build(scenario, result, baseline_size, duration_ms)
         })
         .collect();
 
