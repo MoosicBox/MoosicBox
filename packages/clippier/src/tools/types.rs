@@ -351,6 +351,13 @@ impl ToolsConfig {
                             || normalized == "venv/**"
                             || normalized.ends_with("/venv/**")
                     }
+                    "cpp" => {
+                        normalized == "CMakeFiles/**"
+                            || normalized.ends_with("/CMakeFiles/**")
+                            || normalized == "cmake-build-*/**"
+                            || normalized.ends_with("/cmake-build-*/**")
+                    }
+                    "lua" => normalized == ".luarocks/**" || normalized.ends_with("/.luarocks/**"),
                     "go" => normalized == "vendor/**" || normalized.ends_with("/vendor/**"),
                     "terraform" => {
                         normalized == ".terraform/**" || normalized.ends_with("/.terraform/**")
@@ -366,7 +373,7 @@ impl ToolsConfig {
     #[must_use]
     pub fn effective_scope(&self) -> super::ScopeConfig {
         let mut scope = self.scope.clone();
-        for profile in ["rust", "node", "python", "go", "terraform"] {
+        for profile in ["rust", "node", "python", "cpp", "lua", "go", "terraform"] {
             if self.explicitly_includes_exclusion_profile(profile) {
                 scope.disable_profiles.insert(profile.to_string());
             }

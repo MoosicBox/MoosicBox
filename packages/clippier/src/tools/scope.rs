@@ -196,7 +196,19 @@ pub fn automatic_exclusion_patterns(root: &Path, config: &ScopeConfig) -> Vec<St
                 ".pytest_cache/**",
                 ".mypy_cache/**",
                 ".ruff_cache/**",
+                ".tox/**",
+                ".nox/**",
             ],
+        ),
+        (
+            "cpp",
+            &["compile_commands.json", "CMakeLists.txt"],
+            &["CMakeFiles/**", "cmake-build-*/**"],
+        ),
+        (
+            "lua",
+            &["stylua.toml", ".stylua.toml", ".luacheckrc"],
+            &[".luarocks/**"],
         ),
         ("go", &["go.mod"], &["vendor/**"]),
         ("terraform", &[".terraform.lock.hcl"], &[".terraform/**"]),
@@ -340,6 +352,23 @@ mod tests {
         assert!(patterns.contains(&"packages/web/node_modules/**".to_string()));
         assert!(patterns.contains(&"packages/web/.next/**".to_string()));
         assert!(!patterns.contains(&"node_modules/**".to_string()));
+    }
+
+    #[test]
+    fn newly_supported_ecosystems_activate_only_evidence_backed_profiles() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("CMakeFiles")).unwrap();
+        std::fs::create_dir_all(root.path().join(".luarocks")).unwrap();
+        let initial = automatic_exclusion_patterns(root.path(), &ScopeConfig::default());
+        assert!(!initial.contains(&"CMakeFiles/**".to_string()));
+        assert!(!initial.contains(&".luarocks/**".to_string()));
+
+        std::fs::write(root.path().join("compile_commands.json"), "[]\n").unwrap();
+        std::fs::write(root.path().join("stylua.toml"), "\n").unwrap();
+        let patterns = automatic_exclusion_patterns(root.path(), &ScopeConfig::default());
+        assert!(patterns.contains(&"CMakeFiles/**".to_string()));
+        assert!(patterns.contains(&"cmake-build-*/**".to_string()));
+        assert!(patterns.contains(&".luarocks/**".to_string()));
     }
 
     #[test]

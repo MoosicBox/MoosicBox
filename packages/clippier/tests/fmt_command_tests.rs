@@ -195,6 +195,18 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
             source: "application.go",
         },
         Fixture {
+            label: "lua",
+            tool: "stylua",
+            signal: "stylua.toml",
+            source: "application.lua",
+        },
+        Fixture {
+            label: "terraform",
+            tool: "terraform",
+            signal: ".terraform.lock.hcl",
+            source: "main.tf",
+        },
+        Fixture {
             label: "markdown",
             tool: "mdformat",
             signal: ".mdformat.toml",

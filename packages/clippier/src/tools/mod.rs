@@ -1161,6 +1161,75 @@ mod tests {
     }
 
     #[test]
+    fn compatibility_fixture_preserves_legacy_and_typed_configuration_semantics() {
+        let dir = temp_dir("clippier-tools-compatibility-fixture");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            r#"
+[runner]
+required = ["rustfmt"]
+skip = ["gofmt"]
+runner-fallback = true
+nix-fallback = true
+biome-use-editorconfig = false
+biome-use-vcs-ignore = false
+
+[runner.executables]
+prettier = "/config/prettier"
+
+[runner.scope]
+automatic-excludes = false
+exclude = ["vendor/**"]
+
+[[runner.overlap-warning-suppress]]
+capability = "format"
+tools = ["biome", "prettier"]
+extensions = ["js"]
+
+[tools.prettier]
+mode = "disabled"
+include = ["docs/**"]
+exclude = ["docs/generated/**"]
+format-extensions = ["md"]
+format-order = 20
+"#,
+        )
+        .unwrap();
+        let required = vec!["taplo".to_string()];
+        let skip = vec!["shellcheck".to_string()];
+        let explicit = vec!["prettier".to_string()];
+        let config = build_tools_config(
+            Some(&dir),
+            Some(&required),
+            Some(&skip),
+            Some(&explicit),
+            false,
+            &["prettier=/cli/prettier".to_string()],
+            Some(true),
+            Some(true),
+        )
+        .unwrap();
+
+        assert_eq!(config.required, vec!["rustfmt", "taplo"]);
+        assert_eq!(config.skip, vec!["gofmt", "shellcheck"]);
+        assert!(config.runner_fallback);
+        assert!(config.nix_fallback);
+        assert!(config.biome_use_editorconfig);
+        assert!(config.biome_use_vcs_ignore);
+        assert_eq!(config.get_path("prettier"), Some("/cli/prettier"));
+        assert_eq!(config.scope.exclude, ["vendor/**"]);
+        assert!(!config.scope.automatic_excludes);
+        assert_eq!(config.overlap_warning_suppress.len(), 1);
+        let prettier = &config.tools["prettier"];
+        assert_eq!(prettier.mode, ToolSelectionMode::Enabled);
+        assert_eq!(prettier.include, ["docs/**"]);
+        assert_eq!(prettier.exclude, ["docs/generated/**"]);
+        assert_eq!(prettier.format_extensions, ["md".to_string()].into());
+        assert_eq!(prettier.format_order, Some(20));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn build_tools_config_merges_cli_with_file() {
         let dir = temp_dir("clippier-tools-merge");
         let config_path = dir.join("clippier.toml");
