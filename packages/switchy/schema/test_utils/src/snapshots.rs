@@ -394,7 +394,7 @@ impl MigrationSnapshotTest {
     ///
     /// * Returns `SnapshotError` if table discovery fails
     #[cfg(feature = "snapshots")]
-    #[allow(unused, clippy::unused_async)] // Future enhancement
+    #[allow(unused, clippy::unused_async, clippy::unused_async_trait_impl)] // Future enhancement
     async fn discover_tables_from_migrations(&self) -> Result<Vec<String>> {
         // TODO: Parse migration files in migrations_dir to find CREATE TABLE statements
         // For now, return empty vec - this would be implemented in a future enhancement

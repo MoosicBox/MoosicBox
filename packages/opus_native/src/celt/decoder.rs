@@ -1220,7 +1220,7 @@ impl CeltDecoder {
         let mut hi = ALLOCATION_TABLE[0].len() - 1;
 
         loop {
-            let mid = (lo + hi) >> 1;
+            let mid = usize::midpoint(lo, hi);
             let mut psum = 0_i32;
             let mut done = false;
 

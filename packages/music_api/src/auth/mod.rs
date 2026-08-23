@@ -311,7 +311,7 @@ impl ApiAuth {
     /// # Errors
     ///
     /// * If the authentication status check fails
-    #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
     pub async fn is_logged_in(&self) -> Result<bool, Error> {
         Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
     }

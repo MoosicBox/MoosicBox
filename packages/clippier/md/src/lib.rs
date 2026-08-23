@@ -571,10 +571,9 @@ pub fn run_fmt(
             handles
                 .into_iter()
                 .map(|handle| {
-                    handle.join().map_or_else(
-                        |_| Err(anyhow::anyhow!("Markdown formatter worker panicked")),
-                        std::convert::identity,
-                    )
+                    handle.join().unwrap_or_else(|_| {
+                        Err(anyhow::anyhow!("Markdown formatter worker panicked"))
+                    })
                 })
                 .collect::<Vec<_>>()
         });

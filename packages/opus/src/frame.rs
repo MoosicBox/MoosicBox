@@ -61,7 +61,7 @@ pub enum FramePacking {
 /// assert_eq!(len, 120);
 /// assert_eq!(consumed, 1);
 /// ```
-pub fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
+pub const fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
     if data.is_empty() {
         return Err(Error::PacketTooShort(0));
     }

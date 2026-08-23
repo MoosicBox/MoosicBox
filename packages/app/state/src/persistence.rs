@@ -141,7 +141,7 @@ impl AppState {
         self.persistence.read().await.clone().unwrap()
     }
 
-    #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
     async fn init_persistence(&self) -> Result<(), AppStateError> {
         Ok(())
     }

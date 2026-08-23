@@ -1102,9 +1102,7 @@ pub fn should_skip_feature(feature: &str, patterns: &[String]) -> bool {
 
         let matches = if pattern_str.contains('*') || pattern_str.contains('?') {
             // Use globset for wildcard patterns
-            globset::Glob::new(pattern_str)
-                .ok()
-                .is_some_and(|g| g.compile_matcher().is_match(feature))
+            globset::Glob::new(pattern_str).is_ok_and(|g| g.compile_matcher().is_match(feature))
         } else {
             // Exact match for non-wildcard patterns
             feature == pattern_str
@@ -1136,9 +1134,7 @@ pub fn should_skip_feature(feature: &str, patterns: &[String]) -> bool {
 pub fn matches_pattern(item: &str, pattern: &str) -> bool {
     if pattern.contains('*') || pattern.contains('?') {
         // Use globset for wildcard patterns
-        globset::Glob::new(pattern)
-            .ok()
-            .is_some_and(|g| g.compile_matcher().is_match(item))
+        globset::Glob::new(pattern).is_ok_and(|g| g.compile_matcher().is_match(item))
     } else {
         // Exact match for non-wildcard patterns
         item == pattern

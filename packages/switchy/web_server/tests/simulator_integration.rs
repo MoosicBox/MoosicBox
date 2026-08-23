@@ -37,17 +37,10 @@ fn process_request_sync(
     request: SimulationRequest,
 ) -> SimulationResponse {
     use std::future::Future;
-    use std::sync::Arc;
     use std::task::{Context, Poll, Waker};
 
-    struct SimpleWaker;
-
-    impl std::task::Wake for SimpleWaker {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    let waker = Waker::from(Arc::new(SimpleWaker));
-    let mut context = Context::from_waker(&waker);
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
 
     let mut future = Box::pin(server.process_request(request));
 

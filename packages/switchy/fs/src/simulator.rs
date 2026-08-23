@@ -2304,7 +2304,7 @@ pub mod unsync {
         /// # Errors
         ///
         /// * Infallible
-        #[allow(clippy::unused_async)]
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
         pub async fn file_type(&self) -> std::io::Result<super::FileType> {
             Ok(self.file_type_info.clone())
         }
@@ -2385,7 +2385,7 @@ pub mod unsync {
         /// # Errors
         ///
         /// * Infallible in simulator mode
-        #[allow(clippy::unused_async)]
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
         pub async fn next_entry(&mut self) -> std::io::Result<Option<DirEntry>> {
             Ok(self.entries.next())
         }

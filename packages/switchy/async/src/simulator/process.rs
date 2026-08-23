@@ -572,7 +572,7 @@ impl Child {
     /// # Errors
     ///
     /// This simulated version never fails.
-    #[allow(clippy::unused_async)] // Keep async for API compatibility with tokio::process::Child
+    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)] // Keep async for API compatibility with tokio::process::Child
     pub async fn kill(&mut self) -> io::Result<()> {
         // No-op in simulator - there's no real process to kill
         Ok(())

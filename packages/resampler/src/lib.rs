@@ -1014,7 +1014,7 @@ mod tests {
         let mut right_sum: f32 = 0.0;
         let frame_count = output.len() / 2;
 
-        for frame in output.chunks_exact(2) {
+        for frame in output.as_chunks::<2>().0 {
             left_sum += frame[0].abs();
             right_sum += frame[1].abs();
         }

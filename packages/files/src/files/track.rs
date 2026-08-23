@@ -206,7 +206,7 @@ pub enum GetTrackBytesError {
     MusicApi(#[from] moosicbox_music_api::Error),
     /// Track info retrieval error
     #[error(transparent)]
-    TrackInfo(#[from] TrackInfoError),
+    TrackInfo(#[from] Box<TrackInfoError>),
     /// Commander service error
     #[error(transparent)]
     Commander(#[from] CommanderError),
@@ -298,7 +298,7 @@ pub async fn get_track_bytes(
                 }
                 _ => {
                     log::error!("get_track_bytes error: {err:?}");
-                    return Err(GetTrackBytesError::TrackInfo(err));
+                    return Err(GetTrackBytesError::TrackInfo(Box::new(err)));
                 }
             },
         }
@@ -885,7 +885,7 @@ pub enum TrackInfoError {
     UnsupportedFormat(AudioFormat),
     /// Track source type is not supported for this operation
     #[error("Source not supported: {0:?}")]
-    UnsupportedSource(TrackSource),
+    UnsupportedSource(Box<TrackSource>),
     /// Track not found with the specified ID
     #[error("Track not found: {0}")]
     NotFound(Id),

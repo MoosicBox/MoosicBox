@@ -82,7 +82,7 @@ impl PollAuth {
     /// # Errors
     ///
     /// * If the poll operation fails
-    #[allow(clippy::unused_async)]
+    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
     pub async fn poll(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         Ok(false)
     }

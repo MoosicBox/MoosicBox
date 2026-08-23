@@ -608,7 +608,11 @@ impl AudioOutputScanner {
     /// # Errors
     ///
     /// * If the tokio spawned tasks fail to join
-    #[allow(clippy::too_many_lines, clippy::unused_async)]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::unused_async,
+        clippy::unused_async_trait_impl
+    )]
     pub async fn scan(&mut self) -> Result<(), AudioOutputScannerError> {
         self.default_output = None;
         self.outputs = vec![];
