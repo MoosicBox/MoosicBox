@@ -1,3 +1,5 @@
+#![cfg(feature = "test-vectors")]
+
 use moosicbox_opus_native_test_vectors::{calculate_snr, test_vectors_dir};
 
 #[cfg(feature = "celt")]
