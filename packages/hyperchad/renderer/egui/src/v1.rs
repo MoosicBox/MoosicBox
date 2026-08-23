@@ -19,7 +19,7 @@ use hyperchad_actions::{
     logic::Value,
 };
 use hyperchad_renderer::{
-    Color, Content, Handle, RenderRunner, Renderer, ToRenderRunner, View,
+    Color, Content, Handle, RenderRunner, Renderer, ResponseMetadata, ToRenderRunner, View,
     canvas::{self, CanvasAction, CanvasUpdate},
     viewport::immediate::{Pos, Viewport, ViewportListener},
 };
@@ -446,6 +446,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
                                 primary: Some(x),
                                 fragments: vec![],
                                 delete_selectors: vec![],
+                                response: ResponseMetadata::default(),
                             })
                             .await
                             .inspect_err(|e| log::error!("Failed to render: {e:?}"));
@@ -3089,7 +3090,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 Some(Self::render_text_input(container, ui, ctx, input))
             }
             Input::Checkbox { .. } => Some(Self::render_checkbox_input(ui, input, checkboxes)),
-            Input::Hidden { .. } => None,
+            // Native file selection is not implemented by the egui renderer yet.
+            Input::File | Input::Hidden { .. } => None,
         }
     }
 

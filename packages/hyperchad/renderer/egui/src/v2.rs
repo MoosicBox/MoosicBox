@@ -499,7 +499,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                 Some(egui::Checkbox::without_text(checked_value).ui(ui))
             }
-            Input::Hidden { .. } => None,
+            // Native file selection is not implemented by the egui renderer yet.
+            Input::File | Input::Hidden { .. } => None,
         }
     }
 
