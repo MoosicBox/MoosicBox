@@ -885,6 +885,7 @@ impl ToolRegistry {
                 if let Some(planned) = selected.get(info.name.as_str()) {
                     info.relevant = true;
                     info.selected = true;
+                    info.decision = "selected".to_string();
                     info.evidence = Some(format!(
                         "{:?}:{}",
                         planned.evidence.kind,
@@ -894,6 +895,11 @@ impl ToolRegistry {
                     info.format_order = planned.format_order;
                 } else if unavailable.contains(&info.name) {
                     info.relevant = true;
+                    info.decision = "unavailable".to_string();
+                } else if info.skipped {
+                    info.decision = "disabled".to_string();
+                } else if info.configured {
+                    info.decision = "configured-not-selected".to_string();
                 }
                 info
             })
@@ -924,6 +930,13 @@ impl ToolRegistry {
                     relevant: false,
                     selected: false,
                     configured: self.config.tools.contains_key(&tool.name),
+                    decision: if self.config.should_skip(&tool.name) {
+                        "disabled".to_string()
+                    } else if self.config.tools.contains_key(&tool.name) {
+                        "configured-not-selected".to_string()
+                    } else {
+                        "not-relevant".to_string()
+                    },
                     evidence: None,
                     format_extensions: Vec::new(),
                     format_order: None,
@@ -969,6 +982,8 @@ pub struct ToolInfo {
     pub selected: bool,
     /// Whether typed repository configuration exists for the tool.
     pub configured: bool,
+    /// Stable planning decision for machine-readable and raw reporting.
+    pub decision: String,
     /// Human-readable strongest selection evidence.
     pub evidence: Option<String>,
     /// Formatter extensions owned by this tool.
@@ -1028,8 +1043,8 @@ impl ToolInfo {
             format!(" {}", details.join(" "))
         };
         format!(
-            "{}: {} [{}] {selection}{details}",
-            self.display_name, status, mode
+            "{}: {} [{}] {selection} decision={}{}",
+            self.display_name, status, mode, self.decision, details
         )
     }
 }
@@ -1083,6 +1098,7 @@ mod tests {
             relevant: true,
             selected: true,
             configured: true,
+            decision: "selected".to_string(),
             evidence: Some("NativeConfig:.prettierrc".to_string()),
             format_extensions: vec!["js".to_string(), "md".to_string()],
             format_order: Some(20),
@@ -1091,6 +1107,7 @@ mod tests {
 
         let summary = info.raw_summary();
         assert!(summary.contains("SELECTED"));
+        assert!(summary.contains("decision=selected"));
         assert!(summary.contains("evidence=NativeConfig:.prettierrc"));
         assert!(summary.contains("owns=js,md"));
         assert!(summary.contains("format-order=20"));
@@ -1469,6 +1486,7 @@ mod tests {
         assert!(info[0].configured);
         assert!(info[0].relevant);
         assert!(info[0].selected);
+        assert_eq!(info[0].decision, "selected");
         assert_eq!(info[0].format_extensions, vec!["md"]);
         assert_eq!(info[0].format_order, Some(10));
         assert!(info[0].evidence.as_deref().unwrap().contains(".prettierrc"));
