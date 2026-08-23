@@ -5648,7 +5648,10 @@ pub fn handle_check_command(
                 registry.working_dir(),
                 &registry.config().effective_scope(),
             )?
-            .with_diagnostics(registry.diagnostics_handle()),
+            .with_command_context(
+                registry.diagnostics_handle(),
+                registry.native_config_cache(),
+            ),
         )
     } else {
         None
@@ -5835,7 +5838,10 @@ pub fn handle_fmt_command(
                 registry.working_dir(),
                 &registry.config().effective_scope(),
             )?
-            .with_diagnostics(registry.diagnostics_handle()),
+            .with_command_context(
+                registry.diagnostics_handle(),
+                registry.native_config_cache(),
+            ),
         )
     } else {
         None

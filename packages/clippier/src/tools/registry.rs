@@ -54,6 +54,9 @@ pub struct ToolRegistry {
     /// Command-scoped diagnostics shared with repository inventory and planning.
     diagnostics: crate::tools::InventoryDiagnosticsHandle,
 
+    /// Command-local native configuration parse cache.
+    native_config_cache: crate::tools::discovery::NativeConfigCacheHandle,
+
     /// Command-local native probe results keyed by resolved execution context.
     probe_results: std::sync::Mutex<BTreeMap<String, bool>>,
 
@@ -97,6 +100,9 @@ impl ToolRegistry {
             available: BTreeMap::new(),
             config,
             diagnostics,
+            native_config_cache: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::discovery::NativeConfigCache::default(),
+            )),
             probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: resolved_working_dir,
         };
@@ -945,6 +951,12 @@ impl ToolRegistry {
         std::sync::Arc::clone(&self.diagnostics)
     }
 
+    /// Returns the command-scoped native configuration cache.
+    #[must_use]
+    pub(crate) fn native_config_cache(&self) -> crate::tools::discovery::NativeConfigCacheHandle {
+        std::sync::Arc::clone(&self.native_config_cache)
+    }
+
     /// Returns the directory used for local tool discovery and execution.
     #[must_use]
     pub fn working_dir(&self) -> &Path {
@@ -1650,6 +1662,9 @@ mod tests {
             diagnostics: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::tools::InventoryDiagnostics::default(),
             )),
+            native_config_cache: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::discovery::NativeConfigCache::default(),
+            )),
             probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: std::env::temp_dir(),
         };
@@ -1709,6 +1724,9 @@ mod tests {
             config: ToolsConfig::default(),
             diagnostics: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::tools::InventoryDiagnostics::default(),
+            )),
+            native_config_cache: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::discovery::NativeConfigCache::default(),
             )),
             probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: std::env::temp_dir(),

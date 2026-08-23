@@ -9,6 +9,15 @@ use ignore::WalkBuilder;
 use super::scope::{automatic_exclusion_patterns_from_files, universal_exclusion_patterns};
 use super::{TOOL_CATALOG, ToolCapability, ToolRegistry};
 
+/// Shared command-local parsed native configuration cache.
+#[derive(Debug, Default)]
+pub struct NativeConfigCache {
+    pub(crate) toml: BTreeMap<PathBuf, Option<toml::Value>>,
+    pub(crate) json: BTreeMap<PathBuf, Option<serde_json::Value>>,
+}
+
+pub type NativeConfigCacheHandle = Arc<Mutex<NativeConfigCache>>;
+
 /// Deterministic command-scoped inventory diagnostics.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InventoryDiagnostics {
@@ -62,6 +71,7 @@ pub struct RepositoryDiscovery {
     extensions: BTreeMap<String, BTreeSet<PathBuf>>,
     parsed_toml: BTreeMap<PathBuf, Option<toml::Value>>,
     parsed_json: BTreeMap<PathBuf, Option<serde_json::Value>>,
+    native_config_cache: NativeConfigCacheHandle,
     automatic_exclusions: Vec<String>,
     diagnostics: InventoryDiagnosticsHandle,
 }
@@ -196,9 +206,14 @@ impl RepositoryDiscovery {
         Ok(result)
     }
 
-    /// Replaces this inventory's diagnostics context with a command-shared one.
+    /// Replaces this inventory's diagnostics and native-config contexts with the
+    /// command-shared registry contexts.
     #[must_use]
-    pub fn with_diagnostics(mut self, diagnostics: InventoryDiagnosticsHandle) -> Self {
+    pub(crate) fn with_command_context(
+        mut self,
+        diagnostics: InventoryDiagnosticsHandle,
+        native_config_cache: NativeConfigCacheHandle,
+    ) -> Self {
         if let (Ok(existing), Ok(mut shared)) = (self.diagnostics.lock(), diagnostics.lock()) {
             shared.recursive_walks += existing.recursive_walks;
             shared.directories_visited += existing.directories_visited;
@@ -206,6 +221,7 @@ impl RepositoryDiscovery {
             shared.native_configs_parsed += existing.native_configs_parsed;
         }
         self.diagnostics = diagnostics;
+        self.native_config_cache = native_config_cache;
         self
     }
 
@@ -330,12 +346,24 @@ impl RepositoryDiscovery {
 
     fn parse_toml_cached(&mut self, path: &Path) -> Option<&toml::Value> {
         if !self.parsed_toml.contains_key(path) {
-            let parsed = std::fs::read_to_string(self.root.join(path))
+            let absolute = self.root.join(path);
+            let cached = self
+                .native_config_cache
+                .lock()
                 .ok()
-                .and_then(|contents| toml::from_str::<toml::Value>(&contents).ok());
-            if let Ok(mut diagnostics) = self.diagnostics.lock() {
-                diagnostics.native_configs_parsed += 1;
-            }
+                .and_then(|cache| cache.toml.get(&absolute).cloned());
+            let parsed = cached.unwrap_or_else(|| {
+                let parsed = std::fs::read_to_string(&absolute)
+                    .ok()
+                    .and_then(|contents| toml::from_str::<toml::Value>(&contents).ok());
+                if let Ok(mut diagnostics) = self.diagnostics.lock() {
+                    diagnostics.native_configs_parsed += 1;
+                }
+                if let Ok(mut cache) = self.native_config_cache.lock() {
+                    cache.toml.insert(absolute, parsed.clone());
+                }
+                parsed
+            });
             self.parsed_toml.insert(path.to_path_buf(), parsed);
         }
         self.parsed_toml.get(path).and_then(Option::as_ref)
@@ -343,12 +371,24 @@ impl RepositoryDiscovery {
 
     fn parse_json_cached(&mut self, path: &Path) -> Option<&serde_json::Value> {
         if !self.parsed_json.contains_key(path) {
-            let parsed = std::fs::read_to_string(self.root.join(path))
+            let absolute = self.root.join(path);
+            let cached = self
+                .native_config_cache
+                .lock()
                 .ok()
-                .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok());
-            if let Ok(mut diagnostics) = self.diagnostics.lock() {
-                diagnostics.native_configs_parsed += 1;
-            }
+                .and_then(|cache| cache.json.get(&absolute).cloned());
+            let parsed = cached.unwrap_or_else(|| {
+                let parsed = std::fs::read_to_string(&absolute)
+                    .ok()
+                    .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok());
+                if let Ok(mut diagnostics) = self.diagnostics.lock() {
+                    diagnostics.native_configs_parsed += 1;
+                }
+                if let Ok(mut cache) = self.native_config_cache.lock() {
+                    cache.json.insert(absolute, parsed.clone());
+                }
+                parsed
+            });
             self.parsed_json.insert(path.to_path_buf(), parsed);
         }
         self.parsed_json.get(path).and_then(Option::as_ref)
@@ -508,7 +548,10 @@ pub fn plan_tools(
 ) -> Result<ToolPlan, std::io::Error> {
     let scope_config = registry.config().effective_scope();
     let mut discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?
-        .with_diagnostics(registry.diagnostics_handle());
+        .with_command_context(
+            registry.diagnostics_handle(),
+            registry.native_config_cache(),
+        );
     plan_inventory(registry, capabilities, &mut discovery)
 }
 
