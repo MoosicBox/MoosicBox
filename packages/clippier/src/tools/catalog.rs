@@ -118,6 +118,13 @@ impl ToolCatalogEntry {
         )
     }
 
+    /// Returns whether generic execution should pass resolved scoped files.
+    #[must_use]
+    pub fn uses_scoped_file_arguments(self) -> bool {
+        (self.capabilities.contains(&ToolCapability::Format) && self.name != "rustfmt")
+            || self.check_args.contains(&".")
+    }
+
     /// Returns the extensions for one capability.
     #[must_use]
     pub fn extensions(self, capability: ToolCapability) -> BTreeSet<String> {
@@ -612,6 +619,14 @@ mod tests {
                     .iter()
                     .all(|extension| !extension.is_empty())
             );
+            if entry.uses_scoped_file_arguments() {
+                assert!(
+                    entry.capabilities.contains(&ToolCapability::Format)
+                        || entry.check_args.contains(&"."),
+                    "{} has invalid scoped file argument policy",
+                    entry.name
+                );
+            }
             if entry.capabilities.contains(&ToolCapability::Format) {
                 assert!(
                     !entry.format_args.is_empty(),

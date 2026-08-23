@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
 
-use super::{TOOL_CATALOG, ToolCapability, ToolRegistry, automatic_exclusion_patterns};
+use super::{EffectiveScope, TOOL_CATALOG, ToolCapability, ToolRegistry};
 
 /// Strength of repository evidence selecting a tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -256,13 +256,10 @@ pub fn plan_tools(
     registry: &ToolRegistry,
     capabilities: &[ToolCapability],
 ) -> Result<ToolPlan, std::io::Error> {
-    let scope_config = registry.config().effective_scope();
-    let mut excludes = scope_config.exclude.clone();
-    excludes.extend(automatic_exclusion_patterns(
-        registry.working_dir(),
-        &scope_config,
-    ));
-    let discovery = RepositoryDiscovery::discover_with_excludes(registry.working_dir(), &excludes)?;
+    let scope =
+        EffectiveScope::resolve(registry.working_dir(), registry.config().effective_scope());
+    let discovery =
+        RepositoryDiscovery::discover_with_excludes(registry.working_dir(), &scope.exclusions)?;
     let mut candidates = Vec::new();
     let mut unavailable = Vec::new();
 
@@ -663,7 +660,7 @@ mod tests {
         std::fs::create_dir(root.path().join("target")).unwrap();
         std::fs::write(root.path().join("target/rustfmt.toml"), "").unwrap();
         let exclusions =
-            automatic_exclusion_patterns(root.path(), &crate::tools::ScopeConfig::default());
+            EffectiveScope::resolve(root.path(), crate::tools::ScopeConfig::default()).exclusions;
         let discovery =
             RepositoryDiscovery::discover_with_excludes(root.path(), &exclusions).unwrap();
         assert!(discovery.matching_signal("Cargo.toml").is_some());

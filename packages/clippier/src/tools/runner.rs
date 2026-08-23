@@ -21,7 +21,7 @@ use rayon::prelude::*;
 
 use crate::ColorMode;
 use crate::tools::registry::{ToolError, ToolRegistry};
-use crate::tools::scope::{ScopeMatcher, automatic_exclusion_patterns};
+use crate::tools::scope::{EffectiveScope, ScopeMatcher};
 #[cfg(feature = "tools-tui")]
 use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
@@ -213,13 +213,13 @@ impl<'a> ToolRunner<'a> {
             .scope_base
             .as_deref()
             .unwrap_or_else(|| registry.working_dir());
-        let scope_config = registry.config().effective_scope();
-        let mut global_excludes = scope_config.exclude.clone();
-        global_excludes.extend(automatic_exclusion_patterns(scope_root, &scope_config));
-        let scope = if global_excludes.is_empty() {
+        let effective_scope =
+            EffectiveScope::resolve(scope_root, registry.config().effective_scope());
+        let scope = if effective_scope.exclusions.is_empty() {
             None
         } else {
-            ScopeMatcher::new(scope_root, &global_excludes)
+            effective_scope
+                .matcher(scope_root)
                 .map_err(|error| log::error!("failed to build runner scope: {error}"))
                 .ok()
         };
@@ -249,7 +249,7 @@ impl<'a> ToolRunner<'a> {
             formatter_ownership: None,
             selection_evidence: BTreeMap::new(),
             format_order: BTreeMap::new(),
-            automatic_exclusions: global_excludes,
+            automatic_exclusions: effective_scope.exclusions,
             unavailable_tools: Vec::new(),
             overlap_warnings: Vec::new(),
             selection_fallback: false,
@@ -481,7 +481,10 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn replace_default_path_args(tool: &Tool, args: &mut Vec<String>, files: &[String]) {
-        if files.is_empty() || tool_catalog_entry(&tool.name).is_none() {
+        if files.is_empty()
+            || !tool_catalog_entry(&tool.name)
+                .is_some_and(|entry| entry.uses_scoped_file_arguments())
+        {
             return;
         }
 
@@ -2381,6 +2384,56 @@ mod tests {
             0o640
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn write_named_argument_capture_tool(dir: &Path, name: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let executable = dir.join(format!("capture-args-{name}"));
+        std::fs::write(
+            &executable,
+            format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/captured-{name}\"\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        executable
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn automatic_ownership_prevents_competing_formatter_arguments() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("biome.json"), "{}\n").unwrap();
+        std::fs::write(root.path().join(".prettierrc"), "{}\n").unwrap();
+        std::fs::write(root.path().join("application.js"), "const value=1;\n").unwrap();
+        std::fs::write(root.path().join("README.md"), "# Test\n").unwrap();
+
+        let mut config = ToolsConfig::default();
+        for name in ["biome", "prettier"] {
+            let executable = write_named_argument_capture_tool(root.path(), name);
+            config
+                .executables
+                .insert(name.to_string(), executable.to_string_lossy().to_string());
+        }
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+        let names = plan.names();
+        assert_eq!(names, vec!["biome", "prettier"]);
+        let name_refs = names.iter().map(String::as_str).collect::<Vec<_>>();
+
+        let results = ToolRunner::new(&registry)
+            .with_working_dir(root.path())
+            .with_tool_plan(&plan)
+            .run_specific(&name_refs, &[], false)
+            .unwrap();
+        assert!(results.all_success());
+
+        let biome_args = std::fs::read_to_string(root.path().join("captured-biome")).unwrap();
+        let prettier_args = std::fs::read_to_string(root.path().join("captured-prettier")).unwrap();
+        assert!(biome_args.lines().any(|arg| arg == "application.js"));
+        assert!(!prettier_args.lines().any(|arg| arg == "application.js"));
+        assert!(prettier_args.lines().any(|arg| arg == "README.md"));
     }
 
     #[cfg(unix)]

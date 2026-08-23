@@ -1171,29 +1171,21 @@ unless a verified catalog relationship or an `overlap-warning-suppress` rule
 covers them; warnings never prevent configured execution. Linters remain
 additive.
 
-The `check` command automatically detects and runs:
+The `check` command uses the catalog rather than a fixed language list. The
+supported-tools table below is authoritative for capabilities and activation
+signals; `clippier check --list --output json` reports the current repository's
+relevance, availability, execution mode, evidence, coverage, and exclusions.
+Typical automatic selections include:
 
-- **Rust**: `cargo clippy` (with `-D warnings` for zero-warnings policy)
-- **TOML**: `taplo fmt --check`
-- **JavaScript/TypeScript**: `biome format`, `eslint`
-- **Markdown/MDX**: `clippier_md` strict check
-- **YAML**: `dprint check`
-- **Python**: `ruff check`, `black --check`
-- **Go**: `gofmt -l`
-- **Shell**: `shfmt -d`, `shellcheck`
+- **Rust**: `clippy`, plus formatter check modes from `rustfmt` and `taplo`
+- **Web**: configured `eslint`, `biome`, `prettier`, or `dprint`
+- **Python**: `ruff` and `black` from Python manifests/native config
+- **Go and Shell**: `gofmt`, configured `shfmt`, and configured `shellcheck`
+- **Markdown/YAML and additional ecosystems**: configured catalog integrations
+  whose signals and installed executables are present
 
-Tools run in parallel by default for maximum performance.
-
-By default, `check` auto-selects tools based on manifest/config files in the working directory:
-
-- `Cargo.toml` -> `clippy`, `rustfmt`, `taplo`
-- `package.json` -> `eslint`, `biome`
-- `pyproject.toml`, `requirements.txt`, or `setup.py` -> `ruff`, `black`
-- `go.mod` -> `gofmt`
-- `taplo.toml` -> `taplo`
-- `.shellcheckrc` -> `shellcheck`
-- `dprint.json`/`dprint.jsonc` -> `dprint`
-- workspace includes `packages/clippier/md/Cargo.toml` -> `clippier_md`
+Tools without an explicit formatter order run in parallel. Explicit ordered
+formatter pipelines run sequentially in configured order.
 
 ### Fmt Command (Formatting)
 
@@ -1342,35 +1334,41 @@ TUI behavior for tool output:
 
 #### Supported Tools
 
-| Tool           | Language/Format         | Capabilities | Detection                                                                 |
-| -------------- | ----------------------- | ------------ | ------------------------------------------------------------------------- |
-| `rustfmt`      | Rust                    | Format       | `cargo` in PATH                                                           |
-| `clippy`       | Rust                    | Lint         | `cargo` in PATH                                                           |
-| `taplo`        | TOML                    | Format, Lint | `taplo` binary                                                            |
-| `prettier`     | JS/TS/JSON/MD/YAML/etc. | Format       | `prettier` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback |
-| `biome`        | JS/TS/JSON              | Format, Lint | `biome` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback    |
-| `eslint`       | JS/TS                   | Lint         | `eslint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `dprint`       | Multi-language          | Format, Lint | `dprint` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `clippier_md`  | Markdown/MDX            | Format       | `cargo run -p clippier_md -- fmt`                                         |
-| `remark`       | Markdown/MDX            | Format       | `remark` from explicit path, local bin, PATH, or bunx/pnpm/npx fallback   |
-| `mdformat`     | Markdown                | Format       | `mdformat` binary, `uvx` fallback, or Nix ephemeral fallback              |
-| `yamlfmt`      | YAML                    | Format       | `yamlfmt` binary or Nix ephemeral fallback                                |
-| `ruff`         | Python                  | Format, Lint | `ruff` binary                                                             |
-| `black`        | Python                  | Format       | `black` binary                                                            |
-| `gofmt`        | Go                      | Format       | `gofmt` binary                                                            |
-| `shfmt`        | Shell                   | Format       | `shfmt` binary                                                            |
-| `shellcheck`   | Shell                   | Lint         | `shellcheck` binary                                                       |
-| `clang-format` | C/C++/Objective-C       | Format       | Installed `clang-format`; native `.clang-format`/`_clang-format` config   |
-| `clang-tidy`   | C/C++                   | Lint         | Installed `clang-tidy`; compile database or `.clang-tidy` config          |
-| `stylua`       | Lua/Luau                | Format       | Installed `stylua`; requires `stylua.toml` or `.stylua.toml`              |
-| `luacheck`     | Lua                     | Lint         | Installed `luacheck`; requires `.luacheckrc`                              |
-| `terraform`    | Terraform               | Format, Lint | Installed `terraform`; `.terraform.lock.hcl` project evidence             |
-| `tofu`         | OpenTofu                | Format, Lint | Installed `tofu`; `.terraform.lock.hcl` project evidence                  |
+| Tool           | Language/Format         | Capabilities | Detection                                                                                 |
+| -------------- | ----------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `rustfmt`      | Rust                    | Format       | `cargo` in PATH                                                                           |
+| `clippy`       | Rust                    | Lint         | `cargo` in PATH                                                                           |
+| `taplo`        | TOML                    | Format, Lint | `taplo` binary                                                                            |
+| `prettier`     | JS/TS/JSON/MD/YAML/etc. | Format       | Native Prettier config or `package.json#prettier`; installed explicit/local/PATH binary   |
+| `biome`        | JS/TS/JSON/CSS/etc.     | Format       | `biome.json`/`biome.jsonc` or `package.json`; installed explicit/local/PATH binary        |
+| `eslint`       | JS/TS                   | Lint         | ESLint flat/legacy config; installed explicit/local/PATH binary                           |
+| `dprint`       | Multi-language          | Format, Lint | `dprint.json`/`dprint.jsonc`; installed explicit/local/PATH binary                        |
+| `clippier_md`  | Markdown/MDX            | Format       | Workspace `packages/clippier/md/Cargo.toml`; Cargo adapter                                |
+| `remark`       | Markdown/MDX            | Format       | Native remark config; installed explicit/local/PATH binary                                |
+| `mdformat`     | Markdown                | Format       | `.mdformat.toml`, `pyproject.toml#tool.mdformat`, or Markdown content; installed binary   |
+| `yamlfmt`      | YAML                    | Format       | `.yamlfmt`/`yamlfmt.yml`/`yamlfmt.yaml`; installed binary                                 |
+| `ruff`         | Python                  | Format, Lint | Python manifest or Ruff config; installed explicit/PATH binary                            |
+| `black`        | Python                  | Format       | Python manifest, `.black`, or `pyproject.toml#tool.black`; installed explicit/PATH binary |
+| `gofmt`        | Go                      | Format       | `go.mod`; installed explicit/PATH binary                                                  |
+| `shfmt`        | Shell                   | Format       | `.shfmt.conf`; installed explicit/PATH binary                                             |
+| `shellcheck`   | Shell                   | Lint         | `.shellcheckrc`; installed explicit/PATH binary                                           |
+| `clang-format` | C/C++/Objective-C       | Format       | `.clang-format`/`_clang-format`; installed explicit/PATH binary                           |
+| `clang-tidy`   | C/C++                   | Lint         | `compile_commands.json` or `.clang-tidy`; installed explicit/PATH binary                  |
+| `stylua`       | Lua/Luau                | Format       | `stylua.toml`/`.stylua.toml`; installed explicit/PATH binary                              |
+| `luacheck`     | Lua                     | Lint         | `.luacheckrc`; installed explicit/PATH binary                                             |
+| `terraform`    | Terraform               | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
+| `tofu`         | OpenTofu                | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
 
-Every automatic integration uses cataloged signals, capabilities, coverage, and
-ownership priority. Tools with no safe ecosystem-wide convention require native
-configuration evidence. Missing relevant tools are reported but never acquired
-unless fallback was explicitly enabled.
+Every automatic integration uses cataloged signals, capabilities, default
+coverage, and ownership priority. File coverage is the catalog extension set
+shown by `check --list --output json` or `fmt --list --output json`, with native
+configuration probes narrowing it where supported. Executable resolution is an
+explicit per-tool override, then a project-local executable where the ecosystem
+supports one, then `PATH`. Cargo-backed tools use their cataloged Cargo adapter.
+Tools with no safe ecosystem-wide convention require native configuration
+evidence. Missing relevant tools are reported but never acquired. Package-runner
+and Nix acquisition modes appear only when explicitly enabled in `[runner]`;
+the list output reports the resulting execution mode.
 
 #### Output Format (JSON)
 

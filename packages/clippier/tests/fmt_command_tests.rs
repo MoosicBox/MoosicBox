@@ -68,6 +68,267 @@ fn run_fmt(root: &Path, args: &[&str]) -> std::process::Output {
 }
 
 #[cfg(unix)]
+fn write_successful_tool(root: &Path, name: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = root.join(name);
+    std::fs::write(
+        &path,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/tool-invocation\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    path
+}
+
+#[cfg(unix)]
+#[test]
+fn explicit_tool_path_skip_check_json_and_raw_controls_complete_cli_paths() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join(".prettierrc"), "{}\n").unwrap();
+    std::fs::write(temp.path().join("document.md"), "# test\n").unwrap();
+    let prettier = write_successful_tool(temp.path(), "fake-prettier");
+    let tool_path = format!("prettier={}", prettier.display());
+
+    let checked = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--tools")
+        .arg("prettier")
+        .arg("--tool-path")
+        .arg(&tool_path)
+        .arg("--scope")
+        .arg("all")
+        .arg("--check")
+        .arg("--no-tui")
+        .arg("--output")
+        .arg("json")
+        .output()
+        .unwrap();
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(json["total"], 1);
+    assert_eq!(json["results"][0]["name"], "prettier");
+    assert_eq!(json["results"][0]["success"], true);
+    let args = std::fs::read_to_string(temp.path().join("tool-invocation")).unwrap();
+    assert!(args.lines().any(|arg| arg == "--check"));
+    assert!(args.lines().any(|arg| arg == "document.md"));
+
+    std::fs::remove_file(temp.path().join("tool-invocation")).unwrap();
+    let skipped = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--tool-path")
+        .arg(&tool_path)
+        .arg("--skip")
+        .arg("prettier")
+        .arg("--scope")
+        .arg("all")
+        .arg("--output")
+        .arg("json")
+        .output()
+        .unwrap();
+    assert!(skipped.status.success());
+    let skipped_json: serde_json::Value = serde_json::from_slice(&skipped.stdout).unwrap();
+    assert_eq!(skipped_json["total"], 0);
+    assert!(!temp.path().join("tool-invocation").exists());
+
+    let raw = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--tools")
+        .arg("prettier")
+        .arg("--tool-path")
+        .arg(tool_path)
+        .arg("--scope")
+        .arg("all")
+        .arg("--no-tui")
+        .arg("--output")
+        .arg("raw")
+        .output()
+        .unwrap();
+    assert!(raw.status.success());
+    assert!(String::from_utf8_lossy(&raw.stdout).contains("Prettier"));
+    assert!(temp.path().join("tool-invocation").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
+    struct Fixture {
+        label: &'static str,
+        tool: &'static str,
+        signal: &'static str,
+        source: &'static str,
+    }
+
+    for fixture in [
+        Fixture {
+            label: "rust",
+            tool: "taplo",
+            signal: "Cargo.toml",
+            source: "project.toml",
+        },
+        Fixture {
+            label: "node",
+            tool: "prettier",
+            signal: ".prettierrc",
+            source: "application.js",
+        },
+        Fixture {
+            label: "python",
+            tool: "ruff",
+            signal: "ruff.toml",
+            source: "application.py",
+        },
+        Fixture {
+            label: "go",
+            tool: "gofmt",
+            signal: "go.mod",
+            source: "application.go",
+        },
+        Fixture {
+            label: "markdown",
+            tool: "mdformat",
+            signal: ".mdformat.toml",
+            source: "README.md",
+        },
+        Fixture {
+            label: "clang",
+            tool: "clang-format",
+            signal: ".clang-format",
+            source: "application.cpp",
+        },
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join(fixture.signal), "{}\n").unwrap();
+        std::fs::write(temp.path().join(fixture.source), "fixture\n").unwrap();
+        let executable = write_successful_tool(temp.path(), fixture.tool);
+        let tool_path = format!("{}={}", fixture.tool, executable.display());
+
+        for (command, extra_args) in [("fmt", vec!["--scope", "all"]), ("check", vec![])] {
+            let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+                .arg(command)
+                .arg("--working-dir")
+                .arg(temp.path())
+                .arg("--tool-path")
+                .arg(&tool_path)
+                .args(extra_args)
+                .arg("--no-tui")
+                .arg("--output")
+                .arg("json")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{} {command}: {}",
+                fixture.label,
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert!(
+                json["results"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|result| result["name"] == fixture.tool && result["success"] == true),
+                "{} {command} did not execute {}: {json}",
+                fixture.label,
+                fixture.tool
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn mixed_monorepo_resolves_nested_configs_ownership_linters_exclusions_and_overrides() {
+    let temp = tempfile::tempdir().unwrap();
+    let web = temp.path().join("packages/web");
+    let python = temp.path().join("packages/python");
+    std::fs::create_dir_all(web.join("node_modules")).unwrap();
+    std::fs::create_dir_all(&python).unwrap();
+    std::fs::write(web.join("package.json"), "{}\n").unwrap();
+    std::fs::write(web.join("biome.json"), "{}\n").unwrap();
+    std::fs::write(web.join(".prettierrc"), "{}\n").unwrap();
+    std::fs::write(web.join("eslint.config.js"), "export default [];\n").unwrap();
+    std::fs::write(web.join("application.js"), "const value=1;\n").unwrap();
+    std::fs::write(web.join("README.md"), "# Web\n").unwrap();
+    std::fs::write(web.join("node_modules/generated.js"), "generated\n").unwrap();
+    std::fs::write(
+        python.join("pyproject.toml"),
+        "[project]\nname='fixture'\n[tool.ruff]\nline-length=100\n",
+    )
+    .unwrap();
+    std::fs::write(python.join("application.py"), "value=1\n").unwrap();
+
+    let mut tool_paths = Vec::new();
+    for tool in ["biome", "prettier", "eslint", "ruff"] {
+        let executable = write_successful_tool(temp.path(), &format!("fake-{tool}"));
+        tool_paths.push(format!("{tool}={}", executable.display()));
+    }
+    let mut command = Command::new(env!("CARGO_BIN_EXE_clippier"));
+    command
+        .arg("check")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--skip")
+        .arg("prettier")
+        .arg("--no-tui")
+        .arg("--output")
+        .arg("json");
+    for tool_path in &tool_paths {
+        command.arg("--tool-path").arg(tool_path);
+    }
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let names = json["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|result| result["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"biome"));
+    assert!(names.contains(&"eslint"));
+    assert!(names.contains(&"ruff"));
+    assert!(!names.contains(&"prettier"));
+    assert_eq!(
+        json["plan"]["selection_evidence"]["biome"],
+        "NativeConfig:packages/web/biome.json"
+    );
+    assert_eq!(
+        json["plan"]["selection_evidence"]["ruff"],
+        "NativeConfig:packages/python/pyproject.toml"
+    );
+    assert!(
+        json["plan"]["formatter_ownership"]["biome"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|extension| extension == "js")
+    );
+    assert!(
+        json["plan"]["automatic_exclusions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|pattern| pattern == "packages/web/node_modules/**")
+    );
+}
+
+#[cfg(unix)]
 fn write_failing_acquisition_runner(root: &Path, name: &str) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
@@ -166,6 +427,22 @@ fn default_fmt_and_list_never_invoke_acquisition_runners() {
     assert_eq!(prettier["relevant"], true);
     assert_eq!(prettier["available"], false);
     assert_eq!(prettier["selected"], false);
+
+    let required = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--required")
+        .arg("prettier")
+        .arg("--output")
+        .arg("json")
+        .env("PATH", temp.path())
+        .output()
+        .unwrap();
+    assert!(!required.status.success());
+    assert!(
+        String::from_utf8_lossy(&required.stderr).contains("Required tool 'prettier' not found")
+    );
     assert!(!temp.path().join("acquisition-invocations").exists());
 }
 

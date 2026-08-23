@@ -57,7 +57,7 @@ pub use discovery::{
 pub use format_selection::resolve_format_selection;
 pub use registry::ToolRegistry;
 pub use runner::{AggregatedResults, ToolResult, ToolRunner, print_summary, results_to_json};
-pub use scope::{ScopeConfig, automatic_exclusion_patterns};
+pub use scope::{EffectiveScope, ScopeConfig, automatic_exclusion_patterns};
 pub use types::{
     FormatConfig, FormatScope, FormatSelection, OverlapWarningCapability,
     OverlapWarningSuppressRule, Tool, ToolCapability, ToolKind, ToolPolicy, ToolSelectionMode,
@@ -807,10 +807,9 @@ pub fn overlap_warnings_for_selected_tools(
         || std::env::current_dir().unwrap_or_else(|_| std::path::Path::new(".").to_path_buf()),
         std::path::Path::to_path_buf,
     );
-    let effective_scope = registry.config().effective_scope();
-    let mut excludes = effective_scope.exclude.clone();
-    excludes.extend(automatic_exclusion_patterns(&base_dir, &effective_scope));
-    let overlap_scope = scope::ScopeMatcher::new(&base_dir, &excludes).ok();
+    let effective_scope =
+        scope::EffectiveScope::resolve(&base_dir, registry.config().effective_scope());
+    let overlap_scope = effective_scope.matcher(&base_dir).ok();
     let tool_scopes = registry
         .config()
         .tools

@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::tools::automatic_exclusion_patterns;
+use crate::tools::EffectiveScope;
 use crate::tools::catalog::TOOL_CATALOG;
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
 
@@ -927,13 +927,14 @@ impl ToolRegistry {
                     evidence: None,
                     format_extensions: Vec::new(),
                     format_order: None,
-                    automatic_exclusions: automatic_exclusion_patterns(
+                    automatic_exclusions: EffectiveScope::resolve(
                         self.config
                             .scope_base
                             .as_deref()
                             .unwrap_or(&self.working_dir),
-                        &self.config.effective_scope(),
-                    ),
+                        self.config.effective_scope(),
+                    )
+                    .exclusions,
                 }
             })
             .collect()

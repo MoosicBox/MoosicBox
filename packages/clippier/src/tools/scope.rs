@@ -38,6 +38,33 @@ impl Default for ScopeConfig {
     }
 }
 
+/// One effective repository scope shared by discovery, planning, reporting, and
+/// file-oriented execution.
+#[derive(Debug, Clone)]
+pub struct EffectiveScope {
+    /// Resolved runner scope configuration.
+    pub config: ScopeConfig,
+    /// Runner-wide exclusions, including active automatic profiles.
+    pub exclusions: Vec<String>,
+}
+
+impl EffectiveScope {
+    /// Resolves configured and automatic exclusions for a repository root.
+    #[must_use]
+    pub fn resolve(root: &Path, config: ScopeConfig) -> Self {
+        let mut exclusions = config.exclude.clone();
+        exclusions.extend(automatic_exclusion_patterns(root, &config));
+        exclusions.sort();
+        exclusions.dedup();
+        Self { config, exclusions }
+    }
+
+    /// Builds the global scope matcher.
+    pub(crate) fn matcher(&self, root: &Path) -> Result<ScopeMatcher, BoxError> {
+        ScopeMatcher::new(root, &self.exclusions)
+    }
+}
+
 #[derive(Debug)]
 pub struct ScopeMatcher {
     root: PathBuf,
