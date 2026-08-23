@@ -3,9 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::tools::EffectiveScope;
-use crate::tools::catalog::TOOL_CATALOG;
+use crate::tools::catalog::{TOOL_CATALOG, tool_catalog_entry};
 use crate::tools::types::{Tool, ToolCapability, ToolKind, ToolsConfig};
+use crate::tools::{EffectiveScope, ToolAdapter};
 
 #[derive(Debug, Clone)]
 enum ToolResolution {
@@ -477,140 +477,60 @@ impl ToolRegistry {
         runner_fallback: bool,
         config: &ToolsConfig,
     ) -> Option<ToolResolution> {
-        match name {
-            "prettier" => {
-                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, "prettier") {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if let Ok(path) = which::which("prettier") {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::node_runner_resolution("prettier")
-            }
-            "biome" => {
-                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if let Ok(path) = which::which(&tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::node_runner_resolution("@biomejs/biome")
-            }
-            "eslint" => {
-                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if let Ok(path) = which::which(&tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::node_runner_resolution("eslint")
-            }
-            "dprint" => {
-                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if let Ok(path) = which::which(&tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::node_runner_resolution("dprint")
-            }
-            "remark" => {
-                if let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if let Ok(path) = which::which(&tool.binary) {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::remark_runner_resolution()
-            }
-            "mdformat" => {
-                let requested_extensions = Self::parse_mdformat_requested_extensions(base_dir);
-
-                if !requested_extensions.is_empty() && runner_fallback {
-                    let mut candidates =
-                        Self::mdformat_runner_candidates(config, &requested_extensions);
-                    if let Ok(path) = which::which("mdformat") {
-                        candidates.push(ToolResolution::Binary(path));
-                    }
-
-                    let mut best: Option<(usize, ToolResolution)> = None;
-                    for candidate in candidates {
-                        let supported = Self::mdformat_supported_extensions_for_resolution(
-                            &candidate,
-                            &requested_extensions,
-                            base_dir,
-                        )
-                        .len();
-
-                        if best.as_ref().is_none_or(|(count, _)| supported > *count) {
-                            best = Some((supported, candidate));
-                        }
-                    }
-
-                    return best.map(|(_, candidate)| candidate);
-                }
-
-                if let Ok(path) = which::which("mdformat") {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                Self::mdformat_runner_candidates(config, &requested_extensions)
-                    .into_iter()
-                    .next()
-            }
-            "yamlfmt" => {
-                if let Ok(path) = which::which("yamlfmt") {
-                    return Some(ToolResolution::Binary(path));
-                }
-
-                if !runner_fallback {
-                    return None;
-                }
-
-                if Self::nix_fallback_enabled(config)
-                    && let Some(package) = Self::nix_package_for_tool(config, "yamlfmt")
-                {
-                    return Some(Self::nix_runner_resolution(&[package], "yamlfmt"));
-                }
-
-                None
-            }
-            _ => which::which(&tool.binary).ok().map(ToolResolution::Binary),
+        let entry = tool_catalog_entry(name)?;
+        if entry.uses_local_node_bin()
+            && let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary)
+        {
+            return Some(ToolResolution::Binary(path));
         }
+
+        if name == "mdformat" && runner_fallback {
+            let requested_extensions = Self::parse_mdformat_requested_extensions(base_dir);
+            let candidates = Self::mdformat_runner_candidates(config, &requested_extensions);
+            let mut best: Option<(usize, ToolResolution)> = None;
+            for candidate in candidates {
+                let supported = Self::mdformat_supported_extensions_for_resolution(
+                    &candidate,
+                    &requested_extensions,
+                    base_dir,
+                )
+                .len();
+                if best.as_ref().is_none_or(|(count, _)| supported > *count) {
+                    best = Some((supported, candidate));
+                }
+            }
+            if let Some((_, candidate)) = best {
+                return Some(candidate);
+            }
+        }
+
+        if let Ok(path) = which::which(&tool.binary) {
+            return Some(ToolResolution::Binary(path));
+        }
+        if !runner_fallback {
+            return None;
+        }
+        if name == "remark" {
+            return Self::remark_runner_resolution();
+        }
+        if let Some(package) = entry.node_runner_package() {
+            return Self::node_runner_resolution(package);
+        }
+        if name == "mdformat" {
+            return Self::mdformat_runner_candidates(
+                config,
+                &Self::parse_mdformat_requested_extensions(base_dir),
+            )
+            .into_iter()
+            .next();
+        }
+        if name == "yamlfmt"
+            && Self::nix_fallback_enabled(config)
+            && let Some(package) = Self::nix_package_for_tool(config, name)
+        {
+            return Some(Self::nix_runner_resolution(&[package], &tool.binary));
+        }
+        None
     }
 
     fn to_absolute_path(path: &Path) -> PathBuf {
@@ -682,7 +602,7 @@ impl ToolRegistry {
     }
 
     fn maybe_apply_biome_settings(tool: &mut Tool, config: &ToolsConfig, working_dir: &Path) {
-        if tool.name != "biome" {
+        if tool_catalog_entry(&tool.name).map(|entry| entry.adapter()) != Some(ToolAdapter::Biome) {
             return;
         }
 

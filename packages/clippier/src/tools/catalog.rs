@@ -19,6 +19,10 @@ pub struct CompatibleOverlap {
 
 /// Evidence-backed compatible overlaps. Entries must only be added after the
 /// tools' transformations are verified as complementary and order-safe.
+///
+/// The initial support matrix intentionally contains no such relationship:
+/// every pair of registered formatters can rewrite shared syntax, so configured
+/// overlap continues to warn unless a repository explicitly suppresses it.
 pub const COMPATIBLE_OVERLAPS: &[CompatibleOverlap] = &[];
 
 /// Returns extensions whose overlap is cataloged as compatible.
@@ -62,6 +66,25 @@ pub struct ToolSignals {
     pub configs: &'static [&'static str],
     /// File extensions which may activate a content-based default.
     pub content_extensions: &'static [&'static str],
+}
+
+/// Explicit native adapter for irreducible tool CLI behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolAdapter {
+    /// Standard catalog invocation.
+    Standard,
+    /// Isolated, scoped rustfmt execution.
+    Rustfmt,
+    /// Workspace-local Clippier Markdown delegation.
+    ClippierMarkdown,
+    /// Prettier ignore-path behavior.
+    Prettier,
+    /// Biome configuration and VCS flags.
+    Biome,
+    /// mdformat extension probing.
+    Mdformat,
+    /// Strict remark check behavior.
+    Remark,
 }
 
 /// Canonical metadata for a built-in tool.
@@ -116,6 +139,39 @@ impl ToolCatalogEntry {
             self.check_args.iter().map(ToString::to_string).collect(),
             self.format_args.iter().map(ToString::to_string).collect(),
         )
+    }
+
+    /// Returns the explicit native adapter for irreducible CLI behavior.
+    #[must_use]
+    pub fn adapter(self) -> ToolAdapter {
+        match self.name {
+            "rustfmt" => ToolAdapter::Rustfmt,
+            "clippier_md" => ToolAdapter::ClippierMarkdown,
+            "prettier" => ToolAdapter::Prettier,
+            "biome" => ToolAdapter::Biome,
+            "mdformat" => ToolAdapter::Mdformat,
+            "remark" => ToolAdapter::Remark,
+            _ => ToolAdapter::Standard,
+        }
+    }
+
+    /// Returns the package-runner package for Node ecosystem tools.
+    #[must_use]
+    pub fn node_runner_package(self) -> Option<&'static str> {
+        match self.name {
+            "prettier" => Some("prettier"),
+            "biome" => Some("@biomejs/biome"),
+            "eslint" => Some("eslint"),
+            "dprint" => Some("dprint"),
+            "remark" => Some("remark-cli"),
+            _ => None,
+        }
+    }
+
+    /// Returns whether project-local Node executable lookup applies.
+    #[must_use]
+    pub fn uses_local_node_bin(self) -> bool {
+        self.node_runner_package().is_some()
     }
 
     /// Returns whether generic execution should pass resolved scoped files.
@@ -471,7 +527,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         "shellcheck",
         Binary,
         LINT,
-        NONE,
+        &["."],
         NONE,
         NONE,
         &[".shellcheckrc"],
@@ -501,7 +557,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         "clang-tidy",
         Binary,
         LINT,
-        NONE,
+        &["."],
         NONE,
         &["compile_commands.json"],
         &[".clang-tidy"],
@@ -538,6 +594,36 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         NONE,
         &["lua"],
+        0
+    ),
+    entry!(
+        "alejandra",
+        "Alejandra",
+        "alejandra",
+        Binary,
+        FORMAT,
+        &["--check", "."],
+        &["."],
+        &["flake.nix"],
+        NONE,
+        NONE,
+        &["nix"],
+        NONE,
+        10
+    ),
+    entry!(
+        "statix",
+        "Statix",
+        "statix",
+        Binary,
+        LINT,
+        &["check", "."],
+        NONE,
+        &["flake.nix"],
+        &["statix.toml"],
+        NONE,
+        NONE,
+        &["nix"],
         0
     ),
     entry!(
@@ -581,6 +667,17 @@ pub fn tool_catalog_entry(name: &str) -> Option<&'static ToolCatalogEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initial_matrix_has_no_unverified_compatible_formatter_pairs() {
+        assert!(COMPATIBLE_OVERLAPS.is_empty());
+        assert!(
+            compatible_overlap_extensions("biome", "prettier", ToolCapability::Format).is_empty()
+        );
+        assert!(
+            compatible_overlap_extensions("dprint", "prettier", ToolCapability::Format).is_empty()
+        );
+    }
 
     #[test]
     fn catalog_ids_are_unique_and_capabilities_have_arguments() {

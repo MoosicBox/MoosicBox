@@ -74,7 +74,7 @@ fn write_successful_tool(root: &Path, name: &str) -> PathBuf {
     let path = root.join(name);
     std::fs::write(
         &path,
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/tool-invocation\"\n",
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"${0%/*}/tool-invocation\"\n",
     )
     .unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -161,6 +161,40 @@ fn explicit_tool_path_skip_check_json_and_raw_controls_complete_cli_paths() {
 
 #[cfg(unix)]
 #[test]
+fn installed_markdown_default_runs_without_clippier_or_native_configuration() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join("README.md"), "# Default\n").unwrap();
+    write_successful_tool(temp.path(), "mdformat");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .arg("fmt")
+        .arg("--working-dir")
+        .arg(temp.path())
+        .arg("--scope")
+        .arg("all")
+        .arg("--no-tui")
+        .arg("--output")
+        .arg("json")
+        .env("PATH", temp.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["results"][0]["name"], "mdformat");
+    assert_eq!(
+        json["plan"]["selection_evidence"]["mdformat"],
+        "Content:README.md"
+    );
+    assert_eq!(json["plan"]["formatter_ownership"]["mdformat"][0], "md");
+    assert_eq!(json["results"][0]["success"], true, "{json}");
+}
+
+#[cfg(unix)]
+#[test]
 fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
     struct Fixture {
         label: &'static str,
@@ -183,6 +217,60 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
             source: "application.js",
         },
         Fixture {
+            label: "node-biome",
+            tool: "biome",
+            signal: "biome.json",
+            source: "biome.js",
+        },
+        Fixture {
+            label: "node-eslint",
+            tool: "eslint",
+            signal: "eslint.config.js",
+            source: "lint.js",
+        },
+        Fixture {
+            label: "multi-dprint",
+            tool: "dprint",
+            signal: "dprint.json",
+            source: "document.json",
+        },
+        Fixture {
+            label: "markdown-remark",
+            tool: "remark",
+            signal: ".remarkrc",
+            source: "remark.md",
+        },
+        Fixture {
+            label: "yaml",
+            tool: "yamlfmt",
+            signal: "yamlfmt.yml",
+            source: "document.yaml",
+        },
+        Fixture {
+            label: "python-black",
+            tool: "black",
+            signal: ".black",
+            source: "black.py",
+        },
+        Fixture {
+            label: "shell-format",
+            tool: "shfmt",
+            signal: ".shfmt.conf",
+            source: "format.sh",
+        },
+        Fixture {
+            label: "lua-lint",
+            tool: "luacheck",
+            signal: ".luacheckrc",
+            source: "lint.lua",
+        },
+        Fixture {
+            label: "opentofu",
+            tool: "tofu",
+            signal: ".terraform.lock.hcl",
+            source: "tofu.tf",
+        },
+        Fixture {
             label: "python",
             tool: "ruff",
             signal: "ruff.toml",
@@ -201,10 +289,34 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
             source: "application.lua",
         },
         Fixture {
+            label: "nix-format",
+            tool: "alejandra",
+            signal: "flake.nix",
+            source: "module.nix",
+        },
+        Fixture {
+            label: "nix-lint",
+            tool: "statix",
+            signal: "statix.toml",
+            source: "lint.nix",
+        },
+        Fixture {
             label: "terraform",
             tool: "terraform",
             signal: ".terraform.lock.hcl",
             source: "main.tf",
+        },
+        Fixture {
+            label: "shell-lint",
+            tool: "shellcheck",
+            signal: ".shellcheckrc",
+            source: "application.sh",
+        },
+        Fixture {
+            label: "cpp-lint",
+            tool: "clang-tidy",
+            signal: ".clang-tidy",
+            source: "lint.cpp",
         },
         Fixture {
             label: "markdown",
@@ -226,6 +338,14 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
         let tool_path = format!("{}={}", fixture.tool, executable.display());
 
         for (command, extra_args) in [("fmt", vec!["--scope", "all"]), ("check", vec![])] {
+            if command == "fmt"
+                && matches!(
+                    fixture.tool,
+                    "shellcheck" | "clang-tidy" | "eslint" | "luacheck" | "statix"
+                )
+            {
+                continue;
+            }
             let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
                 .arg(command)
                 .arg("--working-dir")

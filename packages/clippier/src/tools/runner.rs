@@ -25,7 +25,9 @@ use crate::tools::scope::{EffectiveScope, ScopeMatcher};
 #[cfg(feature = "tools-tui")]
 use crate::tools::tui;
 use crate::tools::types::{Tool, ToolKind};
-use crate::tools::{FormatSelection, ToolPlan, default_extensions_for_tool, tool_catalog_entry};
+use crate::tools::{
+    FormatSelection, ToolAdapter, ToolPlan, default_extensions_for_tool, tool_catalog_entry,
+};
 
 /// Live tool execution events used by the TUI.
 #[cfg(feature = "tools-tui")]
@@ -412,8 +414,10 @@ impl<'a> ToolRunner<'a> {
 
     fn scoped_file_args(&self, tool: &Tool) -> Option<Vec<String>> {
         if matches!(tool.kind, ToolKind::Cargo)
-            && tool.name != "clippier_md"
-            && tool.name != "rustfmt"
+            && !matches!(
+                tool_catalog_entry(&tool.name).map(|entry| entry.adapter()),
+                Some(ToolAdapter::ClippierMarkdown | ToolAdapter::Rustfmt)
+            )
         {
             return None;
         }
@@ -981,7 +985,9 @@ impl<'a> ToolRunner<'a> {
         working_dir: Option<&Path>,
         args_start_index: usize,
     ) -> Vec<String> {
-        if tool.name != "mdformat" {
+        if tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
+            != Some(ToolAdapter::Mdformat)
+        {
             return Vec::new();
         }
 
@@ -1058,7 +1064,10 @@ impl<'a> ToolRunner<'a> {
         working_dir: Option<&Path>,
         args_start_index: usize,
     ) {
-        if tool.name != "prettier" || args.iter().any(|arg| arg == "--ignore-path") {
+        if tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
+            != Some(ToolAdapter::Prettier)
+            || args.iter().any(|arg| arg == "--ignore-path")
+        {
             return;
         }
 
@@ -1425,7 +1434,10 @@ impl<'a> ToolRunner<'a> {
             return result;
         }
 
-        if check_mode && tool.name == "remark" {
+        if check_mode
+            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
+                == Some(ToolAdapter::Remark)
+        {
             let _ = tx.send(ToolEvent::Started {
                 tool_name: tool.name.clone(),
                 display_name: tool.display_name.clone(),
@@ -1787,7 +1799,8 @@ impl<'a> ToolRunner<'a> {
 
     #[cfg(feature = "format")]
     fn selected_rust_files(&self, tool: &Tool) -> Option<Vec<String>> {
-        if tool.name != "rustfmt" {
+        if tool_catalog_entry(&tool.name).map(|entry| entry.adapter()) != Some(ToolAdapter::Rustfmt)
+        {
             return None;
         }
         self.scoped_file_args(tool)
@@ -1803,7 +1816,10 @@ impl<'a> ToolRunner<'a> {
             return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
         }
 
-        if check_mode && tool.name == "remark" {
+        if check_mode
+            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
+                == Some(ToolAdapter::Remark)
+        {
             return self.run_remark_strict_check(tool, start_time);
         }
 
@@ -2000,7 +2016,10 @@ impl<'a> ToolRunner<'a> {
             return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
         }
 
-        if check_mode && tool.name == "remark" {
+        if check_mode
+            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
+                == Some(ToolAdapter::Remark)
+        {
             return self.run_remark_strict_check(tool, start_time);
         }
 

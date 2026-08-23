@@ -1356,6 +1356,8 @@ TUI behavior for tool output:
 | `clang-tidy`   | C/C++                   | Lint         | `compile_commands.json` or `.clang-tidy`; installed explicit/PATH binary                  |
 | `stylua`       | Lua/Luau                | Format       | `stylua.toml`/`.stylua.toml`; installed explicit/PATH binary                              |
 | `luacheck`     | Lua                     | Lint         | `.luacheckrc`; installed explicit/PATH binary                                             |
+| `alejandra`    | Nix                     | Format       | `flake.nix`; installed explicit/PATH binary                                               |
+| `statix`       | Nix                     | Lint         | `flake.nix` or `statix.toml`; installed explicit/PATH binary                              |
 | `terraform`    | Terraform               | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
 | `tofu`         | OpenTofu                | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
 

@@ -46,8 +46,9 @@ use serde::Deserialize;
 
 use catalog::tool_catalog_entry as catalog_entry;
 pub use catalog::{
-    COMPATIBLE_OVERLAPS, CompatibleOverlap, EmbeddedConfigSignal, TOOL_CATALOG, ToolCatalogEntry,
-    ToolSignals, compatible_overlap_extensions, embedded_config_signals, tool_catalog_entry,
+    COMPATIBLE_OVERLAPS, CompatibleOverlap, EmbeddedConfigSignal, TOOL_CATALOG, ToolAdapter,
+    ToolCatalogEntry, ToolSignals, compatible_overlap_extensions, embedded_config_signals,
+    tool_catalog_entry,
 };
 pub use discovery::{
     PlannedTool, RepositoryDiscovery, SelectionEvidence, SelectionEvidenceKind, ToolPlan,
