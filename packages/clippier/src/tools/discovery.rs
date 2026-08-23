@@ -2,10 +2,34 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use ignore::WalkBuilder;
 
-use super::{EffectiveScope, TOOL_CATALOG, ToolCapability, ToolRegistry};
+use super::scope::{automatic_exclusion_patterns_from_files, universal_exclusion_patterns};
+use super::{TOOL_CATALOG, ToolCapability, ToolRegistry};
+
+/// Deterministic command-scoped inventory diagnostics.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InventoryDiagnostics {
+    /// Number of recursive repository walkers constructed.
+    pub recursive_walks: usize,
+    /// Directories yielded by the authoritative walker.
+    pub directories_visited: usize,
+    /// Files indexed by the authoritative walker.
+    pub files_indexed: usize,
+    /// Native configuration files parsed.
+    pub native_configs_parsed: usize,
+    /// Installed executable resolutions attempted.
+    pub executables_resolved: usize,
+    /// Native capability probes executed.
+    pub probes_executed: usize,
+    /// Planned file assignments across tools and capabilities.
+    pub files_assigned: usize,
+}
+
+/// Shared mutable diagnostics handle retained by one command plan.
+pub type InventoryDiagnosticsHandle = Arc<Mutex<InventoryDiagnostics>>;
 
 /// Strength of repository evidence selecting a tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,6 +60,8 @@ pub struct RepositoryDiscovery {
     files: BTreeSet<PathBuf>,
     basenames: BTreeMap<String, BTreeSet<PathBuf>>,
     extensions: BTreeMap<String, BTreeSet<PathBuf>>,
+    automatic_exclusions: Vec<String>,
+    diagnostics: InventoryDiagnosticsHandle,
 }
 
 impl RepositoryDiscovery {
@@ -46,6 +72,27 @@ impl RepositoryDiscovery {
     /// * If the working directory cannot be canonicalized
     pub fn discover(root: &Path) -> Result<Self, std::io::Error> {
         Self::discover_with_excludes(root, &[])
+    }
+
+    /// Discovers repository files with one authoritative ignore-aware walk.
+    /// Configured and universal exclusions prune during traversal; ecosystem
+    /// exclusions are derived from manifests indexed by that same walk.
+    ///
+    /// # Errors
+    ///
+    /// * If the working directory cannot be canonicalized
+    pub fn inventory(
+        root: &Path,
+        config: &crate::tools::ScopeConfig,
+    ) -> Result<Self, std::io::Error> {
+        let mut excludes = config.exclude.clone();
+        excludes.extend(universal_exclusion_patterns());
+        excludes.sort();
+        excludes.dedup();
+        let mut result = Self::discover_with_excludes(root, &excludes)?;
+        result.automatic_exclusions =
+            automatic_exclusion_patterns_from_files(&result.files, config);
+        Ok(result)
     }
 
     /// Discovers repository files with additional root-relative exclusions.
@@ -68,6 +115,9 @@ impl RepositoryDiscovery {
             root: root.clone(),
             ..Self::default()
         };
+        if let Ok(mut diagnostics) = result.diagnostics.lock() {
+            diagnostics.recursive_walks += 1;
+        }
         let mut builder = WalkBuilder::new(&root);
         builder
             .hidden(false)
@@ -89,8 +139,17 @@ impl RepositoryDiscovery {
             });
 
         for entry in builder.build().filter_map(Result::ok) {
+            if entry.file_type().is_some_and(|kind| kind.is_dir()) {
+                if let Ok(mut diagnostics) = result.diagnostics.lock() {
+                    diagnostics.directories_visited += 1;
+                }
+                continue;
+            }
             if !entry.file_type().is_some_and(|kind| kind.is_file()) {
                 continue;
+            }
+            if let Ok(mut diagnostics) = result.diagnostics.lock() {
+                diagnostics.files_indexed += 1;
             }
             let path = entry.path();
             let Ok(relative) = path.strip_prefix(&root) else {
@@ -114,6 +173,32 @@ impl RepositoryDiscovery {
             }
         }
         Ok(result)
+    }
+
+    /// Returns deterministic diagnostics for this inventory.
+    #[must_use]
+    pub fn diagnostics(&self) -> InventoryDiagnostics {
+        self.diagnostics
+            .lock()
+            .map_or_else(|_| InventoryDiagnostics::default(), |value| value.clone())
+    }
+
+    /// Returns the shared command diagnostics handle.
+    #[must_use]
+    pub fn diagnostics_handle(&self) -> InventoryDiagnosticsHandle {
+        Arc::clone(&self.diagnostics)
+    }
+
+    /// Returns every indexed repository-relative file.
+    #[must_use]
+    pub const fn files(&self) -> &BTreeSet<PathBuf> {
+        &self.files
+    }
+
+    /// Returns effective automatic exclusions activated by this inventory.
+    #[must_use]
+    pub fn automatic_exclusions(&self) -> &[String] {
+        &self.automatic_exclusions
     }
 
     fn matching_signal(&self, signal: &str) -> Option<PathBuf> {
@@ -212,6 +297,8 @@ pub struct PlannedTool {
     pub name: String,
     /// Strongest repository evidence for the tool.
     pub evidence: SelectionEvidence,
+    /// Actual repository-relative files assigned to this tool.
+    pub files: BTreeSet<PathBuf>,
     /// Formatter extensions owned by this tool in automatic mode or explicitly
     /// assigned to it as part of a configured pipeline.
     pub format_extensions: BTreeSet<String>,
@@ -226,6 +313,10 @@ pub struct ToolPlan {
     pub tools: Vec<PlannedTool>,
     /// Relevant tools which are not installed.
     pub unavailable: Vec<String>,
+    /// Effective automatic exclusions activated by inventory evidence.
+    pub automatic_exclusions: Vec<String>,
+    /// Deterministic diagnostics for command-scoped inventory and planning.
+    pub diagnostics: InventoryDiagnostics,
 }
 
 impl ToolPlan {
@@ -233,6 +324,15 @@ impl ToolPlan {
     #[must_use]
     pub fn names(&self) -> Vec<String> {
         self.tools.iter().map(|tool| tool.name.clone()).collect()
+    }
+
+    /// Automatic plan file assignments by selected tool.
+    #[must_use]
+    pub fn planned_files(&self) -> BTreeMap<String, BTreeSet<PathBuf>> {
+        self.tools
+            .iter()
+            .map(|tool| (tool.name.clone(), tool.files.clone()))
+            .collect()
     }
 
     /// Returns true when explicit formatter ordering requires sequential execution.
@@ -256,10 +356,8 @@ pub fn plan_tools(
     registry: &ToolRegistry,
     capabilities: &[ToolCapability],
 ) -> Result<ToolPlan, std::io::Error> {
-    let scope =
-        EffectiveScope::resolve(registry.working_dir(), registry.config().effective_scope());
-    let discovery =
-        RepositoryDiscovery::discover_with_excludes(registry.working_dir(), &scope.exclusions)?;
+    let scope_config = registry.config().effective_scope();
+    let discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?;
     let mut candidates = Vec::new();
     let mut unavailable = Vec::new();
 
@@ -333,6 +431,11 @@ pub fn plan_tools(
         }
     }
 
+    let global_scope = crate::tools::scope::ScopeMatcher::new(
+        registry.working_dir(),
+        discovery.automatic_exclusions(),
+    )
+    .map_err(|error| std::io::Error::other(error.to_string()))?;
     let mut tools = Vec::new();
     for (entry, evidence, policy) in candidates {
         let lint_selected = wants_lint
@@ -358,9 +461,26 @@ pub fn plan_tools(
             BTreeSet::new()
         };
         if lint_selected || !format_extensions.is_empty() {
+            let mut file_extensions = format_extensions.clone();
+            if lint_selected {
+                file_extensions.extend(entry.extensions(ToolCapability::Lint));
+            }
+            let mut files = global_scope.filter_relative_files(discovery.files(), &file_extensions);
+            if let Some(policy) = policy
+                && (!policy.include.is_empty() || !policy.exclude.is_empty())
+            {
+                let tool_scope = crate::tools::scope::ScopeMatcher::with_patterns(
+                    registry.working_dir(),
+                    &policy.include,
+                    &policy.exclude,
+                )
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+                files = tool_scope.filter_relative_files(&files, &file_extensions);
+            }
             tools.push(PlannedTool {
                 name: entry.name.to_string(),
                 evidence,
+                files,
                 format_extensions,
                 format_order: policy.and_then(|policy| policy.format_order),
             });
@@ -374,7 +494,14 @@ pub fn plan_tools(
     });
     unavailable.sort();
     unavailable.dedup();
-    Ok(ToolPlan { tools, unavailable })
+    let mut diagnostics = discovery.diagnostics();
+    diagnostics.files_assigned = tools.iter().map(|tool| tool.files.len()).sum();
+    Ok(ToolPlan {
+        tools,
+        unavailable,
+        automatic_exclusions: discovery.automatic_exclusions().to_vec(),
+        diagnostics,
+    })
 }
 
 fn configured_format_extensions(
@@ -659,8 +786,11 @@ mod tests {
         std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
         std::fs::create_dir(root.path().join("target")).unwrap();
         std::fs::write(root.path().join("target/rustfmt.toml"), "").unwrap();
-        let exclusions =
-            EffectiveScope::resolve(root.path(), crate::tools::ScopeConfig::default()).exclusions;
+        let exclusions = crate::tools::EffectiveScope::resolve(
+            root.path(),
+            crate::tools::ScopeConfig::default(),
+        )
+        .exclusions;
         let discovery =
             RepositoryDiscovery::discover_with_excludes(root.path(), &exclusions).unwrap();
         assert!(discovery.matching_signal("Cargo.toml").is_some());

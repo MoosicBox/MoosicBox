@@ -162,102 +162,131 @@ impl ScopeMatcher {
         files.into_iter().collect()
     }
 
+    /// Filters an existing repository-relative file set without walking.
+    #[must_use]
+    pub(crate) fn filter_relative_files(
+        &self,
+        files: &BTreeSet<PathBuf>,
+        extensions: &BTreeSet<String>,
+    ) -> BTreeSet<PathBuf> {
+        files
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|extension| extensions.contains(&extension.to_ascii_lowercase()))
+                    && !self.is_excluded(&self.root.join(path))
+            })
+            .cloned()
+            .collect()
+    }
+
     fn absolute(&self, path: &Path) -> PathBuf {
         absolute_path(path, &self.root)
     }
 }
 
-/// Returns safe automatic exclusion patterns activated by repository manifests.
+/// Automatic exclusion profile definition.
+#[derive(Debug, Clone, Copy)]
+pub struct AutomaticExclusionProfile {
+    pub(crate) id: &'static str,
+    pub(crate) manifests: &'static [&'static str],
+    pub(crate) exclusions: &'static [&'static str],
+}
+
+pub const AUTOMATIC_EXCLUSION_PROFILES: &[AutomaticExclusionProfile] = &[
+    AutomaticExclusionProfile {
+        id: "rust",
+        manifests: &["Cargo.toml"],
+        exclusions: &["target/**"],
+    },
+    AutomaticExclusionProfile {
+        id: "node",
+        manifests: &["package.json"],
+        exclusions: &[
+            "node_modules/**",
+            ".pnpm-store/**",
+            ".yarn/cache/**",
+            ".next/**",
+            ".nuxt/**",
+        ],
+    },
+    AutomaticExclusionProfile {
+        id: "python",
+        manifests: &["pyproject.toml", "requirements.txt", "setup.py"],
+        exclusions: &[
+            ".venv/**",
+            "venv/**",
+            "__pycache__/**",
+            ".pytest_cache/**",
+            ".mypy_cache/**",
+            ".ruff_cache/**",
+            ".tox/**",
+            ".nox/**",
+        ],
+    },
+    AutomaticExclusionProfile {
+        id: "cpp",
+        manifests: &["compile_commands.json", "CMakeLists.txt"],
+        exclusions: &["CMakeFiles/**", "cmake-build-*/**"],
+    },
+    AutomaticExclusionProfile {
+        id: "lua",
+        manifests: &["stylua.toml", ".stylua.toml", ".luacheckrc"],
+        exclusions: &[".luarocks/**"],
+    },
+    AutomaticExclusionProfile {
+        id: "go",
+        manifests: &["go.mod"],
+        exclusions: &["vendor/**"],
+    },
+    AutomaticExclusionProfile {
+        id: "terraform",
+        manifests: &[".terraform.lock.hcl"],
+        exclusions: &[".terraform/**"],
+    },
+];
+
+/// Universal VCS boundaries applied without ecosystem evidence.
 #[must_use]
-pub fn automatic_exclusion_patterns(root: &Path, config: &ScopeConfig) -> Vec<String> {
-    if !config.automatic_excludes {
-        return Vec::new();
-    }
-    let profiles: &[(&str, &[&str], &[&str])] = &[
-        ("rust", &["Cargo.toml"], &["target/**"]),
-        (
-            "node",
-            &["package.json"],
-            &[
-                "node_modules/**",
-                ".pnpm-store/**",
-                ".yarn/cache/**",
-                ".next/**",
-                ".nuxt/**",
-            ],
-        ),
-        (
-            "python",
-            &["pyproject.toml", "requirements.txt", "setup.py"],
-            &[
-                ".venv/**",
-                "venv/**",
-                "__pycache__/**",
-                ".pytest_cache/**",
-                ".mypy_cache/**",
-                ".ruff_cache/**",
-                ".tox/**",
-                ".nox/**",
-            ],
-        ),
-        (
-            "cpp",
-            &["compile_commands.json", "CMakeLists.txt"],
-            &["CMakeFiles/**", "cmake-build-*/**"],
-        ),
-        (
-            "lua",
-            &["stylua.toml", ".stylua.toml", ".luacheckrc"],
-            &[".luarocks/**"],
-        ),
-        ("go", &["go.mod"], &["vendor/**"]),
-        ("terraform", &[".terraform.lock.hcl"], &[".terraform/**"]),
-    ];
-    let mut patterns = BTreeSet::from([
+pub fn universal_exclusion_patterns() -> Vec<String> {
+    vec![
         ".git/**".to_string(),
         ".hg/**".to_string(),
         ".svn/**".to_string(),
-    ]);
+    ]
+}
 
-    let mut builder = WalkBuilder::new(root);
-    builder.hidden(false);
-    builder.require_git(false);
-    builder.parents(true);
-    builder.git_ignore(true);
-    builder.git_global(true);
-    builder.git_exclude(true);
-    builder.ignore(true);
-    builder.filter_entry(|entry| {
-        entry.depth() == 0
-            || !entry.file_type().is_some_and(|kind| kind.is_dir())
-            || !is_proven_generated_directory(entry.file_name().to_str().unwrap_or_default())
-    });
-
-    for result in builder.build() {
-        let Ok(entry) = result else {
+/// Returns automatic exclusion patterns activated by already indexed manifests.
+#[must_use]
+pub fn automatic_exclusion_patterns_from_files(
+    files: &BTreeSet<PathBuf>,
+    config: &ScopeConfig,
+) -> Vec<String> {
+    if !config.automatic_excludes {
+        return Vec::new();
+    }
+    let mut patterns = universal_exclusion_patterns()
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    for path in files {
+        let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
             continue;
         };
-        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-            continue;
-        }
-        let Some(file_name) = entry.file_name().to_str() else {
-            continue;
-        };
-        let package_root = entry.path().parent().unwrap_or(root);
-        let Ok(relative_root) = package_root.strip_prefix(root) else {
-            continue;
-        };
-        for (id, manifests, exclusions) in profiles {
-            if config.disable_profiles.contains(*id) || !manifests.contains(&file_name) {
+        let package_root = path.parent().unwrap_or_else(|| Path::new(""));
+        for profile in AUTOMATIC_EXCLUSION_PROFILES {
+            if config.disable_profiles.contains(profile.id)
+                || !profile.manifests.contains(&file_name)
+            {
                 continue;
             }
-            for exclusion in *exclusions {
-                patterns.insert(if relative_root.as_os_str().is_empty() {
+            for exclusion in profile.exclusions {
+                patterns.insert(if package_root.as_os_str().is_empty() {
                     (*exclusion).to_string()
                 } else {
                     format!(
                         "{}/{}",
-                        relative_root.to_string_lossy().replace('\\', "/"),
+                        package_root.to_string_lossy().replace('\\', "/"),
                         exclusion
                     )
                 });
@@ -265,6 +294,40 @@ pub fn automatic_exclusion_patterns(root: &Path, config: &ScopeConfig) -> Vec<St
         }
     }
     patterns.into_iter().collect()
+}
+
+/// Returns safe automatic exclusion patterns activated by repository manifests.
+///
+/// This compatibility helper performs a discovery walk. Command planning uses
+/// the inventory-owned `automatic_exclusion_patterns_from_files` path instead.
+#[must_use]
+pub fn automatic_exclusion_patterns(root: &Path, config: &ScopeConfig) -> Vec<String> {
+    if !config.automatic_excludes {
+        return Vec::new();
+    }
+    let mut files = BTreeSet::new();
+    let mut builder = WalkBuilder::new(root);
+    builder
+        .hidden(false)
+        .require_git(false)
+        .parents(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .ignore(true);
+    builder.filter_entry(|entry| {
+        entry.depth() == 0
+            || !entry.file_type().is_some_and(|kind| kind.is_dir())
+            || !is_proven_generated_directory(entry.file_name().to_str().unwrap_or_default())
+    });
+    for entry in builder.build().filter_map(Result::ok) {
+        if entry.file_type().is_some_and(|kind| kind.is_file())
+            && let Ok(relative) = entry.path().strip_prefix(root)
+        {
+            files.insert(relative.to_path_buf());
+        }
+    }
+    automatic_exclusion_patterns_from_files(&files, config)
 }
 
 fn is_proven_generated_directory(name: &str) -> bool {

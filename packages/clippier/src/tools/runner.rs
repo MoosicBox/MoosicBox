@@ -139,6 +139,10 @@ pub struct AggregatedResults {
     pub formatter_ownership: BTreeMap<String, BTreeSet<String>>,
     /// Explicit formatter pipeline order by tool.
     pub format_order: BTreeMap<String, i32>,
+    /// Number of planned files per selected tool.
+    pub planned_file_counts: BTreeMap<String, usize>,
+    /// Deterministic command-scoped inventory/planning diagnostics.
+    pub inventory_diagnostics: crate::tools::InventoryDiagnostics,
     /// Effective automatic exclusion patterns.
     pub automatic_exclusions: Vec<String>,
     /// Relevant tools which were unavailable during automatic planning.
@@ -167,6 +171,8 @@ struct ResultPlanMetadata {
     selection_evidence: BTreeMap<String, String>,
     formatter_ownership: BTreeMap<String, BTreeSet<String>>,
     format_order: BTreeMap<String, i32>,
+    planned_file_counts: BTreeMap<String, usize>,
+    inventory_diagnostics: crate::tools::InventoryDiagnostics,
     automatic_exclusions: Vec<String>,
     unavailable_tools: Vec<String>,
     overlap_warnings: Vec<String>,
@@ -196,6 +202,10 @@ pub struct ToolRunner<'a> {
     selection_evidence: BTreeMap<String, String>,
     /// Explicit formatter pipeline order by tool.
     format_order: BTreeMap<String, i32>,
+    /// Actual repository-relative files planned per tool.
+    planned_files: BTreeMap<String, BTreeSet<PathBuf>>,
+    /// Deterministic command-scoped inventory/planning diagnostics.
+    inventory_diagnostics: crate::tools::InventoryDiagnostics,
     /// Effective automatic exclusion patterns.
     automatic_exclusions: Vec<String>,
     /// Relevant tools unavailable during automatic planning.
@@ -251,6 +261,8 @@ impl<'a> ToolRunner<'a> {
             formatter_ownership: None,
             selection_evidence: BTreeMap::new(),
             format_order: BTreeMap::new(),
+            planned_files: BTreeMap::new(),
+            inventory_diagnostics: crate::tools::InventoryDiagnostics::default(),
             automatic_exclusions: effective_scope.exclusions,
             unavailable_tools: Vec::new(),
             overlap_warnings: Vec::new(),
@@ -296,7 +308,22 @@ impl<'a> ToolRunner<'a> {
             .iter()
             .filter_map(|tool| tool.format_order.map(|order| (tool.name.clone(), order)))
             .collect();
+        self.planned_files = plan
+            .tools
+            .iter()
+            .map(|tool| (tool.name.clone(), tool.files.clone()))
+            .collect();
+        self.inventory_diagnostics = plan.diagnostics.clone();
+        self.automatic_exclusions
+            .clone_from(&plan.automatic_exclusions);
         self.unavailable_tools.clone_from(&plan.unavailable);
+        self
+    }
+
+    /// Sets actual planned files independently of automatic selection metadata.
+    #[must_use]
+    pub fn with_planned_files(mut self, files: BTreeMap<String, BTreeSet<PathBuf>>) -> Self {
+        self.planned_files = files;
         self
     }
 
@@ -356,6 +383,12 @@ impl<'a> ToolRunner<'a> {
             selection_evidence: self.selection_evidence.clone(),
             formatter_ownership: self.formatter_ownership.clone().unwrap_or_default(),
             format_order: self.format_order.clone(),
+            planned_file_counts: self
+                .planned_files
+                .iter()
+                .map(|(name, files)| (name.clone(), files.len()))
+                .collect(),
+            inventory_diagnostics: self.inventory_diagnostics.clone(),
             automatic_exclusions: self.automatic_exclusions.clone(),
             unavailable_tools: self.unavailable_tools.clone(),
             overlap_warnings: self.overlap_warnings.clone(),
@@ -382,6 +415,8 @@ impl<'a> ToolRunner<'a> {
             selection_evidence: metadata.selection_evidence,
             formatter_ownership: metadata.formatter_ownership,
             format_order: metadata.format_order,
+            planned_file_counts: metadata.planned_file_counts,
+            inventory_diagnostics: metadata.inventory_diagnostics,
             automatic_exclusions: metadata.automatic_exclusions,
             unavailable_tools: metadata.unavailable_tools,
             overlap_warnings: metadata.overlap_warnings,
@@ -413,6 +448,27 @@ impl<'a> ToolRunner<'a> {
     }
 
     fn scoped_file_args(&self, tool: &Tool) -> Option<Vec<String>> {
+        if let Some(planned) = self.planned_files.get(&tool.name) {
+            let working_dir = self.working_dir_path();
+            let tool_scope = self.tool_scopes.get(&tool.name);
+            return Some(
+                planned
+                    .iter()
+                    .filter(|path| match &self.format_selection {
+                        FormatSelection::Files(selected) => selected.contains(*path),
+                        FormatSelection::All | FormatSelection::NoRepository => true,
+                    })
+                    .filter(|path| {
+                        let absolute = working_dir.join(path);
+                        self.scope
+                            .as_ref()
+                            .is_none_or(|scope| !scope.is_excluded(&absolute))
+                            && tool_scope.is_none_or(|scope| !scope.is_excluded(&absolute))
+                    })
+                    .map(|path| path.to_string_lossy().to_string())
+                    .collect(),
+            );
+        }
         if matches!(tool.kind, ToolKind::Cargo)
             && !matches!(
                 tool_catalog_entry(&tool.name).map(|entry| entry.adapter()),
@@ -2247,6 +2303,17 @@ pub fn results_to_json(
             "selection_evidence": results.selection_evidence,
             "formatter_ownership": results.formatter_ownership,
             "format_order": results.format_order,
+            "planned_file_counts": results.planned_file_counts,
+            "inventory": {
+                "mode": if results.selected_file_count.is_some() { "git-candidates" } else { "repository-walk" },
+                "recursive_walks": results.inventory_diagnostics.recursive_walks,
+                "directories_visited": results.inventory_diagnostics.directories_visited,
+                "files_indexed": results.inventory_diagnostics.files_indexed,
+                "native_configs_parsed": results.inventory_diagnostics.native_configs_parsed,
+                "executables_resolved": results.inventory_diagnostics.executables_resolved,
+                "probes_executed": results.inventory_diagnostics.probes_executed,
+                "files_assigned": results.inventory_diagnostics.files_assigned,
+            },
             "automatic_exclusions": results.automatic_exclusions,
             "unavailable_tools": results.unavailable_tools,
             "overlap_warnings": results.overlap_warnings,
@@ -2286,6 +2353,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("src/lib.rs"), "pub fn selected() {}\n").unwrap();
+        std::fs::write(dir.join("src/unselected.rs"), "pub fn unselected() {}\n").unwrap();
         let registry = ToolRegistry::new(ToolsConfig::default(), Some(&dir)).unwrap();
         let plan = ToolPlan {
             tools: vec![crate::tools::PlannedTool {
@@ -2294,10 +2362,16 @@ mod tests {
                     kind: crate::tools::SelectionEvidenceKind::Manifest,
                     path: PathBuf::from("Cargo.toml"),
                 },
+                files: BTreeSet::from([
+                    PathBuf::from("src/lib.rs"),
+                    PathBuf::from("src/unselected.rs"),
+                ]),
                 format_extensions: BTreeSet::from(["rs".to_string()]),
                 format_order: Some(10),
             }],
             unavailable: vec!["taplo".to_string()],
+            automatic_exclusions: Vec::new(),
+            diagnostics: crate::tools::InventoryDiagnostics::default(),
         };
         let warnings = vec!["WARNING: configured formatter overlap".to_string()];
         let runner = ToolRunner::new(&registry)
@@ -2309,6 +2383,10 @@ mod tests {
             )])));
 
         let normal = runner.run_specific(&["rustfmt"], &[], true).unwrap();
+        assert_eq!(
+            runner.scoped_files_for(registry.get("rustfmt").unwrap()),
+            Some(vec!["src/lib.rs".to_string()])
+        );
         let tui = runner
             .run_specific_with_tui(&["rustfmt"], &[], true)
             .unwrap();
@@ -2360,6 +2438,13 @@ mod tests {
                 BTreeSet::from(["md".to_string()]),
             )]),
             format_order: BTreeMap::from([("prettier".to_string(), 10)]),
+            planned_file_counts: BTreeMap::from([("prettier".to_string(), 3)]),
+            inventory_diagnostics: crate::tools::InventoryDiagnostics {
+                recursive_walks: 1,
+                files_indexed: 3,
+                files_assigned: 3,
+                ..Default::default()
+            },
             automatic_exclusions: vec!["node_modules/**".to_string()],
             unavailable_tools: vec!["dprint".to_string()],
             overlap_warnings: vec!["WARNING: formatter overlap".to_string()],
@@ -2377,6 +2462,10 @@ mod tests {
         );
         assert_eq!(value["plan"]["formatter_ownership"]["prettier"][0], "md");
         assert_eq!(value["plan"]["format_order"]["prettier"], 10);
+        assert_eq!(value["plan"]["planned_file_counts"]["prettier"], 3);
+        assert_eq!(value["plan"]["inventory"]["recursive_walks"], 1);
+        assert_eq!(value["plan"]["inventory"]["files_indexed"], 3);
+        assert_eq!(value["plan"]["inventory"]["files_assigned"], 3);
         assert_eq!(value["plan"]["automatic_exclusions"][0], "node_modules/**");
         assert_eq!(value["plan"]["unavailable_tools"][0], "dprint");
         assert_eq!(

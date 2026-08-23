@@ -51,8 +51,8 @@ pub use catalog::{
     tool_catalog_entry,
 };
 pub use discovery::{
-    PlannedTool, RepositoryDiscovery, SelectionEvidence, SelectionEvidenceKind, ToolPlan,
-    plan_tools,
+    InventoryDiagnostics, InventoryDiagnosticsHandle, PlannedTool, RepositoryDiscovery,
+    SelectionEvidence, SelectionEvidenceKind, ToolPlan, plan_tools,
 };
 #[cfg(feature = "format")]
 pub use format_selection::resolve_format_selection;
@@ -66,18 +66,6 @@ pub use types::{
 };
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
-#[derive(Debug, Clone)]
-struct WorkspaceFile {
-    relative_path: String,
-    extension: String,
-}
-
-#[derive(Debug, Clone)]
-struct GlobRule {
-    negated: bool,
-    matcher: globset::GlobMatcher,
-}
 
 #[derive(Debug, Deserialize)]
 struct PrettierSupportInfo {
@@ -159,58 +147,6 @@ fn normalized_tool_pair(a: &str, b: &str) -> (String, String) {
     (pair[0].clone(), pair[1].clone())
 }
 
-fn collect_workspace_files(
-    base_dir: &std::path::Path,
-    scope: Option<&scope::ScopeMatcher>,
-) -> Vec<WorkspaceFile> {
-    let mut files = Vec::new();
-    let mut stack = vec![base_dir.to_path_buf()];
-
-    while let Some(dir) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let Ok(file_type) = entry.file_type() else {
-                continue;
-            };
-            let path = entry.path();
-
-            if file_type.is_dir() {
-                if scope.is_some_and(|matcher| matcher.is_excluded(&path)) {
-                    continue;
-                }
-                stack.push(path);
-                continue;
-            }
-
-            if !file_type.is_file() || scope.is_some_and(|matcher| matcher.is_excluded(&path)) {
-                continue;
-            }
-
-            let Some(extension) = path
-                .extension()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(normalize_extension)
-            else {
-                continue;
-            };
-
-            let Ok(relative) = path.strip_prefix(base_dir) else {
-                continue;
-            };
-
-            files.push(WorkspaceFile {
-                relative_path: relative.to_string_lossy().replace('\\', "/"),
-                extension,
-            });
-        }
-    }
-
-    files
-}
-
 fn find_file_in_ancestors(
     base_dir: &std::path::Path,
     names: &[&str],
@@ -226,70 +162,6 @@ fn find_file_in_ancestors(
         current = dir.parent();
     }
     None
-}
-
-fn parse_glob_rules(raw_patterns: &[String]) -> Vec<GlobRule> {
-    raw_patterns
-        .iter()
-        .filter_map(|value| {
-            let trimmed = value.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-
-            let (negated, pattern) = trimmed
-                .strip_prefix('!')
-                .map_or((false, trimmed), |rest| (true, rest));
-
-            let Ok(glob) = globset::Glob::new(pattern) else {
-                return None;
-            };
-
-            Some(GlobRule {
-                negated,
-                matcher: glob.compile_matcher(),
-            })
-        })
-        .collect()
-}
-
-fn parse_prettier_ignore_rules(base_dir: &std::path::Path) -> Vec<GlobRule> {
-    let Some(path) = find_file_in_ancestors(base_dir, &[".prettierignore"]) else {
-        return Vec::new();
-    };
-
-    let Ok(contents) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-
-    let patterns = contents
-        .lines()
-        .filter_map(|line| {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                return None;
-            }
-            Some(trimmed.to_string())
-        })
-        .collect::<Vec<_>>();
-    parse_glob_rules(&patterns)
-}
-
-fn parse_biome_include_rules(base_dir: &std::path::Path) -> Option<Vec<String>> {
-    let path = find_file_in_ancestors(base_dir, &["biome.json", "biome.jsonc"])?;
-    let contents = std::fs::read_to_string(path).ok()?;
-    let value = serde_json::from_str::<serde_json::Value>(&contents).ok()?;
-    let includes = value
-        .get("files")
-        .and_then(|files| files.get("includes"))
-        .and_then(serde_json::Value::as_array)?;
-
-    Some(
-        includes
-            .iter()
-            .filter_map(|item| item.as_str().map(ToString::to_string))
-            .collect(),
-    )
 }
 
 fn toml_value_contains_mdx(value: &toml::Value) -> bool {
@@ -325,111 +197,6 @@ fn mdformat_config_supports_mdx(base_dir: &std::path::Path) -> bool {
     }
 
     false
-}
-
-fn is_prettier_ignored(path: &str, rules: &[GlobRule]) -> bool {
-    let mut ignored = false;
-    for rule in rules {
-        if rule.matcher.is_match(path) {
-            ignored = !rule.negated;
-        }
-    }
-    ignored
-}
-
-fn is_biome_included(path: &str, include_patterns: &[String]) -> bool {
-    if include_patterns.is_empty() {
-        return true;
-    }
-
-    let mut included = false;
-    let mut force_ignored = false;
-    for pattern in include_patterns {
-        if let Some(rest) = pattern.strip_prefix("!!") {
-            if let Ok(glob) = globset::Glob::new(rest)
-                && glob.compile_matcher().is_match(path)
-            {
-                force_ignored = true;
-            }
-            continue;
-        }
-
-        if let Some(rest) = pattern.strip_prefix('!') {
-            if let Ok(glob) = globset::Glob::new(rest)
-                && glob.compile_matcher().is_match(path)
-            {
-                included = false;
-            }
-            continue;
-        }
-
-        if let Ok(glob) = globset::Glob::new(pattern)
-            && glob.compile_matcher().is_match(path)
-        {
-            included = true;
-        }
-    }
-
-    included && !force_ignored
-}
-
-fn dynamic_extensions_for_tools(
-    base_dir: &std::path::Path,
-    tools: &[&Tool],
-    capabilities: &[ToolCapability],
-    global_scope: Option<&scope::ScopeMatcher>,
-    tool_scopes: &std::collections::BTreeMap<String, scope::ScopeMatcher>,
-) -> std::collections::BTreeMap<String, std::collections::BTreeSet<String>> {
-    let workspace_files = collect_workspace_files(base_dir, global_scope);
-    let prettier_ignore_rules = parse_prettier_ignore_rules(base_dir);
-    let biome_includes = parse_biome_include_rules(base_dir).unwrap_or_default();
-
-    let mut dynamic = std::collections::BTreeMap::new();
-    for tool in tools {
-        let normalized_name = normalize_tool_name(&tool.name);
-        let mut extensions = std::collections::BTreeSet::new();
-
-        for capability in capabilities {
-            if !tool.capabilities.contains(capability) {
-                continue;
-            }
-
-            let default_extensions = effective_extensions_for_tool(base_dir, tool, *capability);
-            if default_extensions.is_empty() {
-                continue;
-            }
-
-            for file in &workspace_files {
-                if !default_extensions.contains(&file.extension)
-                    || tool_scopes
-                        .get(&normalized_name)
-                        .is_some_and(|scope| scope.is_excluded(&base_dir.join(&file.relative_path)))
-                {
-                    continue;
-                }
-
-                let tool_allows_file = match normalized_name.as_str() {
-                    "prettier" => !is_prettier_ignored(&file.relative_path, &prettier_ignore_rules),
-                    "biome" => {
-                        if biome_includes.is_empty() {
-                            true
-                        } else {
-                            is_biome_included(&file.relative_path, &biome_includes)
-                        }
-                    }
-                    _ => true,
-                };
-
-                if tool_allows_file {
-                    extensions.insert(file.extension.clone());
-                }
-            }
-        }
-
-        dynamic.insert(normalized_name, extensions);
-    }
-
-    dynamic
 }
 
 fn effective_extensions_for_tool(
@@ -808,27 +575,51 @@ pub fn overlap_warnings_for_selected_tools(
         || std::env::current_dir().unwrap_or_else(|_| std::path::Path::new(".").to_path_buf()),
         std::path::Path::to_path_buf,
     );
-    let effective_scope =
-        scope::EffectiveScope::resolve(&base_dir, registry.config().effective_scope());
-    let overlap_scope = effective_scope.matcher(&base_dir).ok();
-    let tool_scopes = registry
-        .config()
-        .tools
+    let Ok(inventory) = crate::tools::RepositoryDiscovery::inventory(
+        &base_dir,
+        &registry.config().effective_scope(),
+    ) else {
+        return Vec::new();
+    };
+    let global_scope =
+        crate::tools::scope::ScopeMatcher::new(&base_dir, inventory.automatic_exclusions()).ok();
+    let dynamic_extensions = selected
         .iter()
-        .filter(|(_, policy)| !policy.include.is_empty() || !policy.exclude.is_empty())
-        .filter_map(|(name, policy)| {
-            scope::ScopeMatcher::with_patterns(&base_dir, &policy.include, &policy.exclude)
-                .ok()
-                .map(|matcher| (normalize_tool_name(name), matcher))
+        .map(|tool| {
+            let mut extensions = capabilities
+                .iter()
+                .filter(|capability| tool.capabilities.contains(capability))
+                .flat_map(|capability| effective_extensions_for_tool(&base_dir, tool, *capability))
+                .collect::<std::collections::BTreeSet<_>>();
+            let policy = registry.config().tool_policy(&tool.name);
+            let tool_scope = policy.and_then(|policy| {
+                if policy.include.is_empty() && policy.exclude.is_empty() {
+                    None
+                } else {
+                    crate::tools::scope::ScopeMatcher::with_patterns(
+                        &base_dir,
+                        &policy.include,
+                        &policy.exclude,
+                    )
+                    .ok()
+                }
+            });
+            extensions.retain(|extension| {
+                inventory.files().iter().any(|path| {
+                    path.extension()
+                        .and_then(|value| value.to_str())
+                        .is_some_and(|value| value.eq_ignore_ascii_case(extension))
+                        && global_scope
+                            .as_ref()
+                            .is_none_or(|scope| !scope.is_excluded(&base_dir.join(path)))
+                        && tool_scope
+                            .as_ref()
+                            .is_none_or(|scope| !scope.is_excluded(&base_dir.join(path)))
+                })
+            });
+            (normalize_tool_name(&tool.name), extensions)
         })
         .collect();
-    let dynamic_extensions = dynamic_extensions_for_tools(
-        &base_dir,
-        &selected,
-        capabilities,
-        overlap_scope.as_ref(),
-        &tool_scopes,
-    );
 
     overlap_warnings_for_tools(&selected, capabilities, suppressions, &dynamic_extensions)
 }
@@ -1532,6 +1323,7 @@ format-order = 20
                         kind: SelectionEvidenceKind::ClippierConfig,
                         path: std::path::PathBuf::from("clippier.toml"),
                     },
+                    files: std::collections::BTreeSet::new(),
                     format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
                     format_order: Some(10),
                 },
@@ -1541,11 +1333,14 @@ format-order = 20
                         kind: SelectionEvidenceKind::ClippierConfig,
                         path: std::path::PathBuf::from("clippier.toml"),
                     },
+                    files: std::collections::BTreeSet::new(),
                     format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
                     format_order: Some(20),
                 },
             ],
             unavailable: Vec::new(),
+            automatic_exclusions: Vec::new(),
+            diagnostics: crate::tools::InventoryDiagnostics::default(),
         };
         let warnings = overlap_warnings_for_plan(&registry, &plan, &[]);
         assert_eq!(warnings.len(), 2);

@@ -1396,10 +1396,13 @@ mod tests {
                     kind: crate::tools::SelectionEvidenceKind::NativeConfig,
                     path: PathBuf::from(".prettierrc"),
                 },
+                files: std::collections::BTreeSet::new(),
                 format_extensions: BTreeSet::from(["md".to_string()]),
                 format_order: Some(10),
             }],
             unavailable: Vec::new(),
+            automatic_exclusions: Vec::new(),
+            diagnostics: crate::tools::InventoryDiagnostics::default(),
         };
 
         let info = registry.list_tools_with_plan(&plan);
