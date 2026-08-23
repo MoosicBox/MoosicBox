@@ -451,6 +451,17 @@ fn mixed_monorepo_resolves_nested_configs_ownership_linters_exclusions_and_overr
             .iter()
             .any(|extension| extension == "js")
     );
+    assert_eq!(
+        json["plan"]["inventory"]["recursive_walks"], 1,
+        "mixed command must reuse one repository inventory"
+    );
+    assert!(json["plan"]["inventory"]["files_indexed"].as_u64().unwrap() >= 8);
+    assert!(
+        json["plan"]["inventory"]["files_assigned"]
+            .as_u64()
+            .unwrap()
+            >= 3
+    );
     assert!(
         json["plan"]["automatic_exclusions"]
             .as_array()

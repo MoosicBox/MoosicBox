@@ -1401,6 +1401,7 @@ mod tests {
                 format_order: Some(10),
             }],
             unavailable: Vec::new(),
+            effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
         };

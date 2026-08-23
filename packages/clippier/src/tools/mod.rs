@@ -203,12 +203,14 @@ fn effective_extensions_for_tool(
     base_dir: &std::path::Path,
     tool: &Tool,
     capability: ToolCapability,
+    diagnostics: Option<&InventoryDiagnosticsHandle>,
 ) -> std::collections::BTreeSet<String> {
     let normalized = normalize_tool_name(&tool.name);
 
     if normalized == "prettier"
         && capability == ToolCapability::Format
-        && let Some(prettier_extensions) = query_prettier_support_info_extensions(base_dir, tool)
+        && let Some(prettier_extensions) =
+            query_prettier_support_info_extensions(base_dir, tool, diagnostics)
         && !prettier_extensions.is_empty()
     {
         return prettier_extensions;
@@ -216,7 +218,9 @@ fn effective_extensions_for_tool(
 
     if normalized == "mdformat" && capability == ToolCapability::Format {
         let mut extensions = default_extensions_for_tool(&tool.name, capability);
-        if mdformat_config_supports_mdx(base_dir) || probe_mdformat_supports_mdx(base_dir, tool) {
+        if mdformat_config_supports_mdx(base_dir)
+            || probe_mdformat_supports_mdx(base_dir, tool, diagnostics)
+        {
             extensions.insert("mdx".to_string());
         }
         return extensions;
@@ -236,7 +240,13 @@ fn run_tool_probe_command(
     tool: &Tool,
     args: &[&str],
     stdin: Option<&str>,
+    diagnostics: Option<&InventoryDiagnosticsHandle>,
 ) -> Option<std::process::Output> {
+    if let Some(diagnostics) = diagnostics
+        && let Ok(mut diagnostics) = diagnostics.lock()
+    {
+        diagnostics.probes_executed += 1;
+    }
     let mut command = match &tool.kind {
         ToolKind::Binary => {
             let executable = tool.detected_path.as_ref().map_or_else(
@@ -278,12 +288,17 @@ fn run_tool_probe_command(
     child.wait_with_output().ok()
 }
 
-fn probe_mdformat_supports_mdx(base_dir: &std::path::Path, tool: &Tool) -> bool {
+fn probe_mdformat_supports_mdx(
+    base_dir: &std::path::Path,
+    tool: &Tool,
+    diagnostics: Option<&InventoryDiagnosticsHandle>,
+) -> bool {
     let Some(output) = run_tool_probe_command(
         base_dir,
         tool,
         &["--check", "--extensions", "mdx", "-"],
         Some("# mdx-probe\n"),
+        diagnostics,
     ) else {
         return false;
     };
@@ -309,8 +324,9 @@ fn parse_prettier_support_info_extensions(
 fn query_prettier_support_info_extensions(
     base_dir: &std::path::Path,
     tool: &Tool,
+    diagnostics: Option<&InventoryDiagnosticsHandle>,
 ) -> Option<std::collections::BTreeSet<String>> {
-    let output = run_tool_probe_command(base_dir, tool, &["--support-info"], None)?;
+    let output = run_tool_probe_command(base_dir, tool, &["--support-info"], None, diagnostics)?;
 
     if !output.status.success() {
         return None;
@@ -557,6 +573,7 @@ pub fn overlap_warnings_for_selected_tools(
     capabilities: &[ToolCapability],
     suppressions: &[OverlapWarningSuppressRule],
     working_dir: Option<&std::path::Path>,
+    inventory: Option<&RepositoryDiscovery>,
 ) -> Vec<String> {
     let mut selected = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -575,21 +592,31 @@ pub fn overlap_warnings_for_selected_tools(
         || std::env::current_dir().unwrap_or_else(|_| std::path::Path::new(".").to_path_buf()),
         std::path::Path::to_path_buf,
     );
-    let Ok(inventory) = crate::tools::RepositoryDiscovery::inventory(
-        &base_dir,
-        &registry.config().effective_scope(),
-    ) else {
-        return Vec::new();
+    let owned_inventory;
+    let inventory = if let Some(inventory) = inventory {
+        inventory
+    } else {
+        let Ok(value) = crate::tools::RepositoryDiscovery::inventory(
+            &base_dir,
+            &registry.config().effective_scope(),
+        ) else {
+            return Vec::new();
+        };
+        owned_inventory = value;
+        &owned_inventory
     };
     let global_scope =
         crate::tools::scope::ScopeMatcher::new(&base_dir, inventory.automatic_exclusions()).ok();
+    let diagnostics = inventory.diagnostics_handle();
     let dynamic_extensions = selected
         .iter()
         .map(|tool| {
             let mut extensions = capabilities
                 .iter()
                 .filter(|capability| tool.capabilities.contains(capability))
-                .flat_map(|capability| effective_extensions_for_tool(&base_dir, tool, *capability))
+                .flat_map(|capability| {
+                    effective_extensions_for_tool(&base_dir, tool, *capability, Some(&diagnostics))
+                })
                 .collect::<std::collections::BTreeSet<_>>();
             let policy = registry.config().tool_policy(&tool.name);
             let tool_scope = policy.and_then(|policy| {
@@ -1339,6 +1366,7 @@ format-order = 20
                 },
             ],
             unavailable: Vec::new(),
+            effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
         };
@@ -1375,6 +1403,7 @@ format-order = 20
             &[ToolCapability::Format],
             &[],
             Some(&dir),
+            None,
         );
 
         assert!(warnings.is_empty());
@@ -1403,6 +1432,7 @@ format-order = 20
             &[ToolCapability::Format],
             &[],
             Some(&dir),
+            None,
         );
 
         assert!(warnings.is_empty());

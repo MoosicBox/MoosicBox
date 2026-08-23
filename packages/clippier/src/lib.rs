@@ -5642,29 +5642,43 @@ pub fn handle_check_command(
         <[String]>::to_vec,
     );
 
+    let mut explicit_inventory = if tool_names.is_some() {
+        Some(tools::RepositoryDiscovery::inventory(
+            registry.working_dir(),
+            &registry.config().effective_scope(),
+        )?)
+    } else {
+        None
+    };
+    let explicit_plan = explicit_inventory
+        .as_mut()
+        .map(|inventory| {
+            tools::RepositoryDiscovery::explicit_plan(
+                &registry,
+                &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
+                &names,
+                inventory,
+            )
+        })
+        .transpose()?;
+
     let runner = working_dir.map_or_else(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
-    let runner = if let Some(plan) = &automatic_plan {
+    let runner = if let Some(plan) = automatic_plan.as_ref().or(explicit_plan.as_ref()) {
         runner
             .with_tool_plan(plan)
             .with_parallel(!plan.has_ordered_formatters())
     } else {
         runner
     };
-    let warnings = automatic_plan.as_ref().map_or_else(
-        || {
-            tools::overlap_warnings_for_selected_tools(
-                &registry,
-                &names,
-                &[tools::ToolCapability::Format, tools::ToolCapability::Lint],
-                &overlap_warning_suppress,
-                working_dir,
-            )
-        },
-        |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
-    );
+    let warnings = automatic_plan
+        .as_ref()
+        .or(explicit_plan.as_ref())
+        .map_or_else(Vec::new, |plan| {
+            tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress)
+        });
     if output == OutputType::Raw {
         for warning in &warnings {
             eprintln!("{warning}");
@@ -5812,29 +5826,43 @@ pub fn handle_fmt_command(
         <[String]>::to_vec,
     );
 
+    let mut explicit_inventory = if tool_names.is_some() {
+        Some(tools::RepositoryDiscovery::inventory(
+            registry.working_dir(),
+            &registry.config().effective_scope(),
+        )?)
+    } else {
+        None
+    };
+    let explicit_plan = explicit_inventory
+        .as_mut()
+        .map(|inventory| {
+            tools::RepositoryDiscovery::explicit_plan(
+                &registry,
+                &[tools::ToolCapability::Format],
+                &names,
+                inventory,
+            )
+        })
+        .transpose()?;
+
     let runner = working_dir.map_or_else(
         || ToolRunner::new(&registry),
         |dir| ToolRunner::new(&registry).with_working_dir(dir),
     );
-    let runner = if let Some(plan) = &automatic_plan {
+    let runner = if let Some(plan) = automatic_plan.as_ref().or(explicit_plan.as_ref()) {
         runner
             .with_tool_plan(plan)
             .with_parallel(!plan.has_ordered_formatters())
     } else {
         runner
     };
-    let warnings = automatic_plan.as_ref().map_or_else(
-        || {
-            tools::overlap_warnings_for_selected_tools(
-                &registry,
-                &names,
-                &[tools::ToolCapability::Format],
-                &overlap_warning_suppress,
-                working_dir,
-            )
-        },
-        |plan| tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress),
-    );
+    let warnings = automatic_plan
+        .as_ref()
+        .or(explicit_plan.as_ref())
+        .map_or_else(Vec::new, |plan| {
+            tools::overlap_warnings_for_plan(&registry, plan, &overlap_warning_suppress)
+        });
     if output == OutputType::Raw {
         for warning in &warnings {
             eprintln!("{warning}");

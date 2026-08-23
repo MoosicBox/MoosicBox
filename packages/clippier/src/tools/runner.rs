@@ -198,6 +198,8 @@ pub struct ToolRunner<'a> {
     format_selection: FormatSelection,
     /// Automatic formatter ownership by tool.
     formatter_ownership: Option<BTreeMap<String, BTreeSet<String>>>,
+    /// Effective extensions resolved by planning for each selected tool.
+    effective_extensions: BTreeMap<String, BTreeSet<String>>,
     /// Selection evidence by automatically planned tool.
     selection_evidence: BTreeMap<String, String>,
     /// Explicit formatter pipeline order by tool.
@@ -259,6 +261,7 @@ impl<'a> ToolRunner<'a> {
             tool_scopes,
             format_selection: FormatSelection::All,
             formatter_ownership: None,
+            effective_extensions: BTreeMap::new(),
             selection_evidence: BTreeMap::new(),
             format_order: BTreeMap::new(),
             planned_files: BTreeMap::new(),
@@ -293,6 +296,8 @@ impl<'a> ToolRunner<'a> {
                 .map(|tool| (tool.name.clone(), tool.format_extensions.clone()))
                 .collect(),
         );
+        self.effective_extensions
+            .clone_from(&plan.effective_extensions);
         self.selection_evidence = plan
             .tools
             .iter()
@@ -478,10 +483,15 @@ impl<'a> ToolRunner<'a> {
             return None;
         }
         let mut extensions = self
-            .formatter_ownership
-            .as_ref()
-            .and_then(|ownership| ownership.get(&tool.name))
+            .effective_extensions
+            .get(&tool.name)
             .cloned()
+            .or_else(|| {
+                self.formatter_ownership
+                    .as_ref()
+                    .and_then(|ownership| ownership.get(&tool.name))
+                    .cloned()
+            })
             .unwrap_or_default();
         for capability in &tool.capabilities {
             if *capability == crate::tools::ToolCapability::Format
@@ -671,6 +681,15 @@ impl<'a> ToolRunner<'a> {
         if tools.is_empty() {
             return Err(ToolError::NoToolsAvailable);
         }
+        if tools.iter().any(|tool| {
+            tool_catalog_entry(&tool.name).is_some_and(|entry| entry.uses_scoped_file_arguments())
+                && !self.planned_files.contains_key(&tool.name)
+        }) {
+            return Err(ToolError::DetectionFailed(
+                "inventory".to_string(),
+                "file-oriented tool execution requires a resolved repository plan".to_string(),
+            ));
+        }
 
         Ok(self.run_tools(&tools, paths, check_mode))
     }
@@ -693,6 +712,15 @@ impl<'a> ToolRunner<'a> {
 
         if tools.is_empty() {
             return Err(ToolError::NoToolsAvailable);
+        }
+        if tools.iter().any(|tool| {
+            tool_catalog_entry(&tool.name).is_some_and(|entry| entry.uses_scoped_file_arguments())
+                && !self.planned_files.contains_key(&tool.name)
+        }) {
+            return Err(ToolError::DetectionFailed(
+                "inventory".to_string(),
+                "file-oriented tool execution requires a resolved repository plan".to_string(),
+            ));
         }
 
         #[cfg(feature = "tools-tui")]
@@ -2370,6 +2398,7 @@ mod tests {
                 format_order: Some(10),
             }],
             unavailable: vec!["taplo".to_string()],
+            effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
         };
@@ -2725,6 +2754,29 @@ mod tests {
             reincluded_args.contains(&"node_modules/dependency.json".to_string()),
             "explicit profile re-inclusion did not reach execution: {reincluded_args:?}"
         );
+    }
+
+    #[test]
+    fn file_oriented_low_level_execution_requires_a_resolved_plan() {
+        let dir = temp_dir("clippier-runner-requires-plan");
+        let executable = dir.join("dprint");
+        std::fs::write(&executable, "").unwrap();
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "dprint".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
+        let error = ToolRunner::new(&registry)
+            .with_working_dir(&dir)
+            .run_specific(&["dprint"], &[], false)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("requires a resolved repository plan")
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

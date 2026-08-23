@@ -60,6 +60,8 @@ pub struct RepositoryDiscovery {
     files: BTreeSet<PathBuf>,
     basenames: BTreeMap<String, BTreeSet<PathBuf>>,
     extensions: BTreeMap<String, BTreeSet<PathBuf>>,
+    parsed_toml: BTreeMap<PathBuf, Option<toml::Value>>,
+    parsed_json: BTreeMap<PathBuf, Option<serde_json::Value>>,
     automatic_exclusions: Vec<String>,
     diagnostics: InventoryDiagnosticsHandle,
 }
@@ -71,7 +73,7 @@ impl RepositoryDiscovery {
     ///
     /// * If the working directory cannot be canonicalized
     pub fn discover(root: &Path) -> Result<Self, std::io::Error> {
-        Self::discover_with_excludes(root, &[])
+        Self::discover_with_scope_excludes(root, &[], None)
     }
 
     /// Discovers repository files with one authoritative ignore-aware walk.
@@ -89,7 +91,7 @@ impl RepositoryDiscovery {
         excludes.extend(universal_exclusion_patterns());
         excludes.sort();
         excludes.dedup();
-        let mut result = Self::discover_with_excludes(root, &excludes)?;
+        let mut result = Self::discover_with_scope_excludes(root, &excludes, Some(config))?;
         result.automatic_exclusions =
             automatic_exclusion_patterns_from_files(&result.files, config);
         Ok(result)
@@ -104,6 +106,14 @@ impl RepositoryDiscovery {
         root: &Path,
         excludes: &[String],
     ) -> Result<Self, std::io::Error> {
+        Self::discover_with_scope_excludes(root, excludes, None)
+    }
+
+    fn discover_with_scope_excludes(
+        root: &Path,
+        excludes: &[String],
+        scope_config: Option<&crate::tools::ScopeConfig>,
+    ) -> Result<Self, std::io::Error> {
         let root = root.canonicalize()?;
         let matchers = excludes
             .iter()
@@ -111,6 +121,8 @@ impl RepositoryDiscovery {
             .map(|glob| glob.compile_matcher())
             .collect::<Vec<_>>();
         let filter_root = root.clone();
+        let scope_config = scope_config.cloned();
+        let package_profiles = Arc::new(Mutex::new(BTreeMap::new()));
         let mut result = Self {
             root: root.clone(),
             ..Self::default()
@@ -131,11 +143,20 @@ impl RepositoryDiscovery {
                     .path()
                     .strip_prefix(&filter_root)
                     .unwrap_or_else(|_| entry.path());
-                entry
-                    .file_name()
-                    .to_str()
-                    .is_none_or(|name| !is_universal_excluded_dir(name))
-                    && !matchers.iter().any(|matcher| matcher.is_match(relative))
+                let name = entry.file_name().to_str().unwrap_or_default();
+                if is_universal_excluded_dir(name)
+                    || matchers.iter().any(|matcher| matcher.is_match(relative))
+                {
+                    return false;
+                }
+                if !entry.file_type().is_some_and(|kind| kind.is_dir())
+                    || relative.as_os_str().is_empty()
+                {
+                    return true;
+                }
+                scope_config.as_ref().is_none_or(|config| {
+                    !is_inventory_generated_directory(entry.path(), name, config, &package_profiles)
+                })
             });
 
         for entry in builder.build().filter_map(Result::ok) {
@@ -201,6 +222,125 @@ impl RepositoryDiscovery {
         &self.automatic_exclusions
     }
 
+    /// Builds an automatic plan while reusing an existing command inventory.
+    ///
+    /// # Errors
+    ///
+    /// * If policy or ownership resolution fails
+    pub fn plan_from_inventory(
+        registry: &ToolRegistry,
+        capabilities: &[ToolCapability],
+        discovery: &mut Self,
+    ) -> Result<ToolPlan, std::io::Error> {
+        plan_inventory(registry, capabilities, discovery)
+    }
+
+    /// Builds a plan for explicitly selected tools from one command inventory.
+    ///
+    /// # Errors
+    ///
+    /// * If configured scope patterns cannot be compiled
+    pub fn explicit_plan(
+        registry: &ToolRegistry,
+        capabilities: &[ToolCapability],
+        names: &[String],
+        discovery: &mut Self,
+    ) -> Result<ToolPlan, std::io::Error> {
+        let mut tools = Vec::new();
+        for name in names {
+            let Some(entry) = TOOL_CATALOG.iter().find(|entry| entry.name == name) else {
+                continue;
+            };
+            let Some(_tool) = registry.get(name) else {
+                continue;
+            };
+            let policy = registry.config().tool_policy(name);
+            let mut extensions = BTreeSet::new();
+            for capability in capabilities {
+                if entry.capabilities.contains(capability)
+                    && policy.is_none_or(|policy| policy.enables(*capability))
+                {
+                    extensions.extend(entry.extensions(*capability));
+                }
+            }
+            let global_scope = crate::tools::scope::ScopeMatcher::new(
+                registry.working_dir(),
+                discovery.automatic_exclusions(),
+            )
+            .map_err(|error| std::io::Error::other(error.to_string()))?;
+            let mut files = global_scope.filter_relative_files(discovery.files(), &extensions);
+            if let Some(policy) = policy
+                && (!policy.include.is_empty() || !policy.exclude.is_empty())
+            {
+                let tool_scope = crate::tools::scope::ScopeMatcher::with_patterns(
+                    registry.working_dir(),
+                    &policy.include,
+                    &policy.exclude,
+                )
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+                files = tool_scope.filter_relative_files(&files, &extensions);
+            }
+            tools.push(PlannedTool {
+                name: name.clone(),
+                evidence: SelectionEvidence {
+                    kind: SelectionEvidenceKind::ClippierConfig,
+                    path: PathBuf::from("command-line"),
+                },
+                files,
+                format_extensions: entry.extensions(ToolCapability::Format),
+                format_order: policy.and_then(|policy| policy.format_order),
+            });
+        }
+        let mut diagnostics = discovery.diagnostics();
+        diagnostics.files_assigned = tools.iter().map(|tool| tool.files.len()).sum();
+        Ok(ToolPlan {
+            tools: tools.clone(),
+            unavailable: Vec::new(),
+            effective_extensions: tools
+                .iter()
+                .map(|tool| {
+                    (tool.name.clone(), {
+                        let mut value = tool.format_extensions.clone();
+                        value.extend(tool.files.iter().filter_map(|path| {
+                            path.extension()
+                                .and_then(|ext| ext.to_str())
+                                .map(str::to_ascii_lowercase)
+                        }));
+                        value
+                    })
+                })
+                .collect(),
+            automatic_exclusions: discovery.automatic_exclusions().to_vec(),
+            diagnostics,
+        })
+    }
+
+    fn parse_toml_cached(&mut self, path: &Path) -> Option<&toml::Value> {
+        if !self.parsed_toml.contains_key(path) {
+            let parsed = std::fs::read_to_string(self.root.join(path))
+                .ok()
+                .and_then(|contents| toml::from_str::<toml::Value>(&contents).ok());
+            if let Ok(mut diagnostics) = self.diagnostics.lock() {
+                diagnostics.native_configs_parsed += 1;
+            }
+            self.parsed_toml.insert(path.to_path_buf(), parsed);
+        }
+        self.parsed_toml.get(path).and_then(Option::as_ref)
+    }
+
+    fn parse_json_cached(&mut self, path: &Path) -> Option<&serde_json::Value> {
+        if !self.parsed_json.contains_key(path) {
+            let parsed = std::fs::read_to_string(self.root.join(path))
+                .ok()
+                .and_then(|contents| serde_json::from_str::<serde_json::Value>(&contents).ok());
+            if let Ok(mut diagnostics) = self.diagnostics.lock() {
+                diagnostics.native_configs_parsed += 1;
+            }
+            self.parsed_json.insert(path.to_path_buf(), parsed);
+        }
+        self.parsed_json.get(path).and_then(Option::as_ref)
+    }
+
     fn matching_signal(&self, signal: &str) -> Option<PathBuf> {
         if signal.contains('/') {
             self.files.get(Path::new(signal)).cloned()
@@ -212,45 +352,40 @@ impl RepositoryDiscovery {
     }
 
     fn manifest_contains_tool_config(
-        &self,
+        &mut self,
         signal: super::EmbeddedConfigSignal,
     ) -> Option<PathBuf> {
-        for path in self.basenames.get(signal.manifest)? {
-            let contents = std::fs::read_to_string(self.root.join(path)).ok()?;
+        let paths = self.basenames.get(signal.manifest)?.clone();
+        for path in paths {
             let configured = match signal.manifest {
-                "pyproject.toml" => toml::from_str::<toml::Value>(&contents)
-                    .ok()
-                    .and_then(|value| {
-                        let container = signal
-                            .container
-                            .map_or(Some(&value), |container| value.get(container));
-                        container.and_then(|value| value.get(signal.key)).cloned()
-                    })
-                    .is_some(),
-                "package.json" => serde_json::from_str::<serde_json::Value>(&contents)
-                    .ok()
-                    .is_some_and(|value| {
-                        let container = signal
-                            .container
-                            .map_or(Some(&value), |container| value.get(container));
-                        container.is_some_and(|value| value.get(signal.key).is_some())
-                    }),
+                "pyproject.toml" => self.parse_toml_cached(&path).is_some_and(|value| {
+                    let container = signal
+                        .container
+                        .map_or(Some(value), |container| value.get(container));
+                    container.is_some_and(|value| value.get(signal.key).is_some())
+                }),
+                "package.json" => self.parse_json_cached(&path).is_some_and(|value| {
+                    let container = signal
+                        .container
+                        .map_or(Some(value), |container| value.get(container));
+                    container.is_some_and(|value| value.get(signal.key).is_some())
+                }),
                 _ => false,
             };
             if configured {
-                return Some(path.clone());
+                return Some(path);
             }
         }
         None
     }
 
-    fn embedded_config_for(&self, entry: &super::ToolCatalogEntry) -> Option<PathBuf> {
+    fn embedded_config_for(&mut self, entry: &super::ToolCatalogEntry) -> Option<PathBuf> {
         super::embedded_config_signals(entry.name)
             .iter()
             .find_map(|signal| self.manifest_contains_tool_config(*signal))
     }
 
-    fn evidence_for(&self, tool_name: &str) -> Option<SelectionEvidence> {
+    fn evidence_for(&mut self, tool_name: &str) -> Option<SelectionEvidence> {
         let entry = TOOL_CATALOG.iter().find(|entry| entry.name == tool_name)?;
         for config in entry.signals.configs {
             if let Some(path) = self.matching_signal(config) {
@@ -313,6 +448,8 @@ pub struct ToolPlan {
     pub tools: Vec<PlannedTool>,
     /// Relevant tools which are not installed.
     pub unavailable: Vec<String>,
+    /// Effective per-tool extensions resolved during planning/probing.
+    pub effective_extensions: BTreeMap<String, BTreeSet<String>>,
     /// Effective automatic exclusions activated by inventory evidence.
     pub automatic_exclusions: Vec<String>,
     /// Deterministic diagnostics for command-scoped inventory and planning.
@@ -357,7 +494,16 @@ pub fn plan_tools(
     capabilities: &[ToolCapability],
 ) -> Result<ToolPlan, std::io::Error> {
     let scope_config = registry.config().effective_scope();
-    let discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?;
+    let mut discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?;
+    plan_inventory(registry, capabilities, &mut discovery)
+}
+
+#[allow(clippy::too_many_lines)]
+fn plan_inventory(
+    registry: &ToolRegistry,
+    capabilities: &[ToolCapability],
+    discovery: &mut RepositoryDiscovery,
+) -> Result<ToolPlan, std::io::Error> {
     let mut candidates = Vec::new();
     let mut unavailable = Vec::new();
 
@@ -497,8 +643,22 @@ pub fn plan_tools(
     let mut diagnostics = discovery.diagnostics();
     diagnostics.files_assigned = tools.iter().map(|tool| tool.files.len()).sum();
     Ok(ToolPlan {
-        tools,
+        tools: tools.clone(),
         unavailable,
+        effective_extensions: tools
+            .iter()
+            .map(|tool| {
+                (tool.name.clone(), {
+                    let mut value = tool.format_extensions.clone();
+                    value.extend(tool.files.iter().filter_map(|path| {
+                        path.extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(str::to_ascii_lowercase)
+                    }));
+                    value
+                })
+            })
+            .collect(),
         automatic_exclusions: discovery.automatic_exclusions().to_vec(),
         diagnostics,
     })
@@ -522,6 +682,52 @@ fn configured_format_extensions(
         )
 }
 
+fn is_inventory_generated_directory(
+    directory: &Path,
+    name: &str,
+    config: &crate::tools::ScopeConfig,
+    cache: &Mutex<BTreeMap<PathBuf, BTreeSet<&'static str>>>,
+) -> bool {
+    if !config.automatic_excludes {
+        return false;
+    }
+    let parent = directory.parent().unwrap_or(directory);
+    let profiles = cache.lock().map_or_else(
+        |_| BTreeSet::new(),
+        |mut cache| {
+            cache
+                .entry(parent.to_path_buf())
+                .or_insert_with(|| {
+                    crate::tools::scope::AUTOMATIC_EXCLUSION_PROFILES
+                        .iter()
+                        .filter(|profile| {
+                            !config.disable_profiles.contains(profile.id)
+                                && profile
+                                    .manifests
+                                    .iter()
+                                    .any(|manifest| parent.join(manifest).is_file())
+                        })
+                        .map(|profile| profile.id)
+                        .collect()
+                })
+                .clone()
+        },
+    );
+    profiles.iter().any(|profile_id| {
+        crate::tools::scope::AUTOMATIC_EXCLUSION_PROFILES
+            .iter()
+            .find(|profile| profile.id == *profile_id)
+            .is_some_and(|profile| {
+                profile.exclusions.iter().any(|pattern| {
+                    pattern
+                        .split('/')
+                        .next()
+                        .is_some_and(|component| component == name)
+                })
+            })
+    })
+}
+
 fn is_universal_excluded_dir(name: &str) -> bool {
     matches!(name, ".git" | ".hg" | ".svn")
 }
@@ -531,6 +737,84 @@ mod tests {
     use super::*;
 
     #[test]
+    fn large_synthetic_inventory_has_bounded_work_independent_of_tool_count() {
+        let root = tempfile::tempdir().unwrap();
+        let package_count = 24;
+        for index in 0..package_count {
+            let package = root.path().join(format!("packages/package-{index}"));
+            std::fs::create_dir_all(package.join("src")).unwrap();
+            std::fs::create_dir_all(package.join("node_modules/dependency")).unwrap();
+            std::fs::write(package.join("package.json"), "{}\n").unwrap();
+            std::fs::write(package.join("src/index.js"), "const value = 1;\n").unwrap();
+            std::fs::write(
+                package.join("node_modules/dependency/index.js"),
+                "generated\n",
+            )
+            .unwrap();
+        }
+
+        let inventory =
+            RepositoryDiscovery::inventory(root.path(), &crate::tools::ScopeConfig::default())
+                .unwrap();
+        let diagnostics = inventory.diagnostics();
+
+        assert_eq!(diagnostics.recursive_walks, 1);
+        assert_eq!(diagnostics.files_indexed, package_count * 2);
+        assert_eq!(inventory.files().len(), package_count * 2);
+        assert!(
+            inventory
+                .files()
+                .iter()
+                .all(|path| !path.to_string_lossy().contains("node_modules"))
+        );
+    }
+
+    #[test]
+    fn all_files_plan_uses_one_walk_and_assigns_files_without_tool_walks() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::write(root.path().join("source.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(root.path().join("config.toml"), "key = 'value'\n").unwrap();
+        let registry =
+            ToolRegistry::new(crate::tools::ToolsConfig::default(), Some(root.path())).unwrap();
+        let plan = plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+
+        assert_eq!(plan.diagnostics.recursive_walks, 1);
+        assert!(plan.diagnostics.files_indexed >= 3);
+        assert!(plan.diagnostics.files_assigned >= 2);
+        assert!(
+            plan.tools
+                .iter()
+                .find(|tool| tool.name == "rustfmt")
+                .unwrap()
+                .files
+                .contains(Path::new("source.rs"))
+        );
+        assert!(
+            plan.tools
+                .iter()
+                .find(|tool| tool.name == "taplo")
+                .unwrap()
+                .files
+                .contains(Path::new("config.toml"))
+        );
+    }
+
+    #[test]
+    fn embedded_configuration_is_parsed_once_per_inventory() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("pyproject.toml"),
+            "[tool.ruff]\nline-length=100\n[tool.black]\nline-length=100\n",
+        )
+        .unwrap();
+        let mut discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        assert!(discovery.evidence_for("ruff").is_some());
+        assert!(discovery.evidence_for("black").is_some());
+        assert_eq!(discovery.diagnostics().native_configs_parsed, 1);
+    }
+
+    #[test]
     fn embedded_manifest_configuration_is_native_evidence() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(
@@ -538,7 +822,7 @@ mod tests {
             "[project]\nname = \"test\"\n[tool.ruff]\nline-length = 100\n",
         )
         .unwrap();
-        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        let mut discovery = RepositoryDiscovery::discover(root.path()).unwrap();
         let evidence = discovery.evidence_for("ruff").unwrap();
 
         assert_eq!(evidence.kind, SelectionEvidenceKind::NativeConfig);
@@ -554,7 +838,7 @@ mod tests {
             r#"{"prettier":{"semi":false}}"#,
         )
         .unwrap();
-        let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
+        let mut discovery = RepositoryDiscovery::discover(root.path()).unwrap();
         let evidence = discovery.evidence_for("prettier").unwrap();
 
         assert_eq!(evidence.kind, SelectionEvidenceKind::NativeConfig);
