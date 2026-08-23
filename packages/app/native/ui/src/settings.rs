@@ -193,7 +193,7 @@ pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
             @for settings in settings {
                 section {
                     h2 { (settings.name) }
-                    (music_api_settings_content(settings, AuthState::Initial))
+                    (music_api_settings_content(settings, &AuthState::Initial))
                 }
             }
         }
@@ -216,7 +216,7 @@ pub enum AuthState {
 #[must_use]
 pub fn music_api_settings_content(
     settings: &MusicApiSettings,
-    auth_state: AuthState,
+    auth_state: &AuthState,
 ) -> Containers {
     container! {
         @let id = format!("settings-{}", classify_name(&settings.id));

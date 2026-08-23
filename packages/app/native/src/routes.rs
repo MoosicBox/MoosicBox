@@ -1005,7 +1005,7 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
             .with_primary(
                 moosicbox_app_native_ui::settings::music_api_settings_content(
                     &settings,
-                    AuthState::Initial,
+                    &AuthState::Initial,
                 ),
             )
             .build());
@@ -1093,7 +1093,7 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
             .with_primary(
                 moosicbox_app_native_ui::settings::music_api_settings_content(
                     &settings,
-                    AuthState::Initial,
+                    &AuthState::Initial,
                 ),
             )
             .build());
@@ -1162,7 +1162,8 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
         return Ok(Content::builder()
             .with_primary(
                 moosicbox_app_native_ui::settings::music_api_settings_content(
-                    &settings, auth_state,
+                    &settings,
+                    &auth_state,
                 ),
             )
             .build());

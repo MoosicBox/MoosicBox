@@ -613,7 +613,7 @@ impl std::fmt::Debug for AppState {
                 "connection_generation",
                 &self.connection_generation.load(Ordering::SeqCst),
             )
-            .field("connection_task_handles", &self.connection_task_handles)
+            .field("connection_task_handles", &"<JoinHandles>")
             .field("api_url", &self.api_url)
             .field("profile", &self.profile)
             .field("ws_url", &self.ws_url)

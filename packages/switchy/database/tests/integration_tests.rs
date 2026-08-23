@@ -1402,7 +1402,7 @@ mod turso {
             .expect("transaction insert");
 
         let reader_db = Arc::clone(&db);
-        let reader = switchy_async::task::spawn(async move {
+        let mut reader = switchy_async::task::spawn(async move {
             reader_db
                 .select("users")
                 .where_eq("name", "IsolatedUser")
@@ -1437,7 +1437,8 @@ mod turso {
         let db = suite.get_database().await.expect("Turso database");
         let tx1 = db.begin_transaction().await.expect("first transaction");
         let second_db = Arc::clone(&db);
-        let second = switchy_async::task::spawn(async move { second_db.begin_transaction().await });
+        let mut second =
+            switchy_async::task::spawn(async move { second_db.begin_transaction().await });
         switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
         assert!(
             !second.is_finished(),

@@ -3720,7 +3720,7 @@ mod tests {
             .expect("table creates");
         let transaction = db.begin_transaction().await.expect("transaction begins");
         let closing = std::sync::Arc::clone(&db);
-        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        let mut close_task = switchy_async::task::spawn(async move { closing.close().await });
         switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
         assert!(!close_task.is_finished());
         drop(transaction);
@@ -3750,7 +3750,7 @@ mod tests {
             .expect("transaction inserts");
 
         let closing = std::sync::Arc::clone(&db);
-        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        let mut close_task = switchy_async::task::spawn(async move { closing.close().await });
         switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
         assert!(!close_task.is_finished());
         transaction.commit().await.expect("transaction commits");
@@ -5721,7 +5721,7 @@ mod tests {
         .expect("Failed to create child table");
 
         let dependents =
-            find_cascade_dependents(&*db.connection().await.expect("open connection"), "parent")
+            find_cascade_dependents(&db.connection().await.expect("open connection"), "parent")
                 .await
                 .expect("Failed to find dependents");
 
@@ -5748,7 +5748,7 @@ mod tests {
         .await
         .expect("Failed to create child table");
 
-        let has_deps = has_dependents(&*db.connection().await.expect("open connection"), "parent")
+        let has_deps = has_dependents(&db.connection().await.expect("open connection"), "parent")
             .await
             .expect("Failed to check dependents");
 
@@ -5768,7 +5768,7 @@ mod tests {
             .expect("Failed to create standalone table");
 
         let has_deps = has_dependents(
-            &*db.connection().await.expect("open connection"),
+            &db.connection().await.expect("open connection"),
             "standalone",
         )
         .await
@@ -5802,7 +5802,7 @@ mod tests {
         .expect("Failed to create child table");
 
         let dependents = find_cascade_dependents(
-            &*db.connection().await.expect("open connection"),
+            &db.connection().await.expect("open connection"),
             "grandparent",
         )
         .await
