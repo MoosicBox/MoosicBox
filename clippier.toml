@@ -25,6 +25,9 @@ exclude = [
     "/packages/opus_native/libopus/opus/**",
 ]
 
+[runner.tools.rustfmt]
+exclude = ["/packages/hyperchad/template/tests/warnings/**"]
+
 [tools.clippier-md]
 engine     = "ast"
 line-width = 999999
