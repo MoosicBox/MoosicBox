@@ -488,7 +488,7 @@ impl<'a> ToolRunner<'a> {
             return;
         }
 
-        args.retain(|arg| arg != ".");
+        args.retain(|arg| arg != "." && arg != "-recursive");
         args.extend(files.iter().cloned());
     }
 
@@ -2398,6 +2398,41 @@ mod tests {
         .unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
         executable
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_recursive_formatter_cannot_reintroduce_automatic_exclusions() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(".terraform.lock.hcl"), "\n").unwrap();
+        std::fs::write(root.path().join("main.tf"), "resource {}\n").unwrap();
+        std::fs::create_dir(root.path().join(".terraform")).unwrap();
+        std::fs::write(root.path().join(".terraform/generated.tf"), "generated\n").unwrap();
+        let executable = write_named_argument_capture_tool(root.path(), "terraform");
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "terraform".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+        assert_eq!(plan.names(), vec!["terraform"]);
+
+        let results = ToolRunner::new(&registry)
+            .with_working_dir(root.path())
+            .with_tool_plan(&plan)
+            .run_specific(&["terraform"], &[], false)
+            .unwrap();
+        assert!(results.all_success());
+        let args = std::fs::read_to_string(root.path().join("captured-terraform")).unwrap();
+        assert!(args.lines().any(|arg| arg == "fmt"));
+        assert!(args.lines().any(|arg| arg == "main.tf"));
+        assert!(!args.lines().any(|arg| arg == "-recursive"));
+        assert!(
+            !args
+                .lines()
+                .any(|arg| arg.contains(".terraform/generated.tf"))
+        );
     }
 
     #[cfg(unix)]
