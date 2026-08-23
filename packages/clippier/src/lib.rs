@@ -5644,8 +5644,13 @@ pub fn handle_check_command(
 
     let mut explicit_inventory = if tool_names.is_some() {
         Some(
-            tools::RepositoryDiscovery::inventory(
+            tools::RepositoryDiscovery::inventory_with_scope_base(
                 registry.working_dir(),
+                registry
+                    .config()
+                    .scope_base
+                    .as_deref()
+                    .unwrap_or_else(|| registry.working_dir()),
                 &registry.config().effective_scope(),
             )?
             .with_command_context(
@@ -5834,8 +5839,13 @@ pub fn handle_fmt_command(
 
     let mut explicit_inventory = if tool_names.is_some() {
         Some(
-            tools::RepositoryDiscovery::inventory(
+            tools::RepositoryDiscovery::inventory_with_scope_base(
                 registry.working_dir(),
+                registry
+                    .config()
+                    .scope_base
+                    .as_deref()
+                    .unwrap_or_else(|| registry.working_dir()),
                 &registry.config().effective_scope(),
             )?
             .with_command_context(

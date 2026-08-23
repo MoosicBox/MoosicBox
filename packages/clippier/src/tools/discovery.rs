@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use ignore::WalkBuilder;
 
-use super::scope::{automatic_exclusion_patterns_from_files, universal_exclusion_patterns};
+use super::scope::automatic_exclusion_patterns_from_files;
 use super::{TOOL_CATALOG, ToolCapability, ToolRegistry};
 
 /// Shared command-local parsed native configuration cache.
@@ -83,7 +83,7 @@ impl RepositoryDiscovery {
     ///
     /// * If the working directory cannot be canonicalized
     pub fn discover(root: &Path) -> Result<Self, std::io::Error> {
-        Self::discover_with_scope_excludes(root, &[], None)
+        Self::discover_with_scope_excludes(root, root, &[], None)
     }
 
     /// Discovers repository files with one authoritative ignore-aware walk.
@@ -97,11 +97,23 @@ impl RepositoryDiscovery {
         root: &Path,
         config: &crate::tools::ScopeConfig,
     ) -> Result<Self, std::io::Error> {
-        let mut excludes = config.exclude.clone();
-        excludes.extend(universal_exclusion_patterns());
-        excludes.sort();
-        excludes.dedup();
-        let mut result = Self::discover_with_scope_excludes(root, &excludes, Some(config))?;
+        Self::inventory_with_scope_base(root, root, config)
+    }
+
+    /// Discovers repository files while resolving configured scope patterns
+    /// relative to the directory which owns the runner configuration.
+    ///
+    /// # Errors
+    ///
+    /// * If the working directory cannot be canonicalized
+    /// * If a configured scope pattern is invalid
+    pub fn inventory_with_scope_base(
+        root: &Path,
+        scope_base: &Path,
+        config: &crate::tools::ScopeConfig,
+    ) -> Result<Self, std::io::Error> {
+        let mut result =
+            Self::discover_with_scope_excludes(root, scope_base, &config.exclude, Some(config))?;
         result.automatic_exclusions =
             automatic_exclusion_patterns_from_files(&result.files, config);
         Ok(result)
@@ -116,20 +128,26 @@ impl RepositoryDiscovery {
         root: &Path,
         excludes: &[String],
     ) -> Result<Self, std::io::Error> {
-        Self::discover_with_scope_excludes(root, excludes, None)
+        Self::discover_with_scope_excludes(root, root, excludes, None)
     }
 
     fn discover_with_scope_excludes(
         root: &Path,
+        scope_base: &Path,
         excludes: &[String],
         scope_config: Option<&crate::tools::ScopeConfig>,
     ) -> Result<Self, std::io::Error> {
         let root = root.canonicalize()?;
+        let scope_base = scope_base.canonicalize()?;
         let matchers = excludes
             .iter()
-            .filter_map(|pattern| globset::Glob::new(pattern.trim_start_matches('/')).ok())
-            .map(|glob| glob.compile_matcher())
-            .collect::<Vec<_>>();
+            .map(|pattern| {
+                let absolute = scope_base.join(pattern.trim_start_matches('/'));
+                globset::Glob::new(&absolute.to_string_lossy().replace('\\', "/"))
+                    .map(|glob| glob.compile_matcher())
+                    .map_err(std::io::Error::other)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let filter_root = root.clone();
         let scope_config = scope_config.cloned();
         let package_profiles = Arc::new(Mutex::new(BTreeMap::new()));
@@ -155,7 +173,9 @@ impl RepositoryDiscovery {
                     .unwrap_or_else(|_| entry.path());
                 let name = entry.file_name().to_str().unwrap_or_default();
                 if is_universal_excluded_dir(name)
-                    || matchers.iter().any(|matcher| matcher.is_match(relative))
+                    || matchers
+                        .iter()
+                        .any(|matcher| matcher.is_match(entry.path()))
                 {
                     return false;
                 }
@@ -547,11 +567,20 @@ pub fn plan_tools(
     capabilities: &[ToolCapability],
 ) -> Result<ToolPlan, std::io::Error> {
     let scope_config = registry.config().effective_scope();
-    let mut discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?
-        .with_command_context(
-            registry.diagnostics_handle(),
-            registry.native_config_cache(),
-        );
+    let scope_base = registry
+        .config()
+        .scope_base
+        .as_deref()
+        .unwrap_or_else(|| registry.working_dir());
+    let mut discovery = RepositoryDiscovery::inventory_with_scope_base(
+        registry.working_dir(),
+        scope_base,
+        &scope_config,
+    )?
+    .with_command_context(
+        registry.diagnostics_handle(),
+        registry.native_config_cache(),
+    );
     plan_inventory(registry, capabilities, &mut discovery)
 }
 
@@ -803,6 +832,30 @@ fn is_universal_excluded_dir(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inventory_anchors_configured_exclusions_to_scope_base() {
+        let parent = tempfile::tempdir().unwrap();
+        let scope_base = parent.path().join("workspace");
+        let root = scope_base.join("packages/plugin");
+        std::fs::create_dir_all(root.join("generated")).unwrap();
+        std::fs::write(root.join("generated/reference.md"), "generated\n").unwrap();
+        std::fs::write(root.join("README.md"), "# Included\n").unwrap();
+        let config = crate::tools::ScopeConfig {
+            exclude: vec!["/packages/plugin/generated/**".to_string()],
+            ..Default::default()
+        };
+
+        let inventory =
+            RepositoryDiscovery::inventory_with_scope_base(&root, &scope_base, &config).unwrap();
+
+        assert!(inventory.files().contains(Path::new("README.md")));
+        assert!(
+            !inventory
+                .files()
+                .contains(Path::new("generated/reference.md"))
+        );
+    }
 
     #[test]
     fn inventory_prunes_root_anchored_configured_exclusions() {

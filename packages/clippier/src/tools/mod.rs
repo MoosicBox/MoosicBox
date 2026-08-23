@@ -534,8 +534,9 @@ pub fn overlap_warnings_for_selected_tools(
     let inventory = if let Some(inventory) = inventory {
         inventory
     } else {
-        let Ok(value) = crate::tools::RepositoryDiscovery::inventory(
+        let Ok(value) = crate::tools::RepositoryDiscovery::inventory_with_scope_base(
             &base_dir,
+            registry.config().scope_base.as_deref().unwrap_or(&base_dir),
             &registry.config().effective_scope(),
         ) else {
             return Vec::new();
