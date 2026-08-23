@@ -5643,10 +5643,13 @@ pub fn handle_check_command(
     );
 
     let mut explicit_inventory = if tool_names.is_some() {
-        Some(tools::RepositoryDiscovery::inventory(
-            registry.working_dir(),
-            &registry.config().effective_scope(),
-        )?)
+        Some(
+            tools::RepositoryDiscovery::inventory(
+                registry.working_dir(),
+                &registry.config().effective_scope(),
+            )?
+            .with_diagnostics(registry.diagnostics_handle()),
+        )
     } else {
         None
     };
@@ -5827,10 +5830,13 @@ pub fn handle_fmt_command(
     );
 
     let mut explicit_inventory = if tool_names.is_some() {
-        Some(tools::RepositoryDiscovery::inventory(
-            registry.working_dir(),
-            &registry.config().effective_scope(),
-        )?)
+        Some(
+            tools::RepositoryDiscovery::inventory(
+                registry.working_dir(),
+                &registry.config().effective_scope(),
+            )?
+            .with_diagnostics(registry.diagnostics_handle()),
+        )
     } else {
         None
     };

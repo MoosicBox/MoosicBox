@@ -118,6 +118,21 @@ pub struct Tool {
     /// e.g., for `cargo fmt`, this would be `["fmt"]`
     pub format_args: Vec<String>,
 
+    /// Native extensions requested by the tool's resolved configuration.
+    pub native_requested_extensions: BTreeSet<String>,
+
+    /// Requested native extensions supported by the resolved runtime.
+    pub native_supported_extensions: BTreeSet<String>,
+
+    /// Effective native format extensions resolved for this tool.
+    pub native_format_extensions: Option<BTreeSet<String>>,
+
+    /// Native include patterns resolved from the tool's own configuration.
+    pub native_includes: Vec<String>,
+
+    /// Resolved native ignore file consumed by this tool.
+    pub native_ignore_path: Option<PathBuf>,
+
     /// Optional: The path to the detected binary
     pub detected_path: Option<PathBuf>,
 }
@@ -142,6 +157,11 @@ impl Tool {
             capabilities,
             check_args,
             format_args,
+            native_requested_extensions: BTreeSet::new(),
+            native_supported_extensions: BTreeSet::new(),
+            native_format_extensions: None,
+            native_includes: Vec::new(),
+            native_ignore_path: None,
             detected_path: None,
         }
     }

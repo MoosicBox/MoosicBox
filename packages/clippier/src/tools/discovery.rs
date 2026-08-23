@@ -196,6 +196,19 @@ impl RepositoryDiscovery {
         Ok(result)
     }
 
+    /// Replaces this inventory's diagnostics context with a command-shared one.
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: InventoryDiagnosticsHandle) -> Self {
+        if let (Ok(existing), Ok(mut shared)) = (self.diagnostics.lock(), diagnostics.lock()) {
+            shared.recursive_walks += existing.recursive_walks;
+            shared.directories_visited += existing.directories_visited;
+            shared.files_indexed += existing.files_indexed;
+            shared.native_configs_parsed += existing.native_configs_parsed;
+        }
+        self.diagnostics = diagnostics;
+        self
+    }
+
     /// Returns deterministic diagnostics for this inventory.
     #[must_use]
     pub fn diagnostics(&self) -> InventoryDiagnostics {
@@ -494,7 +507,8 @@ pub fn plan_tools(
     capabilities: &[ToolCapability],
 ) -> Result<ToolPlan, std::io::Error> {
     let scope_config = registry.config().effective_scope();
-    let mut discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?;
+    let mut discovery = RepositoryDiscovery::inventory(registry.working_dir(), &scope_config)?
+        .with_diagnostics(registry.diagnostics_handle());
     plan_inventory(registry, capabilities, &mut discovery)
 }
 
@@ -612,6 +626,17 @@ fn plan_inventory(
                 file_extensions.extend(entry.extensions(ToolCapability::Lint));
             }
             let mut files = global_scope.filter_relative_files(discovery.files(), &file_extensions);
+            if let Some(tool) = registry.get(entry.name)
+                && !tool.native_includes.is_empty()
+            {
+                let native_scope = crate::tools::scope::ScopeMatcher::with_patterns(
+                    registry.working_dir(),
+                    &tool.native_includes,
+                    &[],
+                )
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+                files = native_scope.filter_relative_files(&files, &file_extensions);
+            }
             if let Some(policy) = policy
                 && (!policy.include.is_empty() || !policy.exclude.is_empty())
             {

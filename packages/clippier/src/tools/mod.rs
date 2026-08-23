@@ -147,89 +147,39 @@ fn normalized_tool_pair(a: &str, b: &str) -> (String, String) {
     (pair[0].clone(), pair[1].clone())
 }
 
-fn find_file_in_ancestors(
+pub(crate) fn resolve_native_format_extensions(
     base_dir: &std::path::Path,
-    names: &[&str],
-) -> Option<std::path::PathBuf> {
-    let mut current = Some(base_dir);
-    while let Some(dir) = current {
-        for name in names {
-            let candidate = dir.join(name);
-            if candidate.exists() {
-                return Some(candidate);
-            }
-        }
-        current = dir.parent();
+    tool: &Tool,
+    diagnostics: &InventoryDiagnosticsHandle,
+) -> Option<std::collections::BTreeSet<String>> {
+    let normalized = normalize_tool_name(&tool.name);
+    if normalized == "prettier" {
+        return query_prettier_support_info_extensions(base_dir, tool, Some(diagnostics))
+            .filter(|extensions| !extensions.is_empty());
+    }
+    if normalized == "mdformat" {
+        let mut extensions = default_extensions_for_tool(&tool.name, ToolCapability::Format);
+        extensions.extend(
+            tool.native_supported_extensions
+                .iter()
+                .filter_map(|extension| (extension == "mdx").then_some(extension.clone())),
+        );
+        return Some(extensions);
+    }
+    if normalized == "dprint" {
+        return parse_dprint_include_extensions(base_dir, Some(diagnostics));
     }
     None
 }
 
-fn toml_value_contains_mdx(value: &toml::Value) -> bool {
-    value.as_array().is_some_and(|items| {
-        items.iter().any(|item| {
-            item.as_str()
-                .is_some_and(|entry| normalize_extension(entry) == "mdx")
-        })
-    })
-}
-
-fn mdformat_config_supports_mdx(base_dir: &std::path::Path) -> bool {
-    if let Some(path) = find_file_in_ancestors(base_dir, &[".mdformat.toml"])
-        && let Ok(contents) = std::fs::read_to_string(path)
-        && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-        && parsed
-            .get("extensions")
-            .is_some_and(toml_value_contains_mdx)
-    {
-        return true;
-    }
-
-    if let Some(path) = find_file_in_ancestors(base_dir, &["pyproject.toml"])
-        && let Ok(contents) = std::fs::read_to_string(path)
-        && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-        && parsed
-            .get("tool")
-            .and_then(|tool| tool.get("mdformat"))
-            .and_then(|mdformat| mdformat.get("extensions"))
-            .is_some_and(toml_value_contains_mdx)
-    {
-        return true;
-    }
-
-    false
-}
-
 fn effective_extensions_for_tool(
-    base_dir: &std::path::Path,
     tool: &Tool,
     capability: ToolCapability,
-    diagnostics: Option<&InventoryDiagnosticsHandle>,
 ) -> std::collections::BTreeSet<String> {
-    let normalized = normalize_tool_name(&tool.name);
-
-    if normalized == "prettier"
-        && capability == ToolCapability::Format
-        && let Some(prettier_extensions) =
-            query_prettier_support_info_extensions(base_dir, tool, diagnostics)
-        && !prettier_extensions.is_empty()
+    if capability == ToolCapability::Format
+        && let Some(extensions) = &tool.native_format_extensions
     {
-        return prettier_extensions;
-    }
-
-    if normalized == "mdformat" && capability == ToolCapability::Format {
-        let mut extensions = default_extensions_for_tool(&tool.name, capability);
-        if mdformat_config_supports_mdx(base_dir)
-            || probe_mdformat_supports_mdx(base_dir, tool, diagnostics)
-        {
-            extensions.insert("mdx".to_string());
-        }
-        return extensions;
-    }
-
-    if normalized == "dprint"
-        && let Some(dprint_extensions) = parse_dprint_include_extensions(base_dir)
-    {
-        return dprint_extensions;
+        return extensions.clone();
     }
 
     default_extensions_for_tool(&tool.name, capability)
@@ -288,24 +238,6 @@ fn run_tool_probe_command(
     child.wait_with_output().ok()
 }
 
-fn probe_mdformat_supports_mdx(
-    base_dir: &std::path::Path,
-    tool: &Tool,
-    diagnostics: Option<&InventoryDiagnosticsHandle>,
-) -> bool {
-    let Some(output) = run_tool_probe_command(
-        base_dir,
-        tool,
-        &["--check", "--extensions", "mdx", "-"],
-        Some("# mdx-probe\n"),
-        diagnostics,
-    ) else {
-        return false;
-    };
-
-    output.status.success()
-}
-
 fn parse_prettier_support_info_extensions(
     json: &str,
 ) -> Option<std::collections::BTreeSet<String>> {
@@ -338,6 +270,7 @@ fn query_prettier_support_info_extensions(
 
 fn parse_dprint_include_extensions(
     base_dir: &std::path::Path,
+    diagnostics: Option<&InventoryDiagnosticsHandle>,
 ) -> Option<std::collections::BTreeSet<String>> {
     let config_path = if base_dir.join("dprint.json").exists() {
         base_dir.join("dprint.json")
@@ -349,6 +282,11 @@ fn parse_dprint_include_extensions(
     };
 
     let contents = std::fs::read_to_string(config_path).ok()?;
+    if let Some(diagnostics) = diagnostics
+        && let Ok(mut diagnostics) = diagnostics.lock()
+    {
+        diagnostics.native_configs_parsed += 1;
+    }
     let parsed = serde_json::from_str::<serde_json::Value>(&contents).ok()?;
     let includes = parsed.get("includes")?.as_array()?;
 
@@ -607,16 +545,13 @@ pub fn overlap_warnings_for_selected_tools(
     };
     let global_scope =
         crate::tools::scope::ScopeMatcher::new(&base_dir, inventory.automatic_exclusions()).ok();
-    let diagnostics = inventory.diagnostics_handle();
     let dynamic_extensions = selected
         .iter()
         .map(|tool| {
             let mut extensions = capabilities
                 .iter()
                 .filter(|capability| tool.capabilities.contains(capability))
-                .flat_map(|capability| {
-                    effective_extensions_for_tool(&base_dir, tool, *capability, Some(&diagnostics))
-                })
+                .flat_map(|capability| effective_extensions_for_tool(tool, *capability))
                 .collect::<std::collections::BTreeSet<_>>();
             let policy = registry.config().tool_policy(&tool.name);
             let tool_scope = policy.and_then(|policy| {

@@ -927,70 +927,6 @@ impl<'a> ToolRunner<'a> {
         Some((parts.0, parts.1, warnings))
     }
 
-    fn working_dir_absolute(working_dir: Option<&Path>) -> PathBuf {
-        let base_dir = working_dir.map_or_else(
-            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
-            Path::to_path_buf,
-        );
-        if base_dir.is_absolute() {
-            base_dir
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| Path::new(".").to_path_buf())
-                .join(base_dir)
-        }
-    }
-
-    fn mdformat_supports_extension(
-        tool: &Tool,
-        working_dir: Option<&Path>,
-        extension: &str,
-    ) -> bool {
-        let mut args = match &tool.kind {
-            ToolKind::Cargo => return false,
-            ToolKind::Binary => vec![],
-            ToolKind::Runner { runner_args, .. } => {
-                let mut values = runner_args.clone();
-                values.push(tool.binary.clone());
-                values
-            }
-        };
-
-        args.push("--check".to_string());
-        args.push("--extensions".to_string());
-        args.push(extension.to_string());
-        args.push("-".to_string());
-
-        let program = match &tool.kind {
-            ToolKind::Cargo => return false,
-            ToolKind::Binary => tool
-                .detected_path
-                .as_ref()
-                .map_or_else(|| tool.binary.clone(), |p| p.display().to_string()),
-            ToolKind::Runner { runner, .. } => runner.clone(),
-        };
-
-        let mut command = Command::new(program);
-        command.args(args);
-        command.stdout(Stdio::null());
-        command.stderr(Stdio::null());
-        command.stdin(Stdio::piped());
-        if let Some(dir) = working_dir {
-            command.current_dir(dir);
-        }
-
-        let Ok(mut child) = command.spawn() else {
-            return false;
-        };
-
-        if let Some(mut stdin) = child.stdin.take() {
-            use std::io::Write as _;
-            let _ = stdin.write_all(b"# mdformat extension probe\n");
-        }
-
-        child.wait().is_ok_and(|status| status.success())
-    }
-
     fn find_file_in_ancestors(base_dir: &Path, names: &[&str]) -> Option<PathBuf> {
         let mut current = Some(base_dir);
         while let Some(dir) = current {
@@ -1003,45 +939,6 @@ impl<'a> ToolRunner<'a> {
             current = dir.parent();
         }
         None
-    }
-
-    fn mdformat_requested_extensions(
-        working_dir: Option<&Path>,
-    ) -> std::collections::BTreeSet<String> {
-        fn parse_extensions(value: &toml::Value) -> std::collections::BTreeSet<String> {
-            value
-                .as_array()
-                .into_iter()
-                .flat_map(|values| values.iter())
-                .filter_map(toml::Value::as_str)
-                .map(|value| value.trim().to_ascii_lowercase())
-                .filter(|value| value == "gfm" || value == "mdx" || value == "frontmatter")
-                .collect()
-        }
-
-        let mut requested = std::collections::BTreeSet::new();
-        let base_dir = Self::working_dir_absolute(working_dir);
-
-        if let Some(path) = Self::find_file_in_ancestors(&base_dir, &[".mdformat.toml"])
-            && let Ok(contents) = std::fs::read_to_string(path)
-            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-            && let Some(extensions) = parsed.get("extensions")
-        {
-            requested.extend(parse_extensions(extensions));
-        }
-
-        if let Some(path) = Self::find_file_in_ancestors(&base_dir, &["pyproject.toml"])
-            && let Ok(contents) = std::fs::read_to_string(path)
-            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-            && let Some(extensions) = parsed
-                .get("tool")
-                .and_then(|tool| tool.get("mdformat"))
-                .and_then(|mdformat| mdformat.get("extensions"))
-        {
-            requested.extend(parse_extensions(extensions));
-        }
-
-        requested
     }
 
     fn mdformat_runtime_label(tool: &Tool) -> String {
@@ -1066,7 +963,7 @@ impl<'a> ToolRunner<'a> {
     fn append_mdformat_extension_args(
         tool: &Tool,
         args: &mut Vec<String>,
-        working_dir: Option<&Path>,
+        _working_dir: Option<&Path>,
         args_start_index: usize,
     ) -> Vec<String> {
         if tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
@@ -1088,15 +985,15 @@ impl<'a> ToolRunner<'a> {
             })
             .unwrap_or(args.len());
 
-        let requested_extensions = Self::mdformat_requested_extensions(working_dir);
+        let requested_extensions = &tool.native_requested_extensions;
         if requested_extensions.is_empty() {
             return Vec::new();
         }
 
         let mut extension_args = Vec::new();
         let mut missing_extensions = Vec::new();
-        for extension in &requested_extensions {
-            if Self::mdformat_supports_extension(tool, working_dir, extension) {
+        for extension in requested_extensions {
+            if tool.native_supported_extensions.contains(extension) {
                 extension_args.push("--extensions".to_string());
                 extension_args.push(extension.clone());
             } else {
@@ -1130,22 +1027,10 @@ impl<'a> ToolRunner<'a> {
         )]
     }
 
-    fn find_prettier_ignore_path(base_dir: &Path) -> Option<std::path::PathBuf> {
-        let mut current = Some(base_dir);
-        while let Some(dir) = current {
-            let candidate = dir.join(".prettierignore");
-            if candidate.exists() {
-                return Some(candidate);
-            }
-            current = dir.parent();
-        }
-        None
-    }
-
     fn append_prettier_ignore_path_arg(
         tool: &Tool,
         args: &mut Vec<String>,
-        working_dir: Option<&Path>,
+        _working_dir: Option<&Path>,
         args_start_index: usize,
     ) {
         if tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
@@ -1155,19 +1040,7 @@ impl<'a> ToolRunner<'a> {
             return;
         }
 
-        let base_dir = working_dir.map_or_else(
-            || std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
-            Path::to_path_buf,
-        );
-        let base_dir = if base_dir.is_absolute() {
-            base_dir
-        } else {
-            std::env::current_dir()
-                .unwrap_or_else(|_| Path::new(".").to_path_buf())
-                .join(base_dir)
-        };
-
-        if let Some(ignore_path) = Self::find_prettier_ignore_path(&base_dir) {
+        if let Some(ignore_path) = &tool.native_ignore_path {
             let insert_index = args
                 .iter()
                 .enumerate()
@@ -2616,7 +2489,7 @@ mod tests {
         std::fs::write(
             &executable,
             format!(
-                "#!/bin/sh\nprintf '%s\\n' '{name}' >> \"$(dirname \"$0\")/execution-order\"\n"
+                "#!/bin/sh\nif [ \"$1\" = \"--support-info\" ]; then printf '%s\\n' '{{\"languages\":[]}}'; exit 0; fi\nprintf '%s\\n' '{name}' >> \"$(dirname \"$0\")/execution-order\"\n"
             ),
         )
         .unwrap();
@@ -3063,7 +2936,7 @@ mod tests {
         std::fs::write(dir.join(".prettierignore"), "target/\n")
             .expect("failed to write prettier ignore");
 
-        let tool = Tool::new(
+        let mut tool = Tool::new(
             "prettier",
             "Prettier",
             "prettier",
@@ -3072,6 +2945,7 @@ mod tests {
             vec![],
             vec![],
         );
+        tool.native_ignore_path = Some(dir.join(".prettierignore"));
 
         let mut args = vec![
             "--check".to_string(),

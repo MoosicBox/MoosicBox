@@ -51,6 +51,12 @@ pub struct ToolRegistry {
     /// Configuration for tool selection
     config: ToolsConfig,
 
+    /// Command-scoped diagnostics shared with repository inventory and planning.
+    diagnostics: crate::tools::InventoryDiagnosticsHandle,
+
+    /// Command-local native probe results keyed by resolved execution context.
+    probe_results: std::sync::Mutex<BTreeMap<String, bool>>,
+
     /// Working directory used for local tool discovery
     working_dir: PathBuf,
 }
@@ -62,6 +68,25 @@ impl ToolRegistry {
     ///
     /// Returns an error if a required tool is not found.
     pub fn new(config: ToolsConfig, working_dir: Option<&Path>) -> Result<Self, ToolError> {
+        Self::new_with_diagnostics(
+            config,
+            working_dir,
+            std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+        )
+    }
+
+    /// Creates a registry sharing one command diagnostics context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a required tool is not found.
+    pub fn new_with_diagnostics(
+        config: ToolsConfig,
+        working_dir: Option<&Path>,
+        diagnostics: crate::tools::InventoryDiagnosticsHandle,
+    ) -> Result<Self, ToolError> {
         let resolved_working_dir = match working_dir {
             Some(path) => path.to_path_buf(),
             None => Self::current_working_dir()?,
@@ -71,6 +96,8 @@ impl ToolRegistry {
             tools: BTreeMap::new(),
             available: BTreeMap::new(),
             config,
+            diagnostics,
+            probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: resolved_working_dir,
         };
 
@@ -202,7 +229,10 @@ impl ToolRegistry {
         None
     }
 
-    fn parse_mdformat_requested_extensions(base_dir: &Path) -> BTreeSet<String> {
+    fn parse_mdformat_requested_extensions(
+        base_dir: &Path,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+    ) -> BTreeSet<String> {
         fn parse_extensions(value: &toml::Value) -> BTreeSet<String> {
             value
                 .as_array()
@@ -218,21 +248,31 @@ impl ToolRegistry {
 
         if let Some(path) = Self::find_file_in_ancestors(base_dir, &[".mdformat.toml"])
             && let Ok(contents) = std::fs::read_to_string(path)
-            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-            && let Some(extensions) = parsed.get("extensions")
         {
-            requested.extend(parse_extensions(extensions));
+            if let Ok(mut diagnostics) = diagnostics.lock() {
+                diagnostics.native_configs_parsed += 1;
+            }
+            if let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+                && let Some(extensions) = parsed.get("extensions")
+            {
+                requested.extend(parse_extensions(extensions));
+            }
         }
 
         if let Some(path) = Self::find_file_in_ancestors(base_dir, &["pyproject.toml"])
             && let Ok(contents) = std::fs::read_to_string(path)
-            && let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
-            && let Some(extensions) = parsed
-                .get("tool")
-                .and_then(|tool| tool.get("mdformat"))
-                .and_then(|mdformat| mdformat.get("extensions"))
         {
-            requested.extend(parse_extensions(extensions));
+            if let Ok(mut diagnostics) = diagnostics.lock() {
+                diagnostics.native_configs_parsed += 1;
+            }
+            if let Ok(parsed) = toml::from_str::<toml::Value>(&contents)
+                && let Some(extensions) = parsed
+                    .get("tool")
+                    .and_then(|tool| tool.get("mdformat"))
+                    .and_then(|mdformat| mdformat.get("extensions"))
+            {
+                requested.extend(parse_extensions(extensions));
+            }
         }
 
         requested
@@ -242,7 +282,18 @@ impl ToolRegistry {
         resolution: &ToolResolution,
         extension: &str,
         base_dir: &Path,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+        probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> bool {
+        let key = format!("{resolution:?}|{}|mdformat:{extension}", base_dir.display());
+        if let Ok(results) = probe_results.lock()
+            && let Some(result) = results.get(&key)
+        {
+            return *result;
+        }
+        if let Ok(mut diagnostics) = diagnostics.lock() {
+            diagnostics.probes_executed += 1;
+        }
         let (program, mut args) = match resolution {
             ToolResolution::Binary(path) => (path.display().to_string(), Vec::new()),
             ToolResolution::Runner {
@@ -280,21 +331,74 @@ impl ToolRegistry {
             let _ = child_stdin.write_all(b"# mdformat extension probe\n");
         }
 
-        child.wait().is_ok_and(|status| status.success())
+        let result = child.wait().is_ok_and(|status| status.success());
+        if let Ok(mut results) = probe_results.lock() {
+            results.insert(key, result);
+        }
+        result
     }
 
     fn mdformat_supported_extensions_for_resolution(
         resolution: &ToolResolution,
         requested_extensions: &BTreeSet<String>,
         base_dir: &Path,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+        probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> BTreeSet<String> {
         requested_extensions
             .iter()
             .filter(|extension| {
-                Self::mdformat_resolution_supports_extension(resolution, extension, base_dir)
+                Self::mdformat_resolution_supports_extension(
+                    resolution,
+                    extension,
+                    base_dir,
+                    diagnostics,
+                    probe_results,
+                )
             })
             .cloned()
             .collect()
+    }
+
+    fn resolve_native_paths(tool: &mut Tool, base_dir: &Path) {
+        if tool.name == "prettier" {
+            tool.native_ignore_path = Self::find_file_in_ancestors(base_dir, &[".prettierignore"]);
+        }
+    }
+
+    fn resolve_mdformat_native_extensions(
+        tool: &mut Tool,
+        base_dir: &Path,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+        probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
+    ) {
+        if tool.name != "mdformat" {
+            return;
+        }
+        tool.native_requested_extensions =
+            Self::parse_mdformat_requested_extensions(base_dir, diagnostics);
+        tool.native_supported_extensions = Self::mdformat_supported_extensions_for_resolution(
+            &match &tool.kind {
+                ToolKind::Binary => ToolResolution::Binary(
+                    tool.detected_path
+                        .clone()
+                        .unwrap_or_else(|| PathBuf::from(&tool.binary)),
+                ),
+                ToolKind::Runner {
+                    runner,
+                    runner_args,
+                } => ToolResolution::Runner {
+                    runner: runner.clone(),
+                    runner_args: runner_args.clone(),
+                    tool_binary: tool.binary.clone(),
+                },
+                ToolKind::Cargo => return,
+            },
+            &tool.native_requested_extensions,
+            base_dir,
+            diagnostics,
+            probe_results,
+        );
     }
 
     fn mdformat_extension_subsets_desc(
@@ -476,6 +580,8 @@ impl ToolRegistry {
         base_dir: &Path,
         runner_fallback: bool,
         config: &ToolsConfig,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+        probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> Option<ToolResolution> {
         let entry = tool_catalog_entry(name)?;
         if entry.uses_local_node_bin()
@@ -485,7 +591,8 @@ impl ToolRegistry {
         }
 
         if name == "mdformat" && runner_fallback {
-            let requested_extensions = Self::parse_mdformat_requested_extensions(base_dir);
+            let requested_extensions =
+                Self::parse_mdformat_requested_extensions(base_dir, diagnostics);
             let candidates = Self::mdformat_runner_candidates(config, &requested_extensions);
             let mut best: Option<(usize, ToolResolution)> = None;
             for candidate in candidates {
@@ -493,6 +600,8 @@ impl ToolRegistry {
                     &candidate,
                     &requested_extensions,
                     base_dir,
+                    diagnostics,
+                    probe_results,
                 )
                 .len();
                 if best.as_ref().is_none_or(|(count, _)| supported > *count) {
@@ -519,7 +628,7 @@ impl ToolRegistry {
         if name == "mdformat" {
             return Self::mdformat_runner_candidates(
                 config,
-                &Self::parse_mdformat_requested_extensions(base_dir),
+                &Self::parse_mdformat_requested_extensions(base_dir, diagnostics),
             )
             .into_iter()
             .next();
@@ -635,6 +744,39 @@ impl ToolRegistry {
         }
     }
 
+    fn resolve_biome_native_includes(
+        tool: &mut Tool,
+        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
+    ) {
+        if tool.name != "biome" {
+            return;
+        }
+        let config_path = tool
+            .check_args
+            .windows(2)
+            .find_map(|args| (args[0] == "--config-path").then(|| PathBuf::from(&args[1])));
+        let Some(config_path) = config_path else {
+            return;
+        };
+        let Ok(contents) = std::fs::read_to_string(&config_path) else {
+            return;
+        };
+        if let Ok(mut diagnostics) = diagnostics.lock() {
+            diagnostics.native_configs_parsed += 1;
+        }
+        let parsed = serde_json::from_str::<serde_json::Value>(&contents).ok();
+        tool.native_includes = parsed
+            .as_ref()
+            .and_then(|value| value.get("files"))
+            .and_then(|files| files.get("includes"))
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .map(ToString::to_string)
+            .collect();
+    }
+
     /// Registers a tool definition
     pub fn register(&mut self, tool: Tool) {
         self.tools.insert(tool.name.clone(), tool);
@@ -648,8 +790,12 @@ impl ToolRegistry {
     }
 
     /// Detects which tools are available on the system
+    #[allow(clippy::too_many_lines)]
     fn detect_tools(&mut self) -> Result<(), ToolError> {
         for (name, tool) in &self.tools {
+            if let Ok(mut diagnostics) = self.diagnostics.lock() {
+                diagnostics.executables_resolved += 1;
+            }
             // Skip if configured to skip
             if self.config.should_skip(name) {
                 log::debug!("Skipping tool '{name}' (configured to skip)");
@@ -666,11 +812,25 @@ impl ToolRegistry {
                     );
                     let mut available_tool = tool.clone();
                     available_tool.detected_path = Some(path_buf);
+                    Self::resolve_native_paths(&mut available_tool, &self.working_dir);
+                    Self::resolve_mdformat_native_extensions(
+                        &mut available_tool,
+                        &self.working_dir,
+                        &self.diagnostics,
+                        &self.probe_results,
+                    );
+                    available_tool.native_format_extensions =
+                        crate::tools::resolve_native_format_extensions(
+                            &self.working_dir,
+                            &available_tool,
+                            &self.diagnostics,
+                        );
                     Self::maybe_apply_biome_settings(
                         &mut available_tool,
                         &self.config,
                         &self.working_dir,
                     );
+                    Self::resolve_biome_native_includes(&mut available_tool, &self.diagnostics);
                     self.available.insert(name.clone(), available_tool);
                     continue;
                 }
@@ -686,8 +846,10 @@ impl ToolRegistry {
                 &self.working_dir,
                 self.config.runner_fallback,
                 &self.config,
+                &self.diagnostics,
+                &self.probe_results,
             ) {
-                let available_tool = match resolution {
+                let mut available_tool = match resolution {
                     ToolResolution::Binary(path) => {
                         log::debug!("Tool '{name}' detected at: {}", path.display());
                         let mut detected_tool = tool.clone().with_detected_path(path);
@@ -696,6 +858,7 @@ impl ToolRegistry {
                             &self.config,
                             &self.working_dir,
                         );
+                        Self::resolve_biome_native_includes(&mut detected_tool, &self.diagnostics);
                         detected_tool
                     }
                     ToolResolution::Runner {
@@ -715,9 +878,23 @@ impl ToolRegistry {
                             &self.config,
                             &self.working_dir,
                         );
+                        Self::resolve_biome_native_includes(&mut available_tool, &self.diagnostics);
                         available_tool
                     }
                 };
+                Self::resolve_native_paths(&mut available_tool, &self.working_dir);
+                Self::resolve_mdformat_native_extensions(
+                    &mut available_tool,
+                    &self.working_dir,
+                    &self.diagnostics,
+                    &self.probe_results,
+                );
+                available_tool.native_format_extensions =
+                    crate::tools::resolve_native_format_extensions(
+                        &self.working_dir,
+                        &available_tool,
+                        &self.diagnostics,
+                    );
                 self.available.insert(name.clone(), available_tool);
             } else {
                 log::debug!("Tool '{name}' not found");
@@ -760,6 +937,12 @@ impl ToolRegistry {
     #[must_use]
     pub const fn config(&self) -> &ToolsConfig {
         &self.config
+    }
+
+    /// Returns the command-scoped diagnostics handle.
+    #[must_use]
+    pub fn diagnostics_handle(&self) -> crate::tools::InventoryDiagnosticsHandle {
+        std::sync::Arc::clone(&self.diagnostics)
     }
 
     /// Returns the directory used for local tool discovery and execution.
@@ -1034,6 +1217,63 @@ mod tests {
         assert!(summary.contains("automatic-exclusions=node_modules/**"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn native_config_and_probe_work_is_at_most_once_per_command_context() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let prettier = root.path().join("prettier");
+        std::fs::write(
+            &prettier,
+            "#!/bin/sh\nif [ \"$1\" = \"--support-info\" ]; then printf '%s\\n' '{\"languages\":[{\"extensions\":[\".js\"]}]}'; fi\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&prettier, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(root.path().join(".prettierrc"), "{}\n").unwrap();
+        std::fs::write(root.path().join("source.js"), "const value = 1;\n").unwrap();
+
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "prettier".to_string(),
+            prettier.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+
+        assert_eq!(plan.diagnostics.probes_executed, 1);
+        assert_eq!(plan.diagnostics.native_configs_parsed, 0);
+    }
+
+    #[test]
+    fn dprint_native_config_is_parsed_once_and_reused_by_planning() {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("dprint");
+        std::fs::write(&executable, "").unwrap();
+        std::fs::write(
+            root.path().join("dprint.json"),
+            r#"{"includes":["**/*.json"]}"#,
+        )
+        .unwrap();
+        std::fs::write(root.path().join("source.json"), "{}\n").unwrap();
+
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "dprint".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Format]).unwrap();
+
+        assert_eq!(plan.diagnostics.native_configs_parsed, 1);
+        assert_eq!(
+            registry
+                .get("dprint")
+                .and_then(|tool| tool.native_format_extensions.as_ref()),
+            Some(&BTreeSet::from(["json".to_string()]))
+        );
+    }
+
     #[test]
     fn resolve_preferred_prettier_path_uses_local_prettier_bin() {
         let dir = temp_dir("clippier-prettier-priority");
@@ -1057,6 +1297,10 @@ mod tests {
             &dir,
             true,
             &ToolsConfig::default(),
+            &std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            &std::sync::Mutex::new(BTreeMap::new()),
         )
         .expect("expected prettier variant to resolve");
 
@@ -1099,6 +1343,10 @@ mod tests {
             &nested,
             true,
             &ToolsConfig::default(),
+            &std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            &std::sync::Mutex::new(BTreeMap::new()),
         )
         .expect("expected prettier variant to resolve");
 
@@ -1145,6 +1393,10 @@ mod tests {
             &dir,
             true,
             &ToolsConfig::default(),
+            &std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            &std::sync::Mutex::new(BTreeMap::new()),
         );
 
         if which::which("prettier").is_ok() {
@@ -1199,6 +1451,10 @@ mod tests {
                 &dir,
                 config.runner_fallback,
                 &config,
+                &std::sync::Arc::new(std::sync::Mutex::new(
+                    crate::tools::InventoryDiagnostics::default(),
+                )),
+                &std::sync::Mutex::new(BTreeMap::new()),
             );
             assert!(
                 !matches!(resolution, Some(ToolResolution::Runner { .. })),
@@ -1261,6 +1517,10 @@ mod tests {
             &dir,
             false,
             &ToolsConfig::default(),
+            &std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            &std::sync::Mutex::new(BTreeMap::new()),
         );
 
         if which::which("prettier").is_ok() {
@@ -1387,6 +1647,10 @@ mod tests {
             tools,
             available,
             config,
+            diagnostics: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: std::env::temp_dir(),
         };
         let plan = crate::tools::ToolPlan {
@@ -1443,6 +1707,10 @@ mod tests {
             tools,
             available,
             config: ToolsConfig::default(),
+            diagnostics: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            probe_results: std::sync::Mutex::new(BTreeMap::new()),
             working_dir: std::env::temp_dir(),
         };
 
