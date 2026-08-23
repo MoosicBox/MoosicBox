@@ -1500,7 +1500,8 @@ mod test_element_methods {
         assert!(
             Element::Form {
                 action: None,
-                method: None
+                method: None,
+                multipart: false,
             }
             .allows_children()
         );

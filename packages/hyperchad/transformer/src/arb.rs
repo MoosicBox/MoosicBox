@@ -240,6 +240,7 @@ impl Arbitrary for Element {
             Just(Self::Form {
                 action: None,
                 method: None,
+                multipart: false,
             }),
             Just(Self::Span),
             (

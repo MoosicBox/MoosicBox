@@ -88,7 +88,6 @@ pub enum RouteError {
 }
 
 /// Converts expected backend readiness errors into intentional non-error content.
-#[must_use]
 pub fn handle_route_result<T: Into<Content>>(
     result: Result<T, RouteError>,
 ) -> Result<Content, RouteError> {
