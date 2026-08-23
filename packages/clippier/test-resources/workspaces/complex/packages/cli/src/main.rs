@@ -8,10 +8,8 @@ use shared_utils::format_response;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("CLI Tool Starting...");
 
-    let result = handle_user_creation(
-        "test_user".to_string(),
-        "test@example.com".to_string()
-    ).await;
+    let result =
+        handle_user_creation("test_user".to_string(), "test@example.com".to_string()).await;
 
     println!("{}", format_response(&result));
 

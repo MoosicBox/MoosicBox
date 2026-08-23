@@ -1,5 +1,5 @@
 //! Test case for hex colors with very large exponents
-//! 
+//!
 //! Pattern like #1e999 is valid scientific notation (1e999 is a huge number)
 //! and will tokenize successfully as a float literal.
 //!

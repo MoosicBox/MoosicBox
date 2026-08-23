@@ -1,6 +1,6 @@
 //! API layer for the test workspace
 
-use models::{create_user, User};
+use models::{User, create_user};
 use shared_utils::format_response;
 
 pub async fn handle_user_creation(name: String, email: String) -> String {

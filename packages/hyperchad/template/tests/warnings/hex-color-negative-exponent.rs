@@ -1,5 +1,5 @@
 //! Test case for hex colors with negative exponent pattern
-//! 
+//!
 //! Pattern like #1e-2 contains a minus sign, which breaks tokenization.
 //! Rust's lexer would tokenize this as multiple tokens: # + 1e + - + 2
 //! The minus sign makes this invalid as a hex color.

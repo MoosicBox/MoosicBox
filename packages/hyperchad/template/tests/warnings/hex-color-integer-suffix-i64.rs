@@ -1,5 +1,5 @@
 //! Test case for integer literals with i64 suffix
-//! 
+//!
 //! Pattern: #abci64
 //! Even though 'a', 'b', 'c' are hex-valid, the suffix "i64" contains 'i'
 //! which is NOT a hex digit (hex digits are 0-9, a-f).

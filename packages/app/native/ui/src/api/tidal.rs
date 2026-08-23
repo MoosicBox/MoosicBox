@@ -2,9 +2,9 @@
 //!
 //! Provides utilities for managing Tidal authentication and library scanning.
 
-use moosicbox_tidal::{device_authorization, device_authorization_token, db::models::TidalConfig};
-use switchy_database::profiles::LibraryDatabase;
 use log::error;
+use moosicbox_tidal::{db::models::TidalConfig, device_authorization, device_authorization_token};
+use switchy_database::profiles::LibraryDatabase;
 
 /// Retrieves the stored Tidal configuration from the database.
 ///
@@ -48,10 +48,7 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
         }
     };
 
-    let device_code = match response
-        .get("deviceCode")
-        .and_then(|v| v.as_str())
-    {
+    let device_code = match response.get("deviceCode").and_then(|v| v.as_str()) {
         Some(code) => code,
         None => {
             error!("Missing or invalid device code in Tidal response");
@@ -59,10 +56,7 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
         }
     };
 
-    let url = match response
-        .get("url")
-        .and_then(|v| v.as_str())
-    {
+    let url = match response.get("url").and_then(|v| v.as_str()) {
         Some(url) => url,
         None => {
             error!("Missing or invalid URL in Tidal response");
@@ -85,7 +79,9 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
                     switchy_env::var("TIDAL_CLIENT_SECRET").unwrap(),
                     device_code.clone(),
                     Some(true),
-                ).await {
+                )
+                .await
+                {
                     if response.get("accessToken").is_some() {
                         break;
                     }
@@ -106,7 +102,9 @@ pub async fn run_scan(db: &LibraryDatabase) -> bool {
         Some(vec![moosicbox_scan::ScanOrigin::Tidal]),
         db,
         moosicbox_music_api::MusicApis::default(),
-    ).await {
+    )
+    .await
+    {
         Ok(_) => true,
         Err(e) => {
             error!("Failed to run Tidal scan: {}", e);

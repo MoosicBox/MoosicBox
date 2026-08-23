@@ -5,8 +5,8 @@
 //! command processing and lifecycle management.
 
 use moosicbox_async_service::Arc;
-use switchy_async::sync::RwLock;
 use strum_macros::AsRefStr;
+use switchy_async::sync::RwLock;
 
 /// Commands that can be sent to the example service.
 ///
