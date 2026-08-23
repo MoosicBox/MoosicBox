@@ -1126,7 +1126,7 @@ exclude = [
     "/vendor/checkouts/**",
 ]
 
-[tools.prettier]
+[runner.tools.prettier]
 mode = "auto" # "auto" (default), "enabled", or "disabled"
 capabilities = ["format"]
 include = ["docs/**"]
@@ -1135,7 +1135,7 @@ format-extensions = ["md", "mdx"]
 format-order = 20
 # executable = "./node_modules/.bin/prettier"
 
-[tools.dprint]
+[runner.tools.dprint]
 mode = "enabled"
 capabilities = ["format"]
 format-extensions = ["md", "mdx"]
@@ -1161,7 +1161,7 @@ leading `/` anchors a pattern to that directory. Evidence-backed ecosystem
 profiles also exclude dependency, cache, generated, and build trees by default.
 Set `automatic-excludes = false` to disable every profile, or list individual
 profile names in `disable-profiles`. Tool-specific configuration lives under
-`[tools.<tool-id>]` and can add narrower includes and exclusions.
+`[runner.tools.<tool-id>]` and can add narrower includes and exclusions.
 
 When multiple automatic formatters support an extension, Clippier assigns one
 deterministic owner using evidence strength and catalog priority. Explicit

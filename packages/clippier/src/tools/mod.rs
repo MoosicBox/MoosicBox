@@ -721,7 +721,7 @@ fn overlap_warnings_for_tools(
                     overlap_extensions.into_iter().collect::<Vec<_>>().join(", ")
                 ));
                 warnings.push(format!(
-                    "HINT: suppress intentionally shared coverage via [[tools.overlap-warning-suppress]] with capability='{capability_label}', tools=['{}','{}'], and extensions=[...].",
+                    "HINT: suppress intentionally shared coverage via [[runner.overlap-warning-suppress]] with capability='{capability_label}', tools=['{}','{}'], and extensions=[...].",
                     left.name, right.name
                 ));
             }
@@ -872,6 +872,33 @@ fn validate_tool_policies(
     Ok(())
 }
 
+fn validate_native_tool_namespace(tools: Option<&toml::Value>) -> Result<(), BoxError> {
+    const RUNNER_POLICY_KEYS: &[&str] =
+        &["mode", "capabilities", "format-extensions", "format-order"];
+
+    let Some(tools) = tools.and_then(toml::Value::as_table) else {
+        return Ok(());
+    };
+    for (name, value) in tools {
+        if tool_catalog_entry(name).is_none() {
+            continue;
+        }
+        let Some(table) = value.as_table() else {
+            continue;
+        };
+        if let Some(key) = RUNNER_POLICY_KEYS
+            .iter()
+            .find(|key| table.contains_key(**key))
+        {
+            return Err(format!(
+                "Runner tool policy field '{key}' for tool '{name}' must be configured under [runner.tools.{name}]; [tools.{name}] is reserved for native tool configuration"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 /// Loads tool defaults from `clippier.toml` in the working directory.
 ///
 /// Returns an empty config when the file does not exist.
@@ -892,11 +919,9 @@ pub fn load_tools_config(working_dir: Option<&std::path::Path>) -> Result<ToolsC
 
     let source = std::fs::read_to_string(config_path)?;
     let conf: crate::ClippierConf = toml::from_str(&source)?;
+    validate_native_tool_namespace(conf.tools.as_ref())?;
     let mut config = conf.runner.unwrap_or_default();
-    if let Some(tools) = conf.tools {
-        validate_tool_policies(&tools)?;
-        config.tools = tools;
-    }
+    validate_tool_policies(&config.tools)?;
     config.scope_base = Some(base_dir);
     Ok(config)
 }
@@ -1087,6 +1112,47 @@ mod tests {
     }
 
     #[test]
+    fn load_tools_config_accepts_native_markdown_config_with_runner_policy() {
+        let dir = temp_dir("clippier-native-and-runner-tool-config");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            r#"
+[tools.clippier-md]
+engine = "ast"
+line-width = 120
+
+[tools.clippier-md.prose]
+wrap = "preserve"
+
+[runner.tools.prettier]
+mode = "enabled"
+format-extensions = ["md"]
+"#,
+        )
+        .unwrap();
+
+        let config = load_tools_config(Some(&dir)).unwrap();
+        assert_eq!(config.tools["prettier"].mode, ToolSelectionMode::Enabled);
+        assert!(config.tools["prettier"].format_extensions.contains("md"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn load_tools_config_rejects_misplaced_runner_policy_actionably() {
+        let dir = temp_dir("clippier-misplaced-runner-tool-config");
+        std::fs::write(
+            dir.join("clippier.toml"),
+            "[tools.prettier]\nmode = \"enabled\"\nformat-order = 10\n",
+        )
+        .unwrap();
+
+        let error = load_tools_config(Some(&dir)).unwrap_err().to_string();
+        assert!(error.contains("[runner.tools.prettier]"));
+        assert!(error.contains("[tools.prettier] is reserved for native tool configuration"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn load_tools_config_reads_runner_scope_and_typed_tool_policy() {
         let dir = temp_dir("clippier-runner-scope-config");
         std::fs::write(
@@ -1094,7 +1160,7 @@ mod tests {
             concat!(
                 "[runner.scope]\n",
                 "exclude = [\"/vendor/**\"]\n",
-                "[tools.prettier]\n",
+                "[runner.tools.prettier]\n",
                 "mode = \"enabled\"\n",
                 "exclude = [\"generated/**\"]\n",
             ),
@@ -1133,7 +1199,7 @@ mod tests {
                 "capability = \"format\"\n",
                 "tools = [\"biome\", \"prettier\"]\n",
                 "extensions = [\"js\"]\n",
-                "[tools.prettier]\n",
+                "[runner.tools.prettier]\n",
                 "mode = \"enabled\"\n",
                 "executable = \"/typed/prettier\"\n",
             ),
@@ -1187,7 +1253,7 @@ capability = "format"
 tools = ["biome", "prettier"]
 extensions = ["js"]
 
-[tools.prettier]
+[runner.tools.prettier]
 mode = "disabled"
 include = ["docs/**"]
 exclude = ["docs/generated/**"]
@@ -1269,7 +1335,7 @@ format-order = 20
             concat!(
                 "[runner]\n",
                 "skip = [\"prettier\"]\n",
-                "[tools.prettier]\n",
+                "[runner.tools.prettier]\n",
                 "mode = \"disabled\"\n",
             ),
         )
@@ -1417,7 +1483,7 @@ format-order = 20
         let dir = temp_dir("clippier-invalid-tool-policy");
         std::fs::write(
             dir.join("clippier.toml"),
-            "[tools.shellcheck]\ncapabilities = [\"format\"]\nformat-order = 1\n",
+            "[runner.tools.shellcheck]\ncapabilities = [\"format\"]\nformat-order = 1\n",
         )
         .unwrap();
         let error = load_tools_config(Some(&dir)).unwrap_err();

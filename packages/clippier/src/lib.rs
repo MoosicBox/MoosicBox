@@ -419,9 +419,10 @@ pub struct ClippierConf {
     /// Runner configuration for check/format commands.
     #[cfg(feature = "_tools")]
     pub runner: Option<tools::ToolsConfig>,
-    /// Tool-specific configuration keyed by registered tool IDs.
+    /// Native tool configuration. Clippier's runner treats this namespace as
+    /// opaque; runner policy belongs under `[runner.tools.<tool-id>]`.
     #[cfg(feature = "_tools")]
-    pub tools: Option<BTreeMap<String, tools::ToolPolicy>>,
+    pub tools: Option<toml::Value>,
 }
 
 #[cfg(all(test, feature = "_tools"))]
@@ -429,12 +430,16 @@ mod typed_tools_config_tests {
     use super::*;
 
     #[test]
-    fn typed_tools_table_preserves_unrelated_clippier_configuration() {
+    fn native_tools_table_is_opaque_to_runner_policy() {
         let parsed: ClippierConf = toml::from_str(
             r#"
                 git-submodules = true
 
-                [tools.prettier]
+                [tools.clippier-md]
+                engine = "ast"
+                line-width = 120
+
+                [runner.tools.prettier]
                 mode = "enabled"
                 format-extensions = ["md"]
             "#,
@@ -442,9 +447,27 @@ mod typed_tools_config_tests {
         .unwrap();
 
         assert_eq!(parsed.git_submodules, Some(true));
-        let tools = parsed.tools.unwrap();
-        assert_eq!(tools["prettier"].mode, tools::ToolSelectionMode::Enabled);
-        assert!(tools["prettier"].format_extensions.contains("md"));
+        assert_eq!(
+            parsed
+                .tools
+                .as_ref()
+                .and_then(|tools| tools.get("clippier-md"))
+                .and_then(|tool| tool.get("engine"))
+                .and_then(toml::Value::as_str),
+            Some("ast")
+        );
+        let runner = parsed.runner.unwrap();
+        assert_eq!(
+            runner.tools["prettier"].mode,
+            tools::ToolSelectionMode::Enabled
+        );
+        assert!(runner.tools["prettier"].format_extensions.contains("md"));
+    }
+
+    #[test]
+    fn repository_clippier_config_parses_with_native_markdown_settings() {
+        let parsed: ClippierConf = toml::from_str(include_str!("../../../clippier.toml")).unwrap();
+        assert!(parsed.tools.is_some());
     }
 }
 
