@@ -2388,6 +2388,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "bmux_keyboard"
+version = "0.0.1-alpha.1"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+dependencies = [
+ "crossterm 0.29.0",
+]
+
+[[package]]
+name = "bmux_text_edit"
+version = "0.0.1-alpha.1"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+dependencies = [
+ "bmux_keyboard",
+ "unicode-segmentation",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "bmux_tui"
+version = "0.0.1-alpha.1"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+dependencies = [
+ "bmux_keyboard",
+ "bmux_text_edit",
+ "unicode-segmentation",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "bmux_tui_components"
+version = "0.0.1-alpha.1"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+dependencies = [
+ "bmux_keyboard",
+ "bmux_tui",
+]
+
+[[package]]
 name = "bon"
 version = "3.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3157,11 +3195,14 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bmux_tui",
+ "bmux_tui_components",
  "cargo-semver-checks",
  "cargo_metadata 0.23.1",
  "chrono",
  "clap",
  "clippier_test_utilities",
+ "crossterm 0.29.0",
  "ctrlc",
  "flate2",
  "git2",

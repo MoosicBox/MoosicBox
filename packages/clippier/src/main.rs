@@ -927,11 +927,7 @@ async fn run() -> Result<(), BoxError> {
     let result = match args.cmd {
         #[cfg(feature = "_tools")]
         Commands::Init => {
-            clippier::tools::init::initialize(
-                &std::env::current_dir()?,
-                &mut std::io::stdin().lock(),
-                &mut std::io::stdout().lock(),
-            )?;
+            clippier::tools::init::initialize_terminal(&std::env::current_dir()?)?;
             String::new()
         }
         Commands::Dependencies {

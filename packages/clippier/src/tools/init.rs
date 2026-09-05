@@ -1,5 +1,12 @@
 //! Guided setup using the same repository evidence as tool execution.
 
+#[cfg(feature = "tools-tui")]
+mod inline;
+mod recommendations;
+#[cfg(test)]
+#[path = "init/recommendations_tests.rs"]
+mod recommendations_tests;
+
 use std::io::{BufRead, Write};
 use std::path::Path;
 
@@ -19,6 +26,33 @@ pub fn initialize(
     root: &Path,
     input: &mut impl BufRead,
     output: &mut impl Write,
+) -> std::io::Result<()> {
+    initialize_with_ui(root, input, output, false)
+}
+
+/// Runs setup with inline checkboxes when stdin and stdout are terminals.
+///
+/// # Errors
+/// * If setup fails (see [`initialize`]) or terminal interaction fails
+pub fn initialize_terminal(root: &Path) -> std::io::Result<()> {
+    use std::io::IsTerminal;
+    let interactive = cfg!(feature = "tools-tui")
+        && std::io::stdin().is_terminal()
+        && std::io::stdout().is_terminal();
+    initialize_with_ui(
+        root,
+        &mut std::io::stdin().lock(),
+        &mut std::io::stdout().lock(),
+        interactive,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn initialize_with_ui(
+    root: &Path,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    interactive: bool,
 ) -> std::io::Result<()> {
     let destination = root.join("clippier.toml");
     let original = read_existing(&destination)?;
@@ -47,7 +81,10 @@ pub fn initialize(
                 && !config.executables.contains_key(name)
         })
         .collect::<Vec<_>>();
-    if original.is_some() && evidence.is_empty() {
+    if original.is_some()
+        && evidence.is_empty()
+        && (!interactive || recommendations::groups(&mut inventory, &config).is_empty())
+    {
         writeln!(output, "No newly relevant tools; clippier.toml unchanged.")?;
         return Ok(());
     }
@@ -62,17 +99,32 @@ pub fn initialize(
     )?;
     let mut selected = Vec::new();
     let mut skipped = Vec::new();
-    for (name, evidence) in evidence {
-        writeln!(
-            output,
-            "\n{name}: {:?} ({})",
-            evidence.kind,
-            evidence.path.display()
-        )?;
-        if confirm(input, output, &format!("Enable {name}?"), true)? {
-            selected.push(name);
-        } else {
-            skipped.push(name);
+    if interactive {
+        #[allow(unused_mut)]
+        let mut groups = recommendations::groups(&mut inventory, &config);
+        #[cfg(not(feature = "tools-tui"))]
+        for group in &groups {
+            writeln!(output, "{}", group.title)?;
+            for choice in &group.choices {
+                writeln!(output, "{}: {}", choice.name, choice.reason)?;
+            }
+        }
+        #[cfg(feature = "tools-tui")]
+        inline::select(&mut groups, output)?;
+        (selected, skipped) = recommendations::selections(&groups);
+    } else {
+        for (name, evidence) in evidence {
+            writeln!(
+                output,
+                "\n{name}: {:?} ({})",
+                evidence.kind,
+                evidence.path.display()
+            )?;
+            if confirm(input, output, &format!("Enable {name}?"), true)? {
+                selected.push(name);
+            } else {
+                skipped.push(name);
+            }
         }
     }
     if selected.is_empty() {
@@ -97,6 +149,13 @@ pub fn initialize(
         ""
     };
     apply_choices(&mut document, &selected, &skipped, required);
+    if interactive {
+        // Explicit choices must work even without native configuration evidence.
+        apply_choices(&mut document, &selected, &[], false);
+        for name in &selected {
+            document["runner"]["tools"][name]["mode"] = value("enabled");
+        }
+    }
     let separator = if !prefix.is_empty() && !prefix.ends_with('\n') && !document.is_empty() {
         "\n"
     } else {

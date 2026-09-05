@@ -49,10 +49,15 @@ switchy_random = { workspace = true, features = ["rand"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bmux_tui = { workspace = true, optional = true }
+bmux_tui_components = { workspace = true, optional = true, features = [
+    "checkbox",
+] }
 cargo-semver-checks = { workspace = true, optional = true }
 cargo_metadata = { workspace = true, optional = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+crossterm = { workspace = true, optional = true }
 ctrlc = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 globset = { workspace = true }
@@ -129,14 +134,21 @@ release = [
 ]
 versioning = ["dep:cargo_metadata"]
 
-_tools              = ["dep:rayon", "dep:toml_edit", "dep:which"]
-_transforms         = []
-check               = ["_tools"]
-format              = ["_tools", "dep:cargo_metadata", "dep:git2", "dep:tempfile"]
-git-diff            = ["dep:git2"]
-test-utils          = ["switchy_fs/simulator-real-fs"]
-tools-tui           = ["_tools", "dep:ctrlc", "dep:ratatui"]
-transforms-system   = ["_transforms", "dep:mlua"]
+_tools = ["dep:rayon", "dep:toml_edit", "dep:which"]
+_transforms = []
+check = ["_tools"]
+format = ["_tools", "dep:cargo_metadata", "dep:git2", "dep:tempfile"]
+git-diff = ["dep:git2"]
+test-utils = ["switchy_fs/simulator-real-fs"]
+tools-tui = [
+    "_tools",
+    "dep:bmux_tui",
+    "dep:bmux_tui_components",
+    "dep:crossterm",
+    "dep:ctrlc",
+    "dep:ratatui",
+]
+transforms-system = ["_transforms", "dep:mlua"]
 transforms-vendored = ["_transforms", "mlua/vendored"]
 
 # Automatically enable test-utils when running tests

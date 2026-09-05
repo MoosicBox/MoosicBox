@@ -23,6 +23,13 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 Run `clippier init` from the repository directory you want to configure. It uses
 Clippier's shared ignore-aware inventory to recommend tools from native configs,
 manifest settings, and source files—even when those tools are not installed.
+On an interactive terminal, setup uses inline BMUX checkbox groups: arrow keys
+navigate, Space toggles, Enter continues, and Escape cancels. It does not enter an
+alternate screen. Formatter alternatives are grouped by supported file extensions;
+native configuration takes priority over catalog defaults. A tool selected in any
+group is enabled repository-wide. Existing explicit tool choices are preserved.
+Piped input and builds without `tools-tui` retain line-oriented prompts.
+
 Answer the tool-selection and installation-requirement prompts, review the TOML
 preview, and confirm creation or additive updates to `clippier.toml`.
 
