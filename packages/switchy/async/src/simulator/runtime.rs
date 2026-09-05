@@ -218,6 +218,17 @@ impl Handle {
         }
     }
 
+    /// Try to obtain the runtime active on this thread without panicking.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`TryCurrentError`] when no simulator runtime is active on this thread.
+    pub fn try_current() -> Result<Self, TryCurrentError> {
+        Runtime::current()
+            .map(|runtime| runtime.handle())
+            .ok_or(TryCurrentError)
+    }
+
     /// Returns a handle to the currently running runtime.
     ///
     /// # Panics
@@ -228,6 +239,11 @@ impl Handle {
         Runtime::current().map(|x| x.handle()).unwrap()
     }
 }
+
+/// No simulator runtime is active on the calling thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("no simulator runtime is active on this thread")]
+pub struct TryCurrentError;
 
 scoped_thread_local! {
     static RUNTIME: Runtime
@@ -856,6 +872,23 @@ mod test {
         simulator::runtime::{Handle, Runtime, build_runtime},
         task,
     };
+
+    #[test_log::test]
+    fn try_current_tracks_runtime_scope_and_thread_isolation() {
+        assert!(Handle::try_current().is_err());
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        runtime.block_on(async {
+            let handle = Handle::try_current().expect("active runtime");
+            assert_eq!(handle.spawn(async { 42 }).await.unwrap(), 42);
+            assert!(
+                std::thread::spawn(|| Handle::try_current().is_err())
+                    .join()
+                    .unwrap()
+            );
+        });
+        assert!(Handle::try_current().is_err());
+        runtime.wait().unwrap();
+    }
 
     #[test_log::test]
     fn rt_current_thread_runtime_spawns_on_same_thread() {
