@@ -19,21 +19,11 @@ use bmux_tui_components::{
     scroll_view::{ScrollViewComponent, ScrollViewState},
 };
 use crossterm::{
-    cursor,
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
-    execute,
-    terminal::{self, Clear, ClearType},
+    terminal,
 };
 
 use super::recommendations::Group;
-
-struct RawMode;
-impl Drop for RawMode {
-    fn drop(&mut self) {
-        let _ = terminal::disable_raw_mode();
-        let _ = execute!(io::stdout(), cursor::Show);
-    }
-}
 
 pub(super) fn stops(groups: &[Group]) -> Vec<(usize, usize)> {
     groups
@@ -194,61 +184,16 @@ pub(super) fn render(
     buffer
 }
 
-// Inline transport only: components own geometry, clipping, and styling.
-fn present(buffer: &Buffer, output: &mut impl Write) -> io::Result<()> {
-    for row in buffer.cells().chunks(usize::from(buffer.area().width)) {
-        execute!(
-            output,
-            cursor::MoveToColumn(0),
-            Clear(ClearType::CurrentLine)
-        )?;
-        for cell in row {
-            if cell.is_wide_continuation() {
-                continue;
-            }
-            write!(output, "\x1b[0m")?;
-            for (modifier, code) in [
-                (bmux_tui::style::Modifier::REVERSED, 7),
-                (bmux_tui::style::Modifier::BOLD, 1),
-                (bmux_tui::style::Modifier::DIM, 2),
-                (bmux_tui::style::Modifier::UNDERLINE, 4),
-            ] {
-                if cell.style.modifiers.contains(modifier) {
-                    write!(output, "\x1b[{code}m")?;
-                }
-            }
-            write!(output, "{}", cell.symbol)?;
-        }
-        write!(output, "\x1b[0m\r\n")?;
-    }
-    output.flush()
-}
-
-fn clear_rows(output: &mut impl Write, painted: u16) -> io::Result<()> {
-    if painted == 0 {
-        return Ok(());
-    }
-    execute!(output, cursor::MoveUp(painted), cursor::MoveToColumn(0))?;
-    for _ in 0..painted {
-        execute!(output, Clear(ClearType::CurrentLine))?;
-        write!(output, "\r\n")?;
-    }
-    execute!(output, cursor::MoveUp(painted))
-}
-
 pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Result<()> {
     let stops = stops(groups);
     if stops.is_empty() {
         return Ok(());
     }
     output.flush()?;
-    terminal::enable_raw_mode()?;
-    let guard = RawMode;
+    let mut terminal = bmux_tui::inline::InlineTerminal::enter(&mut *output)?;
     let mut focus = 0usize;
-    let mut painted = 0;
     let mut scroll = ScrollViewState::new();
     loop {
-        clear_rows(output, painted)?;
         let (width, height) = terminal::size()?;
         let buffer = render(
             groups,
@@ -257,8 +202,7 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
             height.saturating_sub(2).max(1),
             &mut scroll,
         );
-        present(&buffer, output)?;
-        painted = buffer.area().height;
+        terminal.draw(&buffer)?;
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Release {
                 continue;
@@ -289,8 +233,8 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
             }
         }
     }
-    clear_rows(output, painted)?;
-    drop(guard);
+    terminal.clear()?;
+    drop(terminal);
     for group in groups {
         writeln!(
             output,

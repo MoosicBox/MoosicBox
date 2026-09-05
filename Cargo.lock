@@ -2390,7 +2390,7 @@ dependencies = [
 [[package]]
 name = "bmux_keyboard"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#ae1f151e9142e802f97ad0537caf73d209d5c2ff"
 dependencies = [
  "crossterm 0.29.0",
 ]
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "bmux_text_edit"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#ae1f151e9142e802f97ad0537caf73d209d5c2ff"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2408,10 +2408,12 @@ dependencies = [
 [[package]]
 name = "bmux_tui"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#ae1f151e9142e802f97ad0537caf73d209d5c2ff"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
+ "crossterm 0.29.0",
+ "futures-util",
  "unicode-segmentation",
  "unicode-width 0.2.2",
 ]
@@ -2419,7 +2421,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui_components"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#d8f4244f2774a6756613f0459f32a774ee43374e"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#ae1f151e9142e802f97ad0537caf73d209d5c2ff"
 dependencies = [
  "bmux_keyboard",
  "bmux_tui",
@@ -3880,6 +3882,7 @@ dependencies = [
  "crossterm_winapi",
  "derive_more 2.1.1",
  "document-features",
+ "futures-core",
  "mio",
  "parking_lot",
  "rustix 1.1.4",
