@@ -27,6 +27,38 @@ const fn key(key: KeyCode) -> Event {
         modifiers: Modifiers::NONE,
     })
 }
+const fn submit_key() -> Event {
+    Event::Key(KeyStroke {
+        key: KeyCode::Enter,
+        modifiers: Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        },
+    })
+}
+#[test]
+fn enter_only_submits_on_button_and_cancel_button_interrupts() {
+    let mut groups = groups();
+    let mut setup = program(&mut groups);
+    setup
+        .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
+        .unwrap();
+    assert!(!setup.accepted);
+    setup.focus = setup.positions.len();
+    setup
+        .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
+        .unwrap();
+    assert!(setup.accepted);
+    let mut groups = self::groups();
+    let mut setup = program(&mut groups);
+    setup.focus = setup.positions.len() + 1;
+    assert!(
+        setup
+            .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
+            .is_err()
+    );
+    assert!(!setup.accepted);
+}
 fn program(groups: &mut [Group]) -> Setup<'_> {
     Setup {
         positions: super::inline::stops(groups),
@@ -99,7 +131,7 @@ fn final_dirty_state_is_presented_after_input_stops() {
                     observer.stats().frames_presented >= 2,
                     "dirty state must render without another input"
                 );
-                handle.send_terminal(key(KeyCode::Enter)).await.unwrap();
+                handle.send_terminal(submit_key()).await.unwrap();
             });
             let result = runtime.run().await.map_err(|_| "runtime failed").unwrap();
             producer.await.unwrap();
@@ -126,7 +158,7 @@ fn burst_preserves_order_coalesces_frames_and_stops_at_enter() {
                 key(KeyCode::Space),
                 key(KeyCode::Up),
                 key(KeyCode::Space),
-                key(KeyCode::Enter),
+                submit_key(),
                 key(KeyCode::Space),
             ] {
                 handle.send_terminal(event).await.unwrap();

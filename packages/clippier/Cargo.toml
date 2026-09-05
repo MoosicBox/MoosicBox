@@ -52,6 +52,7 @@ async-trait = { workspace = true }
 bmux_keyboard = { workspace = true, optional = true }
 bmux_tui = { workspace = true, optional = true, features = ["crossterm"] }
 bmux_tui_components = { workspace = true, optional = true, features = [
+    "button",
     "checkbox",
     "key-hint-bar",
     "labeled-details",

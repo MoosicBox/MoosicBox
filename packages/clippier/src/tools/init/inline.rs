@@ -6,7 +6,7 @@ use std::io::{self, Write};
 use bmux_tui::{
     buffer::Buffer,
     component::{Component, Constraints, LayoutCx, LogicalSize},
-    composition::{Column, Flex, TextBlock},
+    composition::{Column, Flex, Row, TextBlock},
     frame::Frame,
     geometry::{Rect, Size},
     paint::PaintCx,
@@ -14,6 +14,7 @@ use bmux_tui::{
     text::{Line, Span, Text},
 };
 use bmux_tui_components::{
+    button::{ButtonComponent, ButtonState, ButtonStyles},
     checkbox::{CheckboxComponent, CheckboxState, CheckboxStyles},
     key_hint_bar::{KeyHint, KeyHintBarComponent, KeyHintBarStyles},
     labeled_details::{DetailItem, LabeledDetailsComponent, LabeledDetailsStyles},
@@ -123,8 +124,13 @@ pub(super) fn render(
             choices,
         ));
     }
-    let section = &groups[focus.0];
-    let choice = &section.choices[focus.1];
+    let detail_focus = if focus.0 == usize::MAX {
+        *stops(groups).last().expect("nonempty checklist")
+    } else {
+        focus
+    };
+    let section = &groups[detail_focus.0];
+    let choice = &section.choices[detail_focus.1];
     let details = vec![
         DetailItem::new(
             "Capability",
@@ -179,7 +185,8 @@ pub(super) fn render(
     let hints = [
         KeyHint::new("↑↓", "Move"),
         KeyHint::new("Space", "Toggle"),
-        KeyHint::new("↵", "Accept"),
+        KeyHint::new("Ctrl+↵", "Submit"),
+        KeyHint::new("Tab/↵", "Focus/Activate"),
         KeyHint::new("Esc/q", "Cancel"),
     ];
     let footer = KeyHintBarComponent::new("keys", &hints).styles(KeyHintBarStyles {
@@ -197,7 +204,9 @@ pub(super) fn render(
     )
     .retain_state(scroll);
     let positions = stops(groups);
-    let viewport = if positions.first() == Some(&focus) {
+    let viewport = if focus.0 == usize::MAX {
+        viewport
+    } else if positions.first() == Some(&focus) {
         viewport.reveal(format!("section-{}.surface", focus.0))
     } else if positions.last() == Some(&focus) {
         viewport.reveal_end(format!("section-{}.surface", focus.0))
@@ -229,10 +238,31 @@ pub(super) fn render(
         );
         root = root.child(TextBlock::new(context).id("header"));
     }
+    let button_states = [0, 1].map(|index| {
+        let mut state = ButtonState::new();
+        state.set_focused(focus == (usize::MAX, index));
+        Cell::new(state)
+    });
+    let mut buttons = Row::new().id("actions");
+    for (index, label, color) in [(0, "Submit", Color::Green), (1, "Cancel", Color::Red)] {
+        buttons = buttons.child(
+            ButtonComponent::new(format!("action-{index}"), label, &button_states[index]).styles(
+                ButtonStyles {
+                    normal: Style::new().fg(color),
+                    focused: Style::new()
+                        .fg(Color::Black)
+                        .bg(color)
+                        .add_modifier(Modifier::BOLD),
+                    ..ButtonStyles::default()
+                },
+            ),
+        );
+    }
     let root = root
         .flex(Flex::new(3, viewport))
         .child(TextBlock::new("").id("details-spacing"))
         .flex(Flex::new(1, detail_view))
+        .child(buttons)
         .child(footer);
     let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
     let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));

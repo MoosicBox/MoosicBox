@@ -53,21 +53,33 @@ impl Program for Setup<'_> {
                         "Setup cancelled; no files written",
                     ));
                 }
-                KeyCode::Up => self.focus = self.focus.saturating_sub(1),
+                KeyCode::Enter if key.modifiers.ctrl || self.focus == self.positions.len() => {
+                    self.accepted = true;
+                    return Ok(Update::exit());
+                }
+                KeyCode::Enter | KeyCode::Space | KeyCode::Char(' ')
+                    if self.focus > self.positions.len() =>
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "Setup cancelled; no files written",
+                    ));
+                }
+                KeyCode::Space | KeyCode::Char(' ') if self.focus == self.positions.len() => {
+                    self.accepted = true;
+                    return Ok(Update::exit());
+                }
+                KeyCode::Up | KeyCode::Left => self.focus = self.focus.saturating_sub(1),
                 KeyCode::Tab if key.modifiers.shift => self.focus = self.focus.saturating_sub(1),
-                KeyCode::Down | KeyCode::Tab => {
-                    self.focus = (self.focus + 1).min(self.positions.len() - 1);
+                KeyCode::Down | KeyCode::Right | KeyCode::Tab => {
+                    self.focus = (self.focus + 1).min(self.positions.len() + 1);
                 }
                 KeyCode::Home => self.focus = 0,
-                KeyCode::End => self.focus = self.positions.len() - 1,
+                KeyCode::End => self.focus = self.positions.len() + 1,
                 KeyCode::Space | KeyCode::Char(' ') => {
                     let (g, c) = self.positions[self.focus];
                     self.groups[g].choices[c].selected = !self.groups[g].choices[c].selected;
                     changed = true;
-                }
-                KeyCode::Enter => {
-                    self.accepted = true;
-                    return Ok(Update::exit());
                 }
                 _ => {}
             },
@@ -107,7 +119,11 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
         let buffer = render(
             program.groups,
             self.header,
-            program.positions[program.focus],
+            program
+                .positions
+                .get(program.focus)
+                .copied()
+                .unwrap_or_else(|| (usize::MAX, program.focus - program.positions.len())),
             size.width - 1,
             size.height - 1,
             &self.scroll,

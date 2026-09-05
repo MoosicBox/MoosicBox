@@ -58,7 +58,7 @@ fn height_budget_reserves_wrapped_header_and_cursor_row() {
         let emitted_rows = output.iter().filter(|byte| **byte == b'\n').count();
         assert_eq!(emitted_rows, usize::from(buffer.area().height));
         assert!(text.contains("[x] tool-0"));
-        assert!(text.contains("Accept"), "{width}: {text}");
+        assert!(text.contains("Submit"), "{width}: {text}");
     }
 }
 
@@ -188,7 +188,7 @@ fn measured_focus_scrolls_and_small_terminals_are_bounded() {
             );
             // A partially visible section may have its header above the viewport.
             // Do not scroll just to reveal that header while focus remains visible.
-            assert!(text.contains("Accept"), "footer missing at height {height}");
+            assert!(text.contains("Submit"), "footer missing at height {height}");
         }
     }
     for (width, height) in [(1, 1), (20, 6), (40, 12)] {
