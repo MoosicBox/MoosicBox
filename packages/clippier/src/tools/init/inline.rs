@@ -69,16 +69,23 @@ fn paint_row(
     output: &mut impl Write,
 ) -> io::Result<()> {
     let (label, checked) = match row {
-        Row::Section(group) => (groups[group].title.clone(), None),
+        Row::Section(group) => (
+            format!(
+                "{} · {} · {} files",
+                groups[group].title,
+                if groups[group].formatting {
+                    "Formatter"
+                } else {
+                    "Linter"
+                },
+                groups[group].files.len()
+            ),
+            None,
+        ),
         Row::Choice(group, index) => {
             let choice = &groups[group].choices[index];
             (
-                format!(
-                    "{}{} — {}",
-                    if focused { "› " } else { "  " },
-                    choice.name,
-                    choice.reason
-                ),
+                format!("{}{}", if focused { "› " } else { "  " }, choice.name),
                 Some(choice.selected),
             )
         }
@@ -134,6 +141,7 @@ fn clear_rows(output: &mut impl Write, painted: u16) -> io::Result<()> {
     execute!(output, cursor::MoveUp(painted))
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Result<()> {
     let (rows, stops) = checklist_rows(groups);
     if stops.is_empty() {
@@ -152,7 +160,7 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
     loop {
         clear_rows(output, painted)?;
         let (columns, height) = terminal::size()?;
-        let visible = rows.len().min(usize::from(height.saturating_sub(4).max(1)));
+        let visible = rows.len().min(usize::from(height.saturating_sub(8).max(1)));
         start = viewport_start(start, stops[focus], visible, rows.len());
         for (index, row) in rows.iter().enumerate().skip(start).take(visible) {
             paint_row(
@@ -163,7 +171,38 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
                 output,
             )?;
         }
-        painted = u16::try_from(visible).unwrap_or(u16::MAX);
+        if let Row::Choice(group, index) = rows[stops[focus]] {
+            let section = &groups[group];
+            let choice = &section.choices[index];
+            let examples = section
+                .files
+                .iter()
+                .take(3)
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            for text in [
+                format!(
+                    "{} · {} · {} files",
+                    choice.name,
+                    if section.formatting {
+                        "Formatter"
+                    } else {
+                        "Linter"
+                    },
+                    section.files.len()
+                ),
+                format!("Detected from: {}", choice.reason),
+                format!("Examples: {examples}"),
+            ] {
+                let clipped = text
+                    .chars()
+                    .take(usize::from(columns.saturating_sub(1)))
+                    .collect::<String>();
+                write!(output, "\x1b[0m{clipped}\r\n")?;
+            }
+        }
+        painted = u16::try_from(visible + 3).unwrap_or(u16::MAX);
         output.flush()?;
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Release {
@@ -224,6 +263,9 @@ mod tests {
         let groups = (0..2)
             .map(|index| Group {
                 title: index.to_string(),
+                extensions: Vec::new(),
+                files: Vec::new(),
+                formatting: true,
                 choices: vec![Choice {
                     name: index.to_string(),
                     reason: String::new(),

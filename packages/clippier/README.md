@@ -28,8 +28,11 @@ sections: arrow keys or Tab/Shift-Tab navigate across all checkboxes, Space togg
 Home/End jump to the first/last choice, Enter accepts the whole checklist, and
 Escape cancels. Long lists scroll with keyboard focus. It does not enter an
 alternate screen. Formatter alternatives are grouped by supported file extensions;
-native configuration takes priority over catalog defaults. A tool selected in any
-group is enabled repository-wide. Existing explicit tool choices are preserved.
+native configuration takes priority over catalog defaults. Formatter selections are saved with explicit capabilities and selected extension
+coverage, so choosing a formatter for Markdown does not enable it for other
+languages. Lint capabilities are selected separately. Section headers show language,
+capability, and candidate file counts; focused details show evidence and sample
+paths. Counts are inventory candidates; native tool exclusions still apply. Existing explicit tool choices are preserved.
 Piped input and builds without `tools-tui` retain line-oriented prompts.
 
 Answer the tool-selection and installation-requirement prompts, review the TOML

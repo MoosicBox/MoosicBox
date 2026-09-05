@@ -15,8 +15,12 @@ pub(super) struct Choice {
 pub(super) struct Group {
     pub title: String,
     pub choices: Vec<Choice>,
+    pub extensions: Vec<String>,
+    pub files: Vec<std::path::PathBuf>,
+    pub formatting: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) -> Vec<Group> {
     let evidence = inventory.tool_evidence();
     let extensions = inventory
@@ -86,33 +90,129 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             })
             .collect::<Vec<_>>();
         if !choices.is_empty() {
+            let files = inventory
+                .files()
+                .iter()
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext| extensions.contains(&ext))
+                })
+                .cloned()
+                .collect();
+            let names = extensions
+                .iter()
+                .map(|ext| language(ext))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
             result.push(Group {
-                title: format!("Formatters · {}", extensions.join(", ")),
+                title: names.join(" / "),
                 choices,
+                extensions: extensions.into_iter().map(str::to_owned).collect(),
+                files,
+                formatting: true,
             });
         }
     }
-    let formatters = result
-        .iter()
-        .flat_map(|group| &group.choices)
-        .map(|choice| choice.name.clone())
-        .collect::<BTreeSet<_>>();
     let choices = evidence
         .into_iter()
-        .filter(|(name, _)| !configured(name) && !formatters.contains(name))
+        .filter(|(name, _)| {
+            !configured(name)
+                && super::super::tool_catalog_entry(name).is_some_and(|entry| {
+                    entry
+                        .capabilities
+                        .contains(&super::super::ToolCapability::Lint)
+                })
+        })
         .map(|(name, fact)| Choice {
             name,
             reason: format!("{:?}: {}", fact.kind, fact.path.display()),
             selected: true,
         })
         .collect::<Vec<_>>();
-    if !choices.is_empty() {
+    for choice in choices {
+        let entry = super::super::tool_catalog_entry(&choice.name).expect("catalog tool");
+        let extensions = entry
+            .lint_extensions
+            .iter()
+            .map(|ext| (*ext).to_owned())
+            .collect::<Vec<_>>();
+        let files = inventory
+            .files()
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| extensions.iter().any(|value| value == ext))
+            })
+            .cloned()
+            .collect();
         result.push(Group {
-            title: "Other detected tools / linters".to_owned(),
-            choices,
+            title: entry
+                .lint_extensions
+                .iter()
+                .map(|ext| language(ext))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(" / "),
+            choices: vec![choice],
+            extensions,
+            files,
+            formatting: false,
         });
     }
+    result.sort_by(|left, right| {
+        left.title
+            .cmp(&right.title)
+            .then(right.formatting.cmp(&left.formatting))
+    });
     result
+}
+
+fn language(extension: &str) -> &str {
+    match extension {
+        "nix" => "Nix",
+        "py" | "pyi" | "ipynb" => "Python",
+        "js" | "jsx" => "JavaScript",
+        "ts" | "tsx" => "TypeScript",
+        "json" | "jsonc" => "JSON",
+        "md" | "mdx" | "markdown" => "Markdown",
+        "yml" | "yaml" => "YAML",
+        "rs" => "Rust",
+        "go" => "Go",
+        "sh" | "bash" => "Shell",
+        "lua" => "Lua",
+        "toml" => "TOML",
+        "css" | "scss" | "less" => "Stylesheets",
+        "m" => "Objective-C",
+        "c" | "cpp" | "h" | "hpp" | "cc" | "cxx" => "C / C++",
+        other => other,
+    }
+}
+
+pub(super) fn policies(groups: &[Group]) -> BTreeMap<String, super::super::ToolPolicy> {
+    let mut policies = BTreeMap::<String, super::super::ToolPolicy>::new();
+    for group in groups {
+        for choice in group.choices.iter().filter(|choice| choice.selected) {
+            let policy = policies.entry(choice.name.clone()).or_default();
+            policy.mode = super::super::ToolSelectionMode::Enabled;
+            if group.formatting {
+                policy
+                    .capabilities
+                    .insert(super::super::ToolCapability::Format);
+                policy
+                    .format_extensions
+                    .extend(group.extensions.iter().cloned());
+            } else {
+                policy
+                    .capabilities
+                    .insert(super::super::ToolCapability::Lint);
+            }
+        }
+    }
+    policies
 }
 
 pub(super) fn selections(groups: &[Group]) -> (Vec<String>, Vec<String>) {

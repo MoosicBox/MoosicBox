@@ -12,7 +12,7 @@ mod tests {
         let result = groups(&mut inventory, &ToolsConfig::default());
         let js = result
             .iter()
-            .find(|group| group.title.contains("js"))
+            .find(|group| group.title.contains("JavaScript"))
             .unwrap();
         assert!(js.choices.iter().any(|choice| choice.name == "prettier"));
         assert_eq!(

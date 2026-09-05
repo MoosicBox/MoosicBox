@@ -95,8 +95,9 @@ fn initialize_with_ui(
     )?;
     writeln!(
         output,
-        "Selected tools use automatic ownership; overlapping formatters may need runner.tools policies."
+        "Selected formatter coverage is limited to its chosen file extensions. Native tool exclusions still apply."
     )?;
+    let mut selected_policies = std::collections::BTreeMap::new();
     let mut selected = Vec::new();
     let mut skipped = Vec::new();
     if interactive {
@@ -112,6 +113,7 @@ fn initialize_with_ui(
         #[cfg(feature = "tools-tui")]
         inline::select(&mut groups, output)?;
         (selected, skipped) = recommendations::selections(&groups);
+        selected_policies = recommendations::policies(&groups);
     } else {
         for (name, evidence) in evidence {
             writeln!(
@@ -152,8 +154,28 @@ fn initialize_with_ui(
     if interactive {
         // Explicit choices must work even without native configuration evidence.
         apply_choices(&mut document, &selected, &[], false);
-        for name in &selected {
-            document["runner"]["tools"][name]["mode"] = value("enabled");
+        for (name, policy) in selected_policies {
+            let target = &mut document["runner"]["tools"][&name];
+            target["mode"] = value("enabled");
+            target["capabilities"] = value(
+                policy
+                    .capabilities
+                    .iter()
+                    .map(|capability| match capability {
+                        super::ToolCapability::Format => "format",
+                        super::ToolCapability::Lint => "lint",
+                    })
+                    .collect::<toml_edit::Array>(),
+            );
+            if !policy.format_extensions.is_empty() {
+                target["format-extensions"] = value(
+                    policy
+                        .format_extensions
+                        .iter()
+                        .map(String::as_str)
+                        .collect::<toml_edit::Array>(),
+                );
+            }
         }
     }
     let separator = if !prefix.is_empty() && !prefix.ends_with('\n') && !document.is_empty() {
