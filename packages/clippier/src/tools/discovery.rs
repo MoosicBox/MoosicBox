@@ -458,6 +458,19 @@ impl RepositoryDiscovery {
             .find_map(|signal| self.manifest_contains_tool_config(*signal))
     }
 
+    /// Returns repository evidence for every relevant catalog tool, including tools
+    /// which are not installed. Reuses the inventory and native configuration cache.
+    #[must_use]
+    pub fn tool_evidence(&mut self) -> BTreeMap<String, SelectionEvidence> {
+        TOOL_CATALOG
+            .iter()
+            .filter_map(|entry| {
+                self.evidence_for(entry.name)
+                    .map(|evidence| (entry.name.to_owned(), evidence))
+            })
+            .collect()
+    }
+
     fn evidence_for(&mut self, tool_name: &str) -> Option<SelectionEvidence> {
         let entry = TOOL_CATALOG.iter().find(|entry| entry.name == tool_name)?;
         for config in entry.signals.configs {

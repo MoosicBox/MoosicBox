@@ -35,6 +35,7 @@ mod catalog;
 mod discovery;
 #[cfg(feature = "format")]
 mod format_selection;
+pub mod init;
 mod registry;
 mod runner;
 mod scope;

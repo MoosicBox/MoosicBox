@@ -18,6 +18,21 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
 - **Multi-Workspace Support**: Native support for Cargo and Node.js (npm, pnpm, bun) monorepos
 
+## Guided Setup
+
+Run `clippier init` from the repository directory you want to configure. It uses
+Clippier's shared ignore-aware inventory to recommend tools from native configs,
+manifest settings, and source files—even when those tools are not installed.
+Answer the tool-selection and installation-requirement prompts, review the TOML
+preview, and confirm creation of `clippier.toml`.
+
+Setup never runs or installs tools, changes native configs, or overwrites an
+existing `clippier.toml`. Declined tools are skipped; other tools remain eligible
+for automatic discovery. Native configuration and automatic formatter ownership
+remain authoritative. Review overlaps and advanced per-tool scope/ownership with
+`clippier check --list` and `clippier fmt --list` after setup.
+The command is available when tool support (`check` or `format`) is enabled.
+
 ## Supported Workspace Types
 
 Clippier supports multiple monorepo workspace types with automatic detection:

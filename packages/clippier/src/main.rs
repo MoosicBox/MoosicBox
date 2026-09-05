@@ -312,6 +312,9 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Guide setup of clippier.toml in the current directory
+    #[cfg(feature = "_tools")]
+    Init,
     Dependencies {
         #[arg(index = 1)]
         file: String,
@@ -922,6 +925,15 @@ async fn run() -> Result<(), BoxError> {
     let args = Args::parse();
 
     let result = match args.cmd {
+        #[cfg(feature = "_tools")]
+        Commands::Init => {
+            clippier::tools::init::initialize(
+                &std::env::current_dir()?,
+                &mut std::io::stdin().lock(),
+                &mut std::io::stdout().lock(),
+            )?;
+            String::new()
+        }
         Commands::Dependencies {
             file,
             os,
