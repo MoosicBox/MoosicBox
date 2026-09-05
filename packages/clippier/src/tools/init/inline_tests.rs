@@ -18,6 +18,28 @@ fn height_budget_reserves_wrapped_header_and_cursor_row() {
             .map(|cell| cell.symbol.as_str())
             .collect::<String>();
         assert!(text.contains("Repository:"));
+        assert!(
+            buffer
+                .cells()
+                .iter()
+                .all(|cell| !cell.symbol.contains(['\n', '\r']))
+        );
+        let first_row = buffer.cells()[..usize::from(width)]
+            .iter()
+            .map(|cell| cell.symbol.as_str())
+            .collect::<String>();
+        assert!(first_row.starts_with("Repository: /some/path"));
+        let second_row = buffer.cells()[usize::from(width)..usize::from(width) * 2]
+            .iter()
+            .map(|cell| cell.symbol.as_str())
+            .collect::<String>();
+        assert!(second_row.starts_with("Wrapped instruction"));
+        let mut output = Vec::new();
+        bmux_tui::ansi::write_ansi_inline_frame(&mut output, &buffer).unwrap();
+        // Small regression fixture; no byte-count dependency needed.
+        #[allow(clippy::naive_bytecount)]
+        let emitted_rows = output.iter().filter(|byte| **byte == b'\n').count();
+        assert_eq!(emitted_rows, usize::from(buffer.area().height));
         assert!(text.contains("[x] tool-0"));
         assert!(text.contains("Accept"), "{width}: {text}");
     }

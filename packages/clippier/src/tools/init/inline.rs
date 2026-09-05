@@ -167,7 +167,15 @@ pub(super) fn render(
     );
     let mut root = Column::new().id("init");
     if !header.is_empty() {
-        root = root.child(TextBlock::new(header.join("\n")).id("header"));
+        root = root.child(
+            TextBlock::new(bmux_tui::text::Text::from_lines(
+                header
+                    .iter()
+                    .map(|line| bmux_tui::text::Line::raw(line.clone()))
+                    .collect::<Vec<_>>(),
+            ))
+            .id("header"),
+        );
     }
     let root = root
         .flex(Flex::new(3, viewport))
