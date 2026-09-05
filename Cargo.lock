@@ -2390,7 +2390,7 @@ dependencies = [
 [[package]]
 name = "bmux_keyboard"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#de7f11b1fac4e03e5a359ff2440bc5494a1490c9"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#0dd9da7966eb4d324b41561a639d1cf15432437b"
 dependencies = [
  "crossterm 0.29.0",
 ]
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "bmux_text_edit"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#de7f11b1fac4e03e5a359ff2440bc5494a1490c9"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#0dd9da7966eb4d324b41561a639d1cf15432437b"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2408,7 +2408,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#de7f11b1fac4e03e5a359ff2440bc5494a1490c9"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#0dd9da7966eb4d324b41561a639d1cf15432437b"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2421,7 +2421,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui_components"
 version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#de7f11b1fac4e03e5a359ff2440bc5494a1490c9"
+source = "git+https://github.com/BSteffaniak/bmux?branch=master#0dd9da7966eb4d324b41561a639d1cf15432437b"
 dependencies = [
  "bmux_keyboard",
  "bmux_tui",

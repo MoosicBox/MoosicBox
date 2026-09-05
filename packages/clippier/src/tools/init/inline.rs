@@ -5,8 +5,8 @@ use std::io::{self, Write};
 
 use bmux_tui::{
     buffer::Buffer,
-    component::{Component, Constraints, LayoutCx, LayoutId, LogicalSize},
-    composition::Column,
+    component::{Component, Constraints, LayoutCx, LogicalSize},
+    composition::{Column, Flex, TextBlock},
     frame::Frame,
     geometry::{Rect, Size},
     paint::PaintCx,
@@ -37,10 +37,11 @@ pub(super) fn stops(groups: &[Group]) -> Vec<(usize, usize)> {
 #[allow(clippy::too_many_lines)]
 pub(super) fn render(
     groups: &[Group],
+    header: &[String],
     focus: (usize, usize),
     width: u16,
     height: u16,
-    scroll: &mut ScrollViewState,
+    scroll: &ScrollViewState,
 ) -> Buffer {
     let states = groups
         .iter()
@@ -145,109 +146,37 @@ pub(super) fn render(
         "detail-pane",
         Pane::new().border(true).title(format!(" {} ", choice.name)),
         &detail_state,
-        LabeledDetailsComponent::new("details", &details),
+        LabeledDetailsComponent::new("details", &details).item_spacing(false),
     );
     let hints = [
-        KeyHint::new("↑/↓ Tab", "Move"),
+        KeyHint::new("↑↓", "Move"),
         KeyHint::new("Space", "Toggle"),
-        KeyHint::new("Enter", "Accept"),
+        KeyHint::new("↵", "Accept"),
         KeyHint::new("Esc", "Cancel"),
     ];
     let footer = KeyHintBarComponent::new("keys", &hints);
     let mut cx = LayoutCx::new();
-    let detail_height = detail
-        .layout(Constraints::for_width(width), &mut cx)
-        .size
-        .height
-        .min(8);
-    let footer_height = footer
-        .layout(Constraints::for_width(width), &mut cx)
-        .size
-        .height;
-    // Keep navigation usable first. Details progressively collapse on short
-    // terminals rather than consuming the checklist or pushing controls offscreen.
-    let budget = usize::from(height);
-    let footer_height = footer_height.min(budget.saturating_sub(3));
-    let detail_height = if budget >= 16 {
-        detail_height.min(budget / 3)
-    } else {
-        0
-    };
-    let gaps = usize::from(footer_height > 0) + usize::from(detail_height > 0);
-    let viewport_height = budget
-        .saturating_sub(detail_height + footer_height + gaps)
-        .max(1);
-    let content = sections.layout(Constraints::for_width(width), &mut cx);
-    scroll.set_vertical_offset(
-        scroll
-            .vertical_offset()
-            .min(content.size.height.saturating_sub(viewport_height)),
-    );
-    if let Some(rect) =
-        content.find_logical_rect(&LayoutId::new(format!("choice-{}-{}", focus.0, focus.1)))
-    {
-        let panel =
-            content.find_logical_rect(&LayoutId::new(format!("section-{}.surface", focus.0)));
-        // Keep the section title with its choices whenever the whole panel fits.
-        // For taller panels, at least restore its title at the first checkbox.
-        let top = panel
-            .as_ref()
-            .filter(|panel| panel.height <= viewport_height || focus.1 == 0)
-            .map_or(rect.y, |panel| panel.y);
-        let bottom = panel
-            .as_ref()
-            .filter(|panel| panel.height <= viewport_height)
-            .map_or(rect.y + 1, |panel| panel.y + panel.height);
-        let offset = scroll.vertical_offset();
-        if top < offset {
-            scroll.set_vertical_offset(top);
-        } else if bottom > offset + viewport_height {
-            scroll.set_vertical_offset(bottom.saturating_sub(viewport_height));
-        }
-    }
-    let viewport = ScrollViewComponent::new(
-        "checklist",
-        LogicalSize::new(width, viewport_height),
-        *scroll,
-        sections,
-    );
+    let viewport =
+        ScrollViewComponent::new("checklist", LogicalSize::new(width, 0), *scroll, sections)
+            .reveal(format!("choice-{}-{}", focus.0, focus.1));
     let detail_view = ScrollViewComponent::new(
         "detail-view",
-        LogicalSize::new(width, detail_height),
+        LogicalSize::new(width, 0),
         ScrollViewState::new(),
         detail,
     );
-    let mut root = Column::new().id("init").gap(1).child(viewport);
-    if detail_height > 0 {
-        root = root.child(detail_view);
+    let mut root = Column::new().id("init");
+    if !header.is_empty() {
+        root = root.child(TextBlock::new(header.join("\n")).id("header"));
     }
-    if footer_height > 0 {
-        root = root.child(ScrollViewComponent::new(
-            "footer-view",
-            LogicalSize::new(width, footer_height),
-            ScrollViewState::new(),
-            footer,
-        ));
-    }
+    let root = root
+        .flex(Flex::new(3, viewport))
+        .flex(Flex::new(1, detail_view))
+        .child(footer);
     let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
     let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
     root.paint(&layout, &mut PaintCx::new(&mut Frame::new(&mut buffer)));
     buffer
-}
-
-pub(super) fn available_height(header: &[String], width: u16, height: u16) -> u16 {
-    let columns = usize::from(width.max(1));
-    let header_rows = header
-        .iter()
-        .map(|line| {
-            bmux_tui::text_width::display_width(line)
-                .max(1)
-                .div_ceil(columns)
-        })
-        .sum::<usize>();
-    height
-        .saturating_sub(u16::try_from(header_rows).unwrap_or(u16::MAX))
-        .saturating_sub(1)
 }
 
 pub(super) fn select(
@@ -262,10 +191,10 @@ pub(super) fn select(
     output.flush()?;
     let mut terminal = bmux_tui::inline::InlineTerminal::enter(&mut *output)?;
     let mut focus = 0usize;
-    let mut scroll = ScrollViewState::new();
+    let scroll = ScrollViewState::new();
     loop {
         let (width, height) = terminal::size()?;
-        let available = available_height(header, width, height);
+        let available = height.saturating_sub(1);
         if available == 0 || width < 2 {
             // Wait for more space without scrolling the repository header away.
             match event::read()? {
@@ -284,10 +213,11 @@ pub(super) fn select(
         }
         let buffer = render(
             groups,
+            header,
             stops[focus],
             width.saturating_sub(1).max(1),
             available,
-            &mut scroll,
+            &scroll,
         );
         terminal.draw(&buffer)?;
         if let Event::Key(key) = event::read()? {

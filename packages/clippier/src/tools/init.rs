@@ -95,8 +95,10 @@ fn initialize_with_ui(
         "Native configs remain authoritative. Tools will not be installed or run.".to_owned(),
         "Selected formatter coverage is limited to its chosen file extensions. Native tool exclusions still apply.".to_owned(),
     ];
-    for line in &header {
-        writeln!(output, "{line}")?;
+    if !interactive {
+        for line in &header {
+            writeln!(output, "{line}")?;
+        }
     }
     let mut selected_policies = std::collections::BTreeMap::new();
     let mut selected = Vec::new();
