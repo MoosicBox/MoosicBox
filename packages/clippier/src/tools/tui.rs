@@ -436,10 +436,10 @@ fn render(
         .iter()
         .map(|_| Cell::new(SurfaceState::new(Rect::new(0, 0, 0, 0))))
         .collect::<Vec<_>>();
-    let columns = if cx.area().width >= 100 { 2 } else { 1 };
+    let columns = if tools.len() > 1 { 2 } else { 1 };
     let mut grid = Column::new().id("tools");
     for chunk in (0..tools.len()).collect::<Vec<_>>().chunks(columns) {
-        let mut row = Row::new();
+        let mut row = Row::new().alignment(bmux_tui::composition::VerticalAlignment::Stretch);
         for &index in chunk {
             let Some(pane) = panes.get(&tools[index].0) else {
                 continue;
@@ -482,6 +482,9 @@ fn render(
                     LogBody(pane),
                 ),
             ));
+        }
+        if chunk.len() < columns {
+            row = row.flex(Flex::new(1, TextBlock::new("")));
         }
         grid = grid.flex(Flex::new(1, row));
     }
@@ -740,6 +743,52 @@ mod tests {
                 assert!(text.contains("line 99"));
                 assert!(text.contains("Demo"));
             }
+        }
+    }
+
+    #[test]
+    fn multiple_tools_use_two_columns_even_on_narrow_terminals() {
+        use bmux_tui::{buffer::Buffer, frame::Frame};
+        let tools = (0..3)
+            .map(|i| (format!("tool-{i}"), format!("Tool{i}")))
+            .collect::<Vec<_>>();
+        let panes = tools
+            .iter()
+            .map(|(id, name)| (id.clone(), PaneState::new(name.clone())))
+            .collect();
+        for width in [60, 80, 120] {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, width, 24));
+            render(
+                &mut PaintCx::new(&mut Frame::new(&mut buffer)),
+                &panes,
+                &tools,
+                0,
+                Instant::now(),
+                0,
+            );
+            let rows = buffer
+                .cells()
+                .chunks(usize::from(width))
+                .map(|row| {
+                    row.iter()
+                        .map(|cell| cell.symbol.as_str())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                rows.iter()
+                    .any(|row| row.contains("Tool0") && row.contains("Tool1")),
+                "panes must be side by side at width {width}"
+            );
+            assert!(
+                rows.iter().filter(|row| row.starts_with('│')).count() >= 16,
+                "empty panes must fill their allocated grid height at width {width}"
+            );
+            let last = rows.iter().find(|row| row.contains("Tool2")).unwrap();
+            assert!(
+                last.chars().skip(usize::from(width / 2)).all(|c| c == ' '),
+                "odd final pane must remain half-width"
+            );
         }
     }
 
