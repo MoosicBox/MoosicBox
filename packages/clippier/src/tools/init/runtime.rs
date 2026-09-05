@@ -41,7 +41,7 @@ impl Program for Setup<'_> {
                 self.size = size;
             }
             RuntimeEvent::Terminal(Event::Key(key)) => match key.key {
-                KeyCode::Escape => {
+                KeyCode::Escape | KeyCode::Char('q') => {
                     return Err(io::Error::new(
                         io::ErrorKind::Interrupted,
                         "Setup cancelled; no files written",

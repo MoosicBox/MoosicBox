@@ -38,6 +38,19 @@ fn program(groups: &mut [Group]) -> Setup<'_> {
     }
 }
 #[test]
+fn q_and_escape_cancel_without_accepting() {
+    for code in [KeyCode::Char('q'), KeyCode::Escape] {
+        let mut groups = groups();
+        let mut setup = program(&mut groups);
+        let Err(error) = setup.update(RuntimeEvent::Terminal(key(code))) else {
+            panic!("cancel key should interrupt setup");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
+        assert!(!setup.accepted);
+    }
+}
+
+#[test]
 fn ignored_and_boundary_events_do_not_request_frames() {
     let mut groups = groups();
     let mut setup = program(&mut groups);

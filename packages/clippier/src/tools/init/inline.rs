@@ -180,7 +180,7 @@ pub(super) fn render(
         KeyHint::new("↑↓", "Move"),
         KeyHint::new("Space", "Toggle"),
         KeyHint::new("↵", "Accept"),
-        KeyHint::new("Esc", "Cancel"),
+        KeyHint::new("Esc/q", "Cancel"),
     ];
     let footer = KeyHintBarComponent::new("keys", &hints).styles(KeyHintBarStyles {
         key: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
