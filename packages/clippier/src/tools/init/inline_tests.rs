@@ -2,6 +2,7 @@
 use super::inline::{render, stops};
 use super::recommendations::{Choice, Group};
 use bmux_tui_components::scroll_view::ScrollViewState;
+use std::cell::Cell;
 
 #[test]
 fn height_budget_reserves_wrapped_header_and_cursor_row() {
@@ -11,7 +12,14 @@ fn height_budget_reserves_wrapped_header_and_cursor_row() {
     ];
     let groups = fixture();
     for width in [40, 90] {
-        let buffer = render(&groups, &header, (0, 0), width, 30, &ScrollViewState::new());
+        let buffer = render(
+            &groups,
+            &header,
+            (0, 0),
+            width,
+            30,
+            &Cell::new(ScrollViewState::new()),
+        );
         let text = buffer
             .cells()
             .iter()
@@ -64,7 +72,14 @@ fn fixture() -> Vec<Group> {
 #[test]
 fn components_render_borders_details_and_focused_checkbox() {
     let groups = fixture();
-    let buffer = render(&groups, &[], (0, 0), 90, 26, &ScrollViewState::new());
+    let buffer = render(
+        &groups,
+        &[],
+        (0, 0),
+        90,
+        26,
+        &Cell::new(ScrollViewState::new()),
+    );
     let text = buffer
         .cells()
         .iter()
@@ -102,9 +117,45 @@ fn components_render_borders_details_and_focused_checkbox() {
 }
 
 #[test]
+fn reversing_direction_keeps_viewport_until_focus_crosses_edge() {
+    let groups = fixture();
+    let scroll = Cell::new(ScrollViewState::new());
+    let bottom_frame = render(&groups, &[], (5, 0), 60, 18, &scroll);
+    let rows = bottom_frame
+        .cells()
+        .chunks(60)
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.symbol.as_str())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+    let last_choice = rows
+        .iter()
+        .position(|row| row.contains("[x] tool-5"))
+        .unwrap();
+    assert!(
+        rows[last_choice + 1].starts_with('└'),
+        "last panel border is clipped"
+    );
+    let bottom = scroll.get().vertical_offset();
+    assert!(bottom > 0);
+    render(&groups, &[], (4, 0), 60, 18, &scroll);
+    assert_eq!(scroll.get().vertical_offset(), bottom);
+    let buffer = render(&groups, &[], (0, 0), 60, 18, &scroll);
+    assert_eq!(scroll.get().vertical_offset(), 0);
+    let top = buffer.cells()[..60]
+        .iter()
+        .map(|cell| cell.symbol.as_str())
+        .collect::<String>();
+    assert!(top.contains("Language 0"), "missing top panel title: {top}");
+    assert!(top.starts_with('┌'));
+}
+
+#[test]
 fn measured_focus_scrolls_and_small_terminals_are_bounded() {
     let groups = fixture();
-    let scroll = ScrollViewState::new();
+    let scroll = Cell::new(ScrollViewState::new());
     let buffer = render(&groups, &[], (5, 0), 60, 18, &scroll);
     let text = buffer
         .cells()
@@ -124,10 +175,8 @@ fn measured_focus_scrolls_and_small_terminals_are_bounded() {
                 text.contains(&format!("[x] tool-{index}")),
                 "focus missing at height {height}"
             );
-            assert!(
-                text.contains(&format!("Language {index}")),
-                "panel header missing at height {height}"
-            );
+            // A partially visible section may have its header above the viewport.
+            // Do not scroll just to reveal that header while focus remains visible.
             assert!(text.contains("Accept"), "footer missing at height {height}");
         }
     }

@@ -41,7 +41,7 @@ pub(super) fn render(
     focus: (usize, usize),
     width: u16,
     height: u16,
-    scroll: &ScrollViewState,
+    scroll: &Cell<ScrollViewState>,
 ) -> Buffer {
     let states = groups
         .iter()
@@ -156,9 +156,21 @@ pub(super) fn render(
     ];
     let footer = KeyHintBarComponent::new("keys", &hints);
     let mut cx = LayoutCx::new();
-    let viewport =
-        ScrollViewComponent::new("checklist", LogicalSize::new(width, 0), *scroll, sections)
-            .reveal(format!("choice-{}-{}", focus.0, focus.1));
+    let viewport = ScrollViewComponent::new(
+        "checklist",
+        LogicalSize::new(width, 0),
+        scroll.get(),
+        sections,
+    )
+    .retain_state(scroll);
+    let positions = stops(groups);
+    let viewport = if positions.first() == Some(&focus) {
+        viewport.reveal(format!("section-{}.surface", focus.0))
+    } else if positions.last() == Some(&focus) {
+        viewport.reveal_end(format!("section-{}.surface", focus.0))
+    } else {
+        viewport.reveal(format!("choice-{}-{}", focus.0, focus.1))
+    };
     let detail_view = ScrollViewComponent::new(
         "detail-view",
         LogicalSize::new(width, 0),
@@ -191,7 +203,7 @@ pub(super) fn select(
     output.flush()?;
     let mut terminal = bmux_tui::inline::InlineTerminal::enter(&mut *output)?;
     let mut focus = 0usize;
-    let scroll = ScrollViewState::new();
+    let scroll = Cell::new(ScrollViewState::new());
     loop {
         let (width, height) = terminal::size()?;
         let available = height.saturating_sub(1);
