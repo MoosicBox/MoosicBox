@@ -30,6 +30,7 @@ impl Drop for RawMode {
 
 #[derive(Clone, Copy)]
 enum Row {
+    Spacer,
     Section(usize),
     Choice(usize, usize),
 }
@@ -40,6 +41,9 @@ fn checklist_rows(groups: &[Group]) -> (Vec<Row>, Vec<usize>) {
     for (group, section) in groups.iter().enumerate() {
         if section.choices.is_empty() {
             continue;
+        }
+        if !rows.is_empty() {
+            rows.push(Row::Spacer);
         }
         rows.push(Row::Section(group));
         for choice in 0..section.choices.len() {
@@ -69,9 +73,10 @@ fn paint_row(
     output: &mut impl Write,
 ) -> io::Result<()> {
     let (label, checked) = match row {
+        Row::Spacer => (String::new(), None),
         Row::Section(group) => (
             format!(
-                "{} · {} · {} files",
+                "── {} · {} · {} files ──",
                 groups[group].title,
                 if groups[group].formatting {
                     "Formatter"
@@ -160,7 +165,9 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
     loop {
         clear_rows(output, painted)?;
         let (columns, height) = terminal::size()?;
-        let visible = rows.len().min(usize::from(height.saturating_sub(8).max(1)));
+        let visible = rows
+            .len()
+            .min(usize::from(height.saturating_sub(10).max(1)));
         start = viewport_start(start, stops[focus], visible, rows.len());
         for (index, row) in rows.iter().enumerate().skip(start).take(visible) {
             paint_row(
@@ -182,6 +189,8 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
                 .collect::<Vec<_>>()
                 .join(", ");
             for text in [
+                String::new(),
+                "── Focused tool ──".to_owned(),
                 format!(
                     "{} · {} · {} files",
                     choice.name,
@@ -202,7 +211,7 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
                 write!(output, "\x1b[0m{clipped}\r\n")?;
             }
         }
-        painted = u16::try_from(visible + 3).unwrap_or(u16::MAX);
+        painted = u16::try_from(visible + 5).unwrap_or(u16::MAX);
         output.flush()?;
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Release {
@@ -274,7 +283,9 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let (rows, stops) = checklist_rows(&groups);
-        assert_eq!(stops, [1, 3]);
+        assert_eq!(stops, [1, 4]);
+        assert!(matches!(rows[2], Row::Spacer));
+        assert!(matches!(rows[3], Row::Section(1)));
         assert!(matches!(rows[stops[0]], Row::Choice(0, 0)));
         assert!(matches!(rows[stops[1]], Row::Choice(1, 0)));
     }
