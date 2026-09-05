@@ -76,7 +76,7 @@ impl Program for Setup<'_> {
                 }
                 KeyCode::Home => self.focus = 0,
                 KeyCode::End => self.focus = self.positions.len() + 1,
-                KeyCode::Space | KeyCode::Char(' ') => {
+                KeyCode::Enter | KeyCode::Space | KeyCode::Char(' ') => {
                     let (g, c) = self.positions[self.focus];
                     self.groups[g].choices[c].selected = !self.groups[g].choices[c].selected;
                     changed = true;

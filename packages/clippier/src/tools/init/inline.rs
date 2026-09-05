@@ -184,7 +184,7 @@ pub(super) fn render(
     );
     let hints = [
         KeyHint::new("↑↓", "Move"),
-        KeyHint::new("Space", "Toggle"),
+        KeyHint::new("Space/↵", "Toggle"),
         KeyHint::new("Ctrl+↵", "Submit"),
         KeyHint::new("Tab/↵", "Focus/Activate"),
         KeyHint::new("Esc/q", "Cancel"),

@@ -44,6 +44,11 @@ fn enter_only_submits_on_button_and_cancel_button_interrupts() {
         .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
         .unwrap();
     assert!(!setup.accepted);
+    assert!(setup.groups[0].choices[0].selected);
+    setup
+        .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
+        .unwrap();
+    assert!(!setup.groups[0].choices[0].selected);
     setup.focus = setup.positions.len();
     setup
         .update(RuntimeEvent::Terminal(key(KeyCode::Enter)))
