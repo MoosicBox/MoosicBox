@@ -43,6 +43,12 @@ fn components_render_borders_details_and_focused_checkbox() {
         .iter()
         .map(|cell| cell.symbol.as_str())
         .collect::<String>();
+    let first_row = buffer.cells()[..90]
+        .iter()
+        .map(|cell| cell.symbol.as_str())
+        .collect::<String>();
+    assert!(first_row.contains("Language 0"), "first row: {first_row:?}");
+    assert!(first_row.contains('┌'));
     assert!(text.contains("Language 0"));
     assert!(text.contains("[x] tool-0"));
     assert!(text.contains("Capability"));
@@ -91,6 +97,10 @@ fn measured_focus_scrolls_and_small_terminals_are_bounded() {
             assert!(
                 text.contains(&format!("[x] tool-{index}")),
                 "focus missing at height {height}"
+            );
+            assert!(
+                text.contains(&format!("Language {index}")),
+                "panel header missing at height {height}"
             );
             assert!(text.contains("Accept"), "footer missing at height {height}");
         }

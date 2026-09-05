@@ -58,7 +58,7 @@ pub(super) fn render(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
-    let panes = groups
+    let panel_states = groups
         .iter()
         .map(|_| Cell::new(PaneState::new(Rect::new(0, 0, 0, 0))))
         .collect::<Vec<_>>();
@@ -105,7 +105,7 @@ pub(super) fn render(
                 }),
                 ..PaneStyles::default()
             }),
-            &panes[g],
+            &panel_states[g],
             choices,
         ));
     }
@@ -186,11 +186,23 @@ pub(super) fn render(
     if let Some(rect) =
         content.find_logical_rect(&LayoutId::new(format!("choice-{}-{}", focus.0, focus.1)))
     {
+        let panel =
+            content.find_logical_rect(&LayoutId::new(format!("section-{}.surface", focus.0)));
+        // Keep the section title with its choices whenever the whole panel fits.
+        // For taller panels, at least restore its title at the first checkbox.
+        let top = panel
+            .as_ref()
+            .filter(|panel| panel.height <= viewport_height || focus.1 == 0)
+            .map_or(rect.y, |panel| panel.y);
+        let bottom = panel
+            .as_ref()
+            .filter(|panel| panel.height <= viewport_height)
+            .map_or(rect.y + 1, |panel| panel.y + panel.height);
         let offset = scroll.vertical_offset();
-        if rect.y < offset {
-            scroll.set_vertical_offset(rect.y.saturating_sub(1));
-        } else if rect.y >= offset + viewport_height {
-            scroll.set_vertical_offset(rect.y + 1 - viewport_height);
+        if top < offset {
+            scroll.set_vertical_offset(top);
+        } else if bottom > offset + viewport_height {
+            scroll.set_vertical_offset(bottom.saturating_sub(viewport_height));
         }
     }
     let viewport = ScrollViewComponent::new(
