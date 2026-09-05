@@ -72,7 +72,6 @@ globset = { workspace = true }
 ignore = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
-ratatui = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 regex = { workspace = true }
 reqwest = { workspace = true, optional = true, features = ["blocking", "json"] }
@@ -157,7 +156,6 @@ tools-tui = [
     "dep:bmux_tui_runtime",
     "dep:crossterm",
     "dep:ctrlc",
-    "dep:ratatui",
     "dep:tokio",
 ]
 transforms-system = ["_transforms", "dep:mlua"]

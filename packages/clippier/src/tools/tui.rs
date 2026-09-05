@@ -4,14 +4,19 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
-use ratatui::{
-    Frame,
-    crossterm::event::{self, Event, KeyCode, KeyModifiers},
-    layout::{Constraint, Direction, Layout, Rect},
+use bmux_tui::{
+    component::{Component, Constraints, LayoutCx, LayoutNode},
+    composition::{Column, Flex, Row, TextBlock},
+    crossterm::CrosstermTerminalGuard,
+    geometry::{Rect, Size},
+    paint::PaintCx,
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph},
+    terminal::Terminal,
+    text::{Line, Span},
 };
+use bmux_tui_components::pane::{Pane, PaneComponent, PaneState as SurfaceState, PaneStyles};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use std::cell::Cell;
 
 use crate::tools::runner::ToolEvent;
 
@@ -45,7 +50,7 @@ impl AnsiStyleState {
     const fn reset(&mut self) {
         self.fg = None;
         self.bg = None;
-        self.modifiers = Modifier::empty();
+        self.modifiers = Modifier::EMPTY;
     }
 
     fn apply_sgr_params(&mut self, params: &[i32]) {
@@ -54,24 +59,25 @@ impl AnsiStyleState {
             let code = params[index];
             match code {
                 0 => self.reset(),
-                1 => self.modifiers.insert(Modifier::BOLD),
-                2 => self.modifiers.insert(Modifier::DIM),
-                3 => self.modifiers.insert(Modifier::ITALIC),
-                4 => self.modifiers.insert(Modifier::UNDERLINED),
-                5 => self.modifiers.insert(Modifier::SLOW_BLINK),
-                6 => self.modifiers.insert(Modifier::RAPID_BLINK),
-                7 => self.modifiers.insert(Modifier::REVERSED),
-                8 => self.modifiers.insert(Modifier::HIDDEN),
-                9 => self.modifiers.insert(Modifier::CROSSED_OUT),
-                22 => self.modifiers.remove(Modifier::BOLD | Modifier::DIM),
-                23 => self.modifiers.remove(Modifier::ITALIC),
-                24 => self.modifiers.remove(Modifier::UNDERLINED),
-                25 => self
-                    .modifiers
-                    .remove(Modifier::SLOW_BLINK | Modifier::RAPID_BLINK),
-                27 => self.modifiers.remove(Modifier::REVERSED),
-                28 => self.modifiers.remove(Modifier::HIDDEN),
-                29 => self.modifiers.remove(Modifier::CROSSED_OUT),
+                1 => self.modifiers = self.modifiers.union(Modifier::BOLD),
+                2 => self.modifiers = self.modifiers.union(Modifier::DIM),
+                3 => self.modifiers = self.modifiers.union(Modifier::ITALIC),
+                4 => self.modifiers = self.modifiers.union(Modifier::UNDERLINE),
+                5 | 6 => self.modifiers = self.modifiers.union(Modifier::SLOW_BLINK),
+                7 => self.modifiers = self.modifiers.union(Modifier::REVERSED),
+                8 => self.modifiers = self.modifiers.union(Modifier::HIDDEN),
+                9 => self.modifiers = self.modifiers.union(Modifier::CROSSED_OUT),
+                22 => {
+                    self.modifiers = self
+                        .modifiers
+                        .difference(Modifier::BOLD.union(Modifier::DIM));
+                }
+                23 => self.modifiers = self.modifiers.difference(Modifier::ITALIC),
+                24 => self.modifiers = self.modifiers.difference(Modifier::UNDERLINE),
+                25 => self.modifiers = self.modifiers.difference(Modifier::SLOW_BLINK),
+                27 => self.modifiers = self.modifiers.difference(Modifier::REVERSED),
+                28 => self.modifiers = self.modifiers.difference(Modifier::HIDDEN),
+                29 => self.modifiers = self.modifiers.difference(Modifier::CROSSED_OUT),
                 30..=37 => self.fg = Some(Color::Indexed(to_u8(code - 30))),
                 39 => self.fg = None,
                 40..=47 => self.bg = Some(Color::Indexed(to_u8(code - 40))),
@@ -98,7 +104,7 @@ impl AnsiStyleState {
 
 struct PaneState {
     display_name: String,
-    lines: VecDeque<Line<'static>>,
+    lines: VecDeque<Line>,
     status: PaneStatus,
     scroll_offset: usize,
     ansi_state: AnsiStyleState,
@@ -184,12 +190,20 @@ pub fn run_live_tui(
         .map(|(name, display_name)| (name.clone(), PaneState::new(display_name.clone())))
         .collect();
 
-    let mut terminal = ratatui::try_init()?;
+    let mut guard = CrosstermTerminalGuard::enter(std::io::stdout())?;
+    let (width, height) = crossterm::terminal::size()?;
+    let mut terminal = Terminal::new(
+        guard.writer_mut().expect("active terminal guard"),
+        Rect::new(0, 0, width, height),
+    );
     let total = tools.len();
     let mut completed = 0_usize;
     let mut focused_index = 0_usize;
+    let mut last_frame = Instant::now();
 
     let loop_result = loop {
+        // Bound presentation to 20 FPS even when tool output never stops.
+        std::thread::sleep(Duration::from_millis(50).saturating_sub(last_frame.elapsed()));
         let action = read_user_action()?;
         if action == UserAction::Close {
             break Ok(TuiExit::UserClosed);
@@ -203,24 +217,28 @@ pub fn run_live_tui(
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(event) => {
                 handle_event(event, &mut panes, &mut completed);
-                while let Ok(event) = rx.try_recv() {
+                let batch_start = Instant::now();
+                for _ in 0..255 {
+                    let Ok(event) = rx.try_recv() else {
+                        break;
+                    };
                     handle_event(event, &mut panes, &mut completed);
+                    if batch_start.elapsed() >= Duration::from_millis(4) {
+                        break;
+                    }
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break Ok(TuiExit::Completed),
         }
 
+        let (width, height) = crossterm::terminal::size()?;
+        if terminal.area() != Rect::new(0, 0, width, height) {
+            terminal.resize(Rect::new(0, 0, width, height));
+        }
+        last_frame = Instant::now();
         terminal.draw(|frame| {
-            render(
-                frame,
-                &panes,
-                tools,
-                completed,
-                total,
-                start_time,
-                focused_index,
-            );
+            render(frame, &panes, tools, completed, start_time, focused_index);
         })?;
 
         if completed >= total {
@@ -228,7 +246,8 @@ pub fn run_live_tui(
         }
     };
 
-    ratatui::restore();
+    drop(terminal);
+    guard.leave()?;
     loop_result
 }
 
@@ -359,25 +378,47 @@ fn apply_user_action(
     }
 }
 
+struct LogBody<'a>(&'a PaneState);
+impl Component for LogBody<'_> {
+    fn layout(&self, constraints: Constraints, _: &mut LayoutCx) -> LayoutNode {
+        LayoutNode::leaf(
+            "log-body".into(),
+            constraints.constrain(bmux_tui::component::LogicalSize::new(
+                constraints.max_width(),
+                self.0.lines.len(),
+            )),
+        )
+    }
+    fn paint(&self, layout: &LayoutNode, cx: &mut PaintCx<'_, '_>) {
+        let height = layout.size.height;
+        let start = self
+            .0
+            .lines
+            .len()
+            .saturating_sub(height.saturating_add(self.0.scroll_offset));
+        for (row, line) in self.0.lines.iter().skip(start).take(height).enumerate() {
+            cx.write_line(
+                bmux_tui::paint::LocalRect::new(
+                    0,
+                    i64::try_from(row).unwrap_or(i64::MAX),
+                    layout.size.width,
+                    1,
+                ),
+                line,
+            );
+        }
+    }
+}
+
 fn render(
-    frame: &mut Frame,
+    cx: &mut PaintCx<'_, '_>,
     panes: &BTreeMap<String, PaneState>,
     tools: &[(String, String)],
     completed: usize,
-    total: usize,
     start_time: Instant,
     focused_index: usize,
 ) {
     let now = Instant::now();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(1)])
-        .split(frame.area());
-
-    let running = panes
-        .values()
-        .filter(|pane| pane.status == PaneStatus::Running)
-        .count();
     let passed = panes
         .values()
         .filter(|pane| pane.status == PaneStatus::Passed)
@@ -386,127 +427,82 @@ fn render(
         .values()
         .filter(|pane| pane.status == PaneStatus::Failed)
         .count();
-
-    let header = Paragraph::new(format!(
-        "clippier live output | total: {total} running: {running} passed: {passed} failed: {failed} done: {completed}/{total} elapsed: {:.1?} | keys: q/ctrl-c close, tab switch, j/k scroll",
+    let header = TextBlock::new(format!(
+        "Clippier | {completed}/{} complete | {passed} passed | {failed} failed | {:.1?}",
+        tools.len(),
         start_time.elapsed()
-    ))
-    .block(Block::default().borders(Borders::ALL).title("Status"));
-    frame.render_widget(header, chunks[0]);
-
-    render_panes(frame, chunks[1], panes, tools, focused_index, now);
-}
-
-fn render_panes(
-    frame: &mut Frame,
-    area: Rect,
-    panes: &BTreeMap<String, PaneState>,
-    tools: &[(String, String)],
-    focused_index: usize,
-    now: Instant,
-) {
-    if tools.is_empty() {
-        return;
-    }
-
-    let columns: usize = if tools.len() > 1 { 2 } else { 1 };
-    let rows = tools.len().div_ceil(columns);
-    let rows_u32 = u32::try_from(rows).unwrap_or(u32::MAX);
-    let columns_u32 = u32::try_from(columns).unwrap_or(u32::MAX);
-
-    let row_constraints: Vec<Constraint> =
-        (0..rows).map(|_| Constraint::Ratio(1, rows_u32)).collect();
-    let row_areas = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(row_constraints)
-        .split(area);
-
-    for (row_index, row_area) in row_areas.iter().enumerate() {
-        let col_constraints: Vec<Constraint> = (0..columns)
-            .map(|_| Constraint::Ratio(1, columns_u32))
-            .collect();
-        let col_areas = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(col_constraints)
-            .split(*row_area);
-
-        for (col_index, col_area) in col_areas.iter().enumerate() {
-            let tool_index = (row_index * columns) + col_index;
-            if let Some((tool_name, _)) = tools.get(tool_index)
-                && let Some(pane) = panes.get(tool_name)
-            {
-                let status_color = match pane.status {
-                    PaneStatus::Pending => Color::DarkGray,
+    ));
+    let states = tools
+        .iter()
+        .map(|_| Cell::new(SurfaceState::new(Rect::new(0, 0, 0, 0))))
+        .collect::<Vec<_>>();
+    let columns = if cx.area().width >= 100 { 2 } else { 1 };
+    let mut grid = Column::new().id("tools");
+    for chunk in (0..tools.len()).collect::<Vec<_>>().chunks(columns) {
+        let mut row = Row::new();
+        for &index in chunk {
+            let Some(pane) = panes.get(&tools[index].0) else {
+                continue;
+            };
+            let color = if index == focused_index {
+                Color::Cyan
+            } else {
+                match pane.status {
+                    PaneStatus::Pending => Color::BrightBlack,
                     PaneStatus::Running => Color::Yellow,
                     PaneStatus::Passed => Color::Green,
                     PaneStatus::Failed => Color::Red,
-                };
-                let is_focused = tool_index == focused_index;
-
-                let max_lines = col_area.height.saturating_sub(2) as usize;
-                let total_lines = pane.lines.len();
-                let max_start = total_lines.saturating_sub(max_lines);
-                let distance_from_tail = max_lines.saturating_add(pane.scroll_offset);
-                let desired_start = total_lines.saturating_sub(distance_from_tail);
-                let start = desired_start.min(max_start);
-
-                let visible_lines = if total_lines > max_lines {
-                    pane.lines
-                        .iter()
-                        .skip(start)
-                        .take(max_lines)
-                        .cloned()
-                        .collect::<Vec<_>>()
-                } else {
-                    pane.lines.iter().cloned().collect::<Vec<_>>()
-                };
-
-                let content = if visible_lines.is_empty() {
-                    Text::raw("")
-                } else {
-                    Text::from(visible_lines)
-                };
-
-                let border_style = if is_focused {
-                    Style::default().fg(Color::Cyan)
-                } else {
-                    Style::default().fg(status_color)
-                };
-                let scroll_label = if pane.scroll_offset == 0 {
+                }
+            };
+            let title = format!(
+                " {} [{} | {}{}]{} ",
+                pane.display_name,
+                status_label(pane.status),
+                if pane.scroll_offset == 0 {
                     "tail"
                 } else {
                     "scroll"
-                };
-                let updating_label = if pane_is_updating(pane.last_overwrite_at, now) {
+                },
+                if pane_is_updating(pane.last_overwrite_at, now) {
                     " | updating"
                 } else {
                     ""
-                };
-
-                let paragraph = Paragraph::new(content).block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(border_style)
-                        .title(format!(
-                            "{} [{} | {}{}]{}",
-                            pane.display_name,
-                            status_label(pane.status),
-                            scroll_label,
-                            updating_label,
-                            if is_focused { " *" } else { "" }
-                        )),
-                );
-                frame.render_widget(paragraph, *col_area);
-            }
+                },
+                if index == focused_index { " *" } else { "" }
+            );
+            row = row.flex(Flex::new(
+                1,
+                PaneComponent::new(
+                    format!("tool-{index}"),
+                    Pane::new().title(title).styles(PaneStyles {
+                        border: Style::new().fg(color),
+                        ..PaneStyles::default()
+                    }),
+                    &states[index],
+                    LogBody(pane),
+                ),
+            ));
         }
+        grid = grid.flex(Flex::new(1, row));
     }
+    let hints = TextBlock::new("q/Ctrl-C close · Tab switch · ↑↓/jk scroll · PgUp/PgDn · Home/End");
+    let root = Column::new()
+        .child(header)
+        .flex(Flex::new(1, grid))
+        .child(hints);
+    let area = cx.area();
+    let layout = root.layout(
+        Constraints::tight(Size::new(area.width, area.height)),
+        &mut LayoutCx::new(),
+    );
+    root.paint(&layout, cx);
 }
 
-fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line<'static> {
+fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line {
     let bytes = input.as_bytes();
     let mut index = 0_usize;
     let mut segment_start = 0_usize;
-    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut spans: Vec<Span> = Vec::new();
 
     while index < bytes.len() {
         if bytes[index] != 0x1B {
@@ -584,7 +580,7 @@ fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line<'static> {
     if spans.is_empty() {
         Line::from(String::new())
     } else {
-        Line::from(spans)
+        Line::from_spans(spans)
     }
 }
 
@@ -672,7 +668,7 @@ mod tests {
         let line = parse_ansi_line("\u{1b}[31mhello\u{1b}[0m", &mut state);
 
         assert_eq!(line.spans.len(), 1);
-        assert_eq!(line.spans[0].content.as_ref(), "hello");
+        assert_eq!(line.spans[0].content.as_str(), "hello");
         assert_eq!(line.spans[0].style.fg, Some(Color::Indexed(1)));
         assert_eq!(state.fg, None);
     }
@@ -703,7 +699,7 @@ mod tests {
         let line = parse_ansi_line("\u{1b}(Bhello", &mut state);
 
         assert_eq!(line.spans.len(), 1);
-        assert_eq!(line.spans[0].content.as_ref(), "hello");
+        assert_eq!(line.spans[0].content.as_str(), "hello");
     }
 
     #[test]
@@ -713,7 +709,38 @@ mod tests {
         pane.push_line("second", true);
 
         assert_eq!(pane.lines.len(), 1);
-        assert_eq!(pane.lines[0].spans[0].content.as_ref(), "second");
+        assert_eq!(pane.lines[0].spans[0].content.as_str(), "second");
+    }
+
+    #[test]
+    fn component_grid_renders_status_and_tail_at_small_sizes() {
+        use bmux_tui::{buffer::Buffer, frame::Frame};
+        let tools = vec![("demo".into(), "Demo".into())];
+        let mut pane = PaneState::new("Demo".into());
+        for i in 0..100 {
+            pane.push_line(&format!("line {i}"), false);
+        }
+        let panes = BTreeMap::from([("demo".into(), pane)]);
+        for (width, height) in [(80, 24), (30, 10), (1, 1), (0, 0)] {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
+            render(
+                &mut PaintCx::new(&mut Frame::new(&mut buffer)),
+                &panes,
+                &tools,
+                0,
+                Instant::now(),
+                0,
+            );
+            if width == 80 {
+                let text = buffer
+                    .cells()
+                    .iter()
+                    .map(|cell| cell.symbol.as_str())
+                    .collect::<String>();
+                assert!(text.contains("line 99"));
+                assert!(text.contains("Demo"));
+            }
+        }
     }
 
     #[test]

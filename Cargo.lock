@@ -3227,7 +3227,6 @@ dependencies = [
  "log 0.4.33",
  "mlua",
  "moosicbox_log_runtime",
- "ratatui",
  "rayon",
  "regex",
  "reqwest 0.13.4",
