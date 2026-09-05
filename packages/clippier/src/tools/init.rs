@@ -90,15 +90,14 @@ fn initialize_with_ui(
         writeln!(output, "No newly relevant tools; clippier.toml unchanged.")?;
         return Ok(());
     }
-    writeln!(output, "Repository: {}", root.canonicalize()?.display())?;
-    writeln!(
-        output,
-        "Native configs remain authoritative. Tools will not be installed or run."
-    )?;
-    writeln!(
-        output,
-        "Selected formatter coverage is limited to its chosen file extensions. Native tool exclusions still apply."
-    )?;
+    let header = [
+        format!("Repository: {}", root.canonicalize()?.display()),
+        "Native configs remain authoritative. Tools will not be installed or run.".to_owned(),
+        "Selected formatter coverage is limited to its chosen file extensions. Native tool exclusions still apply.".to_owned(),
+    ];
+    for line in &header {
+        writeln!(output, "{line}")?;
+    }
     let mut selected_policies = std::collections::BTreeMap::new();
     let mut selected = Vec::new();
     let mut skipped = Vec::new();
@@ -113,7 +112,7 @@ fn initialize_with_ui(
             }
         }
         #[cfg(feature = "tools-tui")]
-        inline::select(&mut groups, output)?;
+        inline::select(&mut groups, &header, output)?;
         (selected, skipped) = recommendations::selections(&groups);
         selected_policies = recommendations::policies(&groups);
     } else {

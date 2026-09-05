@@ -10,12 +10,13 @@ use bmux_tui::{
     frame::Frame,
     geometry::{Rect, Size},
     paint::PaintCx,
+    style::{Color, Modifier, Style},
 };
 use bmux_tui_components::{
-    checkbox::{CheckboxComponent, CheckboxState},
+    checkbox::{CheckboxComponent, CheckboxState, CheckboxStyles},
     key_hint_bar::{KeyHint, KeyHintBarComponent},
     labeled_details::{DetailItem, LabeledDetailsComponent},
-    pane::{Pane, PaneComponent, PaneState},
+    pane::{Pane, PaneComponent, PaneState, PaneStyles},
     scroll_view::{ScrollViewComponent, ScrollViewState},
 };
 use crossterm::{
@@ -68,11 +69,21 @@ pub(super) fn render(
         }
         let mut choices = Column::new().id(format!("choices-{g}"));
         for (c, choice) in group.choices.iter().enumerate() {
-            choices = choices.child(CheckboxComponent::new(
-                format!("choice-{g}-{c}"),
-                &choice.name,
-                &states[g][c],
-            ));
+            choices = choices.child(
+                CheckboxComponent::new(format!("choice-{g}-{c}"), &choice.name, &states[g][c])
+                    .styles(CheckboxStyles {
+                        normal: Style::new().fg(if choice.selected {
+                            Color::Green
+                        } else {
+                            Color::Default
+                        }),
+                        focused: Style::new()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD)
+                            .add_modifier(Modifier::REVERSED),
+                        ..CheckboxStyles::default()
+                    }),
+            );
         }
         let title = format!(
             " {} · {} · {} files ",
@@ -86,7 +97,14 @@ pub(super) fn render(
         );
         sections = sections.child(PaneComponent::new(
             format!("section-{g}"),
-            Pane::new().border(true).title(title),
+            Pane::new().border(true).title(title).styles(PaneStyles {
+                border: Style::new().fg(if g == focus.0 {
+                    Color::Cyan
+                } else {
+                    Color::BrightBlack
+                }),
+                ..PaneStyles::default()
+            }),
             &panes[g],
             choices,
         ));
@@ -146,10 +164,25 @@ pub(super) fn render(
         .layout(Constraints::for_width(width), &mut cx)
         .size
         .height;
-    let viewport_height = usize::from(height)
-        .saturating_sub(detail_height + footer_height + 2)
+    // Keep navigation usable first. Details progressively collapse on short
+    // terminals rather than consuming the checklist or pushing controls offscreen.
+    let budget = usize::from(height);
+    let footer_height = footer_height.min(budget.saturating_sub(3));
+    let detail_height = if budget >= 16 {
+        detail_height.min(budget / 3)
+    } else {
+        0
+    };
+    let gaps = usize::from(footer_height > 0) + usize::from(detail_height > 0);
+    let viewport_height = budget
+        .saturating_sub(detail_height + footer_height + gaps)
         .max(1);
     let content = sections.layout(Constraints::for_width(width), &mut cx);
+    scroll.set_vertical_offset(
+        scroll
+            .vertical_offset()
+            .min(content.size.height.saturating_sub(viewport_height)),
+    );
     if let Some(rect) =
         content.find_logical_rect(&LayoutId::new(format!("choice-{}-{}", focus.0, focus.1)))
     {
@@ -172,19 +205,44 @@ pub(super) fn render(
         ScrollViewState::new(),
         detail,
     );
-    let root = Column::new()
-        .id("init")
-        .gap(1)
-        .child(viewport)
-        .child(detail_view)
-        .child(footer);
+    let mut root = Column::new().id("init").gap(1).child(viewport);
+    if detail_height > 0 {
+        root = root.child(detail_view);
+    }
+    if footer_height > 0 {
+        root = root.child(ScrollViewComponent::new(
+            "footer-view",
+            LogicalSize::new(width, footer_height),
+            ScrollViewState::new(),
+            footer,
+        ));
+    }
     let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
     let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
     root.paint(&layout, &mut PaintCx::new(&mut Frame::new(&mut buffer)));
     buffer
 }
 
-pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Result<()> {
+pub(super) fn available_height(header: &[String], width: u16, height: u16) -> u16 {
+    let columns = usize::from(width.max(1));
+    let header_rows = header
+        .iter()
+        .map(|line| {
+            bmux_tui::text_width::display_width(line)
+                .max(1)
+                .div_ceil(columns)
+        })
+        .sum::<usize>();
+    height
+        .saturating_sub(u16::try_from(header_rows).unwrap_or(u16::MAX))
+        .saturating_sub(1)
+}
+
+pub(super) fn select(
+    groups: &mut [Group],
+    header: &[String],
+    output: &mut impl Write,
+) -> io::Result<()> {
     let stops = stops(groups);
     if stops.is_empty() {
         return Ok(());
@@ -195,11 +253,28 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
     let mut scroll = ScrollViewState::new();
     loop {
         let (width, height) = terminal::size()?;
+        let available = available_height(header, width, height);
+        if available == 0 || width < 2 {
+            // Wait for more space without scrolling the repository header away.
+            match event::read()? {
+                Event::Key(key)
+                    if key.code == KeyCode::Esc
+                        || (key.code == KeyCode::Char('c')
+                            && key.modifiers.contains(KeyModifiers::CONTROL)) =>
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "Setup cancelled; no files written",
+                    ));
+                }
+                _ => continue,
+            }
+        }
         let buffer = render(
             groups,
             stops[focus],
             width.saturating_sub(1).max(1),
-            height.saturating_sub(2).max(1),
+            available,
             &mut scroll,
         );
         terminal.draw(&buffer)?;
