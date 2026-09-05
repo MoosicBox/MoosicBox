@@ -231,6 +231,7 @@ pub(super) fn render(
     }
     let root = root
         .flex(Flex::new(3, viewport))
+        .child(TextBlock::new("").id("details-spacing"))
         .flex(Flex::new(1, detail_view))
         .child(footer);
     let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
