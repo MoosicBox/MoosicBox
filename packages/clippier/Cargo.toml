@@ -129,7 +129,7 @@ release = [
 ]
 versioning = ["dep:cargo_metadata"]
 
-_tools              = ["dep:rayon", "dep:which"]
+_tools              = ["dep:rayon", "dep:toml_edit", "dep:which"]
 _transforms         = []
 check               = ["_tools"]
 format              = ["_tools", "dep:cargo_metadata", "dep:git2", "dep:tempfile"]

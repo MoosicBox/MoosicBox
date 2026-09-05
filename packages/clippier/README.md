@@ -24,10 +24,17 @@ Run `clippier init` from the repository directory you want to configure. It uses
 Clippier's shared ignore-aware inventory to recommend tools from native configs,
 manifest settings, and source files—even when those tools are not installed.
 Answer the tool-selection and installation-requirement prompts, review the TOML
-preview, and confirm creation of `clippier.toml`.
+preview, and confirm creation or additive updates to `clippier.toml`.
 
-Setup never runs or installs tools, changes native configs, or overwrites an
-existing `clippier.toml`. Declined tools are skipped; other tools remain eligible
+Rerun setup after adding languages or upgrading Clippier to discover newly relevant
+tools. Existing required tools, skips, per-tool policies, and executable overrides
+are left alone. Only approved additions are made using formatting-preserving TOML
+edits; unrelated settings and comments are retained. Cancelling or finding no new
+tools does not rewrite the file. Accepted non-required tools get an explicit `auto`
+policy so setup does not ask about them again.
+
+Setup never runs or installs tools or changes native configs. Declined tools are
+skipped; other tools remain eligible
 for automatic discovery. Native configuration and automatic formatter ownership
 remain authoritative. Review overlaps and advanced per-tool scope/ownership with
 `clippier check --list` and `clippier fmt --list` after setup.
