@@ -1391,6 +1391,14 @@ TUI behavior for tool output:
 | `statix`       | Nix                     | Lint         | `flake.nix` or `statix.toml`; installed explicit/PATH binary                              |
 | `terraform`    | Terraform               | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
 | `tofu`         | OpenTofu                | Format, Lint | `.terraform.lock.hcl`; installed explicit/PATH binary                                     |
+| `nixfmt`       | Nix                     | Format       | `.nix` files or `flake.nix`; preferred Nix formatter                                      |
+| `deadnix`      | Nix                     | Lint         | `flake.nix`; checks unused bindings without editing                                       |
+| `deno`         | JS/TS/JSON/Markdown     | Format, Lint | `deno.json`/`deno.jsonc`; lint coverage is JS/TS                                          |
+| `yamllint`     | YAML                    | Lint         | `.yamllint`, `.yamllint.yaml`, `.yamllint.yml`                                            |
+| `stylelint`    | CSS/SCSS/Less           | Lint         | Native Stylelint config or `package.json#stylelint`; local Node binary supported          |
+| `markdownlint` | Markdown                | Lint         | Native markdownlint config; `markdownlint-cli` Node package                               |
+| `mypy`         | Python                  | Lint         | `mypy.ini`, `.mypy.ini`, or `pyproject.toml#tool.mypy`                                    |
+| `pylint`       | Python                  | Lint         | `.pylintrc`, `pylintrc`, or `pyproject.toml#tool.pylint`                                  |
 
 Every automatic integration uses cataloged signals, capabilities, default
 coverage, and ownership priority. File coverage is the catalog extension set

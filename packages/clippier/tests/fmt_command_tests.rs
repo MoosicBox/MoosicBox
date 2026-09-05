@@ -289,6 +289,54 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
             source: "application.lua",
         },
         Fixture {
+            label: "nixfmt",
+            tool: "nixfmt",
+            signal: "flake.nix",
+            source: "module.nix",
+        },
+        Fixture {
+            label: "deadnix",
+            tool: "deadnix",
+            signal: "flake.nix",
+            source: "module.nix",
+        },
+        Fixture {
+            label: "yamllint",
+            tool: "yamllint",
+            signal: ".yamllint",
+            source: "config.yaml",
+        },
+        Fixture {
+            label: "stylelint",
+            tool: "stylelint",
+            signal: ".stylelintrc.json",
+            source: "style.css",
+        },
+        Fixture {
+            label: "markdownlint",
+            tool: "markdownlint",
+            signal: ".markdownlint.json",
+            source: "README.md",
+        },
+        Fixture {
+            label: "mypy",
+            tool: "mypy",
+            signal: "mypy.ini",
+            source: "app.py",
+        },
+        Fixture {
+            label: "pylint",
+            tool: "pylint",
+            signal: ".pylintrc",
+            source: "app.py",
+        },
+        Fixture {
+            label: "deno",
+            tool: "deno",
+            signal: "deno.json",
+            source: "app.ts",
+        },
+        Fixture {
             label: "nix-format",
             tool: "alejandra",
             signal: "flake.nix",
@@ -341,7 +389,17 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
             if command == "fmt"
                 && matches!(
                     fixture.tool,
-                    "shellcheck" | "clang-tidy" | "eslint" | "luacheck" | "statix"
+                    "shellcheck"
+                        | "clang-tidy"
+                        | "eslint"
+                        | "luacheck"
+                        | "statix"
+                        | "deadnix"
+                        | "yamllint"
+                        | "stylelint"
+                        | "markdownlint"
+                        | "mypy"
+                        | "pylint"
                 )
             {
                 continue;
@@ -352,6 +410,8 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
                 .arg(temp.path())
                 .arg("--tool-path")
                 .arg(&tool_path)
+                .arg("--tools")
+                .arg(fixture.tool)
                 .args(extra_args)
                 .arg("--no-tui")
                 .arg("--output")
