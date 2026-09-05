@@ -8,10 +8,11 @@ use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
-use switchy_time::{instant_now, now};
+#[cfg(test)]
+use switchy_time::instant_now;
 
 use futures::future::FusedFuture;
 use pin_project_lite::pin_project;
@@ -24,7 +25,7 @@ pin_project! {
     #[derive(Debug, Copy, Clone)]
     pub struct Sleep {
         #[pin]
-        now: SystemTime,
+        now: std::time::Instant,
         #[pin]
         duration: Duration,
         #[pin]
@@ -39,7 +40,7 @@ impl Sleep {
     #[must_use]
     pub fn new(duration: Duration) -> Self {
         Self {
-            now: switchy_time::now(),
+            now: switchy_time::instant_now(),
             duration,
             polled: false,
             completed: false,
@@ -63,7 +64,7 @@ impl Future for Sleep {
         let polled = *this.polled;
 
         if polled {
-            let duration = switchy_time::now().duration_since(*this.now).unwrap();
+            let duration = switchy_time::instant_now().duration_since(*this.now);
             log::trace!(
                 "Sleep polled: {}ms/{}ms",
                 duration.as_millis(),
@@ -119,36 +120,6 @@ impl Instant {
     }
 }
 
-/// Converts a `SystemTime` to an `Instant` for the simulator.
-///
-/// This function calculates the equivalent `Instant` for a given `SystemTime` by computing
-/// the delta between the target time and the current system time, then applying that delta
-/// to the current instant.
-///
-/// # Errors
-///
-/// * Returns `SystemTimeError` if the time calculations overflow or underflow
-///
-/// # Panics
-///
-/// * If the instant calculation results in a value that cannot be represented
-fn system_time_to_instant(
-    target: SystemTime,
-) -> Result<std::time::Instant, std::time::SystemTimeError> {
-    let now_sys = now();
-    let now_inst = instant_now();
-
-    if target >= now_sys {
-        // target is in the future (or now)
-        let delta: Duration = target.duration_since(now_sys)?;
-        Ok(now_inst + delta)
-    } else {
-        // target is in the past
-        let delta: Duration = now_sys.duration_since(target)?;
-        Ok(now_inst.checked_sub(delta).unwrap())
-    }
-}
-
 impl Future for Instant {
     type Output = std::time::Instant;
 
@@ -164,9 +135,9 @@ impl Future for Instant {
         let polled = *this.polled;
 
         if polled {
-            let now = system_time_to_instant(switchy_time::now()).unwrap();
+            let now = switchy_time::instant_now();
             log::trace!("Instant polled: now={:?} instant={:?}", now, this.instant);
-            if now > *this.instant {
+            if now >= *this.instant {
                 *this.completed.as_mut() = true;
                 return Poll::Ready(now);
             }
@@ -188,81 +159,66 @@ impl FusedFuture for Instant {
     }
 }
 
-pin_project! {
-    /// An interval that yields values at a fixed rate.
-    ///
-    /// This is the simulator's implementation of an interval timer. It yields values
-    /// at regular intervals controlled by the simulator's time advancement.
-    #[allow(clippy::struct_field_names)]
-    #[derive(Debug, Copy, Clone)]
-    pub struct Interval {
-        #[pin]
-        now: SystemTime,
-        #[pin]
-        interval: Duration,
-        #[pin]
-        polled: bool,
-        #[pin]
-        completed: bool,
-    }
+/// A fixed-rate simulated interval with an immediately due first tick.
+///
+/// Missed ticks are delivered in a burst, retaining their scheduled deadlines.
+#[derive(Debug, Copy, Clone)]
+pub struct Interval {
+    now: std::time::Instant,
+    interval: Duration,
 }
 
 impl Interval {
     /// Creates a new `Interval` that yields values at the specified interval.
+    ///
+    /// # Panics
+    ///
+    /// * If the interval is zero.
     #[must_use]
     pub fn new(interval: Duration) -> Self {
+        assert!(!interval.is_zero(), "interval period must be nonzero");
         Self {
-            now: switchy_time::now(),
+            now: switchy_time::instant_now(),
             interval,
-            polled: false,
-            completed: false,
         }
     }
 
     /// Returns a future that completes at the next tick.
     ///
+    /// Dropping a pending tick does not consume it. This uses the same interval
+    /// state as [`Self::poll_tick`].
+    ///
     /// # Panics
     ///
-    /// * If the `Instant` fails to create
-    pub fn tick(&mut self) -> Instant {
-        Instant::new(system_time_to_instant(switchy_time::now() + self.interval).unwrap())
+    /// * If the next deadline exceeds the representable instant range.
+    pub async fn tick(&mut self) -> std::time::Instant {
+        std::future::poll_fn(|cx| self.poll_tick(cx)).await
     }
 
-    /// Resets the interval to the current time.
+    /// Resets the next deadline to one period after the current time.
     ///
-    /// This resets the internal state so the next tick will occur one interval from now.
+    /// # Panics
+    ///
+    /// * If the next deadline exceeds the representable instant range.
     pub fn reset(&mut self) {
-        self.now = switchy_time::now();
-        self.polled = false;
-        self.completed = false;
+        self.now = switchy_time::instant_now()
+            .checked_add(self.interval)
+            .expect("interval deadline overflow");
     }
 
-    /// Polls for the next tick of the interval.
+    /// Polls for the next scheduled tick using simulated monotonic time.
     ///
     /// # Panics
     ///
-    /// * If time goes backwards
+    /// * If the next deadline exceeds the representable instant range.
     pub fn poll_tick(&mut self, cx: &mut Context) -> Poll<std::time::Instant> {
-        if self.completed {
-            // Reset for next tick
-            self.now = switchy_time::now();
-            self.polled = false;
-            self.completed = false;
+        if switchy_time::instant_now() >= self.now {
+            let deadline = self.now;
+            self.now = deadline
+                .checked_add(self.interval)
+                .expect("interval deadline overflow");
+            return Poll::Ready(deadline);
         }
-
-        if self.polled {
-            let duration = switchy_time::now().duration_since(self.now).unwrap();
-            if duration >= self.interval {
-                self.completed = true;
-                let instant = system_time_to_instant(switchy_time::now()).unwrap();
-                return Poll::Ready(instant);
-            }
-        }
-
-        if !self.polled {
-            self.polled = true;
-        }
-
         cx.waker().wake_by_ref();
         Poll::Pending
     }
@@ -291,6 +247,7 @@ pin_project! {
         future: F,
         #[pin]
         sleep: Sleep,
+        completed: bool,
     }
 }
 
@@ -303,6 +260,7 @@ impl<F> Timeout<F> {
         Self {
             future,
             sleep: Sleep::new(duration),
+            completed: false,
         }
     }
 
@@ -321,14 +279,19 @@ where
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let this = self.project();
+        if *this.completed {
+            return Poll::Pending;
+        }
 
         // First check if the inner future is ready
         if let Poll::Ready(output) = this.future.poll(cx) {
+            *this.completed = true;
             return Poll::Ready(Ok(output));
         }
 
         // Then check if the timeout has elapsed
         if this.sleep.poll(cx) == Poll::Ready(()) {
+            *this.completed = true;
             return Poll::Ready(Err(Elapsed));
         }
 
@@ -338,16 +301,154 @@ where
 
 impl<F> FusedFuture for Timeout<F>
 where
-    F: FusedFuture,
+    F: Future,
 {
     fn is_terminated(&self) -> bool {
-        self.future.is_terminated() || self.sleep.is_terminated()
+        self.completed
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn timeout_terminal_state_does_not_repoll_inner() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        let polls = Arc::new(AtomicUsize::new(0));
+        let count = polls.clone();
+        let inner = std::future::poll_fn(move |_| {
+            count.fetch_add(1, Ordering::SeqCst);
+            Poll::Ready(7)
+        });
+        let mut timeout = Box::pin(Timeout::new(Duration::ZERO, inner));
+        let waker = futures::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+        assert!(!timeout.is_terminated());
+        assert_eq!(timeout.as_mut().poll(&mut context), Poll::Ready(Ok(7)));
+        assert!(timeout.is_terminated());
+        assert!(timeout.as_mut().poll(&mut context).is_pending());
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn expired_timeout_does_not_reopen_when_inner_becomes_ready() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        };
+        let ready = Arc::new(AtomicBool::new(false));
+        let polls = Arc::new(AtomicUsize::new(0));
+        let inner_ready = ready.clone();
+        let inner_polls = polls.clone();
+        let inner = std::future::poll_fn(move |_| {
+            inner_polls.fetch_add(1, Ordering::SeqCst);
+            if inner_ready.load(Ordering::SeqCst) {
+                Poll::Ready(9)
+            } else {
+                Poll::Pending
+            }
+        });
+        let mut timeout = Box::pin(Timeout::new(Duration::ZERO, inner));
+        let waker = futures::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+        // Sleep deliberately yields once before checking elapsed time.
+        assert!(timeout.as_mut().poll(&mut context).is_pending());
+        assert!(!timeout.is_terminated());
+        assert_eq!(
+            timeout.as_mut().poll(&mut context),
+            Poll::Ready(Err(Elapsed))
+        );
+        assert!(timeout.is_terminated());
+        let polls_at_expiration = polls.load(Ordering::SeqCst);
+        ready.store(true, Ordering::SeqCst);
+        for _ in 0..3 {
+            assert!(timeout.as_mut().poll(&mut context).is_pending());
+            assert!(timeout.is_terminated());
+        }
+        assert_eq!(polls.load(Ordering::SeqCst), polls_at_expiration);
+    }
+
+    #[test]
+    fn sleep_deadline_is_independent_of_epoch_reset() {
+        // Isolate thread-local clock/RNG changes from the test worker.
+        std::thread::spawn(|| {
+            let mut sleep = Box::pin(Sleep::new(Duration::from_millis(1)));
+            let waker = futures::task::noop_waker();
+            let mut context = Context::from_waker(&waker);
+            assert!(sleep.as_mut().poll(&mut context).is_pending());
+            for _ in 0..8 {
+                switchy_time::simulator::reset_epoch_offset();
+                assert!(sleep.as_mut().poll(&mut context).is_pending());
+            }
+            let _ = switchy_time::simulator::next_step();
+            assert!(sleep.as_mut().poll(&mut context).is_ready());
+            assert!(sleep.is_terminated());
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn interval_elapsed_time_is_independent_of_epoch_reset() {
+        std::thread::spawn(|| {
+            let mut interval = Interval::new(Duration::from_millis(1));
+            interval.reset();
+            let waker = futures::task::noop_waker();
+            let mut context = Context::from_waker(&waker);
+            assert!(interval.poll_tick(&mut context).is_pending());
+            for _ in 0..8 {
+                switchy_time::simulator::reset_epoch_offset();
+                assert!(interval.poll_tick(&mut context).is_pending());
+            }
+            let _ = switchy_time::simulator::next_step();
+            assert!(interval.poll_tick(&mut context).is_ready());
+            interval.reset();
+            assert!(interval.poll_tick(&mut context).is_pending());
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn cancelled_interval_tick_preserves_poll_tick_state() {
+        std::thread::spawn(|| {
+            let period = Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let mut interval = Interval::new(period);
+            interval.reset();
+            let waker = futures::task::noop_waker();
+            let mut context = Context::from_waker(&waker);
+            {
+                let mut tick = Box::pin(interval.tick());
+                assert!(tick.as_mut().poll(&mut context).is_pending());
+            }
+            let _ = switchy_time::simulator::next_step();
+            assert!(interval.poll_tick(&mut context).is_ready());
+            // Consuming through poll_tick starts the next period for tick too.
+            let mut tick = Box::pin(interval.tick());
+            assert!(tick.as_mut().poll(&mut context).is_pending());
+            assert!(tick.as_mut().poll(&mut context).is_pending());
+            let _ = switchy_time::simulator::next_step();
+            assert!(tick.as_mut().poll(&mut context).is_ready());
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn instant_completes_at_exact_deadline() {
+        let deadline = switchy_time::instant_now();
+        let mut timer = Box::pin(Instant::new(deadline));
+        let waker = futures::task::noop_waker();
+        let mut context = Context::from_waker(&waker);
+        assert!(timer.as_mut().poll(&mut context).is_pending());
+        assert_eq!(timer.as_mut().poll(&mut context), Poll::Ready(deadline));
+        assert!(timer.is_terminated());
+    }
+
     use std::future::ready;
 
     #[test_log::test]
@@ -361,14 +462,15 @@ mod tests {
         let mut interval = Interval::new(Duration::from_millis(100));
 
         // First tick should be created with current time
-        let _tick1 = interval.tick();
+        drop(interval.tick());
 
         // Reset the interval
         interval.reset();
 
-        // After reset, state should be back to initial
-        assert!(!interval.polled);
-        assert!(!interval.completed);
+        assert_eq!(
+            interval.now,
+            switchy_time::instant_now() + Duration::from_millis(100)
+        );
     }
 
     #[test_log::test]
@@ -380,13 +482,13 @@ mod tests {
             let waker = futures::task::noop_waker();
             let mut cx = Context::from_waker(&waker);
 
-            // First poll should return Pending
+            interval.reset();
             assert!(matches!(interval.poll_tick(&mut cx), Poll::Pending));
 
-            // Mark as polled to test the ready path
-            interval.polled = true;
-            // Advance time in test by updating now
-            interval.now = switchy_time::now() - Duration::from_millis(2);
+            // Advance time in test by updating the deadline
+            interval.now = switchy_time::instant_now()
+                .checked_sub(Duration::from_millis(2))
+                .unwrap();
 
             let result = interval.poll_tick(&mut cx);
             assert!(matches!(result, Poll::Ready(_)));
@@ -426,48 +528,18 @@ mod tests {
     #[test_log::test]
     fn sleep_creates_with_current_time() {
         let sleep = Sleep::new(Duration::from_millis(100));
-        let now = switchy_time::now();
+        let now = switchy_time::instant_now();
 
-        // Sleep's now should be very close to current time (within a small window)
-        let diff = sleep
-            .now
-            .duration_since(now)
-            .unwrap_or_else(|_| now.duration_since(sleep.now).unwrap());
+        let diff = now.duration_since(sleep.now);
         assert!(diff < Duration::from_millis(10));
     }
 
     #[test_log::test]
     fn interval_creates_with_current_time() {
         let interval = Interval::new(Duration::from_millis(100));
-        let now = switchy_time::now();
-
-        // Interval's now should be very close to current time
-        let diff = interval
-            .now
-            .duration_since(now)
-            .unwrap_or_else(|_| now.duration_since(interval.now).unwrap());
+        let now = switchy_time::instant_now();
+        let diff = now.duration_since(interval.now);
         assert!(diff < Duration::from_millis(10));
-    }
-
-    #[test_log::test]
-    fn system_time_to_instant_handles_future_time() {
-        let future_time = now() + Duration::from_secs(10);
-        let result = system_time_to_instant(future_time);
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test]
-    fn system_time_to_instant_handles_past_time() {
-        let past_time = now() - Duration::from_secs(10);
-        let result = system_time_to_instant(past_time);
-        assert!(result.is_ok());
-    }
-
-    #[test_log::test]
-    fn system_time_to_instant_handles_current_time() {
-        let current_time = now();
-        let result = system_time_to_instant(current_time);
-        assert!(result.is_ok());
     }
 
     #[test_log::test]
@@ -486,7 +558,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn timeout_fused_future_terminated_when_inner_future_terminates() {
+    fn timeout_remains_pending_with_already_terminated_inner() {
         {
             use futures::future::Fuse;
 
@@ -494,8 +566,9 @@ mod tests {
             let terminated_fused: Fuse<std::future::Ready<()>> = Fuse::terminated();
             let timeout = Timeout::new(Duration::from_millis(100), terminated_fused);
 
-            // Should be terminated since inner future is terminated
-            assert!(timeout.is_terminated());
+            // The inner future stays pending, but the timeout can still expire.
+            // Reporting termination here would let select! skip that deadline.
+            assert!(!timeout.is_terminated());
         }
     }
 
@@ -526,38 +599,26 @@ mod tests {
     }
 
     #[test_log::test]
-    fn interval_poll_tick_resets_after_completion() {
-        {
-            use std::task::{Context, Poll};
+    fn interval_preserves_deadlines_when_ticks_are_missed() {
+        let period = Duration::from_millis(1);
+        let mut interval = Interval::new(period);
+        let now = switchy_time::instant_now();
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        assert_eq!(interval.poll_tick(&mut cx), Poll::Ready(now));
+        assert!(interval.poll_tick(&mut cx).is_pending());
 
-            let mut interval = Interval::new(Duration::from_millis(1));
-            let waker = futures::task::noop_waker();
-            let mut cx = Context::from_waker(&waker);
-
-            // First poll - pending
-            assert!(matches!(interval.poll_tick(&mut cx), Poll::Pending));
-
-            // Simulate time passing
-            interval.polled = true;
-            interval.now = switchy_time::now()
-                .checked_sub(Duration::from_millis(2))
-                .unwrap();
-
-            // Should complete
-            let result = interval.poll_tick(&mut cx);
-            assert!(matches!(result, Poll::Ready(_)));
-
-            // After completion, completed flag is set
-            assert!(interval.completed);
-
-            // The next poll should trigger the reset and then be pending again
-            let result2 = interval.poll_tick(&mut cx);
-            assert!(matches!(result2, Poll::Pending));
-
-            // Now the state should be reset for the new tick cycle
-            assert!(interval.polled); // polled is set true during the pending poll
-            assert!(!interval.completed);
+        // Place the deadline two periods behind the clock, without wall sleeps.
+        let overdue = now.checked_sub(period * 2).unwrap();
+        interval.now = overdue;
+        for step in 0..=2 {
+            assert_eq!(
+                interval.poll_tick(&mut cx),
+                Poll::Ready(overdue + period * step)
+            );
         }
+        assert!(interval.poll_tick(&mut cx).is_pending());
+        assert_eq!(interval.now, now + period);
     }
 
     #[test_log::test]
@@ -577,7 +638,9 @@ mod tests {
             {
                 let mut projected = pinned_sleep.as_mut().project();
                 *projected.polled = true;
-                *projected.now = switchy_time::now() - Duration::from_millis(2);
+                *projected.now = switchy_time::instant_now()
+                    .checked_sub(Duration::from_millis(2))
+                    .unwrap();
             }
 
             // Next poll should complete since enough time has "passed"

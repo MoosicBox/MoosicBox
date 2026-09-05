@@ -231,9 +231,14 @@ pub fn set_step(step: u64) -> u64 {
 /// # Panics
 ///
 /// * If the `STEP` `RwLock` fails to read from or write to
+/// * If the step counter is already `u64::MAX`; the counter is left unchanged.
 #[must_use]
 pub fn next_step() -> u64 {
-    set_step(current_step() + 1)
+    set_step(
+        current_step()
+            .checked_add(1)
+            .expect("simulation step overflow"),
+    )
 }
 
 /// Resets the simulation step counter to zero.
@@ -376,6 +381,103 @@ pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn real_time_scope_restores_simulation_after_unwind() {
+        std::thread::spawn(|| {
+            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(1);
+            });
+            super::EPOCH_OFFSET.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(1);
+            });
+            let wall = super::now();
+            let monotonic = super::instant_now();
+            let result = std::panic::catch_unwind(|| {
+                super::with_real_time(|| {
+                    assert!(super::REAL_TIME.is_set());
+                    let nested = std::panic::catch_unwind(|| {
+                        super::with_real_time(|| panic!("nested scope failure"));
+                    });
+                    assert!(nested.is_err());
+                    assert!(super::REAL_TIME.is_set());
+                    panic!("outer scope failure");
+                });
+            });
+            assert!(result.is_err());
+            assert!(!super::REAL_TIME.is_set());
+            assert_eq!(super::now(), wall);
+            assert_eq!(super::instant_now(), monotonic);
+            let _ = super::next_step();
+            assert_eq!(super::now(), wall + Duration::from_millis(1));
+            assert_eq!(super::instant_now(), monotonic + Duration::from_millis(1));
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn overflowing_clock_reads_preserve_state() {
+        std::thread::spawn(|| {
+            // Set private thread-local fixtures instead of mutating process environment.
+            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(2);
+            });
+            super::EPOCH_OFFSET.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(1);
+            });
+            let wall = super::now();
+            let monotonic = super::instant_now();
+            let _ = super::set_step(u64::MAX);
+            assert!(std::panic::catch_unwind(super::now).is_err());
+            assert!(std::panic::catch_unwind(super::instant_now).is_err());
+            assert_eq!(super::current_step(), u64::MAX);
+            assert_eq!(super::step_multiplier(), 2);
+            assert_eq!(super::epoch_offset(), 1);
+            super::reset_step();
+            assert_eq!(super::now(), wall);
+            assert_eq!(super::instant_now(), monotonic);
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn epoch_addition_overflow_does_not_break_monotonic_time() {
+        std::thread::spawn(|| {
+            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(1);
+            });
+            super::EPOCH_OFFSET.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(u64::MAX);
+            });
+            let baseline = super::instant_now();
+            let _ = super::next_step();
+            assert!(std::panic::catch_unwind(super::now).is_err());
+            assert_eq!(super::current_step(), 1);
+            assert_eq!(super::epoch_offset(), u64::MAX);
+            assert_eq!(super::instant_now(), baseline + Duration::from_millis(1));
+            // Repair only the wall-clock fixture; do not rewind monotonic time.
+            super::EPOCH_OFFSET.with_borrow_mut(|value| {
+                *value.write().unwrap() = Some(1);
+            });
+            assert_eq!(super::now(), UNIX_EPOCH + Duration::from_millis(2));
+            assert_eq!(super::instant_now(), baseline + Duration::from_millis(1));
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn next_step_overflow_preserves_counter() {
+        std::thread::spawn(|| {
+            let _ = super::set_step(u64::MAX - 1);
+            assert_eq!(super::next_step(), u64::MAX);
+            assert!(std::panic::catch_unwind(super::next_step).is_err());
+            assert_eq!(super::current_step(), u64::MAX);
+        })
+        .join()
+        .unwrap();
+    }
     use super::*;
     use serial_test::serial;
     use std::{collections::BTreeMap, time::Duration};

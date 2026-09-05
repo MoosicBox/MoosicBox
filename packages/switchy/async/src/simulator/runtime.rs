@@ -481,17 +481,19 @@ impl<T: Send + Unpin> JoinHandle<T> {
             return true;
         }
 
-        let waker = futures::task::noop_waker();
-        let mut cx = Context::from_waker(&waker);
-
-        let receiver = Pin::new(&mut self.rx);
-        match receiver.poll(&mut cx) {
-            Poll::Ready(x) => {
+        // A status probe must not replace the waker registered by a join waiter.
+        match self.rx.try_recv() {
+            Ok(Some(value)) => {
                 self.finished = true;
-                self.result = Some(x.map_err(|_| task::JoinError::new()));
+                self.result = Some(Ok(value));
                 true
             }
-            Poll::Pending => false,
+            Err(_) => {
+                self.finished = true;
+                self.result = Some(Err(task::JoinError::new()));
+                true
+            }
+            Ok(None) => false,
         }
     }
 
@@ -515,9 +517,12 @@ impl<T: Send + Unpin> Future for JoinHandle<T> {
             return Poll::Ready(result);
         }
 
-        let receiver = Pin::new(&mut self.get_mut().rx);
-        match receiver.poll(cx) {
-            Poll::Ready(x) => Poll::Ready(x.map_err(|_| task::JoinError::new())),
+        let this = self.get_mut();
+        match Pin::new(&mut this.rx).poll(cx) {
+            Poll::Ready(x) => {
+                this.finished = true;
+                Poll::Ready(x.map_err(|_| task::JoinError::new()))
+            }
             Poll::Pending => Poll::Pending,
         }
     }
@@ -758,17 +763,16 @@ impl Task {
         }
         let waker = self.waker();
         let mut ctx = Context::from_waker(&waker);
-        #[allow(clippy::significant_drop_in_scrutinee)]
-        match self
-            .future
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_mut()
-            .poll(&mut ctx)
-        {
-            Poll::Ready(x) => {
-                self.finished.store(true, Ordering::SeqCst);
-                Poll::Ready(x)
+        let mut future = self.future.lock().unwrap_or_else(PoisonError::into_inner);
+        match future.as_mut().poll(&mut ctx) {
+            Poll::Ready(()) => {
+                // Retained wakers may keep Task alive indefinitely. Release user state
+                // now, outside the lock, before declaring the work drained.
+                let completed = std::mem::replace(&mut *future, Box::pin(std::future::ready(())));
+                drop(future);
+                drop(completed);
+                self.finish();
+                Poll::Ready(())
             }
             Poll::Pending => Poll::Pending,
         }
@@ -796,6 +800,13 @@ impl Task {
         }
     }
 
+    fn finish(&self) {
+        // Active work, not retained Arc/Waker references, determines runtime drain.
+        if !self.finished.swap(true, Ordering::SeqCst) {
+            self.runtime.tasks.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
     fn finished(&self) -> bool {
         self.finished.load(Ordering::SeqCst)
     }
@@ -803,17 +814,18 @@ impl Task {
 
 impl Drop for Task {
     fn drop(&mut self) {
-        self.runtime.tasks.fetch_sub(1, Ordering::SeqCst);
+        self.finish();
     }
 }
 
 impl Wake for Task {
     fn wake(self: Arc<Self>) {
         log::trace!("wake");
-        assert!(
-            self.runtime.active(),
-            "Attempted to wake on an inactive Runtime"
-        );
+        // Wakers can outlive their task or runtime. Stale delivery must not reopen
+        // completed work or panic during cleanup.
+        if self.finished() || !self.runtime.active() {
+            return;
+        }
         if self.block {
             self.runtime.spawner.inner_spawn_blocking(&self);
         } else {
@@ -1076,6 +1088,454 @@ mod test {
         assert!(result.is_err());
         assert!(!ran.load(std::sync::atomic::Ordering::SeqCst));
         runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn joined_handle_remains_finished_after_result_consumption() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let mut handle = runtime.spawn(async { 42 });
+        assert_eq!(runtime.block_on(&mut handle).unwrap(), 42);
+        assert!(handle.finished);
+        assert!(handle.is_finished());
+        assert!(handle.is_finished());
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn cancelled_join_remains_finished_after_error_consumption() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let mut handle = runtime.spawn(std::future::pending::<()>());
+        handle.abort();
+        assert!(runtime.block_on(&mut handle).is_err());
+        assert!(handle.finished);
+        assert!(handle.is_finished());
+        runtime.wait().unwrap();
+    }
+
+    fn scheduled_trace() -> Vec<(u8, u8)> {
+        switchy_random::simulator::reset_rng();
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let events = Arc::new(Mutex::new(Vec::new()));
+        for actor in 0..8_u8 {
+            let events = events.clone();
+            drop(runtime.spawn(async move {
+                for step in 0..4_u8 {
+                    events.lock().unwrap().push((actor, step));
+                    task::yield_now().await;
+                }
+            }));
+        }
+        // A fixed poll budget catches lack of progress without a wall-clock hang.
+        for _ in 0..128 {
+            runtime.tick();
+        }
+        assert_eq!(runtime.tasks(), 0);
+        runtime.wait().unwrap();
+        Arc::try_unwrap(events).unwrap().into_inner().unwrap()
+    }
+
+    #[test_log::test]
+    fn resetting_scheduler_rng_replays_concurrent_trace() {
+        let first = scheduled_trace();
+        assert_eq!(first.len(), 32);
+        let second = scheduled_trace();
+        assert_eq!(first, second);
+        for actor in 0..8_u8 {
+            let steps: Vec<_> = first
+                .iter()
+                .filter(|(id, _)| *id == actor)
+                .map(|(_, step)| *step)
+                .collect();
+            assert_eq!(steps, vec![0, 1, 2, 3]);
+        }
+    }
+
+    #[cfg(feature = "time")]
+    fn timed_scheduled_trace(deadlines: [u32; 8]) -> Vec<u8> {
+        // Fresh thread-local clock state per run avoids rewinding live timers.
+        std::thread::spawn(move || {
+            switchy_random::simulator::reset_rng();
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let runtime = build_runtime(&Builder::new()).unwrap();
+            let events = Arc::new(Mutex::new(Vec::new()));
+            for actor in 0..8_u8 {
+                let events = events.clone();
+                drop(runtime.spawn(async move {
+                    crate::time::sleep(period * deadlines[usize::from(actor)]).await;
+                    events.lock().unwrap().push(actor);
+                }));
+            }
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert!(events.lock().unwrap().is_empty());
+            assert_eq!(runtime.tasks(), 8);
+            for elapsed in 1..=8 {
+                let _ = switchy_time::simulator::next_step();
+                for _ in 0..128 {
+                    runtime.tick();
+                }
+                let completed = deadlines
+                    .iter()
+                    .filter(|deadline| **deadline <= elapsed)
+                    .count();
+                assert_eq!(events.lock().unwrap().len(), completed);
+                assert_eq!(runtime.tasks(), u64::try_from(8 - completed).unwrap());
+            }
+            runtime.wait().unwrap();
+            Arc::try_unwrap(events).unwrap().into_inner().unwrap()
+        })
+        .join()
+        .unwrap()
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn explicit_clock_steps_replay_sleeping_tasks() {
+        let deadlines = [1, 2, 3, 4, 5, 6, 7, 8];
+        let first = timed_scheduled_trace(deadlines);
+        assert_eq!(first, (0..8).collect::<Vec<_>>());
+        assert_eq!(first, timed_scheduled_trace(deadlines));
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn equal_deadline_sleepers_replay_completion_order() {
+        let first = timed_scheduled_trace([1; 8]);
+        assert_eq!(first, timed_scheduled_trace([1; 8]));
+        let mut actors = first;
+        actors.sort_unstable();
+        assert_eq!(actors, (0..8).collect::<Vec<_>>());
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn abort_sleepers_before_dispatch_preserves_independent_timer() {
+        std::thread::spawn(|| {
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let runtime = build_runtime(&Builder::new()).unwrap();
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let mut handles = Vec::new();
+            let mut owned_states = Vec::new();
+            for actor in 0..3_u8 {
+                let state = Arc::new(());
+                owned_states.push(Arc::downgrade(&state));
+                let events = events.clone();
+                handles.push(runtime.spawn(async move {
+                    crate::time::sleep(period).await;
+                    events.lock().unwrap().push(actor);
+                    drop(state);
+                }));
+            }
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 3);
+            assert!(owned_states.iter().all(|state| state.upgrade().is_some()));
+            handles[0].abort();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 2);
+            assert!(owned_states[0].upgrade().is_none());
+            let _ = switchy_time::simulator::next_step();
+            // Deadline has arrived, but neither remaining task has been dispatched.
+            handles[1].abort();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 0);
+            assert!(owned_states.iter().all(|state| state.upgrade().is_none()));
+            assert_eq!(*events.lock().unwrap(), vec![2]);
+            let mut handles = handles.into_iter();
+            assert!(futures::executor::block_on(handles.next().unwrap()).is_err());
+            assert!(futures::executor::block_on(handles.next().unwrap()).is_err());
+            assert!(futures::executor::block_on(handles.next().unwrap()).is_ok());
+            let _ = switchy_time::simulator::next_step();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(*events.lock().unwrap(), vec![2]);
+            runtime.wait().unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn scheduled_timeout_releases_pending_work_at_deadline() {
+        std::thread::spawn(|| {
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let runtime = build_runtime(&Builder::new()).unwrap();
+            let state = Arc::new(());
+            let weak = Arc::downgrade(&state);
+            let mut handle = runtime.spawn(async move {
+                crate::time::timeout(period, async move {
+                    std::future::pending::<()>().await;
+                    drop(state);
+                })
+                .await
+            });
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert!(!handle.is_finished());
+            assert_eq!(runtime.tasks(), 1);
+            assert!(weak.upgrade().is_some());
+            let _ = switchy_time::simulator::next_step();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 0);
+            assert!(handle.is_finished());
+            assert!(weak.upgrade().is_none());
+            assert!(futures::executor::block_on(handle).unwrap().is_err());
+            runtime.wait().unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn finishing_runtime_does_not_dispatch_or_cancel_other_runtime_timer() {
+        std::thread::spawn(|| {
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let first = build_runtime(&Builder::new()).unwrap();
+            let second = build_runtime(&Builder::new()).unwrap();
+            let state = Arc::new(());
+            let weak = Arc::downgrade(&state);
+            let mut sleeper = second.spawn(async move {
+                crate::time::sleep(period).await;
+                drop(state);
+                19
+            });
+            for _ in 0..128 {
+                second.tick();
+            }
+            let finished = first.spawn(async { 7 });
+            for _ in 0..128 {
+                first.tick();
+            }
+            assert_eq!(first.tasks(), 0);
+            assert_eq!(futures::executor::block_on(finished).unwrap(), 7);
+            first.wait().unwrap();
+            assert_eq!(second.tasks(), 1);
+            assert!(!sleeper.is_finished());
+            assert!(weak.upgrade().is_some());
+            let _ = switchy_time::simulator::next_step();
+            // Clock advancement alone must not dispatch another runtime's queue.
+            assert!(!sleeper.is_finished());
+            for _ in 0..128 {
+                second.tick();
+            }
+            assert_eq!(second.tasks(), 0);
+            assert!(weak.upgrade().is_none());
+            assert!(sleeper.is_finished());
+            assert_eq!(futures::executor::block_on(sleeper).unwrap(), 19);
+            second.wait().unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn abort_local_sleeper_releases_thread_local_state() {
+        std::thread::spawn(|| {
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let runtime = build_runtime(&Builder::new()).unwrap();
+            let state = std::rc::Rc::new(());
+            let weak = std::rc::Rc::downgrade(&state);
+            let completed = std::rc::Rc::new(std::cell::Cell::new(false));
+            let effect = completed.clone();
+            let mut handle = runtime.spawn_local(async move {
+                crate::time::sleep(period).await;
+                effect.set(true);
+                drop(state);
+            });
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 1);
+            assert!(weak.upgrade().is_some());
+            assert!(!handle.is_finished());
+            handle.abort();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert_eq!(runtime.tasks(), 0);
+            assert!(weak.upgrade().is_none());
+            assert!(handle.is_finished());
+            assert!(futures::executor::block_on(handle).is_err());
+            let _ = switchy_time::simulator::next_step();
+            for _ in 0..128 {
+                runtime.tick();
+            }
+            assert!(!completed.get());
+            assert_eq!(std::rc::Rc::strong_count(&completed), 1);
+            runtime.wait().unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn scheduled_interval_retains_cadence_across_clock_steps() {
+        for clock_steps in [[0, 1, 2, 3], [0, 0, 0, 3]] {
+            scheduled_interval_trace(clock_steps);
+        }
+    }
+
+    #[cfg(feature = "time")]
+    fn scheduled_interval_trace(clock_steps: [u64; 4]) {
+        std::thread::spawn(move || {
+            let period =
+                std::time::Duration::from_millis(switchy_time::simulator::step_multiplier());
+            assert!(!period.is_zero());
+            let runtime = build_runtime(&Builder::new()).unwrap();
+            let events = Arc::new(Mutex::new(Vec::new()));
+            let observed = events.clone();
+            let start = switchy_time::instant_now();
+            let mut handle = runtime.spawn(async move {
+                let mut interval = crate::time::interval(period);
+                for _ in 0..4 {
+                    let deadline = interval.tick().await;
+                    observed.lock().unwrap().push(deadline);
+                }
+            });
+            let initial_step = switchy_time::simulator::current_step();
+            for elapsed in clock_steps {
+                let _ = switchy_time::simulator::set_step(initial_step + elapsed);
+                for _ in 0..128 {
+                    runtime.tick();
+                }
+                let expected: Vec<_> = (0..=u32::try_from(elapsed).unwrap())
+                    .map(|step| start + period * step)
+                    .collect();
+                assert_eq!(*events.lock().unwrap(), expected);
+                assert_eq!(handle.is_finished(), elapsed == 3);
+                assert_eq!(runtime.tasks(), u64::from(elapsed != 3));
+            }
+            assert!(futures::executor::block_on(handle).is_ok());
+            runtime.wait().unwrap();
+        })
+        .join()
+        .unwrap();
+    }
+
+    struct CountWake(std::sync::atomic::AtomicUsize);
+
+    impl std::task::Wake for CountWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[test_log::test]
+    fn completion_probe_preserves_registered_join_waker() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let mut handle = runtime.spawn(async { 42 });
+        let counter = Arc::new(CountWake(std::sync::atomic::AtomicUsize::new(0)));
+        let waker = std::task::Waker::from(counter.clone());
+        let mut cx = std::task::Context::from_waker(&waker);
+        assert!(std::future::Future::poll(std::pin::Pin::new(&mut handle), &mut cx).is_pending());
+        assert!(!handle.is_finished());
+        runtime.tick();
+        assert!(counter.0.load(std::sync::atomic::Ordering::SeqCst) > 0);
+        assert_eq!(runtime.block_on(handle).unwrap(), 42);
+        runtime.wait().unwrap();
+    }
+
+    struct ReadyOwned(Arc<()>);
+
+    impl std::future::Future for ReadyOwned {
+        type Output = ();
+        fn poll(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<()> {
+            assert_eq!(Arc::strong_count(&self.0), 1);
+            std::task::Poll::Ready(())
+        }
+    }
+
+    #[test_log::test]
+    fn completed_future_drops_before_retained_waker() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let owned = Arc::new(());
+        let weak = Arc::downgrade(&owned);
+        let task = super::Task::new(runtime.clone(), false, ReadyOwned(owned));
+        let waker = task.waker();
+        assert!(task.poll().is_ready());
+        assert!(weak.upgrade().is_none());
+        assert_eq!(runtime.tasks(), 0);
+        drop(waker);
+        drop(task);
+    }
+
+    #[test_log::test]
+    fn completed_task_releases_count_before_retained_waker_is_dropped() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        runtime.start();
+        let task = super::Task::new(runtime.clone(), false, async {});
+        let waker = task.waker();
+        assert_eq!(runtime.tasks(), 1);
+        assert!(task.poll().is_ready());
+        assert_eq!(runtime.tasks(), 0);
+        assert!(task.poll().is_ready());
+        assert_eq!(runtime.tasks(), 0);
+        drop(task);
+        runtime.clone().wait().unwrap();
+        waker.wake();
+        assert_eq!(runtime.tasks(), 0);
+    }
+
+    #[test_log::test]
+    fn pending_task_remains_counted_until_released() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let task = super::Task::new(runtime.clone(), false, std::future::pending());
+        assert!(task.poll().is_pending());
+        assert_eq!(runtime.tasks(), 1);
+        drop(task);
+        assert_eq!(runtime.tasks(), 0);
+    }
+
+    #[test_log::test]
+    fn stale_wake_after_completion_does_not_enqueue_task() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        runtime.start();
+        let task = super::Task::new(runtime.clone(), false, async {});
+        let waker = task.waker();
+        assert!(task.poll().is_ready());
+        waker.wake_by_ref();
+        assert!(runtime.queue.lock().unwrap().is_empty());
+        drop(waker);
+        drop(task);
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn stale_wake_on_inactive_runtime_is_harmless() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let task = super::Task::new(runtime.clone(), false, async {});
+        let waker = task.waker();
+        waker.wake();
+        assert!(runtime.queue.lock().unwrap().is_empty());
+        drop(task);
+        assert_eq!(runtime.tasks(), 0);
     }
 
     #[test_log::test]

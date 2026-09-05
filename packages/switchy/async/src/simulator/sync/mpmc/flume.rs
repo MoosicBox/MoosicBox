@@ -36,6 +36,8 @@ struct ChannelInner<T> {
     receiver_wakers: Vec<Waker>,
     /// Wakers waiting for space to become available
     sender_wakers: Vec<Waker>,
+    /// Weak registrations owned by pending asynchronous sends.
+    send_waiters: Vec<std::sync::Weak<Mutex<Option<Waker>>>>,
 }
 
 impl<T> ChannelInner<T> {
@@ -46,7 +48,24 @@ impl<T> ChannelInner<T> {
             capacity,
             receiver_wakers: Vec::new(),
             sender_wakers: Vec::new(),
+            send_waiters: Vec::new(),
         }
+    }
+
+    /// Removes pending sender notifications for dispatch outside the channel lock.
+    fn take_sender_wakers(&mut self) -> Vec<Waker> {
+        let mut wakers = std::mem::take(&mut self.sender_wakers);
+        for waiter in self
+            .send_waiters
+            .drain(..)
+            .filter_map(|weak| weak.upgrade())
+        {
+            let notification = waiter.lock().unwrap().take();
+            if let Some(waker) = notification {
+                wakers.push(waker);
+            }
+        }
+        wakers
     }
 
     /// Checks if the channel is at capacity.
@@ -149,7 +168,14 @@ impl<T> Receiver<T> {
                     Err(TryRecvError::Empty)
                 }
             },
-            |item| Ok(item),
+            |item| {
+                let wakers = inner.take_sender_wakers();
+                drop(inner);
+                for waker in wakers {
+                    waker.wake();
+                }
+                Ok(item)
+            },
         )
     }
 
@@ -184,23 +210,30 @@ impl<T> Receiver<T> {
     ///
     /// * If the internal `Mutex` is poisoned
     pub fn poll_recv(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<T>> {
-        match self.try_recv() {
-            Ok(value) => {
-                // Wake up any waiting senders since we freed up space
-                let mut inner = self.inner.lock().unwrap();
-                for waker in inner.sender_wakers.drain(..) {
-                    waker.wake();
-                }
-                drop(inner);
-                std::task::Poll::Ready(Some(value))
+        // Clone before locking: even custom RawWaker callbacks may re-enter us.
+        let waker = cx.waker().clone();
+        let mut inner = self.inner.lock().unwrap();
+        if let Some(value) = inner.queue.pop_front() {
+            let wakers = inner.take_sender_wakers();
+            drop(inner);
+            for waker in wakers {
+                waker.wake();
             }
-            Err(TryRecvError::Empty) => {
-                // Register waker for when data becomes available
-                let mut inner = self.inner.lock().unwrap();
-                inner.receiver_wakers.push(cx.waker().clone());
-                std::task::Poll::Pending
+            std::task::Poll::Ready(Some(value))
+        } else if self.is_disconnected() {
+            std::task::Poll::Ready(None)
+        } else {
+            // Observe readiness and register interest in one critical section.
+            if !inner
+                .receiver_wakers
+                .iter()
+                .any(|registered| registered.will_wake(&waker))
+            {
+                inner.receiver_wakers.push(waker);
             }
-            Err(TryRecvError::Disconnected) => std::task::Poll::Ready(None),
+            // A redundant waker may run user destruction code when dropped.
+            drop(inner);
+            std::task::Poll::Pending
         }
     }
 
@@ -279,7 +312,14 @@ impl<T> Drop for Receiver<T> {
         if old_count == 1 {
             // Last receiver dropped
             if let Ok(mut inner) = self.inner.lock() {
-                for waker in inner.sender_wakers.drain(..) {
+                let senders = inner.take_sender_wakers();
+                let receivers = std::mem::take(&mut inner.receiver_wakers);
+                let queued = std::mem::take(&mut inner.queue);
+                drop(inner);
+                // Payload destructors and waker callbacks may re-enter the channel.
+                drop(queued);
+                drop(receivers);
+                for waker in senders {
                     waker.wake();
                 }
             }
@@ -363,12 +403,56 @@ impl<T> Sender<T> {
     /// # Errors
     ///
     /// * Returns `SendError` if all receivers have been dropped
+    /// # Panics
+    ///
+    /// * Panics if the channel or notification mutex is poisoned.
     pub async fn send_async(&self, value: T) -> Result<(), SendError<T>> {
-        // In simulator, just use sync send but yield to maintain async behavior
-        let result = self.send(value);
-        // Yield once to allow other tasks to run
-        crate::task::yield_now().await;
-        result
+        struct Registration<'a, T> {
+            inner: &'a Mutex<ChannelInner<T>>,
+            slot: Arc<Mutex<Option<Waker>>>,
+        }
+        impl<T> Drop for Registration<'_, T> {
+            fn drop(&mut self) {
+                let weak = Arc::downgrade(&self.slot);
+                self.inner
+                    .lock()
+                    .unwrap()
+                    .send_waiters
+                    .retain(|entry| !entry.ptr_eq(&weak));
+                let waker = self.slot.lock().unwrap().take();
+                drop(waker);
+            }
+        }
+        let registration = Registration {
+            inner: &self.inner,
+            slot: Arc::new(Mutex::new(None)),
+        };
+        let mut value = Some(value);
+        std::future::poll_fn(|cx| {
+            let waker = cx.waker().clone();
+            let mut inner = self.inner.lock().unwrap();
+            if self.is_disconnected() {
+                return std::task::Poll::Ready(Err(SendError(value.take().unwrap())));
+            }
+            if inner.is_full() {
+                let old = registration.slot.lock().unwrap().replace(waker);
+                let weak = Arc::downgrade(&registration.slot);
+                if !inner.send_waiters.iter().any(|entry| entry.ptr_eq(&weak)) {
+                    inner.send_waiters.push(weak);
+                }
+                drop(inner);
+                drop(old);
+                return std::task::Poll::Pending;
+            }
+            inner.queue.push_back(value.take().unwrap());
+            let receivers = std::mem::take(&mut inner.receiver_wakers);
+            drop(inner);
+            for receiver in receivers {
+                receiver.wake();
+            }
+            std::task::Poll::Ready(Ok(()))
+        })
+        .await
     }
 
     /// Try to send a value without blocking.
@@ -410,12 +494,12 @@ impl<T> Sender<T> {
             inner.queue.len()
         );
 
-        // Wake up any waiting receivers since we added data
-        for waker in inner.receiver_wakers.drain(..) {
+        // User wakers may re-enter the channel; never invoke them under its lock.
+        let wakers = std::mem::take(&mut inner.receiver_wakers);
+        drop(inner);
+        for waker in wakers {
             waker.wake();
         }
-
-        drop(inner);
 
         Ok(())
     }
@@ -494,7 +578,9 @@ impl<T> Drop for Sender<T> {
         if old_count == 1 {
             // Last sender dropped
             if let Ok(mut inner) = self.inner.lock() {
-                for waker in inner.receiver_wakers.drain(..) {
+                let wakers = std::mem::take(&mut inner.receiver_wakers);
+                drop(inner);
+                for waker in wakers {
                     waker.wake();
                 }
             }
@@ -601,6 +687,773 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::thread;
+
+    struct LockCheckingWake {
+        inner: Arc<Mutex<ChannelInner<u8>>>,
+        wakes: AtomicUsize,
+    }
+
+    impl std::task::Wake for LockCheckingWake {
+        fn wake(self: Arc<Self>) {
+            assert!(self.inner.try_lock().is_ok(), "wake holds channel lock");
+            self.wakes.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn cancellation_racing_disconnection_reclaims_send_state() {
+        use std::future::Future as _;
+
+        struct RaceWake(AtomicUsize);
+        impl std::task::Wake for RaceWake {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        for _ in 0..64 {
+            let (sender, receiver) = bounded(1);
+            sender.try_send(Arc::new(0_u8)).unwrap();
+            let payload = Arc::new(1_u8);
+            let payload_probe = Arc::downgrade(&payload);
+            let signal = Arc::new(RaceWake(AtomicUsize::new(0)));
+            let signal_probe = Arc::downgrade(&signal);
+            let waker = Waker::from(signal.clone());
+            let mut send = Box::pin(sender.send_async(payload));
+            assert!(
+                send.as_mut()
+                    .poll(&mut std::task::Context::from_waker(&waker))
+                    .is_pending()
+            );
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let close_barrier = Arc::clone(&barrier);
+            let close = thread::spawn(move || {
+                close_barrier.wait();
+                drop(receiver);
+            });
+            barrier.wait();
+            drop(send);
+            close.join().unwrap();
+            assert!(signal.0.load(Ordering::SeqCst) <= 1);
+            drop(waker);
+            drop(signal);
+            assert!(signal_probe.upgrade().is_none());
+            assert!(payload_probe.upgrade().is_none());
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert!(matches!(
+                sender.try_send(Arc::new(2)),
+                Err(TrySendError::Disconnected(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn cancellation_racing_capacity_release_reclaims_send_state() {
+        use std::future::Future as _;
+
+        struct RaceWake(AtomicUsize);
+        impl std::task::Wake for RaceWake {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        for _ in 0..64 {
+            let (sender, receiver) = bounded(1);
+            sender.try_send(Arc::new(0_u8)).unwrap();
+            let payload = Arc::new(1_u8);
+            let payload_probe = Arc::downgrade(&payload);
+            let signal = Arc::new(RaceWake(AtomicUsize::new(0)));
+            let signal_probe = Arc::downgrade(&signal);
+            let waker = Waker::from(signal.clone());
+            let mut send = Box::pin(sender.send_async(payload));
+            assert!(
+                send.as_mut()
+                    .poll(&mut std::task::Context::from_waker(&waker))
+                    .is_pending()
+            );
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let drain_barrier = Arc::clone(&barrier);
+            let drain_receiver = receiver.clone();
+            let drain = thread::spawn(move || {
+                drain_barrier.wait();
+                assert_eq!(*drain_receiver.try_recv().unwrap(), 0);
+            });
+            barrier.wait();
+            drop(send);
+            drain.join().unwrap();
+            assert!(signal.0.load(Ordering::SeqCst) <= 1);
+            drop(waker);
+            drop(signal);
+            assert!(signal_probe.upgrade().is_none());
+            assert!(payload_probe.upgrade().is_none());
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert!(receiver.try_recv().is_err());
+            sender.try_send(Arc::new(2)).unwrap();
+            assert_eq!(*receiver.try_recv().unwrap(), 2);
+        }
+    }
+
+    #[test]
+    fn disconnection_racing_send_registration_does_not_lose_wakeup() {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        struct RaceWake(AtomicUsize);
+        impl std::task::Wake for RaceWake {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        for _ in 0..64 {
+            let (sender, receiver) = bounded(1);
+            sender.try_send(0_u8).unwrap();
+            let signal = Arc::new(RaceWake(AtomicUsize::new(0)));
+            let waker = Waker::from(signal.clone());
+            let mut context = std::task::Context::from_waker(&waker);
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let close_barrier = Arc::clone(&barrier);
+            let close = thread::spawn(move || {
+                close_barrier.wait();
+                drop(receiver);
+            });
+            let mut send = Box::pin(sender.send_async(1));
+            barrier.wait();
+            let first = send.as_mut().poll(&mut context);
+            close.join().unwrap();
+            let result = if first.is_pending() {
+                assert_eq!(signal.0.load(Ordering::SeqCst), 1);
+                send.as_mut().poll(&mut context)
+            } else {
+                first
+            };
+            let Poll::Ready(Err(error)) = result else {
+                panic!("disconnected send must return its payload");
+            };
+            assert_eq!(error.0, 1);
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+        }
+    }
+
+    #[test]
+    fn capacity_release_racing_send_registration_does_not_lose_wakeup() {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        struct RaceWake(AtomicUsize);
+        impl std::task::Wake for RaceWake {
+            fn wake(self: Arc<Self>) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        for _ in 0..64 {
+            let (sender, receiver) = bounded(1);
+            sender.try_send(0_u8).unwrap();
+            let signal = Arc::new(RaceWake(AtomicUsize::new(0)));
+            let waker = Waker::from(signal.clone());
+            let mut context = std::task::Context::from_waker(&waker);
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let drain_barrier = Arc::clone(&barrier);
+            let drain_receiver = receiver.clone();
+            let drain = thread::spawn(move || {
+                drain_barrier.wait();
+                assert_eq!(drain_receiver.try_recv().unwrap(), 0);
+            });
+            let mut send = Box::pin(sender.send_async(1));
+            barrier.wait();
+            let first = send.as_mut().poll(&mut context);
+            drain.join().unwrap();
+            if first.is_pending() {
+                assert_eq!(signal.0.load(Ordering::SeqCst), 1);
+                assert!(matches!(
+                    send.as_mut().poll(&mut context),
+                    Poll::Ready(Ok(()))
+                ));
+            } else {
+                assert!(matches!(first, Poll::Ready(Ok(()))));
+            }
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert_eq!(receiver.try_recv().unwrap(), 1);
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn send_waker_replacement_and_cancellation_drop_outside_channel_lock() {
+        use std::future::Future as _;
+
+        struct DropCheckingWake {
+            inner: Arc<Mutex<ChannelInner<u8>>>,
+            drops: Arc<AtomicUsize>,
+        }
+        impl std::task::Wake for DropCheckingWake {
+            fn wake(self: Arc<Self>) {
+                panic!("blocked send must not self-wake");
+            }
+        }
+        impl Drop for DropCheckingWake {
+            fn drop(&mut self) {
+                assert!(
+                    self.inner.try_lock().is_ok(),
+                    "waker drop holds channel lock"
+                );
+                self.drops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let (sender, receiver) = bounded(1);
+        sender.try_send(0_u8).unwrap();
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut send = Box::pin(sender.send_async(1));
+        for expected in 0..8 {
+            let waker = Waker::from(Arc::new(DropCheckingWake {
+                inner: Arc::clone(&receiver.inner),
+                drops: Arc::clone(&drops),
+            }));
+            assert!(
+                send.as_mut()
+                    .poll(&mut std::task::Context::from_waker(&waker))
+                    .is_pending()
+            );
+            drop(waker);
+            assert_eq!(drops.load(Ordering::SeqCst), expected);
+        }
+        drop(send);
+        assert_eq!(drops.load(Ordering::SeqCst), 8);
+        assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        assert_eq!(receiver.try_recv().unwrap(), 0);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn last_receiver_clears_all_pending_send_registrations() {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        let (sender, receiver) = bounded(1);
+        sender.try_send(0_u8).unwrap();
+        let other_receiver = receiver.clone();
+        let signals: Vec<_> = (0..3)
+            .map(|_| {
+                Arc::new(LockCheckingWake {
+                    inner: Arc::clone(&receiver.inner),
+                    wakes: AtomicUsize::new(0),
+                })
+            })
+            .collect();
+        let wakers: Vec<_> = signals.iter().cloned().map(Waker::from).collect();
+        let mut sends: Vec<_> = (1..=3)
+            .map(|value| Box::pin(sender.send_async(value)))
+            .collect();
+        for (send, waker) in sends.iter_mut().zip(&wakers) {
+            assert!(
+                send.as_mut()
+                    .poll(&mut std::task::Context::from_waker(waker))
+                    .is_pending()
+            );
+        }
+        assert_eq!(sender.inner.lock().unwrap().send_waiters.len(), 3);
+        drop(other_receiver);
+        assert!(
+            signals
+                .iter()
+                .all(|signal| signal.wakes.load(Ordering::SeqCst) == 0)
+        );
+        drop(receiver);
+        assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+        for (index, (send, waker)) in sends.iter_mut().zip(&wakers).enumerate() {
+            assert_eq!(signals[index].wakes.load(Ordering::SeqCst), 1);
+            let Poll::Ready(Err(error)) = send
+                .as_mut()
+                .poll(&mut std::task::Context::from_waker(waker))
+            else {
+                panic!("disconnected send must return its payload");
+            };
+            assert_eq!(usize::from(error.0), index + 1);
+        }
+        assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+    }
+
+    #[test]
+    fn cancelling_same_waker_send_preserves_other_registration() {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        for cancel_first in [false, true] {
+            let (sender, receiver) = bounded(1);
+            sender.try_send(0_u8).unwrap();
+            let signal = Arc::new(LockCheckingWake {
+                inner: Arc::clone(&receiver.inner),
+                wakes: AtomicUsize::new(0),
+            });
+            let waker = Waker::from(signal.clone());
+            let mut context = std::task::Context::from_waker(&waker);
+            let mut first = Box::pin(sender.send_async(1));
+            let mut second = Box::pin(sender.send_async(2));
+            assert!(first.as_mut().poll(&mut context).is_pending());
+            assert!(second.as_mut().poll(&mut context).is_pending());
+            assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 2);
+            let (mut survivor, expected) = if cancel_first {
+                drop(first);
+                (second, 2)
+            } else {
+                drop(second);
+                (first, 1)
+            };
+            assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 1);
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), 0);
+            assert_eq!(receiver.try_recv().unwrap(), 0);
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+            assert!(matches!(
+                survivor.as_mut().poll(&mut context),
+                Poll::Ready(Ok(()))
+            ));
+            assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+            assert_eq!(receiver.try_recv().unwrap(), expected);
+            assert!(receiver.try_recv().is_err());
+        }
+    }
+
+    #[test]
+    fn cancelling_notified_send_preserves_competing_survivor() {
+        for (cancel_first, disconnect, cancel_survivor) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (true, true, false),
+            (false, false, true),
+            (true, false, true),
+            (false, true, true),
+            (true, true, true),
+        ] {
+            check_notified_send_survivor(cancel_first, disconnect, cancel_survivor);
+        }
+    }
+
+    fn check_notified_send_survivor(cancel_first: bool, disconnect: bool, cancel_survivor: bool) {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        let (sender, receiver) = bounded(1);
+        sender.try_send(0_u8).unwrap();
+        let signal = Arc::new(LockCheckingWake {
+            inner: Arc::clone(&receiver.inner),
+            wakes: AtomicUsize::new(0),
+        });
+        let waker = Waker::from(signal.clone());
+        let mut context = std::task::Context::from_waker(&waker);
+        let mut first = Box::pin(sender.send_async(1));
+        let mut second = Box::pin(sender.send_async(2));
+        assert!(first.as_mut().poll(&mut context).is_pending());
+        assert!(second.as_mut().poll(&mut context).is_pending());
+        assert_eq!(receiver.try_recv().unwrap(), 0);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 2);
+        assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        let (mut survivor, expected) = if cancel_first {
+            drop(first);
+            (second, 2)
+        } else {
+            drop(second);
+            (first, 1)
+        };
+        sender.try_send(3).unwrap();
+        assert!(survivor.as_mut().poll(&mut context).is_pending());
+        assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 1);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 2);
+        let replacement = Arc::new(LockCheckingWake {
+            inner: Arc::clone(&receiver.inner),
+            wakes: AtomicUsize::new(0),
+        });
+        let replacement_probe = Arc::downgrade(&replacement);
+        let replacement_waker = Waker::from(replacement.clone());
+        let mut replacement_context = std::task::Context::from_waker(&replacement_waker);
+        for _ in 0..32 {
+            assert!(
+                survivor
+                    .as_mut()
+                    .poll(&mut replacement_context)
+                    .is_pending()
+            );
+            assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 1);
+            assert_eq!(replacement.wakes.load(Ordering::SeqCst), 0);
+        }
+        let old_probe = Arc::downgrade(&signal);
+        drop(waker);
+        drop(signal);
+        assert!(old_probe.upgrade().is_none());
+        if cancel_survivor {
+            drop(survivor);
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert_eq!(replacement.wakes.load(Ordering::SeqCst), 0);
+            if disconnect {
+                drop(receiver);
+                assert_eq!(replacement.wakes.load(Ordering::SeqCst), 0);
+                assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+                assert!(matches!(
+                    sender.try_send(4),
+                    Err(TrySendError::Disconnected(4))
+                ));
+                drop(replacement_waker);
+                drop(replacement);
+                assert!(replacement_probe.upgrade().is_none());
+                return;
+            }
+            drop(replacement_waker);
+            drop(replacement);
+            // Cancellation must reclaim the task without a later drain doing cleanup.
+            assert!(replacement_probe.upgrade().is_none());
+            assert_eq!(receiver.try_recv().unwrap(), 3);
+            assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+            sender.try_send(4).unwrap();
+            assert_eq!(receiver.try_recv().unwrap(), 4);
+            return;
+        }
+        if disconnect {
+            drop(receiver);
+            assert_eq!(replacement.wakes.load(Ordering::SeqCst), 1);
+            let Poll::Ready(Err(error)) = survivor.as_mut().poll(&mut replacement_context) else {
+                panic!("disconnected survivor must return its payload");
+            };
+            assert_eq!(error.0, expected);
+        } else {
+            assert_eq!(receiver.try_recv().unwrap(), 3);
+            assert_eq!(replacement.wakes.load(Ordering::SeqCst), 1);
+            assert!(matches!(
+                survivor.as_mut().poll(&mut replacement_context),
+                Poll::Ready(Ok(()))
+            ));
+            assert_eq!(receiver.try_recv().unwrap(), expected);
+            assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+        }
+        assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+        assert_eq!(replacement.wakes.load(Ordering::SeqCst), 1);
+        drop(replacement_waker);
+        drop(replacement);
+        assert!(replacement_probe.upgrade().is_none());
+    }
+
+    #[derive(Clone, Copy)]
+    enum ContentionOutcome {
+        Deliver,
+        Disconnect,
+        Cancel,
+    }
+
+    #[test]
+    fn pending_send_reregisters_after_competing_capacity_claim() {
+        for outcome in [
+            ContentionOutcome::Deliver,
+            ContentionOutcome::Disconnect,
+            ContentionOutcome::Cancel,
+        ] {
+            check_repeated_capacity_claims(outcome);
+        }
+    }
+
+    fn check_repeated_capacity_claims(outcome: ContentionOutcome) {
+        use std::future::Future as _;
+        use std::task::Poll;
+
+        let (sender, receiver) = bounded(1);
+        sender.try_send(1_u8).unwrap();
+        let signal = Arc::new(LockCheckingWake {
+            inner: Arc::clone(&receiver.inner),
+            wakes: AtomicUsize::new(0),
+        });
+        let waker = Waker::from(signal.clone());
+        let mut context = std::task::Context::from_waker(&waker);
+        let mut send = Box::pin(sender.send_async(2));
+        assert!(send.as_mut().poll(&mut context).is_pending());
+        assert_eq!(receiver.try_recv().unwrap(), 1);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+        assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        for cycle in 1..=32 {
+            sender.try_send(3).unwrap();
+            for _ in 0..8 {
+                assert!(send.as_mut().poll(&mut context).is_pending());
+                assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 1);
+                assert_eq!(signal.wakes.load(Ordering::SeqCst), cycle);
+            }
+            assert_eq!(receiver.try_recv().unwrap(), 3);
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), cycle + 1);
+            assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        }
+        if matches!(outcome, ContentionOutcome::Cancel) {
+            drop(send);
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), 33);
+            let probe = Arc::downgrade(&signal);
+            drop(waker);
+            drop(signal);
+            assert!(probe.upgrade().is_none());
+            assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+            sender.try_send(4).unwrap();
+            assert_eq!(receiver.try_recv().unwrap(), 4);
+            return;
+        }
+        if matches!(outcome, ContentionOutcome::Disconnect) {
+            drop(receiver);
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), 33);
+            let Poll::Ready(Err(error)) = send.as_mut().poll(&mut context) else {
+                panic!("notified send must observe disconnection");
+            };
+            assert_eq!(error.0, 2);
+            assert!(sender.inner.lock().unwrap().send_waiters.is_empty());
+            assert_eq!(signal.wakes.load(Ordering::SeqCst), 33);
+            let probe = Arc::downgrade(&signal);
+            drop(waker);
+            drop(signal);
+            assert!(probe.upgrade().is_none());
+            return;
+        }
+        assert!(matches!(
+            send.as_mut().poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+        assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        assert_eq!(receiver.try_recv().unwrap(), 2);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 33);
+        assert!(receiver.try_recv().is_err());
+        let probe = Arc::downgrade(&signal);
+        drop(waker);
+        drop(signal);
+        assert!(probe.upgrade().is_none());
+    }
+
+    #[test]
+    fn pending_send_registration_is_bounded_and_cancelled_without_self_wakes() {
+        use std::future::Future as _;
+
+        let (sender, receiver) = bounded(1);
+        sender.try_send(1_u8).unwrap();
+        let signal = Arc::new(LockCheckingWake {
+            inner: Arc::clone(&receiver.inner),
+            wakes: AtomicUsize::new(0),
+        });
+        let waker = Waker::from(signal.clone());
+        let mut context = std::task::Context::from_waker(&waker);
+        for _ in 0..32 {
+            let mut send = Box::pin(sender.send_async(2));
+            for _ in 0..8 {
+                assert!(send.as_mut().poll(&mut context).is_pending());
+                assert_eq!(receiver.inner.lock().unwrap().send_waiters.len(), 1);
+                assert_eq!(signal.wakes.load(Ordering::SeqCst), 0);
+            }
+            drop(send);
+            assert!(receiver.inner.lock().unwrap().send_waiters.is_empty());
+        }
+        assert_eq!(receiver.try_recv().unwrap(), 1);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 0);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn receiver_notifications_release_queue_lock() {
+        let (sender, receiver) = bounded(1);
+        let signal = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let waker = Waker::from(signal.clone());
+        let mut context = std::task::Context::from_waker(&waker);
+        assert!(receiver.poll_recv(&mut context).is_pending());
+        sender.try_send(1).unwrap();
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+        assert_eq!(receiver.try_recv().unwrap(), 1);
+        assert!(receiver.poll_recv(&mut context).is_pending());
+        drop(sender);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            receiver.poll_recv(&mut context),
+            std::task::Poll::Ready(None)
+        );
+    }
+
+    #[test]
+    fn poll_receive_notifies_senders_outside_queue_lock() {
+        let (sender, receiver) = bounded(1);
+        sender.try_send(7).unwrap();
+        let signal = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        receiver
+            .inner
+            .lock()
+            .unwrap()
+            .sender_wakers
+            .push(Waker::from(signal.clone()));
+        let waker = futures::task::noop_waker();
+        let mut context = std::task::Context::from_waker(&waker);
+        assert_eq!(
+            receiver.poll_recv(&mut context),
+            std::task::Poll::Ready(Some(7))
+        );
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+        assert!(receiver.inner.lock().unwrap().sender_wakers.is_empty());
+    }
+
+    #[test]
+    fn final_receiver_releases_waiters_and_notifies_outside_lock() {
+        let (sender, receiver) = bounded::<u8>(1);
+        let signal = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let abandoned = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let weak = Arc::downgrade(&abandoned);
+        {
+            let mut inner = receiver.inner.lock().unwrap();
+            inner.sender_wakers.push(Waker::from(signal.clone()));
+            inner.receiver_wakers.push(Waker::from(abandoned));
+        }
+        drop(receiver);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+        assert!(sender.is_disconnected());
+    }
+
+    struct LockCheckingPayload {
+        inner: std::sync::Weak<Mutex<ChannelInner<Self>>>,
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl Drop for LockCheckingPayload {
+        fn drop(&mut self) {
+            let inner = self.inner.upgrade().expect("sender keeps channel alive");
+            assert!(inner.try_lock().is_ok(), "payload dropped under queue lock");
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn final_receiver_drops_payloads_outside_queue_lock() {
+        let (sender, receiver) = bounded(2);
+        let drops = Arc::new(AtomicUsize::new(0));
+        for _ in 0..2 {
+            let payload = LockCheckingPayload {
+                inner: Arc::downgrade(&receiver.inner),
+                drops: drops.clone(),
+            };
+            assert!(sender.try_send(payload).is_ok());
+        }
+        let other_receiver = receiver.clone();
+        drop(receiver);
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        drop(other_receiver);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+        assert!(sender.is_empty());
+        drop(sender);
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn final_receiver_releases_buffered_payload_while_sender_lives() {
+        let (sender, receiver) = bounded(1);
+        let payload = Arc::new(7_u8);
+        let weak = Arc::downgrade(&payload);
+        sender.try_send(payload).unwrap();
+        drop(receiver);
+        assert!(weak.upgrade().is_none());
+        assert!(sender.is_empty());
+        assert!(sender.is_disconnected());
+    }
+
+    #[test]
+    fn try_receive_notifies_senders_outside_queue_lock() {
+        let (sender, receiver) = bounded(1);
+        sender.try_send(7).unwrap();
+        let signal = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        receiver
+            .inner
+            .lock()
+            .unwrap()
+            .sender_wakers
+            .push(Waker::from(signal.clone()));
+        assert_eq!(receiver.try_recv().unwrap(), 7);
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+        assert!(receiver.inner.lock().unwrap().sender_wakers.is_empty());
+        assert!(receiver.try_recv().is_err());
+        assert_eq!(signal.wakes.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn repeated_receiver_poll_deduplicates_equivalent_wakers() {
+        let (sender, receiver) = bounded(1);
+        let first = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let second = Arc::new(LockCheckingWake {
+            inner: receiver.inner.clone(),
+            wakes: AtomicUsize::new(0),
+        });
+        let first_waker = Waker::from(first.clone());
+        let second_waker = Waker::from(second.clone());
+        for _ in 0..128 {
+            assert!(
+                receiver
+                    .poll_recv(&mut std::task::Context::from_waker(&first_waker))
+                    .is_pending()
+            );
+            assert!(
+                receiver
+                    .poll_recv(&mut std::task::Context::from_waker(&second_waker))
+                    .is_pending()
+            );
+        }
+        assert_eq!(receiver.inner.lock().unwrap().receiver_wakers.len(), 2);
+        sender.try_send(1).unwrap();
+        assert_eq!(first.wakes.load(Ordering::SeqCst), 1);
+        assert_eq!(second.wakes.load(Ordering::SeqCst), 1);
+        assert!(receiver.inner.lock().unwrap().receiver_wakers.is_empty());
+        assert_eq!(receiver.try_recv().unwrap(), 1);
+    }
+
+    struct CountWake(AtomicUsize);
+
+    impl std::task::Wake for CountWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn receiver_registration_racing_send_or_close_does_not_lose_wakeup() {
+        use std::task::{Context, Poll};
+
+        for deliver in [false, true] {
+            for _ in 0..128 {
+                let (sender, receiver) = bounded::<u8>(1);
+                let signal = Arc::new(CountWake(AtomicUsize::new(0)));
+                let waker = Waker::from(signal.clone());
+                let mut context = Context::from_waker(&waker);
+                let barrier = std::sync::Barrier::new(2);
+                let first = thread::scope(|scope| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        if deliver {
+                            sender.try_send(7).unwrap();
+                        }
+                        drop(sender);
+                    });
+                    barrier.wait();
+                    receiver.poll_recv(&mut context)
+                });
+                let expected = Poll::Ready(deliver.then_some(7));
+                if first.is_pending() {
+                    assert!(signal.0.load(Ordering::SeqCst) > 0);
+                    assert_eq!(receiver.poll_recv(&mut context), expected);
+                } else {
+                    assert_eq!(first, expected);
+                }
+                assert_eq!(receiver.poll_recv(&mut context), Poll::Ready(None));
+            }
+        }
+    }
 
     #[test]
     fn test_basic_send_recv() {

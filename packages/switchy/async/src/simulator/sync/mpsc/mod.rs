@@ -247,9 +247,8 @@ impl<T> Sender<T> {
     /// # Errors
     ///
     /// * Returns `SendError` if all receivers have been dropped
-    #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
     pub async fn send_async(&self, value: T) -> Result<(), SendError<T>> {
-        Ok(self.inner.send(value)?)
+        std::future::ready(self.inner.send(value).map_err(Into::into)).await
     }
 
     /// Try to send a value without blocking.

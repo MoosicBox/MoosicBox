@@ -32,6 +32,10 @@ pub fn sleep(duration: Duration) -> Sleep {
 ///
 /// This returns an `Interval` that yields values at regular intervals specified by the duration.
 /// Time advancement is controlled by the simulator runtime.
+///
+/// # Panics
+///
+/// * If the duration is zero.
 #[must_use]
 pub fn interval(duration: Duration) -> crate::simulator::futures::Interval {
     crate::simulator::futures::Interval::new(duration)
