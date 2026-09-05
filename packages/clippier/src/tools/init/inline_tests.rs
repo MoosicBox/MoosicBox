@@ -106,9 +106,11 @@ fn components_render_borders_details_and_focused_checkbox() {
     assert!(text.contains("Coverage"));
     assert!(text.contains("┌"));
     assert!(buffer.cells().iter().any(|cell| {
-        cell.style
-            .modifiers
-            .contains(bmux_tui::style::Modifier::REVERSED)
+        cell.style.bg == Some(bmux_tui::style::Color::Cyan)
+            && cell
+                .style
+                .modifiers
+                .contains(bmux_tui::style::Modifier::BOLD)
     }));
     assert!(
         buffer

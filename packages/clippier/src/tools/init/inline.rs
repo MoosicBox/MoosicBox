@@ -11,11 +11,12 @@ use bmux_tui::{
     geometry::{Rect, Size},
     paint::PaintCx,
     style::{Color, Modifier, Style},
+    text::{Line, Span, Text},
 };
 use bmux_tui_components::{
     checkbox::{CheckboxComponent, CheckboxState, CheckboxStyles},
-    key_hint_bar::{KeyHint, KeyHintBarComponent},
-    labeled_details::{DetailItem, LabeledDetailsComponent},
+    key_hint_bar::{KeyHint, KeyHintBarComponent, KeyHintBarStyles},
+    labeled_details::{DetailItem, LabeledDetailsComponent, LabeledDetailsStyles},
     pane::{Pane, PaneComponent, PaneState, PaneStyles},
     scroll_view::{ScrollViewComponent, ScrollViewState},
 };
@@ -64,6 +65,11 @@ pub(super) fn render(
         if group.choices.is_empty() {
             continue;
         }
+        let accent = if group.formatting {
+            Color::Cyan
+        } else {
+            Color::Magenta
+        };
         let mut choices = Column::new().id(format!("choices-{g}"));
         for (c, choice) in group.choices.iter().enumerate() {
             choices = choices.child(
@@ -75,28 +81,39 @@ pub(super) fn render(
                             Color::Default
                         }),
                         focused: Style::new()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD)
-                            .add_modifier(Modifier::REVERSED),
+                            .fg(Color::Black)
+                            .bg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
                         ..CheckboxStyles::default()
                     }),
             );
         }
-        let title = format!(
-            " {} · {} · {} files ",
-            group.title,
-            if group.formatting {
-                "Formatter"
-            } else {
-                "Linter"
-            },
-            group.files.len()
-        );
+        let title = Line::from_spans(vec![
+            Span::styled(
+                format!(" {} ", group.title),
+                Style::new().fg(accent).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(
+                    "· {} ",
+                    if group.formatting {
+                        "Formatter"
+                    } else {
+                        "Linter"
+                    }
+                ),
+                Style::new().fg(accent),
+            ),
+            Span::styled(
+                format!("· {} files ", group.files.len()),
+                Style::new().fg(Color::Yellow),
+            ),
+        ]);
         sections = sections.child(PaneComponent::new(
             format!("section-{g}"),
             Pane::new().border(true).title(title).styles(PaneStyles {
                 border: Style::new().fg(if g == focus.0 {
-                    Color::Cyan
+                    accent
                 } else {
                     Color::BrightBlack
                 }),
@@ -140,9 +157,24 @@ pub(super) fn render(
     let detail_state = Cell::new(PaneState::new(Rect::new(0, 0, 0, 0)));
     let detail = PaneComponent::new(
         "detail-pane",
-        Pane::new().border(true).title(format!(" {} ", choice.name)),
+        Pane::new()
+            .border(true)
+            .title(Line::from_spans(vec![Span::styled(
+                format!(" {} ", choice.name),
+                Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
+            )]))
+            .styles(PaneStyles {
+                border: Style::new().fg(Color::Blue),
+                ..PaneStyles::default()
+            }),
         &detail_state,
-        LabeledDetailsComponent::new("details", &details).item_spacing(false),
+        LabeledDetailsComponent::new("details", &details)
+            .item_spacing(false)
+            .styles(LabeledDetailsStyles {
+                label: Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                value: Style::new(),
+                continuation: Style::new().fg(Color::BrightBlack),
+            }),
     );
     let hints = [
         KeyHint::new("↑↓", "Move"),
@@ -150,7 +182,12 @@ pub(super) fn render(
         KeyHint::new("↵", "Accept"),
         KeyHint::new("Esc", "Cancel"),
     ];
-    let footer = KeyHintBarComponent::new("keys", &hints);
+    let footer = KeyHintBarComponent::new("keys", &hints).styles(KeyHintBarStyles {
+        key: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        label: Style::new(),
+        separator: Style::new().fg(Color::BrightBlack),
+        ..KeyHintBarStyles::default()
+    });
     let mut cx = LayoutCx::new();
     let viewport = ScrollViewComponent::new(
         "checklist",
@@ -176,7 +213,21 @@ pub(super) fn render(
     let mut root = Column::new().id("init");
     if !header.is_empty() {
         root = root.child(TextBlock::new(super::branding::logo(width, height)).id("logo"));
-        root = root.child(TextBlock::new(header.join("\n")).id("header"));
+        let context = Text::from_lines(
+            header
+                .iter()
+                .enumerate()
+                .map(|(index, line)| {
+                    let color = match index {
+                        0 => Color::Cyan,
+                        1 => Color::Green,
+                        _ => Color::Default,
+                    };
+                    Line::from_spans(vec![Span::styled(line, Style::new().fg(color))])
+                })
+                .collect::<Vec<_>>(),
+        );
+        root = root.child(TextBlock::new(context).id("header"));
     }
     let root = root
         .flex(Flex::new(3, viewport))
