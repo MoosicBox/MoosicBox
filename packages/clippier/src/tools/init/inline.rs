@@ -175,6 +175,7 @@ pub(super) fn render(
     );
     let mut root = Column::new().id("init");
     if !header.is_empty() {
+        root = root.child(TextBlock::new(super::branding::logo(width, height)).id("logo"));
         root = root.child(TextBlock::new(header.join("\n")).id("header"));
     }
     let root = root

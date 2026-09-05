@@ -1,6 +1,8 @@
 //! Guided setup using the same repository evidence as tool execution.
 
 #[cfg(feature = "tools-tui")]
+mod branding;
+#[cfg(feature = "tools-tui")]
 mod inline;
 #[cfg(all(test, feature = "tools-tui"))]
 mod inline_tests;

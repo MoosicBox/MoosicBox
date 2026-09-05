@@ -32,16 +32,25 @@ fn height_budget_reserves_wrapped_header_and_cursor_row() {
                 .iter()
                 .all(|cell| !cell.symbol.contains(['\n', '\r']))
         );
-        let first_row = buffer.cells()[..usize::from(width)]
+        let rows = buffer
+            .cells()
+            .chunks(usize::from(width))
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.symbol.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let repository_row = rows
             .iter()
-            .map(|cell| cell.symbol.as_str())
-            .collect::<String>();
-        assert!(first_row.starts_with("Repository: /some/path"));
-        let second_row = buffer.cells()[usize::from(width)..usize::from(width) * 2]
-            .iter()
-            .map(|cell| cell.symbol.as_str())
-            .collect::<String>();
-        assert!(second_row.starts_with("Wrapped instruction"));
+            .position(|row| row.starts_with("Repository: /some/path"))
+            .unwrap();
+        assert!(rows[repository_row + 1].starts_with("Wrapped instruction"));
+        assert!(
+            rows[..repository_row]
+                .iter()
+                .any(|row| row.contains("C L I P P I E R"))
+        );
         let mut output = Vec::new();
         bmux_tui::ansi::write_ansi_inline_frame(&mut output, &buffer).unwrap();
         // Small regression fixture; no byte-count dependency needed.
