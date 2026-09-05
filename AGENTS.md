@@ -1,5 +1,30 @@
 # MoosicBox Agent Guidelines
 
+## User Overrides
+
+These guidelines describe the default repository workflow and production conventions,
+not irrevocable rules. A direct, explicit user instruction may change or waive them
+within the scope the user authorizes, including guidance worded as "always", "never",
+"required", or "must". This section takes precedence over conflicting language
+elsewhere in this file.
+
+- Accept clear natural-language authorization; do not require a structured approval
+  or an edit to this file before honoring a scoped exception.
+- Follow the latest clear user instruction when it conflicts with an earlier
+  repository convention or workflow. Reading or beginning to follow a guideline
+  does not make it permanently binding.
+- Treat exceptions narrowly: authorize only the task, changes, and side effects
+  requested. If the scope is genuinely ambiguous, ask one concise question.
+- Distinguish development exceptions from production changes. For example, a user
+  may authorize temporary local Cargo path/`[patch.crates-io]` overrides to develop
+  against current dependency APIs while retaining `workspace = true` in package
+  dependencies. Do not treat that as permission to ship local overrides.
+- Report any temporary exceptions that remain so they can be resolved before release.
+
+User overrides of these repository guidelines do not override system or developer
+instructions, tool permission requirements, credential requirements, or safety
+restrictions on destructive or otherwise high-risk operations.
+
 ## Build/Test Commands
 
 - **Rust build**: `cargo build`
