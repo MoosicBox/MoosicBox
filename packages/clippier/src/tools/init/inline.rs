@@ -19,10 +19,6 @@ use bmux_tui_components::{
     pane::{Pane, PaneComponent, PaneState, PaneStyles},
     scroll_view::{ScrollViewComponent, ScrollViewState},
 };
-use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
-    terminal,
-};
 
 use super::recommendations::Group;
 
@@ -201,69 +197,7 @@ pub(super) fn select(
         return Ok(());
     }
     output.flush()?;
-    let mut terminal = bmux_tui::inline::InlineTerminal::enter(&mut *output)?;
-    let mut focus = 0usize;
-    let scroll = Cell::new(ScrollViewState::new());
-    loop {
-        let (width, height) = terminal::size()?;
-        let available = height.saturating_sub(1);
-        if available == 0 || width < 2 {
-            // Wait for more space without scrolling the repository header away.
-            match event::read()? {
-                Event::Key(key)
-                    if key.code == KeyCode::Esc
-                        || (key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL)) =>
-                {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Interrupted,
-                        "Setup cancelled; no files written",
-                    ));
-                }
-                _ => continue,
-            }
-        }
-        let buffer = render(
-            groups,
-            header,
-            stops[focus],
-            width.saturating_sub(1).max(1),
-            available,
-            &scroll,
-        );
-        terminal.draw(&buffer)?;
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Release {
-                continue;
-            }
-            match key.code {
-                KeyCode::Esc => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Interrupted,
-                        "Setup cancelled; no files written",
-                    ));
-                }
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Interrupted,
-                        "Setup cancelled; no files written",
-                    ));
-                }
-                KeyCode::Up | KeyCode::BackTab => focus = focus.saturating_sub(1),
-                KeyCode::Down | KeyCode::Tab => focus = (focus + 1).min(stops.len() - 1),
-                KeyCode::Home => focus = 0,
-                KeyCode::End => focus = stops.len() - 1,
-                KeyCode::Char(' ') => {
-                    let (g, c) = stops[focus];
-                    groups[g].choices[c].selected = !groups[g].choices[c].selected;
-                }
-                KeyCode::Enter => break,
-                _ => {}
-            }
-        }
-    }
-    terminal.clear()?;
-    drop(terminal);
+    super::runtime::run(groups, header, output)?;
     for group in groups {
         writeln!(
             output,

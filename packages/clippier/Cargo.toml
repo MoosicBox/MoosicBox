@@ -49,6 +49,7 @@ switchy_random = { workspace = true, features = ["rand"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bmux_keyboard = { workspace = true, optional = true }
 bmux_tui = { workspace = true, optional = true, features = ["crossterm"] }
 bmux_tui_components = { workspace = true, optional = true, features = [
     "checkbox",
@@ -56,6 +57,9 @@ bmux_tui_components = { workspace = true, optional = true, features = [
     "labeled-details",
     "pane",
     "scroll-view",
+] }
+bmux_tui_runtime = { workspace = true, optional = true, features = [
+    "crossterm",
 ] }
 cargo-semver-checks = { workspace = true, optional = true }
 cargo_metadata = { workspace = true, optional = true }
@@ -79,6 +83,7 @@ serde_yaml = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["rt", "sync", "time"] }
 toml = { workspace = true }
 toml_edit = { workspace = true, optional = true, features = [
     "display",
@@ -146,11 +151,14 @@ git-diff = ["dep:git2"]
 test-utils = ["switchy_fs/simulator-real-fs"]
 tools-tui = [
     "_tools",
+    "dep:bmux_keyboard",
     "dep:bmux_tui",
     "dep:bmux_tui_components",
+    "dep:bmux_tui_runtime",
     "dep:crossterm",
     "dep:ctrlc",
     "dep:ratatui",
+    "dep:tokio",
 ]
 transforms-system = ["_transforms", "dep:mlua"]
 transforms-vendored = ["_transforms", "mlua/vendored"]

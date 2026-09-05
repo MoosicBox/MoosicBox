@@ -576,8 +576,10 @@ aws-sdk-apigatewaymanagement = "1.106.0"
 aws-sdk-ssm = "1.118.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.1", default-features = false }
+bmux_keyboard = { git = "https://github.com/BSteffaniak/bmux", branch = "master", default-features = false }
 bmux_tui = { git = "https://github.com/BSteffaniak/bmux", branch = "master", default-features = false }
 bmux_tui_components = { git = "https://github.com/BSteffaniak/bmux", branch = "master", default-features = false }
+bmux_tui_runtime = { git = "https://github.com/BSteffaniak/bmux", branch = "master", default-features = false }
 btparse = "0.2.0"
 bumpalo = "3.20.3"
 bytes = "1.12.1"

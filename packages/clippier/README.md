@@ -34,6 +34,13 @@ languages. Lint capabilities are selected separately. Section headers show langu
 capability, and candidate file counts; focused details show evidence and sample
 paths. Counts are inventory candidates; native tool exclusions still apply. Existing explicit tool choices are preserved.
 Piped input and builds without `tools-tui` retain line-oriented prompts.
+Interactive input is processed in order by `bmux_tui_runtime`; redraw requests are
+coalesced at its default 60 Hz cadence. Ignored keys and unchanged navigation do
+not request frames. Set `CLIPPIER_INIT_PROFILE=1` to print render/output totals,
+maximum first-update-to-presentation time, and scheduler counters after accepting
+the checklist. These timings exclude terminal-emulator display latency; output
+includes diff encoding, writing, and flushing. Changed-cell counters are not
+reported by the inline presenter and remain zero.
 
 Answer the tool-selection and installation-requirement prompts, review the TOML
 preview, and confirm creation or additive updates to `clippier.toml`.

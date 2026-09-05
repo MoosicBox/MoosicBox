@@ -8,6 +8,10 @@ mod recommendations;
 #[cfg(test)]
 #[path = "init/recommendations_tests.rs"]
 mod recommendations_tests;
+#[cfg(feature = "tools-tui")]
+mod runtime;
+#[cfg(all(test, feature = "tools-tui"))]
+mod runtime_tests;
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -41,12 +45,22 @@ pub fn initialize_terminal(root: &Path) -> std::io::Result<()> {
     let interactive = cfg!(feature = "tools-tui")
         && std::io::stdin().is_terminal()
         && std::io::stdout().is_terminal();
-    initialize_with_ui(
-        root,
-        &mut std::io::stdin().lock(),
-        &mut std::io::stdout().lock(),
-        interactive,
-    )
+    // The CLI already runs in an async runtime. Keep the synchronous wizard and
+    // its terminal locks on a dedicated thread; its input scheduler owns a local
+    // runtime rather than nesting block_on inside the CLI executor.
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                initialize_with_ui(
+                    root,
+                    &mut std::io::stdin().lock(),
+                    &mut std::io::stdout().lock(),
+                    interactive,
+                )
+            })
+            .join()
+            .map_err(|_| std::io::Error::other("setup thread panicked"))?
+    })
 }
 
 #[allow(clippy::too_many_lines)]
@@ -108,7 +122,12 @@ fn initialize_with_ui(
         let mut groups = recommendations::groups(&mut inventory, &config);
         #[cfg(not(feature = "tools-tui"))]
         for group in &groups {
-            writeln!(output, "{}", group.title)?;
+            writeln!(
+                output,
+                "{} · {} candidate files",
+                group.title,
+                group.files.len()
+            )?;
             for choice in &group.choices {
                 writeln!(output, "{}: {}", choice.name, choice.reason)?;
             }
