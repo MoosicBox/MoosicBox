@@ -1,16 +1,23 @@
-//! One inline, sectioned checklist. Only the active prompt rows are repainted.
+//! Inline presentation of a measured BMUX component tree.
 
 use std::cell::Cell;
 use std::io::{self, Write};
 
 use bmux_tui::{
     buffer::Buffer,
-    component::{Component, Constraints, LayoutCx},
+    component::{Component, Constraints, LayoutCx, LayoutId, LogicalSize},
+    composition::Column,
     frame::Frame,
     geometry::{Rect, Size},
     paint::PaintCx,
 };
-use bmux_tui_components::checkbox::{CheckboxComponent, CheckboxState};
+use bmux_tui_components::{
+    checkbox::{CheckboxComponent, CheckboxState},
+    key_hint_bar::{KeyHint, KeyHintBarComponent},
+    labeled_details::{DetailItem, LabeledDetailsComponent},
+    pane::{Pane, PaneComponent, PaneState},
+    scroll_view::{ScrollViewComponent, ScrollViewState},
+};
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -28,110 +35,193 @@ impl Drop for RawMode {
     }
 }
 
-#[derive(Clone, Copy)]
-enum Row {
-    Spacer,
-    Section(usize),
-    Choice(usize, usize),
+pub(super) fn stops(groups: &[Group]) -> Vec<(usize, usize)> {
+    groups
+        .iter()
+        .enumerate()
+        .flat_map(|(group, section)| (0..section.choices.len()).map(move |choice| (group, choice)))
+        .collect()
 }
 
-fn checklist_rows(groups: &[Group]) -> (Vec<Row>, Vec<usize>) {
-    let mut rows = Vec::new();
-    let mut stops = Vec::new();
-    for (group, section) in groups.iter().enumerate() {
-        if section.choices.is_empty() {
+#[allow(clippy::too_many_lines)]
+pub(super) fn render(
+    groups: &[Group],
+    focus: (usize, usize),
+    width: u16,
+    height: u16,
+    scroll: &mut ScrollViewState,
+) -> Buffer {
+    let states = groups
+        .iter()
+        .enumerate()
+        .map(|(g, group)| {
+            group
+                .choices
+                .iter()
+                .enumerate()
+                .map(|(c, choice)| {
+                    let mut state = CheckboxState::new(choice.selected);
+                    state.set_focused((g, c) == focus);
+                    Cell::new(state)
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let panes = groups
+        .iter()
+        .map(|_| Cell::new(PaneState::new(Rect::new(0, 0, 0, 0))))
+        .collect::<Vec<_>>();
+    let mut sections = Column::new().id("sections").gap(1);
+    for (g, group) in groups.iter().enumerate() {
+        if group.choices.is_empty() {
             continue;
         }
-        if !rows.is_empty() {
-            rows.push(Row::Spacer);
+        let mut choices = Column::new().id(format!("choices-{g}"));
+        for (c, choice) in group.choices.iter().enumerate() {
+            choices = choices.child(CheckboxComponent::new(
+                format!("choice-{g}-{c}"),
+                &choice.name,
+                &states[g][c],
+            ));
         }
-        rows.push(Row::Section(group));
-        for choice in 0..section.choices.len() {
-            stops.push(rows.len());
-            rows.push(Row::Choice(group, choice));
-        }
+        let title = format!(
+            " {} · {} · {} files ",
+            group.title,
+            if group.formatting {
+                "Formatter"
+            } else {
+                "Linter"
+            },
+            group.files.len()
+        );
+        sections = sections.child(PaneComponent::new(
+            format!("section-{g}"),
+            Pane::new().border(true).title(title),
+            &panes[g],
+            choices,
+        ));
     }
-    (rows, stops)
-}
-
-fn viewport_start(start: usize, focus: usize, height: usize, count: usize) -> usize {
-    let start = if focus < start {
-        focus.saturating_sub(1)
-    } else if focus >= start + height {
-        focus + 1 - height
-    } else {
-        start
-    };
-    start.min(count.saturating_sub(height))
-}
-
-fn paint_row(
-    row: Row,
-    groups: &[Group],
-    focused: bool,
-    width: u16,
-    output: &mut impl Write,
-) -> io::Result<()> {
-    let (label, checked) = match row {
-        Row::Spacer => (String::new(), None),
-        Row::Section(group) => (
-            format!(
-                "── {} · {} · {} files ──",
-                groups[group].title,
-                if groups[group].formatting {
-                    "Formatter"
-                } else {
-                    "Linter"
-                },
-                groups[group].files.len()
-            ),
-            None,
+    let section = &groups[focus.0];
+    let choice = &section.choices[focus.1];
+    let details = vec![
+        DetailItem::new(
+            "Capability",
+            if section.formatting {
+                "Formatter"
+            } else {
+                "Linter"
+            },
         ),
-        Row::Choice(group, index) => {
-            let choice = &groups[group].choices[index];
-            (
-                format!("{}{}", if focused { "› " } else { "  " }, choice.name),
-                Some(choice.selected),
-            )
+        DetailItem::new("Evidence", &choice.reason),
+        DetailItem::new(
+            "Coverage",
+            format!(
+                "{} candidate files · {}",
+                section.files.len(),
+                section.extensions.join(", ")
+            ),
+        ),
+        DetailItem::new(
+            "Examples",
+            section
+                .files
+                .iter()
+                .take(3)
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+    ];
+    let detail_state = Cell::new(PaneState::new(Rect::new(0, 0, 0, 0)));
+    let detail = PaneComponent::new(
+        "detail-pane",
+        Pane::new().border(true).title(format!(" {} ", choice.name)),
+        &detail_state,
+        LabeledDetailsComponent::new("details", &details),
+    );
+    let hints = [
+        KeyHint::new("↑/↓ Tab", "Move"),
+        KeyHint::new("Space", "Toggle"),
+        KeyHint::new("Enter", "Accept"),
+        KeyHint::new("Esc", "Cancel"),
+    ];
+    let footer = KeyHintBarComponent::new("keys", &hints);
+    let mut cx = LayoutCx::new();
+    let detail_height = detail
+        .layout(Constraints::for_width(width), &mut cx)
+        .size
+        .height
+        .min(8);
+    let footer_height = footer
+        .layout(Constraints::for_width(width), &mut cx)
+        .size
+        .height;
+    let viewport_height = usize::from(height)
+        .saturating_sub(detail_height + footer_height + 2)
+        .max(1);
+    let content = sections.layout(Constraints::for_width(width), &mut cx);
+    if let Some(rect) =
+        content.find_logical_rect(&LayoutId::new(format!("choice-{}-{}", focus.0, focus.1)))
+    {
+        let offset = scroll.vertical_offset();
+        if rect.y < offset {
+            scroll.set_vertical_offset(rect.y.saturating_sub(1));
+        } else if rect.y >= offset + viewport_height {
+            scroll.set_vertical_offset(rect.y + 1 - viewport_height);
         }
-    };
-    let mut buffer = Buffer::empty(Rect::new(0, 0, width, 1));
-    let mut frame = Frame::new(&mut buffer);
-    let mut paint = PaintCx::new(&mut frame);
-    if let Some(checked) = checked {
-        let state = Cell::new(CheckboxState::new(checked));
-        let component = CheckboxComponent::new("init-choice", &label, &state);
-        let layout = component.layout(
-            Constraints::tight(Size::new(width, 1)),
-            &mut LayoutCx::new(),
-        );
-        component.paint(&layout, &mut paint);
-    } else {
-        paint.write_line(
-            bmux_tui::paint::LocalRect::new(0, 0, width, 1),
-            &bmux_tui::text::Line::from(label),
-        );
     }
-    execute!(
-        output,
-        cursor::MoveToColumn(0),
-        Clear(ClearType::CurrentLine)
-    )?;
-    write!(
-        output,
-        "{}",
-        if checked.is_none() {
-            "\x1b[1;36m"
-        } else if focused {
-            "\x1b[36m"
-        } else {
-            "\x1b[0m"
+    let viewport = ScrollViewComponent::new(
+        "checklist",
+        LogicalSize::new(width, viewport_height),
+        *scroll,
+        sections,
+    );
+    let detail_view = ScrollViewComponent::new(
+        "detail-view",
+        LogicalSize::new(width, detail_height),
+        ScrollViewState::new(),
+        detail,
+    );
+    let root = Column::new()
+        .id("init")
+        .gap(1)
+        .child(viewport)
+        .child(detail_view)
+        .child(footer);
+    let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
+    let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
+    root.paint(&layout, &mut PaintCx::new(&mut Frame::new(&mut buffer)));
+    buffer
+}
+
+// Inline transport only: components own geometry, clipping, and styling.
+fn present(buffer: &Buffer, output: &mut impl Write) -> io::Result<()> {
+    for row in buffer.cells().chunks(usize::from(buffer.area().width)) {
+        execute!(
+            output,
+            cursor::MoveToColumn(0),
+            Clear(ClearType::CurrentLine)
+        )?;
+        for cell in row {
+            if cell.is_wide_continuation() {
+                continue;
+            }
+            write!(output, "\x1b[0m")?;
+            for (modifier, code) in [
+                (bmux_tui::style::Modifier::REVERSED, 7),
+                (bmux_tui::style::Modifier::BOLD, 1),
+                (bmux_tui::style::Modifier::DIM, 2),
+                (bmux_tui::style::Modifier::UNDERLINE, 4),
+            ] {
+                if cell.style.modifiers.contains(modifier) {
+                    write!(output, "\x1b[{code}m")?;
+                }
+            }
+            write!(output, "{}", cell.symbol)?;
         }
-    )?;
-    for cell in buffer.cells() {
-        write!(output, "{}", cell.symbol)?;
+        write!(output, "\x1b[0m\r\n")?;
     }
-    write!(output, "\x1b[0m\r\n")
+    output.flush()
 }
 
 fn clear_rows(output: &mut impl Write, painted: u16) -> io::Result<()> {
@@ -146,73 +236,29 @@ fn clear_rows(output: &mut impl Write, painted: u16) -> io::Result<()> {
     execute!(output, cursor::MoveUp(painted))
 }
 
-#[allow(clippy::too_many_lines)]
 pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Result<()> {
-    let (rows, stops) = checklist_rows(groups);
+    let stops = stops(groups);
     if stops.is_empty() {
         return Ok(());
     }
-    writeln!(
-        output,
-        "\n↑/↓ or Tab navigate · Space toggle · Enter accept all · Esc cancel"
-    )?;
     output.flush()?;
     terminal::enable_raw_mode()?;
     let guard = RawMode;
-    let mut focus: usize = 0;
-    let mut start = 0;
+    let mut focus = 0usize;
     let mut painted = 0;
+    let mut scroll = ScrollViewState::new();
     loop {
         clear_rows(output, painted)?;
-        let (columns, height) = terminal::size()?;
-        let visible = rows
-            .len()
-            .min(usize::from(height.saturating_sub(10).max(1)));
-        start = viewport_start(start, stops[focus], visible, rows.len());
-        for (index, row) in rows.iter().enumerate().skip(start).take(visible) {
-            paint_row(
-                *row,
-                groups,
-                index == stops[focus],
-                columns.saturating_sub(1).max(1),
-                output,
-            )?;
-        }
-        if let Row::Choice(group, index) = rows[stops[focus]] {
-            let section = &groups[group];
-            let choice = &section.choices[index];
-            let examples = section
-                .files
-                .iter()
-                .take(3)
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            for text in [
-                String::new(),
-                "── Focused tool ──".to_owned(),
-                format!(
-                    "{} · {} · {} files",
-                    choice.name,
-                    if section.formatting {
-                        "Formatter"
-                    } else {
-                        "Linter"
-                    },
-                    section.files.len()
-                ),
-                format!("Detected from: {}", choice.reason),
-                format!("Examples: {examples}"),
-            ] {
-                let clipped = text
-                    .chars()
-                    .take(usize::from(columns.saturating_sub(1)))
-                    .collect::<String>();
-                write!(output, "\x1b[0m{clipped}\r\n")?;
-            }
-        }
-        painted = u16::try_from(visible + 5).unwrap_or(u16::MAX);
-        output.flush()?;
+        let (width, height) = terminal::size()?;
+        let buffer = render(
+            groups,
+            stops[focus],
+            width.saturating_sub(1).max(1),
+            height.saturating_sub(2).max(1),
+            &mut scroll,
+        );
+        present(&buffer, output)?;
+        painted = buffer.area().height;
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Release {
                 continue;
@@ -235,10 +281,8 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
                 KeyCode::Home => focus = 0,
                 KeyCode::End => focus = stops.len() - 1,
                 KeyCode::Char(' ') => {
-                    if let Row::Choice(group, index) = rows[stops[focus]] {
-                        groups[group].choices[index].selected =
-                            !groups[group].choices[index].selected;
-                    }
+                    let (g, c) = stops[focus];
+                    groups[g].choices[c].selected = !groups[g].choices[c].selected;
                 }
                 KeyCode::Enter => break,
                 _ => {}
@@ -248,53 +292,24 @@ pub(super) fn select(groups: &mut [Group], output: &mut impl Write) -> io::Resul
     clear_rows(output, painted)?;
     drop(guard);
     for group in groups {
-        writeln!(output, "\n\x1b[1;36m{}\x1b[0m", group.title)?;
+        writeln!(
+            output,
+            "\n{} · {}",
+            group.title,
+            if group.formatting {
+                "Formatter"
+            } else {
+                "Linter"
+            }
+        )?;
         for choice in &group.choices {
             writeln!(
                 output,
-                "  [{}] {} — {}",
+                "  [{}] {}",
                 if choice.selected { "x" } else { " " },
-                choice.name,
-                choice.reason
+                choice.name
             )?;
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::recommendations::Choice;
-    use super::*;
-
-    #[test]
-    fn navigation_crosses_sections_and_skips_headers() {
-        let groups = (0..2)
-            .map(|index| Group {
-                title: index.to_string(),
-                extensions: Vec::new(),
-                files: Vec::new(),
-                formatting: true,
-                choices: vec![Choice {
-                    name: index.to_string(),
-                    reason: String::new(),
-                    selected: false,
-                }],
-            })
-            .collect::<Vec<_>>();
-        let (rows, stops) = checklist_rows(&groups);
-        assert_eq!(stops, [1, 4]);
-        assert!(matches!(rows[2], Row::Spacer));
-        assert!(matches!(rows[3], Row::Section(1)));
-        assert!(matches!(rows[stops[0]], Row::Choice(0, 0)));
-        assert!(matches!(rows[stops[1]], Row::Choice(1, 0)));
-    }
-
-    #[test]
-    fn viewport_tracks_focus_in_both_directions() {
-        assert_eq!(viewport_start(0, 3, 8, 6), 0);
-        assert_eq!(viewport_start(0, 8, 4, 12), 5);
-        assert_eq!(viewport_start(5, 2, 4, 12), 1);
-        assert_eq!(viewport_start(8, 11, 8, 12), 4);
-    }
 }

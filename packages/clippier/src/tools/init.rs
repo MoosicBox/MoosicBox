@@ -2,6 +2,8 @@
 
 #[cfg(feature = "tools-tui")]
 mod inline;
+#[cfg(all(test, feature = "tools-tui"))]
+mod inline_tests;
 mod recommendations;
 #[cfg(test)]
 #[path = "init/recommendations_tests.rs"]
