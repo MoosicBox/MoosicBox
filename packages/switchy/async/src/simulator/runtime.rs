@@ -70,32 +70,33 @@ impl Future for LocalFutureProxy {
             return Poll::Ready(());
         }
 
-        LOCAL_FUTURES.with(|futures| {
-            let mut futures = futures.borrow_mut();
-            if let Some(future) = futures.get_mut(&self.id) {
-                match future.as_mut().poll(cx) {
-                    Poll::Ready(()) => {
-                        futures.remove(&self.id);
-                        self.completed = true;
-                        Poll::Ready(())
-                    }
-                    Poll::Pending => Poll::Pending,
-                }
-            } else {
-                // Future was already completed and removed
+        // User polling and destruction can spawn local work. Never hold the registry
+        // borrow across either operation.
+        let future = LOCAL_FUTURES.with(|futures| futures.borrow_mut().remove(&self.id));
+        let Some(mut future) = future else {
+            self.completed = true;
+            return Poll::Ready(());
+        };
+        match future.as_mut().poll(cx) {
+            Poll::Ready(()) => {
                 self.completed = true;
                 Poll::Ready(())
             }
-        })
+            Poll::Pending => {
+                LOCAL_FUTURES.with(|futures| {
+                    futures.borrow_mut().insert(self.id, future);
+                });
+                Poll::Pending
+            }
+        }
     }
 }
 
 impl Drop for LocalFutureProxy {
     fn drop(&mut self) {
         if !self.completed {
-            LOCAL_FUTURES.with(|futures| {
-                futures.borrow_mut().remove(&self.id);
-            });
+            let future = LOCAL_FUTURES.with(|futures| futures.borrow_mut().remove(&self.id));
+            drop(future);
         }
     }
 }
@@ -467,8 +468,7 @@ pub struct JoinHandle<T> {
     #[allow(clippy::option_option)]
     result: Option<Result<T, task::JoinError>>,
     finished: bool,
-    #[allow(unused)]
-    aborted: bool,
+    abort_handle: Option<futures::future::AbortHandle>,
 }
 
 impl<T: Send + Unpin> JoinHandle<T> {
@@ -495,15 +495,15 @@ impl<T: Send + Unpin> JoinHandle<T> {
         }
     }
 
-    /// Aborts the task associated with the handle.
+    /// Requests cancellation of an asynchronous task at its next poll.
     ///
-    /// This is a no-op in the simulator runtime to maintain API compatibility with tokio.
-    /// The simulator cannot abort running tasks.
+    /// Cancellation drops the task future and makes joining return an error. A completed
+    /// task retains its result. A queued blocking closure can be cancelled before its
+    /// first poll, but once it starts executing it cannot be interrupted.
     pub fn abort(&self) {
-        // FIXME: We should implement this in the simulator
-        // Note: In the simulator, we can't actually abort running tasks
-        // This is a no-op to maintain API compatibility with tokio
-        log::debug!("JoinHandle::abort() called (no-op in simulator)");
+        if let Some(handle) = &self.abort_handle {
+            handle.abort();
+        }
     }
 }
 
@@ -540,8 +540,15 @@ impl Spawner {
     ) -> JoinHandle<T> {
         let (tx, rx) = futures::channel::oneshot::channel();
 
+        let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
         let wrapped = async move {
-            let _ = tx.send(future.await);
+            let _ = futures::future::Abortable::new(
+                async move {
+                    let _ = tx.send(future.await);
+                },
+                registration,
+            )
+            .await;
         };
 
         self.inner_spawn(&Task::new(runtime, false, wrapped));
@@ -550,7 +557,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
-            aborted: false,
+            abort_handle: Some(abort_handle),
         }
     }
 
@@ -562,8 +569,15 @@ impl Spawner {
         log::trace!("spawn_blocking");
         let (tx, rx) = futures::channel::oneshot::channel();
 
+        let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
         let wrapped = async move {
-            let _ = tx.send(func());
+            let _ = futures::future::Abortable::new(
+                async move {
+                    let _ = tx.send(func());
+                },
+                registration,
+            )
+            .await;
         };
 
         self.inner_spawn_blocking(&Task::new(runtime, true, wrapped));
@@ -572,7 +586,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
-            aborted: false,
+            abort_handle: Some(abort_handle),
         }
     }
 
@@ -585,7 +599,11 @@ impl Spawner {
         let (tx, rx) = futures::channel::oneshot::channel();
 
         // Create a Send proxy that references the non-Send future in thread-local storage
-        let wrapped = LocalFutureProxy::new(future, tx);
+        let proxy = LocalFutureProxy::new(future, tx);
+        let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
+        let wrapped = async move {
+            let _ = futures::future::Abortable::new(proxy, registration).await;
+        };
 
         self.inner_spawn(&Task::new(runtime, false, wrapped));
 
@@ -593,7 +611,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
-            aborted: false,
+            abort_handle: Some(abort_handle),
         }
     }
 
@@ -785,7 +803,7 @@ impl Task {
 
 impl Drop for Task {
     fn drop(&mut self) {
-        RUNTIME.with(|runtime| runtime.tasks.fetch_sub(1, Ordering::SeqCst));
+        self.runtime.tasks.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -1045,21 +1063,71 @@ mod test {
     }
 
     #[test_log::test]
-    fn join_handle_abort_is_noop() {
+    fn join_handle_abort_before_first_poll_cancels_task() {
         let runtime = build_runtime(&Builder::new()).unwrap();
-
-        let join_handle = runtime.spawn(async {
-            // This should complete despite abort
+        let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let task_ran = ran.clone();
+        let join_handle = runtime.spawn(async move {
+            task_ran.store(true, std::sync::atomic::Ordering::SeqCst);
             42
         });
-
-        // abort() is a no-op in simulator
         join_handle.abort();
+        let result = runtime.block_on(join_handle);
+        assert!(result.is_err());
+        assert!(!ran.load(std::sync::atomic::Ordering::SeqCst));
+        runtime.wait().unwrap();
+    }
 
-        // Task should still complete
-        let result = runtime.block_on(async { join_handle.await.unwrap() });
-        assert_eq!(result, 42);
+    #[test_log::test]
+    fn task_drop_without_runtime_scope_releases_owner_count() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let task = super::Task::new(runtime.clone(), false, async {});
+        assert_eq!(runtime.tasks(), 1);
+        drop(task);
+        assert_eq!(runtime.tasks(), 0);
+    }
 
+    #[test_log::test]
+    fn task_drop_in_foreign_scope_releases_only_owner_count() {
+        let owner = build_runtime(&Builder::new()).unwrap();
+        let other = build_runtime(&Builder::new()).unwrap();
+        let task = super::Task::new(owner.clone(), false, async {});
+        super::RUNTIME.set(&other, || drop(task));
+        assert_eq!(owner.tasks(), 0);
+        assert_eq!(other.tasks(), 0);
+    }
+
+    #[test_log::test]
+    fn abort_queued_blocking_task_drops_captures_without_running() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let owned = Arc::new(());
+        let weak = Arc::downgrade(&owned);
+        let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let task_ran = ran.clone();
+        let handle = runtime.spawn_blocking(move || {
+            task_ran.store(true, std::sync::atomic::Ordering::SeqCst);
+            drop(owned);
+        });
+        handle.abort();
+        assert!(runtime.block_on(handle).is_err());
+        assert!(!ran.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(weak.upgrade().is_none());
+        runtime.wait().unwrap();
+    }
+
+    #[test_log::test]
+    fn abort_started_blocking_task_does_not_discard_result() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let slot = Arc::new(Mutex::new(None::<super::JoinHandle<u32>>));
+        let task_slot = slot.clone();
+        let handle = runtime.spawn_blocking(move || {
+            task_slot.lock().unwrap().as_ref().unwrap().abort();
+            42
+        });
+        *slot.lock().unwrap() = Some(handle);
+        runtime.tick();
+        let handle = slot.lock().unwrap().take().unwrap();
+        assert_eq!(runtime.block_on(handle).unwrap(), 42);
         runtime.wait().unwrap();
     }
 
