@@ -1342,7 +1342,12 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn run_remark_strict_check(&self, tool: &Tool, start_time: Instant) -> ToolResult {
+    fn run_remark_strict_check(
+        &self,
+        tool: &Tool,
+        start_time: Instant,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ToolResult {
         let args = &tool.format_args;
         if args.is_empty() {
             return ToolResult::success(
@@ -1409,7 +1414,7 @@ impl<'a> ToolRunner<'a> {
         command.current_dir(&working_dir);
         Self::apply_color_env(&mut command, self.effective_color_mode());
 
-        let output = match Self::capture_process(&mut command, &|| false) {
+        let output = match Self::capture_process(&mut command, cancelled) {
             Ok(output) => output,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&output_dir);
@@ -1758,6 +1763,7 @@ impl<'a> ToolRunner<'a> {
         files: &[String],
         check_mode: bool,
         start_time: Instant,
+        cancelled: &dyn Fn() -> bool,
     ) -> ToolResult {
         let working_dir = self.working_dir_path();
         let metadata = cargo_metadata::MetadataCommand::new()
@@ -1795,6 +1801,10 @@ impl<'a> ToolRunner<'a> {
         let mut errors = Vec::new();
 
         for relative in files {
+            if cancelled() {
+                errors.push("Execution cancelled".to_owned());
+                break;
+            }
             let path = working_dir.join(relative);
             let source = match std::fs::read(&path) {
                 Ok(source) => source,
@@ -1828,26 +1838,24 @@ impl<'a> ToolRunner<'a> {
             ) {
                 command.arg("--config-path").arg(config_path);
             }
-            command
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            let mut child = match command.spawn() {
-                Ok(child) => child,
+            // A seekable input avoids blocking on stdin while the formatter emits output.
+            let input = (|| -> std::io::Result<std::fs::File> {
+                let mut input = tempfile::tempfile()?;
+                input.write_all(&source)?;
+                std::io::Seek::rewind(&mut input)?;
+                Ok(input)
+            })();
+            let input = match input {
+                Ok(input) => input,
                 Err(error) => {
-                    errors.push(format!("{relative}: failed to spawn rustfmt: {error}"));
+                    errors.push(format!(
+                        "{relative}: failed to prepare rustfmt input: {error}"
+                    ));
                     continue;
                 }
             };
-            if let Some(mut stdin) = child.stdin.take()
-                && let Err(error) = stdin.write_all(&source)
-            {
-                errors.push(format!(
-                    "{relative}: failed to send source to rustfmt: {error}"
-                ));
-                continue;
-            }
-            let output = match child.wait_with_output() {
+            command.stdin(Stdio::from(input));
+            let output = match Self::capture_process(&mut command, cancelled) {
                 Ok(output) => output,
                 Err(error) => {
                     errors.push(format!("{relative}: failed to wait for rustfmt: {error}"));
@@ -1926,11 +1934,13 @@ impl<'a> ToolRunner<'a> {
         #[cfg(feature = "format")]
         if let Some(files) = self.selected_rust_files(tool) {
             started();
-            return Some(self.run_selected_rustfmt(tool, &files, check_mode, start_time));
+            return Some(
+                self.run_selected_rustfmt(tool, &files, check_mode, start_time, cancelled),
+            );
         }
         if check_mode && entry.adapter() == ToolAdapter::Remark {
             started();
-            return Some(self.run_remark_strict_check(tool, start_time));
+            return Some(self.run_remark_strict_check(tool, start_time, cancelled));
         }
         None
     }
@@ -3317,7 +3327,7 @@ mod tests {
             ],
         );
 
-        let result = runner.run_remark_strict_check(&tool, Instant::now());
+        let result = runner.run_remark_strict_check(&tool, Instant::now(), &|| false);
         assert!(!result.success);
         assert!(result.stderr.contains("requiring formatting"));
         assert!(result.stderr.contains("README.md"));
@@ -3357,7 +3367,7 @@ mod tests {
             ],
         );
 
-        let result = runner.run_remark_strict_check(&tool, Instant::now());
+        let result = runner.run_remark_strict_check(&tool, Instant::now(), &|| false);
         assert!(result.success);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean up temp dir");
