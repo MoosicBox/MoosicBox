@@ -56,6 +56,14 @@ HEEx are not advertised. Actionlint receives only files directly under
 `.github/workflows`, while those files remain eligible for YAML formatters.
 Its scope key is `github-workflow`; unrelated YAML is never passed to it.
 
+Protocol Buffers formatting uses Buf's local source plus repeated `--path`
+filters for planned `.proto` files; check mode uses `--diff --exit-code` and
+format mode uses `--write`. Buf lint/module analysis is not integrated yet.
+OCamlFormat supports `.ml`/`.mli` with native `.ocamlformat` configuration
+(required by normal upstream behavior). Standard Ruby is available as the
+`standardrb` lint-only integration, respecting `.standard.yml`; automatic
+RuboCop corrections are intentionally not treated as formatting.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

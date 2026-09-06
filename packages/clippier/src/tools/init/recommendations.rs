@@ -265,6 +265,8 @@ fn language(extension: &str) -> &str {
         "xml" | "csproj" | "props" | "targets" => "XML / MSBuild",
         "ex" | "exs" => "Elixir",
         "github-workflow" => "GitHub Actions",
+        "proto" => "Protocol Buffers",
+        "ml" | "mli" => "OCaml",
         "java" => "Java",
         "php" => "PHP",
         "rst" | "adoc" | "txt" => "Prose",

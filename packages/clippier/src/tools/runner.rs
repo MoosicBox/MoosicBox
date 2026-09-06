@@ -556,6 +556,13 @@ impl<'a> ToolRunner<'a> {
             return;
         }
 
+        if tool_catalog_entry(&tool.name).is_some_and(|entry| entry.adapter() == ToolAdapter::Buf) {
+            for file in files {
+                args.push("--path".to_owned());
+                args.push(file.clone());
+            }
+            return;
+        }
         args.retain(|arg| arg != "." && arg != "-recursive");
         args.extend(files.iter().cloned());
     }
@@ -2770,6 +2777,25 @@ mod tests {
                 assert_eq!(args, expected, "{name} check={check}");
                 assert!(warnings.is_empty());
             }
+        }
+    }
+
+    #[test]
+    fn buf_adapter_uses_local_source_and_explicit_path_filters() {
+        let tool = tool_catalog_entry("buf").unwrap().tool();
+        let files = vec![
+            "api/a.proto".to_owned(),
+            "api/path with spaces.proto".to_owned(),
+        ];
+        for mut args in [tool.check_args.clone(), tool.format_args.clone()] {
+            let prefix = args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+            let mut expected = prefix;
+            for file in &files {
+                expected.extend(["--path".to_owned(), file.clone()]);
+            }
+            assert_eq!(args, expected);
+            assert_eq!(args.iter().filter(|arg| *arg == ".").count(), 1);
         }
     }
 

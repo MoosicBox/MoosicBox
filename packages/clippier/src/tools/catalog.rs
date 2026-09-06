@@ -83,6 +83,8 @@ pub enum ToolAdapter {
     Biome,
     /// mdformat extension probing.
     Mdformat,
+    /// Buf uses repeated path filters within a local source, not positional file lists.
+    Buf,
     /// Strict remark check behavior.
     Remark,
 }
@@ -181,6 +183,7 @@ impl ToolCatalogEntry {
             "prettier" => ToolAdapter::Prettier,
             "biome" => ToolAdapter::Biome,
             "mdformat" => ToolAdapter::Mdformat,
+            "buf" => ToolAdapter::Buf,
             "remark" => ToolAdapter::Remark,
             _ => ToolAdapter::Standard,
         }
@@ -1387,6 +1390,51 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         NONE,
         &["github-workflow"],
+        100
+    ),
+    entry!(
+        "buf",
+        "Buf Formatter",
+        "buf",
+        Binary,
+        FORMAT,
+        &["format", "--diff", "--exit-code", "."],
+        &["format", "--write", "."],
+        NONE,
+        &["buf.yaml"],
+        NONE,
+        &["proto"],
+        NONE,
+        10
+    ),
+    entry!(
+        "ocamlformat",
+        "OCamlFormat",
+        "ocamlformat",
+        Binary,
+        FORMAT,
+        &["--check", "."],
+        &["--inplace", "."],
+        NONE,
+        &[".ocamlformat"],
+        NONE,
+        &["ml", "mli"],
+        NONE,
+        10
+    ),
+    entry!(
+        "standardrb",
+        "Standard Ruby",
+        "standardrb",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &[".standard.yml"],
+        NONE,
+        NONE,
+        &["rb", "rake", "gemspec"],
         100
     ),
     entry!(
