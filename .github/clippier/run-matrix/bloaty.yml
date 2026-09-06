@@ -1,0 +1,7 @@
+# Clippier owns package selection, dependency setup and execution. Each package
+# runs once; Bloaty owns baseline/feature scenarios and canonical reports.
+analysis:
+    commands: |
+        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo run --locked --package bloaty -- --package {{matrix.package.name}} --profile release --baseline {{vars.baseline}} {{vars.scenarios}} --output-format all --report-file report --github-summary --fail-on-incomplete
+    label: "Artifact size"
+    strategy: "combined"

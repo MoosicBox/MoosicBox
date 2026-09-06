@@ -155,6 +155,48 @@ beta = []
 }
 
 #[test]
+fn incomplete_analysis_publishes_summary_and_reports_before_failing() {
+    let workspace = workspace(&[
+        (
+            "Cargo.toml",
+            "[package]\nname=\"broken\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+        ),
+        (
+            "src/main.rs",
+            "compile_error!(\"intentional failure\"); fn main() {}",
+        ),
+    ]);
+    let summary = workspace.path().join("summary.md");
+    let output = cargo_bin_cmd!("bloaty")
+        .current_dir(workspace.path())
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .args([
+            "--package",
+            "broken",
+            "--output-format",
+            "all",
+            "--report-file",
+            "report",
+            "--github-summary",
+            "--fail-on-incomplete",
+            "--scenario",
+            "defaults=default",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(
+        summary.exists(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(fs::read_to_string(summary).unwrap().contains("FAILED"));
+    assert!(workspace.path().join("report.json").exists());
+    assert!(workspace.path().join("report.jsonl").exists());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("analysis incomplete"));
+}
+
+#[test]
 fn rejects_packages_without_supported_final_artifacts() {
     let workspace = workspace(&[
         (

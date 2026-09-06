@@ -4,7 +4,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::BTreeSet, fs};
+use std::{collections::BTreeSet, fs, io::Write as _};
 
 use anyhow::{Context, Result, bail};
 use bloaty::{
@@ -63,6 +63,14 @@ struct Args {
     /// Output format. Text prints to stdout; file formats require --report-file.
     #[arg(long, value_enum, default_value = "text")]
     output_format: OutputFormat,
+
+    /// Append a Markdown analysis summary to `GITHUB_STEP_SUMMARY`.
+    #[arg(long)]
+    github_summary: bool,
+
+    /// Exit unsuccessfully after writing reports if any scenario was not measured.
+    #[arg(long)]
+    fail_on_incomplete: bool,
 
     /// Base report path without an extension.
     #[arg(long)]
@@ -149,6 +157,22 @@ fn main() -> Result<()> {
             write_json(&format!("{base}.json"), &report)?;
             write_jsonl(&format!("{base}.jsonl"), &report)?;
         }
+    }
+    if args.github_summary {
+        let path = std::env::var("GITHUB_STEP_SUMMARY")
+            .context("--github-summary requires GITHUB_STEP_SUMMARY")?;
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?
+            .write_all(render::markdown(&report).as_bytes())?;
+    }
+    if args.fail_on_incomplete
+        && std::iter::once(&report.baseline)
+            .chain(&report.comparisons)
+            .any(|scenario| !matches!(scenario.outcome, bloaty::ScenarioStatus::Success { .. }))
+    {
+        bail!("analysis incomplete: one or more scenarios were not measured; see reports");
     }
     Ok(())
 }

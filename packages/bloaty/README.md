@@ -106,6 +106,28 @@ bloaty -p bloaty \
 The selected Rust target must already be installed and all required cross-compilation tools must
 be available.
 
+## CI integration
+
+The workflow uses the repository's Clippier action for matrix generation, package/dependency
+setup, streamed execution, and its aggregate execution report. Analysis commands live in
+`.github/clippier/run-matrix/bloaty.yml`; there is no separate Python adapter or JSON case format.
+
+Routine runs cover `aconverter` (FLAC, MP3, and their combination), the server (SQLite baseline
+with Qobuz/Tidal), and the tunnel server (Postgres baseline with base64/telemetry). Manual
+`extended` runs also measure shipping default features. Clippier selects default-feature setup
+prerequisites; Bloaty independently owns the explicitly configured measurement scenarios.
+Desktop/mobile packaging and library-only crate attribution are not covered by this matrix.
+
+Measurements use Ubuntu 24.04 and Rust 1.95.0. This reduces, but does not eliminate, variance:
+OS packages and runner images can change. Master artifacts are retained for 90 days and PRs
+search the latest 30 successful master runs for the matching artifact identity. Comparisons
+remain advisory; no empirically unsupported regression thresholds are enabled.
+
+`--github-summary` appends the canonical report as Markdown to `GITHUB_STEP_SUMMARY`.
+`--fail-on-incomplete` makes unavailable/failed scenarios fail the command **after** writing
+reports and the summary. CI uses both flags; the default local failure-reporting behavior is
+unchanged. Pre-analysis failures appear in Clippier's execution summary/logs.
+
 ## Reports
 
 Each scenario's result is printed to stderr as soon as its build and measurement finish,

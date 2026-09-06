@@ -25,6 +25,52 @@ pub fn text(report: &AnalysisReport) -> String {
     output
 }
 
+/// Renders a Markdown summary with explicit feature configurations and outcomes.
+#[must_use]
+pub fn markdown(report: &AnalysisReport) -> String {
+    fn escape(value: &str) -> String {
+        value
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('|', "&#124;")
+            .replace('`', "&#96;")
+            .replace(['\r', '\n'], " ")
+    }
+    let mut output = format!(
+        "## Bloaty: {} / {}\n\nProfile: **{}**. Deltas compare features within this commit, not historical changes.\n\n| Scenario | Defaults | Explicit features | Result |\n| --- | --- | --- | --- |\n",
+        escape(&report.package),
+        escape(&report.target_name),
+        escape(&report.profile)
+    );
+    for scenario in std::iter::once(&report.baseline).chain(&report.comparisons) {
+        writeln!(
+            output,
+            "| {} | {} | {} | {} |",
+            escape(&scenario.scenario.name),
+            scenario.scenario.config.default_features,
+            escape(
+                &scenario
+                    .scenario
+                    .config
+                    .features
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            escape(scenario_text("", scenario).trim())
+        )
+        .expect("writing to String cannot fail");
+    }
+    writeln!(output, "\nPlatform: {}/{}. Rust: {}. Commit: {}.\n\nExact final artifact sizes, not runtime memory or dependency attribution. Full reports are retained as artifacts.\n",
+        escape(&report.environment.host_os), escape(&report.environment.host_arch),
+        escape(report.environment.rustc.lines().next().unwrap_or("unknown")),
+        escape(report.environment.git_revision.as_deref().unwrap_or("unknown"))
+    ).expect("writing to String cannot fail");
+    output
+}
+
 /// Renders one completed scenario for live progress output.
 #[must_use]
 pub fn scenario_text(label: &str, report: &ScenarioReport) -> String {
@@ -176,6 +222,18 @@ mod tests {
         assert!(output.contains("baseline"));
         assert!(output.contains("100 B"));
         assert!(output.contains("FAILED: build failed"));
+    }
+
+    #[test]
+    fn markdown_includes_features_failures_and_escaped_names() {
+        let mut report = report();
+        report.package = "<app>|name".to_owned();
+        let output = markdown(&report);
+        assert!(output.contains("&lt;app&gt;&#124;name"));
+        assert!(output.contains("| Defaults | Explicit features |"));
+        assert!(output.contains("FAILED: build failed"));
+        assert!(output.contains("100 B"));
+        assert!(output.contains("not historical changes"));
     }
 
     #[test]
