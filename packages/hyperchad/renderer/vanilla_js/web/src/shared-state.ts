@@ -398,12 +398,34 @@ async function handleSharedStateCommandClick(event: Event): Promise<void> {
     });
 }
 
-async function reconcileChannelSubscriptions(): Promise<void> {
+let reconciliation: Promise<void> | null = null;
+let reconciliationRequested = false;
+
+function reconcileChannelSubscriptions(): Promise<void> {
+    reconciliationRequested = true;
+    if (!reconciliation) {
+        // Defer starting until the promise is installed: synchronous lifecycle callbacks must
+        // join this reconciliation rather than opening a second subscription request.
+        reconciliation = Promise.resolve().then(async () => {
+            try {
+                while (reconciliationRequested) {
+                    reconciliationRequested = false;
+                    await reconcileChannelSubscriptionsOnce();
+                }
+            } finally {
+                reconciliation = null;
+            }
+        });
+    }
+    return reconciliation;
+}
+
+async function reconcileChannelSubscriptionsOnce(): Promise<void> {
     if (!sharedStateConnected) {
         return;
     }
 
-    for (const channelId of desiredChannels) {
+    for (const channelId of [...desiredChannels]) {
         if (!subscribedChannels.has(channelId)) {
             if (await subscribeChannel(channelId)) {
                 subscribedChannels.add(channelId);

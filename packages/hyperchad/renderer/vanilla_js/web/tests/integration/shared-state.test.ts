@@ -24,6 +24,49 @@ describe('shared-state plugin', () => {
             );
     });
 
+    test('serializes subscription changes across overlapping page loads', async ({
+        worker,
+    }) => {
+        document.body.innerHTML =
+            '<div data-shared-state-channel="game:one"></div>';
+        const requests: unknown[] = [];
+        let release!: () => void;
+        const blocked = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        worker.use(
+            sse('/$shared-state/transport/sse', () => {}),
+            http.post('/$shared-state/transport', async ({ request }) => {
+                requests.push(await request.json());
+                if (requests.length === 1) await blocked;
+                return HttpResponse.json({});
+            }),
+        );
+        await import('../../src/uuid');
+        const core = await import('../../src/core');
+        await import('../../src/shared-state');
+        const load = () =>
+            core.triggerHandlers('domLoad', {
+                elements: [document.documentElement],
+                initial: false,
+                navigation: true,
+            });
+        load();
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
+        load();
+        load();
+        document.body.innerHTML =
+            '<div data-shared-state-channel="game:two"></div>';
+        load();
+        release();
+        await vi.waitFor(() => expect(requests).toHaveLength(3));
+        expect(requests).toEqual([
+            { Subscribe: { channel_id: 'game:one', last_seen_revision: null } },
+            { Unsubscribe: { channel_id: 'game:one' } },
+            { Subscribe: { channel_id: 'game:two', last_seen_revision: null } },
+        ]);
+    });
+
     test('submits command metadata with expected revision and idempotency key', async ({
         worker,
     }) => {

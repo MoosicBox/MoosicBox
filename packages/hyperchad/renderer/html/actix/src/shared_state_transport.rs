@@ -509,11 +509,18 @@ async fn ensure_sse_session_subscription(
         .map_err(ErrorInternalServerError)?;
     let (stop_tx, stop_rx) = flume::bounded(1);
 
-    session
-        .lock()
-        .map_err(|_| lock_poison_error("sse session lock"))?
-        .subscriptions
-        .insert(channel_id.clone(), stop_tx);
+    {
+        let mut session = session
+            .lock()
+            .map_err(|_| lock_poison_error("sse session lock"))?;
+        // Another subscribe request may have completed while we awaited the dispatcher.
+        // Replacing its stop sender would terminate that forwarder, whose cleanup would then
+        // remove our subscription as well. Keep the already-installed subscription instead.
+        if session.subscriptions.contains_key(&channel_id) {
+            return Ok(());
+        }
+        session.subscriptions.insert(channel_id.clone(), stop_tx);
+    }
 
     spawn_sse_subscription_forwarder(session, dispatcher, context, channel_id, event_rx, stop_rx);
 
@@ -1046,7 +1053,10 @@ mod tests {
         clippy::significant_drop_tightening
     )]
 
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::{
+        collections::BTreeMap,
+        sync::{Arc, Mutex},
+    };
 
     use actix_web::{HttpRequest, HttpResponse, body::to_bytes, http::StatusCode, test, web};
     use async_trait::async_trait;
@@ -1068,9 +1078,10 @@ mod tests {
 
     use super::{
         AuthenticatedTransportContext, CSRF_COOKIE_COUNT_HEADER, CSRF_META_MATCH_HEADER,
-        CSRF_SOURCE_HEADER, REQUEST_ID_HEADER, SharedStateTransportDispatcher,
-        TRANSPORT_DIAGNOSTIC_HEADER, WebSharedStateSecurity, handle_shared_state_transport_post,
-        handle_shared_state_transport_sse,
+        CSRF_SOURCE_HEADER, REQUEST_ID_HEADER, SharedStateSseSession,
+        SharedStateTransportDispatcher, TRANSPORT_DIAGNOSTIC_HEADER, WebSharedStateSecurity,
+        ensure_sse_session_subscription, handle_shared_state_transport_post,
+        handle_shared_state_transport_sse, remove_session_subscription,
     };
     use crate::{ActixApp, ActixResponseProcessor};
 
@@ -1970,6 +1981,91 @@ mod tests {
             serde_json::to_string(&TransportInbound::Pong(TransportPing { sent_at_ms: 77 }))
                 .expect("inbound payload should serialize");
         assert_eq!(body, Bytes::from(format!("data: {payload}\n\n")));
+    }
+
+    #[actix_web::test]
+    async fn concurrent_sse_subscribes_keep_the_installed_forwarder_alive() {
+        #[derive(Debug)]
+        struct RacingDispatcher {
+            entered: flume::Sender<()>,
+            release: flume::Receiver<()>,
+            events: flume::Receiver<EventEnvelope>,
+        }
+        #[async_trait]
+        impl SharedStateTransportDispatcher for RacingDispatcher {
+            async fn ingest_outbound(
+                &self,
+                _context: &AuthenticatedTransportContext,
+                _outbound: TransportOutbound,
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                Vec<TransportInbound>,
+            > {
+                Ok(Vec::new())
+            }
+            async fn subscribe_channel(
+                &self,
+                _context: &AuthenticatedTransportContext,
+                _channel_id: &ChannelId,
+            ) -> hyperchad_shared_state_transport::SharedStateTransportDispatchResult<
+                flume::Receiver<EventEnvelope>,
+            > {
+                self.entered.send(())?;
+                self.release.recv_async().await?;
+                Ok(self.events.clone())
+            }
+            fn project_event(
+                &self,
+                _context: &AuthenticatedTransportContext,
+                event: &EventEnvelope,
+            ) -> Option<EventEnvelope> {
+                Some(event.clone())
+            }
+        }
+        let (entered_tx, entered_rx) = flume::unbounded();
+        let (release_tx, release_rx) = flume::unbounded();
+        let (_event_tx, event_rx) = flume::unbounded();
+        let (client_tx, _client_rx) = flume::unbounded();
+        let session = Arc::new(Mutex::new(SharedStateSseSession::new(
+            test_context(),
+            client_tx,
+        )));
+        let dispatcher: Arc<dyn SharedStateTransportDispatcher> = Arc::new(RacingDispatcher {
+            entered: entered_tx,
+            release: release_rx,
+            events: event_rx,
+        });
+        let channel = ChannelId::new("concurrent");
+        let first = actix_web::rt::spawn(ensure_sse_session_subscription(
+            session.clone(),
+            dispatcher.clone(),
+            channel.clone(),
+        ));
+        entered_rx
+            .recv_async()
+            .await
+            .expect("first subscribe entered");
+        let second = actix_web::rt::spawn(ensure_sse_session_subscription(
+            session.clone(),
+            dispatcher,
+            channel.clone(),
+        ));
+        entered_rx
+            .recv_async()
+            .await
+            .expect("second subscribe entered");
+        release_tx.send(()).expect("release first");
+        first
+            .await
+            .expect("first task")
+            .expect("first subscription");
+        let installed = session.lock().expect("session").subscriptions[&channel].clone();
+        release_tx.send(()).expect("release second");
+        second
+            .await
+            .expect("second task")
+            .expect("second subscription");
+        assert!(session.lock().expect("session").subscriptions[&channel].same_channel(&installed));
+        remove_session_subscription(&session, &channel).expect("unsubscribe");
     }
 
     #[actix_web::test]
