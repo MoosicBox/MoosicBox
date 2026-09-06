@@ -61,10 +61,17 @@ pub(super) fn render(
         .iter()
         .map(|_| Cell::new(PaneState::new(Rect::new(0, 0, 0, 0))))
         .collect::<Vec<_>>();
-    let mut sections = Column::new().id("sections").gap(1);
     let columns = usize::from((width / 60).clamp(1, 3));
-    let mut row = Row::new().gap(1);
+    let per_column = groups
+        .iter()
+        .filter(|group| !group.choices.is_empty())
+        .count()
+        .div_ceil(columns)
+        .max(1);
+    let mut sections = Row::new().id("sections").gap(1);
+    let mut column = Column::new().gap(1);
     let mut count = 0;
+    let mut populated_columns = 0;
     for (g, group) in groups.iter().enumerate() {
         if group.choices.is_empty() {
             continue;
@@ -140,34 +147,33 @@ pub(super) fn render(
                 Style::new().fg(Color::Yellow),
             ),
         ]);
-        row = row.flex(Flex::new(
-            1,
-            PaneComponent::new(
-                format!("section-{g}"),
-                Pane::new().border(true).title(title).styles(PaneStyles {
-                    border: Style::new().fg(if g == focus.0 {
-                        accent
-                    } else {
-                        Color::BrightBlack
-                    }),
-                    ..PaneStyles::default()
+        column = column.child(PaneComponent::new(
+            format!("section-{g}"),
+            Pane::new().border(true).title(title).styles(PaneStyles {
+                border: Style::new().fg(if g == focus.0 {
+                    accent
+                } else {
+                    Color::BrightBlack
                 }),
-                &panel_states[g],
-                choices,
-            ),
+                ..PaneStyles::default()
+            }),
+            &panel_states[g],
+            choices,
         ));
         count += 1;
-        if count == columns {
-            sections = sections.child(row);
-            row = Row::new().gap(1);
+        if count == per_column {
+            sections = sections.flex(Flex::new(1, column));
+            column = Column::new().gap(1);
             count = 0;
+            populated_columns += 1;
         }
     }
     if count > 0 {
-        for _ in count..columns {
-            row = row.flex(Flex::new(1, TextBlock::new("")));
-        }
-        sections = sections.child(row);
+        sections = sections.flex(Flex::new(1, column));
+        populated_columns += 1;
+    }
+    for _ in populated_columns..columns {
+        sections = sections.flex(Flex::new(1, TextBlock::new("")));
     }
     let detail_focus = if focus.0 == usize::MAX {
         *stops(groups).last().expect("nonempty checklist")
