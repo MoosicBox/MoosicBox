@@ -112,9 +112,14 @@ The workflow uses the repository's Clippier action for matrix generation, packag
 setup, streamed execution, and its aggregate execution report. Analysis commands live in
 `.github/clippier/run-matrix/bloaty.yml`; there is no separate Python adapter or JSON case format.
 
-Every run discovers all public features for `aconverter`, the server, and the tunnel server
-through Clippier and measures each individually against its package baseline (respectively:
-no features, no features, and `postgres-raw`). The server baseline disables default features
+The workflow runs only on manual `workflow_dispatch`. Its required `packages` input accepts
+comma-separated Cargo package names and defaults to `moosicbox_aconverter,moosicbox_server,moosicbox_tunnel_server`.
+Selected packages must have an unambiguous supported final artifact target; this is not a
+library-only or desktop/mobile packaging workflow.
+
+Every run discovers all public features for the selected packages through Clippier and
+measures each individually against a no-feature baseline, except the tunnel server, which
+currently uses `postgres-raw`. The server baseline disables default features
 and enables no database backend; database features are measured independently, not added to
 SQLite/SQLx. Every run also measures `shipping=default`
 as a separate configuration. This is not an all-features-at-once build or an exponential
@@ -127,8 +132,11 @@ it is measured separately. Clippier owns platform filtering and dependency setup
 discovered features. Desktop/mobile packaging and library-only crate attribution are not
 covered by this package matrix.
 
-Clippier splits discovery into chunks of eight features, with at most four shard jobs running
-concurrently. Single-shard packages publish their report and historical comparison directly
+Clippier splits discovery into chunks of eight features. There is no workflow-defined job
+parallelism cap or workflow concurrency group: GitHub schedules as many jobs as runner/account
+limits permit, and new dispatches do not cancel earlier runs. `CARGO_BUILD_JOBS=2` still limits
+compiler concurrency inside each runner; it does not limit the number of GitHub jobs.
+Single-shard packages publish their report directly
 from the analysis job; no merge job is created for them. Multi-shard packages publish only
 one consolidated size summary after merging, while individual shard results remain available
 in live logs and downloadable artifacts. Clippier's redundant per-shard summaries are disabled.
@@ -151,9 +159,10 @@ bloaty --merge-reports shard-a.json shard-b.json \
 ```
 
 Measurements use Ubuntu 24.04 and Rust 1.95.0. This reduces, but does not eliminate, variance:
-OS packages and runner images can change. Master artifacts are retained for 90 days and PRs
-search the latest 30 successful master runs for the matching artifact identity. Comparisons
-remain advisory; no empirically unsupported regression thresholds are enabled.
+OS packages and runner images can change. Reports are retained for 90 days. Manual runs
+compare feature configurations only; the publisher's PR-only historical comparison is inactive
+with manual-only triggers. Saved reports can still be compared locally; no regression thresholds
+are enforced.
 
 `--github-summary` appends the canonical report as Markdown to `GITHUB_STEP_SUMMARY`.
 Failures/unavailable measurements appear first, followed by one baseline section. Successful
@@ -172,8 +181,8 @@ Each scenario's result is printed to stderr as soon as its build and measurement
 including failures. This provides live progress without mixing diagnostics into machine-readable
 stdout. In GitHub Actions, watch the **Analyze final artifact** step for these results.
 
-The Bloaty workflow also publishes the text report to the run summary immediately after the
-analysis step, plus advisory master comparisons on PR runs. GitHub publishes step summaries
+The Bloaty workflow publishes the Markdown report to the run summary after analysis (or merging
+for multi-shard packages). GitHub publishes step summaries
 when their steps finish; the live job log is the streaming view while analysis is running.
 Downloadable text, JSON, and JSONL artifacts remain available.
 

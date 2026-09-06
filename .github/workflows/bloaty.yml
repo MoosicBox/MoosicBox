@@ -2,19 +2,16 @@ name: Bloaty
 
 on:
     workflow_dispatch:
-    push:
-        branches: [master]
-        paths: ["packages/**", "Cargo.toml", "Cargo.lock", ".github/actions/clippier/**", ".github/clippier/run-matrix/bloaty.yml", ".github/workflows/bloaty.yml"]
-    pull_request:
-        paths: ["packages/**", "Cargo.toml", "Cargo.lock", ".github/actions/clippier/**", ".github/clippier/run-matrix/bloaty.yml", ".github/workflows/bloaty.yml"]
+        inputs:
+            packages:
+                description: Comma-separated Cargo packages with supported final artifact targets
+                type: string
+                required: true
+                default: moosicbox_aconverter,moosicbox_server,moosicbox_tunnel_server
 
 permissions:
     actions: read
     contents: read
-
-concurrency:
-    group: bloaty-${{ github.ref }}
-    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
     CARGO_TERM_COLOR: always
@@ -43,7 +40,7 @@ jobs:
                   # baseline prerequisites and the first shard's shipping scenario.
                   # Bloaty does not consume Clippier's Cargo feature flags.
                   required-features: default
-                  packages: moosicbox_aconverter,moosicbox_server,moosicbox_tunnel_server
+                  packages: ${{ inputs.packages }}
                   os: ubuntu
                   os-suffix: "-latest"
                   skip-on-no-changes: "false"
@@ -68,7 +65,6 @@ jobs:
         timeout-minutes: 90
         strategy:
             fail-fast: false
-            max-parallel: 4
             matrix:
                 package: ${{ fromJson(needs.plan.outputs.matrix) }}
         steps:
