@@ -574,7 +574,7 @@ impl<'a> ToolRunner<'a> {
         args.extend(files.iter().cloned());
     }
 
-    fn tflint_modules(files: &[String]) -> BTreeMap<PathBuf, Vec<String>> {
+    fn directory_groups(files: &[String], filename_filter: &str) -> BTreeMap<PathBuf, Vec<String>> {
         let mut modules = BTreeMap::<PathBuf, Vec<String>>::new();
         for file in files {
             let path = Path::new(file);
@@ -582,13 +582,13 @@ impl<'a> ToolRunner<'a> {
                 modules
                     .entry(path.parent().unwrap_or_else(|| Path::new("")).to_path_buf())
                     .or_default()
-                    .push(format!("--filter={name}"));
+                    .push(format!("{filename_filter}{name}"));
             }
         }
         modules
     }
 
-    fn run_tflint(&self, tool: &Tool) -> ToolResult {
+    fn run_directory_scoped(&self, tool: &Tool, filename_filter: &str) -> ToolResult {
         use std::fmt::Write as _;
         let start = Instant::now();
         let files = self.scoped_file_args(tool).unwrap_or_default();
@@ -596,14 +596,16 @@ impl<'a> ToolRunner<'a> {
         let mut stderr = String::new();
         let mut success = true;
         let mut exit_code = Some(0);
-        for (directory, filters) in Self::tflint_modules(&files) {
+        for (directory, filters) in Self::directory_groups(&files, filename_filter) {
             let mut command = Command::new(
                 tool.detected_path
                     .as_deref()
                     .unwrap_or_else(|| Path::new(&tool.binary)),
             );
             command.current_dir(self.working_dir_path().join(&directory));
-            command.arg("--call-module-type=none").args(filters);
+            command
+                .args(tool.check_args.iter().filter(|arg| arg.as_str() != "."))
+                .args(filters);
             match command.output() {
                 Ok(output) => {
                     let _ = write!(
@@ -1449,12 +1451,15 @@ impl<'a> ToolRunner<'a> {
         tx: &mpsc::Sender<ToolEvent>,
         cancel_requested: &Arc<AtomicBool>,
     ) -> ToolResult {
-        if check_mode && tool.name == "tflint" {
+        if check_mode
+            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
+                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
+        {
             let _ = tx.send(ToolEvent::Started {
                 tool_name: tool.name.clone(),
                 display_name: tool.display_name.clone(),
             });
-            let result = self.run_tflint(tool);
+            let result = self.run_directory_scoped(tool, filename_filter);
             for line in result.stdout.lines() {
                 let _ = tx.send(ToolEvent::StdoutLine {
                     tool_name: tool.name.clone(),
@@ -1874,8 +1879,11 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool.
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
-        if check_mode && tool.name == "tflint" {
-            return self.run_tflint(tool);
+        if check_mode
+            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
+                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
+        {
+            return self.run_directory_scoped(tool, filename_filter);
         }
         let start_time = Instant::now();
 
@@ -2082,8 +2090,11 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool with buffered output (for parallel execution)
     #[allow(clippy::too_many_lines)]
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
-        if check_mode && tool.name == "tflint" {
-            return self.run_tflint(tool);
+        if check_mode
+            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
+                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
+        {
+            return self.run_directory_scoped(tool, filename_filter);
         }
         let start_time = Instant::now();
 
@@ -3071,20 +3082,25 @@ mod tests {
     }
 
     #[test]
-    fn tflint_groups_selected_files_by_module_without_recursive_traversal() {
-        let modules = ToolRunner::tflint_modules(&[
-            "main.tf".to_owned(),
-            "modules/a/main.tf".to_owned(),
-            "modules/a/outputs.tf".to_owned(),
-            "modules/b/main.tf".to_owned(),
-        ]);
+    fn directory_grouping_uses_catalog_filter_syntax() {
+        let alternate = ToolRunner::directory_groups(&["src/input.ext".to_owned()], "--selected=");
+        assert_eq!(alternate[Path::new("src")], ["--selected=input.ext"]);
+        let modules = ToolRunner::directory_groups(
+            &[
+                "main.tf".to_owned(),
+                "modules/a/main.tf".to_owned(),
+                "modules/a/outputs.tf".to_owned(),
+                "modules/b/main.tf".to_owned(),
+            ],
+            "--filter=",
+        );
         assert_eq!(modules.len(), 3);
         assert_eq!(
             modules[Path::new("modules/a")],
             ["--filter=main.tf", "--filter=outputs.tf"]
         );
         assert_eq!(modules[Path::new("")], ["--filter=main.tf"]);
-        assert!(ToolRunner::tflint_modules(&[]).is_empty());
+        assert!(ToolRunner::directory_groups(&[], "--filter=").is_empty());
     }
 
     #[test]

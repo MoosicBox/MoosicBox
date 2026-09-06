@@ -83,8 +83,6 @@ pub enum ToolAdapter {
     Biome,
     /// mdformat extension probing.
     Mdformat,
-    /// `TFLint` requires one invocation per selected Terraform module.
-    Tflint,
     /// .NET formatting resolves a workspace and limits changes with --include.
     DotnetFormat,
     /// Buf uses repeated path filters within a local source, not positional file lists.
@@ -131,9 +129,24 @@ pub fn matches_format(path: &std::path::Path, key: &str) -> bool {
     file_format(path).is_some_and(|format| format.eq_ignore_ascii_case(key))
 }
 
+/// Native execution scope required by an integration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionScope {
+    /// One invocation over the planned files.
+    Files,
+    /// One invocation per parent directory, using repeated filename filters.
+    /// The process may read the entire directory; filters restrict diagnostics.
+    Directory {
+        /// Prefix attached to each selected basename (for example `--filter=`).
+        filename_filter: &'static str,
+    },
+}
+
 /// Canonical metadata for a built-in tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolCatalogEntry {
+    /// Execution grouping and native filename argument behavior.
+    pub execution_scope: ExecutionScope,
     /// Stable tool identifier.
     pub name: &'static str,
     /// Human-readable name.
@@ -194,7 +207,6 @@ impl ToolCatalogEntry {
             "prettier" => ToolAdapter::Prettier,
             "biome" => ToolAdapter::Biome,
             "mdformat" => ToolAdapter::Mdformat,
-            "tflint" => ToolAdapter::Tflint,
             "dotnet-format" => ToolAdapter::DotnetFormat,
             "buf" | "buf-lint" => ToolAdapter::Buf,
             "remark" => ToolAdapter::Remark,
@@ -364,6 +376,7 @@ macro_rules! entry {
      $check:expr, $format:expr, $manifests:expr, $configs:expr, $content:expr,
      $fmt_ext:expr, $lint_ext:expr, $priority:literal) => {
         ToolCatalogEntry {
+            execution_scope: ExecutionScope::Files,
             name: $name,
             display_name: $display,
             binary: $binary,
@@ -1701,21 +1714,26 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         &["github-workflow", "github-action"],
         100
     ),
-    entry!(
-        "tflint",
-        "TFLint",
-        "tflint",
-        Binary,
-        LINT,
-        &["--call-module-type=none", "."],
-        NONE,
-        NONE,
-        &[".tflint.hcl", ".tflint.json"],
-        NONE,
-        NONE,
-        &["tf"],
-        100
-    ),
+    ToolCatalogEntry {
+        execution_scope: ExecutionScope::Directory {
+            filename_filter: "--filter=",
+        },
+        ..entry!(
+            "tflint",
+            "TFLint",
+            "tflint",
+            Binary,
+            LINT,
+            &["--call-module-type=none", "."],
+            NONE,
+            NONE,
+            &[".tflint.hcl", ".tflint.json"],
+            NONE,
+            NONE,
+            &["tf"],
+            100
+        )
+    },
     entry!(
         "terraform",
         "Terraform",
