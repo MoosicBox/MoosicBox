@@ -83,10 +83,6 @@ pub enum ToolAdapter {
     Biome,
     /// mdformat extension probing.
     Mdformat,
-    /// .NET formatting resolves a workspace and limits changes with --include.
-    DotnetFormat,
-    /// Buf uses repeated path filters within a local source, not positional file lists.
-    Buf,
     /// Strict remark check behavior.
     Remark,
 }
@@ -129,6 +125,22 @@ pub fn matches_format(path: &std::path::Path, key: &str) -> bool {
     file_format(path).is_some_and(|format| format.eq_ignore_ascii_case(key))
 }
 
+/// How planned files are encoded in a native invocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileArguments {
+    /// The command does not accept a planned file list.
+    None,
+    /// Append files, replacing declared native traversal defaults.
+    Positional {
+        /// Native default arguments removed before adding files.
+        replace: &'static [&'static str],
+    },
+    /// Append one flag followed by every selected file.
+    List(&'static str),
+    /// Repeat the flag before each selected file.
+    Repeated(&'static str),
+}
+
 /// Native execution scope required by an integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionScope {
@@ -153,12 +165,10 @@ pub struct ToolCatalogEntry {
     pub node_package: Option<&'static str>,
     /// Whether successful check output lists formatting violations.
     pub stdout_reports_changes: bool,
-    /// Whether planned files are passed to the native command.
-    pub scoped_files: bool,
+    /// Encoding for planned files in native arguments.
+    pub file_arguments: FileArguments,
     /// Optional project-local executable directory.
     pub local_bin: Option<&'static str>,
-    /// Native default arguments replaced by planned files.
-    pub replaced_path_args: &'static [&'static str],
     /// Execution grouping and native filename argument behavior.
     pub execution_scope: ExecutionScope,
     /// Stable tool identifier.
@@ -233,7 +243,7 @@ impl ToolCatalogEntry {
     /// Returns whether generic execution should pass resolved scoped files.
     #[must_use]
     pub const fn uses_scoped_file_arguments(self) -> bool {
-        self.scoped_files
+        !matches!(self.file_arguments, FileArguments::None)
     }
 
     /// Whether check mode reports formatting changes via stdout despite exit code zero.
@@ -364,11 +374,10 @@ macro_rules! entry {
      $fmt_ext:expr, $lint_ext:expr, $priority:literal) => {
         ToolCatalogEntry {
             nix_package: None,
-            replaced_path_args: &["."],
             native_adapter: ToolAdapter::Standard,
             node_package: None,
             stdout_reports_changes: false,
-            scoped_files: false,
+            file_arguments: FileArguments::None,
             local_bin: None,
             execution_scope: ExecutionScope::Files,
             name: $name,
@@ -394,7 +403,7 @@ macro_rules! entry {
 /// discovery signals, capabilities, extensions, and ownership priority.
 pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry {
-        scoped_files: false,
+        file_arguments: FileArguments::None,
         native_adapter: ToolAdapter::Rustfmt,
         ..entry!(
             "rustfmt",
@@ -413,7 +422,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: false,
+        file_arguments: FileArguments::None,
         ..entry!(
             "clippy",
             "Rust Linter",
@@ -431,7 +440,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "taplo",
             "TOML Formatter",
@@ -449,7 +458,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         native_adapter: ToolAdapter::Prettier,
         node_package: Some("prettier"),
         ..entry!(
@@ -483,7 +492,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         native_adapter: ToolAdapter::Biome,
         node_package: Some("@biomejs/biome"),
         ..entry!(
@@ -505,7 +514,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("eslint"),
         ..entry!(
             "eslint",
@@ -535,7 +544,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("dprint"),
         ..entry!(
             "dprint",
@@ -558,7 +567,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         native_adapter: ToolAdapter::ClippierMarkdown,
         ..entry!(
             "clippier_md",
@@ -577,7 +586,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         native_adapter: ToolAdapter::Remark,
         node_package: Some("remark-cli"),
         ..entry!(
@@ -604,7 +613,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         native_adapter: ToolAdapter::Mdformat,
         nix_package: Some("nixpkgs#mdformat"),
         ..entry!(
@@ -624,7 +633,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         nix_package: Some("nixpkgs#yamlfmt"),
         ..entry!(
             "yamlfmt",
@@ -643,7 +652,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "ruff",
             "Ruff",
@@ -661,7 +670,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "black",
             "Black",
@@ -679,7 +688,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         stdout_reports_changes: true,
         ..entry!(
             "gofmt",
@@ -698,7 +707,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "shfmt",
             "Shell Formatter",
@@ -716,7 +725,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "shellcheck",
             "ShellCheck",
@@ -734,7 +743,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "clang-format",
             "ClangFormat",
@@ -752,7 +761,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "clang-tidy",
             "Clang-Tidy",
@@ -770,7 +779,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "stylua",
             "StyLua",
@@ -788,7 +797,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "luacheck",
             "Luacheck",
@@ -806,7 +815,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "deno",
             "Deno",
@@ -824,7 +833,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "nixfmt",
             "Nixfmt",
@@ -842,7 +851,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "deadnix",
             "Deadnix",
@@ -860,7 +869,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "yamllint",
             "YAML Linter",
@@ -878,7 +887,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("stylelint"),
         ..entry!(
             "stylelint",
@@ -907,7 +916,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("markdownlint-cli"),
         ..entry!(
             "markdownlint",
@@ -932,7 +941,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "mypy",
             "Mypy",
@@ -950,7 +959,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "pylint",
             "Pylint",
@@ -968,7 +977,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "alejandra",
             "Alejandra",
@@ -986,7 +995,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "statix",
             "Statix",
@@ -1004,7 +1013,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("oxfmt"),
         ..entry!(
             "oxfmt",
@@ -1060,7 +1069,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("oxlint"),
         ..entry!(
             "oxlint",
@@ -1086,7 +1095,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "isort",
             "isort",
@@ -1104,7 +1113,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("pyright"),
         ..entry!(
             "pyright",
@@ -1123,7 +1132,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "bandit",
             "Bandit",
@@ -1141,7 +1150,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "rubocop",
             "RuboCop",
@@ -1159,7 +1168,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "swiftformat",
             "SwiftFormat",
@@ -1177,7 +1186,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "ktlint",
             "ktlint",
@@ -1195,7 +1204,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "sqlfluff",
             "SQLFluff",
@@ -1213,7 +1222,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "dart",
             "Dart Formatter",
@@ -1231,7 +1240,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "flake8",
             "Flake8",
@@ -1249,7 +1258,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "ty",
             "ty",
@@ -1267,7 +1276,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "yapf",
             "YAPF",
@@ -1285,7 +1294,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "autopep8",
             "autopep8",
@@ -1303,7 +1312,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         local_bin: Some("vendor/bin"),
         ..entry!(
             "phpstan",
@@ -1322,7 +1331,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         local_bin: Some("vendor/bin"),
         ..entry!(
             "phpcs",
@@ -1346,7 +1355,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "google-java-format",
             "google-java-format",
@@ -1364,7 +1373,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "vale",
             "Vale",
@@ -1382,7 +1391,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "codespell",
             "codespell",
@@ -1403,7 +1412,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("cspell"),
         ..entry!(
             "cspell",
@@ -1436,7 +1445,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "hadolint",
             "Hadolint",
@@ -1454,7 +1463,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "buildifier",
             "Buildifier",
@@ -1472,7 +1481,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "cmake-format",
             "CMake Formatter",
@@ -1495,7 +1504,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "zig",
             "Zig Formatter",
@@ -1513,7 +1522,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "ormolu",
             "Ormolu",
@@ -1531,7 +1540,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "fourmolu",
             "Fourmolu",
@@ -1549,7 +1558,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "hlint",
             "HLint",
@@ -1567,7 +1576,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "scalafmt",
             "Scalafmt",
@@ -1585,7 +1594,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "csharpier",
             "CSharpier",
@@ -1603,7 +1612,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "mix-format",
             "Elixir Formatter",
@@ -1621,7 +1630,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "actionlint",
             "actionlint",
@@ -1639,8 +1648,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
-        native_adapter: ToolAdapter::Buf,
+        file_arguments: FileArguments::Repeated("--path"),
         ..entry!(
             "buf",
             "Buf Formatter",
@@ -1658,7 +1666,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "ocamlformat",
             "OCamlFormat",
@@ -1676,7 +1684,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "standardrb",
             "Standard Ruby",
@@ -1694,7 +1702,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "fish_indent",
             "Fish Formatter",
@@ -1712,7 +1720,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "jsonnetfmt",
             "Jsonnet Formatter",
@@ -1730,7 +1738,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "typstyle",
             "Typstyle",
@@ -1748,8 +1756,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
-        native_adapter: ToolAdapter::Buf,
+        file_arguments: FileArguments::Repeated("--path"),
         ..entry!(
             "buf-lint",
             "Buf Linter",
@@ -1767,7 +1774,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "cppcheck",
             "Cppcheck",
@@ -1785,7 +1792,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("elm-format"),
         ..entry!(
             "elm-format",
@@ -1804,7 +1811,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("standard"),
         ..entry!(
             "standard",
@@ -1823,7 +1830,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "rumdl",
             "rumdl",
@@ -1841,7 +1848,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "air",
             "Air R Formatter",
@@ -1859,7 +1866,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "selene",
             "Selene",
@@ -1877,7 +1884,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         node_package: Some("squawk-cli"),
         ..entry!(
             "squawk",
@@ -1896,7 +1903,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         stdout_reports_changes: true,
         ..entry!(
             "gofumpt",
@@ -1915,7 +1922,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         stdout_reports_changes: true,
         ..entry!(
             "goimports",
@@ -1934,8 +1941,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
-        native_adapter: ToolAdapter::DotnetFormat,
+        file_arguments: FileArguments::List("--include"),
         ..entry!(
             "dotnet-format",
             "dotnet format whitespace",
@@ -1958,7 +1964,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
+        file_arguments: FileArguments::Positional { replace: &["."] },
         ..entry!(
             "zizmor",
             "Zizmor",
@@ -1980,7 +1986,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
             filename_filter: "--filter=",
         },
         ..ToolCatalogEntry {
-            scoped_files: true,
+            file_arguments: FileArguments::Positional { replace: &["."] },
             ..entry!(
                 "tflint",
                 "TFLint",
@@ -1999,8 +2005,9 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         }
     },
     ToolCatalogEntry {
-        scoped_files: true,
-        replaced_path_args: &[".", "-recursive"],
+        file_arguments: FileArguments::Positional {
+            replace: &[".", "-recursive"],
+        },
         ..entry!(
             "terraform",
             "Terraform",
@@ -2018,8 +2025,9 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         )
     },
     ToolCatalogEntry {
-        scoped_files: true,
-        replaced_path_args: &[".", "-recursive"],
+        file_arguments: FileArguments::Positional {
+            replace: &[".", "-recursive"],
+        },
         ..entry!(
             "tofu",
             "OpenTofu",

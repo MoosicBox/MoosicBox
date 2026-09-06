@@ -556,23 +556,32 @@ impl<'a> ToolRunner<'a> {
             return;
         }
 
-        if tool_catalog_entry(&tool.name)
-            .is_some_and(|entry| entry.adapter() == ToolAdapter::DotnetFormat)
-        {
-            args.push("--include".to_owned());
-            args.extend(files.iter().cloned());
-            return;
-        }
-        if tool_catalog_entry(&tool.name).is_some_and(|entry| entry.adapter() == ToolAdapter::Buf) {
-            for file in files {
-                args.push("--path".to_owned());
-                args.push(file.clone());
-            }
-            return;
-        }
         let entry = tool_catalog_entry(&tool.name).expect("catalog scoped tool");
-        args.retain(|arg| !entry.replaced_path_args.contains(&arg.as_str()));
-        args.extend(files.iter().cloned());
+        Self::append_file_arguments(entry.file_arguments, args, files);
+    }
+
+    fn append_file_arguments(
+        policy: crate::tools::catalog::FileArguments,
+        args: &mut Vec<String>,
+        files: &[String],
+    ) {
+        use crate::tools::catalog::FileArguments;
+        match policy {
+            FileArguments::None => {}
+            FileArguments::Positional { replace } => {
+                args.retain(|arg| !replace.contains(&arg.as_str()));
+                args.extend(files.iter().cloned());
+            }
+            FileArguments::List(flag) => {
+                args.push(flag.to_owned());
+                args.extend(files.iter().cloned());
+            }
+            FileArguments::Repeated(flag) => {
+                for file in files {
+                    args.extend([flag.to_owned(), file.clone()]);
+                }
+            }
+        }
     }
 
     /// Captures both pipes concurrently and always reaps a cancelled child.
@@ -711,13 +720,9 @@ impl<'a> ToolRunner<'a> {
                     .unwrap_or_else(|| Path::new(&tool.binary)),
             );
             command.current_dir(self.working_dir_path().join(&directory));
-            command
-                .args(
-                    tool.check_args
-                        .iter()
-                        .filter(|arg| !entry.replaced_path_args.contains(&arg.as_str())),
-                )
-                .args(filters);
+            let mut args = tool.check_args.clone();
+            Self::append_file_arguments(entry.file_arguments, &mut args, &filters);
+            command.args(args);
             match Self::capture_process(&mut command, cancelled) {
                 Ok(output) => {
                     let _ = write!(
