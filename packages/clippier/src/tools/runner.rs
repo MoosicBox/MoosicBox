@@ -1721,6 +1721,28 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[cfg(feature = "format")]
+    fn cargo_metadata(
+        working_dir: &Path,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Result<cargo_metadata::Metadata, String> {
+        let mut command = cargo_metadata::MetadataCommand::new()
+            .current_dir(working_dir)
+            .no_deps()
+            .cargo_command();
+        let output =
+            Self::capture_process(&mut command, cancelled).map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+        }
+        let stdout = std::str::from_utf8(&output.stdout).map_err(|error| error.to_string())?;
+        let json = stdout
+            .lines()
+            .find(|line| line.starts_with('{'))
+            .ok_or_else(|| "Cargo metadata returned no JSON".to_owned())?;
+        cargo_metadata::MetadataCommand::parse(json).map_err(|error| error.to_string())
+    }
+
+    #[cfg(feature = "format")]
     fn resolve_rustfmt() -> Result<PathBuf, String> {
         if let Some(value) = std::env::var_os("RUSTFMT") {
             let configured = PathBuf::from(value);
@@ -1766,10 +1788,7 @@ impl<'a> ToolRunner<'a> {
         cancelled: &dyn Fn() -> bool,
     ) -> ToolResult {
         let working_dir = self.working_dir_path();
-        let metadata = cargo_metadata::MetadataCommand::new()
-            .current_dir(&working_dir)
-            .no_deps()
-            .exec();
+        let metadata = Self::cargo_metadata(&working_dir, cancelled);
         let metadata = match metadata {
             Ok(metadata) => metadata,
             Err(error) => {
@@ -1784,6 +1803,16 @@ impl<'a> ToolRunner<'a> {
             }
         };
 
+        if cancelled() {
+            return ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                None,
+                String::new(),
+                "Execution cancelled".to_owned(),
+                start_time.elapsed(),
+            );
+        }
         let rustfmt = match Self::resolve_rustfmt() {
             Ok(rustfmt) => rustfmt,
             Err(error) => {
@@ -3008,6 +3037,25 @@ mod tests {
                 "descendant retained pipes: {script}"
             );
         }
+    }
+
+    #[test]
+    #[cfg(feature = "format")]
+    fn cargo_metadata_respects_cancellation_and_parses_real_workspace() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[package]\nname = \"metadata_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\n").unwrap();
+        std::fs::write(root.path().join("src/lib.rs"), "").unwrap();
+        assert!(
+            ToolRunner::cargo_metadata(root.path(), &|| true)
+                .unwrap_err()
+                .contains("cancelled")
+        );
+        let metadata = ToolRunner::cargo_metadata(root.path(), &|| false).unwrap();
+        assert_eq!(metadata.packages.len(), 1);
+        assert_eq!(metadata.packages[0].edition.to_string(), "2021");
+        std::fs::write(root.path().join("Cargo.toml"), "invalid toml").unwrap();
+        assert!(ToolRunner::cargo_metadata(root.path(), &|| false).is_err());
     }
 
     #[test]
