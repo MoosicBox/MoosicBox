@@ -25,6 +25,14 @@ pub fn text(report: &AnalysisReport) -> String {
     output
 }
 
+/// Renders one completed scenario for live progress output.
+#[must_use]
+pub fn scenario_text(label: &str, report: &ScenarioReport) -> String {
+    let mut output = String::new();
+    render_scenario(&mut output, label, report);
+    output
+}
+
 fn render_scenario(output: &mut String, label: &str, report: &ScenarioReport) {
     match &report.outcome {
         ScenarioStatus::Success { measurement } => {
@@ -168,6 +176,16 @@ mod tests {
         assert!(output.contains("baseline"));
         assert!(output.contains("100 B"));
         assert!(output.contains("FAILED: build failed"));
+    }
+
+    #[test]
+    fn live_scenarios_match_the_final_report() {
+        let report = report();
+        let progress = scenario_text("baseline", &report.baseline)
+            + &scenario_text("compare", &report.comparisons[0]);
+        assert!(text(&report).ends_with(&progress));
+        assert!(progress.contains("100 B"));
+        assert!(progress.contains("FAILED: build failed"));
     }
 
     #[test]

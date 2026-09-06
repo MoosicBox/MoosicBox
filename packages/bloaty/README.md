@@ -108,6 +108,15 @@ be available.
 
 ## Reports
 
+Each scenario's result is printed to stderr as soon as its build and measurement finish,
+including failures. This provides live progress without mixing diagnostics into machine-readable
+stdout. In GitHub Actions, watch the **Analyze final artifact** step for these results.
+
+The Bloaty workflow also publishes the text report to the run summary immediately after the
+analysis step, plus advisory master comparisons on PR runs. GitHub publishes step summaries
+when their steps finish; the live job log is the streaming view while analysis is running.
+Downloadable text, JSON, and JSONL artifacts remain available.
+
 Terminal text is the default and does not create files:
 
 ```bash

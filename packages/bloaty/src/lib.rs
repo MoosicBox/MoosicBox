@@ -145,6 +145,7 @@ pub fn analyze(
     let baseline_size = baseline_build.as_ref().ok().map(|artifact| artifact.size);
     let baseline_report =
         ScenarioReport::from_build(baseline, baseline_build, None, baseline_duration_ms);
+    eprint!("{}", render::scenario_text("baseline", &baseline_report));
 
     let comparison_reports = comparisons
         .into_iter()
@@ -154,7 +155,9 @@ pub fn analyze(
                 build::build_scenario(metadata, target, profile, compilation_target, &scenario);
             let duration_ms =
                 u64::try_from(scenario_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-            ScenarioReport::from_build(scenario, result, baseline_size, duration_ms)
+            let report = ScenarioReport::from_build(scenario, result, baseline_size, duration_ms);
+            eprint!("{}", render::scenario_text("compare", &report));
+            report
         })
         .collect();
 

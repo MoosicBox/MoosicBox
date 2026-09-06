@@ -58,6 +58,28 @@ jobs:
                     --output-format all \
                     --report-file "bloaty-${{ matrix.package }}-${{ matrix.profile }}"
 
+            - name: Publish analysis summary
+              if: always()
+              env:
+                  REPORT: bloaty-${{ matrix.package }}-${{ matrix.profile }}.txt
+              run: |
+                  {
+                    echo '## Bloaty feature-size analysis'
+                    echo
+                    echo 'Baseline: defaults disabled. `flac`: baseline plus FLAC. `audio`: FLAC + MP3.'
+                    echo 'Sizes measure the final executable; deltas are relative to the feature baseline, not a previous commit.'
+                    echo
+                    if test -f "$REPORT"; then
+                      echo '```text'
+                      cat "$REPORT"
+                      echo '```'
+                    else
+                      echo 'Analysis did not produce a text report. See the analysis step logs for errors.'
+                    fi
+                    echo
+                    echo 'Full text, JSON, and JSONL reports are retained in the run artifacts. Scenario failures are shown in the report even if the job is green.'
+                  } >> "$GITHUB_STEP_SUMMARY"
+
             - name: Download latest master baseline
               if: github.event_name == 'pull_request'
               id: baseline
@@ -82,14 +104,22 @@ jobs:
               if: github.event_name == 'pull_request' && steps.baseline.outputs.available == 'true'
               continue-on-error: true
               run: |
+                  echo '## Bloaty comparison with master (advisory)' >> "$GITHUB_STEP_SUMMARY"
+                  echo '```text' >> "$GITHUB_STEP_SUMMARY"
+                  trap 'echo '\''```'\'' >> "$GITHUB_STEP_SUMMARY"' EXIT
                   cargo run --package bloaty -- \
                     --compare-reports \
                     "baseline/bloaty-${{ matrix.package }}-${{ matrix.profile }}.json" \
-                    "bloaty-${{ matrix.package }}-${{ matrix.profile }}.json"
+                    "bloaty-${{ matrix.package }}-${{ matrix.profile }}.json" \
+                    2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
             - name: Explain missing baseline
               if: github.event_name == 'pull_request' && steps.baseline.outputs.available != 'true'
-              run: echo "No compatible successful master baseline artifact is available yet; comparison is advisory."
+              run: echo "No compatible successful master baseline artifact is available yet; comparison is advisory." | tee -a "$GITHUB_STEP_SUMMARY"
+
+            - name: Explain comparison scope
+              if: github.event_name != 'pull_request'
+              run: echo "Historical comparison was not run. Only pull request runs compare against master; the results above compare feature configurations within this commit." >> "$GITHUB_STEP_SUMMARY"
 
             - name: Upload reports
               if: always()
