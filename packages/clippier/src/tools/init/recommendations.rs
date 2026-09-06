@@ -28,6 +28,20 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         .files()
         .iter()
         .filter_map(|path| path.extension()?.to_str())
+        .chain(
+            TOOL_CATALOG
+                .iter()
+                .filter(|entry| {
+                    config
+                        .required
+                        .iter()
+                        .chain(&config.skip)
+                        .any(|name| name == entry.name)
+                        || config.tools.contains_key(entry.name)
+                        || config.executables.contains_key(entry.name)
+                })
+                .flat_map(|entry| entry.format_extensions.iter().copied()),
+        )
         .collect::<BTreeSet<_>>();
     let configured = |name: &str| {
         config
@@ -37,6 +51,21 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .any(|item| item == name)
             || config.tools.contains_key(name)
             || config.executables.contains_key(name)
+    };
+    let active = |name: &str, capability: super::super::ToolCapability, extensions: &[&str]| {
+        !config.skip.iter().any(|skip| skip == name)
+            && config.tools.get(name).is_none_or(|policy| {
+                policy.mode != super::super::ToolSelectionMode::Disabled
+                    && (policy.capabilities.is_empty() || policy.capabilities.contains(&capability))
+                    && (capability != super::super::ToolCapability::Format
+                        || policy.format_extensions.is_empty()
+                        || extensions.iter().any(|ext| {
+                            policy
+                                .format_extensions
+                                .iter()
+                                .any(|configured| configured == ext)
+                        }))
+            })
     };
     // Group extensions with identical alternatives; multi-language tools can win
     // more than one group, but are persisted only once.
@@ -52,7 +81,17 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         }
     }
     let mut result = Vec::new();
-    for (names, extensions) in families {
+    for (names, extensions) in families.into_iter().flat_map(|(names, extensions)| {
+        // Existing per-extension choices must remain independently editable.
+        if names.iter().any(|name| configured(name)) {
+            extensions
+                .into_iter()
+                .map(|extension| (names.clone(), vec![extension]))
+                .collect::<Vec<_>>()
+        } else {
+            vec![(names, extensions)]
+        }
+    }) {
         let winner = names
             .iter()
             .filter(|name| !config.skip.iter().any(|skip| skip == **name))
@@ -80,14 +119,21 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .copied();
         let choices = names
             .into_iter()
-            .filter(|name| !configured(name))
             .map(|name| Choice {
                 name: name.to_owned(),
-                reason: evidence.get(name).map_or_else(
-                    || "source files; catalog alternative".to_owned(),
-                    |fact| format!("{:?}: {}", fact.kind, fact.path.display()),
-                ),
-                selected: Some(name) == winner,
+                reason: if configured(name) {
+                    "Current clippier.toml configuration".to_owned()
+                } else {
+                    evidence.get(name).map_or_else(
+                        || "source files; catalog alternative".to_owned(),
+                        |fact| format!("{:?}: {}", fact.kind, fact.path.display()),
+                    )
+                },
+                selected: if configured(name) {
+                    active(name, super::super::ToolCapability::Format, &extensions)
+                } else {
+                    Some(name) == winner
+                },
                 installed: None,
             })
             .collect::<Vec<_>>();
@@ -117,20 +163,24 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             });
         }
     }
-    let choices = evidence
-        .into_iter()
-        .filter(|(name, _)| {
-            !configured(name)
-                && super::super::tool_catalog_entry(name).is_some_and(|entry| {
-                    entry
-                        .capabilities
-                        .contains(&super::super::ToolCapability::Lint)
-                })
+    let choices = TOOL_CATALOG
+        .iter()
+        .filter(|entry| {
+            (configured(entry.name) || evidence.contains_key(entry.name))
+                && entry
+                    .capabilities
+                    .contains(&super::super::ToolCapability::Lint)
         })
-        .map(|(name, fact)| Choice {
-            name,
-            reason: format!("{:?}: {}", fact.kind, fact.path.display()),
-            selected: true,
+        .map(|entry| Choice {
+            name: entry.name.to_owned(),
+            reason: if configured(entry.name) {
+                "Current clippier.toml configuration".to_owned()
+            } else {
+                evidence.get(entry.name).map_or_else(String::new, |fact| {
+                    format!("{:?}: {}", fact.kind, fact.path.display())
+                })
+            },
+            selected: active(entry.name, super::super::ToolCapability::Lint, &[]),
             installed: None,
         })
         .collect::<Vec<_>>();

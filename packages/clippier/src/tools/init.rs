@@ -99,10 +99,7 @@ fn initialize_with_ui(
                 && !config.executables.contains_key(name)
         })
         .collect::<Vec<_>>();
-    if original.is_some()
-        && evidence.is_empty()
-        && (!interactive || recommendations::groups(&mut inventory, &config).is_empty())
-    {
+    if !interactive && original.is_some() && evidence.is_empty() {
         writeln!(output, "No newly relevant tools; clippier.toml unchanged.")?;
         return Ok(());
     }
@@ -174,7 +171,7 @@ fn initialize_with_ui(
             input,
             output,
             "Require selected tools to be installed (recommended for CI)?",
-            true,
+            original.is_none() || selected.iter().any(|name| config.required.contains(name)),
         )?;
     // toml_edit treats a comment-only document as trailing decoration. Keep
     // those original bytes before newly added tables rather than moving them.
@@ -184,6 +181,33 @@ fn initialize_with_ui(
     } else {
         ""
     };
+    if interactive {
+        let edited = selected
+            .iter()
+            .chain(&skipped)
+            .collect::<std::collections::BTreeSet<_>>();
+        for key in ["required", "skip"] {
+            if let Some(array) = document
+                .get_mut("runner")
+                .and_then(|runner| runner.get_mut(key))
+                .and_then(Item::as_array_mut)
+            {
+                array.retain(|item| {
+                    item.as_str()
+                        .is_none_or(|name| !edited.iter().any(|edited| edited.as_str() == name))
+                });
+            }
+        }
+        for name in &skipped {
+            if let Some(policy) = document
+                .get_mut("runner")
+                .and_then(|runner| runner.get_mut("tools"))
+                .and_then(|tools| tools.get_mut(name))
+            {
+                policy["mode"] = value("disabled");
+            }
+        }
+    }
     apply_choices(&mut document, &selected, &skipped, required);
     if interactive {
         // Explicit choices must work even without native configuration evidence.
@@ -334,9 +358,11 @@ fn apply_choices(
                     Item::Table(Table::new())
                 };
             }
-            let mut policy = toml_edit::InlineTable::new();
-            policy.insert("mode", "auto".into());
-            document["runner"]["tools"][name] = value(policy);
+            if document["runner"]["tools"].get(name).is_none() {
+                let mut policy = toml_edit::InlineTable::new();
+                policy.insert("mode", "auto".into());
+                document["runner"]["tools"][name] = value(policy);
+            }
         }
     }
 }
