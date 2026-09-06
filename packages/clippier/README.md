@@ -81,6 +81,13 @@ executables. Markdown's `rumdl` supports lint and format separately through
 `check` and `fmt`, with `.rumdl.toml`/`rumdl.toml` and `[tool.rumdl]`
 discovery. Native rule configuration determines what rumdl reports and fixes.
 
+Air formats R source (`.R` and `.r`, using the `r` policy key) and discovers
+`air.toml`. Selene provides Lua/Luau linting with `selene.toml`; Luau-specific
+analysis depends on the installed build and native standard-library settings.
+Squawk provides PostgreSQL migration linting with `.squawk.toml`, including
+local Node resolution through `squawk-cli`. SQL files alone expose Squawk as an
+unchecked alternative rather than activating migration checks automatically.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

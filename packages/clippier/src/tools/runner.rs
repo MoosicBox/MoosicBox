@@ -2861,6 +2861,29 @@ mod tests {
     }
 
     #[test]
+    fn r_lua_and_sql_commands_pass_only_selected_files() {
+        for (name, prefix) in [
+            ("air", vec!["format", "--check"]),
+            ("selene", vec![]),
+            ("squawk", vec![]),
+        ] {
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            let mut args = tool.check_args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &["selected file".to_owned()]);
+            let mut expected = prefix.into_iter().map(str::to_owned).collect::<Vec<_>>();
+            expected.push("selected file".to_owned());
+            assert_eq!(args, expected);
+            if name == "air" {
+                let mut args = tool.format_args.clone();
+                ToolRunner::replace_default_path_args(&tool, &mut args, &["analysis.R".to_owned()]);
+                assert_eq!(args, ["format", "analysis.R"]);
+            } else {
+                assert!(tool.format_args.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

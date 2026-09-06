@@ -271,6 +271,8 @@ fn language(extension: &str) -> &str {
         "jsonnet" | "libsonnet" => "Jsonnet",
         "typ" => "Typst",
         "elm" => "Elm",
+        "r" => "R",
+        "luau" => "Luau",
         "java" => "Java",
         "php" => "PHP",
         "rst" | "adoc" | "txt" => "Prose",

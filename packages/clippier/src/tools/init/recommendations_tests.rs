@@ -429,6 +429,40 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn r_lua_and_postgres_tools_are_recommended_without_broad_activation() {
+        let root = tempfile::tempdir().unwrap();
+        for file in ["analysis.R", "helper.r", "script.lua", "migration.sql"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        let r = result
+            .iter()
+            .find(|group| group.choices.iter().any(|choice| choice.name == "air"))
+            .unwrap();
+        assert_eq!(r.files.len(), 2);
+        assert_eq!(r.extensions, ["r"]);
+        for name in ["selene", "squawk"] {
+            assert!(
+                result
+                    .iter()
+                    .flat_map(|group| &group.choices)
+                    .any(|choice| choice.name == name && !choice.selected)
+            );
+        }
+        let scope = crate::tools::scope::ScopeMatcher::new(root.path(), &[]).unwrap();
+        assert_eq!(
+            scope
+                .filter_relative_files(
+                    inventory.files(),
+                    &std::collections::BTreeSet::from(["r".to_owned()])
+                )
+                .len(),
+            2
+        );
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

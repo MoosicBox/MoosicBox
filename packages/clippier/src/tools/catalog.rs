@@ -97,6 +97,7 @@ pub fn file_format(path: &std::path::Path) -> Option<&str> {
         "Dockerfile" | "Containerfile" => Some("dockerfile"),
         "BUILD" | "BUILD.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel" => Some("bzl"),
         "CMakeLists.txt" => Some("cmake"),
+        _ if path.extension().and_then(|ext| ext.to_str()) == Some("R") => Some("r"),
         _ if name.starts_with("Dockerfile.")
             || name.starts_with("Containerfile.")
             || name.ends_with(".Dockerfile") =>
@@ -193,6 +194,7 @@ impl ToolCatalogEntry {
     #[must_use]
     pub fn node_runner_package(self) -> Option<&'static str> {
         match self.name {
+            "squawk" => Some("squawk-cli"),
             "standard" => Some("standard"),
             "elm-format" => Some("elm-format"),
             "cspell" => Some("cspell"),
@@ -1570,6 +1572,51 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         &["md", "markdown"],
         &["md", "markdown"],
         40
+    ),
+    entry!(
+        "air",
+        "Air R Formatter",
+        "air",
+        Binary,
+        FORMAT,
+        &["format", "--check", "."],
+        &["format", "."],
+        NONE,
+        &["air.toml"],
+        NONE,
+        &["r"],
+        NONE,
+        10
+    ),
+    entry!(
+        "selene",
+        "Selene",
+        "selene",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &["selene.toml"],
+        NONE,
+        NONE,
+        &["lua", "luau"],
+        100
+    ),
+    entry!(
+        "squawk",
+        "Squawk",
+        "squawk",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &[".squawk.toml"],
+        NONE,
+        NONE,
+        &["sql"],
+        100
     ),
     entry!(
         "terraform",
