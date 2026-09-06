@@ -128,7 +128,11 @@ discovered features. Desktop/mobile packaging and library-only crate attribution
 covered by this package matrix.
 
 Clippier splits discovery into chunks of eight features, with at most four shard jobs running
-concurrently. Each isolated job measures the same package baseline; only its first shard
+concurrently. Single-shard packages publish their report and historical comparison directly
+from the analysis job; no merge job is created for them. Multi-shard packages publish only
+one consolidated size summary after merging, while individual shard results remain available
+in live logs and downloadable artifacts. Clippier's redundant per-shard summaries are disabled.
+Each isolated job measures the same package baseline; only its first shard
 measures shipping defaults. The final per-package job runs even when a shard fails, downloads
 the retained reports, and calls Bloaty's Rust `--merge-reports` mode with the complete scenario
 list from the saved Clippier plan. Historical comparison uses only the consolidated report.

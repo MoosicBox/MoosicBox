@@ -1,0 +1,54 @@
+name: Publish Bloaty report
+description: Compare a complete package report with master and retain its artifacts
+inputs:
+    package:
+        description: Measured Cargo package name
+        required: true
+runs:
+    using: composite
+    steps:
+        - name: Download master baseline
+          if: success() && github.event_name == 'pull_request'
+          id: baseline
+          shell: bash
+          env:
+              GH_TOKEN: ${{ github.token }}
+              GH_PAGER: cat
+              GH_PROMPT_DISABLED: "1"
+              ARTIFACT: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.95.0
+          run: |
+              mkdir -p baseline
+              gh run list --workflow bloaty.yml --branch master --status success --limit 30 --json databaseId --jq '.[].databaseId' > baseline-runs.txt
+              while read -r run_id; do
+                if gh run download "$run_id" --name "$ARTIFACT" --dir baseline; then
+                  echo 'available=true' >> "$GITHUB_OUTPUT"
+                  echo "Baseline: master run $run_id." >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                fi
+              done < baseline-runs.txt
+              echo 'No retained matching master baseline found. Historical comparison skipped.' >> "$GITHUB_STEP_SUMMARY"
+        - name: Compare with master (advisory)
+          if: success() && github.event_name == 'pull_request' && steps.baseline.outputs.available == 'true'
+          shell: bash
+          run: |
+              echo '## Historical comparison (advisory)' >> "$GITHUB_STEP_SUMMARY"
+              echo '```text' >> "$GITHUB_STEP_SUMMARY"
+              status=0
+              cargo run --locked --package bloaty -- --compare-reports baseline/report.json report.json > comparison.txt 2>&1 || status=$?
+              cat comparison.txt | tee -a "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              if test "$status" -ne 0; then
+                echo 'Comparison unavailable or incompatible; see diagnostics. No regression threshold enforced.' >> "$GITHUB_STEP_SUMMARY"
+              fi
+        - name: Explain comparison scope
+          if: success() && github.event_name != 'pull_request'
+          shell: bash
+          run: echo 'Historical comparison runs on PRs only. This run compares feature configurations.' >> "$GITHUB_STEP_SUMMARY"
+        - name: Upload reports
+          if: always()
+          uses: actions/upload-artifact@v6
+          with:
+              name: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.95.0
+              path: report.*
+              if-no-files-found: error
+              retention-days: 90

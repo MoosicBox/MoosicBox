@@ -53,9 +53,9 @@ jobs:
               env:
                   MATRIX: ${{ steps.packages.outputs.matrix }}
               run: |
-                  echo "$MATRIX" | jq 'to_entries | map(.value + {shard: .key}) | group_by(.name) | map(to_entries | map(.value + {shipping: (.key == 0)})) | flatten' > plan.json
+                  echo "$MATRIX" | jq 'to_entries | map(.value + {shard: .key}) | group_by(.name) | map(length as $count | to_entries | map(.value + {shipping: (.key == 0), shardCount: $count})) | flatten' > plan.json
                   echo "matrix=$(jq -c . plan.json)" >> "$GITHUB_OUTPUT"
-                  echo "packages=$(jq -c '[.[].name] | unique' plan.json)" >> "$GITHUB_OUTPUT"
+                  echo "packages=$(jq -c '[.[] | select(.shardCount > 1) | .name] | unique' plan.json)" >> "$GITHUB_OUTPUT"
             - uses: actions/upload-artifact@v6
               with:
                   name: bloaty-plan
@@ -93,10 +93,16 @@ jobs:
                   run-matrix-working-directory: .
                   run-matrix-steps-file: .github/clippier/run-matrix/bloaty.yml
                   run-matrix-stream-output: "true"
+                  run-matrix-reporting: "off"
                   run-matrix-template-vars: >-
-                      {"baseline":"${{ matrix.package.name == 'moosicbox_tunnel_server' && 'postgres-raw' || 'none' }}", "shipping":"${{ matrix.package.shipping && '--scenario shipping=default' || '' }}"}
+                      {"baseline":"${{ matrix.package.name == 'moosicbox_tunnel_server' && 'postgres-raw' || 'none' }}", "shipping":"${{ matrix.package.shipping && '--scenario shipping=default' || '' }}", "summary":"${{ matrix.package.shardCount == 1 && '--github-summary' || '' }}"}
+            - name: Publish single-shard package report
+              if: always() && matrix.package.shardCount == 1
+              uses: ./.github/actions/bloaty-report
+              with:
+                  package: ${{ matrix.package.name }}
             - name: Upload shard reports
-              if: always()
+              if: always() && matrix.package.shardCount > 1
               uses: actions/upload-artifact@v6
               with:
                   name: bloaty-shard-${{ matrix.package.name }}-${{ matrix.package.shard }}
@@ -106,7 +112,7 @@ jobs:
 
     merge:
         needs: [plan, analyze]
-        if: always() && needs.plan.result == 'success'
+        if: always() && needs.plan.result == 'success' && needs.plan.outputs.packages != '[]'
         runs-on: ubuntu-24.04
         strategy:
             fail-fast: false
@@ -131,55 +137,16 @@ jobs:
               run: |
                   expected=$(jq -r --arg p "$PACKAGE" '[.[] | select(.name == $p) | .features[]] + ["shipping"] | unique | join(",")' plan/plan.json)
                   status=0
-                  cargo run --locked --package bloaty -- --merge-reports shards/*/report.json --expected-scenarios "$expected" --output-format all --report-file report --github-summary --fail-on-incomplete > merge.log 2>&1 || status=$?
+                  mapfile -t reports < <(find shards -type f -name report.json | sort)
+                  cargo run --locked --package bloaty -- --merge-reports "${reports[@]}" --expected-scenarios "$expected" --output-format all --report-file report --github-summary --fail-on-incomplete > merge.log 2>&1 || status=$?
                   cat merge.log
                   if test "$status" -ne 0; then
                     echo '## Incomplete package analysis' >> "$GITHUB_STEP_SUMMARY"
                     echo 'Shard merging or measurement failed. See merge diagnostics and retained shard artifacts; no complete baseline will be published.' >> "$GITHUB_STEP_SUMMARY"
                     exit "$status"
                   fi
-            - name: Download master baseline
-              if: github.event_name == 'pull_request'
-              id: baseline
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  ARTIFACT: bloaty-v4-${{ matrix.package }}-release-ubuntu-24.04-rust-1.95.0
-              run: |
-                  mkdir -p baseline
-                  gh run list --workflow bloaty.yml --branch master --status success --limit 30 --json databaseId --jq '.[].databaseId' > baseline-runs.txt
-                  while read -r run_id; do
-                    if gh run download "$run_id" --name "$ARTIFACT" --dir baseline; then
-                      echo 'available=true' >> "$GITHUB_OUTPUT"
-                      echo "Baseline: master run $run_id." >> "$GITHUB_STEP_SUMMARY"
-                      exit 0
-                    fi
-                  done < baseline-runs.txt
-                  echo 'No retained matching master baseline found. Historical comparison skipped.' >> "$GITHUB_STEP_SUMMARY"
-            - name: Compare with master (advisory)
-              if: github.event_name == 'pull_request' && steps.baseline.outputs.available == 'true'
-              run: |
-                  echo '## Historical comparison (advisory)' >> "$GITHUB_STEP_SUMMARY"
-                  echo '```text' >> "$GITHUB_STEP_SUMMARY"
-                  status=0
-                  cargo run --locked --package bloaty -- --compare-reports baseline/report.json report.json > comparison.txt 2>&1 || status=$?
-                  cat comparison.txt | tee -a "$GITHUB_STEP_SUMMARY"
-                  echo '```' >> "$GITHUB_STEP_SUMMARY"
-                  if test "$status" -ne 0; then
-                    echo 'Comparison unavailable or incompatible; see diagnostics. No regression threshold enforced.' >> "$GITHUB_STEP_SUMMARY"
-                  fi
-            - name: Explain comparison scope
-              if: github.event_name != 'pull_request'
-              run: echo 'Historical comparison runs on PRs only. This run compares feature configurations.' >> "$GITHUB_STEP_SUMMARY"
-            - name: Upload reports
+            - name: Publish consolidated report
               if: always()
-              uses: actions/upload-artifact@v6
+              uses: ./.github/actions/bloaty-report
               with:
-                  name: bloaty-v4-${{ matrix.package }}-release-ubuntu-24.04-rust-1.95.0
-                  path: report.*
-                  if-no-files-found: error
-                  retention-days: 90
-
-    clippier-report:
-        if: always()
-        needs: [analyze]
-        uses: ./.github/workflows/clippier-report.yml
+                  package: ${{ matrix.package }}

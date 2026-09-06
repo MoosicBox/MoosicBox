@@ -2,6 +2,6 @@
 # runs once; Bloaty owns baseline/feature scenarios and canonical reports.
 analysis:
     commands: |
-        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo run --locked --package bloaty -- --package {{matrix.package.name}} --profile release --baseline {{vars.baseline}} --feature "{{clippier.features}}" {{vars.shipping}} --output-format all --report-file report --github-summary --fail-on-incomplete
+        {{if matrix.package.env}}{{matrix.package.env}} {{endif}}cargo run --locked --package bloaty -- --package {{matrix.package.name}} --profile release --baseline {{vars.baseline}} --feature "{{clippier.features}}" {{vars.shipping}} --output-format all --report-file report {{vars.summary}} --fail-on-incomplete
     label: "Artifact size"
     strategy: "combined"
