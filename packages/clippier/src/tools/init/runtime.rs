@@ -25,6 +25,7 @@ pub(super) struct Setup<'a> {
     pub pending_since: Option<Instant>,
     pub hits: Vec<bmux_tui::hit::HitRegion>,
     pub pressed: Option<String>,
+    pub hovered: Option<String>,
 }
 
 impl Program for Setup<'_> {
@@ -43,6 +44,7 @@ impl Program for Setup<'_> {
                 changed = size != self.size;
                 self.size = size;
                 self.hits.clear();
+                self.hovered = None;
                 self.pressed = None;
             }
             RuntimeEvent::Terminal(Event::Mouse(mouse)) => {
@@ -61,6 +63,10 @@ impl Program for Setup<'_> {
                     })
                     .max_by_key(|hit| (hit.layer, !hit.id.as_str().starts_with("section-")))
                     .map(|hit| hit.id.as_str().to_owned());
+                if self.hovered != target {
+                    self.hovered.clone_from(&target);
+                    changed = true;
+                }
                 match mouse.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
                         self.pressed.clone_from(&target);
@@ -242,6 +248,7 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
             size.width - 1,
             size.height - 1,
             &self.scroll,
+            program.hovered.as_deref(),
         );
         self.timings.render += start.elapsed();
         let start = Instant::now();
@@ -300,6 +307,7 @@ pub(super) fn run(
             pending_since: None,
             hits: Vec::new(),
             pressed: None,
+            hovered: None,
         };
         let (runtime, handle) = Runtime::new(program, presenter, RuntimeConfig::default());
         let mut input = TerminalInput::start::<Setup<'_>>(handle, |error| error);

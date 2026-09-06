@@ -77,6 +77,7 @@ fn program(groups: &mut [Group]) -> Setup<'_> {
         pending_since: None,
         hits: Vec::new(),
         pressed: None,
+        hovered: None,
     }
 }
 #[test]
@@ -117,6 +118,7 @@ fn horizontal_navigation_and_mouse_use_rendered_component_regions() {
         120,
         30,
         &std::cell::Cell::new(bmux_tui_components::scroll_view::ScrollViewState::new()),
+        None,
     );
     setup.hits = regions;
     for (id, toggles) in [("section-3", false), ("choice-3-0", true)] {
@@ -127,6 +129,17 @@ fn horizontal_navigation_and_mouse_use_rendered_component_regions() {
             .expect(id)
             .area;
         let point = Point::new(area.x, area.y);
+        let previous_focus = setup.focus;
+        let previous_selection = setup.groups[3].choices[0].selected;
+        setup
+            .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                MouseEventKind::Move,
+                point,
+            ))))
+            .unwrap();
+        assert_eq!(setup.hovered.as_deref(), Some(id));
+        assert_eq!(setup.focus, previous_focus);
+        assert_eq!(setup.groups[3].choices[0].selected, previous_selection);
         for kind in [
             MouseEventKind::Down(MouseButton::Left),
             MouseEventKind::Up(MouseButton::Left),

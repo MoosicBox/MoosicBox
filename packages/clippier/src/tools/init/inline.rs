@@ -42,7 +42,7 @@ pub(super) fn render(
     height: u16,
     scroll: &Cell<ScrollViewState>,
 ) -> Buffer {
-    render_scene(groups, header, focus, width, height, scroll).0
+    render_scene(groups, header, focus, width, height, scroll, None).0
 }
 
 #[allow(clippy::too_many_lines)]
@@ -53,6 +53,7 @@ pub(super) fn render_scene(
     width: u16,
     height: u16,
     scroll: &Cell<ScrollViewState>,
+    hovered: Option<&str>,
 ) -> (Buffer, Vec<bmux_tui::hit::HitRegion>) {
     let states = groups
         .iter()
@@ -94,6 +95,9 @@ pub(super) fn render_scene(
         } else {
             Color::Magenta
         };
+        let panel_hovered = hovered.is_some_and(|id| {
+            id == format!("section-{g}") || id.starts_with(&format!("choice-{g}-"))
+        });
         let mut choices = Column::new().id(format!("choices-{g}"));
         for (c, choice) in group.choices.iter().enumerate() {
             let availability = Line::from_spans(vec![
@@ -124,11 +128,22 @@ pub(super) fn render_scene(
                             &states[g][c],
                         )
                         .styles(CheckboxStyles {
-                            normal: Style::new().fg(if choice.selected {
-                                Color::Green
+                            normal: if hovered == Some(format!("choice-{g}-{c}").as_str()) {
+                                Style::new()
+                                    .fg(if choice.selected {
+                                        Color::Green
+                                    } else {
+                                        accent
+                                    })
+                                    .bg(Color::BrightBlack)
+                                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINE)
                             } else {
-                                Color::Default
-                            }),
+                                Style::new().fg(if choice.selected {
+                                    Color::Green
+                                } else {
+                                    Color::Default
+                                })
+                            },
                             focused: Style::new()
                                 .fg(Color::Black)
                                 .bg(Color::Cyan)
@@ -142,7 +157,14 @@ pub(super) fn render_scene(
         let title = Line::from_spans(vec![
             Span::styled(
                 format!(" {} ", group.title),
-                Style::new().fg(accent).add_modifier(Modifier::BOLD),
+                if panel_hovered {
+                    Style::new()
+                        .fg(accent)
+                        .bg(Color::BrightBlack)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINE)
+                } else {
+                    Style::new().fg(accent).add_modifier(Modifier::BOLD)
+                },
             ),
             Span::styled(
                 format!(
@@ -174,7 +196,7 @@ pub(super) fn render_scene(
                 .border(true)
                 .title(title)
                 .styles(PaneStyles {
-                    border: Style::new().fg(if g == focus.0 {
+                    border: Style::new().fg(if g == focus.0 || panel_hovered {
                         accent
                     } else {
                         Color::BrightBlack
@@ -341,6 +363,7 @@ pub(super) fn render_scene(
     let button_states = [0, 1].map(|index| {
         let mut state = ButtonState::new();
         state.set_focused(focus == (usize::MAX, index));
+        state.interaction.hovered = hovered == Some(format!("action-{index}").as_str());
         Cell::new(state)
     });
     let mut buttons = Row::new().id("actions");
@@ -349,6 +372,10 @@ pub(super) fn render_scene(
             ButtonComponent::new(format!("action-{index}"), label, &button_states[index]).styles(
                 ButtonStyles {
                     normal: Style::new().fg(color),
+                    hovered: Style::new()
+                        .fg(color)
+                        .bg(Color::BrightBlack)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINE),
                     focused: Style::new()
                         .fg(Color::Black)
                         .bg(color)
