@@ -40,6 +40,13 @@ Svelte support is not advertised yet: upstream requires an installed Svelte
 package and an enabled option. See upstream [Oxfmt language support](https://oxc.rs/docs/guide/usage/formatter/language-support)
 and [Oxlint usage](https://oxc.rs/docs/guide/usage/linter).
 
+Language integrations also include Zig formatting (`.zig`/`.zon`), Ormolu and
+Fourmolu formatting (`.hs`), HLint (`.hs`/`.lhs`), and Scalafmt
+(`.scala`/`.sbt`/`.sc`). Fourmolu's native configuration takes precedence over
+source-only formatter defaults. Scalafmt retains native configuration/version
+resolution, which may require downloading its configured formatter version.
+These integrations pass selected files explicitly; HLint does not apply fixes.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

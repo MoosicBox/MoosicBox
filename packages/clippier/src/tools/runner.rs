@@ -2720,6 +2720,62 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tools-tui")]
+    fn language_commands_preserve_mode_and_replace_repository_argument() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(dir.path())).unwrap();
+        for (name, extension, check_prefix, format_prefix) in [
+            ("zig", "zon", vec!["fmt", "--check"], vec!["fmt"]),
+            (
+                "ormolu",
+                "hs",
+                vec!["--mode", "check"],
+                vec!["--mode", "inplace"],
+            ),
+            (
+                "fourmolu",
+                "hs",
+                vec!["--mode", "check"],
+                vec!["--mode", "inplace"],
+            ),
+            (
+                "scalafmt",
+                "scala",
+                vec!["--test", "--non-interactive"],
+                vec!["--non-interactive"],
+            ),
+            ("hlint", "lhs", vec![], vec![]),
+        ] {
+            let file = format!("input.{extension}");
+            std::fs::write(dir.path().join(&file), "").unwrap();
+            let runner = ToolRunner::new(&registry)
+                .with_working_dir(dir.path())
+                .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                    &file,
+                )])));
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            for (check, prefix) in [(true, check_prefix), (false, format_prefix)] {
+                if !check && name == "hlint" {
+                    assert!(
+                        runner
+                            .build_command_parts(&tool, false, Some(dir.path()))
+                            .is_none()
+                    );
+                    continue;
+                }
+                let (binary, args, warnings) = runner
+                    .build_command_parts(&tool, check, Some(dir.path()))
+                    .unwrap();
+                let mut expected = prefix.into_iter().map(str::to_owned).collect::<Vec<_>>();
+                expected.push(file.clone());
+                assert_eq!(binary, name);
+                assert_eq!(args, expected, "{name} check={check}");
+                assert!(warnings.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

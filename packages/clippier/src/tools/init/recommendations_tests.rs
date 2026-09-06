@@ -235,6 +235,43 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn haskell_zig_and_scala_recommendations_use_native_preferences() {
+        let root = tempfile::tempdir().unwrap();
+        for file in [
+            "Main.hs",
+            "Notes.lhs",
+            "build.zig",
+            "build.zig.zon",
+            "Main.scala",
+        ] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        std::fs::write(root.path().join("fourmolu.yaml"), "indentation: 4").unwrap();
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        for name in ["ormolu", "fourmolu", "hlint", "zig", "scalafmt"] {
+            assert!(
+                result
+                    .iter()
+                    .flat_map(|group| &group.choices)
+                    .any(|choice| choice.name == name)
+            );
+        }
+        assert!(
+            result
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "fourmolu" && choice.selected)
+        );
+        assert!(
+            !result
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "ormolu" && choice.selected)
+        );
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();
