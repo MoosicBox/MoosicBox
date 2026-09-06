@@ -588,6 +588,20 @@ impl<'a> ToolRunner<'a> {
         cancelled: &dyn Fn() -> bool,
         output: &(dyn Fn(bool, &[u8]) + Sync),
     ) -> std::io::Result<std::process::Output> {
+        Self::execute_process_with_readers(
+            command,
+            cancelled,
+            |pipe| Self::drain_process_pipe(pipe, false, output),
+            |pipe| Self::drain_process_pipe(pipe, true, output),
+        )
+    }
+
+    fn execute_process_with_readers(
+        command: &mut Command,
+        cancelled: &dyn Fn() -> bool,
+        stdout_reader: impl FnOnce(std::process::ChildStdout) -> std::io::Result<Vec<u8>> + Send,
+        stderr_reader: impl FnOnce(std::process::ChildStderr) -> std::io::Result<Vec<u8>> + Send,
+    ) -> std::io::Result<std::process::Output> {
         if cancelled() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Interrupted,
@@ -601,8 +615,8 @@ impl<'a> ToolRunner<'a> {
         std::thread::scope(|scope| {
             let stdout = child.stdout.take().expect("piped stdout");
             let stderr = child.stderr.take().expect("piped stderr");
-            let out = scope.spawn(move || Self::drain_process_pipe(stdout, false, output));
-            let err = scope.spawn(move || Self::drain_process_pipe(stderr, true, output));
+            let out = scope.spawn(move || stdout_reader(stdout));
+            let err = scope.spawn(move || stderr_reader(stderr));
             let status = loop {
                 if cancelled() {
                     let _ = child.kill();
@@ -1667,121 +1681,59 @@ impl<'a> ToolRunner<'a> {
             command.current_dir(dir);
         }
 
-        match command.spawn() {
-            Ok(mut child) => {
-                let stdout_content = Arc::new(Mutex::new(Vec::<u8>::new()));
-                let stderr_content = Arc::new(Mutex::new(Vec::<u8>::new()));
-
-                let stdout_handle = child.stdout.take().map(|stdout| {
-                    let tool_name = tool.name.clone();
-                    let output = Arc::clone(&stdout_content);
-                    let tx = tx.clone();
-                    thread::spawn(move || {
-                        Self::pump_stream_events(stdout, &tx, &tool_name, false, &output);
-                    })
-                });
-
-                let stderr_handle = child.stderr.take().map(|stderr| {
-                    let tool_name = tool.name.clone();
-                    let output = Arc::clone(&stderr_content);
-                    let tx = tx.clone();
-                    thread::spawn(move || {
-                        Self::pump_stream_events(stderr, &tx, &tool_name, true, &output);
-                    })
-                });
-
-                let status = loop {
-                    if cancel_requested.load(Ordering::SeqCst)
-                        && let Err(e) = child.kill()
-                        && e.kind() != std::io::ErrorKind::InvalidInput
-                    {
-                        log::debug!("failed to kill tool process '{}': {e}", tool.name);
-                    }
-
-                    match child.try_wait() {
-                        Ok(Some(exit)) => {
-                            break exit;
-                        }
-                        Ok(None) => thread::sleep(Duration::from_millis(25)),
-                        Err(e) => {
-                            let result = ToolResult::failure(
-                                tool.name.clone(),
-                                tool.display_name.clone(),
-                                None,
-                                String::new(),
-                                format!("Failed to wait for process: {e}"),
-                                start_time.elapsed(),
-                            );
-
-                            let _ = tx.send(ToolEvent::Finished {
-                                tool_name: tool.name.clone(),
-                                success: false,
-                            });
-
-                            return result;
-                        }
-                    }
-                };
-
-                if let Some(handle) = stdout_handle {
-                    let _ = handle.join();
-                }
-                if let Some(handle) = stderr_handle {
-                    let _ = handle.join();
-                }
-
-                let stdout = stdout_content.lock().map_or_else(
-                    |_| String::new(),
-                    |buf| String::from_utf8_lossy(buf.as_slice()).to_string(),
-                );
-                let stderr = stderr_content.lock().map_or_else(
-                    |_| String::new(),
-                    |buf| String::from_utf8_lossy(buf.as_slice()).to_string(),
-                );
-                let warning_text = if warnings.is_empty() {
-                    String::new()
-                } else {
-                    format!("{}\n", warnings.join("\n"))
-                };
-
-                let duration = start_time.elapsed();
-                let result = if Self::command_succeeded(tool, check_mode, status.success(), &stdout)
-                {
-                    ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
+        let stdout_content = Arc::new(Mutex::new(Vec::new()));
+        let stderr_content = Arc::new(Mutex::new(Vec::new()));
+        let output = Self::execute_process_with_readers(
+            &mut command,
+            &|| cancel_requested.load(Ordering::SeqCst),
+            |pipe| {
+                Self::pump_stream_events(pipe, tx, &tool.name, false, &stdout_content);
+                Ok(std::mem::take(&mut *stdout_content.lock().map_err(
+                    |_| std::io::Error::other("stdout capture poisoned"),
+                )?))
+            },
+            |pipe| {
+                Self::pump_stream_events(pipe, tx, &tool.name, true, &stderr_content);
+                Ok(std::mem::take(&mut *stderr_content.lock().map_err(
+                    |_| std::io::Error::other("stderr capture poisoned"),
+                )?))
+            },
+        );
+        let result = match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
+                    ToolResult::success(
+                        tool.name.clone(),
+                        tool.display_name.clone(),
+                        start_time.elapsed(),
+                    )
                 } else {
                     ToolResult::failure(
                         tool.name.clone(),
                         tool.display_name.clone(),
-                        status.code(),
+                        output.status.code(),
                         stdout,
-                        format!("{warning_text}{stderr}"),
-                        duration,
+                        format!("{}\n{stderr}", warnings.join("\n")),
+                        start_time.elapsed(),
                     )
-                };
-
-                let _ = tx.send(ToolEvent::Finished {
-                    tool_name: tool.name.clone(),
-                    success: result.success,
-                });
-
-                result
+                }
             }
-            Err(e) => {
-                let result = ToolResult::failure(
-                    tool.name.clone(),
-                    tool.display_name.clone(),
-                    None,
-                    String::new(),
-                    format!("Failed to spawn process: {e}"),
-                    start_time.elapsed(),
-                );
-                let _ = tx.send(ToolEvent::Finished {
-                    tool_name: tool.name.clone(),
-                    success: false,
-                });
-                result
-            }
-        }
+            Err(error) => ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                None,
+                String::new(),
+                format!("Failed to execute: {error}"),
+                start_time.elapsed(),
+            ),
+        };
+        let _ = tx.send(ToolEvent::Finished {
+            tool_name: tool.name.clone(),
+            success: result.success,
+        });
+        result
     }
 
     #[cfg(feature = "format")]
