@@ -8,6 +8,7 @@ use super::super::{RepositoryDiscovery, SelectionEvidenceKind, TOOL_CATALOG, Too
 pub(super) struct Choice {
     pub name: String,
     pub reason: String,
+    pub source_only: bool,
     pub selected: bool,
     pub active: bool,
     pub installed: Option<std::path::PathBuf>,
@@ -98,6 +99,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .into_iter()
             .map(|name| Choice {
                 name: name.to_owned(),
+                source_only: !configured(name) && !evidence.contains_key(name),
                 reason: if configured(name) {
                     "Current clippier.toml configuration".to_owned()
                 } else {
@@ -157,6 +159,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         })
         .map(|entry| Choice {
             name: entry.name.to_owned(),
+            source_only: !configured(entry.name) && !evidence.contains_key(entry.name),
             reason: if configured(entry.name) {
                 "Current clippier.toml configuration".to_owned()
             } else {
@@ -222,11 +225,10 @@ pub(super) fn apply_availability(
         }
         // Only source-only defaults may fall back; native/Clippier preferences win.
         if group.formatting
-            && group.choices.iter().any(|choice| {
-                choice.selected
-                    && choice.installed.is_none()
-                    && choice.reason.starts_with("source files;")
-            })
+            && group
+                .choices
+                .iter()
+                .any(|choice| choice.selected && choice.installed.is_none() && choice.source_only)
             && let Some(winner) = group
                 .choices
                 .iter()

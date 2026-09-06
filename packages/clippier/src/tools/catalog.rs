@@ -145,6 +145,18 @@ pub enum ExecutionScope {
 /// Canonical metadata for a built-in tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolCatalogEntry {
+    /// Native adapter, independent of the tool identifier.
+    pub native_adapter: ToolAdapter,
+    /// Optional Node package providing this executable.
+    pub node_package: Option<&'static str>,
+    /// Whether successful check output lists formatting violations.
+    pub stdout_reports_changes: bool,
+    /// Whether planned files are passed to the native command.
+    pub scoped_files: bool,
+    /// Optional project-local executable directory.
+    pub local_bin: Option<&'static str>,
+    /// Native default arguments replaced by planned files.
+    pub replaced_path_args: &'static [&'static str],
     /// Execution grouping and native filename argument behavior.
     pub execution_scope: ExecutionScope,
     /// Stable tool identifier.
@@ -200,59 +212,32 @@ impl ToolCatalogEntry {
 
     /// Returns the explicit native adapter for irreducible CLI behavior.
     #[must_use]
-    pub fn adapter(self) -> ToolAdapter {
-        match self.name {
-            "rustfmt" => ToolAdapter::Rustfmt,
-            "clippier_md" => ToolAdapter::ClippierMarkdown,
-            "prettier" => ToolAdapter::Prettier,
-            "biome" => ToolAdapter::Biome,
-            "mdformat" => ToolAdapter::Mdformat,
-            "dotnet-format" => ToolAdapter::DotnetFormat,
-            "buf" | "buf-lint" => ToolAdapter::Buf,
-            "remark" => ToolAdapter::Remark,
-            _ => ToolAdapter::Standard,
-        }
+    pub const fn adapter(self) -> ToolAdapter {
+        self.native_adapter
     }
 
     /// Returns the package-runner package for Node ecosystem tools.
     #[must_use]
-    pub fn node_runner_package(self) -> Option<&'static str> {
-        match self.name {
-            "squawk" => Some("squawk-cli"),
-            "standard" => Some("standard"),
-            "elm-format" => Some("elm-format"),
-            "cspell" => Some("cspell"),
-            "oxfmt" => Some("oxfmt"),
-            "oxlint" => Some("oxlint"),
-            "pyright" => Some("pyright"),
-            "prettier" => Some("prettier"),
-            "biome" => Some("@biomejs/biome"),
-            "eslint" => Some("eslint"),
-            "dprint" => Some("dprint"),
-            "remark" => Some("remark-cli"),
-            "stylelint" => Some("stylelint"),
-            "markdownlint" => Some("markdownlint-cli"),
-            _ => None,
-        }
+    pub const fn node_runner_package(self) -> Option<&'static str> {
+        self.node_package
     }
 
     /// Returns whether project-local Node executable lookup applies.
     #[must_use]
-    pub fn uses_local_node_bin(self) -> bool {
+    pub const fn uses_local_node_bin(self) -> bool {
         self.node_runner_package().is_some()
     }
 
     /// Returns whether generic execution should pass resolved scoped files.
     #[must_use]
-    pub fn uses_scoped_file_arguments(self) -> bool {
-        (self.capabilities.contains(&ToolCapability::Format) && self.name != "rustfmt")
-            || self.check_args.contains(&".")
+    pub const fn uses_scoped_file_arguments(self) -> bool {
+        self.scoped_files
     }
 
     /// Whether check mode reports formatting changes via stdout despite exit code zero.
     #[must_use]
-    pub fn check_uses_stdout(self) -> bool {
-        matches!(self.name, "gofmt" | "gofumpt" | "goimports")
+    pub const fn check_uses_stdout(self) -> bool {
+        self.stdout_reports_changes
     }
 
     /// Returns the extensions for one capability.
@@ -376,6 +361,12 @@ macro_rules! entry {
      $check:expr, $format:expr, $manifests:expr, $configs:expr, $content:expr,
      $fmt_ext:expr, $lint_ext:expr, $priority:literal) => {
         ToolCatalogEntry {
+            replaced_path_args: &["."],
+            native_adapter: ToolAdapter::Standard,
+            node_package: None,
+            stdout_reports_changes: false,
+            scoped_files: false,
+            local_bin: None,
             execution_scope: ExecutionScope::Files,
             name: $name,
             display_name: $display,
@@ -399,1371 +390,1647 @@ macro_rules! entry {
 /// All built-in integrations. This is the canonical source for registration,
 /// discovery signals, capabilities, extensions, and ownership priority.
 pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
-    entry!(
-        "rustfmt",
-        "Rust Formatter",
-        "cargo",
-        Cargo,
-        FORMAT,
-        &["fmt", "--check"],
-        &["fmt"],
-        &["Cargo.toml"],
-        &["rustfmt.toml", ".rustfmt.toml"],
-        NONE,
-        &["rs"],
-        NONE,
-        10
-    ),
-    entry!(
-        "clippy",
-        "Rust Linter",
-        "cargo",
-        Cargo,
-        LINT,
-        &["clippy", "--all-targets", "--", "-D", "warnings"],
-        NONE,
-        &["Cargo.toml"],
-        NONE,
-        NONE,
-        NONE,
-        &["rs"],
-        0
-    ),
-    entry!(
-        "taplo",
-        "TOML Formatter",
-        "taplo",
-        Binary,
-        BOTH,
-        &["fmt", "--check"],
-        &["fmt"],
-        &["Cargo.toml"],
-        &["taplo.toml", ".taplo.toml"],
-        NONE,
-        &["toml"],
-        &["toml"],
-        20
-    ),
-    entry!(
-        "prettier",
-        "Prettier",
-        "prettier",
-        Binary,
-        FORMAT,
-        &["--check", "--ignore-unknown", "."],
-        &["--write", "--ignore-unknown", "."],
-        NONE,
-        &[
-            ".prettierrc",
-            ".prettierrc.json",
-            ".prettierrc.json5",
-            ".prettierrc.yaml",
-            ".prettierrc.yml",
-            ".prettierrc.toml",
-            "prettier.config.js",
-            "prettier.config.cjs",
-            "prettier.config.mjs",
-            "prettier.config.ts"
-        ],
-        NONE,
-        &[
-            "js", "jsx", "ts", "tsx", "json", "md", "mdx", "yaml", "yml", "html", "css", "scss",
-            "less"
-        ],
-        NONE,
-        30
-    ),
-    entry!(
-        "biome",
-        "Biome",
-        "biome",
-        Binary,
-        FORMAT,
-        &["format"],
-        &["format", "--write"],
-        &["package.json"],
-        &["biome.json", "biome.jsonc"],
-        NONE,
-        &[
-            "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html"
-        ],
-        NONE,
-        20
-    ),
-    entry!(
-        "eslint",
-        "ESLint",
-        "eslint",
-        Binary,
-        LINT,
-        &["."],
-        &["--fix", "."],
-        NONE,
-        &[
-            "eslint.config.js",
-            "eslint.config.mjs",
-            "eslint.config.cjs",
-            "eslint.config.ts",
-            ".eslintrc",
-            ".eslintrc.json",
-            ".eslintrc.yml",
-            ".eslintrc.yaml",
-            ".eslintrc.js",
-            ".eslintrc.cjs"
-        ],
-        NONE,
-        NONE,
-        &["js", "jsx", "ts", "tsx"],
-        0
-    ),
-    entry!(
-        "dprint",
-        "Dprint",
-        "dprint",
-        Binary,
-        BOTH,
-        &["check"],
-        &["fmt"],
-        NONE,
-        &["dprint.json", "dprint.jsonc"],
-        NONE,
-        &[
-            "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml"
-        ],
-        &[
-            "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml"
-        ],
-        15
-    ),
-    entry!(
-        "clippier_md",
-        "Clippier MD",
-        "cargo",
-        Cargo,
-        FORMAT,
-        &["run", "-p", "clippier_md", "--", "fmt", "--check", "."],
-        &["run", "-p", "clippier_md", "--", "fmt", "."],
-        NONE,
-        &["packages/clippier/md/Cargo.toml"],
-        NONE,
-        &["md", "mdx"],
-        NONE,
-        5
-    ),
-    entry!(
-        "remark",
-        "remark",
-        "remark",
-        Binary,
-        FORMAT,
-        &[".", "--ext", "md,mdx"],
-        &[".", "--output", "--ext", "md,mdx"],
-        NONE,
-        &[
-            ".remarkrc",
-            ".remarkrc.json",
-            ".remarkrc.js",
-            ".remarkrc.cjs",
-            "remark.config.js",
-            "remark.config.cjs"
-        ],
-        NONE,
-        &["md", "mdx"],
-        NONE,
-        20
-    ),
-    entry!(
-        "mdformat",
-        "mdformat",
-        "mdformat",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["."],
-        NONE,
-        &[".mdformat.toml"],
-        &["md"],
-        &["md"],
-        NONE,
-        40
-    ),
-    entry!(
-        "yamlfmt",
-        "yamlfmt",
-        "yamlfmt",
-        Binary,
-        FORMAT,
-        &["-lint", "."],
-        &["."],
-        NONE,
-        &[".yamlfmt", "yamlfmt.yml", "yamlfmt.yaml"],
-        NONE,
-        &["yaml", "yml"],
-        NONE,
-        20
-    ),
-    entry!(
-        "ruff",
-        "Ruff",
-        "ruff",
-        Binary,
-        BOTH,
-        &["check", "."],
-        &["format", "."],
-        &["pyproject.toml", "requirements.txt", "setup.py"],
-        &["ruff.toml", ".ruff.toml"],
-        NONE,
-        &["py", "pyi", "ipynb"],
-        &["py", "pyi", "ipynb"],
-        10
-    ),
-    entry!(
-        "black",
-        "Black",
-        "black",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["."],
-        NONE,
-        &[".black"],
-        NONE,
-        &["py", "pyi", "ipynb"],
-        NONE,
-        20
-    ),
-    entry!(
-        "gofmt",
-        "Go Formatter",
-        "gofmt",
-        Binary,
-        FORMAT,
-        &["-l", "."],
-        &["-w", "."],
-        &["go.mod"],
-        NONE,
-        NONE,
-        &["go"],
-        NONE,
-        10
-    ),
-    entry!(
-        "shfmt",
-        "Shell Formatter",
-        "shfmt",
-        Binary,
-        FORMAT,
-        &["-d", "."],
-        &["-w", "."],
-        NONE,
-        &[".shfmt.conf"],
-        NONE,
-        &["sh", "bash"],
-        NONE,
-        10
-    ),
-    entry!(
-        "shellcheck",
-        "ShellCheck",
-        "shellcheck",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".shellcheckrc"],
-        NONE,
-        NONE,
-        &["sh", "bash"],
-        0
-    ),
-    entry!(
-        "clang-format",
-        "ClangFormat",
-        "clang-format",
-        Binary,
-        FORMAT,
-        &["--dry-run", "--Werror"],
-        &["-i"],
-        NONE,
-        &[".clang-format", "_clang-format"],
-        NONE,
-        &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx", "m", "mm"],
-        NONE,
-        10
-    ),
-    entry!(
-        "clang-tidy",
-        "Clang-Tidy",
-        "clang-tidy",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        &["compile_commands.json"],
-        &[".clang-tidy"],
-        NONE,
-        NONE,
-        &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
-        0
-    ),
-    entry!(
-        "stylua",
-        "StyLua",
-        "stylua",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["."],
-        NONE,
-        &["stylua.toml", ".stylua.toml"],
-        NONE,
-        &["lua", "luau"],
-        NONE,
-        10
-    ),
-    entry!(
-        "luacheck",
-        "Luacheck",
-        "luacheck",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".luacheckrc"],
-        NONE,
-        NONE,
-        &["lua"],
-        0
-    ),
-    entry!(
-        "deno",
-        "Deno",
-        "deno",
-        Binary,
-        BOTH,
-        &["lint", "."],
-        &["fmt", "."],
-        NONE,
-        &["deno.json", "deno.jsonc"],
-        NONE,
-        &["js", "jsx", "ts", "tsx", "json", "jsonc", "md", "markdown"],
-        &["js", "jsx", "ts", "tsx"],
-        40
-    ),
-    entry!(
-        "nixfmt",
-        "Nixfmt",
-        "nixfmt",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["."],
-        &["flake.nix"],
-        NONE,
-        &["nix"],
-        &["nix"],
-        NONE,
-        5
-    ),
-    entry!(
-        "deadnix",
-        "Deadnix",
-        "deadnix",
-        Binary,
-        LINT,
-        &["--fail", "."],
-        NONE,
-        &["flake.nix"],
-        NONE,
-        NONE,
-        NONE,
-        &["nix"],
-        0
-    ),
-    entry!(
-        "yamllint",
-        "YAML Linter",
-        "yamllint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".yamllint", ".yamllint.yaml", ".yamllint.yml"],
-        NONE,
-        NONE,
-        &["yaml", "yml"],
-        0
-    ),
-    entry!(
-        "stylelint",
-        "Stylelint",
-        "stylelint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[
-            ".stylelintrc",
-            ".stylelintrc.json",
-            ".stylelintrc.yaml",
-            ".stylelintrc.yml",
-            ".stylelintrc.js",
-            ".stylelintrc.cjs",
-            "stylelint.config.js",
-            "stylelint.config.mjs",
-            "stylelint.config.cjs"
-        ],
-        NONE,
-        NONE,
-        &["css", "scss", "less"],
-        0
-    ),
-    entry!(
-        "markdownlint",
-        "Markdownlint",
-        "markdownlint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[
-            ".markdownlint.json",
-            ".markdownlint.jsonc",
-            ".markdownlint.yaml",
-            ".markdownlint.yml",
-            ".markdownlint.cjs"
-        ],
-        NONE,
-        NONE,
-        &["md", "markdown"],
-        0
-    ),
-    entry!(
-        "mypy",
-        "Mypy",
-        "mypy",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &["mypy.ini", ".mypy.ini"],
-        NONE,
-        NONE,
-        &["py", "pyi"],
-        0
-    ),
-    entry!(
-        "pylint",
-        "Pylint",
-        "pylint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".pylintrc", "pylintrc"],
-        NONE,
-        NONE,
-        &["py"],
-        0
-    ),
-    entry!(
-        "alejandra",
-        "Alejandra",
-        "alejandra",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["."],
-        &["flake.nix"],
-        NONE,
-        NONE,
-        &["nix"],
-        NONE,
-        10
-    ),
-    entry!(
-        "statix",
-        "Statix",
-        "statix",
-        Binary,
-        LINT,
-        &["check", "."],
-        NONE,
-        &["flake.nix"],
-        &["statix.toml"],
-        NONE,
-        NONE,
-        &["nix"],
-        0
-    ),
-    entry!(
-        "oxfmt",
-        "Oxfmt",
-        "oxfmt",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["--write", "."],
-        NONE,
-        &[
-            ".oxfmtrc.json",
-            ".oxfmtrc.jsonc",
-            "oxfmt.config.ts",
-            "oxfmt.config.mts"
-        ],
-        NONE,
-        &[
-            "js",
-            "jsx",
-            "mjs",
-            "cjs",
-            "ts",
-            "tsx",
-            "mts",
-            "cts",
-            "json",
-            "jsonc",
-            "json5",
-            "yaml",
-            "yml",
-            "toml",
-            "html",
-            "htm",
-            "xhtml",
-            "vue",
-            "css",
-            "scss",
-            "less",
-            "pcss",
-            "postcss",
-            "md",
-            "markdown",
-            "mdx",
-            "graphql",
-            "gql",
-            "graphqls",
-            "hbs",
-            "handlebars"
-        ],
-        NONE,
-        25
-    ),
-    entry!(
-        "oxlint",
-        "Oxlint",
-        "oxlint",
-        Binary,
-        LINT,
-        &["--deny-warnings", "."],
-        NONE,
-        NONE,
-        &[
-            ".oxlintrc.json",
-            ".oxlintrc.jsonc",
-            "oxlint.config.ts",
-            "oxlint.config.mts"
-        ],
-        NONE,
-        NONE,
-        &[
-            "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "vue", "svelte", "astro"
-        ],
-        100
-    ),
-    entry!(
-        "isort",
-        "isort",
-        "isort",
-        Binary,
-        FORMAT,
-        &["--check-only", "."],
-        &["."],
-        NONE,
-        &[".isort.cfg"],
-        NONE,
-        &["py", "pyi"],
-        NONE,
-        40
-    ),
-    entry!(
-        "pyright",
-        "Pyright",
-        "pyright",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &["pyrightconfig.json"],
-        NONE,
-        NONE,
-        &["py", "pyi"],
-        100
-    ),
-    entry!(
-        "bandit",
-        "Bandit",
-        "bandit",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        &["py"],
-        100
-    ),
-    entry!(
-        "rubocop",
-        "RuboCop",
-        "rubocop",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".rubocop.yml"],
-        NONE,
-        NONE,
-        &["rb", "rake", "gemspec"],
-        100
-    ),
-    entry!(
-        "swiftformat",
-        "SwiftFormat",
-        "swiftformat",
-        Binary,
-        FORMAT,
-        &["--lint", "."],
-        &["."],
-        NONE,
-        &[".swiftformat"],
-        NONE,
-        &["swift"],
-        NONE,
-        10
-    ),
-    entry!(
-        "ktlint",
-        "ktlint",
-        "ktlint",
-        Binary,
-        FORMAT,
-        &["."],
-        &["--format", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["kt", "kts"],
-        NONE,
-        10
-    ),
-    entry!(
-        "sqlfluff",
-        "SQLFluff",
-        "sqlfluff",
-        Binary,
-        LINT,
-        &["lint", "."],
-        NONE,
-        NONE,
-        &[".sqlfluff"],
-        NONE,
-        NONE,
-        &["sql"],
-        100
-    ),
-    entry!(
-        "dart",
-        "Dart Formatter",
-        "dart",
-        Binary,
-        FORMAT,
-        &["format", "--output=none", "--set-exit-if-changed", "."],
-        &["format", "."],
-        &["pubspec.yaml"],
-        NONE,
-        NONE,
-        &["dart"],
-        NONE,
-        10
-    ),
-    entry!(
-        "flake8",
-        "Flake8",
-        "flake8",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".flake8"],
-        NONE,
-        NONE,
-        &["py", "pyi"],
-        100
-    ),
-    entry!(
-        "ty",
-        "ty",
-        "ty",
-        Binary,
-        LINT,
-        &["check", "."],
-        NONE,
-        NONE,
-        &["ty.toml"],
-        NONE,
-        NONE,
-        &["py", "pyi"],
-        100
-    ),
-    entry!(
-        "yapf",
-        "YAPF",
-        "yapf",
-        Binary,
-        FORMAT,
-        &["--diff", "."],
-        &["--in-place", "."],
-        NONE,
-        &[".style.yapf"],
-        NONE,
-        &["py"],
-        NONE,
-        50
-    ),
-    entry!(
-        "autopep8",
-        "autopep8",
-        "autopep8",
-        Binary,
-        FORMAT,
-        &["--diff", "--exit-code", "."],
-        &["--in-place", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["py"],
-        NONE,
-        60
-    ),
-    entry!(
-        "phpstan",
-        "PHPStan",
-        "phpstan",
-        Binary,
-        LINT,
-        &["analyse", "."],
-        NONE,
-        NONE,
-        &["phpstan.neon", "phpstan.neon.dist"],
-        NONE,
-        NONE,
-        &["php"],
-        100
-    ),
-    entry!(
-        "phpcs",
-        "PHP_CodeSniffer",
-        "phpcs",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[
-            ".phpcs.xml",
-            "phpcs.xml",
-            ".phpcs.xml.dist",
-            "phpcs.xml.dist"
-        ],
-        NONE,
-        NONE,
-        &["php"],
-        100
-    ),
-    entry!(
-        "google-java-format",
-        "google-java-format",
-        "google-java-format",
-        Binary,
-        FORMAT,
-        &["--dry-run", "--set-exit-if-changed", "."],
-        &["--replace", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["java"],
-        NONE,
-        10
-    ),
-    entry!(
-        "vale",
-        "Vale",
-        "vale",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".vale.ini"],
-        NONE,
-        NONE,
-        &["md", "markdown", "rst", "adoc", "txt"],
-        100
-    ),
-    entry!(
-        "codespell",
-        "codespell",
-        "codespell",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".codespellrc"],
-        NONE,
-        NONE,
-        &[
-            "md", "markdown", "rst", "txt", "py", "rs", "js", "ts", "go", "c", "cpp", "h", "java",
-            "rb", "sh"
-        ],
-        100
-    ),
-    entry!(
-        "cspell",
-        "CSpell",
-        "cspell",
-        Binary,
-        LINT,
-        &["--no-progress", "."],
-        NONE,
-        NONE,
-        &[
-            "cspell.json",
-            "cspell.jsonc",
-            "cspell.yaml",
-            "cspell.yml",
-            "cspell.config.js",
-            "cspell.config.cjs",
-            "cspell.config.mjs",
-            ".cspell.json",
-            ".cspell.jsonc"
-        ],
-        NONE,
-        NONE,
-        &[
-            "md", "markdown", "mdx", "rst", "txt", "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts",
-            "cts", "json", "yaml", "yml", "html", "css", "py", "rs", "go", "java", "rb", "php",
-            "swift", "kt"
-        ],
-        100
-    ),
-    entry!(
-        "hadolint",
-        "Hadolint",
-        "hadolint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".hadolint.yaml", ".hadolint.yml"],
-        NONE,
-        NONE,
-        &["dockerfile"],
-        100
-    ),
-    entry!(
-        "buildifier",
-        "Buildifier",
-        "buildifier",
-        Binary,
-        FORMAT,
-        &["-mode=check", "."],
-        &["-mode=fix", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["bzl", "bazel"],
-        NONE,
-        10
-    ),
-    entry!(
-        "cmake-format",
-        "CMake Formatter",
-        "cmake-format",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["--in-place", "."],
-        NONE,
-        &[
-            ".cmake-format.json",
-            ".cmake-format.py",
-            ".cmake-format.yaml",
-            ".cmake-format.yml"
-        ],
-        NONE,
-        &["cmake"],
-        NONE,
-        10
-    ),
-    entry!(
-        "zig",
-        "Zig Formatter",
-        "zig",
-        Binary,
-        FORMAT,
-        &["fmt", "--check", "."],
-        &["fmt", "."],
-        &["build.zig"],
-        NONE,
-        NONE,
-        &["zig", "zon"],
-        NONE,
-        10
-    ),
-    entry!(
-        "ormolu",
-        "Ormolu",
-        "ormolu",
-        Binary,
-        FORMAT,
-        &["--mode", "check", "."],
-        &["--mode", "inplace", "."],
-        NONE,
-        &[".ormolu"],
-        NONE,
-        &["hs"],
-        NONE,
-        10
-    ),
-    entry!(
-        "fourmolu",
-        "Fourmolu",
-        "fourmolu",
-        Binary,
-        FORMAT,
-        &["--mode", "check", "."],
-        &["--mode", "inplace", "."],
-        NONE,
-        &["fourmolu.yaml"],
-        NONE,
-        &["hs"],
-        NONE,
-        20
-    ),
-    entry!(
-        "hlint",
-        "HLint",
-        "hlint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".hlint.yaml"],
-        NONE,
-        NONE,
-        &["hs", "lhs"],
-        100
-    ),
-    entry!(
-        "scalafmt",
-        "Scalafmt",
-        "scalafmt",
-        Binary,
-        FORMAT,
-        &["--test", "--non-interactive", "."],
-        &["--non-interactive", "."],
-        NONE,
-        &[".scalafmt.conf"],
-        NONE,
-        &["scala", "sbt", "sc"],
-        NONE,
-        10
-    ),
-    entry!(
-        "csharpier",
-        "CSharpier",
-        "csharpier",
-        Binary,
-        FORMAT,
-        &["check", "."],
-        &["format", "."],
-        NONE,
-        &[".csharpierrc", ".csharpierrc.json", ".csharpierrc.yaml"],
-        NONE,
-        &["cs", "csx", "xml", "csproj", "props", "targets"],
-        NONE,
-        10
-    ),
-    entry!(
-        "mix-format",
-        "Elixir Formatter",
-        "mix",
-        Binary,
-        FORMAT,
-        &["format", "--check-formatted", "."],
-        &["format", "."],
-        &["mix.exs"],
-        &[".formatter.exs"],
-        NONE,
-        &["ex", "exs"],
-        NONE,
-        10
-    ),
-    entry!(
-        "actionlint",
-        "actionlint",
-        "actionlint",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &["actionlint.yaml", "actionlint.yml"],
-        NONE,
-        NONE,
-        &["github-workflow"],
-        100
-    ),
-    entry!(
-        "buf",
-        "Buf Formatter",
-        "buf",
-        Binary,
-        FORMAT,
-        &["format", "--diff", "--exit-code", "."],
-        &["format", "--write", "."],
-        NONE,
-        &["buf.yaml"],
-        NONE,
-        &["proto"],
-        NONE,
-        10
-    ),
-    entry!(
-        "ocamlformat",
-        "OCamlFormat",
-        "ocamlformat",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["--inplace", "."],
-        NONE,
-        &[".ocamlformat"],
-        NONE,
-        &["ml", "mli"],
-        NONE,
-        10
-    ),
-    entry!(
-        "standardrb",
-        "Standard Ruby",
-        "standardrb",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".standard.yml"],
-        NONE,
-        NONE,
-        &["rb", "rake", "gemspec"],
-        100
-    ),
-    entry!(
-        "fish_indent",
-        "Fish Formatter",
-        "fish_indent",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["--write", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["fish"],
-        NONE,
-        10
-    ),
-    entry!(
-        "jsonnetfmt",
-        "Jsonnet Formatter",
-        "jsonnetfmt",
-        Binary,
-        FORMAT,
-        &["--test", "."],
-        &["--in-place", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["jsonnet", "libsonnet"],
-        NONE,
-        10
-    ),
-    entry!(
-        "typstyle",
-        "Typstyle",
-        "typstyle",
-        Binary,
-        FORMAT,
-        &["--check", "."],
-        &["--inplace", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["typ"],
-        NONE,
-        10
-    ),
-    entry!(
-        "buf-lint",
-        "Buf Linter",
-        "buf",
-        Binary,
-        LINT,
-        &["lint", "."],
-        NONE,
-        NONE,
-        &["buf.yaml"],
-        NONE,
-        NONE,
-        &["proto"],
-        100
-    ),
-    entry!(
-        "cppcheck",
-        "Cppcheck",
-        "cppcheck",
-        Binary,
-        LINT,
-        &["--error-exitcode=1", "."],
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
-        100
-    ),
-    entry!(
-        "elm-format",
-        "Elm Formatter",
-        "elm-format",
-        Binary,
-        FORMAT,
-        &["--validate", "."],
-        &["--yes", "."],
-        &["elm.json"],
-        NONE,
-        NONE,
-        &["elm"],
-        NONE,
-        10
-    ),
-    entry!(
-        "standard",
-        "JavaScript Standard Style",
-        "standard",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        NONE,
-        &["js", "jsx", "mjs", "cjs"],
-        100
-    ),
-    entry!(
-        "rumdl",
-        "rumdl",
-        "rumdl",
-        Binary,
-        BOTH,
-        &["check", "."],
-        &["fmt", "."],
-        NONE,
-        &[".rumdl.toml", "rumdl.toml"],
-        NONE,
-        &["md", "markdown"],
-        &["md", "markdown"],
-        40
-    ),
-    entry!(
-        "air",
-        "Air R Formatter",
-        "air",
-        Binary,
-        FORMAT,
-        &["format", "--check", "."],
-        &["format", "."],
-        NONE,
-        &["air.toml"],
-        NONE,
-        &["r"],
-        NONE,
-        10
-    ),
-    entry!(
-        "selene",
-        "Selene",
-        "selene",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &["selene.toml"],
-        NONE,
-        NONE,
-        &["lua", "luau"],
-        100
-    ),
-    entry!(
-        "squawk",
-        "Squawk",
-        "squawk",
-        Binary,
-        LINT,
-        &["."],
-        NONE,
-        NONE,
-        &[".squawk.toml"],
-        NONE,
-        NONE,
-        &["sql"],
-        100
-    ),
-    entry!(
-        "gofumpt",
-        "gofumpt",
-        "gofumpt",
-        Binary,
-        FORMAT,
-        &["-l", "."],
-        &["-w", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["go"],
-        NONE,
-        20
-    ),
-    entry!(
-        "goimports",
-        "goimports",
-        "goimports",
-        Binary,
-        FORMAT,
-        &["-l", "."],
-        &["-w", "."],
-        NONE,
-        NONE,
-        NONE,
-        &["go"],
-        NONE,
-        30
-    ),
-    entry!(
-        "dotnet-format",
-        "dotnet format whitespace",
-        "dotnet",
-        Binary,
-        FORMAT,
-        &[
-            "format",
-            "whitespace",
-            "--no-restore",
-            "--verify-no-changes"
-        ],
-        &["format", "whitespace", "--no-restore"],
-        NONE,
-        NONE,
-        NONE,
-        &["cs", "vb"],
-        NONE,
-        30
-    ),
-    entry!(
-        "zizmor",
-        "Zizmor",
-        "zizmor",
-        Binary,
-        LINT,
-        &["--offline", "--strict-collection", "."],
-        NONE,
-        NONE,
-        &["zizmor.yml", "zizmor.yaml"],
-        NONE,
-        NONE,
-        &["github-workflow", "github-action"],
-        100
-    ),
+    ToolCatalogEntry {
+        scoped_files: false,
+        native_adapter: ToolAdapter::Rustfmt,
+        ..entry!(
+            "rustfmt",
+            "Rust Formatter",
+            "cargo",
+            Cargo,
+            FORMAT,
+            &["fmt", "--check"],
+            &["fmt"],
+            &["Cargo.toml"],
+            &["rustfmt.toml", ".rustfmt.toml"],
+            NONE,
+            &["rs"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: false,
+        ..entry!(
+            "clippy",
+            "Rust Linter",
+            "cargo",
+            Cargo,
+            LINT,
+            &["clippy", "--all-targets", "--", "-D", "warnings"],
+            NONE,
+            &["Cargo.toml"],
+            NONE,
+            NONE,
+            NONE,
+            &["rs"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "taplo",
+            "TOML Formatter",
+            "taplo",
+            Binary,
+            BOTH,
+            &["fmt", "--check"],
+            &["fmt"],
+            &["Cargo.toml"],
+            &["taplo.toml", ".taplo.toml"],
+            NONE,
+            &["toml"],
+            &["toml"],
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Prettier,
+        node_package: Some("prettier"),
+        ..entry!(
+            "prettier",
+            "Prettier",
+            "prettier",
+            Binary,
+            FORMAT,
+            &["--check", "--ignore-unknown", "."],
+            &["--write", "--ignore-unknown", "."],
+            NONE,
+            &[
+                ".prettierrc",
+                ".prettierrc.json",
+                ".prettierrc.json5",
+                ".prettierrc.yaml",
+                ".prettierrc.yml",
+                ".prettierrc.toml",
+                "prettier.config.js",
+                "prettier.config.cjs",
+                "prettier.config.mjs",
+                "prettier.config.ts"
+            ],
+            NONE,
+            &[
+                "js", "jsx", "ts", "tsx", "json", "md", "mdx", "yaml", "yml", "html", "css",
+                "scss", "less"
+            ],
+            NONE,
+            30
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Biome,
+        node_package: Some("@biomejs/biome"),
+        ..entry!(
+            "biome",
+            "Biome",
+            "biome",
+            Binary,
+            FORMAT,
+            &["format"],
+            &["format", "--write"],
+            &["package.json"],
+            &["biome.json", "biome.jsonc"],
+            NONE,
+            &[
+                "js", "jsx", "ts", "tsx", "json", "jsonc", "css", "graphql", "html"
+            ],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("eslint"),
+        ..entry!(
+            "eslint",
+            "ESLint",
+            "eslint",
+            Binary,
+            LINT,
+            &["."],
+            &["--fix", "."],
+            NONE,
+            &[
+                "eslint.config.js",
+                "eslint.config.mjs",
+                "eslint.config.cjs",
+                "eslint.config.ts",
+                ".eslintrc",
+                ".eslintrc.json",
+                ".eslintrc.yml",
+                ".eslintrc.yaml",
+                ".eslintrc.js",
+                ".eslintrc.cjs"
+            ],
+            NONE,
+            NONE,
+            &["js", "jsx", "ts", "tsx"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("dprint"),
+        ..entry!(
+            "dprint",
+            "Dprint",
+            "dprint",
+            Binary,
+            BOTH,
+            &["check"],
+            &["fmt"],
+            NONE,
+            &["dprint.json", "dprint.jsonc"],
+            NONE,
+            &[
+                "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml"
+            ],
+            &[
+                "ts", "tsx", "js", "jsx", "json", "md", "toml", "yaml", "yml"
+            ],
+            15
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::ClippierMarkdown,
+        ..entry!(
+            "clippier_md",
+            "Clippier MD",
+            "cargo",
+            Cargo,
+            FORMAT,
+            &["run", "-p", "clippier_md", "--", "fmt", "--check", "."],
+            &["run", "-p", "clippier_md", "--", "fmt", "."],
+            NONE,
+            &["packages/clippier/md/Cargo.toml"],
+            NONE,
+            &["md", "mdx"],
+            NONE,
+            5
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Remark,
+        node_package: Some("remark-cli"),
+        ..entry!(
+            "remark",
+            "remark",
+            "remark",
+            Binary,
+            FORMAT,
+            &[".", "--ext", "md,mdx"],
+            &[".", "--output", "--ext", "md,mdx"],
+            NONE,
+            &[
+                ".remarkrc",
+                ".remarkrc.json",
+                ".remarkrc.js",
+                ".remarkrc.cjs",
+                "remark.config.js",
+                "remark.config.cjs"
+            ],
+            NONE,
+            &["md", "mdx"],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Mdformat,
+        ..entry!(
+            "mdformat",
+            "mdformat",
+            "mdformat",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["."],
+            NONE,
+            &[".mdformat.toml"],
+            &["md"],
+            &["md"],
+            NONE,
+            40
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "yamlfmt",
+            "yamlfmt",
+            "yamlfmt",
+            Binary,
+            FORMAT,
+            &["-lint", "."],
+            &["."],
+            NONE,
+            &[".yamlfmt", "yamlfmt.yml", "yamlfmt.yaml"],
+            NONE,
+            &["yaml", "yml"],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "ruff",
+            "Ruff",
+            "ruff",
+            Binary,
+            BOTH,
+            &["check", "."],
+            &["format", "."],
+            &["pyproject.toml", "requirements.txt", "setup.py"],
+            &["ruff.toml", ".ruff.toml"],
+            NONE,
+            &["py", "pyi", "ipynb"],
+            &["py", "pyi", "ipynb"],
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "black",
+            "Black",
+            "black",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["."],
+            NONE,
+            &[".black"],
+            NONE,
+            &["py", "pyi", "ipynb"],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        stdout_reports_changes: true,
+        ..entry!(
+            "gofmt",
+            "Go Formatter",
+            "gofmt",
+            Binary,
+            FORMAT,
+            &["-l", "."],
+            &["-w", "."],
+            &["go.mod"],
+            NONE,
+            NONE,
+            &["go"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "shfmt",
+            "Shell Formatter",
+            "shfmt",
+            Binary,
+            FORMAT,
+            &["-d", "."],
+            &["-w", "."],
+            NONE,
+            &[".shfmt.conf"],
+            NONE,
+            &["sh", "bash"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "shellcheck",
+            "ShellCheck",
+            "shellcheck",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".shellcheckrc"],
+            NONE,
+            NONE,
+            &["sh", "bash"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "clang-format",
+            "ClangFormat",
+            "clang-format",
+            Binary,
+            FORMAT,
+            &["--dry-run", "--Werror"],
+            &["-i"],
+            NONE,
+            &[".clang-format", "_clang-format"],
+            NONE,
+            &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx", "m", "mm"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "clang-tidy",
+            "Clang-Tidy",
+            "clang-tidy",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            &["compile_commands.json"],
+            &[".clang-tidy"],
+            NONE,
+            NONE,
+            &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "stylua",
+            "StyLua",
+            "stylua",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["."],
+            NONE,
+            &["stylua.toml", ".stylua.toml"],
+            NONE,
+            &["lua", "luau"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "luacheck",
+            "Luacheck",
+            "luacheck",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".luacheckrc"],
+            NONE,
+            NONE,
+            &["lua"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "deno",
+            "Deno",
+            "deno",
+            Binary,
+            BOTH,
+            &["lint", "."],
+            &["fmt", "."],
+            NONE,
+            &["deno.json", "deno.jsonc"],
+            NONE,
+            &["js", "jsx", "ts", "tsx", "json", "jsonc", "md", "markdown"],
+            &["js", "jsx", "ts", "tsx"],
+            40
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "nixfmt",
+            "Nixfmt",
+            "nixfmt",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["."],
+            &["flake.nix"],
+            NONE,
+            &["nix"],
+            &["nix"],
+            NONE,
+            5
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "deadnix",
+            "Deadnix",
+            "deadnix",
+            Binary,
+            LINT,
+            &["--fail", "."],
+            NONE,
+            &["flake.nix"],
+            NONE,
+            NONE,
+            NONE,
+            &["nix"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "yamllint",
+            "YAML Linter",
+            "yamllint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".yamllint", ".yamllint.yaml", ".yamllint.yml"],
+            NONE,
+            NONE,
+            &["yaml", "yml"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("stylelint"),
+        ..entry!(
+            "stylelint",
+            "Stylelint",
+            "stylelint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[
+                ".stylelintrc",
+                ".stylelintrc.json",
+                ".stylelintrc.yaml",
+                ".stylelintrc.yml",
+                ".stylelintrc.js",
+                ".stylelintrc.cjs",
+                "stylelint.config.js",
+                "stylelint.config.mjs",
+                "stylelint.config.cjs"
+            ],
+            NONE,
+            NONE,
+            &["css", "scss", "less"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("markdownlint-cli"),
+        ..entry!(
+            "markdownlint",
+            "Markdownlint",
+            "markdownlint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[
+                ".markdownlint.json",
+                ".markdownlint.jsonc",
+                ".markdownlint.yaml",
+                ".markdownlint.yml",
+                ".markdownlint.cjs"
+            ],
+            NONE,
+            NONE,
+            &["md", "markdown"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "mypy",
+            "Mypy",
+            "mypy",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &["mypy.ini", ".mypy.ini"],
+            NONE,
+            NONE,
+            &["py", "pyi"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "pylint",
+            "Pylint",
+            "pylint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".pylintrc", "pylintrc"],
+            NONE,
+            NONE,
+            &["py"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "alejandra",
+            "Alejandra",
+            "alejandra",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["."],
+            &["flake.nix"],
+            NONE,
+            NONE,
+            &["nix"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "statix",
+            "Statix",
+            "statix",
+            Binary,
+            LINT,
+            &["check", "."],
+            NONE,
+            &["flake.nix"],
+            &["statix.toml"],
+            NONE,
+            NONE,
+            &["nix"],
+            0
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("oxfmt"),
+        ..entry!(
+            "oxfmt",
+            "Oxfmt",
+            "oxfmt",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["--write", "."],
+            NONE,
+            &[
+                ".oxfmtrc.json",
+                ".oxfmtrc.jsonc",
+                "oxfmt.config.ts",
+                "oxfmt.config.mts"
+            ],
+            NONE,
+            &[
+                "js",
+                "jsx",
+                "mjs",
+                "cjs",
+                "ts",
+                "tsx",
+                "mts",
+                "cts",
+                "json",
+                "jsonc",
+                "json5",
+                "yaml",
+                "yml",
+                "toml",
+                "html",
+                "htm",
+                "xhtml",
+                "vue",
+                "css",
+                "scss",
+                "less",
+                "pcss",
+                "postcss",
+                "md",
+                "markdown",
+                "mdx",
+                "graphql",
+                "gql",
+                "graphqls",
+                "hbs",
+                "handlebars"
+            ],
+            NONE,
+            25
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("oxlint"),
+        ..entry!(
+            "oxlint",
+            "Oxlint",
+            "oxlint",
+            Binary,
+            LINT,
+            &["--deny-warnings", "."],
+            NONE,
+            NONE,
+            &[
+                ".oxlintrc.json",
+                ".oxlintrc.jsonc",
+                "oxlint.config.ts",
+                "oxlint.config.mts"
+            ],
+            NONE,
+            NONE,
+            &[
+                "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "vue", "svelte", "astro"
+            ],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "isort",
+            "isort",
+            "isort",
+            Binary,
+            FORMAT,
+            &["--check-only", "."],
+            &["."],
+            NONE,
+            &[".isort.cfg"],
+            NONE,
+            &["py", "pyi"],
+            NONE,
+            40
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("pyright"),
+        ..entry!(
+            "pyright",
+            "Pyright",
+            "pyright",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &["pyrightconfig.json"],
+            NONE,
+            NONE,
+            &["py", "pyi"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "bandit",
+            "Bandit",
+            "bandit",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            &["py"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "rubocop",
+            "RuboCop",
+            "rubocop",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".rubocop.yml"],
+            NONE,
+            NONE,
+            &["rb", "rake", "gemspec"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "swiftformat",
+            "SwiftFormat",
+            "swiftformat",
+            Binary,
+            FORMAT,
+            &["--lint", "."],
+            &["."],
+            NONE,
+            &[".swiftformat"],
+            NONE,
+            &["swift"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "ktlint",
+            "ktlint",
+            "ktlint",
+            Binary,
+            FORMAT,
+            &["."],
+            &["--format", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["kt", "kts"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "sqlfluff",
+            "SQLFluff",
+            "sqlfluff",
+            Binary,
+            LINT,
+            &["lint", "."],
+            NONE,
+            NONE,
+            &[".sqlfluff"],
+            NONE,
+            NONE,
+            &["sql"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "dart",
+            "Dart Formatter",
+            "dart",
+            Binary,
+            FORMAT,
+            &["format", "--output=none", "--set-exit-if-changed", "."],
+            &["format", "."],
+            &["pubspec.yaml"],
+            NONE,
+            NONE,
+            &["dart"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "flake8",
+            "Flake8",
+            "flake8",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".flake8"],
+            NONE,
+            NONE,
+            &["py", "pyi"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "ty",
+            "ty",
+            "ty",
+            Binary,
+            LINT,
+            &["check", "."],
+            NONE,
+            NONE,
+            &["ty.toml"],
+            NONE,
+            NONE,
+            &["py", "pyi"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "yapf",
+            "YAPF",
+            "yapf",
+            Binary,
+            FORMAT,
+            &["--diff", "."],
+            &["--in-place", "."],
+            NONE,
+            &[".style.yapf"],
+            NONE,
+            &["py"],
+            NONE,
+            50
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "autopep8",
+            "autopep8",
+            "autopep8",
+            Binary,
+            FORMAT,
+            &["--diff", "--exit-code", "."],
+            &["--in-place", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["py"],
+            NONE,
+            60
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        local_bin: Some("vendor/bin"),
+        ..entry!(
+            "phpstan",
+            "PHPStan",
+            "phpstan",
+            Binary,
+            LINT,
+            &["analyse", "."],
+            NONE,
+            NONE,
+            &["phpstan.neon", "phpstan.neon.dist"],
+            NONE,
+            NONE,
+            &["php"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        local_bin: Some("vendor/bin"),
+        ..entry!(
+            "phpcs",
+            "PHP_CodeSniffer",
+            "phpcs",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[
+                ".phpcs.xml",
+                "phpcs.xml",
+                ".phpcs.xml.dist",
+                "phpcs.xml.dist"
+            ],
+            NONE,
+            NONE,
+            &["php"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "google-java-format",
+            "google-java-format",
+            "google-java-format",
+            Binary,
+            FORMAT,
+            &["--dry-run", "--set-exit-if-changed", "."],
+            &["--replace", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["java"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "vale",
+            "Vale",
+            "vale",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".vale.ini"],
+            NONE,
+            NONE,
+            &["md", "markdown", "rst", "adoc", "txt"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "codespell",
+            "codespell",
+            "codespell",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".codespellrc"],
+            NONE,
+            NONE,
+            &[
+                "md", "markdown", "rst", "txt", "py", "rs", "js", "ts", "go", "c", "cpp", "h",
+                "java", "rb", "sh"
+            ],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("cspell"),
+        ..entry!(
+            "cspell",
+            "CSpell",
+            "cspell",
+            Binary,
+            LINT,
+            &["--no-progress", "."],
+            NONE,
+            NONE,
+            &[
+                "cspell.json",
+                "cspell.jsonc",
+                "cspell.yaml",
+                "cspell.yml",
+                "cspell.config.js",
+                "cspell.config.cjs",
+                "cspell.config.mjs",
+                ".cspell.json",
+                ".cspell.jsonc"
+            ],
+            NONE,
+            NONE,
+            &[
+                "md", "markdown", "mdx", "rst", "txt", "js", "jsx", "mjs", "cjs", "ts", "tsx",
+                "mts", "cts", "json", "yaml", "yml", "html", "css", "py", "rs", "go", "java", "rb",
+                "php", "swift", "kt"
+            ],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "hadolint",
+            "Hadolint",
+            "hadolint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".hadolint.yaml", ".hadolint.yml"],
+            NONE,
+            NONE,
+            &["dockerfile"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "buildifier",
+            "Buildifier",
+            "buildifier",
+            Binary,
+            FORMAT,
+            &["-mode=check", "."],
+            &["-mode=fix", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["bzl", "bazel"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "cmake-format",
+            "CMake Formatter",
+            "cmake-format",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["--in-place", "."],
+            NONE,
+            &[
+                ".cmake-format.json",
+                ".cmake-format.py",
+                ".cmake-format.yaml",
+                ".cmake-format.yml"
+            ],
+            NONE,
+            &["cmake"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "zig",
+            "Zig Formatter",
+            "zig",
+            Binary,
+            FORMAT,
+            &["fmt", "--check", "."],
+            &["fmt", "."],
+            &["build.zig"],
+            NONE,
+            NONE,
+            &["zig", "zon"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "ormolu",
+            "Ormolu",
+            "ormolu",
+            Binary,
+            FORMAT,
+            &["--mode", "check", "."],
+            &["--mode", "inplace", "."],
+            NONE,
+            &[".ormolu"],
+            NONE,
+            &["hs"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "fourmolu",
+            "Fourmolu",
+            "fourmolu",
+            Binary,
+            FORMAT,
+            &["--mode", "check", "."],
+            &["--mode", "inplace", "."],
+            NONE,
+            &["fourmolu.yaml"],
+            NONE,
+            &["hs"],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "hlint",
+            "HLint",
+            "hlint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".hlint.yaml"],
+            NONE,
+            NONE,
+            &["hs", "lhs"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "scalafmt",
+            "Scalafmt",
+            "scalafmt",
+            Binary,
+            FORMAT,
+            &["--test", "--non-interactive", "."],
+            &["--non-interactive", "."],
+            NONE,
+            &[".scalafmt.conf"],
+            NONE,
+            &["scala", "sbt", "sc"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "csharpier",
+            "CSharpier",
+            "csharpier",
+            Binary,
+            FORMAT,
+            &["check", "."],
+            &["format", "."],
+            NONE,
+            &[".csharpierrc", ".csharpierrc.json", ".csharpierrc.yaml"],
+            NONE,
+            &["cs", "csx", "xml", "csproj", "props", "targets"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "mix-format",
+            "Elixir Formatter",
+            "mix",
+            Binary,
+            FORMAT,
+            &["format", "--check-formatted", "."],
+            &["format", "."],
+            &["mix.exs"],
+            &[".formatter.exs"],
+            NONE,
+            &["ex", "exs"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "actionlint",
+            "actionlint",
+            "actionlint",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &["actionlint.yaml", "actionlint.yml"],
+            NONE,
+            NONE,
+            &["github-workflow"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Buf,
+        ..entry!(
+            "buf",
+            "Buf Formatter",
+            "buf",
+            Binary,
+            FORMAT,
+            &["format", "--diff", "--exit-code", "."],
+            &["format", "--write", "."],
+            NONE,
+            &["buf.yaml"],
+            NONE,
+            &["proto"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "ocamlformat",
+            "OCamlFormat",
+            "ocamlformat",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["--inplace", "."],
+            NONE,
+            &[".ocamlformat"],
+            NONE,
+            &["ml", "mli"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "standardrb",
+            "Standard Ruby",
+            "standardrb",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".standard.yml"],
+            NONE,
+            NONE,
+            &["rb", "rake", "gemspec"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "fish_indent",
+            "Fish Formatter",
+            "fish_indent",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["--write", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["fish"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "jsonnetfmt",
+            "Jsonnet Formatter",
+            "jsonnetfmt",
+            Binary,
+            FORMAT,
+            &["--test", "."],
+            &["--in-place", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["jsonnet", "libsonnet"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "typstyle",
+            "Typstyle",
+            "typstyle",
+            Binary,
+            FORMAT,
+            &["--check", "."],
+            &["--inplace", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["typ"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::Buf,
+        ..entry!(
+            "buf-lint",
+            "Buf Linter",
+            "buf",
+            Binary,
+            LINT,
+            &["lint", "."],
+            NONE,
+            NONE,
+            &["buf.yaml"],
+            NONE,
+            NONE,
+            &["proto"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "cppcheck",
+            "Cppcheck",
+            "cppcheck",
+            Binary,
+            LINT,
+            &["--error-exitcode=1", "."],
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("elm-format"),
+        ..entry!(
+            "elm-format",
+            "Elm Formatter",
+            "elm-format",
+            Binary,
+            FORMAT,
+            &["--validate", "."],
+            &["--yes", "."],
+            &["elm.json"],
+            NONE,
+            NONE,
+            &["elm"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("standard"),
+        ..entry!(
+            "standard",
+            "JavaScript Standard Style",
+            "standard",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            NONE,
+            &["js", "jsx", "mjs", "cjs"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "rumdl",
+            "rumdl",
+            "rumdl",
+            Binary,
+            BOTH,
+            &["check", "."],
+            &["fmt", "."],
+            NONE,
+            &[".rumdl.toml", "rumdl.toml"],
+            NONE,
+            &["md", "markdown"],
+            &["md", "markdown"],
+            40
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "air",
+            "Air R Formatter",
+            "air",
+            Binary,
+            FORMAT,
+            &["format", "--check", "."],
+            &["format", "."],
+            NONE,
+            &["air.toml"],
+            NONE,
+            &["r"],
+            NONE,
+            10
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "selene",
+            "Selene",
+            "selene",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &["selene.toml"],
+            NONE,
+            NONE,
+            &["lua", "luau"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        node_package: Some("squawk-cli"),
+        ..entry!(
+            "squawk",
+            "Squawk",
+            "squawk",
+            Binary,
+            LINT,
+            &["."],
+            NONE,
+            NONE,
+            &[".squawk.toml"],
+            NONE,
+            NONE,
+            &["sql"],
+            100
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        stdout_reports_changes: true,
+        ..entry!(
+            "gofumpt",
+            "gofumpt",
+            "gofumpt",
+            Binary,
+            FORMAT,
+            &["-l", "."],
+            &["-w", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["go"],
+            NONE,
+            20
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        stdout_reports_changes: true,
+        ..entry!(
+            "goimports",
+            "goimports",
+            "goimports",
+            Binary,
+            FORMAT,
+            &["-l", "."],
+            &["-w", "."],
+            NONE,
+            NONE,
+            NONE,
+            &["go"],
+            NONE,
+            30
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        native_adapter: ToolAdapter::DotnetFormat,
+        ..entry!(
+            "dotnet-format",
+            "dotnet format whitespace",
+            "dotnet",
+            Binary,
+            FORMAT,
+            &[
+                "format",
+                "whitespace",
+                "--no-restore",
+                "--verify-no-changes"
+            ],
+            &["format", "whitespace", "--no-restore"],
+            NONE,
+            NONE,
+            NONE,
+            &["cs", "vb"],
+            NONE,
+            30
+        )
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        ..entry!(
+            "zizmor",
+            "Zizmor",
+            "zizmor",
+            Binary,
+            LINT,
+            &["--offline", "--strict-collection", "."],
+            NONE,
+            NONE,
+            &["zizmor.yml", "zizmor.yaml"],
+            NONE,
+            NONE,
+            &["github-workflow", "github-action"],
+            100
+        )
+    },
     ToolCatalogEntry {
         execution_scope: ExecutionScope::Directory {
             filename_filter: "--filter=",
         },
+        ..ToolCatalogEntry {
+            scoped_files: true,
+            ..entry!(
+                "tflint",
+                "TFLint",
+                "tflint",
+                Binary,
+                LINT,
+                &["--call-module-type=none", "."],
+                NONE,
+                NONE,
+                &[".tflint.hcl", ".tflint.json"],
+                NONE,
+                NONE,
+                &["tf"],
+                100
+            )
+        }
+    },
+    ToolCatalogEntry {
+        scoped_files: true,
+        replaced_path_args: &[".", "-recursive"],
         ..entry!(
-            "tflint",
-            "TFLint",
-            "tflint",
+            "terraform",
+            "Terraform",
+            "terraform",
             Binary,
-            LINT,
-            &["--call-module-type=none", "."],
+            BOTH,
+            &["validate"],
+            &["fmt", "-recursive"],
+            &[".terraform.lock.hcl"],
             NONE,
             NONE,
-            &[".tflint.hcl", ".tflint.json"],
-            NONE,
-            NONE,
-            &["tf"],
-            100
+            &["tf", "tfvars"],
+            &["tf", "tfvars"],
+            10
         )
     },
-    entry!(
-        "terraform",
-        "Terraform",
-        "terraform",
-        Binary,
-        BOTH,
-        &["validate"],
-        &["fmt", "-recursive"],
-        &[".terraform.lock.hcl"],
-        NONE,
-        NONE,
-        &["tf", "tfvars"],
-        &["tf", "tfvars"],
-        10
-    ),
-    entry!(
-        "tofu",
-        "OpenTofu",
-        "tofu",
-        Binary,
-        BOTH,
-        &["validate"],
-        &["fmt", "-recursive"],
-        &[".terraform.lock.hcl"],
-        NONE,
-        NONE,
-        &["tf", "tfvars"],
-        &["tf", "tfvars"],
-        20
-    ),
+    ToolCatalogEntry {
+        scoped_files: true,
+        replaced_path_args: &[".", "-recursive"],
+        ..entry!(
+            "tofu",
+            "OpenTofu",
+            "tofu",
+            Binary,
+            BOTH,
+            &["validate"],
+            &["fmt", "-recursive"],
+            &[".terraform.lock.hcl"],
+            NONE,
+            NONE,
+            &["tf", "tfvars"],
+            &["tf", "tfvars"],
+            20
+        )
+    },
 ];
 
 /// Looks up one catalog entry.

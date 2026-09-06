@@ -570,7 +570,8 @@ impl<'a> ToolRunner<'a> {
             }
             return;
         }
-        args.retain(|arg| arg != "." && arg != "-recursive");
+        let entry = tool_catalog_entry(&tool.name).expect("catalog scoped tool");
+        args.retain(|arg| !entry.replaced_path_args.contains(&arg.as_str()));
         args.extend(files.iter().cloned());
     }
 

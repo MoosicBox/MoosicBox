@@ -455,6 +455,7 @@ fn apply_overrides(
                         reason: "CLI override".into(),
                         selected: !disabled,
                         installed: None,
+                        source_only: false,
                         active: false,
                     }],
                     extensions: if formatting {

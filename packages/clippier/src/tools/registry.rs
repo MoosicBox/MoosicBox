@@ -590,10 +590,10 @@ impl ToolRegistry {
         probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> Option<ToolResolution> {
         let entry = tool_catalog_entry(name)?;
-        if matches!(name, "phpstan" | "phpcs") {
+        if let Some(local_bin) = entry.local_bin {
             let mut directory = Some(base_dir);
             while let Some(dir) = directory {
-                let candidate = dir.join("vendor/bin").join(&tool.binary);
+                let candidate = dir.join(local_bin).join(&tool.binary);
                 if candidate.is_file() {
                     return Some(ToolResolution::Binary(candidate));
                 }

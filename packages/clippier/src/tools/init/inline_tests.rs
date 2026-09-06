@@ -71,6 +71,7 @@ fn fixture() -> Vec<Group> {
                 reason: "Native config: example.toml".into(),
                 selected: true,
                 installed: None,
+                source_only: false,
                 active: false,
             }],
             extensions: vec!["nix".into()],
