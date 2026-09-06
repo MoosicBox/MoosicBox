@@ -112,11 +112,18 @@ The workflow uses the repository's Clippier action for matrix generation, packag
 setup, streamed execution, and its aggregate execution report. Analysis commands live in
 `.github/clippier/run-matrix/bloaty.yml`; there is no separate Python adapter or JSON case format.
 
-Routine runs cover `aconverter` (FLAC, MP3, and their combination), the server (SQLite baseline
-with Qobuz/Tidal), and the tunnel server (Postgres baseline with base64/telemetry). Manual
-`extended` runs also measure shipping default features. Clippier selects default-feature setup
-prerequisites; Bloaty independently owns the explicitly configured measurement scenarios.
-Desktop/mobile packaging and library-only crate attribution are not covered by this matrix.
+Every run discovers all public features for `aconverter`, the server, and the tunnel server
+through Clippier and measures each individually against its package baseline (respectively:
+no features, `sqlite-sqlx`, and `postgres-raw`). Every run also measures `shipping=default`
+as a separate configuration. This is not an all-features-at-once build or an exponential
+feature powerset. Feature build failures remain visible and fail the analysis after reports
+are written; features requiring other prerequisites are not silently omitted.
+
+Discovery excludes `fail-on-warnings` (lint policy), `_`-prefixed private features, and
+Windows-only `asio` on Ubuntu. `default` is excluded from the individual list only because
+it is measured separately. Clippier owns platform filtering and dependency setup for the
+discovered features. Desktop/mobile packaging and library-only crate attribution are not
+covered by this package matrix.
 
 Measurements use Ubuntu 24.04 and Rust 1.95.0. This reduces, but does not eliminate, variance:
 OS packages and runner images can change. Master artifacts are retained for 90 days and PRs

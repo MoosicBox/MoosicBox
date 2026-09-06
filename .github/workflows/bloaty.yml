@@ -2,11 +2,6 @@ name: Bloaty
 
 on:
     workflow_dispatch:
-        inputs:
-            extended:
-                description: Include shipping defaults and additional feature combinations
-                type: boolean
-                default: true
     push:
         branches: [master]
         paths: ["packages/**", "Cargo.toml", "Cargo.lock", ".github/actions/clippier/**", ".github/clippier/run-matrix/bloaty.yml", ".github/workflows/bloaty.yml"]
@@ -39,7 +34,9 @@ jobs:
               uses: ./.github/actions/clippier
               with:
                   command: features
-                  features: default
+                  # Default is measured as its own configuration, not added to the baseline.
+                  # ASIO is Windows-only; the others are non-product/internal features.
+                  skip-features: "default,fail-on-warnings,_*,asio"
                   chunked: "1000"
                   packages: moosicbox_aconverter,moosicbox_server,moosicbox_tunnel_server
                   os: ubuntu
@@ -80,8 +77,7 @@ jobs:
                   run-matrix-steps-file: .github/clippier/run-matrix/bloaty.yml
                   run-matrix-stream-output: "true"
                   run-matrix-template-vars: >-
-                      {"baseline":"${{ matrix.package.name == 'moosicbox_aconverter' && 'none' || matrix.package.name == 'moosicbox_server' && 'sqlite-sqlx' || 'postgres-raw' }}",
-                      "scenarios":"${{ matrix.package.name == 'moosicbox_aconverter' && '--feature flac --feature mp3 --scenario audio=flac,mp3' || matrix.package.name == 'moosicbox_server' && '--feature qobuz --feature tidal --scenario sources=sqlite-sqlx,qobuz,tidal' || '--feature base64 --feature telemetry' }} ${{ inputs.extended && '--scenario shipping=default' || '' }}"}
+                      {"baseline":"${{ matrix.package.name == 'moosicbox_aconverter' && 'none' || matrix.package.name == 'moosicbox_server' && 'sqlite-sqlx' || 'postgres-raw' }}"}
             - name: Download master baseline
               if: github.event_name == 'pull_request'
               id: baseline
