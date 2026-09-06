@@ -575,6 +575,68 @@ impl<'a> ToolRunner<'a> {
         args.extend(files.iter().cloned());
     }
 
+    /// Captures both pipes concurrently and always reaps a cancelled child.
+    fn capture_process(
+        command: &mut Command,
+        cancelled: &dyn Fn() -> bool,
+    ) -> std::io::Result<std::process::Output> {
+        use std::io::Read as _;
+        if cancelled() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Execution cancelled",
+            ));
+        }
+        let mut child = command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        std::thread::scope(|scope| {
+            let stdout = child.stdout.take().expect("piped stdout");
+            let stderr = child.stderr.take().expect("piped stderr");
+            let out = scope.spawn(move || {
+                let mut data = Vec::new();
+                let mut pipe = stdout;
+                pipe.read_to_end(&mut data).map(|_| data)
+            });
+            let err = scope.spawn(move || {
+                let mut data = Vec::new();
+                let mut pipe = stderr;
+                pipe.read_to_end(&mut data).map(|_| data)
+            });
+            let status = loop {
+                if cancelled() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(std::io::Error::new(
+                        std::io::ErrorKind::Interrupted,
+                        "Execution cancelled",
+                    ));
+                }
+                match child.try_wait() {
+                    Ok(Some(status)) => break Ok(status),
+                    Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                    Err(error) => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break Err(error);
+                    }
+                }
+            };
+            let stdout = out
+                .join()
+                .map_err(|_| std::io::Error::other("stdout reader panicked"))??;
+            let stderr = err
+                .join()
+                .map_err(|_| std::io::Error::other("stderr reader panicked"))??;
+            Ok(std::process::Output {
+                status: status?,
+                stdout,
+                stderr,
+            })
+        })
+    }
+
     fn directory_groups(files: &[String], filename_filter: &str) -> BTreeMap<PathBuf, Vec<String>> {
         let mut modules = BTreeMap::<PathBuf, Vec<String>>::new();
         for file in files {
@@ -589,7 +651,12 @@ impl<'a> ToolRunner<'a> {
         modules
     }
 
-    fn run_directory_scoped(&self, tool: &Tool, filename_filter: &str) -> ToolResult {
+    fn run_directory_scoped(
+        &self,
+        tool: &Tool,
+        filename_filter: &str,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ToolResult {
         use std::fmt::Write as _;
         let start = Instant::now();
         let files = self.scoped_file_args(tool).unwrap_or_default();
@@ -599,6 +666,12 @@ impl<'a> ToolRunner<'a> {
         let mut exit_code = Some(0);
         let entry = tool_catalog_entry(&tool.name).expect("catalog directory-scoped tool");
         for (directory, filters) in Self::directory_groups(&files, filename_filter) {
+            if cancelled() {
+                success = false;
+                exit_code = None;
+                stderr.push_str("Execution cancelled\n");
+                break;
+            }
             let mut command = Command::new(
                 tool.detected_path
                     .as_deref()
@@ -612,7 +685,7 @@ impl<'a> ToolRunner<'a> {
                         .filter(|arg| !entry.replaced_path_args.contains(&arg.as_str())),
                 )
                 .args(filters);
-            match command.output() {
+            match Self::capture_process(&mut command, cancelled) {
                 Ok(output) => {
                     let _ = write!(
                         stdout,
@@ -1264,7 +1337,7 @@ impl<'a> ToolRunner<'a> {
         command.current_dir(&working_dir);
         Self::apply_color_env(&mut command, self.effective_color_mode());
 
-        let output = match command.output() {
+        let output = match Self::capture_process(&mut command, &|| false) {
             Ok(output) => output,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&output_dir);
@@ -1465,7 +1538,9 @@ impl<'a> ToolRunner<'a> {
                 tool_name: tool.name.clone(),
                 display_name: tool.display_name.clone(),
             });
-            let result = self.run_directory_scoped(tool, filename_filter);
+            let result = self.run_directory_scoped(tool, filename_filter, &|| {
+                cancel_requested.load(Ordering::SeqCst)
+            });
             for line in result.stdout.lines() {
                 let _ = tx.send(ToolEvent::StdoutLine {
                     tool_name: tool.name.clone(),
@@ -1889,7 +1964,7 @@ impl<'a> ToolRunner<'a> {
             && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
                 tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
         {
-            return self.run_directory_scoped(tool, filename_filter);
+            return self.run_directory_scoped(tool, filename_filter, &|| false);
         }
         let start_time = Instant::now();
 
@@ -2060,7 +2135,7 @@ impl<'a> ToolRunner<'a> {
             }
         } else {
             // Capture all output at once
-            match command.output() {
+            match Self::capture_process(&mut command, &|| false) {
                 Ok(output) => {
                     let duration = start_time.elapsed();
                     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -2100,7 +2175,7 @@ impl<'a> ToolRunner<'a> {
             && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
                 tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
         {
-            return self.run_directory_scoped(tool, filename_filter);
+            return self.run_directory_scoped(tool, filename_filter, &|| false);
         }
         let start_time = Instant::now();
 
@@ -2190,7 +2265,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         // Capture all output at once (buffered for parallel execution)
-        match command.output() {
+        match Self::capture_process(&mut command, &|| false) {
             Ok(output) => {
                 let duration = start_time.elapsed();
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -3107,6 +3182,36 @@ mod tests {
         );
         assert_eq!(modules[Path::new("")], ["--filter=main.tf"]);
         assert!(ToolRunner::directory_groups(&[], "--filter=").is_empty());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn captured_process_drains_both_pipes_and_cancels_running_child() {
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "i=0; while [ $i -lt 10000 ]; do echo stdout; echo stderr >&2; i=$((i+1)); done",
+        ]);
+        let output = ToolRunner::capture_process(&mut command, &|| false).unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout.len(), 70000);
+        assert_eq!(output.stderr.len(), 70000);
+        let start = Instant::now();
+        let mut command = Command::new("sh");
+        command.args(["-c", "exec sleep 30"]);
+        let error = ToolRunner::capture_process(&mut command, &|| {
+            start.elapsed() >= Duration::from_millis(100)
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
+        assert!(start.elapsed() < Duration::from_secs(5));
+        let mut command = Command::new("does-not-exist-clippier-test");
+        assert_eq!(
+            ToolRunner::capture_process(&mut command, &|| true)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::Interrupted
+        );
     }
 
     #[test]
