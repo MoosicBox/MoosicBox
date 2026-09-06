@@ -95,6 +95,14 @@ live, streaming, and captured execution. Goimports also adjusts imports and may
 inspect package context. These are competing formatters, not implicitly safe
 pipeline companions.
 
+`dotnet-format` runs `dotnet format whitespace` for C# and Visual Basic, with
+`--include` containing the planned files and `--no-restore`. Checks add
+`--verify-no-changes`. It loads the project/solution discoverable in the invocation
+directory; missing or ambiguous workspaces fail through the native CLI. Nested
+workspace fan-out and analyzer/style fixes are not implemented. Project evaluation
+is not sandboxed; use it only with trusted repositories. Existing restored project
+assets may be required.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

@@ -273,6 +273,7 @@ fn language(extension: &str) -> &str {
         "elm" => "Elm",
         "r" => "R",
         "luau" => "Luau",
+        "vb" => "Visual Basic",
         "java" => "Java",
         "php" => "PHP",
         "rst" | "adoc" | "txt" => "Prose",

@@ -83,6 +83,8 @@ pub enum ToolAdapter {
     Biome,
     /// mdformat extension probing.
     Mdformat,
+    /// .NET formatting resolves a workspace and limits changes with --include.
+    DotnetFormat,
     /// Buf uses repeated path filters within a local source, not positional file lists.
     Buf,
     /// Strict remark check behavior.
@@ -184,6 +186,7 @@ impl ToolCatalogEntry {
             "prettier" => ToolAdapter::Prettier,
             "biome" => ToolAdapter::Biome,
             "mdformat" => ToolAdapter::Mdformat,
+            "dotnet-format" => ToolAdapter::DotnetFormat,
             "buf" | "buf-lint" => ToolAdapter::Buf,
             "remark" => ToolAdapter::Remark,
             _ => ToolAdapter::Standard,
@@ -1651,6 +1654,26 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         NONE,
         &["go"],
+        NONE,
+        30
+    ),
+    entry!(
+        "dotnet-format",
+        "dotnet format whitespace",
+        "dotnet",
+        Binary,
+        FORMAT,
+        &[
+            "format",
+            "whitespace",
+            "--no-restore",
+            "--verify-no-changes"
+        ],
+        &["format", "whitespace", "--no-restore"],
+        NONE,
+        NONE,
+        NONE,
+        &["cs", "vb"],
         NONE,
         30
     ),

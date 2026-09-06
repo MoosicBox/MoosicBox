@@ -556,6 +556,13 @@ impl<'a> ToolRunner<'a> {
             return;
         }
 
+        if tool_catalog_entry(&tool.name)
+            .is_some_and(|entry| entry.adapter() == ToolAdapter::DotnetFormat)
+        {
+            args.push("--include".to_owned());
+            args.extend(files.iter().cloned());
+            return;
+        }
         if tool_catalog_entry(&tool.name).is_some_and(|entry| entry.adapter() == ToolAdapter::Buf) {
             for file in files {
                 args.push("--path".to_owned());
@@ -2925,6 +2932,24 @@ mod tests {
             true,
             "informational output"
         ));
+    }
+
+    #[test]
+    fn dotnet_formatter_uses_workspace_includes_and_disables_restore() {
+        let tool = tool_catalog_entry("dotnet-format").unwrap().tool();
+        let files = vec!["src/One.cs".to_owned(), "src/Two words.vb".to_owned()];
+        for (check, mut args) in [
+            (true, tool.check_args.clone()),
+            (false, tool.format_args.clone()),
+        ] {
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+            let mut expected = vec!["format", "whitespace", "--no-restore"];
+            if check {
+                expected.push("--verify-no-changes");
+            }
+            expected.extend(["--include", "src/One.cs", "src/Two words.vb"]);
+            assert_eq!(args, expected);
+        }
     }
 
     #[test]
