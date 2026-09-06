@@ -1539,7 +1539,7 @@ impl<'a> ToolRunner<'a> {
         tool_name: &str,
         is_stderr: bool,
         output: &Arc<Mutex<Vec<u8>>>,
-    ) {
+    ) -> std::io::Result<()> {
         let mut buffer = [0_u8; 4096];
         let mut line = Vec::new();
         let mut overwrite_next = false;
@@ -1547,7 +1547,9 @@ impl<'a> ToolRunner<'a> {
 
         loop {
             let read_count = match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
                 Ok(count) => count,
             };
 
@@ -1596,6 +1598,7 @@ impl<'a> ToolRunner<'a> {
         if !line.is_empty() {
             Self::emit_tool_line_event(tx, tool_name, is_stderr, &line, overwrite_next);
         }
+        Ok(())
     }
 
     #[cfg(feature = "tools-tui")]
@@ -1671,13 +1674,13 @@ impl<'a> ToolRunner<'a> {
             &mut command,
             &|| cancel_requested.load(Ordering::SeqCst),
             |pipe| {
-                Self::pump_stream_events(pipe, tx, &tool.name, false, &stdout_content);
+                Self::pump_stream_events(pipe, tx, &tool.name, false, &stdout_content)?;
                 Ok(std::mem::take(&mut *stdout_content.lock().map_err(
                     |_| std::io::Error::other("stdout capture poisoned"),
                 )?))
             },
             |pipe| {
-                Self::pump_stream_events(pipe, tx, &tool.name, true, &stderr_content);
+                Self::pump_stream_events(pipe, tx, &tool.name, true, &stderr_content)?;
                 Ok(std::mem::take(&mut *stderr_content.lock().map_err(
                     |_| std::io::Error::other("stderr capture poisoned"),
                 )?))
@@ -3059,6 +3062,35 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "tools-tui")]
+    fn event_reader_retries_interruptions_and_reports_io_failures() {
+        struct FailingReader {
+            interrupted: bool,
+        }
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                if self.interrupted {
+                    Err(std::io::ErrorKind::BrokenPipe.into())
+                } else {
+                    self.interrupted = true;
+                    Err(std::io::ErrorKind::Interrupted.into())
+                }
+            }
+        }
+        let (tx, _) = mpsc::channel();
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let error = ToolRunner::pump_stream_events(
+            FailingReader { interrupted: false },
+            &tx,
+            "test",
+            false,
+            &output,
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();
@@ -3433,7 +3465,8 @@ mod tests {
             "tool",
             false,
             &output,
-        );
+        )
+        .unwrap();
 
         let events: Vec<ToolEvent> = rx.try_iter().collect();
         assert_eq!(events.len(), 2);
@@ -3471,7 +3504,8 @@ mod tests {
             "tool",
             false,
             &output,
-        );
+        )
+        .unwrap();
 
         let events: Vec<ToolEvent> = rx.try_iter().collect();
         assert_eq!(events.len(), 2);
