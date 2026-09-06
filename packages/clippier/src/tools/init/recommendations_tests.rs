@@ -159,6 +159,44 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn additional_ecosystems_are_visible_and_native_config_selects_linter() {
+        let root = tempfile::tempdir().unwrap();
+        for file in ["main.java", "index.php", "main.py", "readme.rst"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        std::fs::write(root.path().join("pyproject.toml"), "[tool.ty]\n").unwrap();
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        for name in [
+            "google-java-format",
+            "phpstan",
+            "phpcs",
+            "flake8",
+            "ty",
+            "yapf",
+            "autopep8",
+            "vale",
+            "codespell",
+            "cspell",
+        ] {
+            assert!(
+                result
+                    .iter()
+                    .flat_map(|group| &group.choices)
+                    .any(|choice| choice.name == name),
+                "missing {name}"
+            );
+        }
+        assert!(
+            result
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "ty" && choice.selected)
+        );
+        assert_eq!(inventory.diagnostics().recursive_walks, 1);
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

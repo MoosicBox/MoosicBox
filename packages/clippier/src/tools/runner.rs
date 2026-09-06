@@ -2688,6 +2688,38 @@ mod tests {
     }
 
     #[test]
+    fn new_file_scoped_integrations_exclude_unplanned_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(dir.path())).unwrap();
+        for (name, extension) in [
+            ("flake8", "py"),
+            ("ty", "py"),
+            ("yapf", "py"),
+            ("autopep8", "py"),
+            ("phpstan", "php"),
+            ("phpcs", "php"),
+            ("google-java-format", "java"),
+            ("vale", "rst"),
+            ("codespell", "md"),
+            ("cspell", "ts"),
+        ] {
+            let included = format!("included.{extension}");
+            std::fs::write(dir.path().join(&included), "").unwrap();
+            let runner = ToolRunner::new(&registry)
+                .with_working_dir(dir.path())
+                .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                    &included,
+                )])));
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            assert_eq!(
+                runner.scoped_file_args(&tool),
+                Some(vec![included]),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

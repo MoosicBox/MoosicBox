@@ -21,7 +21,14 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 ## Ecosystem coverage
 
 The catalog includes Oxfmt, Oxlint, isort, Pyright, Bandit, RuboCop,
-SwiftFormat, ktlint, SQLFluff, and Dart formatting. Source-matched linters appear
+SwiftFormat, ktlint, SQLFluff, and Dart formatting. Additional integrations cover
+Flake8, ty, YAPF, autopep8, PHPStan, PHP_CodeSniffer (`phpcs`),
+google-java-format, Vale, codespell, and CSpell. PHP tools resolve standard
+Composer `vendor/bin` executables before PATH; CSpell supports local Node bins.
+google-java-format expects a native executable or installed launcher on PATH,
+not an unconfigured Java JAR. Spelling/prose coverage is limited to the catalog's
+explicit text/source extensions, not arbitrary binary or extensionless files.
+Source-matched linters appear
 in init even without native config, but remain unchecked unless configuration or
 other discovery evidence selects them. Formatter overlap is not assumed safe:
 for example, isort and a Python formatter still need an explicit pipeline.

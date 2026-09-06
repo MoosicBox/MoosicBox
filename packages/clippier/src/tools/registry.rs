@@ -590,6 +590,19 @@ impl ToolRegistry {
         probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> Option<ToolResolution> {
         let entry = tool_catalog_entry(name)?;
+        if matches!(name, "phpstan" | "phpcs") {
+            let mut directory = Some(base_dir);
+            while let Some(dir) = directory {
+                let candidate = dir.join("vendor/bin").join(&tool.binary);
+                if candidate.is_file() {
+                    return Some(ToolResolution::Binary(candidate));
+                }
+                if dir.join(".git").exists() || dir.join("composer.json").exists() {
+                    break;
+                }
+                directory = dir.parent();
+            }
+        }
         if entry.uses_local_node_bin()
             && let Some(path) = Self::resolve_node_bin_in_ancestors(base_dir, &tool.binary)
         {
