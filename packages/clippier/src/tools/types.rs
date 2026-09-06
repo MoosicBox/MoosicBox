@@ -357,33 +357,21 @@ impl ToolsConfig {
     /// excluded path is explicitly included by a per-tool policy.
     #[must_use]
     pub fn explicitly_includes_exclusion_profile(&self, profile_id: &str) -> bool {
+        let Some(profile) = super::scope::AUTOMATIC_EXCLUSION_PROFILES
+            .iter()
+            .find(|profile| profile.id == profile_id)
+        else {
+            return false;
+        };
         self.tools.values().any(|policy| {
             policy.include.iter().any(|pattern| {
                 let normalized = pattern.trim_start_matches('/');
-                match profile_id {
-                    "rust" => normalized == "target/**" || normalized.ends_with("/target/**"),
-                    "node" => {
-                        normalized == "node_modules/**" || normalized.ends_with("/node_modules/**")
-                    }
-                    "python" => {
-                        normalized == ".venv/**"
-                            || normalized.ends_with("/.venv/**")
-                            || normalized == "venv/**"
-                            || normalized.ends_with("/venv/**")
-                    }
-                    "cpp" => {
-                        normalized == "CMakeFiles/**"
-                            || normalized.ends_with("/CMakeFiles/**")
-                            || normalized == "cmake-build-*/**"
-                            || normalized.ends_with("/cmake-build-*/**")
-                    }
-                    "lua" => normalized == ".luarocks/**" || normalized.ends_with("/.luarocks/**"),
-                    "go" => normalized == "vendor/**" || normalized.ends_with("/vendor/**"),
-                    "terraform" => {
-                        normalized == ".terraform/**" || normalized.ends_with("/.terraform/**")
-                    }
-                    _ => false,
-                }
+                profile.exclusions.iter().any(|excluded| {
+                    normalized == *excluded
+                        || normalized
+                            .strip_suffix(excluded)
+                            .is_some_and(|prefix| prefix.ends_with('/'))
+                })
             })
         })
     }
@@ -393,9 +381,9 @@ impl ToolsConfig {
     #[must_use]
     pub fn effective_scope(&self) -> super::ScopeConfig {
         let mut scope = self.scope.clone();
-        for profile in ["rust", "node", "python", "cpp", "lua", "go", "terraform"] {
-            if self.explicitly_includes_exclusion_profile(profile) {
-                scope.disable_profiles.insert(profile.to_string());
+        for profile in super::scope::AUTOMATIC_EXCLUSION_PROFILES {
+            if self.explicitly_includes_exclusion_profile(profile.id) {
+                scope.disable_profiles.insert(profile.id.to_string());
             }
         }
         scope
@@ -436,6 +424,30 @@ impl ToolsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_declared_exclusion_can_be_explicitly_reincluded() {
+        for profile in super::super::scope::AUTOMATIC_EXCLUSION_PROFILES {
+            for exclusion in profile.exclusions {
+                let mut config = ToolsConfig::default();
+                config.tools.insert(
+                    "test".to_owned(),
+                    ToolPolicy {
+                        include: vec![format!("nested/{exclusion}")],
+                        ..ToolPolicy::default()
+                    },
+                );
+                assert!(
+                    config
+                        .effective_scope()
+                        .disable_profiles
+                        .contains(profile.id),
+                    "{}: {exclusion}",
+                    profile.id
+                );
+            }
+        }
+    }
 
     #[test]
     fn explicit_include_disables_only_its_automatic_profile() {

@@ -145,6 +145,8 @@ pub enum ExecutionScope {
 /// Canonical metadata for a built-in tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolCatalogEntry {
+    /// Default Nix package for an explicitly supported runner fallback.
+    pub nix_package: Option<&'static str>,
     /// Native adapter, independent of the tool identifier.
     pub native_adapter: ToolAdapter,
     /// Optional Node package providing this executable.
@@ -361,6 +363,7 @@ macro_rules! entry {
      $check:expr, $format:expr, $manifests:expr, $configs:expr, $content:expr,
      $fmt_ext:expr, $lint_ext:expr, $priority:literal) => {
         ToolCatalogEntry {
+            nix_package: None,
             replaced_path_args: &["."],
             native_adapter: ToolAdapter::Standard,
             node_package: None,
@@ -603,6 +606,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
     ToolCatalogEntry {
         scoped_files: true,
         native_adapter: ToolAdapter::Mdformat,
+        nix_package: Some("nixpkgs#mdformat"),
         ..entry!(
             "mdformat",
             "mdformat",
@@ -621,6 +625,7 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
     },
     ToolCatalogEntry {
         scoped_files: true,
+        nix_package: Some("nixpkgs#yamlfmt"),
         ..entry!(
             "yamlfmt",
             "yamlfmt",

@@ -203,11 +203,9 @@ impl ToolRegistry {
             return Some(value.clone());
         }
 
-        match tool_name {
-            "mdformat" => Some("nixpkgs#mdformat".to_string()),
-            "yamlfmt" => Some("nixpkgs#yamlfmt".to_string()),
-            _ => None,
-        }
+        tool_catalog_entry(tool_name)?
+            .nix_package
+            .map(str::to_owned)
     }
 
     fn nix_package_for_mdformat_extension(config: &ToolsConfig, extension: &str) -> Option<String> {
@@ -367,7 +365,9 @@ impl ToolRegistry {
     }
 
     fn resolve_native_paths(tool: &mut Tool, base_dir: &Path) {
-        if tool.name == "prettier" {
+        if tool_catalog_entry(&tool.name)
+            .is_some_and(|entry| entry.adapter() == ToolAdapter::Prettier)
+        {
             tool.native_ignore_path = Self::find_file_in_ancestors(base_dir, &[".prettierignore"]);
         }
     }
@@ -609,7 +609,7 @@ impl ToolRegistry {
             return Some(ToolResolution::Binary(path));
         }
 
-        if name == "mdformat" && runner_fallback {
+        if entry.adapter() == ToolAdapter::Mdformat && runner_fallback {
             let requested_extensions =
                 Self::parse_mdformat_requested_extensions(base_dir, diagnostics);
             let candidates = Self::mdformat_runner_candidates(config, &requested_extensions);
@@ -638,13 +638,13 @@ impl ToolRegistry {
         if !runner_fallback {
             return None;
         }
-        if name == "remark" {
+        if entry.adapter() == ToolAdapter::Remark {
             return Self::remark_runner_resolution();
         }
         if let Some(package) = entry.node_runner_package() {
             return Self::node_runner_resolution(package);
         }
-        if name == "mdformat" {
+        if entry.adapter() == ToolAdapter::Mdformat {
             return Self::mdformat_runner_candidates(
                 config,
                 &Self::parse_mdformat_requested_extensions(base_dir, diagnostics),
@@ -652,7 +652,7 @@ impl ToolRegistry {
             .into_iter()
             .next();
         }
-        if name == "yamlfmt"
+        if entry.nix_package.is_some()
             && Self::nix_fallback_enabled(config)
             && let Some(package) = Self::nix_package_for_tool(config, name)
         {

@@ -597,6 +597,7 @@ impl<'a> ToolRunner<'a> {
         let mut stderr = String::new();
         let mut success = true;
         let mut exit_code = Some(0);
+        let entry = tool_catalog_entry(&tool.name).expect("catalog directory-scoped tool");
         for (directory, filters) in Self::directory_groups(&files, filename_filter) {
             let mut command = Command::new(
                 tool.detected_path
@@ -605,7 +606,11 @@ impl<'a> ToolRunner<'a> {
             );
             command.current_dir(self.working_dir_path().join(&directory));
             command
-                .args(tool.check_args.iter().filter(|arg| arg.as_str() != "."))
+                .args(
+                    tool.check_args
+                        .iter()
+                        .filter(|arg| !entry.replaced_path_args.contains(&arg.as_str())),
+                )
                 .args(filters);
             match command.output() {
                 Ok(output) => {
