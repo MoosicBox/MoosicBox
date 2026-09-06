@@ -122,6 +122,16 @@ fn initialize_with_ui(
     if interactive {
         #[allow(unused_mut)]
         let mut groups = recommendations::groups(&mut inventory, &config);
+        let installed = groups
+            .iter()
+            .flat_map(|group| group.choices.iter().map(|choice| choice.name.clone()))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .filter_map(|name| {
+                super::ToolRegistry::installed_path(&name, root, &config).map(|path| (name, path))
+            })
+            .collect();
+        recommendations::apply_availability(&mut groups, &installed);
         #[cfg(not(feature = "tools-tui"))]
         for group in &groups {
             writeln!(

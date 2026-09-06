@@ -14,6 +14,7 @@ fn groups() -> Vec<Group> {
                 name: format!("tool-{i}"),
                 reason: String::new(),
                 selected: false,
+                installed: None,
             })
             .collect(),
         extensions: vec![],

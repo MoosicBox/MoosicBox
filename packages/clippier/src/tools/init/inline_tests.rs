@@ -70,6 +70,7 @@ fn fixture() -> Vec<Group> {
                 name: format!("tool-{index}"),
                 reason: "Native config: example.toml".into(),
                 selected: true,
+                installed: None,
             }],
             extensions: vec!["nix".into()],
             files: vec!["flake.nix".into()],

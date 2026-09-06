@@ -9,6 +9,7 @@ pub(super) struct Choice {
     pub name: String,
     pub reason: String,
     pub selected: bool,
+    pub installed: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug)]
@@ -87,6 +88,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
                     |fact| format!("{:?}: {}", fact.kind, fact.path.display()),
                 ),
                 selected: Some(name) == winner,
+                installed: None,
             })
             .collect::<Vec<_>>();
         if !choices.is_empty() {
@@ -129,6 +131,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             name,
             reason: format!("{:?}: {}", fact.kind, fact.path.display()),
             selected: true,
+            installed: None,
         })
         .collect::<Vec<_>>();
     for choice in choices {
@@ -169,6 +172,42 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .then(right.formatting.cmp(&left.formatting))
     });
     result
+}
+
+pub(super) fn apply_availability(
+    groups: &mut [Group],
+    installed: &BTreeMap<String, std::path::PathBuf>,
+) {
+    for group in groups {
+        for choice in &mut group.choices {
+            choice.installed = installed.get(&choice.name).cloned();
+        }
+        // Only source-only defaults may fall back; native/Clippier preferences win.
+        if group.formatting
+            && group.choices.iter().any(|choice| {
+                choice.selected
+                    && choice.installed.is_none()
+                    && choice.reason.starts_with("source files;")
+            })
+            && let Some(winner) = group
+                .choices
+                .iter()
+                .filter(|choice| choice.installed.is_some())
+                .min_by_key(|choice| {
+                    let entry =
+                        super::super::tool_catalog_entry(&choice.name).expect("catalog candidate");
+                    (entry.formatter_priority, &choice.name)
+                })
+                .map(|choice| choice.name.clone())
+        {
+            for choice in &mut group.choices {
+                choice.selected = choice.name == winner;
+                if choice.selected {
+                    choice.reason.push_str("; installed fallback");
+                }
+            }
+        }
+    }
 }
 
 fn language(extension: &str) -> &str {

@@ -783,6 +783,32 @@ impl ToolRegistry {
             .collect();
     }
 
+    /// Resolve an installed executable without runner fallback or capability probes.
+    pub(crate) fn installed_path(
+        name: &str,
+        base_dir: &Path,
+        config: &ToolsConfig,
+    ) -> Option<PathBuf> {
+        if let Some(path) = config.get_path(name) {
+            return Self::resolve_configured_executable(base_dir, path);
+        }
+        let tool = tool_catalog_entry(name)?.tool();
+        match Self::resolve_preferred_tool(
+            name,
+            &tool,
+            base_dir,
+            false,
+            config,
+            &std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tools::InventoryDiagnostics::default(),
+            )),
+            &std::sync::Mutex::new(BTreeMap::new()),
+        )? {
+            ToolResolution::Binary(path) => Some(path),
+            ToolResolution::Runner { .. } => None,
+        }
+    }
+
     /// Registers a tool definition
     pub fn register(&mut self, tool: Tool) {
         self.tools.insert(tool.name.clone(), tool);
