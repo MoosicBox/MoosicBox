@@ -117,8 +117,11 @@ filename `--filter` arguments. Filters restrict diagnostics, not reads: TFLint
 still loads the whole selected module. Native configuration resolves from each
 module's working directory; plugins must already be installed (no implicit
 `--init`). Output is buffered per module, including in the live TUI. Cancellation stops
-subsequent modules and kills/reaps the active direct child while draining both
-output pipes. Descendant-process-tree termination is not implemented.
+subsequent modules and terminates the invocation's Unix process group while
+reaping the child and draining both pipes, including when the parent exits first.
+Windows uses best-effort `taskkill /T /F` (not validated on Windows). Processes
+that deliberately detach from the Unix group are not covered; tree termination
+also depends on the platform kill utility being available.
 
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
