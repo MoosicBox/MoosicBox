@@ -452,7 +452,7 @@ fn enforces_explicit_report_thresholds() {
         ],
     );
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("exceeding 20 bytes"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("exceeding 20 B"));
 }
 
 #[test]

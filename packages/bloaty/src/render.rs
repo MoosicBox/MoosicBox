@@ -88,7 +88,7 @@ pub fn markdown(report: &AnalysisReport) -> String {
                 };
                 order.then_with(|| a.scenario.name.cmp(&b.scenario.name))
             });
-            writeln!(output, "<details{}>\n<summary>{title}</summary>\n\n| Scenario | Defaults | Explicit features | Total bytes | Delta bytes | Delta % | Duration (ms) |\n| --- | --- | --- | ---: | ---: | ---: | ---: |",
+            writeln!(output, "<details{}>\n<summary>{title}</summary>\n\n| Scenario | Defaults | Explicit features | Total size | Size delta | Delta % | Duration (ms) |\n| --- | --- | --- | ---: | ---: | ---: | ---: |",
                 if index == 0 { " open" } else { "" }
             ).expect("writing to String cannot fail");
             for (row, measurement) in &rows {
@@ -98,10 +98,10 @@ pub fn markdown(report: &AnalysisReport) -> String {
                     escape(&row.scenario.name),
                     row.scenario.config.default_features,
                     feature_names(row),
-                    measurement.size_bytes,
+                    ByteSize(measurement.size_bytes),
                     measurement
                         .delta_bytes
-                        .map_or_else(|| "—".to_owned(), |value| format!("{value:+}")),
+                        .map_or_else(|| "—".to_owned(), signed_size),
                     escape(measurement.delta_percent.as_deref().unwrap_or("—")),
                     row.duration_ms
                 )
@@ -116,6 +116,13 @@ pub fn markdown(report: &AnalysisReport) -> String {
         escape(report.environment.git_revision.as_deref().unwrap_or("unknown"))
     ).expect("writing to String cannot fail");
     output
+}
+
+/// Formats a signed byte delta using human-readable binary units.
+#[must_use]
+pub fn signed_size(value: i64) -> String {
+    let sign = if value < 0 { '-' } else { '+' };
+    format!("{sign}{}", ByteSize(value.unsigned_abs()))
 }
 
 fn escape(value: &str) -> String {
@@ -156,12 +163,11 @@ fn render_scenario(output: &mut String, label: &str, report: &ScenarioReport) {
     match &report.outcome {
         ScenarioStatus::Success { measurement } => {
             let delta = measurement.delta_bytes.map_or_else(String::new, |delta| {
-                let sign = if delta >= 0 { '+' } else { '-' };
                 let percent = measurement
                     .delta_percent
                     .as_deref()
                     .map_or_else(String::new, |percent| format!(", {percent}%"));
-                format!(" ({sign}{}{percent})", ByteSize(delta.unsigned_abs()))
+                format!(" ({}{percent})", signed_size(delta))
             });
             writeln!(
                 output,
@@ -356,7 +362,16 @@ mod tests {
         assert_eq!(output.matches("<details open>").count(), 1);
         assert_eq!(output.matches("### Baseline").count(), 1);
         assert!(output.find("FAILED").unwrap() < output.find("<details").unwrap());
-        assert!(output.contains("| unknown | false | none | 500 | — | — | 1 |"));
+        assert!(output.contains("| unknown | false | none | 500 B | — | — | 1 |"));
+    }
+
+    #[test]
+    fn signed_sizes_use_binary_units_and_preserve_signs() {
+        assert_eq!(signed_size(0), "+0 B");
+        assert_eq!(signed_size(1024), "+1.0 KiB");
+        assert_eq!(signed_size(-1_048_576), "-1.0 MiB");
+        assert_eq!(signed_size(1_073_741_824), "+1.0 GiB");
+        assert!(signed_size(i64::MIN).starts_with('-'));
     }
 
     #[test]

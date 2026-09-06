@@ -12,6 +12,7 @@ use bloaty::{
     characterize_variance, compare_reports, feature_scenario, parse_feature_config,
     parse_named_scenario, render, validate_scenarios, workspace, write_json, write_jsonl,
 };
+use bytesize::ByteSize;
 use cargo_metadata::MetadataCommand;
 use clap::{Parser, ValueEnum};
 
@@ -229,12 +230,12 @@ fn print_variance(variance: &VarianceReport) {
     println!("Bloaty variance across {} reports", variance.report_count);
     for scenario in &variance.scenarios {
         println!(
-            "  {:<20} {} samples, {}..{} bytes, spread {} bytes ({}%)",
+            "  {:<20} {} samples, {}..{}, spread {} ({}%)",
             scenario.name,
             scenario.samples,
-            scenario.minimum_size_bytes,
-            scenario.maximum_size_bytes,
-            scenario.spread_bytes,
+            ByteSize(scenario.minimum_size_bytes),
+            ByteSize(scenario.maximum_size_bytes),
+            ByteSize(scenario.spread_bytes),
             scenario.spread_percent.as_deref().unwrap_or("undefined")
         );
     }
@@ -284,7 +285,9 @@ fn enforce_thresholds(
                 && *delta_bytes > i64::try_from(limit).unwrap_or(i64::MAX)
             {
                 bail!(
-                    "scenario '{name}' increased by {delta_bytes} bytes, exceeding {limit} bytes"
+                    "scenario '{name}' increased by {}, exceeding {}",
+                    render::signed_size(*delta_bytes),
+                    ByteSize(limit)
                 );
             }
             if let Some(limit) = max_increase_percent
@@ -321,7 +324,10 @@ fn print_comparison(comparison: &ReportComparison) {
                 delta_bytes,
                 delta_percent,
             } => println!(
-                "  {name:<20} {baseline_size_bytes} -> {candidate_size_bytes} ({delta_bytes:+} bytes, {}%)",
+                "  {name:<20} {} -> {} ({}, {}%)",
+                ByteSize(*baseline_size_bytes),
+                ByteSize(*candidate_size_bytes),
+                render::signed_size(*delta_bytes),
                 delta_percent.as_deref().unwrap_or("undefined")
             ),
             ScenarioComparison::Added { name } => println!("  {name:<20} ADDED"),
