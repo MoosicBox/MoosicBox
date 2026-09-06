@@ -629,10 +629,38 @@ impl<'a> ToolRunner<'a> {
         std::thread::scope(|scope| {
             let stdout = child.stdout.take().expect("piped stdout");
             let stderr = child.stderr.take().expect("piped stderr");
-            let out = scope.spawn(move || stdout_reader(stdout));
-            let err = scope.spawn(move || stderr_reader(stderr));
+            let mut out = Some(scope.spawn(move || stdout_reader(stdout)));
+            let mut err = Some(scope.spawn(move || stderr_reader(stderr)));
+            let mut stdout = None;
+            let mut stderr = None;
+            let mut reader_error = None;
             let mut exited = None;
             let status = loop {
+                for (handle, captured, label) in [
+                    (&mut out, &mut stdout, "stdout"),
+                    (&mut err, &mut stderr, "stderr"),
+                ] {
+                    if handle
+                        .as_ref()
+                        .is_some_and(std::thread::ScopedJoinHandle::is_finished)
+                    {
+                        match handle.take().expect("finished reader").join() {
+                            Ok(Ok(bytes)) => *captured = Some(bytes),
+                            Ok(Err(error)) => {
+                                reader_error.get_or_insert(error);
+                            }
+                            Err(_) => {
+                                reader_error.get_or_insert_with(|| {
+                                    std::io::Error::other(format!("{label} reader panicked"))
+                                });
+                            }
+                        }
+                    }
+                }
+                if let Some(error) = reader_error.take() {
+                    Self::terminate_process_tree(&mut child);
+                    break Err(error);
+                }
                 if cancelled() {
                     Self::terminate_process_tree(&mut child);
                     break Err(std::io::Error::new(
@@ -641,7 +669,7 @@ impl<'a> ToolRunner<'a> {
                     ));
                 }
                 if let Some(status) = exited {
-                    if out.is_finished() && err.is_finished() {
+                    if out.is_none() && err.is_none() {
                         break Ok(status);
                     }
                     std::thread::sleep(Duration::from_millis(25));
@@ -656,16 +684,14 @@ impl<'a> ToolRunner<'a> {
                     }
                 }
             };
-            let stdout = out
-                .join()
-                .map_err(|_| std::io::Error::other("stdout reader panicked"))??;
-            let stderr = err
-                .join()
-                .map_err(|_| std::io::Error::other("stderr reader panicked"))??;
+            // Join both readers even on failure; do not let a second panic escape scope.
+            for handle in [out, err].into_iter().flatten() {
+                let _ = handle.join();
+            }
             Ok(std::process::Output {
                 status: status?,
-                stdout,
-                stderr,
+                stdout: stdout.expect("successful stdout reader"),
+                stderr: stderr.expect("successful stderr reader"),
             })
         })
     }
@@ -3088,6 +3114,32 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn failed_reader_terminates_child_and_drains_other_pipe() {
+        for panic_reader in [false, true] {
+            let mut command = Command::new("sh");
+            command.args(["-c", "exec sleep 3"]);
+            let start = Instant::now();
+            let error = ToolRunner::execute_process_with_readers(
+                &mut command,
+                &|| false,
+                move |_pipe| {
+                    assert!(!panic_reader, "injected reader panic");
+                    Err(std::io::ErrorKind::BrokenPipe.into())
+                },
+                |pipe| ToolRunner::drain_process_pipe(pipe, true, &|_, _| {}),
+            )
+            .unwrap_err();
+            assert!(start.elapsed() < Duration::from_secs(2));
+            if panic_reader {
+                assert!(error.to_string().contains("reader panicked"));
+            } else {
+                assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+            }
+        }
     }
 
     #[test]
