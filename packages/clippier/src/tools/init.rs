@@ -177,7 +177,13 @@ fn initialize_with_options(
                 group.files.len()
             )?;
             for choice in &group.choices {
-                writeln!(output, "{}: {}", choice.name, choice.reason)?;
+                writeln!(
+                    output,
+                    "{}{}: {}",
+                    choice.name,
+                    if choice.active { " · active" } else { "" },
+                    choice.reason
+                )?;
             }
         }
         #[cfg(feature = "tools-tui")]
