@@ -146,8 +146,10 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         .filter(|entry| {
             (evidence.contains_key(entry.name)
                 || inventory.files().iter().any(|path| {
-                    crate::tools::catalog::file_format(path)
-                        .is_some_and(|ext| entry.lint_extensions.contains(&ext))
+                    entry
+                        .lint_extensions
+                        .iter()
+                        .any(|key| crate::tools::catalog::matches_format(path, key))
                 }))
                 && entry
                     .capabilities
@@ -181,8 +183,9 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .files()
             .iter()
             .filter(|path| {
-                crate::tools::catalog::file_format(path)
-                    .is_some_and(|ext| extensions.iter().any(|value| value == ext))
+                extensions
+                    .iter()
+                    .any(|key| crate::tools::catalog::matches_format(path, key))
             })
             .cloned()
             .collect();
@@ -258,6 +261,10 @@ fn language(extension: &str) -> &str {
         "zig" | "zon" => "Zig",
         "hs" | "lhs" => "Haskell",
         "scala" | "sbt" | "sc" => "Scala",
+        "cs" | "csx" => "C#",
+        "xml" | "csproj" | "props" | "targets" => "XML / MSBuild",
+        "ex" | "exs" => "Elixir",
+        "github-workflow" => "GitHub Actions",
         "java" => "Java",
         "php" => "PHP",
         "rst" | "adoc" | "txt" => "Prose",

@@ -150,8 +150,9 @@ impl ScopeMatcher {
                 if self.is_excluded(path) || !entry.file_type().is_some_and(|kind| kind.is_file()) {
                     continue;
                 }
-                let included = crate::tools::catalog::file_format(path)
-                    .is_some_and(|extension| extensions.contains(&extension.to_ascii_lowercase()));
+                let included = extensions
+                    .iter()
+                    .any(|key| crate::tools::catalog::matches_format(path, key));
                 if included {
                     files.insert(path.to_path_buf());
                 }
@@ -170,8 +171,9 @@ impl ScopeMatcher {
         files
             .iter()
             .filter(|path| {
-                crate::tools::catalog::file_format(path)
-                    .is_some_and(|extension| extensions.contains(&extension.to_ascii_lowercase()))
+                extensions
+                    .iter()
+                    .any(|key| crate::tools::catalog::matches_format(path, key))
                     && !self.is_excluded(&self.root.join(path))
             })
             .cloned()

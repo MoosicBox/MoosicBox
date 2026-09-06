@@ -47,6 +47,15 @@ source-only formatter defaults. Scalafmt retains native configuration/version
 resolution, which may require downloading its configured formatter version.
 These integrations pass selected files explicitly; HLint does not apply fixes.
 
+The catalog also supports CSharpier's current `check`/`format` CLI for C#/XML,
+Elixir's `mix format`, and actionlint. CSharpier requires an installed `csharpier`
+launcher on PATH (or an explicit executable path); automatic local .NET tool
+manifest resolution is not implemented. Mix preserves native `.formatter.exs`
+behavior, which may compile formatter plugins; plugin-only extensions such as
+HEEx are not advertised. Actionlint receives only files directly under
+`.github/workflows`, while those files remain eligible for YAML formatters.
+Its scope key is `github-workflow`; unrelated YAML is never passed to it.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

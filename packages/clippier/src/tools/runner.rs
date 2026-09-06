@@ -516,11 +516,9 @@ impl<'a> ToolRunner<'a> {
             FormatSelection::Files(files) => files
                 .iter()
                 .filter(|path| {
-                    path.extension()
-                        .and_then(|extension| extension.to_str())
-                        .is_some_and(|extension| {
-                            extensions.contains(&extension.to_ascii_lowercase())
-                        })
+                    extensions
+                        .iter()
+                        .any(|key| crate::tools::catalog::matches_format(path, key))
                 })
                 .filter(|path| !is_excluded(&working_dir.join(path)))
                 .map(|path| path.to_string_lossy().to_string())

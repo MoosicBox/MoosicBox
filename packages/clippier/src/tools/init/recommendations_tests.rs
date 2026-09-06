@@ -272,6 +272,57 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn workflow_matching_retains_yaml_formatters_and_excludes_other_yaml() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        for file in [".github/workflows/ci.yml", "other.yml", "Main.cs", "app.ex"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        let workflow = result
+            .iter()
+            .find(|group| {
+                group
+                    .choices
+                    .iter()
+                    .any(|choice| choice.name == "actionlint")
+            })
+            .unwrap();
+        assert_eq!(
+            workflow.files,
+            vec![std::path::PathBuf::from(".github/workflows/ci.yml")]
+        );
+        let scope = crate::tools::scope::ScopeMatcher::new(root.path(), &[]).unwrap();
+        assert_eq!(
+            scope
+                .filter_relative_files(
+                    inventory.files(),
+                    &std::collections::BTreeSet::from(["github-workflow".to_owned()])
+                )
+                .len(),
+            1
+        );
+        assert_eq!(
+            scope
+                .filter_relative_files(
+                    inventory.files(),
+                    &std::collections::BTreeSet::from(["yml".to_owned()])
+                )
+                .len(),
+            2
+        );
+        for name in ["csharpier", "mix-format"] {
+            assert!(
+                result
+                    .iter()
+                    .flat_map(|group| &group.choices)
+                    .any(|choice| choice.name == name)
+            );
+        }
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

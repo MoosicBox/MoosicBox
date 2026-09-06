@@ -105,6 +105,19 @@ pub fn file_format(path: &std::path::Path) -> Option<&str> {
     }
 }
 
+/// Matches a catalog format key without losing a file's ordinary language identity.
+pub fn matches_format(path: &std::path::Path, key: &str) -> bool {
+    if key == "github-workflow" {
+        return matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("yml" | "yaml")
+        ) && path
+            .parent()
+            .is_some_and(|parent| parent.ends_with(".github/workflows"));
+    }
+    file_format(path).is_some_and(|format| format.eq_ignore_ascii_case(key))
+}
+
 /// Canonical metadata for a built-in tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolCatalogEntry {
@@ -1330,6 +1343,51 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         &["scala", "sbt", "sc"],
         NONE,
         10
+    ),
+    entry!(
+        "csharpier",
+        "CSharpier",
+        "csharpier",
+        Binary,
+        FORMAT,
+        &["check", "."],
+        &["format", "."],
+        NONE,
+        &[".csharpierrc", ".csharpierrc.json", ".csharpierrc.yaml"],
+        NONE,
+        &["cs", "csx", "xml", "csproj", "props", "targets"],
+        NONE,
+        10
+    ),
+    entry!(
+        "mix-format",
+        "Elixir Formatter",
+        "mix",
+        Binary,
+        FORMAT,
+        &["format", "--check-formatted", "."],
+        &["format", "."],
+        &["mix.exs"],
+        &[".formatter.exs"],
+        NONE,
+        &["ex", "exs"],
+        NONE,
+        10
+    ),
+    entry!(
+        "actionlint",
+        "actionlint",
+        "actionlint",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &["actionlint.yaml", "actionlint.yml"],
+        NONE,
+        NONE,
+        &["github-workflow"],
+        100
     ),
     entry!(
         "terraform",
