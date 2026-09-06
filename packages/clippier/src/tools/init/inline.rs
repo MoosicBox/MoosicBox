@@ -33,6 +33,7 @@ pub(super) fn stops(groups: &[Group]) -> Vec<(usize, usize)> {
 }
 
 #[allow(clippy::too_many_lines)]
+#[cfg(test)]
 pub(super) fn render(
     groups: &[Group],
     header: &[String],
@@ -41,6 +42,18 @@ pub(super) fn render(
     height: u16,
     scroll: &Cell<ScrollViewState>,
 ) -> Buffer {
+    render_scene(groups, header, focus, width, height, scroll).0
+}
+
+#[allow(clippy::too_many_lines)]
+pub(super) fn render_scene(
+    groups: &[Group],
+    header: &[String],
+    focus: (usize, usize),
+    width: u16,
+    height: u16,
+    scroll: &Cell<ScrollViewState>,
+) -> (Buffer, Vec<bmux_tui::hit::HitRegion>) {
     let states = groups
         .iter()
         .enumerate()
@@ -149,14 +162,25 @@ pub(super) fn render(
         ]);
         column = column.child(PaneComponent::new(
             format!("section-{g}"),
-            Pane::new().border(true).title(title).styles(PaneStyles {
-                border: Style::new().fg(if g == focus.0 {
-                    accent
-                } else {
-                    Color::BrightBlack
+            Pane::new()
+                .policy(bmux_tui_components::pane::PanePolicy {
+                    mouse: bmux_tui_components::pane::PaneMousePolicy {
+                        enabled: true,
+                        click_to_focus: true,
+                        ..bmux_tui_components::pane::PaneMousePolicy::disabled()
+                    },
+                    ..Default::default()
+                })
+                .border(true)
+                .title(title)
+                .styles(PaneStyles {
+                    border: Style::new().fg(if g == focus.0 {
+                        accent
+                    } else {
+                        Color::BrightBlack
+                    }),
+                    ..PaneStyles::default()
                 }),
-                ..PaneStyles::default()
-            }),
             &panel_states[g],
             choices,
         ));
@@ -342,8 +366,10 @@ pub(super) fn render(
         .child(footer);
     let layout = root.layout(Constraints::tight(Size::new(width, height)), &mut cx);
     let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
-    root.paint(&layout, &mut PaintCx::new(&mut Frame::new(&mut buffer)));
-    buffer
+    let mut frame = Frame::new(&mut buffer);
+    root.paint(&layout, &mut PaintCx::new(&mut frame));
+    let regions = frame.hits().regions().to_vec();
+    (buffer, regions)
 }
 
 pub(super) fn select(

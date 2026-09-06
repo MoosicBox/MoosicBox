@@ -75,6 +75,8 @@ fn program(groups: &mut [Group]) -> Setup<'_> {
         size: Size::new(80, 24),
         accepted: false,
         pending_since: None,
+        hits: Vec::new(),
+        pressed: None,
     }
 }
 #[test]
@@ -88,6 +90,74 @@ fn q_and_escape_cancel_without_accepting() {
         assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
         assert!(!setup.accepted);
     }
+}
+
+#[test]
+fn horizontal_navigation_and_mouse_use_rendered_component_regions() {
+    use bmux_tui::event::{MouseButton, MouseEvent, MouseEventKind};
+    use bmux_tui::geometry::Point;
+    let mut groups = (0..6).map(|_| self::groups().remove(0)).collect::<Vec<_>>();
+    for group in &mut groups {
+        group.choices.truncate(1);
+    }
+    let mut setup = program(&mut groups);
+    setup.size = Size::new(121, 31);
+    setup
+        .update(RuntimeEvent::Terminal(key(KeyCode::Right)))
+        .unwrap();
+    assert_eq!(setup.focus, 3);
+    setup
+        .update(RuntimeEvent::Terminal(key(KeyCode::Left)))
+        .unwrap();
+    assert_eq!(setup.focus, 0);
+    let (_, regions) = super::inline::render_scene(
+        setup.groups,
+        &[],
+        (0, 0),
+        120,
+        30,
+        &std::cell::Cell::new(bmux_tui_components::scroll_view::ScrollViewState::new()),
+    );
+    setup.hits = regions;
+    for (id, toggles) in [("section-3", false), ("choice-3-0", true)] {
+        let area = setup
+            .hits
+            .iter()
+            .find(|region| region.id.as_str() == id)
+            .expect(id)
+            .area;
+        let point = Point::new(area.x, area.y);
+        for kind in [
+            MouseEventKind::Down(MouseButton::Left),
+            MouseEventKind::Up(MouseButton::Left),
+        ] {
+            setup
+                .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                    kind, point,
+                ))))
+                .unwrap();
+        }
+        assert_eq!(setup.focus, 3);
+        assert_eq!(setup.groups[3].choices[0].selected, toggles);
+    }
+    let area = setup
+        .hits
+        .iter()
+        .find(|region| region.id.as_str() == "action-0")
+        .unwrap()
+        .area;
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        setup
+            .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                kind,
+                Point::new(area.x, area.y),
+            ))))
+            .unwrap();
+    }
+    assert!(setup.accepted);
 }
 
 #[test]

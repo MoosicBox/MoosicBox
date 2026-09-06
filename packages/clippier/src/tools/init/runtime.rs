@@ -1,6 +1,6 @@
 //! Ordered input reduction and cadence-limited inline presentation.
 use super::{
-    inline::{render, stops},
+    inline::{render_scene, stops},
     recommendations::Group,
 };
 use bmux_keyboard::KeyCode;
@@ -23,11 +23,14 @@ pub(super) struct Setup<'a> {
     pub size: Size,
     pub accepted: bool,
     pub pending_since: Option<Instant>,
+    pub hits: Vec<bmux_tui::hit::HitRegion>,
+    pub pressed: Option<String>,
 }
 
 impl Program for Setup<'_> {
     type Message = io::Error;
     type Error = io::Error;
+    #[allow(clippy::too_many_lines)]
     fn update(&mut self, event: RuntimeEvent<Self::Message>) -> io::Result<Update<Self::Message>> {
         if self.accepted {
             return Ok(Update::none());
@@ -39,6 +42,83 @@ impl Program for Setup<'_> {
             RuntimeEvent::Terminal(Event::Resize(size)) => {
                 changed = size != self.size;
                 self.size = size;
+                self.hits.clear();
+                self.pressed = None;
+            }
+            RuntimeEvent::Terminal(Event::Mouse(mouse)) => {
+                use bmux_tui::event::{MouseButton, MouseEventKind};
+                let target = self
+                    .hits
+                    .iter()
+                    .rev()
+                    .filter(|hit| {
+                        hit.area.contains(mouse.position)
+                            && hit.enabled
+                            && hit.visible
+                            && (hit.id.as_str().starts_with("choice-")
+                                || hit.id.as_str().starts_with("section-")
+                                || hit.id.as_str().starts_with("action-"))
+                    })
+                    .max_by_key(|hit| (hit.layer, !hit.id.as_str().starts_with("section-")))
+                    .map(|hit| hit.id.as_str().to_owned());
+                match mouse.kind {
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        self.pressed.clone_from(&target);
+                        if let Some(id) = target {
+                            let parts = id.split('-').collect::<Vec<_>>();
+                            if let Some(index) =
+                                parts.get(1).and_then(|value| value.parse::<usize>().ok())
+                            {
+                                if parts[0] == "action" {
+                                    self.focus = self.positions.len() + index;
+                                } else {
+                                    let choice = if parts[0] == "choice" {
+                                        parts
+                                            .get(2)
+                                            .and_then(|value| value.parse().ok())
+                                            .unwrap_or(0)
+                                    } else {
+                                        0
+                                    };
+                                    if let Some(focus) = self
+                                        .positions
+                                        .iter()
+                                        .position(|&stop| stop == (index, choice))
+                                    {
+                                        self.focus = focus;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    MouseEventKind::Up(MouseButton::Left) => {
+                        if let Some(id) = self
+                            .pressed
+                            .take()
+                            .filter(|pressed| Some(pressed) == target.as_ref())
+                        {
+                            if id.starts_with("choice-") && self.focus < self.positions.len() {
+                                let (g, c) = self.positions[self.focus];
+                                self.groups[g].choices[c].selected =
+                                    !self.groups[g].choices[c].selected;
+                                changed = true;
+                            } else if id == "action-0" {
+                                self.accepted = true;
+                                return Ok(Update::exit());
+                            } else if id == "action-1" {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::Interrupted,
+                                    "Setup cancelled; no files written",
+                                ));
+                            }
+                        }
+                    }
+                    MouseEventKind::ScrollDown => {
+                        self.focus = (self.focus + 1).min(self.positions.len() + 1);
+                    }
+                    MouseEventKind::ScrollUp => self.focus = self.focus.saturating_sub(1),
+                    _ => {}
+                }
             }
             RuntimeEvent::Terminal(Event::Key(key)) => match key.key {
                 KeyCode::Escape | KeyCode::Char('q') => {
@@ -68,6 +148,41 @@ impl Program for Setup<'_> {
                 KeyCode::Space | KeyCode::Char(' ') if self.focus == self.positions.len() => {
                     self.accepted = true;
                     return Ok(Update::exit());
+                }
+                KeyCode::Left | KeyCode::Right
+                    if self.size.width.saturating_sub(1) >= 120
+                        && self.focus < self.positions.len() =>
+                {
+                    let columns = usize::from((self.size.width.saturating_sub(1) / 60).clamp(1, 3));
+                    let groups = self
+                        .groups
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, group)| !group.choices.is_empty())
+                        .map(|(index, _)| index)
+                        .collect::<Vec<_>>();
+                    let per_column = groups.len().div_ceil(columns);
+                    let (group, choice) = self.positions[self.focus];
+                    let index = groups
+                        .iter()
+                        .position(|&value| value == group)
+                        .expect("focused group");
+                    let target = if key.key == KeyCode::Right {
+                        index
+                            .checked_add(per_column)
+                            .filter(|&value| value < groups.len())
+                    } else {
+                        index.checked_sub(per_column)
+                    };
+                    if let Some(target) = target {
+                        let group = groups[target];
+                        let choice = choice.min(self.groups[group].choices.len() - 1);
+                        self.focus = self
+                            .positions
+                            .iter()
+                            .position(|&value| value == (group, choice))
+                            .expect("focus stop");
+                    }
                 }
                 KeyCode::Up | KeyCode::Left => self.focus = self.focus.saturating_sub(1),
                 KeyCode::Tab if key.modifiers.shift => self.focus = self.focus.saturating_sub(1),
@@ -116,7 +231,7 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
             return Ok(PresentReport::default());
         }
         let start = Instant::now();
-        let buffer = render(
+        let (buffer, hits) = render_scene(
             program.groups,
             self.header,
             program
@@ -131,6 +246,7 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
         self.timings.render += start.elapsed();
         let start = Instant::now();
         self.terminal.draw(&buffer)?;
+        program.hits = hits;
         self.timings.output += start.elapsed();
         self.timings.frames += 1;
         if let Some(since) = program.pending_since.take() {
@@ -138,6 +254,19 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
                 self.timings.max_update_to_present.max(since.elapsed());
         }
         Ok(PresentReport::default())
+    }
+}
+
+struct MouseCapture;
+impl MouseCapture {
+    fn enter() -> io::Result<Self> {
+        crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+        Ok(Self)
+    }
+}
+impl Drop for MouseCapture {
+    fn drop(&mut self) {
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
     }
 }
 
@@ -150,6 +279,7 @@ pub(super) fn run(
     if positions.is_empty() {
         return Ok(());
     }
+    let _mouse = MouseCapture::enter()?;
     let (width, height) = crossterm::terminal::size()?;
     let executor = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -168,6 +298,8 @@ pub(super) fn run(
             size: Size::new(width, height),
             accepted: false,
             pending_since: None,
+            hits: Vec::new(),
+            pressed: None,
         };
         let (runtime, handle) = Runtime::new(program, presenter, RuntimeConfig::default());
         let mut input = TerminalInput::start::<Setup<'_>>(handle, |error| error);
