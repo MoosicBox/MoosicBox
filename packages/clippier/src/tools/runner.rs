@@ -1,9 +1,9 @@
 //! Tool execution and result aggregation.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::IsTerminal;
 #[cfg(feature = "format")]
 use std::io::Write;
-use std::io::{BufRead, BufReader, IsTerminal};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -580,7 +580,14 @@ impl<'a> ToolRunner<'a> {
         command: &mut Command,
         cancelled: &dyn Fn() -> bool,
     ) -> std::io::Result<std::process::Output> {
-        use std::io::Read as _;
+        Self::execute_process(command, cancelled, &|_, _| {})
+    }
+
+    fn execute_process(
+        command: &mut Command,
+        cancelled: &dyn Fn() -> bool,
+        output: &(dyn Fn(bool, &[u8]) + Sync),
+    ) -> std::io::Result<std::process::Output> {
         if cancelled() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Interrupted,
@@ -594,16 +601,8 @@ impl<'a> ToolRunner<'a> {
         std::thread::scope(|scope| {
             let stdout = child.stdout.take().expect("piped stdout");
             let stderr = child.stderr.take().expect("piped stderr");
-            let out = scope.spawn(move || {
-                let mut data = Vec::new();
-                let mut pipe = stdout;
-                pipe.read_to_end(&mut data).map(|_| data)
-            });
-            let err = scope.spawn(move || {
-                let mut data = Vec::new();
-                let mut pipe = stderr;
-                pipe.read_to_end(&mut data).map(|_| data)
-            });
+            let out = scope.spawn(move || Self::drain_process_pipe(stdout, false, output));
+            let err = scope.spawn(move || Self::drain_process_pipe(stderr, true, output));
             let status = loop {
                 if cancelled() {
                     let _ = child.kill();
@@ -635,6 +634,26 @@ impl<'a> ToolRunner<'a> {
                 stderr,
             })
         })
+    }
+
+    fn drain_process_pipe(
+        mut pipe: impl std::io::Read,
+        stderr: bool,
+        output: &(dyn Fn(bool, &[u8]) + Sync),
+    ) -> std::io::Result<Vec<u8>> {
+        let mut data = Vec::new();
+        let mut chunk = [0; 8192];
+        loop {
+            let count = match pipe.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            };
+            output(stderr, &chunk[..count]);
+            data.extend_from_slice(&chunk[..count]);
+        }
+        Ok(data)
     }
 
     fn directory_groups(files: &[String], filename_filter: &str) -> BTreeMap<PathBuf, Vec<String>> {
@@ -2053,118 +2072,49 @@ impl<'a> ToolRunner<'a> {
             command.current_dir(dir);
         }
 
-        if self.stream_output {
-            // Stream output in real-time
-            command.stdout(Stdio::piped());
-            command.stderr(Stdio::piped());
-
-            match command.spawn() {
-                Ok(mut child) => {
-                    let mut stdout_content = String::new();
-                    let mut stderr_content = warning_text;
-
-                    for warning in &warnings {
-                        eprintln!("{warning}");
-                    }
-
-                    // Read stdout
-                    if let Some(stdout) = child.stdout.take() {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines().map_while(Result::ok) {
-                            println!("{line}");
-                            stdout_content.push_str(&line);
-                            stdout_content.push('\n');
-                        }
-                    }
-
-                    // Read stderr
-                    if let Some(stderr) = child.stderr.take() {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines().map_while(Result::ok) {
-                            eprintln!("{line}");
-                            stderr_content.push_str(&line);
-                            stderr_content.push('\n');
-                        }
-                    }
-
-                    match child.wait() {
-                        Ok(status) => {
-                            let duration = start_time.elapsed();
-                            let exit_code = status.code();
-
-                            if Self::command_succeeded(
-                                tool,
-                                check_mode,
-                                status.success(),
-                                &stdout_content,
-                            ) {
-                                ToolResult::success(
-                                    tool.name.clone(),
-                                    tool.display_name.clone(),
-                                    duration,
-                                )
-                            } else {
-                                ToolResult::failure(
-                                    tool.name.clone(),
-                                    tool.display_name.clone(),
-                                    exit_code,
-                                    stdout_content,
-                                    stderr_content,
-                                    duration,
-                                )
-                            }
-                        }
-                        Err(e) => ToolResult::failure(
-                            tool.name.clone(),
-                            tool.display_name.clone(),
-                            None,
-                            String::new(),
-                            format!("Failed to wait for process: {e}"),
-                            start_time.elapsed(),
-                        ),
-                    }
+        let sink = |stderr: bool, bytes: &[u8]| {
+            use std::io::Write as _;
+            if self.stream_output {
+                if stderr {
+                    let mut output = std::io::stderr().lock();
+                    let _ = output.write_all(bytes);
+                    let _ = output.flush();
+                } else {
+                    let mut output = std::io::stdout().lock();
+                    let _ = output.write_all(bytes);
+                    let _ = output.flush();
                 }
-                Err(e) => ToolResult::failure(
-                    tool.name.clone(),
-                    tool.display_name.clone(),
-                    None,
-                    String::new(),
-                    format!("Failed to spawn process: {e}"),
-                    start_time.elapsed(),
-                ),
             }
-        } else {
-            // Capture all output at once
-            match Self::capture_process(&mut command, &|| false) {
-                Ok(output) => {
-                    let duration = start_time.elapsed();
-                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                    let stderr =
-                        format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
-                    let exit_code = output.status.code();
+        };
+        // Capture all output at once
+        match Self::execute_process(&mut command, &|| false, &sink) {
+            Ok(output) => {
+                let duration = start_time.elapsed();
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
+                let exit_code = output.status.code();
 
-                    if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
-                        ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
-                    } else {
-                        ToolResult::failure(
-                            tool.name.clone(),
-                            tool.display_name.clone(),
-                            exit_code,
-                            stdout,
-                            stderr,
-                            duration,
-                        )
-                    }
+                if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
+                    ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
+                } else {
+                    ToolResult::failure(
+                        tool.name.clone(),
+                        tool.display_name.clone(),
+                        exit_code,
+                        stdout,
+                        stderr,
+                        duration,
+                    )
                 }
-                Err(e) => ToolResult::failure(
-                    tool.name.clone(),
-                    tool.display_name.clone(),
-                    None,
-                    String::new(),
-                    format!("Failed to execute: {e}"),
-                    start_time.elapsed(),
-                ),
             }
+            Err(e) => ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                None,
+                String::new(),
+                format!("Failed to execute: {e}"),
+                start_time.elapsed(),
+            ),
         }
     }
 
@@ -3212,6 +3162,33 @@ mod tests {
                 .kind(),
             std::io::ErrorKind::Interrupted
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn streaming_sink_receives_both_pipes_before_process_exits() {
+        let stdout = std::sync::Mutex::new(Vec::new());
+        let stderr = std::sync::Mutex::new(Vec::new());
+        let started = Instant::now();
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf out; printf err >&2; exec sleep 30"]);
+        let result = ToolRunner::execute_process(
+            &mut command,
+            &|| {
+                started.elapsed() > Duration::from_secs(3)
+                    || (!stdout.lock().unwrap().is_empty() && !stderr.lock().unwrap().is_empty())
+            },
+            &|is_stderr, bytes| {
+                if is_stderr {
+                    stderr.lock().unwrap().extend_from_slice(bytes);
+                } else {
+                    stdout.lock().unwrap().extend_from_slice(bytes);
+                }
+            },
+        );
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+        assert_eq!(*stdout.lock().unwrap(), b"out");
+        assert_eq!(*stderr.lock().unwrap(), b"err");
     }
 
     #[test]
