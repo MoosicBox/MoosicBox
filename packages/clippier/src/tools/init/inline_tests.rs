@@ -82,6 +82,30 @@ fn fixture() -> Vec<Group> {
 }
 
 #[test]
+fn wide_checklists_render_multiple_sections_side_by_side() {
+    let groups = fixture();
+    for (width, expected) in [(90, 1), (120, 2), (180, 3)] {
+        let buffer = render(
+            &groups,
+            &[],
+            (0, 0),
+            width,
+            30,
+            &Cell::new(ScrollViewState::new()),
+        );
+        let row = buffer.cells()[..usize::from(width)]
+            .iter()
+            .map(|cell| cell.symbol.as_str())
+            .collect::<String>();
+        assert_eq!(
+            row.matches("Language").count(),
+            expected,
+            "width {width}: {row}"
+        );
+    }
+}
+
+#[test]
 fn components_render_borders_details_and_focused_checkbox() {
     let groups = fixture();
     let buffer = render(
