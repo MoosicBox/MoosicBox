@@ -2800,6 +2800,24 @@ mod tests {
     }
 
     #[test]
+    fn additional_formatter_commands_have_nonwriting_checks_and_scoped_writes() {
+        for (name, check, write) in [
+            ("fish_indent", "--check", "--write"),
+            ("jsonnetfmt", "--test", "--in-place"),
+            ("typstyle", "--check", "--inplace"),
+        ] {
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            let files = vec!["selected file".to_owned()];
+            let mut args = tool.check_args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+            assert_eq!(args, vec![check.to_owned(), files[0].clone()]);
+            let mut args = tool.format_args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+            assert_eq!(args, vec![write.to_owned(), files[0].clone()]);
+        }
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

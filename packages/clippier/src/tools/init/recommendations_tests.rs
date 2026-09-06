@@ -350,6 +350,34 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn fish_jsonnet_typst_are_source_driven_formatter_alternatives() {
+        let root = tempfile::tempdir().unwrap();
+        for file in [
+            "config.fish",
+            "main.jsonnet",
+            "library.libsonnet",
+            "document.typ",
+        ] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        for (name, count) in [("fish_indent", 1), ("jsonnetfmt", 2), ("typstyle", 1)] {
+            let group = result
+                .iter()
+                .find(|group| group.choices.iter().any(|choice| choice.name == name))
+                .unwrap();
+            assert_eq!(group.files.len(), count);
+            assert!(
+                group
+                    .choices
+                    .iter()
+                    .any(|choice| choice.name == name && choice.selected)
+            );
+        }
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

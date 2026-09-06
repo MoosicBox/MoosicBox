@@ -64,6 +64,11 @@ OCamlFormat supports `.ml`/`.mli` with native `.ocamlformat` configuration
 `standardrb` lint-only integration, respecting `.standard.yml`; automatic
 RuboCop corrections are intentionally not treated as formatting.
 
+Fish scripts (`.fish`) use `fish_indent`; Jsonnet (`.jsonnet`/`.libsonnet`)
+uses `jsonnetfmt`; Typst (`.typ`) uses `typstyle`. Each has a non-writing check
+mode and an explicit in-place formatting mode over selected files. These
+source-only alternatives appear in init without a native configuration file.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their
