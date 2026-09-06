@@ -41,26 +41,6 @@ pub(super) fn render(
     height: u16,
     scroll: &Cell<ScrollViewState>,
 ) -> Buffer {
-    let labels = groups
-        .iter()
-        .map(|group| {
-            group
-                .choices
-                .iter()
-                .map(|choice| {
-                    format!(
-                        "{} · {}",
-                        choice.name,
-                        if choice.installed.is_some() {
-                            "installed"
-                        } else {
-                            "not found"
-                        }
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
     let states = groups
         .iter()
         .enumerate()
@@ -93,20 +73,43 @@ pub(super) fn render(
         };
         let mut choices = Column::new().id(format!("choices-{g}"));
         for (c, choice) in group.choices.iter().enumerate() {
-            choices = choices.child(
-                CheckboxComponent::new(format!("choice-{g}-{c}"), &labels[g][c], &states[g][c])
-                    .styles(CheckboxStyles {
-                        normal: Style::new().fg(if choice.selected {
-                            Color::Green
-                        } else {
-                            Color::Default
-                        }),
-                        focused: Style::new()
-                            .fg(Color::Black)
-                            .bg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                        ..CheckboxStyles::default()
+            let availability = Line::from_spans(vec![
+                Span::styled(" · ", Style::new().fg(Color::BrightBlack)),
+                Span::styled(
+                    if choice.installed.is_some() {
+                        "installed"
+                    } else {
+                        "not found"
+                    },
+                    Style::new().fg(if choice.installed.is_some() {
+                        Color::Green
+                    } else {
+                        Color::Yellow
                     }),
+                ),
+            ]);
+            choices = choices.child(
+                Row::new()
+                    .child(
+                        CheckboxComponent::new(
+                            format!("choice-{g}-{c}"),
+                            &choice.name,
+                            &states[g][c],
+                        )
+                        .styles(CheckboxStyles {
+                            normal: Style::new().fg(if choice.selected {
+                                Color::Green
+                            } else {
+                                Color::Default
+                            }),
+                            focused: Style::new()
+                                .fg(Color::Black)
+                                .bg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                            ..CheckboxStyles::default()
+                        }),
+                    )
+                    .child(TextBlock::new(Text::from_lines(vec![availability]))),
             );
         }
         let title = Line::from_spans(vec![
