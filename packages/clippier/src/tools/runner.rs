@@ -1072,7 +1072,6 @@ impl<'a> ToolRunner<'a> {
         results
     }
 
-    #[cfg(feature = "tools-tui")]
     fn build_command_parts(
         &self,
         tool: &Tool,
@@ -1931,6 +1930,17 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool.
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
+        self.run_tool_process(tool, check_mode, self.stream_output, false)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn run_tool_process(
+        &self,
+        tool: &Tool,
+        check_mode: bool,
+        stream_output: bool,
+        retain_output: bool,
+    ) -> ToolResult {
         if check_mode
             && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
                 tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
@@ -1951,62 +1961,15 @@ impl<'a> ToolRunner<'a> {
             return self.run_remark_strict_check(tool, start_time);
         }
 
-        let args = if check_mode {
-            &tool.check_args
-        } else {
-            &tool.format_args
-        };
-
-        // Skip if no args (tool doesn't support this mode)
-        if args.is_empty() {
+        let Some((program, final_args, warnings)) =
+            self.build_command_parts(tool, check_mode, self.working_dir)
+        else {
             return ToolResult::success(
                 tool.name.clone(),
                 tool.display_name.clone(),
                 Duration::ZERO,
             );
-        }
-
-        let (program, mut final_args, args_start_index) = match &tool.kind {
-            ToolKind::Cargo => ("cargo".to_string(), args.clone(), 0),
-            ToolKind::Binary => {
-                let binary = tool
-                    .detected_path
-                    .as_ref()
-                    .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
-                (binary, args.clone(), 0)
-            }
-            ToolKind::Runner {
-                runner,
-                runner_args,
-            } => {
-                let mut all_args = runner_args.clone();
-                all_args.push(tool.binary.clone());
-                all_args.extend(args.clone());
-                (runner.clone(), all_args, runner_args.len() + 1)
-            }
         };
-        if let Some(files) = self.scoped_file_args(tool) {
-            if files.is_empty() {
-                return ToolResult::success(
-                    tool.name.clone(),
-                    tool.display_name.clone(),
-                    start_time.elapsed(),
-                );
-            }
-            Self::replace_default_path_args(tool, &mut final_args, &files);
-        }
-        Self::append_prettier_ignore_path_arg(
-            tool,
-            &mut final_args,
-            self.working_dir,
-            args_start_index,
-        );
-        let warnings = Self::append_mdformat_extension_args(
-            tool,
-            &mut final_args,
-            self.working_dir,
-            args_start_index,
-        );
         let warning_text = if warnings.is_empty() {
             String::new()
         } else {
@@ -2026,7 +1989,7 @@ impl<'a> ToolRunner<'a> {
 
         let sink = |stderr: bool, bytes: &[u8]| {
             use std::io::Write as _;
-            if self.stream_output {
+            if stream_output {
                 if stderr {
                     let mut output = std::io::stderr().lock();
                     let _ = output.write_all(bytes);
@@ -2047,7 +2010,19 @@ impl<'a> ToolRunner<'a> {
                 let exit_code = output.status.code();
 
                 if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
-                    ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
+                    if retain_output {
+                        ToolResult {
+                            tool_name: tool.name.clone(),
+                            display_name: tool.display_name.clone(),
+                            success: true,
+                            exit_code,
+                            stdout,
+                            stderr,
+                            duration,
+                        }
+                    } else {
+                        ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
+                    }
                 } else {
                     ToolResult::failure(
                         tool.name.clone(),
@@ -2073,137 +2048,7 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool with buffered output (for parallel execution)
     #[allow(clippy::too_many_lines)]
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
-        if check_mode
-            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
-                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
-        {
-            return self.run_directory_scoped(tool, filename_filter, &|| false);
-        }
-        let start_time = Instant::now();
-
-        #[cfg(feature = "format")]
-        if let Some(files) = self.selected_rust_files(tool) {
-            return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
-        }
-
-        if check_mode
-            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
-                == Some(ToolAdapter::Remark)
-        {
-            return self.run_remark_strict_check(tool, start_time);
-        }
-
-        let args = if check_mode {
-            &tool.check_args
-        } else {
-            &tool.format_args
-        };
-
-        // Skip if no args (tool doesn't support this mode)
-        if args.is_empty() {
-            return ToolResult::success(
-                tool.name.clone(),
-                tool.display_name.clone(),
-                Duration::ZERO,
-            );
-        }
-
-        let (program, mut final_args, args_start_index) = match &tool.kind {
-            ToolKind::Cargo => ("cargo".to_string(), args.clone(), 0),
-            ToolKind::Binary => {
-                let binary = tool
-                    .detected_path
-                    .as_ref()
-                    .map_or_else(|| tool.binary.clone(), |p| p.display().to_string());
-                (binary, args.clone(), 0)
-            }
-            ToolKind::Runner {
-                runner,
-                runner_args,
-            } => {
-                let mut all_args = runner_args.clone();
-                all_args.push(tool.binary.clone());
-                all_args.extend(args.clone());
-                (runner.clone(), all_args, runner_args.len() + 1)
-            }
-        };
-        if let Some(files) = self.scoped_file_args(tool) {
-            if files.is_empty() {
-                return ToolResult::success(
-                    tool.name.clone(),
-                    tool.display_name.clone(),
-                    start_time.elapsed(),
-                );
-            }
-            Self::replace_default_path_args(tool, &mut final_args, &files);
-        }
-        Self::append_prettier_ignore_path_arg(
-            tool,
-            &mut final_args,
-            self.working_dir,
-            args_start_index,
-        );
-        let warnings = Self::append_mdformat_extension_args(
-            tool,
-            &mut final_args,
-            self.working_dir,
-            args_start_index,
-        );
-        let warning_text = if warnings.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", warnings.join("\n"))
-        };
-
-        log::info!("Running {} ({})...", tool.display_name, tool.name);
-        log::debug!("Command: {program} {final_args:?}");
-
-        let mut command = Command::new(&program);
-        command.args(&final_args);
-        Self::apply_color_env(&mut command, self.effective_color_mode());
-
-        if let Some(dir) = self.working_dir {
-            command.current_dir(dir);
-        }
-
-        // Capture all output at once (buffered for parallel execution)
-        match Self::capture_process(&mut command, &|| false) {
-            Ok(output) => {
-                let duration = start_time.elapsed();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
-                let exit_code = output.status.code();
-
-                if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
-                    ToolResult {
-                        tool_name: tool.name.clone(),
-                        display_name: tool.display_name.clone(),
-                        success: true,
-                        exit_code,
-                        stdout,
-                        stderr,
-                        duration,
-                    }
-                } else {
-                    ToolResult::failure(
-                        tool.name.clone(),
-                        tool.display_name.clone(),
-                        exit_code,
-                        stdout,
-                        stderr,
-                        duration,
-                    )
-                }
-            }
-            Err(e) => ToolResult::failure(
-                tool.name.clone(),
-                tool.display_name.clone(),
-                None,
-                String::new(),
-                format!("Failed to execute: {e}"),
-                start_time.elapsed(),
-            ),
-        }
+        self.run_tool_process(tool, check_mode, false, true)
     }
 }
 
