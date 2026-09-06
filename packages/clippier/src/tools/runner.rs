@@ -574,6 +574,68 @@ impl<'a> ToolRunner<'a> {
         args.extend(files.iter().cloned());
     }
 
+    fn tflint_modules(files: &[String]) -> BTreeMap<PathBuf, Vec<String>> {
+        let mut modules = BTreeMap::<PathBuf, Vec<String>>::new();
+        for file in files {
+            let path = Path::new(file);
+            if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+                modules
+                    .entry(path.parent().unwrap_or_else(|| Path::new("")).to_path_buf())
+                    .or_default()
+                    .push(format!("--filter={name}"));
+            }
+        }
+        modules
+    }
+
+    fn run_tflint(&self, tool: &Tool) -> ToolResult {
+        use std::fmt::Write as _;
+        let start = Instant::now();
+        let files = self.scoped_file_args(tool).unwrap_or_default();
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        let mut success = true;
+        let mut exit_code = Some(0);
+        for (directory, filters) in Self::tflint_modules(&files) {
+            let mut command = Command::new(
+                tool.detected_path
+                    .as_deref()
+                    .unwrap_or_else(|| Path::new(&tool.binary)),
+            );
+            command.current_dir(self.working_dir_path().join(&directory));
+            command.arg("--call-module-type=none").args(filters);
+            match command.output() {
+                Ok(output) => {
+                    let _ = write!(
+                        stdout,
+                        "Module: {}\n{}",
+                        directory.display(),
+                        String::from_utf8_lossy(&output.stdout)
+                    );
+                    stderr.push_str(&String::from_utf8_lossy(&output.stderr));
+                    if !output.status.success() {
+                        success = false;
+                        exit_code = output.status.code();
+                    }
+                }
+                Err(error) => {
+                    success = false;
+                    exit_code = None;
+                    let _ = writeln!(stderr, "Module {}: {error}", directory.display());
+                }
+            }
+        }
+        ToolResult {
+            tool_name: tool.name.clone(),
+            display_name: tool.display_name.clone(),
+            success,
+            exit_code,
+            stdout,
+            stderr,
+            duration: start.elapsed(),
+        }
+    }
+
     fn command_succeeded(tool: &Tool, check_mode: bool, status_ok: bool, stdout: &str) -> bool {
         status_ok
             && !(check_mode
@@ -1387,6 +1449,32 @@ impl<'a> ToolRunner<'a> {
         tx: &mpsc::Sender<ToolEvent>,
         cancel_requested: &Arc<AtomicBool>,
     ) -> ToolResult {
+        if check_mode && tool.name == "tflint" {
+            let _ = tx.send(ToolEvent::Started {
+                tool_name: tool.name.clone(),
+                display_name: tool.display_name.clone(),
+            });
+            let result = self.run_tflint(tool);
+            for line in result.stdout.lines() {
+                let _ = tx.send(ToolEvent::StdoutLine {
+                    tool_name: tool.name.clone(),
+                    line: line.to_owned(),
+                    overwrite: false,
+                });
+            }
+            for line in result.stderr.lines() {
+                let _ = tx.send(ToolEvent::StderrLine {
+                    tool_name: tool.name.clone(),
+                    line: line.to_owned(),
+                    overwrite: false,
+                });
+            }
+            let _ = tx.send(ToolEvent::Finished {
+                tool_name: tool.name.clone(),
+                success: result.success,
+            });
+            return result;
+        }
         let start_time = Instant::now();
 
         #[cfg(feature = "format")]
@@ -1786,6 +1874,9 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool.
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
+        if check_mode && tool.name == "tflint" {
+            return self.run_tflint(tool);
+        }
         let start_time = Instant::now();
 
         #[cfg(feature = "format")]
@@ -1991,6 +2082,9 @@ impl<'a> ToolRunner<'a> {
     /// Runs a single tool with buffered output (for parallel execution)
     #[allow(clippy::too_many_lines)]
     fn run_single_tool_buffered(&self, tool: &Tool, check_mode: bool) -> ToolResult {
+        if check_mode && tool.name == "tflint" {
+            return self.run_tflint(tool);
+        }
         let start_time = Instant::now();
 
         #[cfg(feature = "format")]
@@ -2974,6 +3068,23 @@ mod tests {
             ]
         );
         assert!(tool.format_args.is_empty());
+    }
+
+    #[test]
+    fn tflint_groups_selected_files_by_module_without_recursive_traversal() {
+        let modules = ToolRunner::tflint_modules(&[
+            "main.tf".to_owned(),
+            "modules/a/main.tf".to_owned(),
+            "modules/a/outputs.tf".to_owned(),
+            "modules/b/main.tf".to_owned(),
+        ]);
+        assert_eq!(modules.len(), 3);
+        assert_eq!(
+            modules[Path::new("modules/a")],
+            ["--filter=main.tf", "--filter=outputs.tf"]
+        );
+        assert_eq!(modules[Path::new("")], ["--filter=main.tf"]);
+        assert!(ToolRunner::tflint_modules(&[]).is_empty());
     }
 
     #[test]

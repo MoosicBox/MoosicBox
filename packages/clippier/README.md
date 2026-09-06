@@ -111,6 +111,14 @@ The `github-action` scope key matches action definitions without changing their
 eligibility for normal YAML formatting. Other Zizmor input kinds and online audits
 are not exposed by this integration.
 
+TFLint uses a dedicated per-module adapter: planned `.tf` files are grouped by
+parent directory and each module runs with `--call-module-type=none` plus selected
+filename `--filter` arguments. Filters restrict diagnostics, not reads: TFLint
+still loads the whole selected module. Native configuration resolves from each
+module's working directory; plugins must already be installed (no implicit
+`--init`). Output is buffered per module, including in the live TUI. This adapter
+does not yet support cancelling an in-flight module process from the TUI.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

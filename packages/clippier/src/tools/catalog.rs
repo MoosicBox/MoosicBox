@@ -83,6 +83,8 @@ pub enum ToolAdapter {
     Biome,
     /// mdformat extension probing.
     Mdformat,
+    /// `TFLint` requires one invocation per selected Terraform module.
+    Tflint,
     /// .NET formatting resolves a workspace and limits changes with --include.
     DotnetFormat,
     /// Buf uses repeated path filters within a local source, not positional file lists.
@@ -192,6 +194,7 @@ impl ToolCatalogEntry {
             "prettier" => ToolAdapter::Prettier,
             "biome" => ToolAdapter::Biome,
             "mdformat" => ToolAdapter::Mdformat,
+            "tflint" => ToolAdapter::Tflint,
             "dotnet-format" => ToolAdapter::DotnetFormat,
             "buf" | "buf-lint" => ToolAdapter::Buf,
             "remark" => ToolAdapter::Remark,
@@ -1696,6 +1699,21 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         NONE,
         &["github-workflow", "github-action"],
+        100
+    ),
+    entry!(
+        "tflint",
+        "TFLint",
+        "tflint",
+        Binary,
+        LINT,
+        &["--call-module-type=none", "."],
+        NONE,
+        NONE,
+        &[".tflint.hcl", ".tflint.json"],
+        NONE,
+        NONE,
+        &["tf"],
         100
     ),
     entry!(
