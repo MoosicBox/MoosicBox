@@ -366,7 +366,7 @@ pub(super) fn render_scene(
         state.interaction.hovered = hovered == Some(format!("action-{index}").as_str());
         Cell::new(state)
     });
-    let mut buttons = Row::new().id("actions");
+    let mut buttons = Row::new().id("actions").gap(1);
     for (index, label, color) in [(0, "Submit", Color::Green), (1, "Cancel", Color::Red)] {
         buttons = buttons.child(
             ButtonComponent::new(format!("action-{index}"), label, &button_states[index]).styles(
