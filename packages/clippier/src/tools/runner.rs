@@ -2818,6 +2818,21 @@ mod tests {
     }
 
     #[test]
+    fn buf_lint_and_cppcheck_commands_preserve_failure_and_scope_semantics() {
+        let files = vec!["api/selected.proto".to_owned()];
+        let tool = tool_catalog_entry("buf-lint").unwrap().tool();
+        let mut args = tool.check_args.clone();
+        ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+        assert_eq!(args, ["lint", ".", "--path", "api/selected.proto"]);
+        assert!(tool.format_args.is_empty());
+        let tool = tool_catalog_entry("cppcheck").unwrap().tool();
+        let mut args = tool.check_args.clone();
+        ToolRunner::replace_default_path_args(&tool, &mut args, &["src/selected.cpp".to_owned()]);
+        assert_eq!(args, ["--error-exitcode=1", "src/selected.cpp"]);
+        assert!(tool.format_args.is_empty());
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

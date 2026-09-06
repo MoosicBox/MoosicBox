@@ -183,7 +183,7 @@ impl ToolCatalogEntry {
             "prettier" => ToolAdapter::Prettier,
             "biome" => ToolAdapter::Biome,
             "mdformat" => ToolAdapter::Mdformat,
-            "buf" => ToolAdapter::Buf,
+            "buf" | "buf-lint" => ToolAdapter::Buf,
             "remark" => ToolAdapter::Remark,
             _ => ToolAdapter::Standard,
         }
@@ -1481,6 +1481,36 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         &["typ"],
         NONE,
         10
+    ),
+    entry!(
+        "buf-lint",
+        "Buf Linter",
+        "buf",
+        Binary,
+        LINT,
+        &["lint", "."],
+        NONE,
+        NONE,
+        &["buf.yaml"],
+        NONE,
+        NONE,
+        &["proto"],
+        100
+    ),
+    entry!(
+        "cppcheck",
+        "Cppcheck",
+        "cppcheck",
+        Binary,
+        LINT,
+        &["--error-exitcode=1", "."],
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
+        100
     ),
     entry!(
         "terraform",

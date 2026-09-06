@@ -58,7 +58,12 @@ Its scope key is `github-workflow`; unrelated YAML is never passed to it.
 
 Protocol Buffers formatting uses Buf's local source plus repeated `--path`
 filters for planned `.proto` files; check mode uses `--diff --exit-code` and
-format mode uses `--write`. Buf lint/module analysis is not integrated yet.
+format mode uses `--write`. The separate `buf-lint` integration invokes
+`buf lint . --path ...` for planned files. Buf still loads module/import context
+and may require dependencies to be available; path filters are not an isolated
+sandbox. Cppcheck is available as an opt-in C/C++ linter with
+`--error-exitcode=1`, so reported errors fail checks. It uses native default
+checks and explicit files, not automatic compilation-database discovery.
 OCamlFormat supports `.ml`/`.mli` with native `.ocamlformat` configuration
 (required by normal upstream behavior). Standard Ruby is available as the
 `standardrb` lint-only integration, respecting `.standard.yml`; automatic

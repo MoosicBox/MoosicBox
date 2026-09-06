@@ -378,6 +378,28 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn buf_lint_uses_native_evidence_and_cppcheck_remains_opt_in() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("api.proto"), "").unwrap();
+        std::fs::write(root.path().join("main.cpp"), "").unwrap();
+        std::fs::write(root.path().join("buf.yaml"), "version: v2\n").unwrap();
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        assert!(
+            result
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "buf-lint" && choice.selected)
+        );
+        assert!(
+            result
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "cppcheck" && !choice.selected)
+        );
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();
