@@ -103,6 +103,14 @@ workspace fan-out and analyzer/style fixes are not implemented. Project evaluati
 is not sandboxed; use it only with trusted repositories. Existing restored project
 assets may be required.
 
+Zizmor audits GitHub workflows and `action.yml`/`action.yaml` definitions via
+explicit paths, with `--offline --strict-collection`. This disables network-dependent
+audits and makes collection/schema errors fail rather than silently skip inputs.
+It discovers `zizmor.yml`/`zizmor.yaml`; source-only recommendations remain unchecked.
+The `github-action` scope key matches action definitions without changing their
+eligibility for normal YAML formatting. Other Zizmor input kinds and online audits
+are not exposed by this integration.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their

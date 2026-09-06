@@ -2953,6 +2953,30 @@ mod tests {
     }
 
     #[test]
+    fn zizmor_command_is_offline_strict_and_explicitly_scoped() {
+        let tool = tool_catalog_entry("zizmor").unwrap().tool();
+        let mut args = tool.check_args.clone();
+        ToolRunner::replace_default_path_args(
+            &tool,
+            &mut args,
+            &[
+                ".github/workflows/ci.yml".to_owned(),
+                "action.yaml".to_owned(),
+            ],
+        );
+        assert_eq!(
+            args,
+            [
+                "--offline",
+                "--strict-collection",
+                ".github/workflows/ci.yml",
+                "action.yaml"
+            ]
+        );
+        assert!(tool.format_args.is_empty());
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

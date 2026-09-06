@@ -463,6 +463,47 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn github_security_audits_match_workflows_and_actions_not_general_yaml() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        for file in [".github/workflows/ci.yml", "action.yaml", "ordinary.yaml"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        let group = result
+            .iter()
+            .find(|group| group.choices.iter().any(|choice| choice.name == "zizmor"))
+            .unwrap();
+        assert_eq!(group.files.len(), 2);
+        assert!(
+            !group
+                .files
+                .iter()
+                .any(|path| path.ends_with("ordinary.yaml"))
+        );
+        assert!(
+            !group
+                .choices
+                .iter()
+                .find(|choice| choice.name == "zizmor")
+                .unwrap()
+                .selected
+        );
+        let scope = crate::tools::scope::ScopeMatcher::new(root.path(), &[]).unwrap();
+        let entry = crate::tools::tool_catalog_entry("zizmor").unwrap();
+        assert_eq!(
+            scope
+                .filter_relative_files(
+                    inventory.files(),
+                    &entry.extensions(crate::tools::ToolCapability::Lint)
+                )
+                .len(),
+            2
+        );
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

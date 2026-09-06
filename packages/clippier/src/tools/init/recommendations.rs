@@ -264,7 +264,7 @@ fn language(extension: &str) -> &str {
         "cs" | "csx" => "C#",
         "xml" | "csproj" | "props" | "targets" => "XML / MSBuild",
         "ex" | "exs" => "Elixir",
-        "github-workflow" => "GitHub Actions",
+        "github-workflow" | "github-action" => "GitHub Actions",
         "proto" => "Protocol Buffers",
         "ml" | "mli" => "OCaml",
         "fish" => "Fish",

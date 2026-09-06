@@ -112,6 +112,12 @@ pub fn file_format(path: &std::path::Path) -> Option<&str> {
 
 /// Matches a catalog format key without losing a file's ordinary language identity.
 pub fn matches_format(path: &std::path::Path, key: &str) -> bool {
+    if key == "github-action" {
+        return matches!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("action.yml" | "action.yaml")
+        );
+    }
     if key == "github-workflow" {
         return matches!(
             path.extension().and_then(|ext| ext.to_str()),
@@ -1676,6 +1682,21 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         &["cs", "vb"],
         NONE,
         30
+    ),
+    entry!(
+        "zizmor",
+        "Zizmor",
+        "zizmor",
+        Binary,
+        LINT,
+        &["--offline", "--strict-collection", "."],
+        NONE,
+        NONE,
+        &["zizmor.yml", "zizmor.yaml"],
+        NONE,
+        NONE,
+        &["github-workflow", "github-action"],
+        100
     ),
     entry!(
         "terraform",
