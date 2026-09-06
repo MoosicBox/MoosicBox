@@ -567,6 +567,13 @@ impl<'a> ToolRunner<'a> {
         args.extend(files.iter().cloned());
     }
 
+    fn command_succeeded(tool: &Tool, check_mode: bool, status_ok: bool, stdout: &str) -> bool {
+        status_ok
+            && !(check_mode
+                && tool_catalog_entry(&tool.name).is_some_and(|entry| entry.check_uses_stdout())
+                && !stdout.trim().is_empty())
+    }
+
     fn should_use_color_auto() -> bool {
         std::io::stdout().is_terminal() || std::io::stderr().is_terminal()
     }
@@ -1538,7 +1545,8 @@ impl<'a> ToolRunner<'a> {
                 };
 
                 let duration = start_time.elapsed();
-                let result = if status.success() {
+                let result = if Self::command_succeeded(tool, check_mode, status.success(), &stdout)
+                {
                     ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
                 } else {
                     ToolResult::failure(
@@ -1897,7 +1905,12 @@ impl<'a> ToolRunner<'a> {
                             let duration = start_time.elapsed();
                             let exit_code = status.code();
 
-                            if status.success() {
+                            if Self::command_succeeded(
+                                tool,
+                                check_mode,
+                                status.success(),
+                                &stdout_content,
+                            ) {
                                 ToolResult::success(
                                     tool.name.clone(),
                                     tool.display_name.clone(),
@@ -1943,7 +1956,7 @@ impl<'a> ToolRunner<'a> {
                         format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
                     let exit_code = output.status.code();
 
-                    if output.status.success() {
+                    if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
                         ToolResult::success(tool.name.clone(), tool.display_name.clone(), duration)
                     } else {
                         ToolResult::failure(
@@ -2066,7 +2079,7 @@ impl<'a> ToolRunner<'a> {
                 let stderr = format!("{warning_text}{}", String::from_utf8_lossy(&output.stderr));
                 let exit_code = output.status.code();
 
-                if output.status.success() {
+                if Self::command_succeeded(tool, check_mode, output.status.success(), &stdout) {
                     ToolResult {
                         tool_name: tool.name.clone(),
                         display_name: tool.display_name.clone(),
@@ -2881,6 +2894,37 @@ mod tests {
                 assert!(tool.format_args.is_empty());
             }
         }
+    }
+
+    #[test]
+    fn go_format_checks_fail_on_listed_files_but_writes_do_not() {
+        for name in ["gofmt", "gofumpt", "goimports"] {
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            assert!(!ToolRunner::command_succeeded(
+                &tool,
+                true,
+                true,
+                "src/main.go\n"
+            ));
+            assert!(ToolRunner::command_succeeded(&tool, true, true, ""));
+            assert!(ToolRunner::command_succeeded(
+                &tool,
+                false,
+                true,
+                "src/main.go\n"
+            ));
+            assert!(!ToolRunner::command_succeeded(&tool, true, false, ""));
+            let mut args = tool.check_args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &["src/main.go".to_owned()]);
+            assert_eq!(args, ["-l", "src/main.go"]);
+        }
+        let tool = tool_catalog_entry("eslint").unwrap().tool();
+        assert!(ToolRunner::command_succeeded(
+            &tool,
+            true,
+            true,
+            "informational output"
+        ));
     }
 
     #[test]

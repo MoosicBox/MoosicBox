@@ -225,6 +225,12 @@ impl ToolCatalogEntry {
             || self.check_args.contains(&".")
     }
 
+    /// Whether check mode reports formatting changes via stdout despite exit code zero.
+    #[must_use]
+    pub fn check_uses_stdout(self) -> bool {
+        matches!(self.name, "gofmt" | "gofumpt" | "goimports")
+    }
+
     /// Returns the extensions for one capability.
     #[must_use]
     pub fn extensions(self, capability: ToolCapability) -> BTreeSet<String> {
@@ -1617,6 +1623,36 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         &["sql"],
         100
+    ),
+    entry!(
+        "gofumpt",
+        "gofumpt",
+        "gofumpt",
+        Binary,
+        FORMAT,
+        &["-l", "."],
+        &["-w", "."],
+        NONE,
+        NONE,
+        NONE,
+        &["go"],
+        NONE,
+        20
+    ),
+    entry!(
+        "goimports",
+        "goimports",
+        "goimports",
+        Binary,
+        FORMAT,
+        &["-l", "."],
+        &["-w", "."],
+        NONE,
+        NONE,
+        NONE,
+        &["go"],
+        NONE,
+        30
     ),
     entry!(
         "terraform",

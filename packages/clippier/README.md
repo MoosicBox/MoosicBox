@@ -88,6 +88,13 @@ Squawk provides PostgreSQL migration linting with `.squawk.toml`, including
 local Node resolution through `squawk-cli`. SQL files alone expose Squawk as an
 unchecked alternative rather than activating migration checks automatically.
 
+Go formatting alternatives include `gofumpt` and `goimports` alongside `gofmt`.
+For all three, check mode interprets nonempty `-l` output as formatting failure,
+even when the native process exits zero; formatting uses `-w`. This applies to
+live, streaming, and captured execution. Goimports also adjusts imports and may
+inspect package context. These are competing formatters, not implicitly safe
+pipeline companions.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their
