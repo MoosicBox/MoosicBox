@@ -9,6 +9,7 @@ pub(super) struct Choice {
     pub name: String,
     pub reason: String,
     pub selected: bool,
+    pub active: bool,
     pub installed: Option<std::path::PathBuf>,
 }
 
@@ -28,20 +29,6 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         .files()
         .iter()
         .filter_map(|path| path.extension()?.to_str())
-        .chain(
-            TOOL_CATALOG
-                .iter()
-                .filter(|entry| {
-                    config
-                        .required
-                        .iter()
-                        .chain(&config.skip)
-                        .any(|name| name == entry.name)
-                        || config.tools.contains_key(entry.name)
-                        || config.executables.contains_key(entry.name)
-                })
-                .flat_map(|entry| entry.format_extensions.iter().copied()),
-        )
         .collect::<BTreeSet<_>>();
     let configured = |name: &str| {
         config
@@ -81,17 +68,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         }
     }
     let mut result = Vec::new();
-    for (names, extensions) in families.into_iter().flat_map(|(names, extensions)| {
-        // Existing per-extension choices must remain independently editable.
-        if names.iter().any(|name| configured(name)) {
-            extensions
-                .into_iter()
-                .map(|extension| (names.clone(), vec![extension]))
-                .collect::<Vec<_>>()
-        } else {
-            vec![(names, extensions)]
-        }
-    }) {
+    for (names, extensions) in families {
         let winner = names
             .iter()
             .filter(|name| !config.skip.iter().any(|skip| skip == **name))
@@ -134,6 +111,8 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
                 } else {
                     Some(name) == winner
                 },
+                active: configured(name)
+                    && active(name, super::super::ToolCapability::Format, &extensions),
                 installed: None,
             })
             .collect::<Vec<_>>();
@@ -166,7 +145,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
     let choices = TOOL_CATALOG
         .iter()
         .filter(|entry| {
-            (configured(entry.name) || evidence.contains_key(entry.name))
+            evidence.contains_key(entry.name)
                 && entry
                     .capabilities
                     .contains(&super::super::ToolCapability::Lint)
@@ -181,6 +160,8 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
                 })
             },
             selected: active(entry.name, super::super::ToolCapability::Lint, &[]),
+            active: configured(entry.name)
+                && active(entry.name, super::super::ToolCapability::Lint, &[]),
             installed: None,
         })
         .collect::<Vec<_>>();

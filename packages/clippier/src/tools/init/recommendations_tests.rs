@@ -92,6 +92,51 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn resumption_keeps_repository_groups_without_catalog_only_extensions() {
+        let root = tempfile::tempdir().unwrap();
+        for file in ["main.c", "main.cpp", "index.js", "module.jsx"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let fresh = groups(&mut inventory, &ToolsConfig::default());
+        let config: ToolsConfig =
+            toml::from_str("skip = [\"clang-format\", \"biome\"]\nrequired = [\"prettier\"]")
+                .unwrap();
+        let resumed = groups(&mut inventory, &config);
+        let shape = |groups: &[super::super::recommendations::Group]| {
+            groups
+                .iter()
+                .filter(|group| group.formatting)
+                .map(|group| {
+                    (
+                        group.title.clone(),
+                        group.extensions.clone(),
+                        group.files.clone(),
+                        group
+                            .choices
+                            .iter()
+                            .map(|choice| choice.name.clone())
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shape(&fresh), shape(&resumed));
+        assert!(
+            resumed
+                .iter()
+                .filter(|group| group.formatting)
+                .all(|group| !group.files.is_empty())
+        );
+        assert!(
+            resumed
+                .iter()
+                .flat_map(|group| &group.choices)
+                .any(|choice| choice.name == "prettier" && choice.active && choice.selected)
+        );
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

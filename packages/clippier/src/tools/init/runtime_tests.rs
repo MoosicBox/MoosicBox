@@ -15,6 +15,7 @@ fn groups() -> Vec<Group> {
                 reason: String::new(),
                 selected: false,
                 installed: None,
+                active: false,
             })
             .collect(),
         extensions: vec![],

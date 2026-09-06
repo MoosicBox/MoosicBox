@@ -87,6 +87,10 @@ pub(super) fn render(
                         Color::Yellow
                     }),
                 ),
+                Span::styled(
+                    if choice.active { " · active" } else { "" },
+                    Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
             ]);
             choices = choices.child(
                 Row::new()
