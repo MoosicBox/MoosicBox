@@ -2833,6 +2833,34 @@ mod tests {
     }
 
     #[test]
+    fn elm_standard_and_rumdl_command_modes_are_scoped() {
+        for (name, check, write) in [
+            ("elm-format", "--validate", Some("--yes")),
+            ("standard", ".", None),
+            ("rumdl", "check", Some("fmt")),
+        ] {
+            let tool = tool_catalog_entry(name).unwrap().tool();
+            let files = vec!["selected file".to_owned()];
+            let mut args = tool.check_args.clone();
+            ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+            let mut expected = if check == "." {
+                vec![]
+            } else {
+                vec![check.to_owned()]
+            };
+            expected.extend(files.clone());
+            assert_eq!(args, expected);
+            if let Some(write) = write {
+                let mut args = tool.format_args.clone();
+                ToolRunner::replace_default_path_args(&tool, &mut args, &files);
+                assert_eq!(args, vec![write.to_owned(), files[0].clone()]);
+            } else {
+                assert!(tool.format_args.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn selected_files_apply_per_tool_include_and_exclude_policy() {
         let dir = temp_dir("clippier-per-tool-scope");
         std::fs::create_dir_all(dir.join("src/generated")).unwrap();

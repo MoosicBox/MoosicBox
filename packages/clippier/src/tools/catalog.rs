@@ -193,6 +193,8 @@ impl ToolCatalogEntry {
     #[must_use]
     pub fn node_runner_package(self) -> Option<&'static str> {
         match self.name {
+            "standard" => Some("standard"),
+            "elm-format" => Some("elm-format"),
             "cspell" => Some("cspell"),
             "oxfmt" => Some("oxfmt"),
             "oxlint" => Some("oxlint"),
@@ -292,10 +294,22 @@ const EMBEDDED_CONFIG_SIGNALS: &[EmbeddedConfigSignal] = &[
         key: "ruff",
     },
     EmbeddedConfigSignal {
+        tool: "rumdl",
+        manifest: "pyproject.toml",
+        container: Some("tool"),
+        key: "rumdl",
+    },
+    EmbeddedConfigSignal {
         tool: "sqlfluff",
         manifest: "pyproject.toml",
         container: Some("tool"),
         key: "sqlfluff",
+    },
+    EmbeddedConfigSignal {
+        tool: "standard",
+        manifest: "package.json",
+        container: None,
+        key: "standard",
     },
     EmbeddedConfigSignal {
         tool: "stylelint",
@@ -1511,6 +1525,51 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         NONE,
         &["c", "cc", "cpp", "cxx", "h", "hh", "hpp", "hxx"],
         100
+    ),
+    entry!(
+        "elm-format",
+        "Elm Formatter",
+        "elm-format",
+        Binary,
+        FORMAT,
+        &["--validate", "."],
+        &["--yes", "."],
+        &["elm.json"],
+        NONE,
+        NONE,
+        &["elm"],
+        NONE,
+        10
+    ),
+    entry!(
+        "standard",
+        "JavaScript Standard Style",
+        "standard",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        &["js", "jsx", "mjs", "cjs"],
+        100
+    ),
+    entry!(
+        "rumdl",
+        "rumdl",
+        "rumdl",
+        Binary,
+        BOTH,
+        &["check", "."],
+        &["fmt", "."],
+        NONE,
+        &[".rumdl.toml", "rumdl.toml"],
+        NONE,
+        &["md", "markdown"],
+        &["md", "markdown"],
+        40
     ),
     entry!(
         "terraform",

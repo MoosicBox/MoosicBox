@@ -74,6 +74,13 @@ uses `jsonnetfmt`; Typst (`.typ`) uses `typstyle`. Each has a non-writing check
 mode and an explicit in-place formatting mode over selected files. These
 source-only alternatives appear in init without a native configuration file.
 
+Elm formatting uses `elm-format --validate` for checking and `--yes` for
+non-interactive writes. JavaScript Standard Style (`standard`) is lint-only;
+its `package.json` configuration activates discovery. Both support local Node
+executables. Markdown's `rumdl` supports lint and format separately through
+`check` and `fmt`, with `.rumdl.toml`/`rumdl.toml` and `[tool.rumdl]`
+discovery. Native rule configuration determines what rumdl reports and fixes.
+
 Filename-aware integrations include Hadolint (lint), Buildifier (format), and
 cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
 Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their
