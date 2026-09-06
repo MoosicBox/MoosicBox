@@ -6,6 +6,7 @@
 
 pub mod build;
 pub mod compare;
+pub mod merge;
 pub mod metrics;
 pub mod model;
 pub mod render;

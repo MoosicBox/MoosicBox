@@ -125,6 +125,25 @@ it is measured separately. Clippier owns platform filtering and dependency setup
 discovered features. Desktop/mobile packaging and library-only crate attribution are not
 covered by this package matrix.
 
+Clippier splits discovery into chunks of eight features, with at most four shard jobs running
+concurrently. Each isolated job measures the same package baseline; only its first shard
+measures shipping defaults. The final per-package job runs even when a shard fails, downloads
+the retained reports, and calls Bloaty's Rust `--merge-reports` mode with the complete scenario
+list from the saved Clippier plan. Historical comparison uses only the consolidated report.
+
+Merging rejects missing/duplicate/unexpected scenarios, incompatible report provenance or
+baseline configurations, and differing baseline byte sizes. Failed comparison measurements
+are preserved in a merged report and fail CI after publication. A missing shard or invalid
+baseline prevents a trustworthy merge; its diagnostics and individual shard artifacts remain
+available. This intentionally does not silently tolerate cross-runner size variance.
+
+For local merging:
+
+```bash
+bloaty --merge-reports shard-a.json shard-b.json \
+  --expected-scenarios flac,mp3,shipping --output-format all --report-file merged
+```
+
 Measurements use Ubuntu 24.04 and Rust 1.95.0. This reduces, but does not eliminate, variance:
 OS packages and runner images can change. Master artifacts are retained for 90 days and PRs
 search the latest 30 successful master runs for the matching artifact identity. Comparisons

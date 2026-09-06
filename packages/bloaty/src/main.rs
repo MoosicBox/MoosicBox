@@ -33,7 +33,7 @@ enum OutputFormat {
 )]
 struct Args {
     /// Workspace package to analyze.
-    #[arg(short, long, required_unless_present_any = ["compare_reports", "characterize_variance"])]
+    #[arg(short, long, required_unless_present_any = ["compare_reports", "characterize_variance", "merge_reports"])]
     package: Option<String>,
 
     /// Final artifact target name. May be omitted when the package has one supported target.
@@ -63,6 +63,14 @@ struct Args {
     /// Output format. Text prints to stdout; file formats require --report-file.
     #[arg(long, value_enum, default_value = "text")]
     output_format: OutputFormat,
+
+    /// Merge shard JSON reports, checking coverage against --expected-scenarios.
+    #[arg(long, num_args = 1.., requires = "expected_scenarios", conflicts_with_all = ["compare_reports", "characterize_variance", "package"])]
+    merge_reports: Option<Vec<String>>,
+
+    /// Complete planned comparison names for merging (comma-separated).
+    #[arg(long, value_delimiter = ',', requires = "merge_reports")]
+    expected_scenarios: Vec<String>,
 
     /// Append a Markdown analysis summary to `GITHUB_STEP_SUMMARY`.
     #[arg(long)]
@@ -101,6 +109,18 @@ fn main() -> Result<()> {
     }
     if let Some(paths) = &args.characterize_variance {
         return characterize_saved_reports(paths);
+    }
+    if let Some(paths) = &args.merge_reports {
+        let reports = paths
+            .iter()
+            .map(|path| {
+                let bytes = fs::read(path).with_context(|| format!("reading shard {path}"))?;
+                serde_json::from_slice(&bytes).with_context(|| format!("parsing shard {path}"))
+            })
+            .collect::<Result<Vec<AnalysisReport>>>()?;
+        let expected = args.expected_scenarios.iter().cloned().collect();
+        let report = bloaty::merge::merge_reports(reports, &expected)?;
+        return output_report(&args, &report);
     }
     let package = args
         .package
@@ -142,11 +162,15 @@ fn main() -> Result<()> {
         baseline,
         comparisons,
     )?;
-    let text = render::text(&report);
+    output_report(&args, &report)
+}
+
+fn output_report(args: &Args, report: &AnalysisReport) -> Result<()> {
+    let text = render::text(report);
     match args.output_format {
         OutputFormat::Text => print!("{text}"),
-        OutputFormat::Json => write_json(&report_path(&args, "json")?, &report)?,
-        OutputFormat::Jsonl => write_jsonl(&report_path(&args, "jsonl")?, &report)?,
+        OutputFormat::Json => write_json(&report_path(args, "json")?, report)?,
+        OutputFormat::Jsonl => write_jsonl(&report_path(args, "jsonl")?, report)?,
         OutputFormat::All => {
             print!("{text}");
             let base = args
@@ -154,8 +178,8 @@ fn main() -> Result<()> {
                 .as_deref()
                 .context("--report-file is required for --output-format all")?;
             fs::write(format!("{base}.txt"), text)?;
-            write_json(&format!("{base}.json"), &report)?;
-            write_jsonl(&format!("{base}.jsonl"), &report)?;
+            write_json(&format!("{base}.json"), report)?;
+            write_jsonl(&format!("{base}.jsonl"), report)?;
         }
     }
     if args.github_summary {
@@ -165,7 +189,7 @@ fn main() -> Result<()> {
             .create(true)
             .append(true)
             .open(path)?
-            .write_all(render::markdown(&report).as_bytes())?;
+            .write_all(render::markdown(report).as_bytes())?;
     }
     if args.fail_on_incomplete
         && std::iter::once(&report.baseline)

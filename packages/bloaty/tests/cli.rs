@@ -197,6 +197,65 @@ fn incomplete_analysis_publishes_summary_and_reports_before_failing() {
 }
 
 #[test]
+fn merges_cli_reports_and_rejects_missing_coverage() {
+    let workspace = workspace(&[
+        (
+            "Cargo.toml",
+            "[package]\nname=\"merge-app\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[features]\na=[]\nb=[]\n",
+        ),
+        ("src/main.rs", "fn main() {}"),
+    ]);
+    for feature in ["a", "b"] {
+        let output = run(
+            workspace.path(),
+            &[
+                "--package",
+                "merge-app",
+                "--feature",
+                feature,
+                "--output-format",
+                "json",
+                "--report-file",
+                feature,
+            ],
+        );
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = run(
+        workspace.path(),
+        &[
+            "--merge-reports",
+            "a.json",
+            "b.json",
+            "--expected-scenarios",
+            "a,b",
+            "--output-format",
+            "all",
+            "--report-file",
+            "merged",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value =
+        serde_json::from_slice(&fs::read(workspace.path().join("merged.json")).unwrap()).unwrap();
+    assert_eq!(report["comparisons"].as_array().unwrap().len(), 2);
+    let output = run(
+        workspace.path(),
+        &["--merge-reports", "a.json", "--expected-scenarios", "a,b"],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("coverage mismatch"));
+}
+
+#[test]
 fn rejects_packages_without_supported_final_artifacts() {
     let workspace = workspace(&[
         (

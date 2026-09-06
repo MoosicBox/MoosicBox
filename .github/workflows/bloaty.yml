@@ -26,7 +26,8 @@ jobs:
     plan:
         runs-on: ubuntu-24.04
         outputs:
-            matrix: ${{ steps.packages.outputs.matrix }}
+            matrix: ${{ steps.shards.outputs.matrix }}
+            packages: ${{ steps.shards.outputs.packages }}
         steps:
             - uses: actions/checkout@v6
             - name: Discover analysis packages
@@ -37,21 +38,37 @@ jobs:
                   # Default is measured as its own configuration, not added to the baseline.
                   # ASIO is Windows-only; the others are non-product/internal features.
                   skip-features: "default,fail-on-warnings,_*,asio"
-                  chunked: "1000"
+                  chunked: "8"
+                  # Provision default-build dependencies in every isolated shard, including
+                  # baseline prerequisites and the first shard's shipping scenario.
+                  # Bloaty does not consume Clippier's Cargo feature flags.
+                  required-features: default
                   packages: moosicbox_aconverter,moosicbox_server,moosicbox_tunnel_server
                   os: ubuntu
                   os-suffix: "-latest"
                   skip-on-no-changes: "false"
                   force-full-matrix-condition: "true"
+            - name: Identify shards and retain expected coverage
+              id: shards
+              env:
+                  MATRIX: ${{ steps.packages.outputs.matrix }}
+              run: |
+                  echo "$MATRIX" | jq 'to_entries | map(.value + {shard: .key}) | group_by(.name) | map(to_entries | map(.value + {shipping: (.key == 0)})) | flatten' > plan.json
+                  echo "matrix=$(jq -c . plan.json)" >> "$GITHUB_OUTPUT"
+                  echo "packages=$(jq -c '[.[].name] | unique' plan.json)" >> "$GITHUB_OUTPUT"
+            - uses: actions/upload-artifact@v6
+              with:
+                  name: bloaty-plan
+                  path: plan.json
 
     analyze:
         needs: plan
-        name: Size ${{ matrix.package.name }}
+        name: Size ${{ matrix.package.name }} shard ${{ matrix.package.shard }}
         runs-on: ubuntu-24.04
         timeout-minutes: 90
         strategy:
             fail-fast: false
-            max-parallel: 2
+            max-parallel: 4
             matrix:
                 package: ${{ fromJson(needs.plan.outputs.matrix) }}
         steps:
@@ -77,13 +94,56 @@ jobs:
                   run-matrix-steps-file: .github/clippier/run-matrix/bloaty.yml
                   run-matrix-stream-output: "true"
                   run-matrix-template-vars: >-
-                      {"baseline":"${{ matrix.package.name == 'moosicbox_aconverter' && 'none' || matrix.package.name == 'moosicbox_server' && 'sqlite-sqlx' || 'postgres-raw' }}"}
+                      {"baseline":"${{ matrix.package.name == 'moosicbox_aconverter' && 'none' || matrix.package.name == 'moosicbox_server' && 'sqlite-sqlx' || 'postgres-raw' }}", "shipping":"${{ matrix.package.shipping && '--scenario shipping=default' || '' }}"}
+            - name: Upload shard reports
+              if: always()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: bloaty-shard-${{ matrix.package.name }}-${{ matrix.package.shard }}
+                  path: report.*
+                  if-no-files-found: error
+                  retention-days: 90
+
+    merge:
+        needs: [plan, analyze]
+        if: always() && needs.plan.result == 'success'
+        runs-on: ubuntu-24.04
+        strategy:
+            fail-fast: false
+            matrix:
+                package: ${{ fromJson(needs.plan.outputs.packages) }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: "1.95.0"
+            - uses: actions/download-artifact@v8
+              with:
+                  name: bloaty-plan
+                  path: plan
+            - uses: actions/download-artifact@v8
+              with:
+                  pattern: bloaty-shard-${{ matrix.package }}-*
+                  path: shards
+            - name: Merge and publish package report
+              env:
+                  PACKAGE: ${{ matrix.package }}
+              run: |
+                  expected=$(jq -r --arg p "$PACKAGE" '[.[] | select(.name == $p) | .features[]] + ["shipping"] | unique | join(",")' plan/plan.json)
+                  status=0
+                  cargo run --locked --package bloaty -- --merge-reports shards/*/report.json --expected-scenarios "$expected" --output-format all --report-file report --github-summary --fail-on-incomplete > merge.log 2>&1 || status=$?
+                  cat merge.log
+                  if test "$status" -ne 0; then
+                    echo '## Incomplete package analysis' >> "$GITHUB_STEP_SUMMARY"
+                    echo 'Shard merging or measurement failed. See merge diagnostics and retained shard artifacts; no complete baseline will be published.' >> "$GITHUB_STEP_SUMMARY"
+                    exit "$status"
+                  fi
             - name: Download master baseline
               if: github.event_name == 'pull_request'
               id: baseline
               env:
                   GH_TOKEN: ${{ github.token }}
-                  ARTIFACT: bloaty-v3-${{ matrix.package.name }}-release-ubuntu-24.04-rust-1.95.0
+                  ARTIFACT: bloaty-v4-${{ matrix.package }}-release-ubuntu-24.04-rust-1.95.0
               run: |
                   mkdir -p baseline
                   gh run list --workflow bloaty.yml --branch master --status success --limit 30 --json databaseId --jq '.[].databaseId' > baseline-runs.txt
@@ -114,7 +174,7 @@ jobs:
               if: always()
               uses: actions/upload-artifact@v6
               with:
-                  name: bloaty-v3-${{ matrix.package.name }}-release-ubuntu-24.04-rust-1.95.0
+                  name: bloaty-v4-${{ matrix.package }}-release-ubuntu-24.04-rust-1.95.0
                   path: report.*
                   if-no-files-found: error
                   retention-days: 90
