@@ -87,6 +87,24 @@ pub enum ToolAdapter {
     Remark,
 }
 
+/// Returns the file's format key, including conventional extensionless build files.
+/// Keys are also used in formatter extension policies so inventory and execution agree.
+pub fn file_format(path: &std::path::Path) -> Option<&str> {
+    let name = path.file_name()?.to_str()?;
+    match name {
+        "Dockerfile" | "Containerfile" => Some("dockerfile"),
+        "BUILD" | "BUILD.bazel" | "WORKSPACE" | "WORKSPACE.bazel" | "MODULE.bazel" => Some("bzl"),
+        "CMakeLists.txt" => Some("cmake"),
+        _ if name.starts_with("Dockerfile.")
+            || name.starts_with("Containerfile.")
+            || name.ends_with(".Dockerfile") =>
+        {
+            Some("dockerfile")
+        }
+        _ => path.extension()?.to_str(),
+    }
+}
+
 /// Canonical metadata for a built-in tool.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolCatalogEntry {
@@ -1187,6 +1205,56 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
             "swift", "kt"
         ],
         100
+    ),
+    entry!(
+        "hadolint",
+        "Hadolint",
+        "hadolint",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &[".hadolint.yaml", ".hadolint.yml"],
+        NONE,
+        NONE,
+        &["dockerfile"],
+        100
+    ),
+    entry!(
+        "buildifier",
+        "Buildifier",
+        "buildifier",
+        Binary,
+        FORMAT,
+        &["-mode=check", "."],
+        &["-mode=fix", "."],
+        NONE,
+        NONE,
+        NONE,
+        &["bzl", "bazel"],
+        NONE,
+        10
+    ),
+    entry!(
+        "cmake-format",
+        "CMake Formatter",
+        "cmake-format",
+        Binary,
+        FORMAT,
+        &["--check", "."],
+        &["--in-place", "."],
+        NONE,
+        &[
+            ".cmake-format.json",
+            ".cmake-format.py",
+            ".cmake-format.yaml",
+            ".cmake-format.yml"
+        ],
+        NONE,
+        &["cmake"],
+        NONE,
+        10
     ),
     entry!(
         "terraform",

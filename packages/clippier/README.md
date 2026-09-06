@@ -40,6 +40,13 @@ Svelte support is not advertised yet: upstream requires an installed Svelte
 package and an enabled option. See upstream [Oxfmt language support](https://oxc.rs/docs/guide/usage/formatter/language-support)
 and [Oxlint usage](https://oxc.rs/docs/guide/usage/linter).
 
+Filename-aware integrations include Hadolint (lint), Buildifier (format), and
+cmake-format (format). Shared inventory/scope matching recognizes Dockerfile and
+Containerfile variants, BUILD/WORKSPACE/MODULE.bazel, and CMakeLists.txt. Their
+policy format keys are `dockerfile`, `bzl`/`bazel`, and `cmake`; ordinary `.txt`
+files are not treated as CMake. Native include/exclude policies still apply.
+Buildifier configuration injection and lint fixes are not implemented.
+
 These integrations use native CLIs and planned file arguments. RuboCop and
 SQLFluff are currently lint-only; Dart is format-only. Bandit is opt-in and uses
 its CLI defaults (Clippier does not inject a Bandit config path). Native binaries

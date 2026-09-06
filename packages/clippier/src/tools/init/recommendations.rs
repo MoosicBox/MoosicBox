@@ -28,7 +28,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
     let extensions = inventory
         .files()
         .iter()
-        .filter_map(|path| path.extension()?.to_str())
+        .filter_map(|path| crate::tools::catalog::file_format(path))
         .collect::<BTreeSet<_>>();
     let configured = |name: &str| {
         config
@@ -121,8 +121,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
                 .files()
                 .iter()
                 .filter(|path| {
-                    path.extension()
-                        .and_then(|ext| ext.to_str())
+                    crate::tools::catalog::file_format(path)
                         .is_some_and(|ext| extensions.contains(&ext))
                 })
                 .cloned()
@@ -147,8 +146,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
         .filter(|entry| {
             (evidence.contains_key(entry.name)
                 || inventory.files().iter().any(|path| {
-                    path.extension()
-                        .and_then(|ext| ext.to_str())
+                    crate::tools::catalog::file_format(path)
                         .is_some_and(|ext| entry.lint_extensions.contains(&ext))
                 }))
                 && entry
@@ -183,8 +181,7 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             .files()
             .iter()
             .filter(|path| {
-                path.extension()
-                    .and_then(|ext| ext.to_str())
+                crate::tools::catalog::file_format(path)
                     .is_some_and(|ext| extensions.iter().any(|value| value == ext))
             })
             .cloned()
@@ -255,6 +252,9 @@ fn language(extension: &str) -> &str {
         "js" | "jsx" | "mjs" | "cjs" => "JavaScript",
         "ts" | "tsx" | "mts" | "cts" => "TypeScript",
         "rb" | "rake" | "gemspec" => "Ruby",
+        "dockerfile" => "Docker / Container",
+        "bzl" | "bazel" => "Bazel / Starlark",
+        "cmake" => "CMake",
         "java" => "Java",
         "php" => "PHP",
         "rst" | "adoc" | "txt" => "Prose",

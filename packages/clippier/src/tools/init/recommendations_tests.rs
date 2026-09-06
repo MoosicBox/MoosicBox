@@ -197,6 +197,44 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn extensionless_build_files_share_inventory_and_init_matching() {
+        let root = tempfile::tempdir().unwrap();
+        for file in [
+            "Dockerfile",
+            "Dockerfile.dev",
+            "BUILD",
+            "WORKSPACE",
+            "CMakeLists.txt",
+            "ordinary.txt",
+        ] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        let scope = crate::tools::scope::ScopeMatcher::new(root.path(), &[]).unwrap();
+        for (name, count) in [("hadolint", 2), ("buildifier", 2), ("cmake-format", 1)] {
+            let entry = crate::tools::tool_catalog_entry(name).unwrap();
+            let group = result
+                .iter()
+                .find(|group| group.choices.iter().any(|choice| choice.name == name))
+                .unwrap();
+            assert_eq!(group.files.len(), count, "{name}");
+            let extensions = entry.extensions(if group.formatting {
+                crate::tools::ToolCapability::Format
+            } else {
+                crate::tools::ToolCapability::Lint
+            });
+            assert_eq!(
+                scope
+                    .filter_relative_files(inventory.files(), &extensions)
+                    .len(),
+                count
+            );
+        }
+        assert_eq!(inventory.diagnostics().recursive_walks, 1);
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();

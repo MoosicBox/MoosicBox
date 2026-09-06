@@ -215,7 +215,7 @@ impl RepositoryDiscovery {
                     .or_default()
                     .insert(relative.clone());
             }
-            if let Some(extension) = path.extension().and_then(|value| value.to_str()) {
+            if let Some(extension) = crate::tools::catalog::file_format(path) {
                 result
                     .extensions
                     .entry(extension.to_ascii_lowercase())
@@ -351,9 +351,7 @@ impl RepositoryDiscovery {
                     (tool.name.clone(), {
                         let mut value = tool.format_extensions.clone();
                         value.extend(tool.files.iter().filter_map(|path| {
-                            path.extension()
-                                .and_then(|ext| ext.to_str())
-                                .map(str::to_ascii_lowercase)
+                            crate::tools::catalog::file_format(path).map(str::to_ascii_lowercase)
                         }));
                         value
                     })
@@ -761,9 +759,7 @@ fn plan_inventory(
                 (tool.name.clone(), {
                     let mut value = tool.format_extensions.clone();
                     value.extend(tool.files.iter().filter_map(|path| {
-                        path.extension()
-                            .and_then(|ext| ext.to_str())
-                            .map(str::to_ascii_lowercase)
+                        crate::tools::catalog::file_format(path).map(str::to_ascii_lowercase)
                     }));
                     value
                 })

@@ -1077,7 +1077,7 @@ impl<'a> ToolRunner<'a> {
                 continue;
             }
 
-            let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
+            let Some(extension) = crate::tools::catalog::file_format(&path) else {
                 continue;
             };
             if extension != "md" && extension != "mdx" {
