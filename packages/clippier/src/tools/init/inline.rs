@@ -262,9 +262,17 @@ pub(super) fn render(
     )
     .retain_state(scroll);
     let positions = stops(groups);
+    let column_start = focus.1 == 0
+        && groups
+            .iter()
+            .take(focus.0.min(groups.len()))
+            .filter(|group| !group.choices.is_empty())
+            .count()
+            % per_column
+            == 0;
     let viewport = if focus.0 == usize::MAX {
         viewport
-    } else if positions.first() == Some(&focus) {
+    } else if column_start || positions.first() == Some(&focus) {
         viewport.reveal(format!("section-{}.surface", focus.0))
     } else if positions.last() == Some(&focus) {
         viewport.reveal_end(format!("section-{}.surface", focus.0))

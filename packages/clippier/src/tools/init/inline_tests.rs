@@ -106,6 +106,19 @@ fn wide_checklists_render_multiple_sections_side_by_side() {
 }
 
 #[test]
+fn moving_to_next_column_reveals_its_panel_header() {
+    let groups = fixture();
+    let scroll = Cell::new(ScrollViewState::new());
+    let _ = render(&groups, &[], (2, 0), 120, 14, &scroll);
+    let buffer = render(&groups, &[], (3, 0), 120, 14, &scroll);
+    let first_row = buffer.cells()[..120]
+        .iter()
+        .map(|cell| cell.symbol.as_str())
+        .collect::<String>();
+    assert!(first_row.contains("Language 3"), "{first_row}");
+}
+
+#[test]
 fn components_render_borders_details_and_focused_checkbox() {
     let groups = fixture();
     let buffer = render(
