@@ -1562,82 +1562,22 @@ impl<'a> ToolRunner<'a> {
         tx: &mpsc::Sender<ToolEvent>,
         cancel_requested: &Arc<AtomicBool>,
     ) -> ToolResult {
-        if check_mode
-            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
-                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
-        {
-            let _ = tx.send(ToolEvent::Started {
-                tool_name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-            });
-            let result = self.run_directory_scoped(tool, filename_filter, &|| {
-                cancel_requested.load(Ordering::SeqCst)
-            });
-            for line in result.stdout.lines() {
-                let _ = tx.send(ToolEvent::StdoutLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_owned(),
-                    overwrite: false,
-                });
-            }
-            for line in result.stderr.lines() {
-                let _ = tx.send(ToolEvent::StderrLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_owned(),
-                    overwrite: false,
-                });
-            }
-            let _ = tx.send(ToolEvent::Finished {
-                tool_name: tool.name.clone(),
-                success: result.success,
-            });
-            return result;
-        }
         let start_time = Instant::now();
-
-        #[cfg(feature = "format")]
-        if let Some(files) = self.selected_rust_files(tool) {
-            let _ = tx.send(ToolEvent::Started {
-                tool_name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-            });
-            let result = self.run_selected_rustfmt(tool, &files, check_mode, start_time);
-            for line in result.stderr.lines() {
-                let _ = tx.send(ToolEvent::StderrLine {
+        if let Some(result) = self.run_special_adapter(
+            tool,
+            check_mode,
+            &|| cancel_requested.load(Ordering::SeqCst),
+            &|| {
+                let _ = tx.send(ToolEvent::Started {
                     tool_name: tool.name.clone(),
-                    line: line.to_string(),
-                    overwrite: false,
+                    display_name: tool.display_name.clone(),
                 });
-            }
-            let _ = tx.send(ToolEvent::Finished {
-                tool_name: tool.name.clone(),
-                success: result.success,
-            });
-            return result;
-        }
-
-        if check_mode
-            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
-                == Some(ToolAdapter::Remark)
-        {
-            let _ = tx.send(ToolEvent::Started {
-                tool_name: tool.name.clone(),
-                display_name: tool.display_name.clone(),
-            });
-            let result = self.run_remark_strict_check(tool, start_time);
-            for line in result.stdout.lines() {
-                let _ = tx.send(ToolEvent::StdoutLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_string(),
-                    overwrite: false,
-                });
-            }
-            for line in result.stderr.lines() {
-                let _ = tx.send(ToolEvent::StderrLine {
-                    tool_name: tool.name.clone(),
-                    line: line.to_string(),
-                    overwrite: false,
-                });
+            },
+        ) {
+            for (is_stderr, text) in [(false, &result.stdout), (true, &result.stderr)] {
+                for line in text.lines() {
+                    Self::emit_tool_line_event(tx, &tool.name, is_stderr, line.as_bytes(), false);
+                }
             }
             let _ = tx.send(ToolEvent::Finished {
                 tool_name: tool.name.clone(),
@@ -1927,6 +1867,34 @@ impl<'a> ToolRunner<'a> {
         self.scoped_file_args(tool)
     }
 
+    fn run_special_adapter(
+        &self,
+        tool: &Tool,
+        check_mode: bool,
+        cancelled: &dyn Fn() -> bool,
+        started: &dyn Fn(),
+    ) -> Option<ToolResult> {
+        let start_time = Instant::now();
+        let entry = tool_catalog_entry(&tool.name)?;
+        if check_mode
+            && let crate::tools::catalog::ExecutionScope::Directory { filename_filter } =
+                entry.execution_scope
+        {
+            started();
+            return Some(self.run_directory_scoped(tool, filename_filter, cancelled));
+        }
+        #[cfg(feature = "format")]
+        if let Some(files) = self.selected_rust_files(tool) {
+            started();
+            return Some(self.run_selected_rustfmt(tool, &files, check_mode, start_time));
+        }
+        if check_mode && entry.adapter() == ToolAdapter::Remark {
+            started();
+            return Some(self.run_remark_strict_check(tool, start_time));
+        }
+        None
+    }
+
     /// Runs a single tool.
     #[allow(clippy::too_many_lines)]
     fn run_single_tool(&self, tool: &Tool, check_mode: bool) -> ToolResult {
@@ -1941,24 +1909,9 @@ impl<'a> ToolRunner<'a> {
         stream_output: bool,
         retain_output: bool,
     ) -> ToolResult {
-        if check_mode
-            && let Some(crate::tools::catalog::ExecutionScope::Directory { filename_filter }) =
-                tool_catalog_entry(&tool.name).map(|entry| entry.execution_scope)
-        {
-            return self.run_directory_scoped(tool, filename_filter, &|| false);
-        }
         let start_time = Instant::now();
-
-        #[cfg(feature = "format")]
-        if let Some(files) = self.selected_rust_files(tool) {
-            return self.run_selected_rustfmt(tool, &files, check_mode, start_time);
-        }
-
-        if check_mode
-            && tool_catalog_entry(&tool.name).map(|entry| entry.adapter())
-                == Some(ToolAdapter::Remark)
-        {
-            return self.run_remark_strict_check(tool, start_time);
+        if let Some(result) = self.run_special_adapter(tool, check_mode, &|| false, &|| {}) {
+            return result;
         }
 
         let Some((program, final_args, warnings)) =
