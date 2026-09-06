@@ -159,6 +159,9 @@ impl ToolCatalogEntry {
     #[must_use]
     pub fn node_runner_package(self) -> Option<&'static str> {
         match self.name {
+            "oxfmt" => Some("oxfmt"),
+            "oxlint" => Some("oxlint"),
+            "pyright" => Some("pyright"),
             "prettier" => Some("prettier"),
             "biome" => Some("@biomejs/biome"),
             "eslint" => Some("eslint"),
@@ -783,6 +786,200 @@ pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
         0
     ),
     entry!(
+        "oxfmt",
+        "Oxfmt",
+        "oxfmt",
+        Binary,
+        FORMAT,
+        &["--check", "."],
+        &["--write", "."],
+        NONE,
+        &[
+            ".oxfmtrc.json",
+            ".oxfmtrc.jsonc",
+            "oxfmt.config.ts",
+            "oxfmt.config.mts"
+        ],
+        NONE,
+        &[
+            "js",
+            "jsx",
+            "mjs",
+            "cjs",
+            "ts",
+            "tsx",
+            "mts",
+            "cts",
+            "json",
+            "jsonc",
+            "json5",
+            "yaml",
+            "yml",
+            "toml",
+            "html",
+            "htm",
+            "xhtml",
+            "vue",
+            "css",
+            "scss",
+            "less",
+            "pcss",
+            "postcss",
+            "md",
+            "markdown",
+            "mdx",
+            "graphql",
+            "gql",
+            "graphqls",
+            "hbs",
+            "handlebars"
+        ],
+        NONE,
+        25
+    ),
+    entry!(
+        "oxlint",
+        "Oxlint",
+        "oxlint",
+        Binary,
+        LINT,
+        &["--deny-warnings", "."],
+        NONE,
+        NONE,
+        &[
+            ".oxlintrc.json",
+            ".oxlintrc.jsonc",
+            "oxlint.config.ts",
+            "oxlint.config.mts"
+        ],
+        NONE,
+        NONE,
+        &[
+            "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "vue", "svelte", "astro"
+        ],
+        100
+    ),
+    entry!(
+        "isort",
+        "isort",
+        "isort",
+        Binary,
+        FORMAT,
+        &["--check-only", "."],
+        &["."],
+        NONE,
+        &[".isort.cfg"],
+        NONE,
+        &["py", "pyi"],
+        NONE,
+        40
+    ),
+    entry!(
+        "pyright",
+        "Pyright",
+        "pyright",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &["pyrightconfig.json"],
+        NONE,
+        NONE,
+        &["py", "pyi"],
+        100
+    ),
+    entry!(
+        "bandit",
+        "Bandit",
+        "bandit",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        NONE,
+        &["py"],
+        100
+    ),
+    entry!(
+        "rubocop",
+        "RuboCop",
+        "rubocop",
+        Binary,
+        LINT,
+        &["."],
+        NONE,
+        NONE,
+        &[".rubocop.yml"],
+        NONE,
+        NONE,
+        &["rb", "rake", "gemspec"],
+        100
+    ),
+    entry!(
+        "swiftformat",
+        "SwiftFormat",
+        "swiftformat",
+        Binary,
+        FORMAT,
+        &["--lint", "."],
+        &["."],
+        NONE,
+        &[".swiftformat"],
+        NONE,
+        &["swift"],
+        NONE,
+        10
+    ),
+    entry!(
+        "ktlint",
+        "ktlint",
+        "ktlint",
+        Binary,
+        FORMAT,
+        &["."],
+        &["--format", "."],
+        NONE,
+        NONE,
+        NONE,
+        &["kt", "kts"],
+        NONE,
+        10
+    ),
+    entry!(
+        "sqlfluff",
+        "SQLFluff",
+        "sqlfluff",
+        Binary,
+        LINT,
+        &["lint", "."],
+        NONE,
+        NONE,
+        &[".sqlfluff"],
+        NONE,
+        NONE,
+        &["sql"],
+        100
+    ),
+    entry!(
+        "dart",
+        "Dart Formatter",
+        "dart",
+        Binary,
+        FORMAT,
+        &["format", "--output=none", "--set-exit-if-changed", "."],
+        &["format", "."],
+        &["pubspec.yaml"],
+        NONE,
+        NONE,
+        &["dart"],
+        NONE,
+        10
+    ),
+    entry!(
         "terraform",
         "Terraform",
         "terraform",
@@ -823,6 +1020,25 @@ pub fn tool_catalog_entry(name: &str) -> Option<&'static ToolCatalogEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oxc_tools_have_independent_coverage_and_node_resolution() {
+        let formatter = tool_catalog_entry("oxfmt").unwrap();
+        let linter = tool_catalog_entry("oxlint").unwrap();
+        for extension in [
+            "json5", "yaml", "toml", "html", "vue", "css", "scss", "md", "mdx", "graphql", "hbs",
+        ] {
+            assert!(formatter.format_extensions.contains(&extension));
+        }
+        for extension in ["vue", "svelte", "astro", "mts", "cts"] {
+            assert!(linter.lint_extensions.contains(&extension));
+        }
+        assert!(!linter.lint_extensions.contains(&"json"));
+        assert_eq!(formatter.node_runner_package(), Some("oxfmt"));
+        assert_eq!(linter.node_runner_package(), Some("oxlint"));
+        assert!(formatter.uses_scoped_file_arguments());
+        assert!(linter.uses_scoped_file_arguments());
+    }
 
     #[test]
     fn initial_matrix_has_no_unverified_compatible_formatter_pairs() {

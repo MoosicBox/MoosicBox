@@ -145,7 +145,12 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
     let choices = TOOL_CATALOG
         .iter()
         .filter(|entry| {
-            evidence.contains_key(entry.name)
+            (evidence.contains_key(entry.name)
+                || inventory.files().iter().any(|path| {
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext| entry.lint_extensions.contains(&ext))
+                }))
                 && entry
                     .capabilities
                     .contains(&super::super::ToolCapability::Lint)
@@ -155,11 +160,13 @@ pub(super) fn groups(inventory: &mut RepositoryDiscovery, config: &ToolsConfig) 
             reason: if configured(entry.name) {
                 "Current clippier.toml configuration".to_owned()
             } else {
-                evidence.get(entry.name).map_or_else(String::new, |fact| {
-                    format!("{:?}: {}", fact.kind, fact.path.display())
-                })
+                evidence.get(entry.name).map_or_else(
+                    || "source files; catalog alternative".to_owned(),
+                    |fact| format!("{:?}: {}", fact.kind, fact.path.display()),
+                )
             },
-            selected: active(entry.name, super::super::ToolCapability::Lint, &[]),
+            selected: (configured(entry.name) || evidence.contains_key(entry.name))
+                && active(entry.name, super::super::ToolCapability::Lint, &[]),
             active: configured(entry.name)
                 && active(entry.name, super::super::ToolCapability::Lint, &[]),
             installed: None,
@@ -245,8 +252,17 @@ fn language(extension: &str) -> &str {
     match extension {
         "nix" => "Nix",
         "py" | "pyi" | "ipynb" => "Python",
-        "js" | "jsx" => "JavaScript",
-        "ts" | "tsx" => "TypeScript",
+        "js" | "jsx" | "mjs" | "cjs" => "JavaScript",
+        "ts" | "tsx" | "mts" | "cts" => "TypeScript",
+        "rb" | "rake" | "gemspec" => "Ruby",
+        "swift" => "Swift",
+        "kt" | "kts" => "Kotlin",
+        "dart" => "Dart",
+        "sql" => "SQL",
+        "graphql" | "gql" | "graphqls" => "GraphQL",
+        "vue" => "Vue",
+        "svelte" => "Svelte",
+        "astro" => "Astro",
         "json" | "jsonc" => "JSON",
         "md" | "mdx" | "markdown" => "Markdown",
         "yml" | "yaml" => "YAML",

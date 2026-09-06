@@ -18,6 +18,26 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
 - **Multi-Workspace Support**: Native support for Cargo and Node.js (npm, pnpm, bun) monorepos
 
+## Ecosystem coverage
+
+The catalog includes Oxfmt, Oxlint, isort, Pyright, Bandit, RuboCop,
+SwiftFormat, ktlint, SQLFluff, and Dart formatting. Source-matched linters appear
+in init even without native config, but remain unchecked unless configuration or
+other discovery evidence selects them. Formatter overlap is not assumed safe:
+for example, isort and a Python formatter still need an explicit pipeline.
+
+Oxfmt coverage includes JS/TS, JSON/JSONC/JSON5, YAML, TOML, HTML, Vue,
+CSS/SCSS/Less, Markdown/MDX, GraphQL, and Handlebars. Oxlint independently
+covers JS/TS and script blocks in Vue, Svelte, and Astro. Oxfmt's conditional
+Svelte support is not advertised yet: upstream requires an installed Svelte
+package and an enabled option. See upstream [Oxfmt language support](https://oxc.rs/docs/guide/usage/formatter/language-support)
+and [Oxlint usage](https://oxc.rs/docs/guide/usage/linter).
+
+These integrations use native CLIs and planned file arguments. RuboCop and
+SQLFluff are currently lint-only; Dart is format-only. Bandit is opt-in and uses
+its CLI defaults (Clippier does not inject a Bandit config path). Native binaries
+must be installed; Node tools also support project-local executable resolution.
+
 ## Guided Setup
 
 Run `clippier init` from the repository directory you want to configure. It uses

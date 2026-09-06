@@ -11,7 +11,7 @@ mod tests {
         let mut result = groups(&mut inventory, &ToolsConfig::default());
         let js = result
             .iter()
-            .find(|group| group.title.contains("JavaScript"))
+            .find(|group| group.formatting && group.title.contains("JavaScript"))
             .unwrap();
         let alternative = js
             .choices
@@ -25,7 +25,7 @@ mod tests {
         super::super::recommendations::apply_availability(&mut result, &installed);
         let js = result
             .iter()
-            .find(|group| group.title.contains("JavaScript"))
+            .find(|group| group.formatting && group.title.contains("JavaScript"))
             .unwrap();
         assert!(
             js.choices
@@ -137,6 +137,28 @@ format-extensions = ["js"]
     }
 
     #[test]
+    fn source_linters_are_visible_without_automatic_activation() {
+        let root = tempfile::tempdir().unwrap();
+        for file in ["index.ts", "main.py", "main.rb", "query.sql"] {
+            std::fs::write(root.path().join(file), "").unwrap();
+        }
+        let mut inventory = RepositoryDiscovery::discover(root.path()).unwrap();
+        let result = groups(&mut inventory, &ToolsConfig::default());
+        for name in ["oxlint", "pyright", "bandit", "rubocop", "sqlfluff"] {
+            let choice = result
+                .iter()
+                .filter(|group| !group.formatting)
+                .flat_map(|group| &group.choices)
+                .find(|choice| choice.name == name)
+                .unwrap();
+            assert!(
+                !choice.selected,
+                "source-only alternative {name} must be opt-in"
+            );
+        }
+    }
+
+    #[test]
     fn config_wins_and_all_alternatives_are_shown() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("index.js"), "const x = 1;\n").unwrap();
@@ -145,7 +167,7 @@ format-extensions = ["js"]
         let result = groups(&mut inventory, &ToolsConfig::default());
         let js = result
             .iter()
-            .find(|group| group.title.contains("JavaScript"))
+            .find(|group| group.formatting && group.title.contains("JavaScript"))
             .unwrap();
         assert!(js.choices.iter().any(|choice| choice.name == "prettier"));
         assert_eq!(
