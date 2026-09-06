@@ -114,7 +114,9 @@ setup, streamed execution, and its aggregate execution report. Analysis commands
 
 Every run discovers all public features for `aconverter`, the server, and the tunnel server
 through Clippier and measures each individually against its package baseline (respectively:
-no features, `sqlite-sqlx`, and `postgres-raw`). Every run also measures `shipping=default`
+no features, no features, and `postgres-raw`). The server baseline disables default features
+and enables no database backend; database features are measured independently, not added to
+SQLite/SQLx. Every run also measures `shipping=default`
 as a separate configuration. This is not an all-features-at-once build or an exponential
 feature powerset. Feature build failures remain visible and fail the analysis after reports
 are written; features requiring other prerequisites are not silently omitted.
