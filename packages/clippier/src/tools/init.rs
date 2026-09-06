@@ -65,12 +65,51 @@ pub fn initialize_terminal(root: &Path) -> std::io::Result<()> {
     })
 }
 
+/// Overrides for unattended setup. Unspecified choices retain wizard defaults.
+#[derive(Debug, Default)]
+pub struct InitOptions {
+    /// Tools to enable.
+    pub enable: Vec<String>,
+    /// Tools to disable.
+    pub disable: Vec<String>,
+    /// Per-tool capabilities, written as `tool=format,lint`.
+    pub capabilities: Vec<String>,
+    /// Per-tool formatter extensions, written as `tool=js,ts`.
+    pub format_extensions: Vec<String>,
+    /// Whether selected tools are required. None preserves existing requirements.
+    pub required: Option<bool>,
+}
+
+/// Saves wizard defaults with explicit overrides, without reading stdin.
+///
+/// # Errors
+/// * If overrides name unknown tools, unsupported capabilities/extensions, or conflicting choices
+/// * If discovery, configuration parsing, or file access fails
+pub fn initialize_non_interactive(
+    root: &Path,
+    options: &InitOptions,
+    output: &mut impl Write,
+) -> std::io::Result<()> {
+    initialize_with_options(root, &mut std::io::empty(), output, false, Some(options))
+}
+
 #[allow(clippy::too_many_lines)]
 fn initialize_with_ui(
     root: &Path,
     input: &mut impl BufRead,
     output: &mut impl Write,
     interactive: bool,
+) -> std::io::Result<()> {
+    initialize_with_options(root, input, output, interactive, None)
+}
+
+#[allow(clippy::too_many_lines)]
+fn initialize_with_options(
+    root: &Path,
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    interactive: bool,
+    options: Option<&InitOptions>,
 ) -> std::io::Result<()> {
     let destination = root.join("clippier.toml");
     let original = read_existing(&destination)?;
@@ -99,7 +138,7 @@ fn initialize_with_ui(
                 && !config.executables.contains_key(name)
         })
         .collect::<Vec<_>>();
-    if !interactive && original.is_some() && evidence.is_empty() {
+    if options.is_none() && !interactive && original.is_some() && evidence.is_empty() {
         writeln!(output, "No newly relevant tools; clippier.toml unchanged.")?;
         return Ok(());
     }
@@ -116,7 +155,7 @@ fn initialize_with_ui(
     let mut selected_policies = std::collections::BTreeMap::new();
     let mut selected = Vec::new();
     let mut skipped = Vec::new();
-    if interactive {
+    if interactive || options.is_some() {
         #[allow(unused_mut)]
         let mut groups = recommendations::groups(&mut inventory, &config);
         let installed = groups
@@ -142,7 +181,12 @@ fn initialize_with_ui(
             }
         }
         #[cfg(feature = "tools-tui")]
-        inline::select(&mut groups, &header, output)?;
+        if interactive {
+            inline::select(&mut groups, &header, output)?;
+        }
+        if let Some(options) = options {
+            apply_overrides(&mut groups, options)?;
+        }
         (selected, skipped) = recommendations::selections(&groups);
         selected_policies = recommendations::policies(&groups);
     } else {
@@ -166,13 +210,17 @@ fn initialize_with_ui(
             "No tools selected. Automatic discovery remains enabled for tools not skipped."
         )?;
     }
-    let required = !selected.is_empty()
-        && confirm(
-            input,
-            output,
-            "Require selected tools to be installed (recommended for CI)?",
-            original.is_none() || selected.iter().any(|name| config.required.contains(name)),
-        )?;
+    let required = if let Some(options) = options {
+        options.required.unwrap_or_else(|| original.is_none())
+    } else {
+        !selected.is_empty()
+            && confirm(
+                input,
+                output,
+                "Require selected tools to be installed (recommended for CI)?",
+                original.is_none() || selected.iter().any(|name| config.required.contains(name)),
+            )?
+    };
     // toml_edit treats a comment-only document as trailing decoration. Keep
     // those original bytes before newly added tables rather than moving them.
     let prefix = if document.is_empty() {
@@ -181,7 +229,7 @@ fn initialize_with_ui(
     } else {
         ""
     };
-    if interactive {
+    if interactive || options.is_some() {
         let edited = selected
             .iter()
             .chain(&skipped)
@@ -209,7 +257,15 @@ fn initialize_with_ui(
         }
     }
     apply_choices(&mut document, &selected, &skipped, required);
-    if interactive {
+    if options.is_some_and(|options| options.required.is_none()) && original.is_some() {
+        let retained = selected
+            .iter()
+            .filter(|name| config.required.contains(name))
+            .cloned()
+            .collect::<Vec<_>>();
+        apply_choices(&mut document, &retained, &[], true);
+    }
+    if interactive || options.is_some() {
         // Explicit choices must work even without native configuration evidence.
         apply_choices(&mut document, &selected, &[], false);
         for (name, policy) in selected_policies {
@@ -250,12 +306,14 @@ fn initialize_with_ui(
         output,
         "\n--- proposed clippier.toml ---\n{rendered}--- end ---"
     )?;
-    if !confirm(
-        input,
-        output,
-        "Apply these additions to clippier.toml?",
-        false,
-    )? {
+    if options.is_none()
+        && !confirm(
+            input,
+            output,
+            "Apply these additions to clippier.toml?",
+            false,
+        )?
+    {
         writeln!(output, "Cancelled; no files written.")?;
         return Ok(());
     }
@@ -278,6 +336,143 @@ fn initialize_with_ui(
         "Updated {}. Review tool selection with clippier check --list and clippier fmt --list.",
         destination.display()
     )?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn apply_overrides(
+    groups: &mut Vec<recommendations::Group>,
+    options: &InitOptions,
+) -> std::io::Result<()> {
+    use super::ToolCapability;
+    use std::collections::{BTreeMap, BTreeSet};
+    let invalid = |message: String| std::io::Error::new(std::io::ErrorKind::InvalidInput, message);
+    let parse = |values: &[String]| -> std::io::Result<BTreeMap<String, Vec<String>>> {
+        let mut result = BTreeMap::new();
+        for value in values {
+            let (name, list) = value
+                .split_once('=')
+                .ok_or_else(|| invalid(format!("Expected tool=value,value: {value}")))?;
+            if list.is_empty() || list.split(',').any(str::is_empty) || result.contains_key(name) {
+                return Err(invalid(format!("Empty or duplicate override: {value}")));
+            }
+            result.insert(
+                name.to_owned(),
+                list.split(',').map(str::to_owned).collect(),
+            );
+        }
+        Ok(result)
+    };
+    let capabilities = parse(&options.capabilities)?;
+    let extensions = parse(&options.format_extensions)?;
+    let names = options
+        .enable
+        .iter()
+        .chain(&options.disable)
+        .chain(capabilities.keys())
+        .chain(extensions.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for name in names {
+        let entry = super::tool_catalog_entry(&name)
+            .ok_or_else(|| invalid(format!("Unknown tool: {name}")))?;
+        let disabled = options.disable.contains(&name);
+        if disabled
+            && (options.enable.contains(&name)
+                || capabilities.contains_key(&name)
+                || extensions.contains_key(&name))
+        {
+            return Err(invalid(format!("Conflicting overrides for {name}")));
+        }
+        let requested = capabilities
+            .get(&name)
+            .map(|values| {
+                values
+                    .iter()
+                    .map(|value| match value.as_str() {
+                        "format" => Ok(ToolCapability::Format),
+                        "lint" => Ok(ToolCapability::Lint),
+                        _ => Err(invalid(format!("Unknown capability: {value}"))),
+                    })
+                    .collect::<std::io::Result<BTreeSet<_>>>()
+            })
+            .transpose()?;
+        if requested
+            .as_ref()
+            .is_some_and(|values| values.iter().any(|cap| !entry.capabilities.contains(cap)))
+        {
+            return Err(invalid(format!("Unsupported capability for {name}")));
+        }
+        if let Some(values) = extensions.get(&name)
+            && (values
+                .iter()
+                .any(|ext| !entry.format_extensions.contains(&ext.as_str()))
+                || requested
+                    .as_ref()
+                    .is_some_and(|caps| !caps.contains(&ToolCapability::Format)))
+        {
+            return Err(invalid(format!(
+                "Unsupported formatter extensions for {name}"
+            )));
+        }
+        let mut seen = false;
+        for group in groups.iter_mut() {
+            for choice in group
+                .choices
+                .iter_mut()
+                .filter(|choice| choice.name == name)
+            {
+                seen = true;
+                choice.selected = !disabled
+                    && requested.as_ref().is_none_or(|caps| {
+                        caps.contains(&if group.formatting {
+                            ToolCapability::Format
+                        } else {
+                            ToolCapability::Lint
+                        })
+                    });
+                if group.formatting
+                    && let Some(exts) = extensions.get(&name)
+                {
+                    choice.selected =
+                        choice.selected && group.extensions.iter().any(|ext| exts.contains(ext));
+                }
+            }
+        }
+        // Explicit scope/capability overrides are represented as their own group so
+        // extensions absent from repository inventory are still persisted exactly.
+        if !seen || requested.is_some() || extensions.contains_key(&name) {
+            for group in groups.iter_mut() {
+                group.choices.retain(|choice| choice.name != name);
+            }
+            let defaults = entry.capabilities.iter().copied().collect();
+            for capability in requested.as_ref().unwrap_or(&defaults) {
+                let formatting = *capability == ToolCapability::Format;
+                groups.push(recommendations::Group {
+                    title: name.clone(),
+                    choices: vec![recommendations::Choice {
+                        name: name.clone(),
+                        reason: "CLI override".into(),
+                        selected: !disabled,
+                        installed: None,
+                    }],
+                    extensions: if formatting {
+                        extensions.get(&name).cloned().unwrap_or_else(|| {
+                            entry
+                                .format_extensions
+                                .iter()
+                                .map(|ext| (*ext).to_owned())
+                                .collect()
+                        })
+                    } else {
+                        vec![]
+                    },
+                    files: vec![],
+                    formatting,
+                });
+            }
+        }
+    }
     Ok(())
 }
 
@@ -370,6 +565,47 @@ fn apply_choices(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unattended_defaults_overrides_and_invalid_input() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("index.js"), "const x = 1;").unwrap();
+        let mut output = Vec::new();
+        initialize_non_interactive(root.path(), &InitOptions::default(), &mut output).unwrap();
+        let path = root.path().join("clippier.toml");
+        assert!(path.exists());
+        let options = InitOptions {
+            enable: vec!["prettier".into()],
+            disable: vec!["biome".into()],
+            capabilities: vec!["prettier=format".into()],
+            format_extensions: vec!["prettier=js,ts".into()],
+            required: Some(false),
+        };
+        initialize_non_interactive(root.path(), &options, &mut output).unwrap();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        let parsed: toml::Value = toml::from_str(&saved).unwrap();
+        assert_eq!(
+            parsed["runner"]["tools"]["prettier"]["format-extensions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(
+            parsed["runner"]["skip"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|name| name.as_str() == Some("biome"))
+        );
+        let bad = InitOptions {
+            enable: vec!["unknown-tool".into()],
+            ..InitOptions::default()
+        };
+        assert!(initialize_non_interactive(root.path(), &bad, &mut output).is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), saved);
+        assert!(!String::from_utf8(output).unwrap().contains("[y/N]"));
+    }
 
     #[test]
     #[cfg(feature = "format")]

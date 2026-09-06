@@ -314,7 +314,26 @@ enum ReleaseCommands {
 enum Commands {
     /// Guide setup of clippier.toml in the current directory
     #[cfg(feature = "_tools")]
-    Init,
+    Init {
+        /// Save wizard defaults without prompts or terminal interaction
+        #[arg(long)]
+        non_interactive: bool,
+        /// Enable tools (comma-separated; repeatable)
+        #[arg(long, value_delimiter = ',', requires = "non_interactive")]
+        enable: Vec<String>,
+        /// Disable tools (comma-separated; repeatable)
+        #[arg(long, value_delimiter = ',', requires = "non_interactive")]
+        disable: Vec<String>,
+        /// Override capabilities: tool=format,lint (repeatable)
+        #[arg(long, requires = "non_interactive")]
+        capabilities: Vec<String>,
+        /// Override formatter scope: tool=js,ts (repeatable)
+        #[arg(long, requires = "non_interactive")]
+        format_extensions: Vec<String>,
+        /// Require selected tools: true/false; default preserves existing requirements
+        #[arg(long, requires = "non_interactive", action = clap::ArgAction::Set)]
+        required: Option<bool>,
+    },
     Dependencies {
         #[arg(index = 1)]
         file: String,
@@ -926,8 +945,30 @@ async fn run() -> Result<(), BoxError> {
 
     let result = match args.cmd {
         #[cfg(feature = "_tools")]
-        Commands::Init => {
-            clippier::tools::init::initialize_terminal(&std::env::current_dir()?)?;
+        Commands::Init {
+            non_interactive,
+            enable,
+            disable,
+            capabilities,
+            format_extensions,
+            required,
+        } => {
+            let root = std::env::current_dir()?;
+            if non_interactive {
+                clippier::tools::init::initialize_non_interactive(
+                    &root,
+                    &clippier::tools::init::InitOptions {
+                        enable,
+                        disable,
+                        capabilities,
+                        format_extensions,
+                        required,
+                    },
+                    &mut std::io::stdout().lock(),
+                )?;
+            } else {
+                clippier::tools::init::initialize_terminal(&root)?;
+            }
             String::new()
         }
         Commands::Dependencies {

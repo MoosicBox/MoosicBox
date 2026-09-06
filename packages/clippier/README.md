@@ -24,16 +24,30 @@ Run `clippier init` from the repository directory you want to configure. It uses
 Clippier's shared ignore-aware inventory to recommend tools from native configs,
 manifest settings, and source files—even when those tools are not installed.
 On an interactive terminal, setup shows one inline BMUX checklist with separate
-sections: arrow keys or Tab/Shift-Tab navigate across all checkboxes, Space toggles,
-Home/End jump to the first/last choice, Enter accepts the whole checklist, and
-Escape cancels. Long lists scroll with keyboard focus. It does not enter an
+sections: arrow keys or Tab/Shift-Tab navigate across checkboxes and Submit/Cancel
+buttons. Space or Enter toggles a checkbox or activates a button; Ctrl+Enter
+submits from anywhere. Escape or q cancels. Long lists scroll with keyboard focus. It does not enter an
 alternate screen. Formatter alternatives are grouped by supported file extensions;
 native configuration takes priority over catalog defaults. Formatter selections are saved with explicit capabilities and selected extension
 coverage, so choosing a formatter for Markdown does not enable it for other
 languages. Lint capabilities are selected separately. Section headers show language,
 capability, and candidate file counts; focused details show evidence and sample
 paths. Counts are inventory candidates; native tool exclusions still apply. Existing explicit tool choices are preserved.
-Piped input and builds without `tools-tui` retain line-oriented prompts.
+For unattended setup, use the same recommendations without prompts:
+
+```sh
+clippier init --non-interactive
+clippier init --non-interactive --enable prettier --disable biome \
+  --capabilities prettier=format --format-extensions prettier=js,ts --required false
+```
+
+Tool lists are comma-separated; capability and extension overrides use repeatable
+`tool=value,value` arguments. Invalid or conflicting overrides fail before writing.
+Unspecified settings use wizard defaults, including installed-tool fallbacks and
+current configuration. New configurations require selected tools by default;
+existing required-tool membership is preserved unless `--required true/false` is
+specified. No tools are installed or executed. Without `--non-interactive`, piped
+input and builds without `tools-tui` retain line-oriented prompts.
 Interactive input is processed in order by `bmux_tui_runtime`; redraw requests are
 coalesced at its default 60 Hz cadence. Ignored keys and unchanged navigation do
 not request frames. Set `CLIPPIER_INIT_PROFILE=1` to print render/output totals,
