@@ -25,50 +25,123 @@ pub fn text(report: &AnalysisReport) -> String {
     output
 }
 
-/// Renders a Markdown summary with explicit feature configurations and outcomes.
+/// Renders collapsible, deterministically sorted Markdown views of measurements.
 #[must_use]
 pub fn markdown(report: &AnalysisReport) -> String {
-    fn escape(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('|', "&#124;")
-            .replace('`', "&#96;")
-            .replace(['\r', '\n'], " ")
-    }
     let mut output = format!(
-        "## Bloaty: {} / {}\n\nProfile: **{}**. Deltas compare features within this commit, not historical changes.\n\n| Scenario | Defaults | Explicit features | Result |\n| --- | --- | --- | --- |\n",
+        "## Bloaty: {} / {}\n\nProfile: **{}**. Deltas compare features within this commit, not historical changes.\n\n",
         escape(&report.package),
         escape(&report.target_name),
         escape(&report.profile)
     );
-    for scenario in std::iter::once(&report.baseline).chain(&report.comparisons) {
-        writeln!(
-            output,
-            "| {} | {} | {} | {} |",
-            escape(&scenario.scenario.name),
-            scenario.scenario.config.default_features,
-            escape(
-                &scenario
-                    .scenario
-                    .config
-                    .features
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            escape(scenario_text("", scenario).trim())
-        )
-        .expect("writing to String cannot fail");
+    let mut failures = std::iter::once(&report.baseline)
+        .chain(&report.comparisons)
+        .filter(|row| !matches!(row.outcome, ScenarioStatus::Success { .. }))
+        .collect::<Vec<_>>();
+    failures.sort_by_key(|row| &row.scenario.name);
+    if !failures.is_empty() {
+        output.push_str("### Failed or unavailable measurements\n\n");
+        for row in failures {
+            writeln!(output, "- {}", escape(scenario_text("", row).trim()))
+                .expect("writing to String cannot fail");
+        }
+        output.push('\n');
     }
-    writeln!(output, "\nPlatform: {}/{}. Rust: {}. Commit: {}.\n\nExact final artifact sizes, not runtime memory or dependency attribution. Full reports are retained as artifacts.\n",
+    writeln!(
+        output,
+        "### Baseline\n\nDefaults: **{}**. Explicit features: **{}**.\n\n{}\n\nDuration: {} ms.\n",
+        report.baseline.scenario.config.default_features,
+        feature_names(&report.baseline),
+        escape(scenario_text("baseline", &report.baseline).trim()),
+        report.baseline.duration_ms
+    )
+    .expect("writing to String cannot fail");
+    let mut rows = report
+        .comparisons
+        .iter()
+        .filter_map(|row| {
+            if let ScenarioStatus::Success { measurement } = &row.outcome {
+                Some((row, measurement))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        output.push_str("No successful comparison measurements.\n\n");
+    } else {
+        for (index, title) in [
+            "Largest size increase first",
+            "Largest total binary size first",
+            "Feature name A–Z",
+            "Slowest builds first",
+        ]
+        .iter()
+        .enumerate()
+        {
+            rows.sort_by(|(a, am), (b, bm)| {
+                let order = match index {
+                    0 => bm.delta_bytes.cmp(&am.delta_bytes),
+                    1 => bm.size_bytes.cmp(&am.size_bytes),
+                    2 => a.scenario.name.cmp(&b.scenario.name),
+                    _ => b.duration_ms.cmp(&a.duration_ms),
+                };
+                order.then_with(|| a.scenario.name.cmp(&b.scenario.name))
+            });
+            writeln!(output, "<details{}>\n<summary>{title}</summary>\n\n| Scenario | Defaults | Explicit features | Total bytes | Delta bytes | Delta % | Duration (ms) |\n| --- | --- | --- | ---: | ---: | ---: | ---: |",
+                if index == 0 { " open" } else { "" }
+            ).expect("writing to String cannot fail");
+            for (row, measurement) in &rows {
+                writeln!(
+                    output,
+                    "| {} | {} | {} | {} | {} | {} | {} |",
+                    escape(&row.scenario.name),
+                    row.scenario.config.default_features,
+                    feature_names(row),
+                    measurement.size_bytes,
+                    measurement
+                        .delta_bytes
+                        .map_or_else(|| "—".to_owned(), |value| format!("{value:+}")),
+                    escape(measurement.delta_percent.as_deref().unwrap_or("—")),
+                    row.duration_ms
+                )
+                .expect("writing to String cannot fail");
+            }
+            output.push_str("\n</details>\n\n");
+        }
+    }
+    writeln!(output, "Platform: {}/{}. Rust: {}. Commit: {}.\n\nExact final artifact sizes, not runtime memory or dependency attribution. Missing deltas are shown as —, not zero. Durations include cache reuse and are not clean-build benchmarks. Full reports are retained as artifacts.\n",
         escape(&report.environment.host_os), escape(&report.environment.host_arch),
         escape(report.environment.rustc.lines().next().unwrap_or("unknown")),
         escape(report.environment.git_revision.as_deref().unwrap_or("unknown"))
     ).expect("writing to String cannot fail");
     output
+}
+
+fn escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('|', "&#124;")
+        .replace('`', "&#96;")
+        .replace(['\r', '\n'], " ")
+}
+
+fn feature_names(row: &ScenarioReport) -> String {
+    if row.scenario.config.features.is_empty() {
+        "none".to_owned()
+    } else {
+        escape(
+            &row.scenario
+                .config
+                .features
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
 }
 
 /// Renders one completed scenario for live progress output.
@@ -230,10 +303,67 @@ mod tests {
         report.package = "<app>|name".to_owned();
         let output = markdown(&report);
         assert!(output.contains("&lt;app&gt;&#124;name"));
-        assert!(output.contains("| Defaults | Explicit features |"));
+        assert!(output.contains("Defaults: **false**. Explicit features: **none**"));
         assert!(output.contains("FAILED: build failed"));
         assert!(output.contains("100 B"));
         assert!(output.contains("not historical changes"));
+    }
+
+    #[test]
+    fn markdown_sorts_numeric_views_without_mutating_reports() {
+        let mut report = report();
+        for (name, size, delta, duration) in [
+            ("z", 200, Some(100), 2),
+            ("a", 90, Some(-10), 300),
+            ("b", 200, Some(100), 20),
+            ("unknown", 500, None, 1),
+        ] {
+            let mut row = report.baseline.clone();
+            row.scenario.name = name.to_owned();
+            row.duration_ms = duration;
+            if let ScenarioStatus::Success { measurement } = &mut row.outcome {
+                measurement.size_bytes = size;
+                measurement.delta_bytes = delta;
+            }
+            report.comparisons.push(row);
+        }
+        let original = report.clone();
+        let output = markdown(&report);
+        let views = output
+            .split("</summary>")
+            .skip(1)
+            .map(|part| {
+                part.split("</details>")
+                    .next()
+                    .unwrap()
+                    .lines()
+                    .filter(|line| line.starts_with("| "))
+                    .skip(2)
+                    .map(|line| line.split('|').nth(1).unwrap().trim())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            views,
+            vec![
+                vec!["b", "z", "a", "unknown"],
+                vec!["unknown", "b", "z", "a"],
+                vec!["a", "b", "unknown", "z"],
+                vec!["a", "b", "z", "unknown"],
+            ]
+        );
+        assert_eq!(report, original);
+        assert_eq!(output.matches("<details open>").count(), 1);
+        assert_eq!(output.matches("### Baseline").count(), 1);
+        assert!(output.find("FAILED").unwrap() < output.find("<details").unwrap());
+        assert!(output.contains("| unknown | false | none | 500 | — | — | 1 |"));
+    }
+
+    #[test]
+    fn markdown_handles_no_successful_comparisons() {
+        let output = markdown(&report());
+        assert!(output.contains("No successful comparison measurements"));
+        assert!(!output.contains("<details"));
     }
 
     #[test]

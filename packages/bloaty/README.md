@@ -156,6 +156,12 @@ search the latest 30 successful master runs for the matching artifact identity. 
 remain advisory; no empirically unsupported regression thresholds are enabled.
 
 `--github-summary` appends the canonical report as Markdown to `GITHUB_STEP_SUMMARY`.
+Failures/unavailable measurements appear first, followed by one baseline section. Successful
+comparisons have collapsible views sorted by largest increase (open by default), total size,
+scenario name, and build duration. Tables show exact bytes, signed byte deltas, percentage
+deltas, feature configurations, and milliseconds. Numeric ties sort by scenario name; missing
+deltas sort last and display as `—`. Durations include cache reuse, not clean-build benchmarks.
+These are static views, not clickable column sorting; JSON/JSONL and live logs are unchanged.
 `--fail-on-incomplete` makes unavailable/failed scenarios fail the command **after** writing
 reports and the summary. CI uses both flags; the default local failure-reporting behavior is
 unchanged. Pre-analysis failures appear in Clippier's execution summary/logs.
