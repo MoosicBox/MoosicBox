@@ -119,6 +119,35 @@ fn moving_to_next_column_reveals_its_panel_header() {
 }
 
 #[test]
+fn last_choice_in_each_column_reveals_bottom_border() {
+    let groups = fixture();
+    for focus in [(2, 0), (5, 0)] {
+        let buffer = render(
+            &groups,
+            &[],
+            focus,
+            120,
+            14,
+            &Cell::new(ScrollViewState::new()),
+        );
+        let rows = buffer
+            .cells()
+            .chunks(120)
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.symbol.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let checkbox = rows
+            .iter()
+            .position(|row| row.contains(&format!("tool-{}", focus.0)) && row.contains("[x]"))
+            .unwrap();
+        assert!(rows[checkbox + 1].contains('└'), "{rows:?}");
+    }
+}
+
+#[test]
 fn components_render_borders_details_and_focused_checkbox() {
     let groups = fixture();
     let buffer = render(

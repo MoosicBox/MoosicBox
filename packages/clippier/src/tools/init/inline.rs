@@ -270,11 +270,21 @@ pub(super) fn render(
             .count()
             % per_column
             == 0;
+    let column_end = groups.get(focus.0).is_some_and(|group| {
+        focus.1.checked_add(1) == Some(group.choices.len())
+            && groups
+                .iter()
+                .take(focus.0 + 1)
+                .filter(|group| !group.choices.is_empty())
+                .count()
+                % per_column
+                == 0
+    });
     let viewport = if focus.0 == usize::MAX {
         viewport
     } else if column_start || positions.first() == Some(&focus) {
         viewport.reveal(format!("section-{}.surface", focus.0))
-    } else if positions.last() == Some(&focus) {
+    } else if column_end || positions.last() == Some(&focus) {
         viewport.reveal_end(format!("section-{}.surface", focus.0))
     } else {
         viewport.reveal(format!("choice-{}-{}", focus.0, focus.1))
