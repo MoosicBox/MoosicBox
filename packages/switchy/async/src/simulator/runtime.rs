@@ -393,6 +393,22 @@ impl Runtime {
         true
     }
 
+    /// Finish this runtime only if every admitted task has released its future.
+    ///
+    /// This does not poll tasks, advance time, or request cancellation. A false
+    /// result retains execution ownership so the caller can drive or cancel work
+    /// and check again. A true result does not prevent subsequent admission through
+    /// retained handles and is not a shutdown fence. Callers must stop producers
+    /// before treating this observation as the end of a run.
+    #[must_use]
+    pub fn try_finish(&self) -> bool {
+        if self.tasks() != 0 {
+            return false;
+        }
+        self.active.store(false, Ordering::SeqCst);
+        true
+    }
+
     /// Processes the next task in the runtime's queue.
     ///
     /// This advances the simulator by one task execution. Useful for manual stepping
@@ -888,6 +904,37 @@ mod test {
         });
         assert!(Handle::try_current().is_err());
         runtime.wait().unwrap();
+    }
+
+    struct DrainRelease(Arc<std::sync::atomic::AtomicBool>);
+
+    impl Drop for DrainRelease {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[test_log::test]
+    fn try_finish_observes_release_without_polling_work() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+        let released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let release = DrainRelease(Arc::clone(&released));
+        let task = runtime.spawn(async move {
+            let _release = release;
+            std::future::pending::<()>().await;
+        });
+        assert!(!runtime.try_finish());
+        assert!(!released.load(std::sync::atomic::Ordering::SeqCst));
+        task.abort();
+        assert!(!runtime.try_finish());
+        for _ in 0..100 {
+            runtime.tick();
+            if runtime.try_finish() {
+                assert!(released.load(std::sync::atomic::Ordering::SeqCst));
+                return;
+            }
+        }
+        panic!("cancelled task did not release ownership");
     }
 
     #[test_log::test]
