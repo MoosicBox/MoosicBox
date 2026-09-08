@@ -103,8 +103,10 @@ impl TestVector {
         let channels = u8::try_from(meta["channels"].as_u64().ok_or("Missing channels")?)?;
 
         let expected_pcm = pcm_bytes
-            .chunks_exact(2)
-            .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| i16::from_le_bytes(*chunk))
             .collect();
 
         Ok(Self {
