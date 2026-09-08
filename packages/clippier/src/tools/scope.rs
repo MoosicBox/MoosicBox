@@ -13,6 +13,9 @@ use super::BoxError;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ScopeConfig {
+    /// Skip files whose first 8 KiB contain binary data (NUL or invalid UTF-8).
+    #[serde(default = "default_true")]
+    pub exclude_binary: bool,
     /// Glob patterns excluded from every file-oriented tool invocation.
     #[serde(default)]
     pub exclude: Vec<String>,
@@ -33,6 +36,7 @@ impl Default for ScopeConfig {
         Self {
             exclude: Vec::new(),
             automatic_excludes: true,
+            exclude_binary: true,
             disable_profiles: BTreeSet::new(),
         }
     }

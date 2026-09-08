@@ -9,6 +9,27 @@ use ignore::WalkBuilder;
 use super::scope::automatic_exclusion_patterns_from_files;
 use super::{TOOL_CATALOG, ToolCapability, ToolRegistry};
 
+// A bounded probe inside the existing walk, not a second discovery pass.
+// Read one extra byte to distinguish a truncated UTF-8 scalar from an invalid
+// sequence at EOF. Read errors propagate rather than silently hiding files.
+fn file_is_binary(path: &Path) -> std::io::Result<bool> {
+    use std::io::Read;
+    let mut bytes = Vec::with_capacity(8193);
+    std::fs::File::open(path)?
+        .take(8193)
+        .read_to_end(&mut bytes)?;
+    Ok(binary_sample(&bytes))
+}
+
+fn binary_sample(bytes: &[u8]) -> bool {
+    let sample = &bytes[..bytes.len().min(8192)];
+    sample.starts_with(b"GSC1")
+        || sample.starts_with(b"\0GITCRYPT")
+        || sample.contains(&0)
+        || std::str::from_utf8(sample)
+            .is_err_and(|error| error.error_len().is_some() || bytes.len() <= 8192)
+}
+
 /// Shared command-local parsed native configuration cache.
 #[derive(Debug, Default)]
 pub struct NativeConfigCache {
@@ -149,6 +170,7 @@ impl RepositoryDiscovery {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let filter_root = root.clone();
+        let exclude_binary = scope_config.is_none_or(|config| config.exclude_binary);
         let scope_config = scope_config.cloned();
         let package_profiles = Arc::new(Mutex::new(BTreeMap::new()));
         let mut result = Self {
@@ -203,6 +225,9 @@ impl RepositoryDiscovery {
                 diagnostics.files_indexed += 1;
             }
             let path = entry.path();
+            if exclude_binary && file_is_binary(path)? {
+                continue;
+            }
             let Ok(relative) = path.strip_prefix(&root) else {
                 continue;
             };
@@ -840,6 +865,56 @@ fn is_universal_excluded_dir(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn binary_detection_handles_unicode_and_probe_boundaries() {
+        for bytes in [b"".as_slice(), "hello 🦀\n".as_bytes(), b"\t\r\n"] {
+            assert!(!super::binary_sample(bytes));
+        }
+        for bytes in [b"text\0data".as_slice(), b"\xff\xfe", b"GSC1encrypted"] {
+            assert!(super::binary_sample(bytes));
+        }
+        let mut bytes = vec![b'a'; 8191];
+        bytes.extend_from_slice("🦀".as_bytes());
+        assert!(!super::binary_sample(&bytes));
+        assert!(super::binary_sample(&bytes[..8192]));
+    }
+
+    #[test]
+    fn inventory_excludes_binary_sources_by_default_and_can_opt_out() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("plain.nix"), "{ name = \"🦀\"; }").unwrap();
+        std::fs::write(root.path().join("locked.nix"), b"GSC1\xff\0").unwrap();
+        std::fs::write(root.path().join("locked.toml"), b"GSC1\xff\0").unwrap();
+        for exclude_binary in [true, false] {
+            let config = crate::tools::ScopeConfig {
+                exclude_binary,
+                ..Default::default()
+            };
+            let inventory = super::RepositoryDiscovery::inventory_with_scope_base(
+                root.path(),
+                root.path(),
+                &config,
+            )
+            .unwrap();
+            assert!(inventory.files.contains(std::path::Path::new("plain.nix")));
+            assert_eq!(
+                inventory.files.contains(std::path::Path::new("locked.nix")),
+                !exclude_binary
+            );
+            assert_eq!(
+                inventory
+                    .files
+                    .contains(std::path::Path::new("locked.toml")),
+                !exclude_binary
+            );
+            assert_eq!(inventory.diagnostics().recursive_walks, 1);
+        }
+        let defaults: crate::tools::ScopeConfig = toml::from_str("").unwrap();
+        assert!(defaults.exclude_binary);
+        let opt_out: crate::tools::ScopeConfig = toml::from_str("exclude-binary = false").unwrap();
+        assert!(!opt_out.exclude_binary);
+    }
+
     use super::*;
 
     #[test]

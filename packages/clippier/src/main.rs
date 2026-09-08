@@ -827,6 +827,10 @@ enum Commands {
         #[arg(long, conflicts_with = "no_tui")]
         tui_fullscreen: bool,
 
+        /// Include binary files normally excluded from file-oriented tools
+        #[arg(long)]
+        include_binary: bool,
+
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
         no_runner_fallback: bool,
@@ -901,6 +905,10 @@ enum Commands {
         /// Use the full-screen live view instead of compact inline output
         #[arg(long, conflicts_with = "no_tui")]
         tui_fullscreen: bool,
+
+        /// Include binary files normally excluded from file-oriented tools
+        #[arg(long)]
+        include_binary: bool,
 
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
@@ -1496,6 +1504,7 @@ async fn run() -> Result<(), BoxError> {
             color,
             no_tui,
             tui_fullscreen,
+            include_binary,
             no_runner_fallback,
             tool_path,
             biome_use_editorconfig,
@@ -1539,6 +1548,9 @@ async fn run() -> Result<(), BoxError> {
                 biome_vcs_ignore_override,
             )?;
             config.tui_fullscreen |= tui_fullscreen;
+            if include_binary {
+                config.scope.exclude_binary = false;
+            }
             handle_check_command(
                 working_dir.as_deref(),
                 tools.as_deref(),
@@ -1563,6 +1575,7 @@ async fn run() -> Result<(), BoxError> {
             color,
             no_tui,
             tui_fullscreen,
+            include_binary,
             no_runner_fallback,
             tool_path,
             biome_use_editorconfig,
@@ -1607,6 +1620,9 @@ async fn run() -> Result<(), BoxError> {
             )?;
             apply_format_cli_overrides(&mut config, scope, git_base, !list)?;
             config.tui_fullscreen |= tui_fullscreen;
+            if include_binary {
+                config.scope.exclude_binary = false;
+            }
             handle_fmt_command(
                 working_dir.as_deref(),
                 tools.as_deref(),
