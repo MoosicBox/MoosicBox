@@ -1065,8 +1065,10 @@ impl<'a> ToolRunner<'a> {
 
             let tui_exit = match if tool_meta.is_empty() {
                 Ok(tui::TuiExit::Completed)
-            } else {
+            } else if self.registry.config().tui_fullscreen {
                 tui::run_live_tui(&tool_meta, rx, start_time)
+            } else {
+                tui::run_inline_tui(&tool_meta, rx)
             } {
                 Ok(exit) => exit,
                 Err(e) => {

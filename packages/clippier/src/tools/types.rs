@@ -248,6 +248,9 @@ impl ToolPolicy {
 #[serde(rename_all = "kebab-case")]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ToolsConfig {
+    /// Use the alternate-screen live tool view instead of compact inline output.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub tui_fullscreen: bool,
     /// Tools that MUST be installed (error if missing)
     #[serde(default)]
     pub required: Vec<String>,
@@ -312,6 +315,7 @@ impl Default for ToolsConfig {
             skip: Vec::new(),
             executables: std::collections::BTreeMap::new(),
             runner_fallback: false,
+            tui_fullscreen: false,
             biome_use_editorconfig: true,
             biome_use_vcs_ignore: true,
             overlap_warning_suppress: Vec::new(),

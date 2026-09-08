@@ -12,7 +12,7 @@ use bmux_tui::{
     paint::PaintCx,
     style::{Color, Modifier, Style},
     terminal::Terminal,
-    text::{Line, Span},
+    text::{Line, Span, Text},
 };
 use bmux_tui_components::pane::{Pane, PaneComponent, PaneState as SurfaceState, PaneStyles};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
@@ -249,6 +249,134 @@ pub fn run_live_tui(
     drop(terminal);
     guard.leave()?;
     loop_result
+}
+
+#[allow(clippy::similar_names)]
+fn inline_frame(
+    panes: &BTreeMap<String, PaneState>,
+    tools: &[(String, String)],
+    width: u16,
+    height: u16,
+    page: usize,
+) -> bmux_tui::buffer::Buffer {
+    use bmux_tui::{buffer::Buffer, frame::Frame};
+    let capacity = usize::from(height / 2).max(1);
+    let pages = tools.len().div_ceil(capacity).max(1);
+    let mut content = Column::new();
+    for (name, _) in tools.iter().skip((page % pages) * capacity).take(capacity) {
+        let pane = &panes[name];
+        let (status, color) = match pane.status {
+            PaneStatus::Pending => ("· pending", Color::BrightBlack),
+            PaneStatus::Running => ("⠋ running", Color::Cyan),
+            PaneStatus::Passed => ("✓ passed", Color::Green),
+            PaneStatus::Failed => ("✗ failed", Color::Red),
+        };
+        let pagination = if pages > 1 {
+            format!(" · page {}/{} (Tab)", page % pages + 1, pages)
+        } else {
+            String::new()
+        };
+        content = content.child(TextBlock::new(Text::from_lines(vec![Line::from_spans(
+            vec![Span::styled(
+                format!("{} · {status}{pagination}", pane.display_name),
+                Style::new().fg(color).add_modifier(Modifier::BOLD),
+            )],
+        )])));
+        content = content.child(TextBlock::new(Text::from_lines(vec![
+            pane.lines.back().cloned().unwrap_or_else(|| {
+                Line::from(match pane.status {
+                    PaneStatus::Passed | PaneStatus::Failed => "No output.",
+                    PaneStatus::Pending | PaneStatus::Running => "Waiting for output…",
+                })
+            }),
+        ])));
+    }
+    let mut cx = LayoutCx::default();
+    let layout = content.layout(Constraints::loose(Size::new(width, height)), &mut cx);
+    let mut buffer = Buffer::empty(Rect::new(
+        0,
+        0,
+        width,
+        u16::try_from(layout.size.height)
+            .unwrap_or(height)
+            .min(height),
+    ));
+    content.paint(&layout, &mut PaintCx::new(&mut Frame::new(&mut buffer)));
+    buffer
+}
+
+/// Present two inline rows per tool, retaining full output in the runner.
+///
+/// # Errors
+/// Returns terminal input, sizing, mode, or output errors.
+#[allow(clippy::needless_pass_by_value)]
+pub fn run_inline_tui(
+    tools: &[(String, String)],
+    rx: Receiver<ToolEvent>,
+) -> std::io::Result<TuiExit> {
+    use std::io::Write;
+    if tools.is_empty() {
+        return Ok(TuiExit::Completed);
+    }
+    let mut panes: BTreeMap<String, PaneState> = tools
+        .iter()
+        .map(|(name, display)| (name.clone(), PaneState::new(display.clone())))
+        .collect();
+    let mut terminal = bmux_tui::inline::InlineTerminal::enter(std::io::stdout())?;
+    let mut completed = 0;
+    let mut page = 0_usize;
+    let exit = loop {
+        let frame_start = Instant::now();
+        match read_user_action()? {
+            UserAction::Close => break TuiExit::UserClosed,
+            UserAction::FocusNext => page = page.wrapping_add(1),
+            _ => {}
+        }
+        let mut disconnected = false;
+        for _ in 0..256 {
+            match rx.try_recv() {
+                Ok(event) => handle_event(event, &mut panes, &mut completed),
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    disconnected = true;
+                    break;
+                }
+            }
+            if frame_start.elapsed() >= Duration::from_millis(4) {
+                break;
+            }
+        }
+        // Only the latest line is needed for presentation; complete output is
+        // independently captured by the runner for summaries and diagnostics.
+        for pane in panes.values_mut() {
+            while pane.lines.len() > 1 {
+                pane.lines.pop_front();
+            }
+        }
+        let (width, height) = crossterm::terminal::size()?;
+        terminal.draw(&inline_frame(
+            &panes,
+            tools,
+            width.saturating_sub(1),
+            height.saturating_sub(1),
+            page,
+        ))?;
+        if completed >= tools.len() || disconnected {
+            break TuiExit::Completed;
+        }
+        std::thread::sleep(Duration::from_millis(50).saturating_sub(frame_start.elapsed()));
+    };
+    // Release the live region, then commit every tool's final two-line entry to
+    // normal scrollback, including entries on other pages in short terminals.
+    drop(terminal);
+    let width = crossterm::terminal::size()?.0.saturating_sub(1);
+    let mut output = std::io::stdout().lock();
+    for tool in tools {
+        let frame = inline_frame(&panes, std::slice::from_ref(tool), width, 2, 0);
+        bmux_tui::ansi::write_ansi_inline_frame(&mut output, &frame)?;
+    }
+    output.flush()?;
+    Ok(exit)
 }
 
 fn handle_event(event: ToolEvent, panes: &mut BTreeMap<String, PaneState>, completed: &mut usize) {
@@ -713,6 +841,38 @@ mod tests {
 
         assert_eq!(pane.lines.len(), 1);
         assert_eq!(pane.lines[0].spans[0].content.as_str(), "second");
+    }
+
+    #[test]
+    fn inline_view_keeps_two_rows_and_only_latest_output() {
+        let tools = vec![("demo".into(), "Demo".into())];
+        let mut state = PaneState::new("Demo".into());
+        state.push_line("old output", false);
+        state.push_line("latest output", false);
+        for status in [
+            PaneStatus::Pending,
+            PaneStatus::Running,
+            PaneStatus::Passed,
+            PaneStatus::Failed,
+        ] {
+            state.status = status;
+            let states = BTreeMap::from([("demo".into(), state)]);
+            let buffer = inline_frame(&states, &tools, 80, 24, 0);
+            assert_eq!(buffer.area().height, 2);
+            let text = buffer
+                .cells()
+                .iter()
+                .map(|cell| cell.symbol.as_str())
+                .collect::<String>();
+            assert!(text.contains("Demo"));
+            assert!(text.contains("latest output"));
+            assert!(!text.contains("old output"));
+            for (width, height) in [(0, 0), (1, 1), (12, 2)] {
+                let buffer = inline_frame(&states, &tools, width, height, 0);
+                assert!(buffer.area().height <= height);
+            }
+            state = states.into_values().next().unwrap();
+        }
     }
 
     #[test]

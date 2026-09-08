@@ -823,6 +823,10 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         no_tui: bool,
 
+        /// Use the full-screen live view instead of compact inline output
+        #[arg(long, conflicts_with = "no_tui")]
+        tui_fullscreen: bool,
+
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
         no_runner_fallback: bool,
@@ -893,6 +897,10 @@ enum Commands {
         /// Disable real-time pane TUI output
         #[arg(long, default_value_t = false)]
         no_tui: bool,
+
+        /// Use the full-screen live view instead of compact inline output
+        #[arg(long, conflicts_with = "no_tui")]
+        tui_fullscreen: bool,
 
         /// Disable package-manager runner fallback (bunx/pnpm/npx)
         #[arg(long, default_value_t = false)]
@@ -1487,6 +1495,7 @@ async fn run() -> Result<(), BoxError> {
             output,
             color,
             no_tui,
+            tui_fullscreen,
             no_runner_fallback,
             tool_path,
             biome_use_editorconfig,
@@ -1519,7 +1528,7 @@ async fn run() -> Result<(), BoxError> {
             } else {
                 None
             };
-            let config = build_tools_config(
+            let mut config = build_tools_config(
                 working_dir.as_deref(),
                 required.as_deref(),
                 skip.as_deref(),
@@ -1529,6 +1538,7 @@ async fn run() -> Result<(), BoxError> {
                 biome_editorconfig_override,
                 biome_vcs_ignore_override,
             )?;
+            config.tui_fullscreen |= tui_fullscreen;
             handle_check_command(
                 working_dir.as_deref(),
                 tools.as_deref(),
@@ -1552,6 +1562,7 @@ async fn run() -> Result<(), BoxError> {
             output,
             color,
             no_tui,
+            tui_fullscreen,
             no_runner_fallback,
             tool_path,
             biome_use_editorconfig,
@@ -1595,6 +1606,7 @@ async fn run() -> Result<(), BoxError> {
                 biome_vcs_ignore_override,
             )?;
             apply_format_cli_overrides(&mut config, scope, git_base, !list)?;
+            config.tui_fullscreen |= tui_fullscreen;
             handle_fmt_command(
                 working_dir.as_deref(),
                 tools.as_deref(),

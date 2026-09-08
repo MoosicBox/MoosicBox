@@ -1495,7 +1495,9 @@ Color behavior for tool output:
 TUI behavior for tool output:
 
 - In interactive terminals, `check` and `fmt` auto-enable a live pane TUI while tools are running
-- Use `--no-tui` to disable live panes and keep non-interactive streaming behavior
+- Live output defaults to a compact inline view: each tool keeps a status/name header and its latest output line, including after completion. Full output remains available in failure diagnostics. On short terminals, use Tab to switch pages.
+- Use `--tui-fullscreen` to select the existing alternate-screen pane view.
+- Use `--no-tui` to disable live rendering and keep non-interactive streaming behavior
 - Pane output renders ANSI SGR colors/styles from tool output directly in the TUI
 - Carriage-return updates (progress/spinner style output) are rendered as in-place line updates in focused panes
 - Pane titles show `updating` while recent carriage-return updates are active
