@@ -1020,6 +1020,24 @@ impl<'a> ToolRunner<'a> {
     }
 
     #[cfg(feature = "tools-tui")]
+    fn tui_tool_metadata(&self, tools: &[&Tool]) -> Vec<(String, String)> {
+        tools
+            .iter()
+            .filter(|tool| {
+                // Reuse known assignments/selection without introducing a repository scan
+                // for presentation. Native tools with unknown counts remain visible.
+                let known = self.planned_files.contains_key(&tool.name)
+                    || matches!(self.format_selection, FormatSelection::Files(_));
+                !known
+                    || self
+                        .scoped_file_args(tool)
+                        .is_none_or(|files| !files.is_empty())
+            })
+            .map(|tool| (tool.name.clone(), tool.display_name.clone()))
+            .collect()
+    }
+
+    #[cfg(feature = "tools-tui")]
     fn run_tools_with_tui(
         &self,
         tools: &[&Tool],
@@ -1032,10 +1050,7 @@ impl<'a> ToolRunner<'a> {
         let start_time = Instant::now();
         let (tx, rx) = mpsc::channel::<ToolEvent>();
         let cancel_requested = Arc::new(AtomicBool::new(false));
-        let tool_meta: Vec<(String, String)> = tools
-            .iter()
-            .map(|tool| (tool.name.clone(), tool.display_name.clone()))
-            .collect();
+        let tool_meta = self.tui_tool_metadata(tools);
 
         let results: Vec<ToolResult> = thread::scope(|scope| {
             let mut handles = Vec::new();
@@ -1048,7 +1063,11 @@ impl<'a> ToolRunner<'a> {
             }
             drop(tx);
 
-            let tui_exit = match tui::run_live_tui(&tool_meta, rx, start_time) {
+            let tui_exit = match if tool_meta.is_empty() {
+                Ok(tui::TuiExit::Completed)
+            } else {
+                tui::run_live_tui(&tool_meta, rx, start_time)
+            } {
                 Ok(exit) => exit,
                 Err(e) => {
                     log::warn!("failed to start tool TUI, continuing without live panes: {e}");
@@ -2260,6 +2279,36 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
         std::fs::create_dir_all(&path).expect("failed to create temp dir");
         path
+    }
+
+    #[cfg(feature = "tools-tui")]
+    #[test]
+    fn tui_panes_exclude_empty_effective_assignments() {
+        let registry = ToolRegistry::new(ToolsConfig::default(), None).unwrap();
+        let rustfmt = registry.get("rustfmt").unwrap();
+        let prettier = registry.get("prettier").unwrap();
+        let runner = ToolRunner::new(&registry).with_planned_files(BTreeMap::from([
+            ("rustfmt".to_string(), BTreeSet::new()),
+            (
+                "prettier".to_string(),
+                BTreeSet::from([PathBuf::from("index.js")]),
+            ),
+        ]));
+        assert_eq!(
+            runner.tui_tool_metadata(&[rustfmt, prettier]),
+            vec![(prettier.name.clone(), prettier.display_name.clone())]
+        );
+        let runner =
+            runner.with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                "other.rs",
+            )])));
+        assert!(runner.tui_tool_metadata(&[rustfmt, prettier]).is_empty());
+        assert_eq!(
+            ToolRunner::new(&registry)
+                .tui_tool_metadata(&[rustfmt])
+                .len(),
+            1
+        );
     }
 
     #[cfg(all(feature = "format", feature = "tools-tui"))]
