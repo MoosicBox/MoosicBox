@@ -119,6 +119,8 @@ impl ToolResult {
 /// Aggregated results from running multiple tools
 #[derive(Debug, Clone)]
 pub struct AggregatedResults {
+    /// Tool output already committed by the inline presentation.
+    pub output_presented: bool,
     /// Results from each tool
     pub results: Vec<ToolResult>,
     /// Total duration
@@ -410,6 +412,7 @@ impl<'a> ToolRunner<'a> {
         let failure_count = results.len() - success_count;
         let metadata = self.result_metadata(tools);
         AggregatedResults {
+            output_presented: false,
             results,
             total_duration,
             success_count,
@@ -1146,7 +1149,18 @@ impl<'a> ToolRunner<'a> {
             results
         });
 
-        self.aggregate_results(tools, results, start_time.elapsed())
+        let mut aggregated = self.aggregate_results(tools, results, start_time.elapsed());
+        if !self.registry.config().tui_fullscreen && !tool_meta.is_empty() {
+            match tui::write_inline_results(
+                &mut std::io::stdout().lock(),
+                &tool_meta,
+                &aggregated.results,
+            ) {
+                Ok(()) => aggregated.output_presented = true,
+                Err(error) => log::warn!("failed to present final tool output: {error}"),
+            }
+        }
+        aggregated
     }
 
     #[cfg(feature = "tools-tui")]
@@ -2190,8 +2204,8 @@ impl<'a> ToolRunner<'a> {
 
 /// Prints a summary of results, including buffered output from each tool
 pub fn print_summary(results: &AggregatedResults) {
-    // First, print the buffered output from each tool sequentially
-    for result in &results.results {
+    // First, print buffered output unless the inline view already committed it.
+    for result in results.results.iter().filter(|_| !results.output_presented) {
         // Print a header for each tool's output
         let has_output = !result.stdout.is_empty() || !result.stderr.is_empty();
         if has_output {
@@ -2502,6 +2516,7 @@ mod tests {
     #[test]
     fn json_results_include_bounded_selection_metadata() {
         let results = AggregatedResults {
+            output_presented: false,
             results: Vec::new(),
             total_duration: Duration::ZERO,
             success_count: 0,

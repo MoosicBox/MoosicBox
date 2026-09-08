@@ -330,7 +330,6 @@ pub fn run_inline_tui(
     tools: &[(String, String)],
     rx: Receiver<ToolEvent>,
 ) -> std::io::Result<TuiExit> {
-    use std::io::Write;
     if tools.is_empty() {
         return Ok(TuiExit::Completed);
     }
@@ -384,24 +383,54 @@ pub fn run_inline_tui(
         }
         std::thread::sleep(Duration::from_millis(50).saturating_sub(frame_start.elapsed()));
     };
-    // Release the live region, then commit every tool's final two-line entry to
-    // normal scrollback, including entries on other pages in short terminals.
+    // The runner commits final entries after joining workers, using their full
+    // captured output rather than this view's single-line tails.
     drop(terminal);
-    let width = crossterm::terminal::size()?.0.saturating_sub(1);
-    let mut output = std::io::stdout().lock();
-    for tool in tools {
-        let frame = inline_frame(
-            &panes,
-            std::slice::from_ref(tool),
-            width,
-            2,
-            0,
-            animation_start.elapsed(),
-        );
-        bmux_tui::ansi::write_ansi_inline_frame(&mut output, &frame)?;
-    }
-    output.flush()?;
     Ok(exit)
+}
+
+/// Commit final inline entries; failed tools expand to their complete output.
+///
+/// # Errors
+/// Returns writer errors.
+pub fn write_inline_results(
+    output: &mut impl std::io::Write,
+    tools: &[(String, String)],
+    results: &[crate::tools::runner::ToolResult],
+) -> std::io::Result<()> {
+    for (name, _) in tools {
+        let Some(result) = results.iter().find(|result| &result.tool_name == name) else {
+            continue;
+        };
+        let status = if result.success {
+            "✓ passed"
+        } else {
+            "✗ failed"
+        };
+        writeln!(output, "{} · {status}", result.display_name)?;
+        if result.success {
+            let last = result
+                .stderr
+                .lines()
+                .last()
+                .or_else(|| result.stdout.lines().last())
+                .unwrap_or("No output.");
+            writeln!(output, "{last}")?;
+        } else if result.stdout.is_empty() && result.stderr.is_empty() {
+            writeln!(output, "No output.")?;
+        } else {
+            for text in [&result.stdout, &result.stderr] {
+                if text.is_empty() {
+                    continue;
+                }
+                output.write_all(text.as_bytes())?;
+                if !text.ends_with('\n') {
+                    writeln!(output)?;
+                }
+            }
+        }
+    }
+    output.flush()
 }
 
 fn handle_event(event: ToolEvent, panes: &mut BTreeMap<String, PaneState>, completed: &mut usize) {
@@ -889,6 +918,33 @@ mod tests {
                 assert_eq!(plain, format!("prefix{text}"));
             }
         }
+    }
+
+    #[test]
+    fn final_inline_output_expands_failures_without_truncation() {
+        use crate::tools::runner::ToolResult;
+        let full = "full output line\n".repeat(2100);
+        let results = vec![
+            ToolResult::failure(
+                "bad".into(),
+                "Bad".into(),
+                Some(1),
+                full.clone(),
+                "error tail".into(),
+                Duration::ZERO,
+            ),
+            ToolResult {
+                stdout: "old\nlatest\n".into(),
+                ..ToolResult::success("good".into(), "Good".into(), Duration::ZERO)
+            },
+        ];
+        let tools = vec![("bad".into(), "Bad".into()), ("good".into(), "Good".into())];
+        let mut output = Vec::new();
+        write_inline_results(&mut output, &tools, &results).unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            format!("Bad · ✗ failed\n{full}error tail\nGood · ✓ passed\nlatest\n")
+        );
     }
 
     #[test]
