@@ -179,7 +179,7 @@ struct ResultPlanMetadata {
 }
 
 /// Runs tools and aggregates results
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ToolRunner<'a> {
     registry: &'a ToolRegistry,
     /// Working directory to run tools in
@@ -892,7 +892,9 @@ impl<'a> ToolRunner<'a> {
             return Err(ToolError::NoToolsAvailable);
         }
 
-        Ok(self.run_tools(&formatters, paths, false))
+        Ok(self
+            .prepare_execution(&formatters)?
+            .run_tools(&formatters, paths, false))
     }
 
     /// Runs all available linters/checkers
@@ -906,7 +908,9 @@ impl<'a> ToolRunner<'a> {
             return Err(ToolError::NoToolsAvailable);
         }
 
-        Ok(self.run_tools(&linters, paths, true))
+        Ok(self
+            .prepare_execution(&linters)?
+            .run_tools(&linters, paths, true))
     }
 
     /// Runs format check (--check mode) for all formatters
@@ -920,7 +924,51 @@ impl<'a> ToolRunner<'a> {
             return Err(ToolError::NoToolsAvailable);
         }
 
-        Ok(self.run_tools(&formatters, paths, true))
+        Ok(self
+            .prepare_execution(&formatters)?
+            .run_tools(&formatters, paths, true))
+    }
+
+    fn prepare_execution(&self, tools: &[&Tool]) -> Result<Self, ToolError> {
+        let mut prepared = self.clone();
+        let mut candidates = BTreeSet::new();
+        for tool in tools {
+            if let Some(files) = self.scoped_file_args(tool) {
+                let files = files
+                    .into_iter()
+                    .map(PathBuf::from)
+                    .collect::<BTreeSet<_>>();
+                candidates.extend(files.iter().cloned());
+                prepared.planned_files.insert(tool.name.clone(), files);
+            }
+        }
+        if !self.registry.config().scope.exclude_binary {
+            return Ok(prepared);
+        }
+        let start = Instant::now();
+        let mut excluded = BTreeSet::new();
+        for path in candidates {
+            let (binary, bytes) = super::discovery::file_is_binary(
+                &self.working_dir_path().join(&path),
+            )
+            .map_err(|error| {
+                ToolError::DetectionFailed(
+                    "binary classification".into(),
+                    format!("{}: {error}", path.display()),
+                )
+            })?;
+            prepared.inventory_diagnostics.binary_files_probed += 1;
+            prepared.inventory_diagnostics.binary_bytes_read += bytes;
+            if binary {
+                excluded.insert(path);
+            }
+        }
+        prepared.inventory_diagnostics.binary_files_excluded = excluded.len();
+        prepared.inventory_diagnostics.binary_probe_micros = start.elapsed().as_micros();
+        for files in prepared.planned_files.values_mut() {
+            files.retain(|path| !excluded.contains(path));
+        }
+        Ok(prepared)
     }
 
     /// Runs specific tools by name
@@ -952,7 +1000,9 @@ impl<'a> ToolRunner<'a> {
             ));
         }
 
-        Ok(self.run_tools(&tools, paths, check_mode))
+        Ok(self
+            .prepare_execution(&tools)?
+            .run_tools(&tools, paths, check_mode))
     }
 
     /// Runs specific tools by name and renders live pane output in a TUI.
@@ -986,12 +1036,16 @@ impl<'a> ToolRunner<'a> {
 
         #[cfg(feature = "tools-tui")]
         {
-            Ok(self.run_tools_with_tui(&tools, paths, check_mode))
+            Ok(self
+                .prepare_execution(&tools)?
+                .run_tools_with_tui(&tools, paths, check_mode))
         }
 
         #[cfg(not(feature = "tools-tui"))]
         {
-            Ok(self.run_tools(&tools, paths, check_mode))
+            Ok(self
+                .prepare_execution(&tools)?
+                .run_tools(&tools, paths, check_mode))
         }
     }
 
@@ -2253,6 +2307,10 @@ pub fn results_to_json(
                 "native_configs_parsed": results.inventory_diagnostics.native_configs_parsed,
                 "executables_resolved": results.inventory_diagnostics.executables_resolved,
                 "probes_executed": results.inventory_diagnostics.probes_executed,
+                "binary_files_probed": results.inventory_diagnostics.binary_files_probed,
+                "binary_bytes_read": results.inventory_diagnostics.binary_bytes_read,
+                "binary_files_excluded": results.inventory_diagnostics.binary_files_excluded,
+                "binary_probe_micros": results.inventory_diagnostics.binary_probe_micros,
                 "files_assigned": results.inventory_diagnostics.files_assigned,
             },
             "automatic_exclusions": results.automatic_exclusions,
@@ -2281,6 +2339,56 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{prefix}-{nanos}"));
         std::fs::create_dir_all(&path).expect("failed to create temp dir");
         path
+    }
+
+    #[test]
+    fn execution_probes_only_selected_candidates_once() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.js"), "hello").unwrap();
+        std::fs::write(dir.path().join("binary.js"), vec![0; 10000]).unwrap();
+        let files = BTreeSet::from([
+            PathBuf::from("one.js"),
+            PathBuf::from("binary.js"),
+            PathBuf::from("unselected.js"),
+        ]);
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(dir.path())).unwrap();
+        let other = Tool {
+            name: "other".into(),
+            ..registry.get("prettier").unwrap().clone()
+        };
+        let tools = [registry.get("prettier").unwrap(), &other];
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(dir.path())
+            .with_planned_files(BTreeMap::from([
+                ("prettier".into(), files.clone()),
+                ("other".into(), files),
+            ]))
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([
+                PathBuf::from("one.js"),
+                PathBuf::from("binary.js"),
+            ])));
+        let prepared = runner.prepare_execution(&tools).unwrap();
+        assert_eq!(prepared.inventory_diagnostics.binary_files_probed, 2);
+        assert_eq!(prepared.inventory_diagnostics.binary_bytes_read, 517);
+        assert_eq!(prepared.inventory_diagnostics.binary_files_excluded, 1);
+        for tool in tools {
+            assert_eq!(prepared.scoped_file_args(tool).unwrap(), vec!["one.js"]);
+        }
+        let runner = runner.with_format_selection(FormatSelection::All);
+        assert!(runner.prepare_execution(&tools).is_err());
+        let mut config = ToolsConfig::default();
+        config.scope.exclude_binary = false;
+        let registry = ToolRegistry::new(config, Some(dir.path())).unwrap();
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(dir.path())
+            .with_planned_files(BTreeMap::from([(
+                "prettier".into(),
+                BTreeSet::from([PathBuf::from("missing.js")]),
+            )]));
+        let prepared = runner
+            .prepare_execution(&[registry.get("prettier").unwrap()])
+            .unwrap();
+        assert_eq!(prepared.inventory_diagnostics.binary_files_probed, 0);
     }
 
     #[cfg(feature = "tools-tui")]

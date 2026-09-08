@@ -1496,7 +1496,7 @@ TUI behavior for tool output:
 
 - In interactive terminals, `check` and `fmt` auto-enable a live pane TUI while tools are running
 - Live output defaults to a compact inline view: each tool keeps a status/name header and its latest output line, including after completion. Full output remains available in failure diagnostics. On short terminals, use Tab to switch pages.
-- Binary/encrypted files are excluded from shared file-oriented `fmt` and `check` plans by default. Clippier probes the first 8 KiB for NUL bytes, invalid UTF-8, and known encrypted-file headers; unreadable files report an error. This is a bounded heuristic, not full-file validation, and does not control independent traversal by repository-wide native tools.
+- Binary/encrypted files are excluded from file-oriented `fmt` and `check` execution by default. After tool scopes and Git selection, each unique candidate is probed once in 512-byte chunks, stopping early for binary content and reading at most 8,193 bytes. The probe checks NUL bytes, invalid UTF-8, and known encrypted-file headers; BOM-marked UTF-16/32 is validated as text. Unreadable candidates report an error. Discovery itself does not probe contents, so manifest/configuration facts remain available. JSON inventory diagnostics include probe count, bytes read, exclusions, and elapsed microseconds. This is a bounded heuristic, not full-file validation, and does not control independent traversal by repository-wide native tools.
   Use `--include-binary` for a single invocation, or set `exclude-binary = false` under `[runner.scope]` in `clippier.toml` to opt out.
 - Use `--tui-fullscreen` to select the existing alternate-screen pane view.
 - Use `--no-tui` to disable live rendering and keep non-interactive streaming behavior

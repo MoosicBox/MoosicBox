@@ -9,25 +9,94 @@ use ignore::WalkBuilder;
 use super::scope::automatic_exclusion_patterns_from_files;
 use super::{TOOL_CATALOG, ToolCapability, ToolRegistry};
 
-// A bounded probe inside the existing walk, not a second discovery pass.
-// Read one extra byte to distinguish a truncated UTF-8 scalar from an invalid
-// sequence at EOF. Read errors propagate rather than silently hiding files.
-fn file_is_binary(path: &Path) -> std::io::Result<bool> {
+// Probe only execution candidates; callers share results across tool assignments.
+// Small reads let obvious binaries stop early without weakening the 8 KiB sample.
+pub(super) fn file_is_binary(path: &Path) -> std::io::Result<(bool, usize)> {
     use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
     let mut bytes = Vec::with_capacity(8193);
-    std::fs::File::open(path)?
-        .take(8193)
-        .read_to_end(&mut bytes)?;
-    Ok(binary_sample(&bytes))
+    let mut chunk = [0; 512];
+    loop {
+        let remaining = (8193 - bytes.len()).min(chunk.len());
+        let count = match file.read(&mut chunk[..remaining]) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        bytes.extend_from_slice(&chunk[..count]);
+        let finished = count == 0 || bytes.len() == 8193;
+        if binary_prefix(&bytes, finished) {
+            return Ok((true, bytes.len()));
+        }
+        if finished {
+            return Ok((false, bytes.len()));
+        }
+    }
 }
 
-fn binary_sample(bytes: &[u8]) -> bool {
+fn binary_prefix(bytes: &[u8], finished: bool) -> bool {
+    if bytes.starts_with(b"GSC1") || bytes.starts_with(b"\0GITCRYPT") {
+        return true;
+    }
+    // BOM-marked UTF-16/32 is text, but validate complete code units rather
+    // than allowing arbitrary binary content merely because it has a BOM.
+    let encoding = if bytes.starts_with(&[0xff, 0xfe, 0, 0]) {
+        Some((4, true))
+    } else if bytes.starts_with(&[0, 0, 0xfe, 0xff]) {
+        Some((4, false))
+    } else if bytes.starts_with(&[0xff, 0xfe]) {
+        Some((2, true))
+    } else if bytes.starts_with(&[0xfe, 0xff]) {
+        Some((2, false))
+    } else {
+        None
+    };
     let sample = &bytes[..bytes.len().min(8192)];
-    sample.starts_with(b"GSC1")
-        || sample.starts_with(b"\0GITCRYPT")
-        || sample.contains(&0)
-        || std::str::from_utf8(sample)
-            .is_err_and(|error| error.error_len().is_some() || bytes.len() <= 8192)
+    let eof = finished && bytes.len() <= 8192;
+    if let Some((unit, little)) = encoding {
+        let content = &sample[unit..];
+        if eof && !content.len().is_multiple_of(unit) {
+            return true;
+        }
+        if unit == 4 {
+            return content.as_chunks::<4>().0.iter().any(|chunk| {
+                let raw = *chunk;
+                let value = if little {
+                    u32::from_le_bytes(raw)
+                } else {
+                    u32::from_be_bytes(raw)
+                };
+                value == 0 || char::from_u32(value).is_none()
+            });
+        }
+        let mut units = content
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| {
+                if little {
+                    u16::from_le_bytes([chunk[0], chunk[1]])
+                } else {
+                    u16::from_be_bytes([chunk[0], chunk[1]])
+                }
+            })
+            .collect::<Vec<_>>();
+        if !eof
+            && units
+                .last()
+                .is_some_and(|value| (0xd800..=0xdbff).contains(value))
+        {
+            units.pop();
+        }
+        return char::decode_utf16(units)
+            .any(|value| value.map_or(true, |character| character == '\0'));
+    }
+    sample.contains(&0)
+        || std::str::from_utf8(sample).is_err_and(|error| error.error_len().is_some() || eof)
+}
+
+#[cfg(test)]
+fn binary_sample(bytes: &[u8]) -> bool {
+    binary_prefix(bytes, true)
 }
 
 /// Shared command-local parsed native configuration cache.
@@ -42,6 +111,14 @@ pub type NativeConfigCacheHandle = Arc<Mutex<NativeConfigCache>>;
 /// Deterministic command-scoped inventory diagnostics.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InventoryDiagnostics {
+    /// Unique execution candidates probed for binary content.
+    pub binary_files_probed: usize,
+    /// Bytes read by binary classification.
+    pub binary_bytes_read: usize,
+    /// Unique binary files excluded from execution.
+    pub binary_files_excluded: usize,
+    /// Time spent classifying execution candidates, in microseconds.
+    pub binary_probe_micros: u128,
     /// Number of recursive repository walkers constructed.
     pub recursive_walks: usize,
     /// Directories yielded by the authoritative walker.
@@ -170,7 +247,6 @@ impl RepositoryDiscovery {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let filter_root = root.clone();
-        let exclude_binary = scope_config.is_none_or(|config| config.exclude_binary);
         let scope_config = scope_config.cloned();
         let package_profiles = Arc::new(Mutex::new(BTreeMap::new()));
         let mut result = Self {
@@ -225,9 +301,6 @@ impl RepositoryDiscovery {
                 diagnostics.files_indexed += 1;
             }
             let path = entry.path();
-            if exclude_binary && file_is_binary(path)? {
-                continue;
-            }
             let Ok(relative) = path.strip_prefix(&root) else {
                 continue;
             };
@@ -870,8 +943,16 @@ mod tests {
         for bytes in [b"".as_slice(), "hello 🦀\n".as_bytes(), b"\t\r\n"] {
             assert!(!super::binary_sample(bytes));
         }
-        for bytes in [b"text\0data".as_slice(), b"\xff\xfe", b"GSC1encrypted"] {
+        for bytes in [b"text\0data".as_slice(), b"\xff\xfe\xff", b"GSC1encrypted"] {
             assert!(super::binary_sample(bytes));
+        }
+        for bytes in [
+            b"\xff\xfe".as_slice(),
+            b"\xff\xfeh\0i\0",
+            b"\xfe\xff\0h\0i",
+            b"\xff\xfe\0\0h\0\0\0",
+        ] {
+            assert!(!super::binary_sample(bytes));
         }
         let mut bytes = vec![b'a'; 8191];
         bytes.extend_from_slice("🦀".as_bytes());
@@ -880,7 +961,7 @@ mod tests {
     }
 
     #[test]
-    fn inventory_excludes_binary_sources_by_default_and_can_opt_out() {
+    fn inventory_retains_binary_facts_without_content_probes() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("plain.nix"), "{ name = \"🦀\"; }").unwrap();
         std::fs::write(root.path().join("locked.nix"), b"GSC1\xff\0").unwrap();
@@ -897,15 +978,11 @@ mod tests {
             )
             .unwrap();
             assert!(inventory.files.contains(std::path::Path::new("plain.nix")));
-            assert_eq!(
-                inventory.files.contains(std::path::Path::new("locked.nix")),
-                !exclude_binary
-            );
-            assert_eq!(
+            assert!(inventory.files.contains(std::path::Path::new("locked.nix")));
+            assert!(
                 inventory
                     .files
-                    .contains(std::path::Path::new("locked.toml")),
-                !exclude_binary
+                    .contains(std::path::Path::new("locked.toml"))
             );
             assert_eq!(inventory.diagnostics().recursive_walks, 1);
         }

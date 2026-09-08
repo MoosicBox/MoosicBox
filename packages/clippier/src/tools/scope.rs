@@ -69,7 +69,7 @@ impl EffectiveScope {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScopeMatcher {
     root: PathBuf,
     includes: Option<GlobSet>,
