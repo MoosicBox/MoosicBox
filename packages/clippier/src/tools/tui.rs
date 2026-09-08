@@ -258,6 +258,7 @@ fn inline_frame(
     width: u16,
     height: u16,
     page: usize,
+    elapsed: Duration,
 ) -> bmux_tui::buffer::Buffer {
     use bmux_tui::{buffer::Buffer, frame::Frame};
     let capacity = usize::from(height / 2).max(1);
@@ -267,7 +268,22 @@ fn inline_frame(
         let pane = &panes[name];
         let (status, color) = match pane.status {
             PaneStatus::Pending => ("· pending", Color::BrightBlack),
-            PaneStatus::Running => ("⠋ running", Color::Cyan),
+            PaneStatus::Running => {
+                const FRAMES: [&str; 10] = [
+                    "⠋ running",
+                    "⠙ running",
+                    "⠹ running",
+                    "⠸ running",
+                    "⠼ running",
+                    "⠴ running",
+                    "⠦ running",
+                    "⠧ running",
+                    "⠇ running",
+                    "⠏ running",
+                ];
+                let index = usize::try_from((elapsed.as_millis() / 100) % 10).unwrap_or(0);
+                (FRAMES[index], Color::Cyan)
+            }
             PaneStatus::Passed => ("✓ passed", Color::Green),
             PaneStatus::Failed => ("✗ failed", Color::Red),
         };
@@ -325,6 +341,7 @@ pub fn run_inline_tui(
     let mut terminal = bmux_tui::inline::InlineTerminal::enter(std::io::stdout())?;
     let mut completed = 0;
     let mut page = 0_usize;
+    let animation_start = Instant::now();
     let exit = loop {
         let frame_start = Instant::now();
         match read_user_action()? {
@@ -360,6 +377,7 @@ pub fn run_inline_tui(
             width.saturating_sub(1),
             height.saturating_sub(1),
             page,
+            animation_start.elapsed(),
         ))?;
         if completed >= tools.len() || disconnected {
             break TuiExit::Completed;
@@ -372,7 +390,14 @@ pub fn run_inline_tui(
     let width = crossterm::terminal::size()?.0.saturating_sub(1);
     let mut output = std::io::stdout().lock();
     for tool in tools {
-        let frame = inline_frame(&panes, std::slice::from_ref(tool), width, 2, 0);
+        let frame = inline_frame(
+            &panes,
+            std::slice::from_ref(tool),
+            width,
+            2,
+            0,
+            animation_start.elapsed(),
+        );
         bmux_tui::ansi::write_ansi_inline_frame(&mut output, &frame)?;
     }
     output.flush()?;
@@ -650,6 +675,7 @@ fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line {
 
         index += 1;
         if index >= bytes.len() {
+            segment_start = index;
             break;
         }
 
@@ -689,13 +715,17 @@ fn parse_ansi_line(input: &str, state: &mut AnsiStyleState) -> Line {
             }
             b'(' | b')' | b'*' | b'+' | b'-' | b'.' | b'/' => {
                 index += 1;
-                if index < bytes.len() {
+                if index < bytes.len() && bytes[index].is_ascii() {
                     index += 1;
                 }
                 segment_start = index;
             }
             _ => {
-                index += 1;
+                // An escape introducer may be followed by ordinary Unicode
+                // (or malformed terminal output). Never consume part of a scalar.
+                if bytes[index].is_ascii() {
+                    index += 1;
+                }
                 segment_start = index;
             }
         }
@@ -844,6 +874,24 @@ mod tests {
     }
 
     #[test]
+    fn ansi_parser_preserves_unicode_after_incomplete_escapes() {
+        for escape in ["\x1b", "\x1b(", "\x1b)"] {
+            for text in ["é", "⠋ running", "🦀 output"] {
+                let line = parse_ansi_line(
+                    &format!("prefix{escape}{text}"),
+                    &mut AnsiStyleState::default(),
+                );
+                let plain = line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_str())
+                    .collect::<String>();
+                assert_eq!(plain, format!("prefix{text}"));
+            }
+        }
+    }
+
+    #[test]
     fn inline_view_keeps_two_rows_and_only_latest_output() {
         let tools = vec![("demo".into(), "Demo".into())];
         let mut state = PaneState::new("Demo".into());
@@ -857,7 +905,13 @@ mod tests {
         ] {
             state.status = status;
             let states = BTreeMap::from([("demo".into(), state)]);
-            let buffer = inline_frame(&states, &tools, 80, 24, 0);
+            let buffer = inline_frame(&states, &tools, 80, 24, 0, Duration::ZERO);
+            let next = inline_frame(&states, &tools, 80, 24, 0, Duration::from_millis(100));
+            assert_eq!(buffer == next, status != PaneStatus::Running);
+            assert_eq!(
+                buffer,
+                inline_frame(&states, &tools, 80, 24, 0, Duration::from_secs(1))
+            );
             assert_eq!(buffer.area().height, 2);
             let text = buffer
                 .cells()
@@ -868,7 +922,7 @@ mod tests {
             assert!(text.contains("latest output"));
             assert!(!text.contains("old output"));
             for (width, height) in [(0, 0), (1, 1), (12, 2)] {
-                let buffer = inline_frame(&states, &tools, width, height, 0);
+                let buffer = inline_frame(&states, &tools, width, height, 0, Duration::ZERO);
                 assert!(buffer.area().height <= height);
             }
             state = states.into_values().next().unwrap();
