@@ -261,10 +261,18 @@ fn inline_frame(
     elapsed: Duration,
 ) -> bmux_tui::buffer::Buffer {
     use bmux_tui::{buffer::Buffer, frame::Frame};
-    let capacity = usize::from(height / 2).max(1);
+    let capacity = ((usize::from(height) + 1) / 3).max(1);
     let pages = tools.len().div_ceil(capacity).max(1);
     let mut content = Column::new();
-    for (name, _) in tools.iter().skip((page % pages) * capacity).take(capacity) {
+    for (index, (name, _)) in tools
+        .iter()
+        .skip((page % pages) * capacity)
+        .take(capacity)
+        .enumerate()
+    {
+        if index > 0 {
+            content = content.child(TextBlock::new(""));
+        }
         let pane = &panes[name];
         let (status, color) = match pane.status {
             PaneStatus::Pending => ("· pending", Color::BrightBlack),
@@ -298,14 +306,14 @@ fn inline_frame(
                 Style::new().fg(color).add_modifier(Modifier::BOLD),
             )],
         )])));
-        content = content.child(TextBlock::new(Text::from_lines(vec![
-            pane.lines.back().cloned().unwrap_or_else(|| {
-                Line::from(match pane.status {
-                    PaneStatus::Passed | PaneStatus::Failed => "No output.",
-                    PaneStatus::Pending | PaneStatus::Running => "Waiting for output…",
-                })
-            }),
-        ])));
+        let mut last = pane.lines.back().cloned().unwrap_or_else(|| {
+            Line::from(match pane.status {
+                PaneStatus::Passed | PaneStatus::Failed => "No output.",
+                PaneStatus::Pending | PaneStatus::Running => "Waiting for output…",
+            })
+        });
+        last.spans.insert(0, Span::raw("  "));
+        content = content.child(TextBlock::new(Text::from_lines(vec![last])));
     }
     let mut cx = LayoutCx::default();
     let layout = content.layout(Constraints::loose(Size::new(width, height)), &mut cx);
@@ -398,10 +406,15 @@ pub fn write_inline_results(
     tools: &[(String, String)],
     results: &[crate::tools::runner::ToolResult],
 ) -> std::io::Result<()> {
+    let mut first = true;
     for (name, _) in tools {
         let Some(result) = results.iter().find(|result| &result.tool_name == name) else {
             continue;
         };
+        if !first {
+            writeln!(output)?;
+        }
+        first = false;
         let status = if result.success {
             "✓ passed"
         } else {
@@ -415,17 +428,16 @@ pub fn write_inline_results(
                 .last()
                 .or_else(|| result.stdout.lines().last())
                 .unwrap_or("No output.");
-            writeln!(output, "{last}")?;
+            writeln!(output, "  {last}")?;
         } else if result.stdout.is_empty() && result.stderr.is_empty() {
-            writeln!(output, "No output.")?;
+            writeln!(output, "  No output.")?;
         } else {
             for text in [&result.stdout, &result.stderr] {
                 if text.is_empty() {
                     continue;
                 }
-                output.write_all(text.as_bytes())?;
-                if !text.ends_with('\n') {
-                    writeln!(output)?;
+                for line in text.lines() {
+                    writeln!(output, "  {line}")?;
                 }
             }
         }
@@ -929,7 +941,7 @@ mod tests {
                 "bad".into(),
                 "Bad".into(),
                 Some(1),
-                full.clone(),
+                full,
                 "error tail".into(),
                 Duration::ZERO,
             ),
@@ -943,7 +955,10 @@ mod tests {
         write_inline_results(&mut output, &tools, &results).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
-            format!("Bad · ✗ failed\n{full}error tail\nGood · ✓ passed\nlatest\n")
+            format!(
+                "Bad · ✗ failed\n{}  error tail\n\nGood · ✓ passed\n  latest\n",
+                "  full output line\n".repeat(2100)
+            )
         );
     }
 
