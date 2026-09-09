@@ -97,6 +97,7 @@ mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
 insta                   = { workspace = true, features = ["json", "redactions", "yaml"] }
+tempfile                = { workspace = true }
 test-log                = { workspace = true }
 
 [features]
@@ -141,7 +142,7 @@ release = [
     "publish",
     "switchy_async/net",
 ]
-versioning = ["dep:cargo_metadata"]
+versioning = ["dep:cargo_metadata", "dep:toml_edit"]
 
 _tools = ["dep:rayon", "dep:toml_edit", "dep:which"]
 _transforms = []

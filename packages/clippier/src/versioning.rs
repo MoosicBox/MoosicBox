@@ -8,8 +8,8 @@ use std::{
 
 use cargo_metadata::{MetadataCommand, PackageId};
 use clap::ValueEnum;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
+use toml_edit::{DocumentMut, Item, TableLike, Value};
 
 use crate::{OutputType, cargo_workspace::normalize_workspace_root};
 
@@ -143,57 +143,20 @@ pub fn handle_version_command(
     let update_workspace_version = selected_names_set == all_package_names
         && workspace_package_version(&workspace_manifest)?.is_some();
 
-    let dry_run = config.dry_run;
-    let mut changed_files = BTreeSet::new();
-
-    if update_workspace_version
-        && update_manifest_file(&workspace_manifest, dry_run, |contents| {
-            update_workspace_package_version(contents, &new_version)
-        })?
-    {
-        changed_files.insert(workspace_manifest.clone());
-    }
-
-    for package in packages.values() {
-        let package_selected = selected_names_set.contains(&package.name);
-        if update_manifest_file(&package.manifest_path, dry_run, |contents| {
-            let mut updated = contents.to_string();
-            let changed_package_version = package_selected
-                && !package.inherits_workspace_version
-                && update_package_version_in_contents(&mut updated, &new_version);
-
-            let changed_dependency_versions = update_dependency_versions_in_contents(
-                &mut updated,
-                &selected_names_set,
-                &new_version,
-                DependencyUpdateMode::PathOnly,
-            );
-
-            if changed_package_version || changed_dependency_versions {
-                Some(updated)
-            } else {
-                None
-            }
-        })? {
-            changed_files.insert(package.manifest_path.clone());
+    let planned = plan_manifest_updates(
+        &workspace_manifest,
+        &packages,
+        &selected_names_set,
+        &new_version,
+        update_workspace_version,
+    )?;
+    // Complete parsing and dependency validation before writing any manifest.
+    if !config.dry_run {
+        for (path, contents) in &planned {
+            fs::write(path, contents)?;
         }
     }
-
-    if update_manifest_file(&workspace_manifest, dry_run, |contents| {
-        let mut updated = contents.to_string();
-        if update_dependency_versions_in_contents(
-            &mut updated,
-            &selected_names_set,
-            &new_version,
-            DependencyUpdateMode::WorkspaceDependencies,
-        ) {
-            Some(updated)
-        } else {
-            None
-        }
-    })? {
-        changed_files.insert(workspace_manifest);
-    }
+    let changed_files = planned.into_keys().collect::<BTreeSet<_>>();
 
     let report = VersionReport {
         old_version,
@@ -366,210 +329,138 @@ fn validate_partial_workspace_inherited_bump(
     }
 }
 
-fn update_manifest_file(
-    path: &Path,
-    dry_run: bool,
-    update: impl FnOnce(&str) -> Option<String>,
-) -> Result<bool, BoxError> {
-    let contents = fs::read_to_string(path)?;
-    let Some(updated) = update(&contents) else {
-        return Ok(false);
-    };
-
-    if updated == contents {
-        Ok(false)
-    } else {
-        if !dry_run {
-            fs::write(path, updated)?;
+fn plan_manifest_updates(
+    workspace_manifest: &Path,
+    packages: &BTreeMap<String, WorkspacePackage>,
+    selected: &BTreeSet<String>,
+    version: &str,
+    update_workspace_version: bool,
+) -> Result<BTreeMap<PathBuf, String>, BoxError> {
+    let root = workspace_manifest.canonicalize()?;
+    let mut manifests = BTreeSet::from([root.clone()]);
+    let mut members = BTreeMap::new();
+    for package in packages.values() {
+        let path = package.manifest_path.canonicalize()?;
+        manifests.insert(path.clone());
+        members.insert(path, package);
+    }
+    let mut planned = BTreeMap::new();
+    for path in manifests {
+        let original = fs::read_to_string(&path)?;
+        let mut document = original.parse::<DocumentMut>()?;
+        if path == root && update_workspace_version {
+            replace_string(&mut document["workspace"]["package"]["version"], version);
         }
-        Ok(true)
-    }
-}
-
-fn update_workspace_package_version(contents: &str, new_version: &str) -> Option<String> {
-    update_version_key_in_section(contents, "workspace.package", new_version)
-}
-
-fn update_package_version_in_contents(contents: &mut String, new_version: &str) -> bool {
-    update_version_key_in_section(contents, "package", new_version).is_some_and(|updated| {
-        *contents = updated;
-        true
-    })
-}
-
-fn update_version_key_in_section(
-    contents: &str,
-    target_section: &str,
-    new_version: &str,
-) -> Option<String> {
-    let mut current_section = String::new();
-    let mut changed = false;
-    let lines = contents
-        .lines()
-        .map(|line| {
-            if let Some(section) = parse_section(line) {
-                current_section = section;
-                return line.to_string();
+        if let Some(package) = members.get(&path)
+            && selected.contains(&package.name)
+            && !package.inherits_workspace_version
+        {
+            replace_string(&mut document["package"]["version"], version);
+        }
+        update_dependency_sections(
+            document.as_table_mut(),
+            &path,
+            &members,
+            selected,
+            version,
+            false,
+        )?;
+        if let Some(workspace) = document
+            .get_mut("workspace")
+            .and_then(Item::as_table_like_mut)
+        {
+            update_dependency_sections(workspace, &path, &members, selected, version, true)?;
+        }
+        if let Some(targets) = document.get_mut("target").and_then(Item::as_table_like_mut) {
+            for (_, target) in targets.iter_mut() {
+                if let Some(table) = target.as_table_like_mut() {
+                    update_dependency_sections(table, &path, &members, selected, version, false)?;
+                }
             }
-
-            if current_section == target_section
-                && line_key(line).is_some_and(|key| key == "version")
-                && let Some(updated) = replace_version_literal(line, new_version)
-            {
-                changed = true;
-                return updated;
-            }
-
-            line.to_string()
-        })
-        .collect::<Vec<_>>();
-
-    if changed {
-        Some(join_lines_preserving_trailing_newline(&lines, contents))
-    } else {
-        None
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DependencyUpdateMode {
-    PathOnly,
-    WorkspaceDependencies,
-}
-
-fn update_dependency_versions_in_contents(
-    contents: &mut String,
-    selected_package_names: &BTreeSet<String>,
-    new_version: &str,
-    mode: DependencyUpdateMode,
-) -> bool {
-    let mut current_section = String::new();
-    let mut changed = false;
-    let lines = contents
-        .lines()
-        .map(|line| {
-            if let Some(section) = parse_section(line) {
-                current_section = section;
-                return line.to_string();
-            }
-
-            if !is_dependency_section(&current_section, mode) {
-                return line.to_string();
-            }
-
-            if dependency_line_targets_package(line, selected_package_names, mode)
-                && let Some(updated) = replace_version_literal(line, new_version)
-            {
-                changed = true;
-                return updated;
-            }
-
-            line.to_string()
-        })
-        .collect::<Vec<_>>();
-
-    if changed {
-        *contents = join_lines_preserving_trailing_newline(&lines, contents);
-    }
-
-    changed
-}
-
-fn is_dependency_section(section: &str, mode: DependencyUpdateMode) -> bool {
-    match mode {
-        DependencyUpdateMode::WorkspaceDependencies => section == "workspace.dependencies",
-        DependencyUpdateMode::PathOnly => {
-            section == "dependencies"
-                || section == "dev-dependencies"
-                || section == "build-dependencies"
-                || section.ends_with(".dependencies")
-                || section.ends_with(".dev-dependencies")
-                || section.ends_with(".build-dependencies")
+        }
+        let updated = document.to_string();
+        if updated != original {
+            planned.insert(path, updated);
         }
     }
+    Ok(planned)
 }
 
-fn dependency_line_targets_package(
-    line: &str,
-    selected_package_names: &BTreeSet<String>,
-    mode: DependencyUpdateMode,
-) -> bool {
-    let Some(key) = line_key(line) else {
-        return false;
-    };
-
-    if !line.contains("version") {
-        return false;
-    }
-
-    if mode == DependencyUpdateMode::PathOnly && !line.contains("path") {
-        return false;
-    }
-
-    if selected_package_names.contains(key) {
-        return true;
-    }
-
-    inline_table_string_value(line, "package")
-        .is_some_and(|package| selected_package_names.contains(package.as_str()))
-}
-
-fn parse_section(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
-        return None;
-    }
-
-    Some(
-        trimmed
-            .trim_start_matches('[')
-            .trim_end_matches(']')
-            .trim_matches('[')
-            .trim_matches(']')
-            .to_string(),
-    )
-}
-
-fn line_key(line: &str) -> Option<&str> {
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('#') {
-        return None;
-    }
-
-    trimmed
-        .split_once('=')
-        .map(|(key, _value)| key.trim())
-        .filter(|key| !key.is_empty())
-}
-
-fn replace_version_literal(line: &str, new_version: &str) -> Option<String> {
-    let regex = Regex::new(r#"(version\s*=\s*)"[^"]+""#).expect("valid version regex");
-    if regex.is_match(line) {
-        Some(
-            regex
-                .replace(line, format!("$1\"{new_version}\""))
-                .to_string(),
-        )
-    } else {
-        None
+fn replace_string(item: &mut Item, version: &str) {
+    if let Some(value) = item.as_value_mut()
+        && value.as_str().is_some_and(|old| old != version)
+    {
+        let decor = value.decor().clone();
+        *value = Value::from(version);
+        *value.decor_mut() = decor;
     }
 }
 
-fn inline_table_string_value(line: &str, key: &str) -> Option<String> {
-    let regex = Regex::new(&format!(r#"{}\s*=\s*"([^"]+)""#, regex::escape(key)))
-        .expect("valid inline table regex");
-    regex
-        .captures(line)
-        .and_then(|captures| captures.get(1))
-        .map(|capture| capture.as_str().to_string())
-}
-
-fn join_lines_preserving_trailing_newline(lines: &[String], original: &str) -> String {
-    let mut joined = lines.join("\n");
-    if original.ends_with('\n') {
-        joined.push('\n');
+fn update_dependency_sections(
+    table: &mut dyn TableLike,
+    manifest: &Path,
+    members: &BTreeMap<PathBuf, &WorkspacePackage>,
+    selected: &BTreeSet<String>,
+    version: &str,
+    workspace: bool,
+) -> Result<(), BoxError> {
+    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if workspace && section != "dependencies" {
+            continue;
+        }
+        let Some(dependencies) = table.get_mut(section).and_then(Item::as_table_like_mut) else {
+            continue;
+        };
+        for (key, dependency) in dependencies.iter_mut() {
+            let key = key.get();
+            let Some(spec) = dependency.as_table_like_mut() else {
+                // Preserve the existing workspace registry dependency behavior.
+                if workspace && selected.contains(key) {
+                    replace_string(dependency, version);
+                }
+                continue;
+            };
+            if spec.get("workspace").and_then(Item::as_bool) == Some(true) {
+                continue;
+            }
+            let name = spec.get("package").and_then(Item::as_str).unwrap_or(key);
+            let should_update = if let Some(relative) = spec.get("path").and_then(Item::as_str) {
+                let target = manifest
+                    .parent()
+                    .ok_or("Manifest has no parent")?
+                    .join(relative)
+                    .join("Cargo.toml")
+                    .canonicalize()
+                    .map_err(|error| {
+                        format!(
+                            "{}: dependency '{key}' path '{relative}': {error}",
+                            manifest.display()
+                        )
+                    })?;
+                let target_manifest = read_toml(&target)?;
+                let actual = target_manifest
+                    .get("package")
+                    .and_then(|package| package.get("name"))
+                    .and_then(toml::Value::as_str)
+                    .ok_or_else(|| format!("{}: missing package.name", target.display()))?;
+                if name != actual {
+                    return Err(format!(
+                        "{}: dependency '{key}' declares package '{name}' but path '{relative}' points to package '{actual}'; add package = \"{actual}\", rename the dependency key, or remove the unused declaration",
+                        manifest.display()
+                    ).into());
+                }
+                members
+                    .get(&target)
+                    .is_some_and(|package| selected.contains(&package.name))
+            } else {
+                workspace && selected.contains(name)
+            };
+            if should_update && let Some(item) = spec.get_mut("version") {
+                replace_string(item, version);
+            }
+        }
     }
-    joined
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -704,43 +595,155 @@ mod tests {
         );
     }
 
-    #[test]
-    fn update_workspace_package_version_preserves_manifest_shape() {
-        let manifest = r#"
+    fn fixture(extra: &str) -> (tempfile::TempDir, VersionConfig) {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("cli")).unwrap();
+        fs::write(dir.path().join("cli/main.rs"), "fn main() {}\n").unwrap();
+        fs::write(
+            dir.path().join("cli/Cargo.toml"),
+            r#"[package]
+name = "sshenv"
+version.workspace = true
+[[bin]]
+name = "sshenv"
+path = "main.rs"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            format!(
+                r#"[workspace]
+members = ["cli"]
+resolver = "2"
 [workspace.package]
-edition = "2024"
-version    = "0.2.0"
-
-[workspace.dependencies]
-foo = { version = "0.2.0", path = "packages/foo" }
-"#;
-
-        let updated = update_workspace_package_version(manifest, "0.3.0").unwrap();
-
-        assert!(updated.contains("version    = \"0.3.0\""));
-        assert!(updated.contains("foo = { version = \"0.2.0\""));
+version    = "0.0.1-alpha.3" # retained
+{extra}
+"#
+            ),
+        )
+        .unwrap();
+        let config = VersionConfig {
+            workspace_root: dir.path().to_path_buf(),
+            packages: None,
+            publishable_only: false,
+            dry_run: false,
+            operation: VersionOperation::Set("0.0.1-alpha.4".into()),
+        };
+        (dir, config)
     }
 
     #[test]
-    fn update_dependency_versions_updates_selected_path_dependencies() {
-        let mut manifest = r#"
+    fn updates_unused_aliases_and_preserves_comments() {
+        let (dir, config) = fixture(
+            r#"
+[workspace.dependencies]
+"sshenv_cli" = { package = "sshenv", path = "cli/../cli", version = '0.0.1-alpha.3' } # alias
+[workspace.dependencies.other]
+package = "sshenv"
+path = "cli"
+version = "0.0.1-alpha.3"
+"#,
+        );
+        handle_version_command(&config, OutputType::Json).unwrap();
+        let updated = fs::read_to_string(dir.path().join("Cargo.toml")).unwrap();
+        assert!(!updated.contains("alpha.3"));
+        assert!(updated.contains("# alias"));
+        assert!(updated.contains("version    = \"0.0.1-alpha.4\" # retained"));
+    }
+
+    #[test]
+    fn mismatch_leaves_all_manifests_unchanged() {
+        let (dir, mut config) = fixture(
+            r#"
+[workspace.dependencies]
+sshenv_cli = { path = "cli", version = "0.0.1-alpha.3" }
+"#,
+        );
+        let root = dir.path().join("Cargo.toml");
+        let member = dir.path().join("cli/Cargo.toml");
+        let original = fs::read_to_string(&root).unwrap();
+        let original_member = fs::read_to_string(&member).unwrap();
+        for dry_run in [true, false] {
+            config.dry_run = dry_run;
+            let error = handle_version_command(&config, OutputType::Json)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("sshenv_cli"), "{error}");
+            assert!(error.contains("package = \"sshenv\""), "{error}");
+            assert_eq!(fs::read_to_string(&root).unwrap(), original);
+            assert_eq!(fs::read_to_string(&member).unwrap(), original_member);
+        }
+    }
+
+    #[test]
+    fn package_override_takes_precedence_and_registry_members_stay_external() {
+        let mut doc = r#"
 [dependencies]
-foo = { version = "0.2.0", path = "../foo" }
-bar = { version = "0.2.0", path = "../bar", package = "foo" }
-serde = { version = "1.0.0" }
+foo = { package = "bar", version = "1.0.0" }
+bar = "1.0.0"
 "#
-        .to_string();
+        .parse::<DocumentMut>()
+        .unwrap();
+        let original = doc.to_string();
         let selected = BTreeSet::from(["foo".to_string()]);
-
-        assert!(update_dependency_versions_in_contents(
-            &mut manifest,
+        update_dependency_sections(
+            doc.as_table_mut(),
+            Path::new("Cargo.toml"),
+            &BTreeMap::new(),
             &selected,
-            "0.3.0",
-            DependencyUpdateMode::PathOnly,
-        ));
+            "2.0.0",
+            true,
+        )
+        .unwrap();
+        assert_eq!(doc.to_string(), original);
+        let selected = BTreeSet::from(["bar".to_string()]);
+        update_dependency_sections(
+            doc.as_table_mut(),
+            Path::new("Cargo.toml"),
+            &BTreeMap::new(),
+            &selected,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+        assert_eq!(doc.to_string(), original);
+        update_dependency_sections(
+            doc.as_table_mut(),
+            Path::new("Cargo.toml"),
+            &BTreeMap::new(),
+            &selected,
+            "2.0.0",
+            true,
+        )
+        .unwrap();
+        assert!(!doc.to_string().contains("1.0.0"));
+    }
 
-        assert!(manifest.contains("foo = { version = \"0.3.0\""));
-        assert!(manifest.contains("bar = { version = \"0.3.0\""));
-        assert!(manifest.contains("serde = { version = \"1.0.0\""));
+    #[test]
+    fn target_dependencies_and_dry_run() {
+        let (dir, mut config) = fixture("");
+        let root = dir.path().join("Cargo.toml");
+        let member = dir.path().join("cli/Cargo.toml");
+        let original = fs::read_to_string(&member).unwrap()
+            + r#"
+[target.'cfg(unix)'.build-dependencies.self_alias]
+package = "sshenv"
+path = "."
+version = "0.0.1-alpha.3"
+"#;
+        fs::write(&member, &original).unwrap();
+        let original_root = fs::read_to_string(&root).unwrap();
+        config.dry_run = true;
+        handle_version_command(&config, OutputType::Json).unwrap();
+        assert_eq!(fs::read_to_string(&root).unwrap(), original_root);
+        assert_eq!(fs::read_to_string(&member).unwrap(), original);
+        config.dry_run = false;
+        handle_version_command(&config, OutputType::Json).unwrap();
+        assert!(
+            fs::read_to_string(&member)
+                .unwrap()
+                .contains("0.0.1-alpha.4")
+        );
     }
 }
