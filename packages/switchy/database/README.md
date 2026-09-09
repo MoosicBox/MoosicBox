@@ -377,7 +377,28 @@ The following feature flags are available in `Cargo.toml`:
 - `mysql` / `mysql-sqlx` - MySQL backend using sqlx
 - `duckdb` - DuckDB embedded analytical database
 - `duckdb-bundled` - DuckDB with bundled library (no system install required)
-- `turso` - Turso local database support (file-based or in-memory)
+- `turso` - Turso local database support (file-based or in-memory), without selecting a global allocator
+- `turso-mimalloc` - Explicitly enables `turso` and Turso's mimalloc global allocator; not enabled by defaults or `turso`
+
+#### Optional Turso allocator
+
+Applications can opt in with:
+
+```toml
+switchy_database = { version = "0.4.0", default-features = false, features = ["turso-mimalloc"] }
+```
+
+This forwards to `turso/mimalloc`, which installs a Rust global allocator for the
+**entire linked artifact**, not only database allocations. Do not also declare a
+different global allocator in that artifact. Cargo features are additive: a
+transitive dependency enabling this feature enables the allocator for other
+consumers sharing that artifact too.
+
+Keep this feature disabled in reusable libraries and independently linked native
+plugins. Multiple mimalloc instances can collide through fixed thread-local slots
+on macOS, causing memory corruption. Executable-owned allocator selection is
+preferred when an application loads plugins. Performance benefits are workload-
+and platform-dependent; benchmark before enabling it.
 
 ### Additional Features
 

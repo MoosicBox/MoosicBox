@@ -806,10 +806,9 @@ tracing-opentelemetry = { version = "0.32.1" }
 tracing-subscriber = "0.3.23"
 tracy-client = { version = "0.18.4", default-features = false }
 trybuild = "1.0.118"
-# Libraries must not select a process-global allocator. Turso's mimalloc feature
-# installs one in every linked artifact; independently linked native plugins can
-# then collide through mimalloc's fixed macOS TLS slots. Executables may select
-# their allocator explicitly instead.
+# Keep Turso allocator-neutral by default. switchy_database exposes an explicit
+# turso-mimalloc opt-in for applications that intend whole-artifact allocation.
+# Independent mimalloc copies in native plugins can collide on macOS TLS slots.
 turso             = { version = "0.6.1", default-features = false }
 uaparser          = "0.6.4"
 url               = "2.5.8"

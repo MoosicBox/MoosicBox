@@ -192,6 +192,10 @@ turso = [
     "placeholder-question-mark",
 ]
 
+# Explicit whole-artifact allocator opt-in; never included by `turso` or defaults.
+# Not suitable for independently linked native plugins on macOS.
+turso-mimalloc = ["turso", "turso/mimalloc"]
+
 simulator = [
     "sqlite-rusqlite",
     "switchy_async/simulator",
