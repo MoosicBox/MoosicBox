@@ -63,6 +63,7 @@ mod real_fs_support {
             path: path.as_ref().to_path_buf(),
             data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
             position: 0,
+            append: false,
             write,
         })
     }
@@ -94,6 +95,7 @@ mod real_fs_support {
             path: path_buf,
             data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
             position: 0,
+            append: false,
             write,
         })
     }
@@ -119,11 +121,137 @@ mod real_fs_support {
 // Re-export at module level for clean access
 pub use real_fs_support::with_real_fs;
 
+/// An independently owned in-memory filesystem namespace.
+///
+/// Select it with `with_filesystem` for synchronous work. Open files retain their
+/// data after the selection ends. This is namespace isolation, not crash recovery.
+#[derive(Default)]
+pub struct Filesystem {
+    files: RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>,
+    directories: RwLock<BTreeSet<String>>,
+}
+
+impl Filesystem {
+    /// Create an empty simulated filesystem.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 thread_local! {
-    static FILES: RefCell<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
-        const { RefCell::new(RwLock::new(BTreeMap::new())) };
-    static DIRECTORIES: RefCell<RwLock<BTreeSet<String>>> =
-        const { RefCell::new(RwLock::new(BTreeSet::new())) };
+    static CURRENT_FILESYSTEM: RefCell<Arc<Filesystem>> = RefCell::new(Arc::new(Filesystem::new()));
+}
+
+/// Execute synchronous work in an explicit simulated filesystem.
+///
+/// Restores the previous selection on return or unwind. A returned future is not
+/// scoped: callers must select the filesystem while polling it, not when constructing
+/// it. Explicit real-filesystem mode remains independent of this namespace selection.
+///
+/// # Panics
+/// * Propagates a panic from the callback after restoring the previous selection.
+pub fn with_filesystem<T>(filesystem: &Arc<Filesystem>, work: impl FnOnce() -> T) -> T {
+    struct Restore(Arc<Filesystem>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CURRENT_FILESYSTEM.with_borrow_mut(|current| *current = self.0.clone());
+        }
+    }
+    let previous = CURRENT_FILESYSTEM
+        .with_borrow_mut(|current| std::mem::replace(current, filesystem.clone()));
+    let _restore = Restore(previous);
+    work()
+}
+
+/// Scope every poll of a future to an explicit simulated filesystem.
+///
+/// Selection is restored after each poll, including `Pending` and unwinding.
+/// Independently spawned tasks are not implicitly scoped; wrap each task explicitly.
+/// The future is dropped under the selected filesystem as well.
+#[must_use]
+pub fn scope_filesystem<F: std::future::Future>(
+    filesystem: Arc<Filesystem>,
+    future: F,
+) -> FilesystemFuture<F> {
+    FilesystemFuture {
+        filesystem,
+        future: Some(Box::pin(future)),
+    }
+}
+
+/// A future whose polling and cancellation cleanup use a selected filesystem.
+pub struct FilesystemFuture<F: std::future::Future> {
+    filesystem: Arc<Filesystem>,
+    future: Option<std::pin::Pin<Box<F>>>,
+}
+
+impl<F: std::future::Future> std::future::Future for FilesystemFuture<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = self.get_mut();
+        with_filesystem(&this.filesystem, || {
+            this.future
+                .as_mut()
+                .expect("future retained until drop")
+                .as_mut()
+                .poll(context)
+        })
+    }
+}
+
+impl<F: std::future::Future> Drop for FilesystemFuture<F> {
+    fn drop(&mut self) {
+        with_filesystem(&self.filesystem, || drop(self.future.take()));
+    }
+}
+
+struct Files {
+    owner: fn() -> Arc<Filesystem>,
+}
+struct Directories {
+    owner: fn() -> Arc<Filesystem>,
+}
+fn current_filesystem() -> Arc<Filesystem> {
+    CURRENT_FILESYSTEM.with_borrow(Arc::clone)
+}
+const FILES: Files = Files {
+    owner: current_filesystem,
+};
+const DIRECTORIES: Directories = Directories {
+    owner: current_filesystem,
+};
+
+impl Files {
+    fn with_borrow<T>(
+        &self,
+        work: impl FnOnce(&RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>) -> T,
+    ) -> T {
+        let owner = (self.owner)();
+        work(&owner.files)
+    }
+
+    fn with_borrow_mut<T>(
+        &self,
+        work: impl FnOnce(&RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>) -> T,
+    ) -> T {
+        self.with_borrow(work)
+    }
+}
+
+impl Directories {
+    fn with_borrow<T>(&self, work: impl FnOnce(&RwLock<BTreeSet<String>>) -> T) -> T {
+        let owner = (self.owner)();
+        work(&owner.directories)
+    }
+
+    fn with_borrow_mut<T>(&self, work: impl FnOnce(&RwLock<BTreeSet<String>>) -> T) -> T {
+        self.with_borrow(work)
+    }
 }
 
 /// Resets the simulated filesystem to an empty state
@@ -428,7 +556,7 @@ macro_rules! impl_file_sync {
                 let len = binding.len();
                 let pos = usize::try_from(self.position).unwrap();
 
-                let remaining = len - pos;
+                let remaining = len.saturating_sub(pos);
                 let read_count = std::cmp::min(remaining, buf.len());
 
                 if read_count == 0 {
@@ -448,23 +576,32 @@ macro_rules! impl_file_sync {
 
         impl std::io::Write for $file {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-                {
-                    use bytes::BufMut as _;
-
-                    if !self.write {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::PermissionDenied,
-                            "File not opened in write mode",
-                        ));
-                    }
-                    let mut binding = self.data.lock().unwrap();
-
-                    binding.put(buf);
-
-                    drop(binding);
-
-                    Ok(buf.len())
+                if !self.write {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "File not opened in write mode",
+                    ));
                 }
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+                let mut data = self.data.lock().unwrap();
+                let start = if self.append {
+                    data.len()
+                } else {
+                    usize::try_from(self.position)
+                        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+                };
+                let end = start
+                    .checked_add(buf.len())
+                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+                if end > data.len() {
+                    data.resize(end, 0);
+                }
+                data[start..end].copy_from_slice(buf);
+                drop(data);
+                self.position = end as u64;
+                Ok(buf.len())
             }
 
             fn flush(&mut self) -> std::io::Result<()> {
@@ -474,16 +611,17 @@ macro_rules! impl_file_sync {
 
         impl std::io::Seek for $file {
             fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-                self.position = match pos {
-                    std::io::SeekFrom::Start(x) => x,
-                    std::io::SeekFrom::End(x) => {
-                        u64::try_from(i64::try_from(self.data.lock().unwrap().len()).unwrap() - x)
-                            .unwrap()
+                let next = match pos {
+                    std::io::SeekFrom::Start(offset) => Some(offset),
+                    std::io::SeekFrom::End(offset) => {
+                        u64::try_from(self.data.lock().unwrap().len())
+                            .ok()
+                            .and_then(|len| len.checked_add_signed(offset))
                     }
-                    std::io::SeekFrom::Current(x) => {
-                        u64::try_from(i64::try_from(self.position).unwrap() + x).unwrap()
-                    }
-                };
+                    std::io::SeekFrom::Current(offset) => self.position.checked_add_signed(offset),
+                }
+                .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+                self.position = next;
 
                 Ok(self.position)
             }
@@ -655,6 +793,7 @@ pub mod sync {
         pub(crate) path: PathBuf,
         pub(crate) data: Arc<Mutex<BytesMut>>,
         pub(crate) position: u64,
+        pub(crate) append: bool,
         pub(crate) write: bool,
     }
 
@@ -725,6 +864,7 @@ pub mod sync {
                 path: self.path,
                 data: self.data,
                 position: self.position,
+                append: self.append,
                 write: self.write,
             }
         }
@@ -733,6 +873,104 @@ pub mod sync {
     pub use super::Metadata;
 
     impl_file_sync!(File);
+
+    // Allocation identity is internal only: it never affects iteration, traces, or
+    // persisted state. The guard retains the allocation until its entry is removed.
+    static FILE_LOCKS: Mutex<std::collections::BTreeSet<usize>> =
+        Mutex::new(std::collections::BTreeSet::new());
+
+    /// Exclusive advisory lock retaining simulated file identity until dropped.
+    /// Ownership follows handles across threads and does not prevent ordinary writes.
+    pub struct ExclusiveFileLock {
+        file: File,
+    }
+
+    impl Drop for ExclusiveFileLock {
+        fn drop(&mut self) {
+            let identity = Arc::as_ptr(&self.file.data) as usize;
+            // Release even after poisoning; acquisition still fails closed.
+            FILE_LOCKS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&identity);
+        }
+    }
+
+    impl File {
+        /// Acknowledge synchronization in the in-memory, no-crash simulation model.
+        ///
+        /// Writes are immediately visible to handles sharing this file's data. No
+        /// native I/O occurs and success does not imply persistence across process
+        /// exit, reset, or power loss. Fault and crash simulation are not modeled.
+        ///
+        /// # Errors
+        /// * Explicit real-filesystem mode returns `Unsupported`, because its copied
+        ///   handles cannot synchronize the original native file.
+        // This I/O contract must remain callable with runtime-only native backends.
+        #[allow(clippy::missing_const_for_fn)]
+        pub fn sync_all(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "native synchronization requires native handles",
+                ));
+            }
+            Ok(())
+        }
+
+        /// Consume this handle and acquire an exclusive advisory lock without waiting.
+        /// The guard retains file identity across renames and releases on drop.
+        ///
+        /// # Errors
+        /// * Returns `WouldBlock` when this simulated file is already locked.
+        /// * Returns an I/O error if the ownership registry is poisoned.
+        /// * Explicit real-filesystem mode returns `Unsupported`: copied simulated
+        ///   handles cannot retain a native OS lock.
+        pub fn try_lock_exclusive(self) -> std::io::Result<ExclusiveFileLock> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "native locks require native handles",
+                ));
+            }
+            let mut locks = FILE_LOCKS
+                .lock()
+                .map_err(|_| std::io::Error::other("file lock registry poisoned"))?;
+            let identity = Arc::as_ptr(&self.data) as usize;
+            if !locks.insert(identity) {
+                return Err(std::io::Error::from(std::io::ErrorKind::WouldBlock));
+            }
+            drop(locks);
+            Ok(ExclusiveFileLock { file: self })
+        }
+    }
+
+    fn validate_creation_parent(location: &str) -> std::io::Result<()> {
+        if let Some(parent) = Path::new(location).parent()
+            && !parent.as_os_str().is_empty()
+            && parent != Path::new(".")
+        {
+            let parent = parent.to_str().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "parent path is not UTF-8")
+            })?;
+            if FILES.with_borrow(|files| files.read().unwrap().contains_key(parent)) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotADirectory,
+                    "parent is a file",
+                ));
+            }
+            if !DIRECTORIES.with_borrow(|directories| directories.read().unwrap().contains(parent))
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "parent directory not found",
+                ));
+            }
+        }
+        Ok(())
+    }
 
     impl OpenOptions {
         /// Opens a file with the configured options
@@ -757,7 +995,37 @@ pub mod sync {
 
             // Original simulator implementation (fallback)
             let location = path_to_str!(path)?;
-            let data = if let Some(data) =
+            let data = if self.create_new {
+                if !self.write && !self.append {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "exclusive creation requires write access",
+                    ));
+                }
+                if super::exists(location) {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        "path already exists",
+                    ));
+                }
+                validate_creation_parent(location)?;
+                FILES.with_borrow_mut(|files| {
+                    let mut files = files.write().unwrap();
+                    match files.entry(location.to_owned()) {
+                        std::collections::btree_map::Entry::Occupied(_) => {
+                            Err(std::io::Error::new(
+                                std::io::ErrorKind::AlreadyExists,
+                                "file already exists",
+                            ))
+                        }
+                        std::collections::btree_map::Entry::Vacant(entry) => {
+                            let data = Arc::new(Mutex::new(BytesMut::new()));
+                            entry.insert(data.clone());
+                            Ok(data)
+                        }
+                    }
+                })?
+            } else if let Some(data) =
                 FILES.with_borrow(|x| x.read().unwrap().get(location).cloned())
             {
                 data
@@ -805,7 +1073,8 @@ pub mod sync {
                 path: path.as_ref().to_path_buf(),
                 data,
                 position: 0,
-                write: self.write,
+                append: self.append,
+                write: self.write || self.append,
             })
         }
     }
@@ -1036,6 +1305,130 @@ pub mod sync {
         });
 
         Ok(())
+    }
+
+    /// Exclusively create a writable file within the simulated namespace.
+    ///
+    /// The simulator has no OS users or permission enforcement. Explicit real-fs
+    /// mode rejects this operation rather than returning a copied native handle.
+    ///
+    /// # Errors
+    /// * Returns creation errors or `Unsupported` in explicit real-fs mode.
+    pub fn create_private_file(path: impl AsRef<Path>) -> std::io::Result<File> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return Err(std::io::Error::from(std::io::ErrorKind::Unsupported));
+        }
+        OpenOptions::new().write(true).create_new(true).open(path)
+    }
+
+    /// Inspect an entry without following its final symbolic link.
+    ///
+    /// The in-memory backend models regular files and directories, not symlinks.
+    /// Native mode preserves native no-follow semantics. This observation does not
+    /// prevent subsequent path replacement.
+    ///
+    /// # Errors
+    /// * Returns an error for missing or non-UTF-8 paths, or native metadata failure.
+    ///
+    /// # Panics
+    /// * An internal filesystem lock is poisoned.
+    pub fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            let metadata = std::fs::symlink_metadata(path)?;
+            return Ok(Metadata {
+                len: metadata.len(),
+                is_file: metadata.is_file(),
+                is_dir: metadata.is_dir(),
+                is_symlink: metadata.is_symlink(),
+            });
+        }
+        let path = path_to_str!(path)?;
+        if let Some(data) = FILES.with_borrow(|files| files.read().unwrap().get(path).cloned()) {
+            return Ok(Metadata {
+                len: data.lock().unwrap().len() as u64,
+                is_file: true,
+                is_dir: false,
+                is_symlink: false,
+            });
+        }
+        if DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path)) {
+            return Ok(Metadata {
+                len: 0,
+                is_file: false,
+                is_dir: true,
+                is_symlink: false,
+            });
+        }
+        Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+    }
+
+    /// Acknowledge directory synchronization in the in-memory no-crash model.
+    ///
+    /// Success does not imply persistence across reset or process exit. Explicit
+    /// real-filesystem mode delegates to native directory synchronization.
+    ///
+    /// # Errors
+    /// * The path is missing, not a directory, or not UTF-8.
+    /// * Native synchronization fails or is unsupported in real-filesystem mode.
+    ///
+    /// # Panics
+    /// * An internal filesystem lock is poisoned.
+    pub fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::sync_directory(path);
+        }
+        let path = path_to_str!(path)?;
+        if FILES.with_borrow(|files| files.read().unwrap().contains_key(path)) {
+            return Err(std::io::Error::from(std::io::ErrorKind::NotADirectory));
+        }
+        if !DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path)) {
+            return Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        }
+        Ok(())
+    }
+
+    /// Move a regular file, replacing an existing destination file.
+    ///
+    /// Open handles retain the original file data. The simulated file-map change
+    /// is indivisible, but does not model durability or crash recovery. Callers
+    /// must exclusively control the paths, including their parent directories.
+    ///
+    /// # Errors
+    /// * Source is missing, or either path names a directory.
+    /// * Destination parent is missing or is a file, or a path is not UTF-8.
+    /// * A native operation fails when explicit real-filesystem mode is enabled.
+    ///
+    /// # Panics
+    /// * An internal filesystem lock is poisoned.
+    pub fn rename_file(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::rename_file(from, to);
+        }
+        let from = path_to_str!(from)?;
+        let to = path_to_str!(to)?;
+        if DIRECTORIES.with_borrow(|dirs| {
+            let dirs = dirs.read().unwrap();
+            dirs.contains(from) || dirs.contains(to)
+        }) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path is a directory",
+            ));
+        }
+        validate_creation_parent(to)?;
+        FILES.with_borrow_mut(|files| {
+            let mut files = files.write().unwrap();
+            let data = files.remove(from).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "source file not found")
+            })?;
+            files.insert(to.to_owned(), data);
+            drop(files);
+            Ok(())
+        })
     }
 
     /// Canonicalizes a path by resolving `.` and `..` components and normalizing it
@@ -1662,13 +2055,10 @@ pub mod sync {
                 // Write data
                 file.write_all(b"0123456789").unwrap();
 
-                // NOTE: Current implementation bug - write does not update position
-                // It always appends, so position stays at 0
-                // This test documents the current buggy behavior
                 let pos = file.stream_position().unwrap();
-                assert_eq!(pos, 0, "BUG: Write should update position but doesn't");
+                assert_eq!(pos, 10);
 
-                // Seek to beginning (no-op since we're at 0)
+                // Seek to beginning before reading.
                 file.seek(SeekFrom::Start(0)).unwrap();
 
                 // Read 5 bytes
@@ -1802,6 +2192,7 @@ pub mod unsync {
         pub(crate) path: PathBuf,
         pub(crate) data: Arc<Mutex<BytesMut>>,
         pub(crate) position: u64,
+        pub(crate) append: bool,
         pub(crate) write: bool,
     }
 
@@ -1854,7 +2245,8 @@ pub mod unsync {
         ///
         /// * If the internal data mutex is poisoned (when using simulator)
         /// * If the `spawn_blocking` task panics (when using real filesystem)
-        #[allow(clippy::unused_async)]
+        // Keep polling-time execution and the same async API as the native backend.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
         pub async fn metadata(&self) -> std::io::Result<Metadata> {
             #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
             if super::real_fs_support::is_real_fs() {
@@ -1882,6 +2274,7 @@ pub mod unsync {
                 path: self.path,
                 data: self.data,
                 position: self.position,
+                append: self.append,
                 write: self.write,
             }
         }
@@ -1981,7 +2374,12 @@ pub mod unsync {
         /// # Panics
         ///
         /// * If the `FILES` `RwLock` fails to read.
-        #[allow(clippy::unused_async, clippy::future_not_send)]
+        // Opening must remain lazy until polled, even when simulator I/O is immediate.
+        #[allow(
+            clippy::unused_async,
+            clippy::unused_async_trait_impl,
+            clippy::future_not_send
+        )]
         pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             #[cfg(all(feature = "simulator-real-fs", feature = "async",))]
             if super::real_fs_support::is_real_fs() {
@@ -2319,7 +2717,8 @@ pub mod unsync {
         ///
         /// * If the FILES or data mutex is poisoned (when using simulator)
         /// * If the `spawn_blocking` task panics (when using real filesystem)
-        #[allow(clippy::unused_async)]
+        // Preserve polling-time metadata access across simulator/native backends.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
         pub async fn metadata(&self) -> std::io::Result<Metadata> {
             #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
             if super::real_fs_support::is_real_fs() {

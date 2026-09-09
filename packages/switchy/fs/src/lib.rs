@@ -122,6 +122,7 @@ macro_rules! impl_open_options {
             pub(crate) read: bool,
             pub(crate) write: bool,
             pub(crate) truncate: bool,
+            pub(crate) create_new: bool,
         }
 
         impl Default for OpenOptions {
@@ -142,6 +143,7 @@ macro_rules! impl_open_options {
                     read: false,
                     write: false,
                     truncate: false,
+                    create_new: false,
                 }
             }
 
@@ -173,6 +175,16 @@ macro_rules! impl_open_options {
                 self
             }
 
+            /// Require atomic creation of a previously nonexistent file.
+            ///
+            /// Existing files are rejected even when `create` or `truncate` is set.
+            /// Opening requires write or append access.
+            #[must_use]
+            pub const fn create_new(mut self, create_new: bool) -> Self {
+                self.create_new = create_new;
+                self
+            }
+
             /// Sets the option to truncate the file to 0 length if it exists
             #[must_use]
             pub const fn truncate(mut self, truncate: bool) -> Self {
@@ -192,11 +204,54 @@ macro_rules! impl_sync_fs {
         #[cfg(feature = "sync")]
         pub mod sync {
             pub use $crate::$module::sync::{
-                File, canonicalize, create_dir, create_dir_all, read, read_dir_sorted,
-                read_to_string, remove_dir_all, walk_dir_sorted, write,
+                ExclusiveFileLock, File, canonicalize, create_dir, create_dir_all,
+                create_private_file, read, read_dir_sorted, read_to_string, remove_dir_all,
+                rename_file, symlink_metadata, sync_directory, walk_dir_sorted, write,
             };
 
             impl_open_options!();
+
+            /// Publish bytes using an exclusively created staging file in the destination directory.
+            ///
+            /// The caller must exclusively control the directory and its ancestors, and
+            /// supply distinct staging and destination paths with the same parent. Existing
+            /// staging entries are never overwritten. Failed operations preserve any staging
+            /// file for caller-owned maintenance. Errors after rename can mean publication
+            /// succeeded: inspect the destination before retrying. Native staging files use
+            /// owner-only Unix permissions from creation; unsupported platforms fail closed.
+            /// This API does not establish a private directory or model simulator permissions.
+            ///
+            /// Native synchronization follows the backend's durability guarantees; simulation
+            /// acknowledges only its documented no-crash model.
+            ///
+            /// # Errors
+            /// * Invalid paths, exclusive creation failure, write, sync, or rename failure.
+            pub fn publish_file(
+                staging: impl AsRef<std::path::Path>,
+                destination: impl AsRef<std::path::Path>,
+                bytes: &[u8],
+            ) -> std::io::Result<()> {
+                use std::io::Write as _;
+                let staging = staging.as_ref();
+                let destination = destination.as_ref();
+                let parent = destination
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+                if staging == destination
+                    || staging.parent() != Some(parent)
+                    || staging.file_name().is_none()
+                    || destination.file_name().is_none()
+                {
+                    return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+                }
+                let mut file = create_private_file(staging)?;
+                file.write_all(bytes)?;
+                file.sync_all()?;
+                drop(file);
+                rename_file(staging, destination)?;
+                sync_directory(parent)
+            }
         }
 
         pub use $crate::$module::exists;
@@ -230,6 +285,7 @@ macro_rules! impl_async_fs {
                         read: self.read,
                         write: self.write,
                         truncate: self.truncate,
+                        create_new: self.create_new,
                     }
                 }
             }

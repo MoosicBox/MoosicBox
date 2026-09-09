@@ -419,6 +419,7 @@ pub mod unsync {
             let mut options = Self::new();
 
             options
+                .create_new(value.create_new)
                 .create(value.create)
                 .append(value.append)
                 .read(value.read)
@@ -434,6 +435,7 @@ pub mod unsync {
             let mut options = Self::new();
 
             options
+                .create_new(value.create_new)
                 .create(value.create)
                 .append(value.append)
                 .read(value.read)

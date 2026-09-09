@@ -19,7 +19,42 @@ pub mod sync {
     /// Provides convenience methods for opening files that match the simulator API.
     pub struct File(std::fs::File);
 
+    /// Exclusive advisory lock retaining its opened file until dropped.
+    ///
+    /// Does not prevent nonparticipating writers or pathname replacement.
+    pub struct ExclusiveFileLock {
+        _file: File,
+    }
+
     impl File {
+        /// Synchronize this file's contents and metadata with the underlying storage.
+        ///
+        /// This does not synchronize the parent directory after creation or rename.
+        /// Guarantees are those of the operating system and backing filesystem.
+        ///
+        /// # Errors
+        /// * Returns an underlying OS synchronization error.
+        pub fn sync_all(&self) -> std::io::Result<()> {
+            self.0.sync_all()
+        }
+
+        /// Consume this handle and acquire an exclusive advisory lock without waiting.
+        ///
+        /// Ownership is released when the returned guard is dropped. Do not replace
+        /// the lock file: a replacement is a different lock identity.
+        ///
+        /// # Errors
+        /// * Returns `WouldBlock` on contention, or an underlying OS locking error.
+        pub fn try_lock_exclusive(self) -> std::io::Result<ExclusiveFileLock> {
+            self.0.try_lock().map_err(|error| match error {
+                std::fs::TryLockError::WouldBlock => {
+                    std::io::Error::from(std::io::ErrorKind::WouldBlock)
+                }
+                std::fs::TryLockError::Error(error) => error,
+            })?;
+            Ok(ExclusiveFileLock { _file: self })
+        }
+
         /// Opens a file in read-only mode
         ///
         /// This is a convenience method equivalent to `OpenOptions::new().read(true).open(path)`.
@@ -105,6 +140,39 @@ pub mod sync {
         fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
             self.0.seek(pos)
         }
+    }
+
+    /// Exclusively create a writable file with owner-only Unix permissions.
+    ///
+    /// # Errors
+    /// * Returns creation errors without replacing existing entries.
+    /// * Non-Unix platforms return `Unsupported` before creating anything.
+    pub fn create_private_file(path: impl AsRef<Path>) -> std::io::Result<File> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(path)
+                .map(File)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
+    /// Inspect an entry without following its final symbolic link.
+    ///
+    /// This is a point-in-time observation, not protection against path replacement.
+    ///
+    /// # Errors
+    /// * Returns underlying metadata errors, including missing paths and denied access.
+    pub fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        std::fs::symlink_metadata(path).map(Metadata)
     }
 
     /// Metadata information about a file
@@ -211,6 +279,59 @@ pub mod sync {
         ::std::fs::remove_dir_all(path)
     }
 
+    /// Synchronize an existing directory after publishing or removing entries.
+    ///
+    /// Callers must control the path and its ancestors for the operation's duration.
+    ///
+    /// # Errors
+    /// * Returns an I/O error for missing paths, non-directories, or failed synchronization.
+    /// * Returns `Unsupported` on platforms without directory synchronization support.
+    pub fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            let directory = std::fs::File::open(path)?;
+            if !directory.metadata()?.is_dir() {
+                return Err(std::io::Error::from(std::io::ErrorKind::NotADirectory));
+            }
+            directory.sync_all()
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
+    /// Move a regular file, replacing an existing destination file.
+    ///
+    /// This operation does not sync file contents or directory metadata. Callers
+    /// must exclusively control the paths: metadata checks do not prevent path races.
+    ///
+    /// # Errors
+    /// * Source or destination is not a regular file (symlinks are rejected).
+    /// * The underlying rename fails, including missing parents or cross-device moves.
+    pub fn rename_file(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        let from = from.as_ref();
+        let to = to.as_ref();
+        if !std::fs::symlink_metadata(from)?.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "source is not a regular file",
+            ));
+        }
+        match std::fs::symlink_metadata(to) {
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "destination is not a regular file",
+                ));
+            }
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+        std::fs::rename(from, to)
+    }
+
     /// Canonicalizes a path
     ///
     /// # Errors
@@ -275,6 +396,7 @@ pub mod sync {
                 .append(value.append)
                 .read(value.read)
                 .write(value.write)
+                .create_new(value.create_new)
                 .truncate(value.truncate);
 
             options
