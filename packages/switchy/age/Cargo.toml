@@ -1,0 +1,22 @@
+[package]
+authors     = { workspace = true }
+categories  = ["cryptography", "development-tools"]
+description = "Feature-selected SSH age wrapping for native and simulated execution"
+edition     = { workspace = true }
+keywords    = ["age", "encryption", "simulation"]
+license     = { workspace = true }
+name        = "switchy_age"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.4.0"
+
+[dependencies]
+age       = { workspace = true, optional = true, features = ["ssh"] }
+sha2      = { workspace = true, optional = true }
+thiserror = { workspace = true }
+
+[features]
+default          = ["native"]
+fail-on-warnings = []
+native           = ["dep:age"]
+simulator        = ["dep:sha2"]

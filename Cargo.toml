@@ -296,6 +296,7 @@ members = [
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
+    "packages/switchy/age",
     "packages/switchy/async",
     "packages/switchy/async/cargo",
     "packages/switchy/async/examples/cancel",
@@ -400,6 +401,8 @@ repository = "https://github.com/MoosicBox/MoosicBox"
 version    = "0.4.0"
 
 [workspace.dependencies]
+age         = { version = "0.12.1", default-features = false }
+switchy_age = { version = "0.4.0", default-features = false, path = "packages/switchy/age" }
 # Internal MoosicBox
 moosicbox                          = { version = "0.4.0", default-features = false, path = "packages/moosicbox" }
 moosicbox_admin_htmx               = { version = "0.4.0", default-features = false, path = "packages/admin_htmx" }
