@@ -164,6 +164,24 @@ pub fn with_filesystem<T>(filesystem: &Arc<Filesystem>, work: impl FnOnce() -> T
     work()
 }
 
+/// Execute work in an isolated namespace, rejecting active native filesystem mode.
+///
+/// # Errors
+/// * Returns `Unsupported` without invoking `work` when real-filesystem mode is active.
+/// * Propagates errors returned by `work`.
+///
+/// # Panics
+/// * Propagates callback panics after restoring the previous namespace.
+pub fn try_with_filesystem<T>(
+    filesystem: &Arc<Filesystem>,
+    work: impl FnOnce() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    if real_fs_support::is_real_fs() {
+        return Err(std::io::Error::from(std::io::ErrorKind::Unsupported));
+    }
+    with_filesystem(filesystem, work)
+}
+
 /// Scope every poll of a future to an explicit simulated filesystem.
 ///
 /// Selection is restored after each poll, including `Pending` and unwinding.
