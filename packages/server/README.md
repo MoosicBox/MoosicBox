@@ -16,6 +16,26 @@ The MoosicBox Server is the core component that provides:
 - **Tunnel Integration**: Remote access through tunnel server
 - **High-Quality Audio**: Hi-Fi audio playback with configurable quality
 
+## Dependencies and local evaluation
+
+The default feature set includes native codecs and audio output. Install a
+native compiler toolchain and pkg-config; codec source builds may also require
+Autoconf, Automake, and Libtool. On Linux the default CPAL backend needs ALSA
+development headers. An installed Opus development library can avoid building
+Opus from source. Optional libvips image support adds libvips dependencies.
+See this package's and the audio encoder's `clippier.toml` for CI setup.
+
+For a loopback-only evaluation, run
+`BIND_ADDR=127.0.0.1 cargo run --locked -p moosicbox_server`, then open
+`http://127.0.0.1:8000/admin` for administration or `/health` for a health check.
+The root URL is not the listening-client UI. Connect a separate client for
+playback. The default bind is otherwise `0.0.0.0`; authentication is not a
+blanket default protection. Review network exposure before remote deployment.
+
+The music server supports SQLite/PostgreSQL configurations. MySQL/DuckDB
+implementations in Switchy are reusable-library capabilities, not documented
+end-to-end server configurations.
+
 ## Installation
 
 ### From Source
@@ -24,12 +44,11 @@ The MoosicBox Server is the core component that provides:
 cargo install --path packages/server --features "all-apis,all-formats,all-sources"
 ```
 
-### Dependencies
+### Dependency selection
 
-- **pkg-config** (optional, for OPUS support)
-- **libtool** (optional, for OPUS support)
-- **libvips** (optional, for image optimization)
-- **Database**: SQLite (included) or PostgreSQL
+Codec dependencies depend on enabled features; the default server already enables
+Opus and other formats. They are not optional prerequisites for that default
+build. See [Dependencies and local evaluation](#dependencies-and-local-evaluation).
 
 ## Usage
 
