@@ -437,18 +437,8 @@ fn update_dependency_sections(
                             manifest.display()
                         )
                     })?;
-                let target_manifest = read_toml(&target)?;
-                let actual = target_manifest
-                    .get("package")
-                    .and_then(|package| package.get("name"))
-                    .and_then(toml::Value::as_str)
-                    .ok_or_else(|| format!("{}: missing package.name", target.display()))?;
-                if name != actual {
-                    return Err(format!(
-                        "{}: dependency '{key}' declares package '{name}' but path '{relative}' points to package '{actual}'; add package = \"{actual}\", rename the dependency key, or remove the unused declaration",
-                        manifest.display()
-                    ).into());
-                }
+                // Workspace declarations may be unused aliases without `package`.
+                // Identify local members by path; leave Cargo's name validation to Cargo.
                 members
                     .get(&target)
                     .is_some_and(|package| selected.contains(&package.name))
@@ -653,7 +643,7 @@ version = "0.0.1-alpha.3"
     }
 
     #[test]
-    fn mismatch_leaves_all_manifests_unchanged() {
+    fn updates_unused_workspace_dependency_by_path_without_requiring_matching_name() {
         let (dir, mut config) = fixture(
             r#"
 [workspace.dependencies]
@@ -664,16 +654,16 @@ sshenv_cli = { path = "cli", version = "0.0.1-alpha.3" }
         let member = dir.path().join("cli/Cargo.toml");
         let original = fs::read_to_string(&root).unwrap();
         let original_member = fs::read_to_string(&member).unwrap();
-        for dry_run in [true, false] {
-            config.dry_run = dry_run;
-            let error = handle_version_command(&config, OutputType::Json)
-                .unwrap_err()
-                .to_string();
-            assert!(error.contains("sshenv_cli"), "{error}");
-            assert!(error.contains("package = \"sshenv\""), "{error}");
-            assert_eq!(fs::read_to_string(&root).unwrap(), original);
-            assert_eq!(fs::read_to_string(&member).unwrap(), original_member);
-        }
+        config.dry_run = true;
+        handle_version_command(&config, OutputType::Json).unwrap();
+        assert_eq!(fs::read_to_string(&root).unwrap(), original);
+        config.dry_run = false;
+        handle_version_command(&config, OutputType::Json).unwrap();
+        assert_eq!(
+            fs::read_to_string(&root).unwrap(),
+            original.replace("0.0.1-alpha.3", "0.0.1-alpha.4")
+        );
+        assert_eq!(fs::read_to_string(&member).unwrap(), original_member);
     }
 
     #[test]
