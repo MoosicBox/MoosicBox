@@ -501,6 +501,86 @@ impl_rng!(simulator, simulator::SimulatorRng);
 #[cfg(all(not(feature = "simulator"), feature = "rand"))]
 impl_rng!(rand, rand::RandRng);
 
+#[cfg(any(feature = "rand", feature = "simulator"))]
+/// Fills a buffer with cryptographically secure randomness, except in simulation.
+///
+/// With `rand` enabled and `simulator` disabled, this uses the operating system's
+/// random source directly, never the general-purpose `SmallRng` backend.
+/// With `simulator` enabled, this consumes the existing thread-local simulation
+/// RNG instead, respecting `SIMULATOR_SEED` and `simulator::reset_rng`.
+///
+/// # Security
+///
+/// The `simulator` feature takes precedence even when `rand` is also enabled.
+/// **Simulated output is deterministic and not cryptographically secure.** The
+/// default features include `simulator`; security-sensitive production consumers
+/// must disable default features and enable only `rand`, including throughout
+/// their dependency graph. This API does not change the ordinary RNG's behavior.
+///
+/// # Errors
+///
+/// * Returns the underlying random source error if the buffer cannot be filled.
+///   On error, the buffer may be partially modified and must not be used as
+///   successfully generated random data. There is no weaker fallback.
+///
+/// # Panics
+///
+/// * In simulation, if `SIMULATOR_SEED` cannot be parsed as `u64`, or a simulator
+///   RNG mutex or seed lock is poisoned.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[cfg(any(feature = "rand", feature = "simulator"))]
+/// # {
+/// let mut bytes = [0_u8; 21];
+/// switchy_random::secure_fill_bytes(&mut bytes)?;
+/// # }
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+pub fn secure_fill_bytes(dest: &mut [u8]) -> Result<(), external_rand::Error> {
+    #[cfg(feature = "simulator")]
+    {
+        simulator::rng().try_fill_bytes(dest)
+    }
+    #[cfg(all(feature = "rand", not(feature = "simulator")))]
+    {
+        external_rand::rngs::OsRng.try_fill_bytes(dest)
+    }
+}
+
+#[cfg(all(test, any(feature = "simulator", feature = "rand")))]
+mod secure_tests {
+    #[test]
+    fn fills_buffers_of_various_sizes() {
+        for len in [0, 1, 21, 256, 4096] {
+            let mut bytes = vec![0; len];
+            super::secure_fill_bytes(&mut bytes).unwrap();
+        }
+    }
+
+    #[cfg(feature = "simulator")]
+    #[test]
+    fn uses_resettable_simulator_stream_even_with_rand_enabled() {
+        super::simulator::reset_rng();
+        let mut expected = [0; 64];
+        super::GenericRng::try_fill_bytes(&super::simulator::rng(), &mut expected).unwrap();
+        super::simulator::reset_rng();
+        let mut actual = [0; 64];
+        super::secure_fill_bytes(&mut actual[..21]).unwrap();
+        super::secure_fill_bytes(&mut actual[21..]).unwrap();
+        // Replay the same call boundaries: the simulator may consume whole words.
+        super::simulator::reset_rng();
+        let mut replay = [0; 64];
+        super::secure_fill_bytes(&mut replay[..21]).unwrap();
+        super::secure_fill_bytes(&mut replay[21..]).unwrap();
+        assert_eq!(actual, replay);
+        super::simulator::reset_rng();
+        super::secure_fill_bytes(&mut actual).unwrap();
+        assert_eq!(actual, expected);
+    }
+}
+
 #[cfg(all(test, any(feature = "simulator", feature = "rand")))]
 mod tests {
     use super::*;

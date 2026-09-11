@@ -22,6 +22,33 @@ switchy_random = "0.1.4"
 
 ## Usage
 
+### Secure Random Bytes with Simulation Support
+
+`secure_fill_bytes` uses OS-backed cryptographic randomness when only the `rand`
+backend is enabled. It returns entropy-source errors without falling back to a
+weaker generator; discard the buffer on error.
+
+```toml
+[dependencies]
+switchy_random = { version = "0.4.0", default-features = false, features = ["rand"] }
+```
+
+```rust
+let mut bytes = [0_u8; 21];
+switchy_random::secure_fill_bytes(&mut bytes)?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Enabling `simulator` switches the same API to the existing thread-local seeded
+RNG, including `SIMULATOR_SEED` and `simulator::reset_rng()` replay support. The
+simulator takes precedence when both backends are enabled. **Simulated output is
+not cryptographically secure.** Default features include `simulator`; production
+consumers requiring security must disable it across their dependency graph,
+since Cargo unifies features. Ordinary `Rng` APIs remain unchanged and are not
+cryptographically secure. Through the `switchy` facade, enable `random-rand` for
+production and `random-simulator` for simulation, then call
+`switchy::random::secure_fill_bytes`.
+
 ### Basic Random Generation
 
 ```rust
