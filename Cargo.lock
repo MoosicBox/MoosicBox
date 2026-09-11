@@ -18117,6 +18117,7 @@ name = "switchy_fs"
 version = "0.4.0"
 dependencies = [
  "bytes",
+ "libc",
  "log 0.4.33",
  "pretty_assertions",
  "scoped-tls",
@@ -18124,6 +18125,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "tokio",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

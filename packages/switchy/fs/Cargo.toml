@@ -29,6 +29,15 @@ scoped-tls = { workspace = true, optional = true }
 tempfile   = { workspace = true, optional = true }
 tokio      = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, optional = true, features = [
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+] }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 switchy_async     = { workspace = true, features = ["macros"] }
@@ -40,6 +49,7 @@ default = ["async", "simulator", "std", "sync", "tokio"]
 
 fail-on-warnings = ["switchy_async?/fail-on-warnings"]
 
+native-directories = ["dep:libc", "dep:windows-sys"]
 simulator = ["dep:bytes", "switchy_async?/simulator", "sync"]
 simulator-real-fs = [
     "dep:scoped-tls",
@@ -48,8 +58,14 @@ simulator-real-fs = [
     "switchy_async/rt-multi-thread",
     "tokio",
 ]
-std = ["dep:tempfile", "sync"]
-tokio = ["async", "dep:tokio", "switchy_async?/fs", "switchy_async?/tokio"]
+std = ["dep:tempfile", "native-directories", "sync"]
+tokio = [
+    "async",
+    "dep:tokio",
+    "native-directories",
+    "switchy_async?/fs",
+    "switchy_async?/tokio",
+]
 
 async = ["dep:switchy_async", "switchy_async/io"]
 sync  = ["switchy_async?/sync"]

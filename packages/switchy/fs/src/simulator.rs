@@ -127,11 +127,23 @@ pub use real_fs_support::with_real_fs;
 /// data after the selection ends. This is namespace isolation, not crash recovery.
 #[derive(Default)]
 pub struct Filesystem {
+    directory_locations: crate::directories::DirectoryLocations,
     files: RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>,
     directories: RwLock<BTreeSet<String>>,
 }
 
 impl Filesystem {
+    /// Create an empty filesystem with explicit user directory locations.
+    ///
+    /// Locations are immutable, need not exist, and never fall back to host paths.
+    #[must_use]
+    pub fn with_directory_locations(locations: crate::directories::DirectoryLocations) -> Self {
+        Self {
+            directory_locations: locations,
+            ..Self::default()
+        }
+    }
+
     /// Create an empty simulated filesystem.
     #[must_use]
     pub fn new() -> Self {
@@ -141,6 +153,10 @@ impl Filesystem {
 
 thread_local! {
     static CURRENT_FILESYSTEM: RefCell<Arc<Filesystem>> = RefCell::new(Arc::new(Filesystem::new()));
+}
+
+pub(crate) fn directory_locations() -> crate::directories::DirectoryLocations {
+    CURRENT_FILESYSTEM.with_borrow(|fs| fs.directory_locations.clone())
 }
 
 /// Execute synchronous work in an explicit simulated filesystem.

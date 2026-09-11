@@ -268,13 +268,14 @@ all-fs = [
     "fs-tokio",
 ]
 
-fs                   = ["dep:switchy_fs", "switchy_async?/fs"]
-fs-async             = ["fs", "switchy_fs?/async"]
-fs-simulator         = ["fs", "switchy_fs?/simulator"]
-fs-simulator-real-fs = ["fs", "switchy_fs?/simulator-real-fs"]
-fs-std               = ["fs", "switchy_fs?/std"]
-fs-sync              = ["fs", "switchy_fs?/sync"]
-fs-tokio             = ["fs", "switchy_fs?/tokio"]
+fs                    = ["dep:switchy_fs", "switchy_async?/fs"]
+fs-async              = ["fs", "switchy_fs?/async"]
+fs-native-directories = ["fs", "switchy_fs?/native-directories"]
+fs-simulator          = ["fs", "switchy_fs?/simulator"]
+fs-simulator-real-fs  = ["fs", "switchy_fs?/simulator-real-fs"]
+fs-std                = ["fs", "switchy_fs?/std"]
+fs-sync               = ["fs", "switchy_fs?/sync"]
+fs-tokio              = ["fs", "switchy_fs?/tokio"]
 
 all-http = [
     "http",

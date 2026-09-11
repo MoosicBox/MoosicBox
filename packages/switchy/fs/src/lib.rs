@@ -68,6 +68,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// User directory locations selected by the compiled filesystem backend.
+#[cfg(any(feature = "simulator", feature = "native-directories"))]
+pub mod directories;
+
 /// In-memory filesystem simulator for testing
 ///
 /// Provides a complete filesystem simulation that runs entirely in memory, useful for testing

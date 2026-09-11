@@ -2,6 +2,32 @@
 
 Cross-platform filesystem abstraction with sync and async operations.
 
+## User directory locations
+
+`directories::{home_dir, config_dir, data_dir, data_local_dir}` return
+`Option<PathBuf>` without creating directories. Enable `native-directories` for
+lookup without an executor; `std` and `tokio` also enable it. Through `switchy`,
+use `fs-native-directories`, `fs-std`, or `fs-tokio`.
+
+Native Unix home resolution uses nonempty `HOME`, then the user account database
+(except Android/iOS/Emscripten). Linux-style config/data lookup accepts only absolute
+XDG overrides. macOS uses `Library/Application Support`. Windows uses native Known
+Folder APIs, including roaming/local storage and redirected folders. Unavailable
+locations return `None`; account lookup retries are bounded to 1 MiB of storage.
+
+**The simulator takes precedence**, including with both native backends enabled.
+Default features include the simulator. For native production lookup, disable default
+features and ensure dependencies do not unify in `simulator`.
+
+Configure immutable `DirectoryLocations` using
+`simulator::Filesystem::with_directory_locations`. The default filesystem has no
+user locations. Locations follow `with_filesystem` and `scope_filesystem`, including
+nested scopes, each async poll, and cancellation cleanup. Spawned tasks must be
+scoped explicitly. Resetting filesystem contents preserves configured locations.
+Paths are supplied verbatim and need not exist. `simulator-real-fs` does **not**
+switch directory resolution to host paths: permission for native I/O is not
+permission to discover the host user's directories.
+
 ## Overview
 
 The switchy_fs package provides:
