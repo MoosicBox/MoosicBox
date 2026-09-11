@@ -1,0 +1,8 @@
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"
