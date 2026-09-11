@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.4.0"
 
 [dependencies]
-dirs = { workspace = true }
+switchy_fs = { workspace = true, features = ["native-directories"] }
 
 thiserror          = { workspace = true }
 tracing-appender   = { workspace = true, optional = true }
@@ -21,6 +21,7 @@ tracing-subscriber = { workspace = true, optional = true }
 [features]
 default          = []
 fail-on-warnings = []
+simulator        = ["switchy_fs/simulator"]
 
 env-filter = ["init"]
 file = ["init"]

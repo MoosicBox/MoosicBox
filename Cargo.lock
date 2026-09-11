@@ -11108,7 +11108,7 @@ dependencies = [
 name = "moosicbox_log_runtime"
 version = "0.4.0"
 dependencies = [
- "dirs",
+ "switchy_fs",
  "thiserror 2.0.19",
  "tracing-appender",
  "tracing-log",

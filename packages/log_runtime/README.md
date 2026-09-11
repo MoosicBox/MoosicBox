@@ -12,6 +12,18 @@ Generic log runtime paths and initialization.
 
 ## Features
 
+- `simulator`: resolves platform base directories from the selected `switchy_fs`
+  filesystem. Native lookup is used otherwise; dependency feature unification can
+  also enable the simulator. Application environment overrides (including
+  `XDG_STATE_HOME`) still take precedence exactly as in native builds.
+
+This selects **directory discovery only**. `ensure_paths` and tracing file sinks
+still perform real filesystem I/O. Simulation users should test `resolve_paths`
+without initializing sinks or creating paths unless real I/O is intentional.
+Missing simulated locations use the same relative fallback paths as missing native
+locations, never the host user's home. Filesystem scopes must wrap each async task
+that resolves paths.
+
 - `init`: enables `init` module and tracing subscriber initialization APIs
 - `file`: enables daily rolling file output (`tracing-appender`); implies `init`
 

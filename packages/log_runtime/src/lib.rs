@@ -5,6 +5,7 @@
 //! Runtime helpers for resolving and initializing logging paths.
 
 use std::path::PathBuf;
+use switchy_fs::directories;
 
 /// Resolved filesystem locations used by the logging runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +78,7 @@ fn resolve_state_dir(config: &LogRuntimePathsConfig<'_>) -> PathBuf {
 
     #[cfg(target_os = "macos")]
     {
-        dirs::home_dir().map_or_else(
+        directories::home_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("state"),
             |home| {
                 home.join("Library")
@@ -90,7 +91,7 @@ fn resolve_state_dir(config: &LogRuntimePathsConfig<'_>) -> PathBuf {
 
     #[cfg(target_os = "windows")]
     {
-        dirs::data_local_dir().map_or_else(
+        directories::data_local_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("state"),
             |base| base.join(config.app_name).join("State"),
         )
@@ -100,7 +101,7 @@ fn resolve_state_dir(config: &LogRuntimePathsConfig<'_>) -> PathBuf {
     {
         std::env::var_os("XDG_STATE_HOME").map_or_else(
             || {
-                dirs::home_dir().map_or_else(
+                directories::home_dir().map_or_else(
                     || PathBuf::from(".").join(config.app_name).join("state"),
                     |home| home.join(".local").join("state").join(config.app_name),
                 )
@@ -120,7 +121,7 @@ fn resolve_log_dir(
 
     #[cfg(target_os = "macos")]
     {
-        dirs::home_dir().map_or_else(
+        directories::home_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("logs"),
             |home| home.join("Library").join("Logs").join(config.app_name),
         )
@@ -128,7 +129,7 @@ fn resolve_log_dir(
 
     #[cfg(target_os = "windows")]
     {
-        dirs::data_local_dir().map_or_else(
+        directories::data_local_dir().map_or_else(
             || PathBuf::from(".").join(config.app_name).join("logs"),
             |base| base.join(config.app_name).join("Logs"),
         )
