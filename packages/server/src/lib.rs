@@ -1271,6 +1271,7 @@ mod bundled_lifecycle_tests {
         );
     }
 
+    #[cfg(feature = "sqlite-sqlx")]
     #[switchy_async::test]
     async fn bundled_app_profile_is_created_and_reused() {
         let database = switchy_database_connection::init_sqlite_sqlx(None)
@@ -1298,6 +1299,7 @@ mod bundled_lifecycle_tests {
         );
     }
 
+    #[cfg(feature = "sqlite-sqlx")]
     #[switchy_async::test]
     async fn remote_server_startup_does_not_create_bundled_profile() {
         let database = switchy_database_connection::init_sqlite_sqlx(None)

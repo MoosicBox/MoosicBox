@@ -699,6 +699,8 @@ pub trait MaybeElement: Sized + ToTokens {
 pub type DiagnosticParseFn<T> = fn(ParseStream, &mut Vec<Diagnostic>) -> syn::Result<T>;
 
 /// Represents an attribute context, where elements are disallowed.
+// This type must be uninhabited because attribute contexts cannot contain elements.
+#[allow(clippy::empty_enums)]
 #[derive(Debug, Clone)]
 pub enum NoElement {}
 

@@ -1079,8 +1079,15 @@ mod tests {
         std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
         std::fs::write(root.path().join("source.rs"), "fn main() {}\n").unwrap();
         std::fs::write(root.path().join("config.toml"), "key = 'value'\n").unwrap();
-        let registry =
-            ToolRegistry::new(crate::tools::ToolsConfig::default(), Some(root.path())).unwrap();
+        let mut config = crate::tools::ToolsConfig::default();
+        for name in ["rustfmt", "taplo"] {
+            let executable = root.path().join(name);
+            std::fs::write(&executable, "").unwrap();
+            config
+                .executables
+                .insert(name.to_string(), executable.to_string_lossy().to_string());
+        }
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
         let plan = plan_tools(&registry, &[ToolCapability::Format]).unwrap();
 
         assert_eq!(plan.diagnostics.recursive_walks, 1);

@@ -135,6 +135,8 @@ impl Scanner {
     ///
     /// * If a database error occurs
     #[allow(unused, clippy::unused_async)]
+    // Keep the async API consistent when local scanning is disabled.
+    #[cfg_attr(not(feature = "local"), allow(clippy::unused_async_trait_impl))]
     pub async fn from_origin(
         db: &LibraryDatabase,
         origin: ScanOrigin,

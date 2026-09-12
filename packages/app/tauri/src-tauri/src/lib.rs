@@ -1243,6 +1243,9 @@ pub fn run() {
                 (ready.endpoint, server_task)
             };
 
+            #[cfg(all(feature = "bundled", not(feature = "moosicbox-app-native")))]
+            let _ = bundled_endpoint;
+
             #[cfg(all(feature = "moosicbox-app-native", feature = "bundled"))]
             {
                 let (bundled_endpoint, server_task) = bundled_endpoint;
@@ -1265,7 +1268,7 @@ pub fn run() {
                 });
             }
             #[cfg(all(feature = "moosicbox-app-native", not(feature = "bundled")))]
-            RT.block_on(STATE.activate_persisted_connection(
+            tauri::async_runtime::block_on(STATE.activate_persisted_connection(
                 moosicbox_app_native::PROFILE,
             ))?;
 

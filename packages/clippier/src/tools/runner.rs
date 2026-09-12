@@ -1276,6 +1276,7 @@ impl<'a> ToolRunner<'a> {
         Some((parts.0, parts.1, warnings))
     }
 
+    #[cfg(feature = "format")]
     fn find_file_in_ancestors(base_dir: &Path, names: &[&str]) -> Option<PathBuf> {
         let mut current = Some(base_dir);
         while let Some(dir) = current {
@@ -2365,7 +2366,14 @@ mod tests {
             PathBuf::from("binary.js"),
             PathBuf::from("unselected.js"),
         ]);
-        let registry = ToolRegistry::new(ToolsConfig::default(), Some(dir.path())).unwrap();
+        let executable = dir.path().join("prettier");
+        std::fs::write(&executable, "").unwrap();
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "prettier".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config.clone(), Some(dir.path())).unwrap();
         let other = Tool {
             name: "other".into(),
             ..registry.get("prettier").unwrap().clone()
@@ -2390,7 +2398,6 @@ mod tests {
         }
         let runner = runner.with_format_selection(FormatSelection::All);
         assert!(runner.prepare_execution(&tools).is_err());
-        let mut config = ToolsConfig::default();
         config.scope.exclude_binary = false;
         let registry = ToolRegistry::new(config, Some(dir.path())).unwrap();
         let runner = ToolRunner::new(&registry)
@@ -2408,7 +2415,16 @@ mod tests {
     #[cfg(feature = "tools-tui")]
     #[test]
     fn tui_panes_exclude_empty_effective_assignments() {
-        let registry = ToolRegistry::new(ToolsConfig::default(), None).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = ToolsConfig::default();
+        for name in ["rustfmt", "prettier"] {
+            let executable = dir.path().join(name);
+            std::fs::write(&executable, "").unwrap();
+            config
+                .executables
+                .insert(name.to_string(), executable.to_string_lossy().to_string());
+        }
+        let registry = ToolRegistry::new(config, Some(dir.path())).unwrap();
         let rustfmt = registry.get("rustfmt").unwrap();
         let prettier = registry.get("prettier").unwrap();
         let runner = ToolRunner::new(&registry).with_planned_files(BTreeMap::from([

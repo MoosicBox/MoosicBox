@@ -168,10 +168,13 @@ impl Context {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let runtime_handle = moosicbox_async_service::runtime::Handle::current();
     /// let context = moosicbox_app_tauri_bundled::Context::new(&runtime_handle)?;
     ///
     /// let _ = context;
+    /// # Ok(())
+    /// # }
     /// ```
     /// # Errors
     ///

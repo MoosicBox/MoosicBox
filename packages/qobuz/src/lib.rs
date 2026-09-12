@@ -2751,7 +2751,16 @@ mod tests {
 
     #[test_log::test(switchy_async::test)]
     async fn qobuz_auth_state_covers_stored_credential_outcomes() {
-        let api = QobuzMusicApi::builder().build().await.unwrap();
+        let builder = QobuzMusicApi::builder();
+        #[cfg(feature = "db")]
+        let builder = {
+            let database = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .unwrap();
+            moosicbox_schema::migrate_library(&*database).await.unwrap();
+            builder.with_db(std::sync::Arc::new(database).into())
+        };
+        let api = builder.build().await.unwrap();
         assert_eq!(api.auth_state(), AuthState::NotConfigured);
 
         assert!(

@@ -55,8 +55,10 @@ thiserror       = { workspace = true }
 url             = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
-test-log          = { workspace = true }
+moosicbox_schema            = { workspace = true, features = ["sqlite"] }
+pretty_assertions           = { workspace = true }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+test-log                    = { workspace = true }
 
 [features]
 default = ["api", "db", "openapi", "scan"]
