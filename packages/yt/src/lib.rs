@@ -2296,6 +2296,8 @@ impl YtMusicApiBuilder {
     ///
     /// * `YtConfigError::MissingDb` - If the database connection is missing (with `db` feature)
     #[allow(clippy::unused_async)]
+    // Keep the async API consistent when database support is disabled.
+    #[cfg_attr(not(feature = "db"), allow(clippy::unused_async_trait_impl))]
     pub async fn build(self) -> Result<YtMusicApi, YtConfigError> {
         #[cfg(feature = "db")]
         let db = self.db.ok_or(YtConfigError::MissingDb)?;

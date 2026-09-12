@@ -321,7 +321,13 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
             Some(content) => {
                 let response_metadata = match &content {
                     hyperchad_renderer::Content::View(view) => view.response.clone(),
-                    _ => hyperchad_renderer::ResponseMetadata::default(),
+                    hyperchad_renderer::Content::Raw { .. } => {
+                        hyperchad_renderer::ResponseMetadata::default()
+                    }
+                    #[cfg(feature = "json")]
+                    hyperchad_renderer::Content::Json(_) => {
+                        hyperchad_renderer::ResponseMetadata::default()
+                    }
                 };
                 let has_fragments = matches!(&content, hyperchad_renderer::Content::View(v) if !v.fragments.is_empty());
                 let delete_selectors = if let hyperchad_renderer::Content::View(v) = &content {
