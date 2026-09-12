@@ -78,7 +78,7 @@ regex = { workspace = true }
 reqwest = { workspace = true, optional = true, features = ["blocking", "json"] }
 semver = { workspace = true, optional = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
