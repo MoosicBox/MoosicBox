@@ -1155,6 +1155,7 @@ impl<'a> ToolRunner<'a> {
                 &mut std::io::stdout().lock(),
                 &tool_meta,
                 &aggregated.results,
+                self.effective_color_mode() == ColorMode::Always,
             ) {
                 Ok(()) => aggregated.output_presented = true,
                 Err(error) => log::warn!("failed to present final tool output: {error}"),

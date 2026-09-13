@@ -405,6 +405,7 @@ pub fn write_inline_results(
     output: &mut impl std::io::Write,
     tools: &[(String, String)],
     results: &[crate::tools::runner::ToolResult],
+    color: bool,
 ) -> std::io::Result<()> {
     let mut first = true;
     for (name, _) in tools {
@@ -420,7 +421,16 @@ pub fn write_inline_results(
         } else {
             "✗ failed"
         };
-        writeln!(output, "{} · {status}", result.display_name)?;
+        if color {
+            let foreground = if result.success { 32 } else { 31 };
+            writeln!(
+                output,
+                "\x1b[0;1;{foreground}m{} · {status}\x1b[0m",
+                result.display_name
+            )?;
+        } else {
+            writeln!(output, "{} · {status}", result.display_name)?;
+        }
         if result.success {
             let last = result
                 .stderr
@@ -952,13 +962,36 @@ mod tests {
         ];
         let tools = vec![("bad".into(), "Bad".into()), ("good".into(), "Good".into())];
         let mut output = Vec::new();
-        write_inline_results(&mut output, &tools, &results).unwrap();
+        write_inline_results(&mut output, &tools, &results, false).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             format!(
                 "Bad · ✗ failed\n{}  error tail\n\nGood · ✓ passed\n  latest\n",
                 "  full output line\n".repeat(2100)
             )
+        );
+    }
+
+    #[test]
+    fn final_inline_headers_preserve_status_colors_and_reset_before_output() {
+        use crate::tools::runner::ToolResult;
+        let results = vec![
+            ToolResult::success("good".into(), "Good".into(), Duration::ZERO),
+            ToolResult::failure(
+                "bad".into(),
+                "Bad".into(),
+                Some(1),
+                "details".into(),
+                String::new(),
+                Duration::ZERO,
+            ),
+        ];
+        let tools = vec![("good".into(), "Good".into()), ("bad".into(), "Bad".into())];
+        let mut output = Vec::new();
+        write_inline_results(&mut output, &tools, &results, true).unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "\x1b[0;1;32mGood · ✓ passed\x1b[0m\n  No output.\n\n\x1b[0;1;31mBad · ✗ failed\x1b[0m\n  details\n"
         );
     }
 
