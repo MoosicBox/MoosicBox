@@ -4,6 +4,13 @@
 //! switch between real system time and simulated time for testing purposes. When the `simulator`
 //! feature is enabled, time can be controlled programmatically for deterministic testing.
 //!
+//! # Monotonic intervals
+//!
+//! Use [`Instant::now`] and [`Instant::elapsed`] for backend-aware intervals and
+//! [`Instant::remaining`] for deadlines. The legacy [`instant_now`] API returns
+//! a standard-library instant: calling `.elapsed()` on that value reads the
+//! real clock even when simulation is enabled.
+//!
 //! # Features
 //!
 //! * `std` - Enables standard library time functions
@@ -26,6 +33,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
+
+#[cfg(any(feature = "std", feature = "simulator"))]
+mod instant;
+#[cfg(any(feature = "std", feature = "simulator"))]
+pub use instant::Instant;
 
 #[cfg(feature = "std")]
 pub mod standard;

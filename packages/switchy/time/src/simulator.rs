@@ -50,6 +50,10 @@ pub fn with_real_time<T>(f: impl FnOnce() -> T) -> T {
     REAL_TIME.set(&RealTime, f)
 }
 
+pub(crate) fn is_real_time() -> bool {
+    REAL_TIME.is_set()
+}
+
 thread_local! {
     static EPOCH_OFFSET: RefCell<RwLock<Option<u64>>> = const { RefCell::new(RwLock::new(None)) };
 }
@@ -333,6 +337,11 @@ pub fn instant_now() -> Instant {
         return Instant::now();
     }
 
+    monotonic_instant_now()
+}
+
+/// Reads the simulator clock even inside a real-time override.
+pub(crate) fn monotonic_instant_now() -> Instant {
     let step_multiplier = step_multiplier();
     let step = current_step();
     let mult_step = step.checked_mul(step_multiplier).unwrap();
