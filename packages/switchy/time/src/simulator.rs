@@ -13,7 +13,7 @@
 //! Simulated time is calculated as: `epoch_offset + (step * step_multiplier)`
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     sync::{LazyLock, RwLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -180,14 +180,17 @@ fn gen_step_multiplier() -> u64 {
 /// Resets the step multiplier to a new random value.
 ///
 /// The step multiplier controls how much simulated time advances per step.
+/// Resetting it invalidates captured [`crate::Instant`] values.
 ///
 /// # Panics
 ///
+/// * If the clock generation counter overflows.
 /// * If the `STEP_MULTIPLIER` `RwLock` fails to write to
 /// * If the `SIMULATOR_STEP_MULTIPLIER` environment variable is set but cannot be parsed as a `u64`
 pub fn reset_step_multiplier() {
     let value = gen_step_multiplier();
     log::trace!("reset_step_multiplier to seed={value}");
+    advance_clock_generation();
     STEP_MULTIPLIER.with_borrow_mut(|x| *x.write().unwrap() = Some(value));
 }
 
@@ -211,19 +214,37 @@ pub fn step_multiplier() -> u64 {
 }
 
 thread_local! {
+    static CLOCK_GENERATION: Cell<u64> = const { Cell::new(0) };
     static STEP: RefCell<RwLock<u64>> = const { RefCell::new(RwLock::new(0)) };
+}
+
+pub(crate) fn clock_generation() -> u64 {
+    CLOCK_GENERATION.get()
+}
+
+fn advance_clock_generation() {
+    CLOCK_GENERATION.set(
+        clock_generation()
+            .checked_add(1)
+            .expect("simulation clock generation overflow"),
+    );
 }
 
 /// Sets the current simulation step to the specified value.
 ///
-/// The step counter controls the progression of simulated time.
+/// The step counter controls the progression of simulated time. Moving backwards
+/// invalidates captured [`crate::Instant`] values.
 ///
 /// # Panics
 ///
+/// * If the clock generation counter overflows during a rewind.
 /// * If the `STEP` `RwLock` fails to write to
 #[must_use]
 pub fn set_step(step: u64) -> u64 {
     log::trace!("set_step to step={step}");
+    if step < current_step() {
+        advance_clock_generation();
+    }
     STEP.with_borrow_mut(|x| *x.write().unwrap() = step);
     step
 }
@@ -245,13 +266,16 @@ pub fn next_step() -> u64 {
     )
 }
 
-/// Resets the simulation step counter to zero.
+/// Resets the simulation step counter to zero and invalidates captured
+/// [`crate::Instant`] values, even when the counter is already zero.
 ///
 /// # Panics
 ///
+/// * If the clock generation counter overflows.
 /// * If the `STEP` `RwLock` fails to write to
 pub fn reset_step() {
-    let _ = set_step(0);
+    advance_clock_generation();
+    STEP.with_borrow_mut(|x| *x.write().unwrap() = 0);
 }
 
 /// Returns the current simulation step.

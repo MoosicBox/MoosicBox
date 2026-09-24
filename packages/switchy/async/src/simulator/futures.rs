@@ -25,7 +25,7 @@ pin_project! {
     #[derive(Debug, Copy, Clone)]
     pub struct Sleep {
         #[pin]
-        now: std::time::Instant,
+        now: switchy_time::Instant,
         #[pin]
         duration: Duration,
         #[pin]
@@ -40,7 +40,7 @@ impl Sleep {
     #[must_use]
     pub fn new(duration: Duration) -> Self {
         Self {
-            now: switchy_time::instant_now(),
+            now: switchy_time::Instant::now(),
             duration,
             polled: false,
             completed: false,
@@ -53,6 +53,9 @@ impl Future for Sleep {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let mut this = self.project();
+        if *this.completed {
+            return Poll::Ready(());
+        }
         log::trace!(
             "Polling Sleep: now={:?} duration={:?} polled={} completed={}",
             this.now,
@@ -64,7 +67,7 @@ impl Future for Sleep {
         let polled = *this.polled;
 
         if polled {
-            let duration = switchy_time::instant_now().duration_since(*this.now);
+            let duration = this.now.elapsed();
             log::trace!(
                 "Sleep polled: {}ms/{}ms",
                 duration.as_millis(),
@@ -159,13 +162,26 @@ impl FusedFuture for Instant {
     }
 }
 
+/// Policy used when an interval tick is more than five milliseconds late.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub enum MissedTickBehavior {
+    /// Deliver every missed scheduled tick without shifting the schedule.
+    #[default]
+    Burst,
+    /// Schedule the next tick one period after the observation time.
+    Delay,
+    /// Skip missed ticks, preserving the original schedule's phase.
+    Skip,
+}
+
 /// A fixed-rate simulated interval with an immediately due first tick.
 ///
-/// Missed ticks are delivered in a burst, retaining their scheduled deadlines.
+/// Missed ticks default to burst delivery, retaining their scheduled deadlines.
 #[derive(Debug, Copy, Clone)]
 pub struct Interval {
     now: std::time::Instant,
-    interval: Duration,
+    period: Duration,
+    missed_tick_behavior: MissedTickBehavior,
 }
 
 impl Interval {
@@ -179,8 +195,20 @@ impl Interval {
         assert!(!interval.is_zero(), "interval period must be nonzero");
         Self {
             now: switchy_time::instant_now(),
-            interval,
+            period: interval,
+            missed_tick_behavior: MissedTickBehavior::Burst,
         }
+    }
+
+    /// Returns the policy used for missed ticks.
+    #[must_use]
+    pub const fn missed_tick_behavior(&self) -> MissedTickBehavior {
+        self.missed_tick_behavior
+    }
+
+    /// Sets missed-tick policy without consuming or moving the pending tick.
+    pub const fn set_missed_tick_behavior(&mut self, behavior: MissedTickBehavior) {
+        self.missed_tick_behavior = behavior;
     }
 
     /// Returns a future that completes at the next tick.
@@ -202,7 +230,7 @@ impl Interval {
     /// * If the next deadline exceeds the representable instant range.
     pub fn reset(&mut self) {
         self.now = switchy_time::instant_now()
-            .checked_add(self.interval)
+            .checked_add(self.period)
             .expect("interval deadline overflow");
     }
 
@@ -212,10 +240,34 @@ impl Interval {
     ///
     /// * If the next deadline exceeds the representable instant range.
     pub fn poll_tick(&mut self, cx: &mut Context) -> Poll<std::time::Instant> {
-        if switchy_time::instant_now() >= self.now {
+        let now = switchy_time::instant_now();
+        if now >= self.now {
             let deadline = self.now;
-            self.now = deadline
-                .checked_add(self.interval)
+            let late = now.duration_since(deadline);
+            let (base, offset) = if late > Duration::from_millis(5) {
+                match self.missed_tick_behavior {
+                    MissedTickBehavior::Burst => (deadline, self.period),
+                    MissedTickBehavior::Delay => (now, self.period),
+                    MissedTickBehavior::Skip => {
+                        let remainder = late.as_nanos() % self.period.as_nanos();
+                        let remainder = Duration::new(
+                            u64::try_from(remainder / 1_000_000_000)
+                                .expect("duration seconds fit u64"),
+                            u32::try_from(remainder % 1_000_000_000).expect("nanoseconds fit u32"),
+                        );
+                        (
+                            now,
+                            self.period
+                                .checked_sub(remainder)
+                                .expect("remainder is less than period"),
+                        )
+                    }
+                }
+            } else {
+                (deadline, self.period)
+            };
+            self.now = base
+                .checked_add(offset)
                 .expect("interval deadline overflow");
             return Poll::Ready(deadline);
         }
@@ -528,9 +580,9 @@ mod tests {
     #[test_log::test]
     fn sleep_creates_with_current_time() {
         let sleep = Sleep::new(Duration::from_millis(100));
-        let now = switchy_time::instant_now();
+        let now = switchy_time::Instant::now();
 
-        let diff = now.duration_since(sleep.now);
+        let diff = now.checked_duration_since(sleep.now).unwrap();
         assert!(diff < Duration::from_millis(10));
     }
 
@@ -622,6 +674,69 @@ mod tests {
     }
 
     #[test_log::test]
+    fn missed_tick_policies_preserve_phase_or_delay_as_requested() {
+        let period = Duration::from_millis(10);
+        let now = switchy_time::instant_now();
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        for (behavior, next_offset) in [
+            (MissedTickBehavior::Burst, -15_i64),
+            (MissedTickBehavior::Delay, 10),
+            (MissedTickBehavior::Skip, 5),
+        ] {
+            let mut interval = Interval::new(period);
+            assert_eq!(interval.missed_tick_behavior(), MissedTickBehavior::Burst);
+            interval.now = now.checked_sub(Duration::from_millis(25)).unwrap();
+            let due = interval.now;
+            interval.set_missed_tick_behavior(behavior);
+            assert_eq!(interval.missed_tick_behavior(), behavior);
+            assert_eq!(interval.poll_tick(&mut cx), Poll::Ready(due));
+            let offset = Duration::from_millis(next_offset.unsigned_abs());
+            let expected = if next_offset < 0 {
+                now.checked_sub(offset).unwrap()
+            } else {
+                now + offset
+            };
+            assert_eq!(interval.now, expected);
+        }
+        // At the five-millisecond tolerance boundary, do not skip or delay.
+        for behavior in [MissedTickBehavior::Delay, MissedTickBehavior::Skip] {
+            let mut interval = Interval::new(period);
+            interval.now = now.checked_sub(Duration::from_millis(5)).unwrap();
+            interval.set_missed_tick_behavior(behavior);
+            assert!(interval.poll_tick(&mut cx).is_ready());
+            assert_eq!(interval.now, now + Duration::from_millis(5));
+        }
+    }
+
+    #[test_log::test]
+    fn completed_sleep_stays_terminal_after_clock_reset() {
+        let mut sleep = std::pin::pin!(Sleep::new(Duration::ZERO));
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        assert!(sleep.as_mut().poll(&mut cx).is_pending());
+        assert!(sleep.as_mut().poll(&mut cx).is_ready());
+        switchy_time::simulator::reset_step();
+        assert!(sleep.as_mut().poll(&mut cx).is_ready());
+        assert!(sleep.is_terminated());
+    }
+
+    #[test_log::test]
+    fn sleep_rejects_a_reset_clock() {
+        let mut sleep = std::pin::pin!(Sleep::new(Duration::from_secs(1)));
+        let waker = futures::task::noop_waker();
+        let mut cx = Context::from_waker(&waker);
+        assert!(sleep.as_mut().poll(&mut cx).is_pending());
+        switchy_time::simulator::reset_step();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                sleep.as_mut().poll(&mut cx)
+            }))
+            .is_err()
+        );
+    }
+
+    #[test_log::test]
     fn sleep_poll_completes_after_duration_elapses() {
         {
             use std::task::{Context, Poll};
@@ -638,7 +753,7 @@ mod tests {
             {
                 let mut projected = pinned_sleep.as_mut().project();
                 *projected.polled = true;
-                *projected.now = switchy_time::instant_now()
+                *projected.now = switchy_time::Instant::now()
                     .checked_sub(Duration::from_millis(2))
                     .unwrap();
             }

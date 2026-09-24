@@ -8,7 +8,7 @@ use std::future::IntoFuture;
 use crate::simulator::futures::{Sleep, Timeout};
 
 // Re-export types for compatibility
-pub use crate::simulator::futures::{Elapsed, Interval};
+pub use crate::simulator::futures::{Elapsed, Interval, MissedTickBehavior};
 pub use std::time::Duration;
 
 // Re-export simulator functionality

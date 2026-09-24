@@ -2,4 +2,4 @@
 //!
 //! This module re-exports Tokio's time utilities including sleep, intervals, and timeouts.
 
-pub use tokio::time::{Duration, Interval, interval, sleep, timeout};
+pub use tokio::time::{Duration, Interval, MissedTickBehavior, interval, sleep, timeout};

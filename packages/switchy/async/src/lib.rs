@@ -159,6 +159,9 @@ pub use crate::tokio::main as main_internal;
 ///
 /// This module provides the Tokio-based async runtime implementation, including
 /// task spawning, runtime management, and I/O utilities.
+#[cfg(all(feature = "sync", feature = "_any_backend"))]
+mod bounded;
+
 #[cfg(feature = "tokio")]
 pub mod tokio;
 

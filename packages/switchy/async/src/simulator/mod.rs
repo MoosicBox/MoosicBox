@@ -108,10 +108,14 @@ pub use try_join;
 #[cfg(test)]
 mod test {
     use std::time::Duration;
-
-    use crate::runtime::Builder;
+    #[cfg(feature = "time")]
+    use std::{
+        future::Future,
+        task::{Context, Poll},
+    };
 
     use super::runtime::build_runtime;
+    use crate::runtime::Builder;
 
     #[cfg(feature = "time")]
     #[test_log::test]
@@ -432,58 +436,28 @@ mod test {
     #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_3_futures() {
-        switchy_time::simulator::with_real_time(|| {
-            let runtime = build_runtime(&Builder::new()).unwrap();
-
-            runtime.block_on(async move {
+        // Wall-time sleeps can all expire while a test thread is descheduled.
+        // Advance only one simulated step so exactly one branch is ready,
+        // independently of branch polling order or machine load.
+        let step = Duration::from_millis(switchy_time::simulator::step_multiplier());
+        for periods in [[1, 2, 3], [1, 3, 2], [3, 1, 2], [3, 2, 1]] {
+            let sleeps = periods.map(|period| super::time::sleep(step * period));
+            let mut selected = std::pin::pin!(async move {
+                let [first, second, third] = sleeps;
                 crate::select! {
-                    () = super::time::sleep(Duration::from_millis(1)) => {},
-                    () = super::time::sleep(Duration::from_millis(10)) => {
-                        panic!("Should have selected other future");
-                    },
-                    () = super::time::sleep(Duration::from_millis(20)) => {
-                        panic!("Should have selected other future");
-                    },
+                    () = first => 0,
+                    () = second => 1,
+                    () = third => 2,
                 }
             });
-
-            runtime.block_on(async move {
-                crate::select! {
-                    () = super::time::sleep(Duration::from_millis(1)) => {},
-                    () = super::time::sleep(Duration::from_millis(20)) => {
-                        panic!("Should have selected other future");
-                    },
-                    () = super::time::sleep(Duration::from_millis(10)) => {
-                        panic!("Should have selected other future");
-                    },
-                }
-            });
-
-            runtime.block_on(async move {
-                crate::select! {
-                    () = super::time::sleep(Duration::from_millis(20)) => {
-                        panic!("Should have selected other future");
-                    },
-                    () = super::time::sleep(Duration::from_millis(1)) => {},
-                    () = super::time::sleep(Duration::from_millis(10)) => {
-                        panic!("Should have selected other future");
-                    },
-                }
-            });
-
-            runtime.block_on(async move {
-                crate::select! {
-                    () = super::time::sleep(Duration::from_millis(20)) => {
-                        panic!("Should have selected other future");
-                    },
-                    () = super::time::sleep(Duration::from_millis(10)) => {
-                        panic!("Should have selected other future");
-                    },
-                    () = super::time::sleep(Duration::from_millis(1)) => {},
-                }
-            });
-
-            runtime.wait().unwrap();
-        });
+            let waker = futures::task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+            assert!(selected.as_mut().poll(&mut cx).is_pending());
+            let _ = switchy_time::simulator::next_step();
+            assert_eq!(
+                selected.as_mut().poll(&mut cx),
+                Poll::Ready(periods.iter().position(|period| *period == 1).unwrap())
+            );
+        }
     }
 }

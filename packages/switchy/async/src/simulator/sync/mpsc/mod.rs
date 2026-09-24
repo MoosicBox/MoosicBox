@@ -6,6 +6,11 @@ use std::task::{Context, Poll};
 
 use tokio::sync::mpsc;
 
+/// Capacity-limited async channels without blocking or implicit timer operations.
+pub mod bounded {
+    pub use crate::bounded::*;
+}
+
 /// Receiving end of an MPSC channel.
 ///
 /// This wraps the underlying runtime's unbounded receiver and provides a consistent
