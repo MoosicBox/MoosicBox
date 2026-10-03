@@ -1,3 +1,4 @@
+#![cfg(feature = "raw-sql")]
 #![cfg(feature = "schema")]
 
 mod common;

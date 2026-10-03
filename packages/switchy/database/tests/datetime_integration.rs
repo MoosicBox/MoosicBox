@@ -1,3 +1,5 @@
+#![cfg(feature = "raw-sql")]
+
 mod common;
 
 use chrono::NaiveDateTime;

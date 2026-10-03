@@ -23,11 +23,13 @@ use sqlx::{
 use switchy_async::sync::Mutex;
 use thiserror::Error;
 
+#[cfg(feature = "raw-sql")]
+use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};
+
 use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -169,6 +171,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                     SortDirection::Desc => "DESC",
                 }
             ),
+            ExpressionType::NotLike(value) => format!(
+                "({} NOT LIKE {})",
+                value.left.to_sql(),
+                value.right.to_sql()
+            ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
                     format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
@@ -191,8 +198,9 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
-            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '`'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
@@ -566,18 +574,9 @@ impl Database for MySqlSqlxDatabase {
         Ok(rows)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        log::trace!("exec_raw: query:\n{statement}");
-
-        let pool = self.connection.lock().await;
-        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
-
-        connection
-            .execute(statement)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -716,36 +715,9 @@ impl Database for MySqlSqlxDatabase {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let pool = self.connection.lock().await;
-        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
-
-        let result = sqlx::query(query)
-            .fetch_all(&mut *connection)
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        if result.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = result[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Use existing from_row helper
-        let mut rows = Vec::new();
-        for row in result {
-            rows.push(
-                from_row(&column_names, &row)
-                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
-            );
-        }
-
-        Ok(rows)
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -759,161 +731,22 @@ impl Database for MySqlSqlxDatabase {
         Ok(Box::new(MysqlSqlxTransaction::new(tx)))
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
-
-        let pool = self.connection.lock().await;
-        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
-
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(&transformed_query);
-
-        // Add only filtered parameters - Now/NowPlus are already in the SQL
-        for param in &filtered_params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-        }
-
-        let result = query_builder
-            .execute(&mut *connection)
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        Ok(result.rows_affected())
+        self.exec_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
-
-        let pool = self.connection.lock().await;
-        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
-
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(&transformed_query);
-
-        // Add only filtered parameters - Now/NowPlus are already in the SQL
-        for param in &filtered_params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-        }
-
-        let result = query_builder
-            .fetch_all(&mut *connection)
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        if result.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = result[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Convert sqlx rows to our Row format
-        let mut rows = Vec::new();
-        for sqlx_row in result {
-            let row = from_row(&column_names, &sqlx_row)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            rows.push(row);
-        }
-
-        Ok(rows)
+        self.query_raw_params_internal(query, params).await
     }
 }
 
@@ -1120,19 +953,9 @@ impl Database for MysqlSqlxTransaction {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        log::trace!("exec_raw: query:\n{statement}");
-
-        let mut transaction_guard = self.transaction.lock().await;
-        let tx = transaction_guard
-            .as_mut()
-            .ok_or(DatabaseError::TransactionCommitted)?;
-
-        tx.execute(statement)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1292,38 +1115,9 @@ impl Database for MysqlSqlxTransaction {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut transaction_guard = self.transaction.lock().await;
-        let tx = transaction_guard
-            .as_mut()
-            .ok_or(DatabaseError::TransactionCommitted)?;
-
-        let result = sqlx::query(query)
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        if result.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = result[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Use existing from_row helper
-        let mut rows = Vec::new();
-        for row in result {
-            rows.push(
-                from_row(&column_names, &row)
-                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
-            );
-        }
-
-        Ok(rows)
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -1332,159 +1126,22 @@ impl Database for MysqlSqlxTransaction {
         Err(DatabaseError::AlreadyInTransaction)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(query);
-
-        // Add parameters in order - MySQL uses ? placeholders
-        for param in params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
-                }
-            };
-        }
-
-        let result = {
-            let mut transaction_guard = self.transaction.lock().await;
-            query_builder
-                .execute(
-                    &mut **transaction_guard
-                        .as_mut()
-                        .ok_or(DatabaseError::TransactionCommitted)?,
-                )
-                .await
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
-        };
-
-        Ok(result.rows_affected())
+        self.exec_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(query);
-
-        // Add parameters in order - MySQL uses ? placeholders
-        for param in params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
-                }
-            };
-        }
-
-        let result = {
-            let mut transaction_guard = self.transaction.lock().await;
-            query_builder
-                .fetch_all(
-                    &mut **transaction_guard
-                        .as_mut()
-                        .ok_or(DatabaseError::TransactionCommitted)?,
-                )
-                .await
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
-        };
-
-        if result.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = result[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Convert sqlx rows to our Row format
-        let mut rows = Vec::new();
-        for sqlx_row in result {
-            let row = from_row(&column_names, &sqlx_row)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            rows.push(row);
-        }
-
-        Ok(rows)
+        self.query_raw_params_internal(query, params).await
     }
 }
 
@@ -1641,7 +1298,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             sanitize_value(table_name)
         );
 
-        let rows = self.query_raw(&recursive_query).await?;
+        let rows = self.query_raw_internal(&recursive_query).await?;
         let mut result = Vec::new();
         for row in rows {
             if let Some((_, crate::DatabaseValue::String(table))) = row.columns.first() {
@@ -1668,7 +1325,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             sanitize_value(table_name)
         );
 
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         if let Some(row) = rows.first() {
             // MySQL might return as integer (1/0) or boolean
@@ -1698,7 +1355,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             sanitize_value(table_name)
         );
 
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         let mut dependents = std::collections::BTreeSet::new();
         for row in rows {
@@ -1899,6 +1556,11 @@ async fn mysql_sqlx_exec_create_table(
         query.push_str(", PRIMARY KEY (");
         query.push_str(primary_key);
         query.push(')');
+    }
+
+    for constraint in &statement.constraints {
+        query.push_str(", ");
+        query.push_str(&constraint.render('`'));
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -3477,6 +3139,7 @@ impl Expression for MySqlDatabaseValue {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 fn mysql_transform_query_for_params(
     query: &str,
     params: &[crate::DatabaseValue],
@@ -3494,11 +3157,455 @@ fn mysql_transform_query_for_params(
     .map_err(DatabaseError::QueryFailed)
 }
 
+impl MySqlSqlxDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+
+        connection
+            .execute(statement)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+}
+
+impl MySqlSqlxDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+
+        let result = sqlx::query(query)
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in result {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+}
+
+impl MySqlSqlxDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
+
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(&transformed_query);
+
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
+            query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
+                }
+            };
+        }
+
+        let result = query_builder
+            .execute(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(result.rows_affected())
+    }
+}
+
+impl MySqlSqlxDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
+
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(&transformed_query);
+
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
+            query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
+                }
+            };
+        }
+
+        let result = query_builder
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert sqlx rows to our Row format
+        let mut rows = Vec::new();
+        for sqlx_row in result {
+            let row = from_row(&column_names, &sqlx_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
+}
+
+impl MysqlSqlxTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.execute(statement)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        drop(transaction_guard);
+
+        Ok(())
+    }
+}
+
+impl MysqlSqlxTransaction {
+    #[cfg(any(feature = "raw-sql", feature = "cascade"))]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        let result = sqlx::query(query)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+        drop(transaction_guard);
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in result {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+}
+
+impl MysqlSqlxTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                }
+            };
+        }
+
+        let result = {
+            let mut transaction_guard = self.transaction.lock().await;
+            query_builder
+                .execute(
+                    &mut **transaction_guard
+                        .as_mut()
+                        .ok_or(DatabaseError::TransactionCommitted)?,
+                )
+                .await
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
+        };
+
+        Ok(result.rows_affected())
+    }
+}
+
+impl MysqlSqlxTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
+                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
+                #[cfg(feature = "decimal")]
+                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+                #[cfg(feature = "uuid")]
+                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                }
+            };
+        }
+
+        let result = {
+            let mut transaction_guard = self.transaction.lock().await;
+            query_builder
+                .fetch_all(
+                    &mut **transaction_guard
+                        .as_mut()
+                        .ok_or(DatabaseError::TransactionCommitted)?,
+                )
+                .await
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
+        };
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert sqlx rows to our Row format
+        let mut rows = Vec::new();
+        for sqlx_row in result {
+            let row = from_row(&column_names, &sqlx_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "schema")]
     mod schema {
         use super::super::*;
+        #[cfg(feature = "raw-sql")]
         use crate::schema::DataType;
         use sqlx::MySqlPool;
         use std::sync::Arc;
@@ -3513,6 +3620,7 @@ mod tests {
             Ok(Arc::new(Mutex::new(pool)))
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_table_exists() {
             let Some(url) = get_mysql_test_url() else {
@@ -3541,6 +3649,7 @@ mod tests {
                 .unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_list_tables() {
             let Some(url) = get_mysql_test_url() else {
@@ -3599,6 +3708,7 @@ mod tests {
                 .ok();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_get_table_columns() {
             let Some(url) = get_mysql_test_url() else {
@@ -3656,6 +3766,7 @@ mod tests {
                 .unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_column_exists() {
             let Some(url) = get_mysql_test_url() else {
@@ -3696,6 +3807,7 @@ mod tests {
                 .unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_get_table_info() {
             let Some(url) = get_mysql_test_url() else {
@@ -3748,6 +3860,7 @@ mod tests {
             assert!(table_info.is_none());
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
             let Some(url) = get_mysql_test_url() else {
@@ -3802,6 +3915,7 @@ mod tests {
                 .unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_mysql_varchar_length_preservation() {
             let Some(url) = get_mysql_test_url() else {

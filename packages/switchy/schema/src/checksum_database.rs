@@ -763,6 +763,22 @@ mod tests {
     }
 
     #[test]
+    fn not_like_digest_distinguishes_column_and_pattern() {
+        use sha2::{Digest as _, Sha256};
+        use switchy_database::query::{Expression as _, where_not_like};
+
+        let digest = |column: &str, pattern: &str| {
+            let expression = where_not_like(column, pattern);
+            let mut hasher = Sha256::new();
+            expression.expression_type().update_digest(&mut hasher);
+            hasher.finalize()
+        };
+        assert_eq!(digest("name", "sqlite_%"), digest("name", "sqlite_%"));
+        assert_ne!(digest("name", "sqlite_%"), digest("type", "sqlite_%"));
+        assert_ne!(digest("name", "sqlite_%"), digest("name", "other_%"));
+    }
+
+    #[test]
     fn test_database_value_digest_coverage() {
         use sha2::{Digest as _, Sha256};
 
@@ -1321,6 +1337,11 @@ impl Digest for ExpressionType<'_> {
                         val.update_digest(hasher);
                     }
                 }
+            }
+            ExpressionType::NotLike(expr) => {
+                hasher.update(b"NOTLIKE:");
+                hasher.update(expr.left.value.as_bytes());
+                expr.right.update_digest(hasher);
             }
             ExpressionType::InList(expr) => {
                 hasher.update(b"INLIST:");

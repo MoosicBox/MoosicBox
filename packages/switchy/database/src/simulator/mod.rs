@@ -268,8 +268,9 @@ impl Database for SimulationDatabase {
         self.inner.exec_delete_first(statement).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        self.inner.exec_raw(statement).await
+        self.exec_raw_internal(statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -347,9 +348,9 @@ impl Database for SimulationDatabase {
         self.inner.column_exists(table_name, column_name).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Delegate to inner database implementation
-        self.inner.query_raw(query).await
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -358,7 +359,43 @@ impl Database for SimulationDatabase {
         self.inner.begin_transaction().await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        self.exec_raw_params_internal(query, params).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        self.query_raw_params_internal(query, params).await
+    }
+}
+
+impl SimulationDatabase {
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.inner.exec_raw(statement).await
+    }
+}
+
+impl SimulationDatabase {
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Delegate to inner database implementation
+        self.inner.query_raw(query).await
+    }
+}
+
+impl SimulationDatabase {
+    pub(crate) async fn exec_raw_params_internal(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
@@ -366,8 +403,10 @@ impl Database for SimulationDatabase {
         // Delegate to inner database implementation
         self.inner.exec_raw_params(query, params).await
     }
+}
 
-    async fn query_raw_params(
+impl SimulationDatabase {
+    pub(crate) async fn query_raw_params_internal(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
@@ -382,6 +421,7 @@ mod tests {
     use super::*;
     use crate::{Database, query::FilterableQuery};
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_path_based_database_isolation() {
         // Create two databases with different paths
@@ -418,6 +458,7 @@ mod tests {
         assert_eq!(rows2[0].columns[1].1, "db2_data".into());
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_same_path_returns_same_database() {
         // Create two database instances with the same path
@@ -441,6 +482,7 @@ mod tests {
         assert_eq!(rows[0].columns[1].1, "shared_data".into());
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_simulator_transaction_delegation() {
         // Create SimulationDatabase
@@ -504,6 +546,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_simulator_transaction_rollback() {
         // Create SimulationDatabase
@@ -559,6 +602,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_simulator_introspection_delegation() {
@@ -629,6 +673,7 @@ mod tests {
         assert!(no_table_info.is_none());
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_simulator_transaction_introspection() {
@@ -656,6 +701,7 @@ mod tests {
         transaction.commit().await.unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_simulator_path_isolation() {
@@ -695,6 +741,7 @@ mod tests {
         assert!(info2.unwrap().columns.contains_key("value"));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_basic() {
@@ -724,6 +771,7 @@ mod tests {
         assert!(!tables.contains(&"table1".to_string()));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_with_transactions() {
@@ -760,6 +808,7 @@ mod tests {
         assert!(!tables_after_rollback.contains(&"tx_table".to_string()));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_isolation() {
@@ -787,6 +836,7 @@ mod tests {
         assert!(!tables2.contains(&"db1_table".to_string()));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_after_commit() {

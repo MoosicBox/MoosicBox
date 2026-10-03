@@ -50,6 +50,8 @@ test-log = { workspace = true }
 
 [features]
 default = [
+    "raw-sql",
+
     "duckdb",
     "mysql-sqlx",
     "postgres-sqlx",
@@ -57,6 +59,7 @@ default = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
 ]
+raw-sql = ["switchy_database/raw-sql"]
 
 fail-on-warnings = [
     "switchy_async?/fail-on-warnings",

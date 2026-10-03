@@ -27,11 +27,13 @@ use super::introspection::{
     postgres_list_tables, postgres_table_exists,
 };
 
+#[cfg(feature = "raw-sql")]
+use crate::sql_interval::SqlInterval;
+
 use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    sql_interval::SqlInterval,
 };
 
 trait ToSql {
@@ -40,6 +42,7 @@ trait ToSql {
 
 /// Format `SqlInterval` as `PostgreSQL` interval string for parameter binding
 /// Returns formats like "1 year 2 days 3 hours" or "0" for zero interval
+#[cfg(feature = "raw-sql")]
 fn postgres_interval_to_string(interval: &SqlInterval) -> String {
     let mut parts = Vec::new();
 
@@ -211,6 +214,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                     SortDirection::Desc => "DESC",
                 }
             ),
+            ExpressionType::NotLike(value) => format!(
+                "({} NOT LIKE {})",
+                value.left.to_sql(index),
+                value.right.to_sql(index)
+            ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
                     format!(
@@ -242,8 +250,18 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
-            ExpressionType::Identifier(value) => format_identifier(&value.value),
+            ExpressionType::Identifier(value) => {
+                #[cfg(feature = "raw-sql")]
+                {
+                    format_identifier(&value.value)
+                }
+                #[cfg(not(feature = "raw-sql"))]
+                {
+                    crate::query::render_identifier(&value.value, '"')
+                }
+            }
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins
@@ -762,44 +780,14 @@ impl Database for PostgresDatabase {
         Ok(rows)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
-        let client = self.get_client().await?;
-        client
-            .batch_execute(sql)
-            .await
-            .map_err(PostgresDatabaseError::Postgres)?;
-        Ok(())
+        self.exec_raw_internal(sql).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let client = self.get_client().await?;
-
-        let pg_rows = client
-            .query(query, &[])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        if pg_rows.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = pg_rows[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Use existing from_row helper
-        let mut rows = Vec::new();
-        for row in pg_rows {
-            rows.push(
-                from_row(&column_names, &row)
-                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
-            );
-        }
-
-        Ok(rows)
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -810,87 +798,22 @@ impl Database for PostgresDatabase {
         Ok(Box::new(transaction))
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters consistently with other backends
-        let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params);
-
-        let client = self.get_client().await?;
-
-        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
-        let pg_params: Vec<PgDatabaseValue> = filtered_params
-            .into_iter()
-            .map(PgDatabaseValue::from)
-            .collect();
-
-        // Create references for tokio_postgres (it expects &[&dyn ToSql])
-        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
-            .iter()
-            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-
-        // Execute with proper parameter binding
-        let rows_affected = client
-            .execute(&transformed_query, &param_refs[..])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        Ok(rows_affected)
+        self.exec_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters consistently with other backends
-        let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params);
-
-        let client = self.get_client().await?;
-
-        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
-        let pg_params: Vec<PgDatabaseValue> = filtered_params
-            .into_iter()
-            .map(PgDatabaseValue::from)
-            .collect();
-
-        // Create references for tokio_postgres (it expects &[&dyn ToSql])
-        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
-            .iter()
-            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-
-        // Execute with proper parameter binding
-        let pg_rows = client
-            .query(&transformed_query, &param_refs[..])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        if pg_rows.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = pg_rows[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Convert postgres rows to our Row format
-        let mut rows = Vec::new();
-        for pg_row in &pg_rows {
-            let row = from_row(&column_names, pg_row)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            rows.push(row);
-        }
-
-        Ok(rows)
+        self.query_raw_params_internal(query, params).await
     }
 }
 
@@ -1148,46 +1071,15 @@ impl Database for PostgresTransaction {
         postgres_column_exists(client_ref, table_name, column_name).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
-        self.client
-            .lock()
-            .await
-            .batch_execute(sql)
-            .await
-            .map_err(PostgresDatabaseError::Postgres)?;
-        Ok(())
+        self.exec_raw_internal(sql).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let client_ref = self.client.lock().await;
-
-        let pg_rows = client_ref
-            .query(query, &[])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        if pg_rows.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = pg_rows[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Use existing from_row helper
-        let mut rows = Vec::new();
-        for row in pg_rows {
-            rows.push(
-                from_row(&column_names, &row)
-                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
-            );
-        }
-
-        Ok(rows)
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -1198,89 +1090,22 @@ impl Database for PostgresTransaction {
         ))
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters consistently with other backends
-        let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params);
-
-        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
-        let pg_params: Vec<PgDatabaseValue> = filtered_params
-            .into_iter()
-            .map(PgDatabaseValue::from)
-            .collect();
-
-        // Create references for tokio_postgres (it expects &[&dyn ToSql])
-        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
-            .iter()
-            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-
-        // Execute with proper parameter binding
-        let rows_affected = self
-            .client
-            .lock()
-            .await
-            .execute(&transformed_query, &param_refs[..])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        Ok(rows_affected)
+        self.exec_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters consistently with other backends
-        let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params);
-
-        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
-        let pg_params: Vec<PgDatabaseValue> = filtered_params
-            .into_iter()
-            .map(PgDatabaseValue::from)
-            .collect();
-
-        // Create references for tokio_postgres (it expects &[&dyn ToSql])
-        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
-            .iter()
-            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-
-        // Execute with proper parameter binding
-        let pg_rows = self
-            .client
-            .lock()
-            .await
-            .query(&transformed_query, &param_refs[..])
-            .await
-            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
-
-        if pg_rows.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Get column names from first row
-        let column_names: Vec<String> = pg_rows[0]
-            .columns()
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect();
-
-        // Convert postgres rows to our Row format
-        let mut rows = Vec::new();
-        for pg_row in &pg_rows {
-            let row = from_row(&column_names, pg_row)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            rows.push(row);
-        }
-
-        Ok(rows)
+        self.query_raw_params_internal(query, params).await
     }
 }
 
@@ -1498,7 +1323,7 @@ impl crate::DatabaseTransaction for PostgresTransaction {
             "
         );
 
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         let mut result = Vec::new();
         for row in rows {
@@ -1537,7 +1362,7 @@ impl crate::DatabaseTransaction for PostgresTransaction {
             sanitize_value(table_name)
         );
 
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         if let Some(row) = rows.first()
             && let Some((_, crate::DatabaseValue::Bool(has_deps))) = row.columns.first()
@@ -1571,7 +1396,7 @@ impl crate::DatabaseTransaction for PostgresTransaction {
             sanitize_value(table_name)
         );
 
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         let mut dependents = std::collections::BTreeSet::new();
         for row in rows {
@@ -1814,6 +1639,11 @@ async fn postgres_exec_create_table(
         query.push_str(", PRIMARY KEY (");
         query.push_str(primary_key);
         query.push(')');
+    }
+
+    for constraint in &statement.constraints {
+        query.push_str(", ");
+        query.push_str(&constraint.render('"'));
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -3432,6 +3262,7 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 fn postgres_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
@@ -3508,6 +3339,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_table_exists() {
         let Some(url) = get_postgres_test_url() else {
@@ -3534,6 +3366,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_list_tables() {
         let Some(url) = get_postgres_test_url() else {
@@ -3592,6 +3425,7 @@ mod tests {
             .ok();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_column_metadata() {
         let Some(url) = get_postgres_test_url() else {
@@ -3642,6 +3476,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_constraints() {
         let Some(url) = get_postgres_test_url() else {
@@ -3691,6 +3526,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_type_mapping() {
         let Some(url) = get_postgres_test_url() else {
@@ -3751,6 +3587,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_default_values() {
         let Some(url) = get_postgres_test_url() else {
@@ -3802,6 +3639,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_postgres_transaction_isolation() {
         let Some(url) = get_postgres_test_url() else {
@@ -4003,5 +3841,285 @@ mod tests {
 
         // Commit transaction
         tx.commit().await.unwrap();
+    }
+}
+
+impl PostgresDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, sql: &str) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        client
+            .batch_execute(sql)
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        Ok(())
+    }
+}
+
+impl PostgresDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+
+        let pg_rows = client
+            .query(query, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in pg_rows {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+}
+
+impl PostgresDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters consistently with other backends
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params);
+
+        let client = self.get_client().await?;
+
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
+
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
+        let rows_affected = client
+            .execute(&transformed_query, &param_refs[..])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+
+        Ok(rows_affected)
+    }
+}
+
+impl PostgresDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters consistently with other backends
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params);
+
+        let client = self.get_client().await?;
+
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
+
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
+        let pg_rows = client
+            .query(&transformed_query, &param_refs[..])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert postgres rows to our Row format
+        let mut rows = Vec::new();
+        for pg_row in &pg_rows {
+            let row = from_row(&column_names, pg_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
+}
+
+impl PostgresTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, sql: &str) -> Result<(), DatabaseError> {
+        self.client
+            .lock()
+            .await
+            .batch_execute(sql)
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        Ok(())
+    }
+}
+
+impl PostgresTransaction {
+    #[cfg(any(feature = "raw-sql", feature = "cascade"))]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client_ref = self.client.lock().await;
+
+        let pg_rows = client_ref
+            .query(query, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+        drop(client_ref);
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in pg_rows {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+}
+
+impl PostgresTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters consistently with other backends
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params);
+
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
+
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
+        let rows_affected = self
+            .client
+            .lock()
+            .await
+            .execute(&transformed_query, &param_refs[..])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+
+        Ok(rows_affected)
+    }
+}
+
+impl PostgresTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters consistently with other backends
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params);
+
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
+
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
+        let pg_rows = self
+            .client
+            .lock()
+            .await
+            .query(&transformed_query, &param_refs[..])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert postgres rows to our Row format
+        let mut rows = Vec::new();
+        for pg_row in &pg_rows {
+            let row = from_row(&column_names, pg_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
     }
 }

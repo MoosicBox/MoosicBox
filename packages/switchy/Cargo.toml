@@ -45,7 +45,9 @@ switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
 tokio         = { workspace = true, features = ["macros"] }
 
 [features]
-default = ["all"]
+database-connection-raw-sql = ["switchy_database_connection?/raw-sql"]
+database-raw-sql            = ["switchy_database?/raw-sql", "switchy_schema?/raw-sql"]
+default                     = ["all", "database-connection-raw-sql", "database-raw-sql"]
 
 fail-on-warnings = [
     "switchy_async?/fail-on-warnings",

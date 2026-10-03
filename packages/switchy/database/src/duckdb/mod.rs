@@ -363,6 +363,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                     SortDirection::Desc => "DESC",
                 }
             ),
+            ExpressionType::NotLike(value) => format!(
+                "({} NOT LIKE {})",
+                value.left.to_sql(),
+                value.right.to_sql()
+            ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
                     format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
@@ -385,8 +390,9 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
-            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
@@ -1479,6 +1485,13 @@ fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -
         col_defs.push(format!("PRIMARY KEY (\"{pk}\")"));
     }
 
+    col_defs.extend(
+        statement
+            .constraints
+            .iter()
+            .map(|constraint| constraint.render('"')),
+    );
+
     for (col, ref_table) in &statement.foreign_keys {
         col_defs.push(format!("FOREIGN KEY (\"{col}\") REFERENCES {ref_table}"));
     }
@@ -2311,47 +2324,15 @@ impl Database for DuckDbDatabase {
         .await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
-        let statement = statement.to_string();
-
-        run_duckdb_blocking("duckdb_exec_raw", move || {
-            log::trace!("exec_raw: query:\n{statement}");
-            connection
-                .blocking_lock()
-                .execute_batch(&statement)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            Ok(())
-        })
-        .await
+        self.exec_raw_internal(statement).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
-        let query = query.to_string();
-
-        run_duckdb_blocking("duckdb_query_raw", move || {
-            let connection = connection.blocking_lock();
-
-            let mut stmt = connection
-                .prepare(&query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let mut rows = stmt
-                .query([])
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let column_names: Vec<String> = rows
-                .as_ref()
-                .map(::duckdb::Statement::column_names)
-                .unwrap_or_default();
-
-            to_rows(&column_names, &mut rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
-        })
-        .await
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -2369,90 +2350,23 @@ impl Database for DuckDbDatabase {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let (transformed_query, filtered_params) =
-            duckdb_transform_query_for_params(query, params)?;
-
-        let connection = self.get_connection();
-        let duckdb_params: Vec<DuckDbDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        let original_query = query.to_string();
-
-        run_duckdb_blocking("duckdb_exec_raw_params", move || {
-            let connection_guard = connection.blocking_lock();
-
-            let mut stmt = connection_guard
-                .prepare(&transformed_query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            log::trace!(
-                "\
-                exec_raw_params: query:\n\
-                '{transformed_query}' (transformed from '{original_query}')\n\
-                raw: {duckdb_params:?}\
-                "
-            );
-
-            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let rows_affected = stmt
-                .raw_execute()
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            Ok(rows_affected as u64)
-        })
-        .await
+        self.exec_raw_params_internal(query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let (transformed_query, filtered_params) =
-            duckdb_transform_query_for_params(query, params)?;
-
-        let connection = self.get_connection();
-        let duckdb_params: Vec<DuckDbDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        let original_query = query.to_string();
-
-        run_duckdb_blocking("duckdb_query_raw_params", move || {
-            let connection_guard = connection.blocking_lock();
-
-            let mut stmt = connection_guard
-                .prepare(&transformed_query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            log::trace!(
-                "\
-                query_raw_params: query:\n\
-                '{transformed_query}' (transformed from '{original_query}')\n\
-                raw: {duckdb_params:?}\
-                "
-            );
-
-            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            stmt.raw_execute()
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let column_names = stmt.column_names();
-
-            to_rows(&column_names, &mut stmt.raw_query())
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
-        })
-        .await
+        self.query_raw_params_internal(query, params).await
     }
 
     #[cfg(feature = "schema")]
@@ -3004,43 +2918,15 @@ impl Database for DuckDbTransaction {
         .await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        let connection = Arc::clone(&self.connection);
-        let statement = statement.to_string();
-        run_duckdb_blocking("duckdb_tx_exec_raw", move || {
-            connection
-                .blocking_lock()
-                .execute_batch(&statement)
-                .map_err(DuckDbDatabaseError::DuckDb)?;
-            Ok(())
-        })
-        .await
+        self.exec_raw_internal(statement).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = Arc::clone(&self.connection);
-        let query = query.to_string();
-
-        run_duckdb_blocking("duckdb_tx_query_raw", move || {
-            let connection = connection.blocking_lock();
-
-            let mut stmt = connection
-                .prepare(&query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let mut rows = stmt
-                .query([])
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let column_names: Vec<String> = rows
-                .as_ref()
-                .map(::duckdb::Statement::column_names)
-                .unwrap_or_default();
-
-            to_rows(&column_names, &mut rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
-        })
-        .await
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -3050,70 +2936,23 @@ impl Database for DuckDbTransaction {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let (transformed_query, filtered_params) =
-            duckdb_transform_query_for_params(query, params)?;
-
-        let connection = Arc::clone(&self.connection);
-
-        let duckdb_params: Vec<DuckDbDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        run_duckdb_blocking("duckdb_tx_exec_raw_params", move || {
-            let connection_guard = connection.blocking_lock();
-
-            let mut stmt = connection_guard
-                .prepare(&transformed_query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            let rows_affected = stmt
-                .raw_execute()
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            Ok(rows_affected as u64)
-        })
-        .await
+        self.exec_raw_params_internal(query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let (transformed_query, filtered_params) =
-            duckdb_transform_query_for_params(query, params)?;
-
-        let connection = Arc::clone(&self.connection);
-
-        let duckdb_params: Vec<DuckDbDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        run_duckdb_blocking("duckdb_tx_query_raw_params", move || {
-            let connection_guard = connection.blocking_lock();
-
-            let mut stmt = connection_guard
-                .prepare(&transformed_query)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-            stmt.raw_execute()
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let column_names = stmt.column_names();
-
-            to_rows(&column_names, &mut stmt.raw_query())
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
-        })
-        .await
+        self.query_raw_params_internal(query, params).await
     }
 
     #[cfg(feature = "schema")]
@@ -3481,6 +3320,278 @@ impl Expression for DuckDbDatabaseValue {
     }
 }
 
+impl DuckDbDatabase {
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
+        let connection = self.get_connection();
+        let statement = statement.to_string();
+
+        run_duckdb_blocking("duckdb_exec_raw", move || {
+            log::trace!("exec_raw: query:\n{statement}");
+            connection
+                .blocking_lock()
+                .execute_batch(&statement)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            Ok(())
+        })
+        .await
+    }
+}
+
+impl DuckDbDatabase {
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
+        let connection = self.get_connection();
+        let query = query.to_string();
+
+        run_duckdb_blocking("duckdb_query_raw", move || {
+            let connection = connection.blocking_lock();
+
+            let mut stmt = connection
+                .prepare(&query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let mut rows = stmt
+                .query([])
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let column_names: Vec<String> = rows
+                .as_ref()
+                .map(::duckdb::Statement::column_names)
+                .unwrap_or_default();
+
+            let result = to_rows(&column_names, &mut rows)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            drop(rows);
+            drop(stmt);
+            drop(connection);
+            result
+        })
+        .await
+    }
+}
+
+impl DuckDbDatabase {
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+
+        let connection = self.get_connection();
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        let original_query = query.to_string();
+
+        run_duckdb_blocking("duckdb_exec_raw_params", move || {
+            let connection_guard = connection.blocking_lock();
+
+            let mut stmt = connection_guard
+                .prepare(&transformed_query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            log::trace!(
+                "\
+                exec_raw_params: query:\n\
+                '{transformed_query}' (transformed from '{original_query}')\n\
+                raw: {duckdb_params:?}\
+                "
+            );
+
+            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let rows_affected = stmt
+                .raw_execute()
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            drop(stmt);
+            drop(connection_guard);
+            Ok(rows_affected as u64)
+        })
+        .await
+    }
+}
+
+impl DuckDbDatabase {
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+
+        let connection = self.get_connection();
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        let original_query = query.to_string();
+
+        run_duckdb_blocking("duckdb_query_raw_params", move || {
+            let connection_guard = connection.blocking_lock();
+
+            let mut stmt = connection_guard
+                .prepare(&transformed_query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            log::trace!(
+                "\
+                query_raw_params: query:\n\
+                '{transformed_query}' (transformed from '{original_query}')\n\
+                raw: {duckdb_params:?}\
+                "
+            );
+
+            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            stmt.raw_execute()
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            let column_names = stmt.column_names();
+
+            let result = to_rows(&column_names, &mut stmt.raw_query())
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            drop(stmt);
+            drop(connection_guard);
+            result
+        })
+        .await
+    }
+}
+
+impl DuckDbTransaction {
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        let connection = Arc::clone(&self.connection);
+        let statement = statement.to_string();
+        run_duckdb_blocking("duckdb_tx_exec_raw", move || {
+            connection
+                .blocking_lock()
+                .execute_batch(&statement)
+                .map_err(DuckDbDatabaseError::DuckDb)?;
+            Ok(())
+        })
+        .await
+    }
+}
+
+impl DuckDbTransaction {
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = Arc::clone(&self.connection);
+        let query = query.to_string();
+
+        run_duckdb_blocking("duckdb_tx_query_raw", move || {
+            let connection = connection.blocking_lock();
+
+            let mut stmt = connection
+                .prepare(&query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let mut rows = stmt
+                .query([])
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let column_names: Vec<String> = rows
+                .as_ref()
+                .map(::duckdb::Statement::column_names)
+                .unwrap_or_default();
+
+            let result = to_rows(&column_names, &mut rows)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            drop(rows);
+            drop(stmt);
+            drop(connection);
+            result
+        })
+        .await
+    }
+}
+
+impl DuckDbTransaction {
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+
+        let connection = Arc::clone(&self.connection);
+
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        run_duckdb_blocking("duckdb_tx_exec_raw_params", move || {
+            let connection_guard = connection.blocking_lock();
+
+            let mut stmt = connection_guard
+                .prepare(&transformed_query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            let rows_affected = stmt
+                .raw_execute()
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            drop(stmt);
+            drop(connection_guard);
+            Ok(rows_affected as u64)
+        })
+        .await
+    }
+}
+
+impl DuckDbTransaction {
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+
+        let connection = Arc::clone(&self.connection);
+
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        run_duckdb_blocking("duckdb_tx_query_raw_params", move || {
+            let connection_guard = connection.blocking_lock();
+
+            let mut stmt = connection_guard
+                .prepare(&transformed_query)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            bind_values_raw(&mut stmt, Some(&duckdb_params), 0)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+            stmt.raw_execute()
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            let column_names = stmt.column_names();
+
+            let result = to_rows(&column_names, &mut stmt.raw_query())
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            drop(stmt);
+            drop(connection_guard);
+            result
+        })
+        .await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3604,6 +3715,7 @@ mod tests {
         tx.rollback().await.expect("Failed to rollback transaction");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_exec_raw() {
         let db = create_test_db();
@@ -3624,6 +3736,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_exec_raw_params() {
         let db = create_test_db();
@@ -3670,6 +3783,7 @@ mod tests {
         tx.rollback().await.expect("Failed to rollback transaction");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_isolation() {
         // DuckDB uses a single shared connection wrapped in Arc<Mutex>, so
@@ -3712,6 +3826,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_query_builder_select() {
         let db = create_test_db();
@@ -3743,6 +3858,7 @@ mod tests {
         assert_eq!(rows[0].get("value"), Some(DatabaseValue::Int32(20)));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_query_builder_update() {
         let db = create_test_db();
@@ -3763,6 +3879,7 @@ mod tests {
         assert_eq!(rows[0].get("value"), Some(DatabaseValue::Int32(99)));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_query_builder_delete() {
         let db = create_test_db();
@@ -3902,6 +4019,7 @@ mod tests {
         assert!(none_info.is_none());
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_schema_create_and_drop_table() {

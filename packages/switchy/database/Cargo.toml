@@ -87,11 +87,14 @@ tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 uuid = { workspace = true }
 
 [[bench]]
-harness = false
-name    = "database_benchmarks"
+harness           = false
+name              = "database_benchmarks"
+required-features = ["raw-sql"]
 
 [features]
 default = [
+    "raw-sql",
+
     "all-placeholders",
     "api",
     "auto-reverse",
@@ -107,6 +110,7 @@ default = [
     "turso",
     "uuid",
 ]
+raw-sql = []
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",

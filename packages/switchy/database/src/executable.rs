@@ -50,6 +50,7 @@ pub trait Executable: Send + Sync {
 
 /// Implement `Executable` for String (raw SQL)
 #[async_trait]
+#[cfg(feature = "raw-sql")]
 impl Executable for String {
     async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
         db.exec_raw(self).await
@@ -58,6 +59,7 @@ impl Executable for String {
 
 /// Implement `Executable` for &str (raw SQL)
 #[async_trait]
+#[cfg(feature = "raw-sql")]
 impl Executable for &str {
     async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
         db.exec_raw(self).await

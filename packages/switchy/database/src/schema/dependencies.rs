@@ -800,6 +800,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_edge_case_self_references() {
             let db = SimulationDatabase::new().unwrap();
@@ -892,6 +893,7 @@ mod tests {
             tx2.commit().await.unwrap();
         }
 
+        #[cfg(feature = "raw-sql")]
         #[switchy_async::test]
         async fn test_complex_dependency_chains() {
             let db = SimulationDatabase::new().unwrap();
@@ -1325,6 +1327,7 @@ mod tests {
         assert!(deps.foreign_keys.contains(&"fk_user_email".to_string()));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "simulator")]
     #[switchy_async::test]
     async fn test_get_column_dependencies_empty_table() {

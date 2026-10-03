@@ -53,7 +53,10 @@ tempfile = { workspace = true }
 test-log = { workspace = true }
 
 [features]
-default = ["all-discovery", "auto-reverse", "decimal", "uuid"]
+default = ["all-discovery", "auto-reverse", "decimal", "raw-sql", "uuid"]
+
+# Transitional compatibility; typed consumers explicitly disable defaults.
+raw-sql = ["switchy_database/raw-sql"]
 
 fail-on-warnings = [
     "moosicbox_json_utils/fail-on-warnings",

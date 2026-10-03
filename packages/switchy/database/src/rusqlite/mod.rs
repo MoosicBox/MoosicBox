@@ -111,7 +111,6 @@ use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
     SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -196,6 +195,16 @@ fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
     }
 }
 
+#[derive(Debug)]
+struct PoolState {
+    available: Vec<Arc<Mutex<Connection>>>,
+    closed: bool,
+}
+
+type ConnectionPool = Arc<std::sync::Mutex<PoolState>>;
+
+pub use crate::TransactionMode;
+
 /// `SQLite` database connection pool using `rusqlite`
 ///
 /// Manages a pool of `SQLite` connections using round-robin selection for distributing
@@ -204,25 +213,85 @@ fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct RusqliteDatabase {
-    connections: Vec<Arc<Mutex<Connection>>>,
+    connections: ConnectionPool,
     next_connection: AtomicUsize,
 }
+
+#[cfg(feature = "raw-sql")]
+use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};
 
 impl RusqliteDatabase {
     /// Creates a new `SQLite` database instance from a vector of connections
     ///
     /// The connections are used in round-robin fashion to distribute load.
     #[must_use]
-    pub const fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
+    pub fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
         Self {
-            connections,
+            connections: Arc::new(std::sync::Mutex::new(PoolState {
+                available: connections,
+                closed: false,
+            })),
             next_connection: AtomicUsize::new(0),
         }
     }
 
-    fn get_connection(&self) -> Arc<Mutex<Connection>> {
-        let index = self.next_connection.fetch_add(1, Ordering::Relaxed) % self.connections.len();
-        self.connections[index].clone()
+    fn get_connection(&self) -> Result<Arc<Mutex<Connection>>, DatabaseError> {
+        let connections = self
+            .connections
+            .lock()
+            .map_err(|_| DatabaseError::ConnectionClosed)?;
+        if connections.closed {
+            return Err(DatabaseError::ConnectionClosed);
+        }
+        if connections.available.is_empty() {
+            return Err(DatabaseError::Busy);
+        }
+        let index =
+            self.next_connection.fetch_add(1, Ordering::Relaxed) % connections.available.len();
+        Ok(connections.available[index].clone())
+    }
+
+    /// Reserves an exclusively owned pool connection for a transaction.
+    ///
+    /// # Errors
+    /// Returns busy if every connection is in use, or a driver error if BEGIN fails.
+    pub async fn transaction_with_mode(
+        &self,
+        mode: TransactionMode,
+    ) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+        let connection = {
+            let mut connections = self
+                .connections
+                .lock()
+                .map_err(|_| DatabaseError::ConnectionClosed)?;
+            if connections.closed {
+                return Err(DatabaseError::ConnectionClosed);
+            }
+            let index = connections
+                .available
+                .iter()
+                .position(|connection| Arc::strong_count(connection) == 1)
+                .ok_or(DatabaseError::Busy)?;
+            connections.available.remove(index)
+        };
+        let transaction = RusqliteTransaction {
+            connection,
+            committed: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
+            pool: Some(Arc::clone(&self.connections)),
+        };
+        let begin = match mode {
+            TransactionMode::Deferred => "BEGIN DEFERRED",
+            TransactionMode::Immediate => "BEGIN IMMEDIATE",
+            TransactionMode::Exclusive => "BEGIN EXCLUSIVE",
+        };
+        transaction
+            .connection
+            .lock()
+            .await
+            .execute(begin, [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(Box::new(transaction))
     }
 }
 
@@ -236,6 +305,28 @@ pub struct RusqliteTransaction {
     connection: Arc<Mutex<Connection>>,
     committed: AtomicBool,
     rolled_back: AtomicBool,
+    pool: Option<ConnectionPool>,
+}
+
+impl Drop for RusqliteTransaction {
+    fn drop(&mut self) {
+        let Ok(connection) = self.connection.try_lock() else {
+            return;
+        };
+        if !connection.is_autocommit() && connection.execute_batch("ROLLBACK").is_err() {
+            return;
+        }
+        drop(connection);
+        if Arc::strong_count(&self.connection) != 1 {
+            return;
+        }
+        if let Some(pool) = &self.pool
+            && let Ok(mut connections) = pool.lock()
+            && !connections.closed
+        {
+            connections.available.push(Arc::clone(&self.connection));
+        }
+    }
 }
 
 impl RusqliteTransaction {
@@ -246,6 +337,7 @@ impl RusqliteTransaction {
             connection,
             committed: AtomicBool::new(false),
             rolled_back: AtomicBool::new(false),
+            pool: None,
         }
     }
 }
@@ -331,6 +423,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                     SortDirection::Desc => "DESC",
                 }
             ),
+            ExpressionType::NotLike(value) => format!(
+                "({} NOT LIKE {})",
+                value.left.to_sql(),
+                value.right.to_sql()
+            ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
                     format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
@@ -353,8 +450,9 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
-            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
@@ -465,6 +563,13 @@ pub enum RusqliteDatabaseError {
 
 impl From<RusqliteDatabaseError> for DatabaseError {
     fn from(value: RusqliteDatabaseError) -> Self {
+        if let RusqliteDatabaseError::Rusqlite(rusqlite::Error::SqliteFailure(error, _)) = &value {
+            match error.code {
+                rusqlite::ErrorCode::DatabaseBusy => return Self::Busy,
+                rusqlite::ErrorCode::DatabaseLocked => return Self::Locked,
+                _ => {}
+            }
+        }
         Self::Rusqlite(value)
     }
 }
@@ -538,8 +643,61 @@ fn rusqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for RusqliteDatabase {
+    async fn begin_transaction_with_mode(
+        &self,
+        mode: TransactionMode,
+    ) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+        self.transaction_with_mode(mode).await
+    }
+
+    async fn exec_update_count(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = self.get_connection()?;
+        Ok(update_count(
+            &*connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+    async fn exec_delete_count(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = self.get_connection()?;
+        Ok(delete_count(
+            &*connection.lock().await,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    fn trigger_close(&self) -> Result<(), DatabaseError> {
+        let mut pool = self
+            .connections
+            .lock()
+            .map_err(|_| DatabaseError::ConnectionClosed)?;
+        // Do not declare closure while operations/transactions can still own handles.
+        if Arc::strong_count(&self.connections) != 1
+            || pool
+                .available
+                .iter()
+                .any(|connection| Arc::strong_count(connection) != 1)
+        {
+            return Err(DatabaseError::Busy);
+        }
+        pool.closed = true;
+        pool.available.clear();
+        drop(pool);
+        Ok(())
+    }
+
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(select(
             &*connection.lock().await,
             query.table_name,
@@ -556,7 +714,7 @@ impl Database for RusqliteDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(find_row(
             &*connection.lock().await,
             query.table_name,
@@ -572,7 +730,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(delete(
             &*connection.lock().await,
             statement.table_name,
@@ -585,7 +743,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(delete(
             &*connection.lock().await,
             statement.table_name,
@@ -600,7 +758,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(insert_and_get_row(
             &*connection.lock().await,
             statement.table_name,
@@ -612,7 +770,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(update_and_get_rows(
             &*connection.lock().await,
             statement.table_name,
@@ -626,7 +784,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(update_and_get_row(
             &*connection.lock().await,
             statement.table_name,
@@ -640,7 +798,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(upsert(
             &*connection.lock().await,
             statement.table_name,
@@ -654,7 +812,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(upsert_and_get_row(
             &*connection.lock().await,
             statement.table_name,
@@ -668,7 +826,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         Ok(upsert_multi(
             &*connection.lock().await,
             statement.table_name,
@@ -680,16 +838,9 @@ impl Database for RusqliteDatabase {
         )?)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
-        log::trace!("exec_raw: query:\n{statement}");
-
-        connection
-            .lock()
-            .await
-            .execute_batch(statement)
-            .map_err(RusqliteDatabaseError::Rusqlite)?;
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -697,7 +848,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_exec_create_table(&*connection.lock().await, statement)
     }
 
@@ -706,7 +857,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_exec_drop_table(&*connection.lock().await, statement)
     }
 
@@ -715,7 +866,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_exec_create_index(&*connection.lock().await, statement)
     }
 
@@ -724,7 +875,7 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_exec_drop_index(&*connection.lock().await, statement)
     }
 
@@ -733,19 +884,19 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_exec_alter_table(&*connection.lock().await, statement)
     }
 
     #[cfg(feature = "schema")]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_table_exists(&*connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_list_tables(&*connection.lock().await)
     }
 
@@ -754,7 +905,7 @@ impl Database for RusqliteDatabase {
         &self,
         table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_get_table_info(&*connection.lock().await, table_name)
     }
 
@@ -763,7 +914,7 @@ impl Database for RusqliteDatabase {
         &self,
         table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_get_table_columns(&*connection.lock().await, table_name)
     }
 
@@ -773,138 +924,71 @@ impl Database for RusqliteDatabase {
         table_name: &str,
         column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        let connection = self.get_connection();
+        let connection = self.get_connection()?;
         rusqlite_column_exists(&*connection.lock().await, table_name, column_name)
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.get_connection();
-        let connection = connection.lock().await;
-
-        let mut stmt = connection
-            .prepare(query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Get column names from the statement
-        let column_names: Vec<String> =
-            stmt.column_names().iter().map(|&s| s.to_string()).collect();
-
-        // Execute query and use existing to_rows helper
-        let rows = stmt
-            .query([])
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Use the existing to_rows function from rusqlite/mod.rs
-        to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // Get dedicated connection from pool for transaction
-        let connection = self.get_connection();
-
-        // Execute BEGIN TRANSACTION on the dedicated connection
-        connection
-            .lock()
-            .await
-            .execute("BEGIN TRANSACTION", [])
-            .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-        // Create and return the transaction with dedicated connection
-        Ok(Box::new(RusqliteTransaction::new(connection)))
+        self.transaction_with_mode(TransactionMode::Deferred).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) =
-            sqlite_transform_query_for_params(query, params)?;
-
-        let connection = self.get_connection();
-        let connection_guard = connection.lock().await;
-
-        let mut stmt = connection_guard
-            .prepare(&transformed_query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Convert only filtered params to RusqliteDatabaseValue
-        let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        log::trace!(
-            "\
-            exec_raw_params: query:\n\
-            '{transformed_query}' (transformed from '{query}')\n\
-            params: {params:?}\n\
-            filtered: {filtered_params:?}\n\
-            raw: {rusqlite_params:?}\
-            "
-        );
-
-        // Bind parameters, including SQL NULL for null-like values
-        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        let rows_affected = stmt
-            .raw_execute()
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        Ok(rows_affected as u64)
+        self.exec_raw_params_internal(query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) =
-            sqlite_transform_query_for_params(query, params)?;
-
-        let connection = self.get_connection();
-        let connection_guard = connection.lock().await;
-
-        let mut stmt = connection_guard
-            .prepare(&transformed_query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Get column names
-        let column_names: Vec<String> =
-            stmt.column_names().iter().map(|&s| s.to_string()).collect();
-
-        // Convert only filtered params using existing conversion
-        let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        log::trace!(
-            "\
-            query_raw_params: query:\n\
-            '{transformed_query}' (transformed from '{query}')\n\
-            params: {params:?}\n\
-            filtered: {filtered_params:?}\n\
-            raw: {rusqlite_params:?}\
-            "
-        );
-
-        // Bind parameters, including SQL NULL for null-like values
-        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Execute and use existing to_rows helper
-        to_rows(&column_names, stmt.raw_query())
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+        self.query_raw_params_internal(query, params).await
     }
 }
 
 #[async_trait]
 impl Database for RusqliteTransaction {
+    async fn exec_update_count(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = &self.connection;
+        Ok(update_count(
+            &*connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+    async fn exec_delete_count(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = &self.connection;
+        Ok(delete_count(
+            &*connection.lock().await,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             &*self.connection.lock().await,
@@ -1044,13 +1128,9 @@ impl Database for RusqliteTransaction {
         Ok(results)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        self.connection
-            .lock()
-            .await
-            .execute_batch(statement)
-            .map_err(RusqliteDatabaseError::Rusqlite)?;
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
     #[cfg(feature = "schema")]
@@ -1129,24 +1209,9 @@ impl Database for RusqliteTransaction {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
-        let connection = self.connection.lock().await;
-
-        let mut stmt = connection
-            .prepare(query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Get column names from the statement
-        let column_names: Vec<String> =
-            stmt.column_names().iter().map(|&s| s.to_string()).collect();
-
-        // Execute query and use existing to_rows helper
-        let rows = stmt
-            .query([])
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Use the existing to_rows function from rusqlite/mod.rs
-        to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+        self.query_raw_internal(query).await
     }
 
     async fn begin_transaction(
@@ -1157,71 +1222,29 @@ impl Database for RusqliteTransaction {
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) =
-            sqlite_transform_query_for_params(query, params)?;
-
-        let connection_guard = self.connection.lock().await;
-
-        let mut stmt = connection_guard
-            .prepare(&transformed_query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Convert only filtered params to RusqliteDatabaseValue
-        let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        // Bind parameters, including SQL NULL for null-like values
-        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        let rows_affected = stmt
-            .raw_execute()
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        Ok(rows_affected as u64)
+        self.exec_raw_params_internal(query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        // Transform query to handle Now/NowPlus parameters
-        let (transformed_query, filtered_params) =
-            sqlite_transform_query_for_params(query, params)?;
-
-        let connection_guard = self.connection.lock().await;
-
-        let mut stmt = connection_guard
-            .prepare(&transformed_query)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Get column names
-        let column_names: Vec<String> =
-            stmt.column_names().iter().map(|&s| s.to_string()).collect();
-
-        // Convert only filtered params using existing conversion
-        let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            filtered_params.iter().map(|p| p.clone().into()).collect();
-
-        // Bind parameters, including SQL NULL for null-like values
-        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-
-        // Execute and use existing to_rows helper
-        to_rows(&column_names, stmt.raw_query())
-            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+        self.query_raw_params_internal(query, params).await
     }
 }
 
 struct RusqliteSavepoint {
+    // Keep close fenced while a savepoint can still reference the leased connection.
+    _pool: Option<ConnectionPool>,
     name: String,
     connection: Arc<Mutex<Connection>>,
     released: AtomicBool,
@@ -1334,6 +1357,7 @@ impl DatabaseTransaction for RusqliteTransaction {
             .map_err(RusqliteDatabaseError::Rusqlite)?;
 
         Ok(Box::new(RusqliteSavepoint {
+            _pool: self.pool.clone(),
             name: name.to_string(),
             connection: Arc::clone(&self.connection),
             released: AtomicBool::new(false),
@@ -1359,7 +1383,7 @@ impl DatabaseTransaction for RusqliteTransaction {
             // Get all tables using query_raw
             let tables_query =
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-            let tables = self.query_raw(tables_query).await?;
+            let tables = self.query_raw_internal(tables_query).await?;
 
             for table_row in tables {
                 if let Some((_, crate::DatabaseValue::String(check_table))) =
@@ -1372,7 +1396,7 @@ impl DatabaseTransaction for RusqliteTransaction {
                     // Validate table name for PRAGMA (cannot be parameterized)
                     crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
                     let fk_query = format!("PRAGMA foreign_key_list({check_table})");
-                    let fk_rows = self.query_raw(&fk_query).await?;
+                    let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                     for fk_row in fk_rows {
                         // Column 2 is the referenced table
@@ -1404,7 +1428,7 @@ impl DatabaseTransaction for RusqliteTransaction {
     async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
         let tables_query =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-        let tables = self.query_raw(tables_query).await?;
+        let tables = self.query_raw_internal(tables_query).await?;
 
         for table_row in tables {
             if let Some((_, crate::DatabaseValue::String(check_table))) = table_row.columns.first()
@@ -1415,7 +1439,7 @@ impl DatabaseTransaction for RusqliteTransaction {
 
                 crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
                 let fk_query = format!("PRAGMA foreign_key_list({check_table})");
-                let fk_rows = self.query_raw(&fk_query).await?;
+                let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                 for fk_row in fk_rows {
                     if let Some((_, crate::DatabaseValue::String(ref_table))) =
@@ -1440,7 +1464,7 @@ impl DatabaseTransaction for RusqliteTransaction {
         let mut dependents = std::collections::BTreeSet::new();
         let tables_query =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-        let tables = self.query_raw(tables_query).await?;
+        let tables = self.query_raw_internal(tables_query).await?;
 
         for table_row in tables {
             if let Some((_, crate::DatabaseValue::String(check_table))) = table_row.columns.first()
@@ -1451,7 +1475,7 @@ impl DatabaseTransaction for RusqliteTransaction {
 
                 crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
                 let fk_query = format!("PRAGMA foreign_key_list({check_table})");
-                let fk_rows = self.query_raw(&fk_query).await?;
+                let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                 for fk_row in fk_rows {
                     if let Some((_, crate::DatabaseValue::String(ref_table))) =
@@ -1522,6 +1546,23 @@ fn rusqlite_exec_create_table(
             )));
         }
 
+        if column.auto_increment
+            && !matches!(
+                column.data_type,
+                crate::schema::DataType::Bool
+                    | crate::schema::DataType::TinyInt
+                    | crate::schema::DataType::SmallInt
+                    | crate::schema::DataType::Int
+                    | crate::schema::DataType::BigInt
+                    | crate::schema::DataType::Serial
+                    | crate::schema::DataType::BigSerial
+            )
+        {
+            return Err(DatabaseError::InvalidSchema(
+                "Auto increment requires an INTEGER primary key".to_owned(),
+            ));
+        }
+
         query.push_str(&column.name);
         query.push(' ');
 
@@ -1567,6 +1608,10 @@ fn rusqlite_exec_create_table(
 
         if !column.nullable {
             query.push_str(" NOT NULL");
+        }
+
+        if column.auto_increment {
+            query.push_str(" PRIMARY KEY AUTOINCREMENT");
         }
 
         if let Some(default) = &column.default {
@@ -1676,10 +1721,17 @@ fn rusqlite_exec_create_table(
 
     moosicbox_assert::assert!(!first);
 
-    if let Some(primary_key) = &statement.primary_key {
+    if let Some(primary_key) = &statement.primary_key
+        && !statement.columns.iter().any(|column| column.auto_increment)
+    {
         query.push_str(", PRIMARY KEY (");
         query.push_str(primary_key);
         query.push(')');
+    }
+
+    for constraint in &statement.constraints {
+        query.push_str(", ");
+        query.push_str(&constraint.render('"'));
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -2953,6 +3005,54 @@ fn update_and_get_rows(
     to_rows(&column_names, statement.raw_query())
 }
 
+fn update_count(
+    connection: &Connection,
+    table_name: &str,
+    values: &[(&str, Box<dyn Expression>)],
+    filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<u64, RusqliteDatabaseError> {
+    let select_query = limit.map(|_| {
+        format!(
+            "SELECT rowid FROM {table_name} {}",
+            build_where_clause(filters),
+        )
+    });
+
+    let query = format!(
+        "UPDATE {table_name} {} {}",
+        build_set_clause(values),
+        build_update_where_clause(filters, limit, select_query.as_deref()),
+    );
+
+    let all_values = values
+        .iter()
+        .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
+        .map(std::convert::Into::into)
+        .collect::<Vec<_>>();
+    let mut all_filter_values = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    let all_values = [all_values, all_filter_values].concat();
+
+    log::trace!("Running update query: {query} with params: {all_values:?}");
+
+    let mut statement = connection.prepare_cached(&query)?;
+    bind_values(&mut statement, Some(&all_values), false, 0)?;
+    Ok(statement.raw_execute()? as u64)
+}
+
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
     joins.map_or_else(String::new, |joins| {
         joins
@@ -3072,6 +3172,7 @@ fn bind_values(
 /// `DatabaseValue::Null` (and all `*Opt(None)` variants) are bound as SQL
 /// NULL rather than skipped. This keeps the positional index in sync with `?`
 /// placeholders written by the caller in raw-parameter queries.
+#[cfg(feature = "raw-sql")]
 fn bind_values_raw(
     statement: &mut Statement<'_>,
     values: Option<&[RusqliteDatabaseValue]>,
@@ -3408,6 +3509,48 @@ fn delete(
     bind_values(&mut statement, Some(&all_filter_values), false, 0)?;
 
     to_rows(&column_names, statement.raw_query())
+}
+
+fn delete_count(
+    connection: &Connection,
+    table_name: &str,
+    filters: Option<&[Box<dyn BooleanExpression>]>,
+    limit: Option<usize>,
+) -> Result<u64, RusqliteDatabaseError> {
+    let where_clause = build_where_clause(filters);
+
+    let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
+
+    let query = format!(
+        "DELETE FROM {table_name} {}",
+        build_update_where_clause(filters, limit, select_query.as_deref()),
+    );
+
+    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters
+        .map(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .map(std::convert::Into::into)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    if limit.is_some() {
+        all_filter_values.extend(all_filter_values.clone());
+    }
+
+    log::trace!(
+        "Running delete query: {query} with params: {:?}",
+        all_filter_values
+            .iter()
+            .filter_map(super::query::Expression::params)
+            .collect::<Vec<_>>()
+    );
+
+    let mut statement = connection.prepare_cached(&query)?;
+    bind_values(&mut statement, Some(&all_filter_values), false, 0)?;
+    Ok(statement.raw_execute()? as u64)
 }
 
 fn find_row(
@@ -4176,6 +4319,7 @@ fn rusqlite_get_table_info(
     }))
 }
 
+#[cfg(feature = "raw-sql")]
 fn sqlite_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
@@ -4200,6 +4344,262 @@ fn sqlite_transform_query_for_params(
         _ => None,
     })
     .map_err(DatabaseError::QueryFailed)
+}
+
+impl RusqliteDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        let connection = self.get_connection()?;
+        log::trace!("exec_raw: query:\n{statement}");
+
+        connection
+            .lock()
+            .await
+            .execute_batch(statement)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
+    }
+}
+
+impl RusqliteDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+
+        let mut stmt = connection
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names from the statement
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Execute query and use existing to_rows helper
+        let rows = stmt
+            .query([])
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Materialize rows before releasing the connection lease.
+        let result =
+            to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+        drop(stmt);
+        drop(connection);
+        result
+    }
+}
+
+impl RusqliteDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
+        let connection = self.get_connection()?;
+        let connection_guard = connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(&transformed_query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Convert only filtered params to RusqliteDatabaseValue
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        log::trace!(
+            "\
+            exec_raw_params: query:\n\
+            '{transformed_query}' (transformed from '{query}')\n\
+            params: {params:?}\n\
+            filtered: {filtered_params:?}\n\
+            raw: {rusqlite_params:?}\
+            "
+        );
+
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        let rows_affected = stmt
+            .raw_execute()
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        drop(stmt);
+        drop(connection_guard);
+        Ok(rows_affected as u64)
+    }
+}
+
+impl RusqliteDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
+        let connection = self.get_connection()?;
+        let connection_guard = connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(&transformed_query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Convert only filtered params using existing conversion
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        log::trace!(
+            "\
+            query_raw_params: query:\n\
+            '{transformed_query}' (transformed from '{query}')\n\
+            params: {params:?}\n\
+            filtered: {filtered_params:?}\n\
+            raw: {rusqlite_params:?}\
+            "
+        );
+
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Execute and use existing to_rows helper
+        let result = to_rows(&column_names, stmt.raw_query())
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+        drop(stmt);
+        drop(connection_guard);
+        result
+    }
+}
+
+impl RusqliteTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.connection
+            .lock()
+            .await
+            .execute_batch(statement)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
+    }
+}
+
+impl RusqliteTransaction {
+    #[cfg(any(feature = "raw-sql", feature = "cascade"))]
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.connection.lock().await;
+
+        let mut stmt = connection
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names from the statement
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Execute query and use existing to_rows helper
+        let rows = stmt
+            .query([])
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Materialize rows before releasing the connection lease.
+        let result =
+            to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+        drop(stmt);
+        drop(connection);
+        result
+    }
+}
+
+impl RusqliteTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
+        let connection_guard = self.connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(&transformed_query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Convert only filtered params to RusqliteDatabaseValue
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        let rows_affected = stmt
+            .raw_execute()
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        drop(stmt);
+        drop(connection_guard);
+        Ok(rows_affected as u64)
+    }
+}
+
+impl RusqliteTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
+        let connection_guard = self.connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(&transformed_query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Convert only filtered params using existing conversion
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        // Bind parameters, including SQL NULL for null-like values
+        bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Execute and use existing to_rows helper
+        let result = to_rows(&column_names, stmt.raw_query())
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+        drop(stmt);
+        drop(connection_guard);
+        result
+    }
 }
 
 #[cfg(test)]
@@ -4567,6 +4967,7 @@ mod tests {
         tx.rollback().await.expect("Failed to rollback");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables() {
@@ -4631,6 +5032,7 @@ mod tests {
         assert!(!tables_after_rollback.contains(&"temp_table".to_string()));
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_empty_database() {
@@ -4647,6 +5049,7 @@ mod tests {
         assert!(tables.is_empty(), "Empty database should have no tables");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables_after_create_drop() {

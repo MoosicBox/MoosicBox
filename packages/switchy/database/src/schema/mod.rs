@@ -448,6 +448,41 @@ pub struct CreateTableStatement<'a> {
     pub columns: Vec<Column>,
     pub primary_key: Option<&'a str>,
     pub foreign_keys: Vec<(&'a str, &'a str)>,
+    /// Structured table constraints.
+    pub constraints: Vec<TableConstraint>,
+}
+
+/// Portable table constraints with no SQL-fragment inputs.
+#[derive(Debug, Clone)]
+pub enum TableConstraint {
+    /// Require a column to equal an integer (NULL retains SQL CHECK semantics).
+    IntegerEquals { column: String, value: i64 },
+    /// Require a combination of columns to be unique.
+    Unique(Vec<String>),
+}
+
+impl TableConstraint {
+    pub(crate) fn render(&self, quote: char) -> String {
+        let identifier = |name: &str| {
+            format!(
+                "{quote}{}{quote}",
+                name.replace(quote, &format!("{quote}{quote}"))
+            )
+        };
+        match self {
+            Self::IntegerEquals { column, value } => {
+                format!("CHECK ({} = {value})", identifier(column))
+            }
+            Self::Unique(columns) => format!(
+                "UNIQUE ({})",
+                columns
+                    .iter()
+                    .map(|name| identifier(name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
 }
 
 /// Creates a new CREATE TABLE statement builder
@@ -479,10 +514,30 @@ pub const fn create_table(table_name: &str) -> CreateTableStatement<'_> {
         columns: vec![],
         primary_key: None,
         foreign_keys: vec![],
+        constraints: vec![],
     }
 }
 
 impl<'a> CreateTableStatement<'a> {
+    /// Require a column to equal an integer; combine with NOT NULL to reject NULL.
+    #[must_use]
+    pub fn check_integer_equals(mut self, column: impl Into<String>, value: i64) -> Self {
+        self.constraints.push(TableConstraint::IntegerEquals {
+            column: column.into(),
+            value,
+        });
+        self
+    }
+
+    /// Add a composite UNIQUE constraint. Column names are quoted as exact identifiers.
+    #[must_use]
+    pub fn unique_columns(mut self, columns: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.constraints.push(TableConstraint::Unique(
+            columns.into_iter().map(Into::into).collect(),
+        ));
+        self
+    }
+
     /// Sets the IF NOT EXISTS clause for the CREATE TABLE statement
     #[must_use]
     pub const fn if_not_exists(mut self, if_not_exists: bool) -> Self {

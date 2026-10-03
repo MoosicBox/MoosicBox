@@ -250,98 +250,32 @@ impl crate::DatabaseTransaction for TursoTransaction {
 
 #[async_trait]
 impl crate::Database for TursoTransaction {
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
-        let mut stmt = self
-            .connection
-            .prepare(query)
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        let column_info = stmt.columns();
-        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
-
-        let mut rows = stmt
-            .query(())
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?
-        {
-            results.push(from_turso_row(&column_names, &row).map_err(DatabaseError::Turso)?);
-        }
-
-        Ok(results)
+        self.query_raw_internal(query).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<Vec<Row>, DatabaseError> {
-        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
-
-        let mut stmt = self
-            .connection
-            .prepare(&transformed_query)
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        let column_info = stmt.columns();
-        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
-
-        let turso_params = to_turso_params(&filtered_params).map_err(DatabaseError::Turso)?;
-
-        let mut rows = stmt
-            .query(turso_params)
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?
-        {
-            results.push(from_turso_row(&column_names, &row).map_err(DatabaseError::Turso)?);
-        }
-
-        Ok(results)
+        self.query_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        self.connection
-            .execute(statement, ())
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
-
-        let turso_params = to_turso_params(&filtered_params).map_err(DatabaseError::Turso)?;
-
-        let mut stmt = self
-            .connection
-            .prepare(&transformed_query)
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        let affected_rows = stmt
-            .execute(turso_params)
-            .await
-            .map_err(|e| DatabaseError::Turso(e.into()))?;
-
-        Ok(affected_rows)
+        self.exec_raw_params_internal(query, params).await
     }
 
     async fn begin_transaction(
@@ -547,7 +481,7 @@ impl crate::Database for TursoTransaction {
     async fn table_exists(&self, table: &str) -> Result<bool, DatabaseError> {
         let query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
         let rows = self
-            .query_raw_params(query, &[DatabaseValue::String(table.to_string())])
+            .query_raw_params_internal(query, &[DatabaseValue::String(table.to_string())])
             .await?;
         Ok(!rows.is_empty())
     }
@@ -556,7 +490,7 @@ impl crate::Database for TursoTransaction {
     async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
         let query =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-        let rows = self.query_raw(query).await?;
+        let rows = self.query_raw_internal(query).await?;
 
         Ok(rows
             .into_iter()
@@ -594,7 +528,7 @@ impl crate::Database for TursoTransaction {
             let index_query =
                 "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?";
             let index_rows = self
-                .query_raw_params(index_query, &[DatabaseValue::String(table.to_string())])
+                .query_raw_params_internal(index_query, &[DatabaseValue::String(table.to_string())])
                 .await?;
 
             let mut indexes = std::collections::BTreeMap::new();
@@ -658,7 +592,7 @@ impl crate::Database for TursoTransaction {
         let foreign_keys = {
             let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
             let create_sql_rows = self
-                .query_raw_params(
+                .query_raw_params_internal(
                     create_sql_query,
                     &[DatabaseValue::String(table.to_string())],
                 )
@@ -733,11 +667,11 @@ impl crate::Database for TursoTransaction {
         table: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
         let query = format!("PRAGMA table_info({table})");
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
         let create_sql_rows = self
-            .query_raw_params(
+            .query_raw_params_internal(
                 create_sql_query,
                 &[DatabaseValue::String(table.to_string())],
             )
@@ -841,5 +775,109 @@ fn strip_identifier_quotes(identifier: &str) -> String {
         identifier[1..identifier.len() - 1].replace("''", "'")
     } else {
         identifier.to_string()
+    }
+}
+
+impl TursoTransaction {
+    pub(crate) async fn query_raw_internal(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+        let mut stmt = self
+            .connection
+            .prepare(query)
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?
+        {
+            results.push(from_turso_row(&column_names, &row).map_err(DatabaseError::Turso)?);
+        }
+
+        Ok(results)
+    }
+}
+
+impl TursoTransaction {
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<Vec<Row>, DatabaseError> {
+        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
+
+        let mut stmt = self
+            .connection
+            .prepare(&transformed_query)
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let turso_params = to_turso_params(&filtered_params).map_err(DatabaseError::Turso)?;
+
+        let mut rows = stmt
+            .query(turso_params)
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?
+        {
+            results.push(from_turso_row(&column_names, &row).map_err(DatabaseError::Turso)?);
+        }
+
+        Ok(results)
+    }
+}
+
+impl TursoTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.connection
+            .execute(statement, ())
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        Ok(())
+    }
+}
+
+impl TursoTransaction {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
+
+        let turso_params = to_turso_params(&filtered_params).map_err(DatabaseError::Turso)?;
+
+        let mut stmt = self
+            .connection
+            .prepare(&transformed_query)
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        let affected_rows = stmt
+            .execute(turso_params)
+            .await
+            .map_err(|e| DatabaseError::Turso(e.into()))?;
+
+        Ok(affected_rows)
     }
 }

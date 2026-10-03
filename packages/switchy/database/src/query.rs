@@ -73,6 +73,30 @@ use std::fmt::Debug;
 
 use crate::{Database, DatabaseError, DatabaseValue, Row};
 
+/// Render an exact identifier, preserving the transitional raw-enabled behavior.
+#[cfg(any(
+    feature = "sqlite-rusqlite",
+    feature = "duckdb",
+    feature = "turso",
+    feature = "mysql-sqlx",
+    all(
+        not(feature = "raw-sql"),
+        any(
+            feature = "sqlite-sqlx",
+            feature = "postgres-sqlx",
+            feature = "postgres-raw"
+        )
+    )
+))]
+pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
+    if cfg!(feature = "raw-sql") {
+        value.to_owned()
+    } else {
+        let escaped = value.replace(delimiter, &format!("{delimiter}{delimiter}"));
+        format!("{delimiter}{escaped}{delimiter}")
+    }
+}
+
 /// Sort direction for ORDER BY clauses
 #[derive(Debug, Clone, Copy)]
 pub enum SortDirection {
@@ -144,9 +168,12 @@ pub enum ExpressionType<'a> {
     NotIn(&'a NotIn<'a>),
     /// Not equal comparison expression
     NotEq(&'a NotEq),
+    /// Negated SQL pattern comparison.
+    NotLike(&'a NotLike),
     /// IN list expression (with explicit list of values)
     InList(&'a InList),
     /// Raw SQL literal expression
+    #[cfg(feature = "raw-sql")]
     Literal(&'a Literal),
     /// COALESCE function expression
     Coalesce(&'a Coalesce),
@@ -206,12 +233,14 @@ pub trait Expression: Send + Sync + Debug {
 /// # Safety
 ///
 /// The value is inserted directly into SQL. Never use with untrusted user input.
+#[cfg(feature = "raw-sql")]
 #[derive(Debug)]
 pub struct Literal {
     /// The raw SQL expression text
     pub value: String,
 }
 
+#[cfg(feature = "raw-sql")]
 impl From<&str> for Literal {
     fn from(val: &str) -> Self {
         Self {
@@ -220,24 +249,28 @@ impl From<&str> for Literal {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl From<&String> for Literal {
     fn from(val: &String) -> Self {
         Self { value: val.clone() }
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl From<String> for Literal {
     fn from(val: String) -> Self {
         Self { value: val }
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl From<Literal> for Box<dyn Expression> {
     fn from(val: Literal) -> Self {
         Box::new(val)
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl Expression for Literal {
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Literal(self)
@@ -250,6 +283,7 @@ impl Expression for Literal {
 ///
 /// The value is inserted directly into SQL without escaping. Never use with untrusted user input.
 #[must_use]
+#[cfg(feature = "raw-sql")]
 pub fn literal(value: &str) -> Literal {
     Literal {
         value: value.to_string(),
@@ -293,6 +327,9 @@ impl Expression for Identifier {
 }
 
 /// Creates an SQL identifier expression for a column or table name
+///
+/// Without `raw-sql`, this expression denotes one exact identifier. Dots,
+/// quotes, spaces, and SQL-looking content are part of its name, not SQL.
 #[must_use]
 pub fn identifier(value: &str) -> Identifier {
     Identifier {
@@ -434,6 +471,34 @@ impl Expression for Or {
         } else {
             Some(values)
         }
+    }
+}
+
+/// Negated SQL LIKE comparison. The pattern is bound as data.
+#[derive(Debug)]
+pub struct NotLike {
+    /// Exact column identifier.
+    pub left: Identifier,
+    /// Pattern value.
+    pub right: DatabaseValue,
+}
+
+impl BooleanExpression for NotLike {}
+impl Expression for NotLike {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::NotLike(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        Some(vec![&self.right])
+    }
+}
+
+/// Exclude rows matching a SQL LIKE pattern (`%` and `_` are wildcards).
+#[must_use]
+pub fn where_not_like(column: impl Into<Identifier>, pattern: impl Into<String>) -> NotLike {
+    NotLike {
+        left: column.into(),
+        right: DatabaseValue::String(pattern.into()),
     }
 }
 
@@ -964,7 +1029,13 @@ where
         this
     }
 
-    /// Adds a single filter condition to the WHERE clause
+    /// Excludes rows matching a bound SQL LIKE pattern.
+    #[must_use]
+    fn where_not_like(self, column: impl Into<Identifier>, pattern: impl Into<String>) -> Self {
+        self.filter(Box::new(where_not_like(column, pattern)))
+    }
+
+    /// Adds a single filter condition to the WHERE clause.
     #[must_use]
     fn filter(self, filter: Box<dyn BooleanExpression>) -> Self;
 
@@ -1931,6 +2002,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "raw-sql")]
     mod literal_tests {
         use super::*;
 

@@ -179,6 +179,17 @@ pub mod value_builders;
 /// Schema definition, DDL builders, and introspection model types.
 pub mod schema;
 
+/// SQLite transaction lock acquisition policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionMode {
+    /// Acquire locks as statements require them.
+    Deferred,
+    /// Reserve write access before executing transaction helpers.
+    Immediate,
+    /// Reserve exclusive database access.
+    Exclusive,
+}
+
 use std::{num::TryFromIntError, sync::Arc};
 
 use async_trait::async_trait;
@@ -910,6 +921,12 @@ pub enum DatabaseError {
     /// Error from Turso backend
     #[error(transparent)]
     Turso(#[from] turso::TursoDatabaseError),
+    /// Database is busy acquiring a lock or an exclusive connection lease.
+    #[error("Database is busy")]
+    Busy,
+    /// Database operation conflicts with a lock on the same connection/shared cache.
+    #[error("Database is locked")]
+    Locked,
     /// Database connection has been closed.
     #[error("Database connection is closed")]
     ConnectionClosed,
@@ -1114,6 +1131,36 @@ impl Row {
 /// }
 /// ```
 #[async_trait]
+#[cfg_attr(
+    not(feature = "raw-sql"),
+    doc = r#"
+Caller-supplied SQL is excluded without `raw-sql`:
+
+```compile_fail
+use switchy_database::Database;
+async fn raw(db: &dyn Database) {
+    db.exec_raw("DELETE FROM items").await.unwrap();
+}
+```
+
+```compile_fail
+use switchy_database::Database;
+async fn raw(db: &dyn Database) {
+    db.query_raw_params("SELECT ?", &[]).await.unwrap();
+}
+```
+
+```compile_fail
+use switchy_database::query::literal;
+```
+
+```compile_fail
+use switchy_database::Executable;
+fn require<T: Executable>(_: T) {}
+require("DELETE FROM items");
+```
+"#
+)]
 pub trait Database: Send + Sync + std::fmt::Debug {
     /// Creates a SELECT query builder for the specified table
     fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
@@ -1200,6 +1247,32 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// * If the update execution fails
     /// * If there are connection errors
+    /// Execute an update without materializing returned payloads.
+    ///
+    /// # Errors
+    /// Returns unsupported for backends without affected-row support, or an execution error.
+    async fn exec_update_count(
+        &self,
+        _statement: &UpdateStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "affected-row update".into(),
+        ))
+    }
+
+    /// Execute a delete without materializing returned payloads.
+    ///
+    /// # Errors
+    /// Returns unsupported for backends without affected-row support, or an execution error.
+    async fn exec_delete_count(
+        &self,
+        _statement: &DeleteStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "affected-row delete".into(),
+        ))
+    }
+
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
     -> Result<Vec<Row>, DatabaseError>;
 
@@ -1296,6 +1369,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// * If the statement execution fails
     /// * If there are connection errors
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
 
     /// Initiates graceful backend-specific connection shutdown.
@@ -1539,6 +1613,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// * Returns `DatabaseError::QueryFailed` if query execution fails
     /// * Returns `DatabaseError::InvalidQuery` for malformed SQL
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError>;
 
     /// Execute raw SQL with parameters
@@ -1557,6 +1632,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
     /// * Returns `DatabaseError::QueryFailed` if execution fails
     /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         _query: &str,
@@ -1579,6 +1655,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
     /// * Returns `DatabaseError::QueryFailed` if query fails
     /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         _query: &str,
@@ -1595,6 +1672,22 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// * If transaction creation fails
     /// * If called on a `DatabaseTransaction` (nested transactions not supported)
+    /// Begin a transaction with an explicit lock acquisition policy.
+    ///
+    /// # Errors
+    /// Backends reject unsupported modes rather than silently weakening locking.
+    async fn begin_transaction_with_mode(
+        &self,
+        mode: TransactionMode,
+    ) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+        match mode {
+            TransactionMode::Deferred => self.begin_transaction().await,
+            TransactionMode::Immediate | TransactionMode::Exclusive => Err(
+                DatabaseError::UnsupportedOperation("transaction mode".into()),
+            ),
+        }
+    }
+
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>;
 
     /// Clears any cached database connections.

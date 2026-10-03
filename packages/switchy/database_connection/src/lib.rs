@@ -836,6 +836,68 @@ pub fn init_sqlite_rusqlite(
     )))
 }
 
+/// How a typed SQLite opener may access storage.
+#[cfg(feature = "sqlite-rusqlite")]
+#[derive(Debug, Clone, Copy)]
+pub enum SqliteAccess {
+    /// Existing database only; never create or write.
+    ReadOnly,
+    /// Existing writable database only.
+    ReadWrite,
+    /// Create a writable database if missing.
+    ReadWriteCreate,
+}
+
+/// Explicit SQLite opening policy. Paths are not interpreted as URIs unless opted in.
+#[cfg(feature = "sqlite-rusqlite")]
+#[derive(Debug, Clone)]
+pub struct SqliteOpenOptions {
+    /// Storage access policy.
+    pub access: SqliteAccess,
+    /// Interpret the filename as a SQLite URI.
+    pub allow_uri: bool,
+    /// Time spent waiting for SQLite locks.
+    pub busy_timeout: std::time::Duration,
+    /// Enforce foreign key constraints on every opened connection.
+    pub foreign_keys: bool,
+    /// Number of independently leased connections (must be nonzero).
+    pub connections: std::num::NonZeroUsize,
+}
+
+/// Open SQLite with explicit access and connection-local settings.
+///
+/// # Errors
+/// Returns driver errors for invalid paths, permissions, unsupported URI options or settings.
+#[cfg(feature = "sqlite-rusqlite")]
+pub fn open_sqlite_rusqlite(
+    path: &std::path::Path,
+    options: &SqliteOpenOptions,
+) -> Result<switchy_database::rusqlite::RusqliteDatabase, InitSqliteRusqliteError> {
+    use ::rusqlite::OpenFlags;
+    let mut flags = match options.access {
+        SqliteAccess::ReadOnly => OpenFlags::SQLITE_OPEN_READ_ONLY,
+        SqliteAccess::ReadWrite => OpenFlags::SQLITE_OPEN_READ_WRITE,
+        SqliteAccess::ReadWriteCreate => {
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE
+        }
+    };
+    if options.allow_uri {
+        flags |= OpenFlags::SQLITE_OPEN_URI;
+    }
+    let mut connections = Vec::with_capacity(options.connections.get());
+    for _ in 0..options.connections.get() {
+        let connection = ::rusqlite::Connection::open_with_flags(path, flags)?;
+        connection.busy_timeout(options.busy_timeout)?;
+        connection.pragma_update(None, "foreign_keys", options.foreign_keys)?;
+        connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(
+            connection,
+        )));
+    }
+    Ok(switchy_database::rusqlite::RusqliteDatabase::new(
+        connections,
+    ))
+}
+
 /// Errors that can occur when initializing a `PostgreSQL` connection
 #[cfg(feature = "postgres")]
 #[derive(Debug, Error)]

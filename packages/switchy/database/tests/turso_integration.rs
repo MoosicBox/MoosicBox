@@ -1,3 +1,4 @@
+#![cfg(feature = "raw-sql")]
 #![cfg(feature = "schema")]
 
 use std::sync::Arc;

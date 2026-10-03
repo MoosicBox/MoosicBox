@@ -45,16 +45,16 @@
 //!     let db: &dyn Database = &db;
 //!
 //!     // Create a table
-//!     db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").await?;
+//!     db.exec_raw_internal("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)").await?;
 //!
 //!     // Insert data using parameterized queries
-//!     db.exec_raw_params(
+//!     db.exec_raw_params_internal(
 //!         "INSERT INTO users (name) VALUES (?1)",
 //!         &[DatabaseValue::String("Alice".to_string())]
 //!     ).await?;
 //!
 //!     // Query data
-//!     let rows = db.query_raw("SELECT id, name FROM users").await?;
+//!     let rows = db.query_raw_internal("SELECT id, name FROM users").await?;
 //!     println!("Found {} users", rows.len());
 //!
 //!     Ok(())
@@ -76,7 +76,7 @@
 //!     let tx = db.begin_transaction().await?;
 //!
 //!     // Execute operations within the transaction
-//!     tx.exec_raw_params(
+//!     tx.exec_raw_params_internal(
 //!         "INSERT INTO users (name) VALUES (?1)",
 //!         &[DatabaseValue::String("Bob".to_string())]
 //!     ).await?;
@@ -101,7 +101,7 @@
 //!     let db: &dyn Database = &db;
 //!
 //!     // Database is fully functional but not persisted to disk
-//!     db.exec_raw("CREATE TABLE temp (value INTEGER)").await?;
+//!     db.exec_raw_internal("CREATE TABLE temp (value INTEGER)").await?;
 //!
 //!     Ok(())
 //! }
@@ -627,6 +627,11 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                     SortDirection::Desc => "DESC",
                 }
             ),
+            ExpressionType::NotLike(value) => format!(
+                "({} NOT LIKE {})",
+                value.left.to_sql(),
+                value.right.to_sql()
+            ),
             ExpressionType::NotEq(value) => {
                 if value.right.is_null() {
                     format!("({} IS NOT {})", value.left.to_sql(), value.right.to_sql())
@@ -649,8 +654,9 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
-            ExpressionType::Identifier(value) => value.value.clone(),
+            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
                     joins
@@ -1422,88 +1428,23 @@ async fn upsert_and_get_row(
 
 #[async_trait::async_trait]
 impl crate::Database for TursoDatabase {
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        log::trace!("query_raw: query:\n{query}");
-
-        let mut stmt = self
-            .connection()
-            .await?
-            .prepare(query)
-            .await
-            .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
-
-        let column_info = stmt.columns();
-        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
-
-        let mut rows = stmt
-            .query(())
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
-        {
-            results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
-        }
-
-        log::trace!("query_raw: returned {} rows", results.len());
-        Ok(results)
+        self.query_raw_internal(query).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
-        log::trace!("query_raw_params: query: {query} with params: {params:?}");
-
-        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
-
-        let mut stmt = self
-            .connection()
-            .await?
-            .prepare(&transformed_query)
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        let column_info = stmt.columns();
-        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
-
-        let turso_params =
-            to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
-
-        let mut rows = stmt
-            .query(turso_params)
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        let mut results = Vec::new();
-        while let Some(row) = rows
-            .next()
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
-        {
-            results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
-        }
-
-        log::trace!("query_raw_params: returned {} rows", results.len());
-        Ok(results)
+        self.query_raw_params_internal(query, params).await
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), crate::DatabaseError> {
-        log::trace!("exec_raw: query:\n{statement}");
-
-        self.connection()
-            .await?
-            .execute(statement, ())
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        log::trace!("exec_raw: completed");
-        Ok(())
+        self.exec_raw_internal(statement).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -1547,32 +1488,13 @@ impl crate::Database for TursoDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
         params: &[DatabaseValue],
     ) -> Result<u64, crate::DatabaseError> {
-        log::trace!("exec_raw_params: query: {query} with params: {params:?}");
-
-        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
-
-        let turso_params =
-            to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
-
-        let mut stmt = self
-            .connection()
-            .await?
-            .prepare(&transformed_query)
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        let affected_rows = stmt
-            .execute(turso_params)
-            .await
-            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
-
-        log::trace!("exec_raw_params: affected {affected_rows} rows");
-        Ok(affected_rows)
+        self.exec_raw_params_internal(query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -1792,7 +1714,7 @@ impl crate::Database for TursoDatabase {
     async fn table_exists(&self, table: &str) -> Result<bool, crate::DatabaseError> {
         let query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
         let rows = self
-            .query_raw_params(query, &[DatabaseValue::String(table.to_string())])
+            .query_raw_params_internal(query, &[DatabaseValue::String(table.to_string())])
             .await?;
         Ok(!rows.is_empty())
     }
@@ -1801,7 +1723,7 @@ impl crate::Database for TursoDatabase {
     async fn list_tables(&self) -> Result<Vec<String>, crate::DatabaseError> {
         let query =
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-        let rows = self.query_raw(query).await?;
+        let rows = self.query_raw_internal(query).await?;
 
         Ok(rows
             .into_iter()
@@ -1846,11 +1768,11 @@ impl crate::Database for TursoDatabase {
         table: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, crate::DatabaseError> {
         let query = format!("PRAGMA table_info({table})");
-        let rows = self.query_raw(&query).await?;
+        let rows = self.query_raw_internal(&query).await?;
 
         let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
         let create_sql_rows = self
-            .query_raw_params(
+            .query_raw_params_internal(
                 create_sql_query,
                 &[DatabaseValue::String(table.to_string())],
             )
@@ -2130,6 +2052,11 @@ async fn exec_create_table(
         query.push_str(", PRIMARY KEY (");
         query.push_str(primary_key);
         query.push(')');
+    }
+
+    for constraint in &statement.constraints {
+        query.push_str(", ");
+        query.push_str(&constraint.render('"'));
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -3199,13 +3126,12 @@ async fn get_table_indexes(
     db: &TursoDatabase,
     table: &str,
 ) -> Result<std::collections::BTreeMap<String, crate::schema::IndexInfo>, crate::DatabaseError> {
-    use crate::Database;
     use crate::schema::IndexInfo;
     use std::collections::BTreeMap;
 
     let index_query = "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?";
     let index_rows = db
-        .query_raw_params(index_query, &[DatabaseValue::String(table.to_string())])
+        .query_raw_params_internal(index_query, &[DatabaseValue::String(table.to_string())])
         .await?;
 
     let mut indexes = BTreeMap::new();
@@ -3290,13 +3216,12 @@ async fn get_table_foreign_keys(
     table: &str,
 ) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, crate::DatabaseError>
 {
-    use crate::Database;
     use crate::schema::ForeignKeyInfo;
     use std::collections::BTreeMap;
 
     let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
     let create_sql_rows = db
-        .query_raw_params(
+        .query_raw_params_internal(
             create_sql_query,
             &[DatabaseValue::String(table.to_string())],
         )
@@ -3382,6 +3307,134 @@ pub(crate) fn strip_identifier_quotes(identifier: &str) -> String {
         identifier[1..identifier.len() - 1].replace("''", "'")
     } else {
         identifier.to_string()
+    }
+}
+
+impl TursoDatabase {
+    pub(crate) async fn query_raw_internal(
+        &self,
+        query: &str,
+    ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        log::trace!("query_raw: query:\n{query}");
+
+        let mut stmt = self
+            .connection()
+            .await?
+            .prepare(query)
+            .await
+            .map_err(|e| crate::DatabaseError::QueryFailed(e.to_string()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let mut rows = stmt
+            .query(())
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
+        }
+
+        log::trace!("query_raw: returned {} rows", results.len());
+        Ok(results)
+    }
+}
+
+impl TursoDatabase {
+    pub(crate) async fn query_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        log::trace!("query_raw_params: query: {query} with params: {params:?}");
+
+        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
+
+        let mut stmt = self
+            .connection()
+            .await?
+            .prepare(&transformed_query)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let column_info = stmt.columns();
+        let column_names: Vec<String> = column_info.iter().map(|c| c.name().to_string()).collect();
+
+        let turso_params =
+            to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
+
+        let mut rows = stmt
+            .query(turso_params)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows
+            .next()
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?
+        {
+            results.push(from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?);
+        }
+
+        log::trace!("query_raw_params: returned {} rows", results.len());
+        Ok(results)
+    }
+}
+
+impl TursoDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_internal(
+        &self,
+        statement: &str,
+    ) -> Result<(), crate::DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
+        self.connection()
+            .await?
+            .execute(statement, ())
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        log::trace!("exec_raw: completed");
+        Ok(())
+    }
+}
+
+impl TursoDatabase {
+    #[cfg(feature = "raw-sql")]
+    pub(crate) async fn exec_raw_params_internal(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<u64, crate::DatabaseError> {
+        log::trace!("exec_raw_params: query: {query} with params: {params:?}");
+
+        let (transformed_query, filtered_params) = turso_transform_query_for_params(query, params)?;
+
+        let turso_params =
+            to_turso_params(&filtered_params).map_err(crate::DatabaseError::Turso)?;
+
+        let mut stmt = self
+            .connection()
+            .await?
+            .prepare(&transformed_query)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        let affected_rows = stmt
+            .execute(turso_params)
+            .await
+            .map_err(|e| crate::DatabaseError::Turso(e.into()))?;
+
+        log::trace!("exec_raw_params: affected {affected_rows} rows");
+        Ok(affected_rows)
     }
 }
 
@@ -3659,6 +3712,7 @@ async fn set_foreign_key_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "raw-sql")]
     use crate::Database;
 
     async fn create_test_db() -> TursoDatabase {
@@ -3667,11 +3721,13 @@ mod tests {
             .expect("Failed to create in-memory Turso database")
     }
 
+    #[cfg(feature = "raw-sql")]
     fn unique_test_database_path(label: &str) -> std::path::PathBuf {
         let id = uuid::Uuid::new_v4();
         std::env::temp_dir().join(format!("switchy-turso-{label}-{id}.db"))
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn close_is_idempotent_and_rejects_later_operations() {
         let db_path = unique_test_database_path("close");
@@ -3706,6 +3762,7 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn dropped_transaction_releases_close_waiter() {
@@ -3720,7 +3777,9 @@ mod tests {
             .expect("table creates");
         let transaction = db.begin_transaction().await.expect("transaction begins");
         let closing = std::sync::Arc::clone(&db);
-        let mut close_task = switchy_async::task::spawn(async move { closing.close().await });
+        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        #[cfg(feature = "simulator")]
+        let mut close_task = close_task;
         switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
         assert!(!close_task.is_finished());
         drop(transaction);
@@ -3731,6 +3790,7 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn close_waits_for_transaction_completion() {
@@ -3750,7 +3810,9 @@ mod tests {
             .expect("transaction inserts");
 
         let closing = std::sync::Arc::clone(&db);
-        let mut close_task = switchy_async::task::spawn(async move { closing.close().await });
+        let close_task = switchy_async::task::spawn(async move { closing.close().await });
+        #[cfg(feature = "simulator")]
+        let mut close_task = close_task;
         switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
         assert!(!close_task.is_finished());
         transaction.commit().await.expect("transaction commits");
@@ -3768,12 +3830,14 @@ mod tests {
     }
 
     #[derive(Debug, Clone, Copy)]
+    #[cfg(feature = "raw-sql")]
     struct WalWorkloadObservation {
         operations: u64,
         database_bytes: u64,
         wal_bytes: u64,
     }
 
+    #[cfg(feature = "raw-sql")]
     fn observe_workload(db_path: &std::path::Path, operations: u64) -> WalWorkloadObservation {
         WalWorkloadObservation {
             operations,
@@ -3783,6 +3847,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn abstract_catalog_workload_records_bounded_lifecycle_sizes() {
         const OPERATIONS: u32 = 128;
@@ -3814,6 +3879,7 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn repeated_abstract_open_write_close_cycles_keep_wal_bounded() {
         let db_path = unique_test_database_path("bounded-wal");
@@ -3844,6 +3910,7 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn concurrent_regular_queries_are_serialized() {
@@ -3862,6 +3929,7 @@ mod tests {
         assert_eq!(second.expect("second queries").len(), 1);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
     #[switchy_async::test]
     async fn transaction_blocks_regular_query_until_commit() {
@@ -3901,6 +3969,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_upsert_multi_uses_one_conflict_aware_statement() {
         let db = create_test_db().await;
@@ -3954,6 +4023,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_exec_raw_create_table() {
         let db = create_test_db().await;
@@ -3964,6 +4034,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_exec_raw_params_insert() {
         let db = create_test_db().await;
@@ -3986,6 +4057,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_query_raw_basic() {
         let db = create_test_db().await;
@@ -4016,6 +4088,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_query_raw_params() {
         let db = create_test_db().await;
@@ -4055,6 +4128,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_parameter_binding_all_types() {
         let db = create_test_db().await;
@@ -4140,6 +4214,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_parameter_binding_optional_types() {
         let db = create_test_db().await;
@@ -4171,6 +4246,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "decimal")]
     #[switchy_async::test]
     async fn test_decimal_storage_and_retrieval() {
@@ -4204,6 +4280,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "uuid")]
     #[switchy_async::test]
     async fn test_uuid_storage_and_retrieval() {
@@ -4236,6 +4313,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_datetime_storage_and_retrieval() {
         use chrono::NaiveDateTime;
@@ -4270,6 +4348,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_now_transformation() {
         let db = create_test_db().await;
@@ -4303,6 +4382,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_now_plus_transformation() {
         use crate::sql_interval::SqlInterval;
@@ -4348,6 +4428,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_error_handling_invalid_query() {
         let db = create_test_db().await;
@@ -4357,6 +4438,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_error_handling_type_mismatch() {
         let db = create_test_db().await;
@@ -4378,6 +4460,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_multiple_rows() {
         let db = create_test_db().await;
@@ -4414,6 +4497,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_empty_result_set() {
         let db = create_test_db().await;
@@ -4431,6 +4515,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_column_name_preservation() {
         let db = create_test_db().await;
@@ -4462,6 +4547,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_null_handling() {
         let db = create_test_db().await;
@@ -4487,6 +4573,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_uint64_overflow_error() {
         let db = create_test_db().await;
@@ -4508,6 +4595,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_uint64_valid_range() {
         let db = create_test_db().await;
@@ -4529,6 +4617,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_commit() {
         use crate::Database;
@@ -4564,6 +4653,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_rollback() {
         use crate::Database;
@@ -4594,6 +4684,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_query() {
         use crate::Database;
@@ -4635,6 +4726,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_params() {
         use crate::Database;
@@ -4708,6 +4800,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_transaction_state_guards() {
         use crate::Database;
@@ -4738,6 +4831,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_table_exists() {
@@ -4763,6 +4857,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_list_tables() {
@@ -4784,6 +4879,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_get_table_columns() {
@@ -4833,6 +4929,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_column_exists() {
@@ -4865,6 +4962,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_get_table_info() {
@@ -4897,6 +4995,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_autoincrement_detection() {
@@ -4931,6 +5030,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_primary_key_without_autoincrement() {
@@ -4955,6 +5055,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_table_info_with_indexes() {
@@ -4987,6 +5088,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_table_info_with_foreign_keys() {
@@ -5031,6 +5133,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_table_info_complete() {
@@ -5085,6 +5188,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_action_set_default() {
@@ -5116,6 +5220,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_action_no_action_explicit() {
@@ -5147,6 +5252,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_action_default_when_omitted() {
@@ -5185,6 +5291,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_all_five_actions() {
@@ -5230,6 +5337,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_lowercase_syntax() {
@@ -5272,6 +5380,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_mixed_case_actions() {
@@ -5312,6 +5421,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_lowercase_references() {
@@ -5348,6 +5458,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_unicode_table_names() {
@@ -5386,6 +5497,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_cyrillic_identifiers() {
@@ -5424,6 +5536,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_emoji_and_mixed_scripts() {
@@ -5463,6 +5576,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_multiple_different_actions() {
@@ -5524,6 +5638,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_quoted_table_name_with_spaces() {
@@ -5563,6 +5678,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_escaped_double_quotes_in_table_name() {
@@ -5598,6 +5714,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_escaped_backticks_in_table_name() {
@@ -5633,6 +5750,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_square_bracket_quoted_table_name() {
@@ -5668,6 +5786,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn test_fk_single_quoted_table_name() {
@@ -5703,6 +5822,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(all(feature = "schema", feature = "cascade"))]
     #[switchy_async::test]
     async fn test_cascade_find_dependents_simple() {
@@ -5731,6 +5851,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(all(feature = "schema", feature = "cascade"))]
     #[switchy_async::test]
     async fn test_cascade_has_dependents_true() {
@@ -5756,6 +5877,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(all(feature = "schema", feature = "cascade"))]
     #[switchy_async::test]
     async fn test_cascade_has_dependents_false() {
@@ -5778,6 +5900,7 @@ mod tests {
         drop(db);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[cfg(all(feature = "schema", feature = "cascade"))]
     #[switchy_async::test]
     async fn test_cascade_nested_dependencies() {
