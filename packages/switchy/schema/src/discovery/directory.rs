@@ -116,7 +116,13 @@ impl Migration<'static> for FileMigration {
         if let Some(up_sql) = &self.up_sql
             && !up_sql.trim().is_empty()
         {
+            #[cfg(feature = "raw-sql")]
             db.exec_raw(up_sql).await?;
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                let _ = db;
+                return Err(crate::MigrationError::RawSqlDisabled);
+            }
         }
         Ok(())
     }
@@ -125,7 +131,13 @@ impl Migration<'static> for FileMigration {
         if let Some(down_sql) = &self.down_sql
             && !down_sql.trim().is_empty()
         {
+            #[cfg(feature = "raw-sql")]
             db.exec_raw(down_sql).await?;
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                let _ = db;
+                return Err(crate::MigrationError::RawSqlDisabled);
+            }
         }
         Ok(())
     }

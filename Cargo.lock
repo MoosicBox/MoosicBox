@@ -18256,7 +18256,6 @@ dependencies = [
  "async-trait",
  "insta",
  "log 0.4.33",
- "moosicbox_schema",
  "serde",
  "serde_json",
  "switchy_async",

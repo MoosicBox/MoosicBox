@@ -14,6 +14,9 @@ async fn turso_typed_maintenance() {
         .unwrap();
     db.check_connection().await.unwrap();
     db.sqlite_temp_store_memory().await.unwrap();
+    let transaction = db.begin_transaction().await.unwrap();
+    transaction.sqlite_temp_store_memory().await.unwrap();
+    transaction.rollback().await.unwrap();
     assert!(!db.sqlite_integrity_check().await.unwrap().is_empty());
     assert!(matches!(
         db.sqlite_foreign_key_check().await,

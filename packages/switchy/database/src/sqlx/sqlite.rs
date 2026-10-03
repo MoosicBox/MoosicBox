@@ -234,8 +234,8 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
                 if value.left { "LEFT" } else { "" },
-                value.table_name,
-                value.on
+                value.render_table('"'),
+                value.on.render('"')
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
@@ -282,6 +282,19 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
+            ExpressionType::Max(value) => format!("MAX({})", value.expression.to_sql(index)),
+            ExpressionType::Count(value) => format!(
+                "COUNT({})",
+                value
+                    .expression
+                    .as_ref()
+                    .map_or_else(|| "*".to_owned(), |expression| expression.to_sql(index))
+            ),
+            ExpressionType::Min(value) => format!("MIN({})", value.expression.to_sql(index)),
+            ExpressionType::ByteLength(value) => {
+                format!("length(CAST({} AS BLOB))", value.expression.to_sql(index))
+            }
+            ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => {
                 #[cfg(feature = "raw-sql")]
                 {
@@ -338,13 +351,17 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value
-                        .columns
-                        .iter()
-                        .map(|x| format_identifier(x))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    value.table_name,
+                    if cfg!(feature = "raw-sql") {
+                        value
+                            .columns
+                            .iter()
+                            .map(|x| format_identifier(x))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    } else {
+                        crate::query::render_columns(value.columns, '"')
+                    },
+                    crate::query::render_identifier(value.table_name, '"'),
                     joins,
                     where_clause,
                     sort_clause,
@@ -390,6 +407,15 @@ impl<T: Expression + ?Sized> ToSql for T {
 
 /// `SQLite` database implementation using `SQLx`
 #[allow(clippy::module_name_repetitions)]
+#[cfg_attr(
+    not(feature = "raw-sql"),
+    doc = r"
+Legacy SQL-fragment bulk helpers are unavailable without `raw-sql`.
+```compile_fail
+use switchy_database::sqlx::sqlite::update_multi;
+```
+"
+)]
 #[derive(Debug)]
 pub struct SqliteSqlxDatabase {
     pool: Arc<Mutex<SqlitePool>>,
@@ -487,7 +513,7 @@ async fn sqlite_get_column_dependencies(
     let mut foreign_keys = Vec::new();
 
     // Find indexes that use this column
-    let index_list_query = format!("PRAGMA index_list({table_name})");
+    let index_list_query = format!("PRAGMA index_list({})", quote_schema_identifier(table_name));
     let index_rows = sqlx::query(&index_list_query)
         .fetch_all(&mut *connection)
         .await
@@ -497,7 +523,10 @@ async fn sqlite_get_column_dependencies(
         let index_name: String = row.try_get("name").map_err(SqlxDatabaseError::Sqlx)?;
 
         // Check if this index uses the column we're interested in
-        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let index_info_query = format!(
+            "PRAGMA index_info({})",
+            quote_schema_identifier(&index_name)
+        );
         let column_rows = sqlx::query(&index_info_query)
             .fetch_all(&mut *connection)
             .await
@@ -513,7 +542,10 @@ async fn sqlite_get_column_dependencies(
     }
 
     // Find foreign key constraints that use this column
-    let fk_list_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_list_query = format!(
+        "PRAGMA foreign_key_list({})",
+        quote_schema_identifier(table_name)
+    );
     let fk_rows = sqlx::query(&fk_list_query)
         .fetch_all(&mut *connection)
         .await
@@ -534,6 +566,9 @@ async fn sqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for SqliteSqlxDatabase {
+    async fn sqlite_foreign_key_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        self.query_raw_internal("PRAGMA foreign_key_check").await
+    }
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             self.get_connection_internal().await?.lock().await.as_mut(),
@@ -1060,8 +1095,8 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
                 format!(
                     "{}JOIN {} ON {}",
                     if join.left { "LEFT " } else { "" },
-                    join.table_name,
-                    join.on
+                    join.render_table('"'),
+                    join.on.render('"')
                 )
             })
             .collect::<Vec<_>>()
@@ -1165,6 +1200,13 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
         .iter()
         .map(|(_, value)| value.deref().to_sql(index))
         .collect()
+}
+
+/// Quotes one exact `SQLite` schema identifier, even in raw-enabled builds.
+/// Names read back from `SQLite` are data, not trusted SQL fragments.
+#[cfg(feature = "schema")]
+fn quote_schema_identifier(identifier: &str) -> String {
+    format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
 fn format_identifier(identifier: &str) -> String {
@@ -1289,7 +1331,7 @@ async fn sqlite_sqlx_exec_create_table(
         query.push_str("IF NOT EXISTS ");
     }
 
-    query.push_str(statement.table_name);
+    query.push_str(&crate::query::render_identifier(statement.table_name, '"'));
     query.push('(');
 
     let mut first = true;
@@ -1305,7 +1347,7 @@ async fn sqlite_sqlx_exec_create_table(
             return Err(SqlxDatabaseError::InvalidRequest);
         }
 
-        query.push_str(&column.name);
+        query.push_str(&crate::query::render_identifier(&column.name, '"'));
         query.push(' ');
 
         match column.data_type {
@@ -1345,7 +1387,9 @@ async fn sqlite_sqlx_exec_create_table(
             crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
                 query.push_str("BLOB");
             }
-            crate::schema::DataType::Custom(ref type_name) => query.push_str(type_name),
+            crate::schema::DataType::Custom(ref type_name) => {
+                query.push_str(&crate::query::render_identifier(type_name, '"'));
+            }
         }
 
         if !column.nullable {
@@ -1381,7 +1425,7 @@ async fn sqlite_sqlx_exec_create_table(
                 }
                 DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
                     query.push('\'');
-                    query.push_str(x);
+                    query.push_str(&x.replace('\'', "''"));
                     query.push('\'');
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
@@ -1461,7 +1505,7 @@ async fn sqlite_sqlx_exec_create_table(
 
     if let Some(primary_key) = &statement.primary_key {
         query.push_str(", PRIMARY KEY (");
-        query.push_str(primary_key);
+        query.push_str(&crate::query::render_identifier(primary_key, '"'));
         query.push(')');
     }
 
@@ -1472,9 +1516,9 @@ async fn sqlite_sqlx_exec_create_table(
 
     for (source, target) in &statement.foreign_keys {
         query.push_str(", FOREIGN KEY (");
-        query.push_str(source);
+        query.push_str(&crate::query::render_identifier(source, '"'));
         query.push_str(") REFERENCES ");
-        query.push_str(target);
+        query.push_str(&crate::query::render_identifier(target, '"'));
     }
 
     query.push(')');
@@ -1620,7 +1664,10 @@ async fn sqlite_sqlx_find_cascade_dependents(
             crate::schema::dependencies::validate_table_name_for_pragma(&check_table)
                 .map_err(|_| SqlxDatabaseError::InvalidRequest)?;
 
-            let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+            let fk_query = format!(
+                "PRAGMA foreign_key_list({})",
+                quote_schema_identifier(&check_table)
+            );
             let fk_rows = sqlx::query(&fk_query)
                 .fetch_all(&mut *connection)
                 .await
@@ -1667,7 +1714,10 @@ async fn sqlite_sqlx_has_dependents(
         crate::schema::dependencies::validate_table_name_for_pragma(&check_table)
             .map_err(|_| SqlxDatabaseError::InvalidRequest)?;
 
-        let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+        let fk_query = format!(
+            "PRAGMA foreign_key_list({})",
+            quote_schema_identifier(&check_table)
+        );
         let fk_rows = sqlx::query(&fk_query)
             .fetch_all(&mut *connection)
             .await
@@ -1733,13 +1783,17 @@ pub(crate) async fn sqlite_sqlx_exec_create_index(
     let columns_str = statement
         .columns
         .iter()
-        .map(|col| format!("`{col}`"))
+        .map(|col| format!("`{}`", col.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
 
     let sql = format!(
         "CREATE {}INDEX {}{} ON {} ({})",
-        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+        unique_str,
+        if_not_exists_str,
+        crate::query::render_identifier(statement.index_name, '"'),
+        crate::query::render_identifier(statement.table_name, '"'),
+        columns_str
     );
 
     connection
@@ -1761,7 +1815,11 @@ pub(crate) async fn sqlite_sqlx_exec_drop_index(
         ""
     };
 
-    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
+    let sql = format!(
+        "DROP INDEX {}{}",
+        if_exists_str,
+        crate::query::render_identifier(statement.index_name, '"')
+    );
 
     connection
         .execute(sqlx::raw_sql(&sql))
@@ -2421,7 +2479,7 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
             .map_err(SqlxDatabaseError::Sqlx)?;
 
         // Step 6: Get column list for INSERT SELECT
-        let columns: Vec<String> = sqlx::query(&format!("PRAGMA table_info({table_name})"))
+        let columns: Vec<String> = sqlx::query(&format!("PRAGMA table_info({})", quote_schema_identifier(table_name)))
             .fetch_all(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?
@@ -2631,6 +2689,7 @@ async fn delete(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let index = AtomicU16::new(0);
 
     let select_query = limit.map(|_| {
@@ -2732,10 +2791,11 @@ async fn insert_and_get_row(
 ) -> Result<crate::Row, SqlxDatabaseError> {
     let column_names = values
         .iter()
-        .map(|(key, _v)| format_identifier(key))
+        .map(|(key, _v)| crate::query::render_identifier(key, '"'))
         .collect::<Vec<_>>()
         .join(", ");
 
+    let table_name = crate::query::render_identifier(table_name, '"');
     let index = AtomicU16::new(0);
     let insert_columns = if values.is_empty() {
         String::new()
@@ -2778,6 +2838,7 @@ async fn insert_and_get_row(
 /// # Errors
 ///
 /// Will return `Err` if the update multi execution failed.
+#[cfg(feature = "raw-sql")]
 pub async fn update_multi(
     connection: &mut SqliteConnection,
     table_name: &str,
@@ -2826,6 +2887,7 @@ pub async fn update_multi(
     Ok(results)
 }
 
+#[cfg(feature = "raw-sql")]
 async fn update_chunk(
     connection: &mut SqliteConnection,
     table_name: &str,
@@ -3661,7 +3723,10 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
 
                     // Validate table name for PRAGMA (cannot be parameterized)
                     crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
-                    let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                    let fk_query = format!(
+                        "PRAGMA foreign_key_list({})",
+                        quote_schema_identifier(check_table)
+                    );
                     let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                     for fk_row in fk_rows {
@@ -3704,7 +3769,10 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
                 }
 
                 crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
-                let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                let fk_query = format!(
+                    "PRAGMA foreign_key_list({})",
+                    quote_schema_identifier(check_table)
+                );
                 let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                 for fk_row in fk_rows {
@@ -3740,7 +3808,10 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
                 }
 
                 crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
-                let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                let fk_query = format!(
+                    "PRAGMA foreign_key_list({})",
+                    quote_schema_identifier(check_table)
+                );
                 let fk_rows = self.query_raw_internal(&fk_query).await?;
 
                 for fk_row in fk_rows {
@@ -3841,7 +3912,7 @@ async fn sqlx_sqlite_get_table_columns(
 ) -> Result<Vec<crate::schema::ColumnInfo>, SqlxDatabaseError> {
     let mut columns = Vec::new();
 
-    let pragma_query = format!("PRAGMA table_info({table_name})");
+    let pragma_query = format!("PRAGMA table_info({})", quote_schema_identifier(table_name));
     let rows = sqlx::query(&pragma_query).fetch_all(&mut *executor).await?;
 
     for row in rows {
@@ -3945,7 +4016,7 @@ async fn sqlx_sqlite_get_table_info(
 
     // Get indexes
     let mut indexes = BTreeMap::new();
-    let index_query = format!("PRAGMA index_list({table_name})");
+    let index_query = format!("PRAGMA index_list({})", quote_schema_identifier(table_name));
     let index_rows = sqlx::query(&index_query).fetch_all(&mut *executor).await?;
 
     for row in index_rows {
@@ -3954,7 +4025,10 @@ async fn sqlx_sqlite_get_table_info(
         let origin: String = row.get(3);
 
         // Get index columns
-        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let index_info_query = format!(
+            "PRAGMA index_info({})",
+            quote_schema_identifier(&index_name)
+        );
         let column_rows = sqlx::query(&index_info_query)
             .fetch_all(&mut *executor)
             .await?;
@@ -3978,7 +4052,10 @@ async fn sqlx_sqlite_get_table_info(
 
     // Get foreign keys
     let mut foreign_keys = BTreeMap::new();
-    let fk_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_query = format!(
+        "PRAGMA foreign_key_list({})",
+        quote_schema_identifier(table_name)
+    );
     let fk_rows = sqlx::query(&fk_query).fetch_all(&mut *executor).await?;
 
     for row in fk_rows {
@@ -4017,6 +4094,31 @@ mod introspection_tests {
     use super::*;
     use crate::schema::DataType;
     use std::sync::Arc;
+
+    #[switchy_async::test(no_simulator)]
+    async fn schema_lookup_treats_names_as_exact_identifiers() {
+        let db = create_sqlx_introspection_test_db().await;
+        for name in [
+            "users.name",
+            "users) WHERE 1=1 --",
+            "users); DROP TABLE users; --",
+            "users\"quoted",
+            "漢字🦀",
+        ] {
+            let columns = db.get_table_columns(name).await.unwrap();
+            assert!(columns.is_empty(), "unexpected columns for {name:?}");
+        }
+        assert!(!db.get_table_columns("users").await.unwrap().is_empty());
+        assert!(db.table_exists("users").await.unwrap());
+        db.close().await.unwrap();
+    }
+
+    #[test]
+    fn schema_identifiers_quote_dots_and_escape_delimiters() {
+        assert_eq!(quote_schema_identifier("a.b"), "\"a.b\"");
+        assert_eq!(quote_schema_identifier("a\"b"), "\"a\"\"b\"");
+        assert_eq!(quote_schema_identifier("漢字🦀"), "\"漢字🦀\"");
+    }
 
     async fn create_sqlx_introspection_test_db() -> SqliteSqlxDatabase {
         let db_url = "sqlite::memory:".to_string();
@@ -4542,7 +4644,6 @@ impl SqliteSqlxDatabase {
 }
 
 impl SqliteSqlxDatabase {
-    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_internal(
         &self,
         query: &str,

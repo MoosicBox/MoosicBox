@@ -154,7 +154,7 @@ pub mod postgres;
 /// Database profiles management for multi-database support
 pub mod profiles;
 #[cfg(feature = "sqlite-rusqlite")]
-/// SQLite database backend using rusqlite
+/// `SQLite` database backend using rusqlite
 pub mod rusqlite;
 #[cfg(feature = "simulator")]
 /// Database simulator for testing
@@ -179,7 +179,7 @@ pub mod value_builders;
 /// Schema definition, DDL builders, and introspection model types.
 pub mod schema;
 
-/// SQLite transaction lock acquisition policy.
+/// `SQLite` transaction lock acquisition policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransactionMode {
     /// Acquire locks as statements require them.
@@ -191,6 +191,18 @@ pub enum TransactionMode {
 }
 
 use std::{num::TryFromIntError, sync::Arc};
+
+/// A connection-local `SQLite` observation for optimistic read invalidation.
+///
+/// Compare only samples from the same live connection. This is neither a durable
+/// revision nor a snapshot; external commits may occur immediately after sampling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SqliteChangeObservation {
+    /// `SQLite`'s `data_version`, detecting commits by other connections.
+    pub data_version: u64,
+    /// Changes on this connection, including changes later rolled back.
+    pub total_changes: u64,
+}
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -1372,6 +1384,19 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
 
+    /// Samples `SQLite` change counters on one persistent connection without writes.
+    /// Callers must retain their own connection identity and exclude concurrent local
+    /// operations when using the result as an optimistic publication fence.
+    ///
+    /// # Errors
+    /// * Unsupported backends and multi-connection handles reject this operation.
+    /// * Closed or exclusively leased connections return closed or busy errors.
+    async fn sqlite_change_observation(&self) -> Result<SqliteChangeObservation, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "connection-affine SQLite change observation".into(),
+        ))
+    }
+
     /// Checks connection availability without changing database contents.
     ///
     /// # Errors
@@ -1382,7 +1407,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    /// Runs SQLite's full integrity check. Each returned row contains an `integrity_check`
+    /// Runs `SQLite`'s full integrity check. Each returned row contains an `integrity_check`
     /// text value; `ok` is success, other values describe corruption.
     /// This explicit maintenance operation may scan the entire database.
     ///
@@ -1394,7 +1419,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    /// Checks SQLite foreign keys, returning one row per violation (`table`, `rowid`,
+    /// Checks `SQLite` foreign keys, returning one row per violation (`table`, `rowid`,
     /// `parent`, `fkid`). An empty result means no violations.
     ///
     /// # Errors
@@ -1405,8 +1430,8 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    /// Requests a truncating SQLite WAL checkpoint. Returned `busy`, `log` and
-    /// `checkpointed` columns preserve SQLite's checkpoint outcome, including busy status.
+    /// Requests a truncating `SQLite` WAL checkpoint. Returned `busy`, `log` and
+    /// `checkpointed` columns preserve `SQLite`'s checkpoint outcome, including busy status.
     ///
     /// # Errors
     /// Returns an execution error or unsupported on other backends.
@@ -1416,7 +1441,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    /// Configures SQLite temporary storage in memory on this connection.
+    /// Configures `SQLite` temporary storage in memory on this connection.
     /// Call before creating temporary objects and use a single-connection handle.
     ///
     /// # Errors

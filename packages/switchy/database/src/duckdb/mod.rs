@@ -36,11 +36,12 @@ use switchy_async::task::JoinError;
 use thiserror::Error;
 use tokio::sync::OwnedMutexGuard;
 
+#[cfg(feature = "raw-sql")]
+use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};
 use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
     SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -352,8 +353,8 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
                 if value.left { "LEFT" } else { "" },
-                value.table_name,
-                value.on
+                value.render_table('"'),
+                value.on.render('"')
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
@@ -392,6 +393,19 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
+            ExpressionType::Max(value) => format!("MAX({})", value.expression.to_sql()),
+            ExpressionType::Count(value) => format!(
+                "COUNT({})",
+                value
+                    .expression
+                    .as_ref()
+                    .map_or_else(|| "*".to_owned(), |expression| expression.to_sql())
+            ),
+            ExpressionType::Min(value) => format!("MIN({})", value.expression.to_sql()),
+            ExpressionType::ByteLength(value) => {
+                format!("octet_length(encode({}))", value.expression.to_sql())
+            }
+            ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -435,8 +449,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value.columns.join(", "),
-                    value.table_name,
+                    crate::query::render_columns(value.columns, '"'),
+                    crate::query::render_identifier(value.table_name, '"'),
                     joins,
                     where_clause,
                     sort_clause,
@@ -639,8 +653,8 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
                 format!(
                     "{}JOIN {} ON {}",
                     if join.left { "LEFT " } else { "" },
-                    join.table_name,
-                    join.on
+                    join.render_table('"'),
+                    join.on.render('"')
                 )
             })
             .collect::<Vec<_>>()
@@ -717,7 +731,13 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
 fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
     values
         .iter()
-        .map(|(name, value)| format!("{name}=({})", value.deref().to_sql()))
+        .map(|(name, value)| {
+            format!(
+                "{}=({})",
+                crate::query::render_identifier(name, '"'),
+                value.deref().to_sql()
+            )
+        })
         .collect()
 }
 
@@ -948,6 +968,7 @@ fn bind_values(
     bind_values_inner(statement, values, constant_inc, false, offset)
 }
 
+#[cfg(feature = "raw-sql")]
 fn bind_values_raw(
     statement: &mut ::duckdb::Statement<'_>,
     values: Option<&[DuckDbDatabaseValue]>,
@@ -984,6 +1005,16 @@ fn bexprs_to_values_opt(
     values: Option<&[Box<dyn BooleanExpression>]>,
 ) -> Option<Vec<DuckDbDatabaseValue>> {
     values.map(bexprs_to_values)
+}
+
+fn select_values(query: &SelectQuery<'_>) -> Vec<DuckDbDatabaseValue> {
+    query
+        .values()
+        .unwrap_or_default()
+        .into_iter()
+        .cloned()
+        .map(Into::into)
+        .collect()
 }
 
 fn build_insert_plan(
@@ -1284,6 +1315,7 @@ fn delete(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, DuckDbDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let where_clause = build_where_clause(filters);
 
     let filter_values: Vec<DuckDbDatabaseValue> = filters
@@ -1349,6 +1381,7 @@ fn delete(
 // Now/NowPlus parameter transformation
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "raw-sql")]
 fn duckdb_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
@@ -1482,7 +1515,12 @@ fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -
     }
 
     if let Some(pk) = statement.primary_key {
-        col_defs.push(format!("PRIMARY KEY (\"{pk}\")"));
+        let pk = if cfg!(feature = "raw-sql") {
+            format!("\"{pk}\"")
+        } else {
+            crate::query::render_identifier(pk, '"')
+        };
+        col_defs.push(format!("PRIMARY KEY ({pk})"));
     }
 
     col_defs.extend(
@@ -1493,7 +1531,15 @@ fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -
     );
 
     for (col, ref_table) in &statement.foreign_keys {
-        col_defs.push(format!("FOREIGN KEY (\"{col}\") REFERENCES {ref_table}"));
+        if cfg!(feature = "raw-sql") {
+            col_defs.push(format!("FOREIGN KEY (\"{col}\") REFERENCES {ref_table}"));
+        } else {
+            col_defs.push(format!(
+                "FOREIGN KEY ({}) REFERENCES {}",
+                crate::query::render_identifier(col, '"'),
+                crate::query::render_identifier(ref_table, '"')
+            ));
+        }
     }
 
     sql.push_str(&col_defs.join(", "));
@@ -1535,12 +1581,12 @@ fn build_create_index_sql(statement: &crate::schema::CreateIndexStatement<'_>) -
     write!(
         sql,
         "\"{}\" ON \"{}\" ({})",
-        statement.index_name,
-        statement.table_name,
+        statement.index_name.replace('"', "\"\""),
+        statement.table_name.replace('"', "\"\""),
         statement
             .columns
             .iter()
-            .map(|c| format!("\"{c}\""))
+            .map(|c| format!("\"{}\"", c.replace('"', "\"\"")))
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -1554,7 +1600,7 @@ fn build_drop_index_sql(statement: &crate::schema::DropIndexStatement<'_>) -> St
     if statement.if_exists {
         sql.push_str("IF EXISTS ");
     }
-    write!(sql, "\"{}\"", statement.index_name).unwrap();
+    write!(sql, "\"{}\"", statement.index_name.replace('"', "\"\"")).unwrap();
     sql
 }
 
@@ -1954,8 +2000,8 @@ impl Database for DuckDbDatabase {
         let sql = format!(
             "SELECT {} {} FROM {} {} {} {} {}",
             if query.distinct { "DISTINCT" } else { "" },
-            query.columns.join(", "),
-            query.table_name,
+            crate::query::render_columns(query.columns, '"'),
+            crate::query::render_identifier(query.table_name, '"'),
             build_join_clauses(query.joins.as_deref()),
             build_where_clause(query.filters.as_deref()),
             build_sort_clause(query.sorts.as_deref()),
@@ -1963,7 +2009,7 @@ impl Database for DuckDbDatabase {
                 .limit
                 .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
         );
-        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+        let params = select_values(query);
 
         run_duckdb_blocking("duckdb_select", move || {
             let conn = connection.blocking_lock();
@@ -1989,13 +2035,13 @@ impl Database for DuckDbDatabase {
         let sql = format!(
             "SELECT {} {} FROM {} {} {} {} LIMIT 1",
             if query.distinct { "DISTINCT" } else { "" },
-            query.columns.join(", "),
-            query.table_name,
+            crate::query::render_columns(query.columns, '"'),
+            crate::query::render_identifier(query.table_name, '"'),
             build_join_clauses(query.joins.as_deref()),
             build_where_clause(query.filters.as_deref()),
             build_sort_clause(query.sorts.as_deref()),
         );
-        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+        let params = select_values(query);
 
         run_duckdb_blocking("duckdb_select_first", move || {
             let conn = connection.blocking_lock();
@@ -2559,8 +2605,8 @@ impl Database for DuckDbTransaction {
         let sql = format!(
             "SELECT {} {} FROM {} {} {} {} {}",
             if query.distinct { "DISTINCT" } else { "" },
-            query.columns.join(", "),
-            query.table_name,
+            crate::query::render_columns(query.columns, '"'),
+            crate::query::render_identifier(query.table_name, '"'),
             build_join_clauses(query.joins.as_deref()),
             build_where_clause(query.filters.as_deref()),
             build_sort_clause(query.sorts.as_deref()),
@@ -2568,7 +2614,7 @@ impl Database for DuckDbTransaction {
                 .limit
                 .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
         );
-        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+        let params = select_values(query);
 
         run_duckdb_blocking("duckdb_tx_select", move || {
             let conn = connection.blocking_lock();
@@ -2593,13 +2639,13 @@ impl Database for DuckDbTransaction {
         let sql = format!(
             "SELECT {} {} FROM {} {} {} {} LIMIT 1",
             if query.distinct { "DISTINCT" } else { "" },
-            query.columns.join(", "),
-            query.table_name,
+            crate::query::render_columns(query.columns, '"'),
+            crate::query::render_identifier(query.table_name, '"'),
             build_join_clauses(query.joins.as_deref()),
             build_where_clause(query.filters.as_deref()),
             build_sort_clause(query.sorts.as_deref()),
         );
-        let params = bexprs_to_values_opt(query.filters.as_deref()).unwrap_or_default();
+        let params = select_values(query);
 
         run_duckdb_blocking("duckdb_tx_select_first", move || {
             let conn = connection.blocking_lock();
@@ -3320,6 +3366,7 @@ impl Expression for DuckDbDatabaseValue {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbDatabase {
     pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
@@ -3338,6 +3385,7 @@ impl DuckDbDatabase {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbDatabase {
     pub(crate) async fn query_raw_internal(
         &self,
@@ -3374,6 +3422,7 @@ impl DuckDbDatabase {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbDatabase {
     pub(crate) async fn exec_raw_params_internal(
         &self,
@@ -3420,6 +3469,7 @@ impl DuckDbDatabase {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbDatabase {
     pub(crate) async fn query_raw_params_internal(
         &self,
@@ -3468,6 +3518,7 @@ impl DuckDbDatabase {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbTransaction {
     pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
         let connection = Arc::clone(&self.connection);
@@ -3483,6 +3534,7 @@ impl DuckDbTransaction {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbTransaction {
     pub(crate) async fn query_raw_internal(
         &self,
@@ -3518,6 +3570,7 @@ impl DuckDbTransaction {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbTransaction {
     pub(crate) async fn exec_raw_params_internal(
         &self,
@@ -3554,6 +3607,7 @@ impl DuckDbTransaction {
     }
 }
 
+#[cfg(feature = "raw-sql")]
 impl DuckDbTransaction {
     pub(crate) async fn query_raw_params_internal(
         &self,
@@ -3624,6 +3678,99 @@ mod tests {
         }
 
         DuckDbDatabase::new(connections)
+    }
+
+    async fn assert_select_sort_bindings(db: &dyn Database) {
+        for first_only in [false, true] {
+            let query = db.select("test_table").where_gte("value", 1).sorts(vec![
+                Sort {
+                    expression: Box::new(where_eq(
+                        crate::query::identifier("value"),
+                        DatabaseValue::Int64(2),
+                    )),
+                    direction: crate::query::SortDirection::Desc,
+                },
+                crate::query::sort(
+                    crate::query::identifier("value"),
+                    crate::query::SortDirection::Asc,
+                ),
+            ]);
+            let row = if first_only {
+                query.execute_first(db).await.unwrap().unwrap()
+            } else {
+                query.execute(db).await.unwrap().remove(0)
+            };
+            assert_eq!(
+                row.get("name"),
+                Some(DatabaseValue::String("second".into()))
+            );
+        }
+    }
+
+    #[switchy_async::test]
+    async fn select_binds_sort_values_after_filters_in_database_and_transaction() {
+        let db = create_test_db();
+        for (name, value) in [("first", 1), ("second", 2)] {
+            db.insert("test_table")
+                .value("name", name)
+                .value("value", value)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+        assert_select_sort_bindings(&db).await;
+        let tx = db.begin_transaction().await.unwrap();
+        assert_select_sort_bindings(&*tx).await;
+        tx.rollback().await.unwrap();
+        db.close().await.unwrap();
+    }
+
+    #[cfg(not(feature = "raw-sql"))]
+    #[switchy_async::test]
+    async fn select_rejects_fragment_names_in_database_and_transaction() {
+        let db = create_test_db();
+        assert!(
+            crate::query::select("test_table")
+                .execute(&db)
+                .await
+                .is_ok()
+        );
+        for name in ["test_table WHERE false", "test_table AS other"] {
+            assert!(crate::query::select(name).execute(&db).await.is_err());
+            assert!(crate::query::select(name).execute_first(&db).await.is_err());
+        }
+        for name in ["id + 1", "id AS renamed"] {
+            let columns = [name];
+            let query = crate::query::select("test_table").columns(&columns);
+            assert!(query.execute(&db).await.is_err());
+            let query = crate::query::select("test_table").columns(&columns);
+            assert!(query.execute_first(&db).await.is_err());
+        }
+        let tx = db.begin_transaction().await.unwrap();
+        assert!(
+            crate::query::select("test_table")
+                .execute(&*tx)
+                .await
+                .is_ok()
+        );
+        for name in ["test_table WHERE false", "test_table AS other"] {
+            assert!(crate::query::select(name).execute(&*tx).await.is_err());
+            assert!(
+                crate::query::select(name)
+                    .execute_first(&*tx)
+                    .await
+                    .is_err()
+            );
+        }
+        for name in ["id + 1", "id AS renamed"] {
+            let columns = [name];
+            let query = crate::query::select("test_table").columns(&columns);
+            assert!(query.execute(&*tx).await.is_err());
+            let query = crate::query::select("test_table").columns(&columns);
+            assert!(query.execute_first(&*tx).await.is_err());
+        }
+        tx.rollback().await.unwrap();
+        db.close().await.unwrap();
     }
 
     #[switchy_async::test]

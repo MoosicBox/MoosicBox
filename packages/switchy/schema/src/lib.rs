@@ -317,6 +317,10 @@ impl std::fmt::Display for ChecksumMismatch {
 /// from database connectivity issues to migration-specific failures.
 #[derive(Debug, Error)]
 pub enum MigrationError {
+    /// SQL-file execution requires the explicitly enabled `raw-sql` capability.
+    #[error("SQL migration execution requires the raw-sql feature")]
+    RawSqlDisabled,
+
     /// Database operation failed
     ///
     /// Wraps underlying database errors from `switchy_database`.

@@ -250,6 +250,10 @@ impl crate::DatabaseTransaction for TursoTransaction {
 
 #[async_trait]
 impl crate::Database for TursoTransaction {
+    async fn sqlite_temp_store_memory(&self) -> Result<(), DatabaseError> {
+        self.exec_raw_internal("PRAGMA temp_store = MEMORY").await
+    }
+
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
         self.query_raw_internal(query).await
@@ -845,7 +849,6 @@ impl TursoTransaction {
 }
 
 impl TursoTransaction {
-    #[cfg(feature = "raw-sql")]
     pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
         self.connection
             .execute(statement, ())

@@ -33,11 +33,10 @@ serde      = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
-moosicbox_schema = { workspace = true, features = ["sqlite"] }
-switchy_async    = { workspace = true, features = ["macros", "time", "tokio"] }
-switchy_fs       = { workspace = true, features = ["simulator-real-fs"] }
-test-log         = { workspace = true }
-tokio            = { workspace = true, features = ["macros", "rt"] }
+switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
+switchy_fs    = { workspace = true, features = ["simulator-real-fs"] }
+test-log      = { workspace = true }
+tokio         = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["decimal", "sqlite", "uuid"]
@@ -48,6 +47,7 @@ fail-on-warnings = [
     "switchy_database_connection?/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
 ]
+raw-sql = ["switchy_database/raw-sql", "switchy_schema/raw-sql"]
 snapshots = [
     "dep:insta",
     "dep:serde",

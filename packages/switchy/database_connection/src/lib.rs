@@ -836,7 +836,7 @@ pub fn init_sqlite_rusqlite(
     )))
 }
 
-/// How a typed SQLite opener may access storage.
+/// How a typed `SQLite` opener may access storage.
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Clone, Copy)]
 pub enum SqliteAccess {
@@ -848,15 +848,15 @@ pub enum SqliteAccess {
     ReadWriteCreate,
 }
 
-/// Explicit SQLite opening policy. Paths are not interpreted as URIs unless opted in.
+/// Explicit `SQLite` opening policy. Paths are not interpreted as URIs unless opted in.
 #[cfg(feature = "sqlite-rusqlite")]
 #[derive(Debug, Clone)]
 pub struct SqliteOpenOptions {
     /// Storage access policy.
     pub access: SqliteAccess,
-    /// Interpret the filename as a SQLite URI.
+    /// Interpret the filename as a `SQLite` URI.
     pub allow_uri: bool,
-    /// Time spent waiting for SQLite locks.
+    /// Time spent waiting for `SQLite` locks.
     pub busy_timeout: std::time::Duration,
     /// Enforce foreign key constraints on every opened connection.
     pub foreign_keys: bool,
@@ -864,7 +864,7 @@ pub struct SqliteOpenOptions {
     pub connections: std::num::NonZeroUsize,
 }
 
-/// Open SQLite with explicit access and connection-local settings.
+/// Open `SQLite` with explicit access and connection-local settings.
 ///
 /// # Errors
 /// Returns driver errors for invalid paths, permissions, unsupported URI options or settings.

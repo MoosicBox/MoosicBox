@@ -1274,6 +1274,52 @@ impl Digest for DatabaseValue {
 }
 
 // Digest implementation for ExpressionType enum
+#[cfg(test)]
+mod qualified_column_tests {
+    use super::*;
+    use switchy_database::query::qualified_column;
+
+    #[test]
+    fn byte_length_digest_preserves_operand_and_operation() {
+        use switchy_database::query::{Expression, byte_length, identifier};
+
+        let digest = |expression: &dyn Expression| {
+            let mut hasher = Sha256::new();
+            expression.expression_type().update_digest(&mut hasher);
+            hasher.finalize()
+        };
+        assert_eq!(
+            digest(&byte_length(identifier("payload"))),
+            digest(&byte_length(identifier("payload")))
+        );
+        assert_ne!(
+            digest(&byte_length(identifier("payload"))),
+            digest(&byte_length(identifier("other")))
+        );
+        assert_ne!(
+            digest(&byte_length(identifier("payload"))),
+            digest(&identifier("payload"))
+        );
+        assert_ne!(
+            digest(&byte_length(qualified_column("a", "value"))),
+            digest(&byte_length(qualified_column("b", "value")))
+        );
+    }
+
+    #[test]
+    fn qualified_digest_preserves_component_boundaries() {
+        let digest = |table: &str, column: &str| {
+            let expression = qualified_column(table, column);
+            let mut hasher = Sha256::new();
+            expression.expression_type().update_digest(&mut hasher);
+            hasher.finalize()
+        };
+        assert_eq!(digest("items", "value"), digest("items", "value"));
+        assert_ne!(digest("a", "bc"), digest("ab", "c"));
+        assert_ne!(digest("表", "列"), digest("列", "表"));
+    }
+}
+
 impl Digest for ExpressionType<'_> {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn update_digest(&self, hasher: &mut Sha256) {
@@ -1396,12 +1442,67 @@ impl Digest for ExpressionType<'_> {
                     }
                 }
             }
+            ExpressionType::Max(expr) => {
+                hasher.update(b"MAX:");
+                match expr.expression.expression_type() {
+                    ExpressionType::Identifier(identifier) => {
+                        hasher.update(b"IDENTIFIER:");
+                        hasher.update((identifier.value.len() as u64).to_le_bytes());
+                        hasher.update(identifier.value.as_bytes());
+                    }
+                    operand => operand.update_digest(hasher),
+                }
+            }
+            ExpressionType::Count(expr) => {
+                hasher.update(b"COUNT:");
+                if let Some(expression) = &expr.expression {
+                    match expression.expression_type() {
+                        ExpressionType::Identifier(identifier) => {
+                            hasher.update(b"IDENTIFIER:");
+                            hasher.update((identifier.value.len() as u64).to_le_bytes());
+                            hasher.update(identifier.value.as_bytes());
+                        }
+                        operand => operand.update_digest(hasher),
+                    }
+                } else {
+                    hasher.update(b"ALL_ROWS:");
+                }
+            }
+            ExpressionType::Min(expr) => {
+                hasher.update(b"MIN:");
+                match expr.expression.expression_type() {
+                    ExpressionType::Identifier(identifier) => {
+                        hasher.update(b"IDENTIFIER:");
+                        hasher.update((identifier.value.len() as u64).to_le_bytes());
+                        hasher.update(identifier.value.as_bytes());
+                    }
+                    operand => operand.update_digest(hasher),
+                }
+            }
+            ExpressionType::ByteLength(expr) => {
+                hasher.update(b"BYTE_LENGTH:");
+                match expr.expression.expression_type() {
+                    ExpressionType::Identifier(identifier) => {
+                        hasher.update(b"IDENTIFIER:");
+                        hasher.update((identifier.value.len() as u64).to_le_bytes());
+                        hasher.update(identifier.value.as_bytes());
+                    }
+                    operand => operand.update_digest(hasher),
+                }
+            }
             ExpressionType::Coalesce(expr) => {
                 hasher.update(b"COALESCE:");
                 if let Some(values) = expr.values() {
                     for val in values {
                         val.update_digest(hasher);
                     }
+                }
+            }
+            ExpressionType::QualifiedColumn(expr) => {
+                hasher.update(b"QUALIFIED_COLUMN:");
+                for component in [&expr.table, &expr.column] {
+                    hasher.update((component.len() as u64).to_le_bytes());
+                    hasher.update(component.as_bytes());
                 }
             }
             ExpressionType::Identifier(expr) => {

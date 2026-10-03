@@ -139,7 +139,9 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
         .with_data_before("002_add_email_column", |db| {
             Box::pin(async move {
                 // Insert user before email column is added (should get NULL for email)
-                db.exec_raw("INSERT INTO users (name) VALUES ('Alice')")
+                db.insert("users")
+                    .value("name", "Alice")
+                    .execute(db)
                     .await?;
                 Ok(())
             })
@@ -147,7 +149,10 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
         .with_data_after("002_add_email_column", |db| {
             Box::pin(async move {
                 // Insert user after email column is added (can specify email)
-                db.exec_raw("INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com')")
+                db.insert("users")
+                    .value("name", "Bob")
+                    .value("email", "bob@example.com")
+                    .execute(db)
                     .await?;
                 Ok(())
             })
@@ -155,9 +160,15 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
         .with_data_after("003_create_posts", |db| {
             Box::pin(async move {
                 // Insert posts after posts table is created
-                db.exec_raw("INSERT INTO posts (user_id, title) VALUES (1, 'Alice Post')")
+                db.insert("posts")
+                    .value("user_id", 1)
+                    .value("title", "Alice Post")
+                    .execute(db)
                     .await?;
-                db.exec_raw("INSERT INTO posts (user_id, title) VALUES (2, 'Bob Post')")
+                db.insert("posts")
+                    .value("user_id", 2)
+                    .value("title", "Bob Post")
+                    .execute(db)
                     .await?;
                 Ok(())
             })
@@ -194,111 +205,6 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
     Ok(())
 }
 
-/// Demonstrates environment variable integration with `moosicbox_schema`
-///
-/// This test verifies that the `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment
-/// variable works correctly to skip migration execution while still populating
-/// the migration tracking table with all migrations marked as completed.
-///
-/// Note: This function is only available in test builds since it requires
-/// the `moosicbox_schema` crate which is a dev-dependency.
-///
-/// # Errors
-///
-/// * If creating the in-memory database fails
-/// * If migration execution fails while the environment variable is set
-/// * If migration table verification queries fail
-///
-/// # Panics
-///
-/// * If any of the assertions fail
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// # #[cfg(all(test, feature = "sqlite"))]
-/// # {
-/// # async fn example() -> Result<(), switchy_schema_test_utils::TestError> {
-/// switchy_schema_test_utils::integration_tests::demonstrate_environment_variable_integration()
-///     .await?;
-/// # Ok(())
-/// # }
-/// # }
-/// ```
-#[cfg(all(test, feature = "sqlite"))]
-pub async fn demonstrate_environment_variable_integration() -> Result<(), crate::TestError> {
-    use switchy_database::query::FilterableQuery as _;
-
-    use crate::create_empty_in_memory;
-
-    let db = create_empty_in_memory().await?;
-
-    // Set the environment variable to skip migration execution
-    unsafe {
-        std::env::set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
-    }
-
-    // Call the actual moosicbox_schema migration functions
-    // These should complete successfully but not actually run migrations
-    // They should instead populate the migration table with all migrations marked as completed
-    let result = moosicbox_schema::migrate_library(&*db).await;
-
-    // Clean up environment variable
-    unsafe {
-        std::env::remove_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION");
-    }
-
-    // Migration should succeed (not error) even though it was skipped
-    assert!(
-        result.is_ok(),
-        "Migration should succeed when skipped via env var"
-    );
-
-    // Verify migration tracking table WAS created (even though migrations were skipped)
-    let tables = db
-        .select("sqlite_master")
-        .columns(&["name"])
-        .where_eq("type", "table")
-        .where_eq("name", "__moosicbox_schema_migrations")
-        .execute(&*db)
-        .await?;
-
-    // Migration table should exist since we now populate it even when skipping
-    assert!(
-        !tables.is_empty(),
-        "Migration table should exist when migrations are skipped"
-    );
-
-    // Verify that migrations were recorded in the table
-    let migration_records = db
-        .select("__moosicbox_schema_migrations")
-        .columns(&["id", "status"])
-        .execute(&*db)
-        .await?;
-
-    // Should have migration records
-    assert!(
-        !migration_records.is_empty(),
-        "Migration records should exist when skipped via env var"
-    );
-
-    // All migrations should be marked as completed
-    for record in &migration_records {
-        if let Some(status_value) = record.get("status") {
-            let status = status_value.as_str();
-            assert_eq!(
-                status,
-                Some("completed"),
-                "All migrations should be marked as completed when skipped"
-            );
-        } else {
-            panic!("Migration record missing status field");
-        }
-    }
-
-    Ok(())
-}
-
 /// Simple test migration implementation for demonstrations
 #[cfg(feature = "sqlite")]
 struct TestMigration {
@@ -321,7 +227,13 @@ impl switchy_schema::migration::Migration<'static> for TestMigration {
         if let Some(sql) = &self.up_sql
             && !sql.is_empty()
         {
+            #[cfg(feature = "raw-sql")]
             db.exec_raw(sql).await?;
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                let _ = db;
+                return Err(switchy_schema::MigrationError::RawSqlDisabled);
+            }
         }
         Ok(())
     }
@@ -333,7 +245,13 @@ impl switchy_schema::migration::Migration<'static> for TestMigration {
         if let Some(sql) = &self.down_sql
             && !sql.is_empty()
         {
+            #[cfg(feature = "raw-sql")]
             db.exec_raw(sql).await?;
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                let _ = db;
+                return Err(switchy_schema::MigrationError::RawSqlDisabled);
+            }
         }
         Ok(())
     }
@@ -352,12 +270,5 @@ mod tests {
     #[switchy_async::test]
     async fn test_complex_breakpoint_demonstration() {
         demonstrate_complex_breakpoint_patterns().await.unwrap();
-    }
-
-    #[switchy_async::test]
-    async fn test_environment_variable_demonstration() {
-        demonstrate_environment_variable_integration()
-            .await
-            .unwrap();
     }
 }

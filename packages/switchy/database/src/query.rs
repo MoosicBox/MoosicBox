@@ -79,14 +79,9 @@ use crate::{Database, DatabaseError, DatabaseValue, Row};
     feature = "duckdb",
     feature = "turso",
     feature = "mysql-sqlx",
-    all(
-        not(feature = "raw-sql"),
-        any(
-            feature = "sqlite-sqlx",
-            feature = "postgres-sqlx",
-            feature = "postgres-raw"
-        )
-    )
+    feature = "sqlite-sqlx",
+    feature = "postgres-sqlx",
+    feature = "postgres-raw"
 ))]
 pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     if cfg!(feature = "raw-sql") {
@@ -95,6 +90,32 @@ pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
         let escaped = value.replace(delimiter, &format!("{delimiter}{delimiter}"));
         format!("{delimiter}{escaped}{delimiter}")
     }
+}
+
+/// Render a legacy SELECT column list without allowing fragments in no-raw builds.
+/// The standalone wildcard retains its query-builder meaning; all other strings
+/// are exact identifiers, including strings containing dots.
+#[cfg(any(
+    feature = "sqlite-rusqlite",
+    feature = "sqlite-sqlx",
+    feature = "postgres-sqlx",
+    feature = "postgres-raw",
+    feature = "mysql-sqlx",
+    feature = "duckdb",
+    feature = "turso"
+))]
+pub(crate) fn render_columns(columns: &[&str], delimiter: char) -> String {
+    columns
+        .iter()
+        .map(|column| {
+            if *column == "*" {
+                "*".to_owned()
+            } else {
+                render_identifier(column, delimiter)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Sort direction for ORDER BY clauses
@@ -119,6 +140,10 @@ impl Expression for Sort {
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Sort(self)
     }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
 }
 
 /// JOIN clause specification for combining tables
@@ -126,10 +151,82 @@ impl Expression for Sort {
 pub struct Join<'a> {
     /// Name of the table to join with
     pub table_name: &'a str,
-    /// JOIN condition (e.g., "users.id = `orders.user_id`")
-    pub on: &'a str,
+    /// Typed equality condition, or a feature-gated raw predicate.
+    pub on: JoinCondition,
     /// Whether this is a LEFT JOIN (true) or INNER JOIN (false)
     pub left: bool,
+}
+
+/// A JOIN predicate that cannot carry caller SQL without `raw-sql`.
+#[cfg_attr(
+    not(feature = "raw-sql"),
+    doc = r#"
+```compile_fail
+use switchy_database::query::JoinCondition;
+let _ = JoinCondition::Raw("1 = 1".to_owned());
+```
+```compile_fail
+use switchy_database::query::join;
+let _ = join("items", "1 = 1");
+```
+```compile_fail
+use switchy_database::query::select;
+let _ = select("items").join("other", "1 = 1");
+```
+"#
+)]
+#[derive(Debug, Clone)]
+pub enum JoinCondition {
+    /// Equality between independently quoted, qualified columns.
+    ColumnsEqual(QualifiedColumn, QualifiedColumn),
+    /// Arbitrary SQL retained only for compatibility callers.
+    #[cfg(feature = "raw-sql")]
+    Raw(String),
+}
+
+impl JoinCondition {
+    #[cfg(feature = "_any_backend")]
+    pub(crate) fn render(&self, delimiter: char) -> String {
+        match self {
+            Self::ColumnsEqual(left, right) => {
+                format!("{} = {}", left.render(delimiter), right.render(delimiter))
+            }
+            #[cfg(feature = "raw-sql")]
+            Self::Raw(sql) => sql.clone(),
+        }
+    }
+}
+
+/// Creates a JOIN using equality of exact qualified column names.
+///
+/// Set `left` for a LEFT JOIN. Dots and quotes within each name are literal;
+/// use [`qualified_column`] to specify qualification explicitly.
+#[must_use]
+pub const fn join_columns(
+    table_name: &str,
+    first: QualifiedColumn,
+    second: QualifiedColumn,
+    left: bool,
+) -> Join<'_> {
+    Join {
+        table_name,
+        on: JoinCondition::ColumnsEqual(first, second),
+        left,
+    }
+}
+
+impl Join<'_> {
+    #[cfg(feature = "_any_backend")]
+    pub(crate) fn render_table(&self, delimiter: char) -> String {
+        #[cfg(feature = "raw-sql")]
+        if matches!(self.on, JoinCondition::Raw(_)) {
+            return self.table_name.to_owned();
+        }
+        let escaped = self
+            .table_name
+            .replace(delimiter, &format!("{delimiter}{delimiter}"));
+        format!("{delimiter}{escaped}{delimiter}")
+    }
 }
 
 impl Expression for Join<'_> {
@@ -175,8 +272,18 @@ pub enum ExpressionType<'a> {
     /// Raw SQL literal expression
     #[cfg(feature = "raw-sql")]
     Literal(&'a Literal),
+    /// UTF-8 byte length of a text expression (NULL remains NULL).
+    ByteLength(&'a ByteLength),
+    /// Minimum non-NULL value of a typed expression.
+    Min(&'a Min),
+    /// Maximum non-NULL value of a typed expression.
+    Max(&'a Max),
+    /// Number of rows, or non-NULL values of a typed expression.
+    Count(&'a Count),
     /// COALESCE function expression
     Coalesce(&'a Coalesce),
+    /// Explicitly qualified column with separately quoted components.
+    QualifiedColumn(&'a QualifiedColumn),
     /// Column/table identifier expression
     Identifier(&'a Identifier),
     /// Subquery expression
@@ -287,6 +394,204 @@ impl Expression for Literal {
 pub fn literal(value: &str) -> Literal {
     Literal {
         value: value.to_string(),
+    }
+}
+
+/// Minimum non-NULL value of a typed expression.
+///
+/// An empty input or an input containing only NULL values produces SQL NULL.
+#[derive(Debug)]
+pub struct Min {
+    /// Operand, rendered through the backend's typed expression implementation.
+    pub expression: Box<dyn Expression>,
+}
+
+impl Expression for Min {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::Min(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+
+impl From<Min> for Box<dyn Expression> {
+    fn from(value: Min) -> Self {
+        Box::new(value)
+    }
+}
+
+/// Returns the minimum non-NULL value of a typed expression.
+///
+/// Use a typed column expression for column operands. Bound values remain bound;
+/// no caller-supplied SQL function name or fragment is accepted.
+#[must_use]
+pub fn min(expression: impl Into<Box<dyn Expression>>) -> Min {
+    Min {
+        expression: expression.into(),
+    }
+}
+
+/// Maximum non-NULL value of a typed expression.
+///
+/// An empty input or an input containing only NULL values produces SQL NULL.
+#[derive(Debug)]
+pub struct Max {
+    /// Typed operand; never an SQL fragment.
+    pub expression: Box<dyn Expression>,
+}
+
+impl Expression for Max {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::Max(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+
+impl From<Max> for Box<dyn Expression> {
+    fn from(value: Max) -> Self {
+        Box::new(value)
+    }
+}
+
+/// Returns the maximum non-NULL value of a typed expression.
+#[must_use]
+pub fn max(expression: impl Into<Box<dyn Expression>>) -> Max {
+    Max {
+        expression: expression.into(),
+    }
+}
+
+/// Counts rows or non-NULL expression values. Empty input produces zero.
+#[derive(Debug)]
+pub struct Count {
+    /// None counts all rows; Some counts non-NULL values of the typed operand.
+    pub expression: Option<Box<dyn Expression>>,
+}
+
+impl Expression for Count {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::Count(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.as_ref().and_then(|value| value.values())
+    }
+}
+
+impl From<Count> for Box<dyn Expression> {
+    fn from(value: Count) -> Self {
+        Box::new(value)
+    }
+}
+
+/// Counts non-NULL values of a typed expression, preserving bound parameters.
+#[must_use]
+pub fn count(expression: impl Into<Box<dyn Expression>>) -> Count {
+    Count {
+        expression: Some(expression.into()),
+    }
+}
+
+/// Counts all rows, including rows containing NULL values.
+#[must_use]
+pub const fn count_all() -> Count {
+    Count { expression: None }
+}
+
+/// UTF-8 byte length of a text expression, preserving SQL NULL.
+///
+/// This is not a character or grapheme count. The operand must be text;
+/// behavior for other SQL types is backend-dependent.
+#[derive(Debug)]
+pub struct ByteLength {
+    /// Typed text operand; never an SQL fragment.
+    pub expression: Box<dyn Expression>,
+}
+
+impl Expression for ByteLength {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::ByteLength(self)
+    }
+
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+
+impl From<ByteLength> for Box<dyn Expression> {
+    fn from(value: ByteLength) -> Self {
+        Box::new(value)
+    }
+}
+
+/// Counts UTF-8 bytes in a typed text expression, preserving SQL NULL.
+///
+/// Use [`identifier`] or [`qualified_column`] for column operands, or a
+/// [`DatabaseValue`] for bound text. Strings are not interpreted as SQL.
+#[must_use]
+pub fn byte_length(expression: impl Into<Box<dyn Expression>>) -> ByteLength {
+    ByteLength {
+        expression: expression.into(),
+    }
+}
+
+/// A column qualified by an exact table name or table alias.
+///
+/// Both components are always quoted independently, even with `raw-sql` enabled.
+/// Dots within a component are literal name characters, never extra qualification.
+#[derive(Debug, Clone)]
+pub struct QualifiedColumn {
+    /// Exact table name or alias.
+    pub table: String,
+    /// Exact column name.
+    pub column: String,
+}
+
+impl Expression for QualifiedColumn {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::QualifiedColumn(self)
+    }
+}
+
+impl From<QualifiedColumn> for Box<dyn Expression> {
+    fn from(value: QualifiedColumn) -> Self {
+        Box::new(value)
+    }
+}
+
+/// Refers to a column through an explicit table name or alias.
+///
+/// Unlike `identifier("table.column")`, this produces two independently quoted
+/// identifiers separated by a qualification dot. Neither argument accepts SQL.
+#[must_use]
+pub fn qualified_column(table: &str, column: &str) -> QualifiedColumn {
+    QualifiedColumn {
+        table: table.to_owned(),
+        column: column.to_owned(),
+    }
+}
+
+impl QualifiedColumn {
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-sqlx",
+        feature = "postgres-raw",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
+    pub(crate) fn render(&self, delimiter: char) -> String {
+        let quote = |name: &str| {
+            let escaped = name.replace(delimiter, &format!("{delimiter}{delimiter}"));
+            format!("{delimiter}{escaped}{delimiter}")
+        };
+        format!("{}.{}", quote(&self.table), quote(&self.column))
     }
 }
 
@@ -820,10 +1125,11 @@ pub fn where_or(conditions: Vec<Box<dyn BooleanExpression>>) -> Or {
 /// let join_clause = join("orders", "orders.user_id = users.id");
 /// ```
 #[must_use]
-pub const fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
+#[cfg(feature = "raw-sql")]
+pub fn join<'a>(table_name: &'a str, on: &str) -> Join<'a> {
     Join {
         table_name,
-        on,
+        on: JoinCondition::Raw(on.to_owned()),
         left: false,
     }
 }
@@ -838,10 +1144,11 @@ pub const fn join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
 /// let join_clause = left_join("orders", "orders.user_id = users.id");
 /// ```
 #[must_use]
-pub const fn left_join<'a>(table_name: &'a str, on: &'a str) -> Join<'a> {
+#[cfg(feature = "raw-sql")]
+pub fn left_join<'a>(table_name: &'a str, on: &str) -> Join<'a> {
     Join {
         table_name,
-        on,
+        on: JoinCondition::Raw(on.to_owned()),
         left: true,
     }
 }
@@ -1279,6 +1586,7 @@ impl<'a> SelectQuery<'a> {
 
     /// Adds an INNER JOIN clause
     #[must_use]
+    #[cfg(feature = "raw-sql")]
     pub fn join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(joins) = &mut self.joins {
             joins.push(join(table_name, on));
@@ -1303,6 +1611,7 @@ impl<'a> SelectQuery<'a> {
 
     /// Adds a LEFT JOIN clause
     #[must_use]
+    #[cfg(feature = "raw-sql")]
     pub fn left_join(mut self, table_name: &'a str, on: &'a str) -> Self {
         if let Some(left_joins) = &mut self.joins {
             left_joins.push(left_join(table_name, on));
@@ -2025,6 +2334,19 @@ mod tests {
         }
     }
 
+    #[cfg(all(test, feature = "sqlite-rusqlite"))]
+    mod qualified_column_tests {
+        use super::*;
+
+        #[test]
+        fn qualification_quotes_each_exact_component() {
+            let column = qualified_column("a.b\"c", "d.e\"f");
+            assert_eq!(column.render('"'), "\"a.b\"\"c\".\"d.e\"\"f\"");
+            let column = qualified_column("a.b`c", "d.e`f");
+            assert_eq!(column.render('`'), "`a.b``c`.`d.e``f`");
+        }
+    }
+
     mod identifier_tests {
         use super::*;
 
@@ -2047,6 +2369,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "raw-sql")]
     mod join_tests {
         use super::*;
 
@@ -2054,7 +2377,7 @@ mod tests {
         fn test_inner_join_creation() {
             let j = join("orders", "orders.user_id = users.id");
             assert_eq!(j.table_name, "orders");
-            assert_eq!(j.on, "orders.user_id = users.id");
+            assert!(matches!(&j.on, JoinCondition::Raw(sql) if sql == "orders.user_id = users.id"));
             assert!(!j.left);
         }
 

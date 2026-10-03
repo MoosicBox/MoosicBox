@@ -1,5 +1,18 @@
 //! `SQLite` database backend using rusqlite
 //!
+//! Direct connection helpers are excluded without `raw-sql`.
+#![cfg_attr(
+    not(feature = "raw-sql"),
+    doc = r"
+```compile_fail
+use switchy_database::rusqlite::update_multi;
+```
+```compile_fail
+use switchy_database::rusqlite::upsert_multi;
+```
+"
+)]
+//!
 //! This module provides `SQLite` database support using the `rusqlite` crate for synchronous
 //! `SQLite` access wrapped in async interfaces. It implements schema introspection using
 //! `SQLite`'s PRAGMA commands.
@@ -215,6 +228,7 @@ pub use crate::TransactionMode;
 pub struct RusqliteDatabase {
     connections: ConnectionPool,
     next_connection: AtomicUsize,
+    connection_count: usize,
 }
 
 #[cfg(feature = "raw-sql")]
@@ -227,6 +241,7 @@ impl RusqliteDatabase {
     #[must_use]
     pub fn new(connections: Vec<Arc<Mutex<Connection>>>) -> Self {
         Self {
+            connection_count: connections.len(),
             connections: Arc::new(std::sync::Mutex::new(PoolState {
                 available: connections,
                 closed: false,
@@ -342,6 +357,62 @@ impl RusqliteTransaction {
     }
 }
 
+#[cfg(test)]
+mod aggregate_rendering_tests {
+    use super::ToSql;
+    use crate::{
+        DatabaseValue,
+        query::{Expression, count, count_all, identifier, max},
+    };
+
+    #[test]
+    fn aggregate_results_distinguish_rows_non_null_values_and_empty_input() {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        // Backend-private SQL exercises the generated expressions without introducing
+        // an arbitrary-SQL capability in the portable database contract.
+        for (filter, expected) in [
+            ("", (3_i64, 2_i64, Some(7_i64))),
+            ("WHERE value IS NULL", (1, 0, None)),
+            ("WHERE 0", (0, 0, None)),
+        ] {
+            let sql = format!(
+                "SELECT {}, {}, {} FROM (SELECT NULL AS value UNION ALL SELECT 2 UNION ALL SELECT 7) {filter}",
+                count_all().to_sql(),
+                count(identifier("value")).to_sql(),
+                max(identifier("value")).to_sql(),
+            );
+            let actual = connection
+                .query_row(&sql, [], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                    ))
+                })
+                .unwrap();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn typed_aggregates_render_and_preserve_parameters() {
+        assert_eq!(count_all().to_sql(), "COUNT(*)");
+        assert!(count_all().values().is_none());
+        let operand = DatabaseValue::String("x'); DROP TABLE events; --".to_owned());
+        let count = count(operand.clone());
+        let maximum = max(operand.clone());
+        assert_eq!(count.to_sql(), "COUNT(?)");
+        assert_eq!(maximum.to_sql(), "MAX(?)");
+        assert_eq!(count.values().unwrap(), vec![&operand]);
+        assert_eq!(maximum.values().unwrap(), vec![&operand]);
+        #[cfg(not(feature = "raw-sql"))]
+        {
+            assert_eq!(max(identifier("x\"; --")).to_sql(), "MAX(\"x\"\"; --\")");
+        }
+        assert!(max(identifier("value")).values().is_none());
+    }
+}
+
 trait ToSql {
     fn to_sql(&self) -> String;
 }
@@ -412,8 +483,8 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
                 if value.left { "LEFT" } else { "" },
-                value.table_name,
-                value.on
+                value.render_table('"'),
+                value.on.render('"')
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
@@ -452,6 +523,19 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
+            ExpressionType::Max(value) => format!("MAX({})", value.expression.to_sql()),
+            ExpressionType::Count(value) => format!(
+                "COUNT({})",
+                value
+                    .expression
+                    .as_ref()
+                    .map_or_else(|| "*".to_owned(), |expression| expression.to_sql())
+            ),
+            ExpressionType::Min(value) => format!("MIN({})", value.expression.to_sql()),
+            ExpressionType::ByteLength(value) => {
+                format!("length(CAST({} AS BLOB))", value.expression.to_sql())
+            }
+            ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -495,8 +579,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value.columns.join(", "),
-                    value.table_name,
+                    crate::query::render_columns(value.columns, '"'),
+                    crate::query::render_identifier(value.table_name, '"'),
                     joins,
                     where_clause,
                     sort_clause,
@@ -643,6 +727,27 @@ fn rusqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for RusqliteDatabase {
+    async fn sqlite_change_observation(
+        &self,
+    ) -> Result<crate::SqliteChangeObservation, DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite change observation requires one persistent connection".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        let data_version = connection
+            .query_row("PRAGMA data_version", [], |row| row.get(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        let total_changes = connection.total_changes();
+        drop(connection);
+        Ok(crate::SqliteChangeObservation {
+            data_version,
+            total_changes,
+        })
+    }
+
     async fn check_connection(&self) -> Result<(), DatabaseError> {
         self.query_raw_internal("SELECT 1").await?;
         Ok(())
@@ -848,7 +953,7 @@ impl Database for RusqliteDatabase {
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let connection = self.get_connection()?;
-        Ok(upsert_multi(
+        Ok(upsert_multi_internal(
             &*connection.lock().await,
             statement.table_name,
             statement
@@ -1526,12 +1631,16 @@ impl From<Value> for DatabaseValue {
     }
 }
 
-fn from_row(column_names: &[String], row: &Row<'_>) -> Result<crate::Row, RusqliteDatabaseError> {
-    let mut columns = vec![];
-
-    for column in column_names {
-        columns.push((column.clone(), row.get::<_, Value>(column.as_str())?.into()));
-    }
+fn from_row(_column_names: &[String], row: &Row<'_>) -> Result<crate::Row, RusqliteDatabaseError> {
+    // SQLite may reprepare a cached statement when it is stepped after a schema change.
+    // Read metadata from the stepped row, not the statement before execution.
+    let columns = row
+        .as_ref()
+        .column_names()
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| Ok((name.to_owned(), row.get::<_, Value>(index)?.into())))
+        .collect::<Result<Vec<_>, RusqliteDatabaseError>>()?;
 
     Ok(crate::Row { columns })
 }
@@ -1548,7 +1657,7 @@ fn rusqlite_exec_create_table(
         query.push_str("IF NOT EXISTS ");
     }
 
-    query.push_str(statement.table_name);
+    query.push_str(&crate::query::render_identifier(statement.table_name, '"'));
     query.push('(');
 
     let mut first = true;
@@ -1584,7 +1693,7 @@ fn rusqlite_exec_create_table(
             ));
         }
 
-        query.push_str(&column.name);
+        query.push_str(&crate::query::render_identifier(&column.name, '"'));
         query.push(' ');
 
         match column.data_type {
@@ -1746,7 +1855,7 @@ fn rusqlite_exec_create_table(
         && !statement.columns.iter().any(|column| column.auto_increment)
     {
         query.push_str(", PRIMARY KEY (");
-        query.push_str(primary_key);
+        query.push_str(&crate::query::render_identifier(primary_key, '"'));
         query.push(')');
     }
 
@@ -1757,9 +1866,9 @@ fn rusqlite_exec_create_table(
 
     for (source, target) in &statement.foreign_keys {
         query.push_str(", FOREIGN KEY (");
-        query.push_str(source);
+        query.push_str(&crate::query::render_identifier(source, '"'));
         query.push_str(") REFERENCES ");
-        query.push_str(target);
+        query.push_str(&crate::query::render_identifier(target, '"'));
     }
 
     query.push(')');
@@ -1797,7 +1906,7 @@ fn rusqlite_exec_drop_table(
         query.push_str("IF EXISTS ");
     }
 
-    query.push_str(statement.table_name);
+    query.push_str(&crate::query::render_identifier(statement.table_name, '"'));
 
     connection
         .execute(&query, [])
@@ -1826,7 +1935,7 @@ fn rusqlite_exec_drop_table_cascade(
             if statement.if_exists {
                 query.push_str("IF EXISTS ");
             }
-            query.push_str(table_to_drop);
+            query.push_str(&crate::query::render_identifier(table_to_drop, '"'));
 
             connection
                 .execute(&query, [])
@@ -1860,7 +1969,7 @@ fn rusqlite_exec_drop_table_restrict(
     if statement.if_exists {
         query.push_str("IF EXISTS ");
     }
-    query.push_str(statement.table_name);
+    query.push_str(&crate::query::render_identifier(statement.table_name, '"'));
 
     connection
         .execute(&query, [])
@@ -2022,13 +2131,17 @@ pub(crate) fn rusqlite_exec_create_index(
     let columns_str = statement
         .columns
         .iter()
-        .map(|col| format!("`{col}`"))
+        .map(|col| format!("`{}`", col.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
 
     let sql = format!(
         "CREATE {}INDEX {}{} ON {} ({})",
-        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+        unique_str,
+        if_not_exists_str,
+        crate::query::render_identifier(statement.index_name, '"'),
+        crate::query::render_identifier(statement.table_name, '"'),
+        columns_str
     );
 
     connection
@@ -2049,7 +2162,11 @@ pub(crate) fn rusqlite_exec_drop_index(
         ""
     };
 
-    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
+    let sql = format!(
+        "DROP INDEX {}{}",
+        if_exists_str,
+        crate::query::render_identifier(statement.index_name, '"')
+    );
 
     connection
         .execute(&sql, [])
@@ -2110,7 +2227,9 @@ pub(crate) fn rusqlite_exec_alter_table(
                 let default_str = match default {
                     Some(val) => {
                         let val_str = match val {
-                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::String(s) => {
+                                format!("'{}'", s.replace('\'', "''"))
+                            }
                             crate::DatabaseValue::Int64(n) => n.to_string(),
                             crate::DatabaseValue::UInt64(n) => n.to_string(),
                             crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
@@ -2141,8 +2260,12 @@ pub(crate) fn rusqlite_exec_alter_table(
                 };
 
                 let sql = format!(
-                    "ALTER TABLE {} ADD COLUMN `{}` {}{}{}",
-                    statement.table_name, name, type_str, nullable_str, default_str
+                    "ALTER TABLE {} ADD COLUMN \"{}\" {}{}{}",
+                    crate::query::render_identifier(statement.table_name, '"'),
+                    name.replace('"', "\"\""),
+                    type_str,
+                    nullable_str,
+                    default_str
                 );
 
                 connection
@@ -2212,8 +2335,9 @@ pub(crate) fn rusqlite_exec_alter_table(
                 }
 
                 let sql = format!(
-                    "ALTER TABLE {} DROP COLUMN `{}`",
-                    statement.table_name, name
+                    "ALTER TABLE {} DROP COLUMN \"{}\"",
+                    crate::query::render_identifier(statement.table_name, '"'),
+                    name.replace('"', "\"\"")
                 );
 
                 connection
@@ -2222,8 +2346,10 @@ pub(crate) fn rusqlite_exec_alter_table(
             }
             AlterOperation::RenameColumn { old_name, new_name } => {
                 let sql = format!(
-                    "ALTER TABLE {} RENAME COLUMN `{}` TO `{}`",
-                    statement.table_name, old_name, new_name
+                    "ALTER TABLE {} RENAME COLUMN \"{}\" TO \"{}\"",
+                    crate::query::render_identifier(statement.table_name, '"'),
+                    old_name.replace('"', "\"\""),
+                    new_name.replace('"', "\"\"")
                 );
 
                 connection
@@ -2319,12 +2445,8 @@ fn rusqlite_exec_modify_column_workaround(
             .as_secs()
     );
 
-    // Execute the column-based workaround in a transaction
-    connection
-        .execute("BEGIN TRANSACTION", [])
-        .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    // Step 1: Add temporary column with new type
+    // Validate defaults before opening a transaction: unsupported values must not
+    // leave the connection inside an abandoned transaction.
     let nullable_str = match new_nullable {
         Some(true) | None => "",
         Some(false) => " NOT NULL",
@@ -2333,7 +2455,7 @@ fn rusqlite_exec_modify_column_workaround(
     let default_str = match new_default {
         Some(val) => {
             let val_str = match val {
-                crate::DatabaseValue::String(s) => format!("'{s}'"),
+                crate::DatabaseValue::String(s) => format!("'{}'", s.replace('\'', "''")),
                 crate::DatabaseValue::Int64(n) => n.to_string(),
                 crate::DatabaseValue::UInt64(n) => n.to_string(),
                 crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
@@ -2360,11 +2482,19 @@ fn rusqlite_exec_modify_column_workaround(
         None => String::new(),
     };
 
+    // These are identifiers even in compatibility builds, not SQL expressions.
+    let table_name = format!("\"{}\"", table_name.replace('"', "\"\""));
+    let column_name = format!("\"{}\"", column_name.replace('"', "\"\""));
+    let temp_column = format!("\"{}\"", temp_column.replace('"', "\"\""));
+    connection
+        .execute("BEGIN TRANSACTION", [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
     let result = (|| -> Result<(), RusqliteDatabaseError> {
         connection
             .execute(
                 &format!(
-                    "ALTER TABLE {table_name} ADD COLUMN `{temp_column}` {type_str}{nullable_str}{default_str}"
+                    "ALTER TABLE {table_name} ADD COLUMN {temp_column} {type_str}{nullable_str}{default_str}"
                 ),
                 [],
             )
@@ -2374,7 +2504,7 @@ fn rusqlite_exec_modify_column_workaround(
         connection
             .execute(
                 &format!(
-                    "UPDATE {table_name} SET `{temp_column}` = CAST(`{column_name}` AS {type_str})"
+                    "UPDATE {table_name} SET {temp_column} = CAST({column_name} AS {type_str})"
                 ),
                 [],
             )
@@ -2383,7 +2513,7 @@ fn rusqlite_exec_modify_column_workaround(
         // Step 3: Drop original column
         connection
             .execute(
-                &format!("ALTER TABLE {table_name} DROP COLUMN `{column_name}`"),
+                &format!("ALTER TABLE {table_name} DROP COLUMN {column_name}"),
                 [],
             )
             .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -2392,7 +2522,7 @@ fn rusqlite_exec_modify_column_workaround(
         connection
             .execute(
                 &format!(
-                    "ALTER TABLE {table_name} ADD COLUMN `{column_name}` {type_str}{nullable_str}{default_str}"
+                    "ALTER TABLE {table_name} ADD COLUMN {column_name} {type_str}{nullable_str}{default_str}"
                 ),
                 [],
             )
@@ -2401,7 +2531,7 @@ fn rusqlite_exec_modify_column_workaround(
         // Step 5: Copy data from temp to final column
         connection
             .execute(
-                &format!("UPDATE {table_name} SET `{column_name}` = `{temp_column}`"),
+                &format!("UPDATE {table_name} SET {column_name} = {temp_column}"),
                 [],
             )
             .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -2409,7 +2539,7 @@ fn rusqlite_exec_modify_column_workaround(
         // Step 6: Drop temporary column
         connection
             .execute(
-                &format!("ALTER TABLE {table_name} DROP COLUMN `{temp_column}`"),
+                &format!("ALTER TABLE {table_name} DROP COLUMN {temp_column}"),
                 [],
             )
             .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -3082,8 +3212,8 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
                 format!(
                     "{}JOIN {} ON {}",
                     if join.left { "LEFT " } else { "" },
-                    join.table_name,
-                    join.on
+                    join.render_table('"'),
+                    join.on.render('"')
                 )
             })
             .collect::<Vec<_>>()
@@ -3160,7 +3290,13 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
 fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
     values
         .iter()
-        .map(|(name, value)| format!("{name}=({})", value.deref().to_sql()))
+        .map(|(name, value)| {
+            format!(
+                "{}=({})",
+                crate::query::render_identifier(name, '"'),
+                value.deref().to_sql()
+            )
+        })
         .collect()
 }
 
@@ -3434,10 +3570,20 @@ fn exprs_to_values_opt(
     values.map(exprs_to_values)
 }
 
-fn bexprs_to_values_opt(
-    values: Option<&[Box<dyn BooleanExpression>]>,
-) -> Option<Vec<RusqliteDatabaseValue>> {
-    values.map(bexprs_to_values)
+fn select_values(
+    filters: Option<&[Box<dyn BooleanExpression>]>,
+    sorts: Option<&[Sort]>,
+) -> Vec<RusqliteDatabaseValue> {
+    let mut values = filters.map(bexprs_to_values).unwrap_or_default();
+    values.extend(
+        sorts
+            .into_iter()
+            .flatten()
+            .flat_map(|sort| sort.values().unwrap_or_default())
+            .cloned()
+            .map(RusqliteDatabaseValue::from),
+    );
+    values
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3451,10 +3597,11 @@ fn select(
     sort: Option<&[Sort]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '"'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
@@ -3475,7 +3622,7 @@ fn select(
 
     bind_values(
         &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
+        Some(&select_values(filters, sort)),
         false,
         0,
     )?;
@@ -3489,6 +3636,7 @@ fn delete(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let where_clause = build_where_clause(filters);
 
     let select_query = limit.map(|_| format!("SELECT rowid FROM {table_name} {where_clause}"));
@@ -3583,10 +3731,11 @@ fn find_row(
     joins: Option<&[Join]>,
     sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, RusqliteDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '"'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
@@ -3601,7 +3750,7 @@ fn find_row(
 
     bind_values(
         &mut statement,
-        bexprs_to_values_opt(filters).as_deref(),
+        Some(&select_values(filters, sort)),
         false,
         0,
     )?;
@@ -3626,10 +3775,11 @@ fn insert_and_get_row(
 ) -> Result<crate::Row, RusqliteDatabaseError> {
     let column_names = values
         .iter()
-        .map(|(key, _v)| format!("`{key}`"))
+        .map(|(key, _v)| format!("`{}`", key.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
 
+    let table_name = crate::query::render_identifier(table_name, '"');
     let insert_columns = if values.is_empty() {
         String::new()
     } else {
@@ -3668,6 +3818,7 @@ fn insert_and_get_row(
 /// # Errors
 ///
 /// Will return `Err` if the update multi execution failed.
+#[cfg(feature = "raw-sql")]
 pub fn update_multi(
     connection: &Connection,
     table_name: &str,
@@ -3723,6 +3874,7 @@ pub fn update_multi(
     Ok(results)
 }
 
+#[cfg(feature = "raw-sql")]
 fn update_chunk(
     connection: &Connection,
     table_name: &str,
@@ -3815,7 +3967,17 @@ fn update_chunk(
 /// # Errors
 ///
 /// Will return `Err` if the upsert multi execution failed.
+#[cfg(feature = "raw-sql")]
 pub fn upsert_multi(
+    connection: &Connection,
+    table_name: &str,
+    unique: &[Box<dyn Expression>],
+    values: &[Vec<(&str, Box<dyn Expression>)>],
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    upsert_multi_internal(connection, table_name, unique, values)
+}
+
+fn upsert_multi_internal(
     connection: &Connection,
     table_name: &str,
     unique: &[Box<dyn Expression>],
@@ -4109,7 +4271,7 @@ fn rusqlite_get_table_columns(
 ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
     use crate::schema::ColumnInfo;
 
-    let query = format!("PRAGMA table_info({table_name})");
+    let query = format!("PRAGMA table_info(\"{}\")", table_name.replace('"', "\"\""));
     let mut stmt = connection
         .prepare_cached(&query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -4220,6 +4382,34 @@ fn rusqlite_column_exists(
 }
 
 #[cfg(feature = "schema")]
+fn rusqlite_referenced_primary_key(
+    connection: &Connection,
+    table: &str,
+    sequence: i64,
+) -> Result<String, DatabaseError> {
+    // SQLite reports NULL for REFERENCES table with no column list.
+    // Resolve by primary-key ordinal, not table column order.
+    let target = table.replace('"', "\"\"");
+    let mut statement = connection
+        .prepare_cached(&format!("PRAGMA table_info(\"{target}\")"))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let keys = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    for key in keys {
+        let (name, ordinal) = key.map_err(RusqliteDatabaseError::Rusqlite)?;
+        if ordinal == sequence + 1 {
+            return Ok(name);
+        }
+    }
+    Err(DatabaseError::InvalidSchema(
+        "implicit foreign key has no matching primary key".into(),
+    ))
+}
+
+#[cfg(feature = "schema")]
 fn rusqlite_get_table_info(
     connection: &Connection,
     table_name: &str,
@@ -4240,7 +4430,7 @@ fn rusqlite_get_table_info(
     }
 
     // Get indexes
-    let index_query = format!("PRAGMA index_list({table_name})");
+    let index_query = format!("PRAGMA index_list(\"{}\")", table_name.replace('"', "\"\""));
     let mut index_stmt = connection
         .prepare_cached(&index_query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -4261,7 +4451,8 @@ fn rusqlite_get_table_info(
             index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
 
         // Get index columns
-        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let index_info_query =
+            format!("PRAGMA index_info(\"{}\")", index_name.replace('"', "\"\""));
         let mut index_info_stmt = connection
             .prepare_cached(&index_info_query)
             .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -4287,7 +4478,10 @@ fn rusqlite_get_table_info(
     }
 
     // Get foreign keys
-    let fk_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_query = format!(
+        "PRAGMA foreign_key_list(\"{}\")",
+        table_name.replace('"', "\"\"")
+    );
     let mut fk_stmt = connection
         .prepare_cached(&fk_query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -4295,19 +4489,25 @@ fn rusqlite_get_table_info(
     let fk_rows = fk_stmt
         .query_map([], |row| {
             Ok((
-                row.get::<_, String>(2)?, // table (referenced table)
-                row.get::<_, String>(3)?, // from (column in current table)
-                row.get::<_, String>(4)?, // to (column in referenced table)
-                row.get::<_, String>(5)?, // on_update
-                row.get::<_, String>(6)?, // on_delete
+                row.get::<_, String>(2)?,         // table (referenced table)
+                row.get::<_, String>(3)?,         // from (column in current table)
+                row.get::<_, Option<String>>(4)?, // NULL means the referenced primary key
+                row.get::<_, String>(5)?,         // on_update
+                row.get::<_, String>(6)?,         // on_delete
+                row.get::<_, i64>(1)?,            // sequence within a composite foreign key
             ))
         })
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     let mut foreign_keys = BTreeMap::new();
     for fk_result in fk_rows {
-        let (referenced_table, column, referenced_column, on_update, on_delete) =
+        let (referenced_table, column, referenced_column, on_update, on_delete, sequence) =
             fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+        let referenced_column = if let Some(column) = referenced_column {
+            column
+        } else {
+            rusqlite_referenced_primary_key(connection, &referenced_table, sequence)?
+        };
 
         let fk_name = format!("{table_name}_{column}_{referenced_table}_{referenced_column}");
 
@@ -4318,16 +4518,8 @@ fn rusqlite_get_table_info(
                 column,
                 referenced_table,
                 referenced_column,
-                on_update: if on_update == "NO ACTION" {
-                    None
-                } else {
-                    Some(on_update)
-                },
-                on_delete: if on_delete == "NO ACTION" {
-                    None
-                } else {
-                    Some(on_delete)
-                },
+                on_update: (on_update != "NO ACTION").then_some(on_update),
+                on_delete: (on_delete != "NO ACTION").then_some(on_delete),
             },
         );
     }
@@ -4629,6 +4821,67 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use switchy_async::sync::Mutex;
+
+    #[test]
+    fn minimum_expression_preserves_nulls_values_and_identifier_boundaries() {
+        use crate::query::{Expression, min, qualified_column};
+
+        let connection = Connection::open_in_memory().unwrap();
+        let expression = min(qualified_column("source", "value"));
+        let sql = format!(
+            "SELECT {} FROM (SELECT 9 AS value UNION ALL SELECT NULL UNION ALL SELECT 2) AS source",
+            expression.to_sql()
+        );
+        assert_eq!(
+            connection
+                .query_row(&sql, [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        let sql = format!(
+            "SELECT {} FROM (SELECT NULL AS value) AS source",
+            expression.to_sql()
+        );
+        assert_eq!(
+            connection
+                .query_row(&sql, [], |row| row.get::<_, Option<i64>>(0))
+                .unwrap(),
+            None
+        );
+        let sql = format!(
+            "SELECT {} FROM (SELECT 1 AS value WHERE 0) AS source",
+            expression.to_sql()
+        );
+        assert_eq!(
+            connection
+                .query_row(&sql, [], |row| row.get::<_, Option<i64>>(0))
+                .unwrap(),
+            None
+        );
+
+        let expression = min(DatabaseValue::String("'); DROP TABLE source; --".into()));
+        assert_eq!(expression.values().unwrap().len(), 1);
+        let sql = format!("SELECT {}", expression.to_sql());
+        assert_eq!(
+            connection
+                .query_row(&sql, ["'); DROP TABLE source; --"], |row| row
+                    .get::<_, String>(0))
+                .unwrap(),
+            "'); DROP TABLE source; --"
+        );
+
+        let expression = min(qualified_column("source", "value) FROM source; --"));
+        let sql = format!(
+            "SELECT {} FROM (SELECT 7 AS \"value) FROM source; --\") AS source",
+            expression.to_sql()
+        );
+        assert_eq!(
+            connection
+                .query_row(&sql, [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            7
+        );
+    }
 
     const CONNECTION_POOL_SIZE: u8 = 5;
 

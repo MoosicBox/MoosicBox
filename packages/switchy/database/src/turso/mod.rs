@@ -616,8 +616,8 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
                 if value.left { "LEFT" } else { "" },
-                value.table_name,
-                value.on
+                value.render_table('"'),
+                value.on.render('"')
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
@@ -656,6 +656,19 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
             ),
             #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
+            ExpressionType::Max(value) => format!("MAX({})", value.expression.to_sql()),
+            ExpressionType::Count(value) => format!(
+                "COUNT({})",
+                value
+                    .expression
+                    .as_ref()
+                    .map_or_else(|| "*".to_owned(), |expression| expression.to_sql())
+            ),
+            ExpressionType::Min(value) => format!("MIN({})", value.expression.to_sql()),
+            ExpressionType::ByteLength(value) => {
+                format!("length(CAST({} AS BLOB))", value.expression.to_sql())
+            }
+            ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -703,8 +716,8 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value.columns.join(", "),
-                    value.table_name,
+                    crate::query::render_columns(value.columns, '"'),
+                    crate::query::render_identifier(value.table_name, '"'),
                     joins,
                     where_clause,
                     sort_clause,
@@ -753,8 +766,8 @@ fn build_join_clauses(joins: Option<&[crate::query::Join<'_>]>) -> String {
                 format!(
                     "{}JOIN {} ON {}",
                     if join.left { "LEFT " } else { "" },
-                    join.table_name,
-                    join.on
+                    join.render_table('"'),
+                    join.on.render('"')
                 )
             })
             .collect::<Vec<_>>()
@@ -806,7 +819,13 @@ fn build_set_props(values: &[(&str, Box<dyn crate::query::Expression>)]) -> Vec<
     use std::ops::Deref;
     values
         .iter()
-        .map(|(name, value)| format!("{name}=({})", value.deref().to_sql()))
+        .map(|(name, value)| {
+            format!(
+                "{}=({})",
+                crate::query::render_identifier(name, '"'),
+                value.deref().to_sql()
+            )
+        })
         .collect()
 }
 
@@ -850,10 +869,11 @@ async fn select(
     sort: Option<&[crate::query::Sort]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '"'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
@@ -891,10 +911,11 @@ async fn find_row(
     joins: Option<&[crate::query::Join<'_>]>,
     sort: Option<&[crate::query::Sort]>,
 ) -> Result<Option<crate::Row>, TursoDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '"'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
@@ -930,10 +951,14 @@ async fn insert_and_get_row(
     table_name: &str,
     values: &[(&str, Box<dyn crate::query::Expression>)],
 ) -> Result<crate::Row, TursoDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let query = if values.is_empty() {
         format!("INSERT INTO {table_name} DEFAULT VALUES RETURNING *")
     } else {
-        let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        let columns = values
+            .iter()
+            .map(|(name, _)| crate::query::render_identifier(name, '"'))
+            .collect::<Vec<_>>();
         format!(
             "INSERT INTO {table_name} ({}) {} RETURNING *",
             columns.join(", "),
@@ -1126,6 +1151,7 @@ async fn delete(
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, TursoDatabaseError> {
+    let table_name = crate::query::render_identifier(table_name, '"');
     let select_cols = if limit.is_some() {
         "rowid, *".to_string()
     } else {
@@ -1278,7 +1304,15 @@ async fn upsert_multi(
             "multi-row UPSERT conflict target cannot be empty".to_owned(),
         ));
     }
-    let columns = first.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    let table_name = crate::query::render_identifier(table_name, '"');
+    let unique = unique
+        .iter()
+        .map(|name| crate::query::render_identifier(name, '"'))
+        .collect::<Vec<_>>();
+    let columns = first
+        .iter()
+        .map(|(name, _)| crate::query::render_identifier(name, '"'))
+        .collect::<Vec<_>>();
     let values_clause = values
         .iter()
         .map(|row| format!("({})", build_values_props(row).join(", ")))
@@ -1327,7 +1361,15 @@ async fn upsert_on_conflict(
         ));
     }
 
-    let columns = values.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+    let table_name = crate::query::render_identifier(table_name, '"');
+    let unique = unique
+        .iter()
+        .map(|name| crate::query::render_identifier(name, '"'))
+        .collect::<Vec<_>>();
+    let columns = values
+        .iter()
+        .map(|(name, _)| crate::query::render_identifier(name, '"'))
+        .collect::<Vec<_>>();
     let set_clause = columns
         .iter()
         .map(|name| format!("{name}=excluded.{name}"))
@@ -1879,7 +1921,7 @@ async fn exec_create_table(
         query.push_str("IF NOT EXISTS ");
     }
 
-    query.push_str(statement.table_name);
+    query.push_str(&crate::query::render_identifier(statement.table_name, '"'));
     query.push('(');
 
     let mut first = true;
@@ -1898,7 +1940,7 @@ async fn exec_create_table(
             )));
         }
 
-        query.push_str(&column.name);
+        query.push_str(&crate::query::render_identifier(&column.name, '"'));
         query.push(' ');
 
         match column.data_type {
@@ -2067,7 +2109,7 @@ async fn exec_create_table(
         && !pk_in_column
     {
         query.push_str(", PRIMARY KEY (");
-        query.push_str(primary_key);
+        query.push_str(&crate::query::render_identifier(primary_key, '"'));
         query.push(')');
     }
 
@@ -2078,9 +2120,9 @@ async fn exec_create_table(
 
     for (source, target) in &statement.foreign_keys {
         query.push_str(", FOREIGN KEY (");
-        query.push_str(source);
+        query.push_str(&crate::query::render_identifier(source, '"'));
         query.push_str(") REFERENCES ");
-        query.push_str(target);
+        query.push_str(&crate::query::render_identifier(target, '"'));
     }
 
     query.push(')');
@@ -2168,13 +2210,17 @@ async fn exec_create_index(
     let columns_str = statement
         .columns
         .iter()
-        .map(|col| format!("`{col}`"))
+        .map(|col| format!("`{}`", col.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
 
     let sql = format!(
         "CREATE {}INDEX {}{} ON {} ({})",
-        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+        unique_str,
+        if_not_exists_str,
+        crate::query::render_identifier(statement.index_name, '"'),
+        crate::query::render_identifier(statement.table_name, '"'),
+        columns_str
     );
 
     conn.execute(&sql, ())
@@ -2195,7 +2241,11 @@ async fn exec_drop_index(
         ""
     };
 
-    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
+    let sql = format!(
+        "DROP INDEX {}{}",
+        if_exists_str,
+        crate::query::render_identifier(statement.index_name, '"')
+    );
 
     conn.execute(&sql, ())
         .await

@@ -108,8 +108,16 @@ impl Migration<'static> for EmbeddedMigration {
     async fn up(&self, db: &dyn switchy_database::Database) -> Result<()> {
         match &self.up_content {
             Some(sql) if !sql.is_empty() => {
-                let sql_str = String::from_utf8_lossy(sql);
-                db.exec_raw(&sql_str).await?;
+                #[cfg(feature = "raw-sql")]
+                {
+                    let sql_str = String::from_utf8_lossy(sql);
+                    db.exec_raw(&sql_str).await?;
+                }
+                #[cfg(not(feature = "raw-sql"))]
+                {
+                    let _ = db;
+                    return Err(crate::MigrationError::RawSqlDisabled);
+                }
             }
             _ => {
                 // Empty or missing up.sql is a no-op
@@ -121,8 +129,16 @@ impl Migration<'static> for EmbeddedMigration {
     async fn down(&self, db: &dyn switchy_database::Database) -> Result<()> {
         match &self.down_content {
             Some(sql) if !sql.is_empty() => {
-                let sql_str = String::from_utf8_lossy(sql);
-                db.exec_raw(&sql_str).await?;
+                #[cfg(feature = "raw-sql")]
+                {
+                    let sql_str = String::from_utf8_lossy(sql);
+                    db.exec_raw(&sql_str).await?;
+                }
+                #[cfg(not(feature = "raw-sql"))]
+                {
+                    let _ = db;
+                    return Err(crate::MigrationError::RawSqlDisabled);
+                }
             }
             _ => {
                 // Empty or missing down.sql is a no-op

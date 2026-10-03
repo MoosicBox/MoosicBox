@@ -439,9 +439,14 @@ pub async fn assert_row_count_min(
 /// # }
 /// ```
 pub async fn assert_foreign_key_integrity(db: &dyn Database) -> Result<(), DatabaseError> {
-    // Use PRAGMA foreign_key_check to verify integrity
-    // For now, we'll assume integrity is OK if no error occurs
-    db.exec_raw("PRAGMA foreign_key_check").await
+    let violations = db.sqlite_foreign_key_check().await?;
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(DatabaseError::ForeignKeyViolation(
+            "foreign key integrity check reported violations".into(),
+        ))
+    }
 }
 
 /// Verifies that specific migrations have been applied by checking the migration table

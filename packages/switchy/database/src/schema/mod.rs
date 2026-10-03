@@ -559,21 +559,29 @@ impl<'a> CreateTableStatement<'a> {
         self
     }
 
-    /// Sets the primary key column for the table
+    /// Sets the primary key column for the table.
+    ///
+    /// Without `raw-sql`, this is one exact column identifier, not a comma-
+    /// separated list or SQL expression.
     #[must_use]
     pub const fn primary_key(mut self, primary_key: &'a str) -> Self {
         self.primary_key = Some(primary_key);
         self
     }
 
-    /// Adds a foreign key constraint (column, `referenced_table.column`)
+    /// Adds a foreign key referencing the target table's primary key.
+    ///
+    /// Without `raw-sql`, both strings are exact identifiers: `(local_column,
+    /// referenced_table)`. Dots and parentheses are literal name characters,
+    /// not qualification or a referenced-column clause. With `raw-sql`, the
+    /// legacy backend SQL-fragment interpretation is retained.
     #[must_use]
     pub fn foreign_key(mut self, foreign_key: (&'a str, &'a str)) -> Self {
         self.foreign_keys.push(foreign_key);
         self
     }
 
-    /// Sets all foreign key constraints for the table
+    /// Sets all foreign key constraints using the semantics of [`Self::foreign_key`].
     #[must_use]
     pub fn foreign_keys(mut self, foreign_keys: Vec<(&'a str, &'a str)>) -> Self {
         self.foreign_keys = foreign_keys;

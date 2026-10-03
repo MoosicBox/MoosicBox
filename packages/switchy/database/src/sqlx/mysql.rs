@@ -160,8 +160,8 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
                 if value.left { "LEFT" } else { "" },
-                value.table_name,
-                value.on
+                value.render_table('`'),
+                value.on.render('`')
             ),
             ExpressionType::Sort(value) => format!(
                 "({}) {}",
@@ -200,6 +200,20 @@ impl<T: Expression + ?Sized> ToSql for T {
             ),
             #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(value) => value.value.clone(),
+            ExpressionType::Max(value) => format!("MAX({})", value.expression.to_sql()),
+            ExpressionType::Count(value) => format!(
+                "COUNT({})",
+                value
+                    .expression
+                    .as_ref()
+                    .map_or_else(|| "*".to_owned(), |expression| expression.to_sql())
+            ),
+            ExpressionType::Min(value) => format!("MIN({})", value.expression.to_sql()),
+            ExpressionType::ByteLength(value) => format!(
+                "octet_length(CONVERT({} USING utf8mb4))",
+                value.expression.to_sql()
+            ),
+            ExpressionType::QualifiedColumn(value) => value.render('`'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '`'),
             ExpressionType::SelectQuery(value) => {
                 let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
@@ -243,8 +257,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {} FROM {} {} {} {} {}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    value.columns.join(", "),
-                    value.table_name,
+                    crate::query::render_columns(value.columns, '`'),
+                    crate::query::render_identifier(value.table_name, '`'),
                     joins,
                     where_clause,
                     sort_clause,
@@ -303,6 +317,15 @@ impl MysqlSqlxTransaction {
 ///
 /// Manages a pool of `MySQL` connections for efficient connection reuse
 /// and concurrent query execution.
+#[cfg_attr(
+    not(feature = "raw-sql"),
+    doc = r"
+Legacy SQL-fragment bulk helpers are unavailable without `raw-sql`.
+```compile_fail
+use switchy_database::sqlx::mysql::update_multi;
+```
+"
+)]
 #[derive(Debug)]
 pub struct MySqlSqlxDatabase {
     connection: Arc<Mutex<MySqlPool>>,
@@ -1554,7 +1577,7 @@ async fn mysql_sqlx_exec_create_table(
 
     if let Some(primary_key) = &statement.primary_key {
         query.push_str(", PRIMARY KEY (");
-        query.push_str(primary_key);
+        query.push_str(&crate::query::render_identifier(primary_key, '`'));
         query.push(')');
     }
 
@@ -1565,9 +1588,9 @@ async fn mysql_sqlx_exec_create_table(
 
     for (source, target) in &statement.foreign_keys {
         query.push_str(", FOREIGN KEY (");
-        query.push_str(source);
+        query.push_str(&crate::query::render_identifier(source, '`'));
         query.push_str(") REFERENCES ");
-        query.push_str(target);
+        query.push_str(&crate::query::render_identifier(target, '`'));
     }
 
     query.push(')');
@@ -1779,13 +1802,17 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
     let columns_str = statement
         .columns
         .iter()
-        .map(|col| format!("`{col}`"))
+        .map(|col| format!("`{}`", col.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
 
     let sql = format!(
         "CREATE {}INDEX {}{} ON {} ({})",
-        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+        unique_str,
+        if_not_exists_str,
+        crate::query::render_identifier(statement.index_name, '`'),
+        crate::query::render_identifier(statement.table_name, '`'),
+        columns_str
     );
 
     log::trace!("exec_create_index: query:\n{sql}");
@@ -1814,8 +1841,10 @@ pub(crate) async fn mysql_sqlx_exec_drop_index(
     };
 
     let sql = format!(
-        "DROP INDEX {}{}ON {}",
-        if_exists_str, statement.index_name, statement.table_name
+        "DROP INDEX {}{} ON {}",
+        if_exists_str,
+        crate::query::render_identifier(statement.index_name, '`'),
+        crate::query::render_identifier(statement.table_name, '`')
     );
 
     log::trace!("exec_drop_index: query:\n{sql}");
@@ -2355,8 +2384,8 @@ fn build_join_clauses(joins: Option<&[Join]>) -> String {
                 format!(
                     "{}JOIN {} ON {}",
                     if join.left { "LEFT " } else { "" },
-                    join.table_name,
-                    join.on
+                    join.render_table('`'),
+                    join.on.render('`')
                 )
             })
             .collect::<Vec<_>>()
@@ -2433,7 +2462,13 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
 fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
     values
         .iter()
-        .map(|(name, value)| format!("{name}={}", value.deref().to_param()))
+        .map(|(name, value)| {
+            format!(
+                "{}={}",
+                crate::query::render_identifier(name, '`'),
+                value.deref().to_param()
+            )
+        })
         .collect()
 }
 
@@ -2649,6 +2684,8 @@ async fn delete(
     // MySQL doesn't support RETURNING, so we emulate it with SELECT + DELETE + transaction
     use sqlx::Connection;
 
+    let table_name = crate::query::render_identifier(table_name, '`');
+
     // Start a transaction to ensure atomicity
     let mut tx = connection.begin().await?;
 
@@ -2815,6 +2852,7 @@ async fn insert_and_get_row(
 /// # Errors
 ///
 /// Will return `Err` if the update multi execution failed.
+#[cfg(feature = "raw-sql")]
 pub async fn update_multi(
     connection: &mut MySqlConnection,
     table_name: &str,
@@ -2863,6 +2901,7 @@ pub async fn update_multi(
     Ok(results)
 }
 
+#[cfg(feature = "raw-sql")]
 async fn update_chunk(
     connection: &mut MySqlConnection,
     table_name: &str,
