@@ -1428,6 +1428,23 @@ async fn upsert_and_get_row(
 
 #[async_trait::async_trait]
 impl crate::Database for TursoDatabase {
+    async fn check_connection(&self) -> Result<(), crate::DatabaseError> {
+        self.query_raw_internal("SELECT 1").await?;
+        Ok(())
+    }
+
+    async fn sqlite_integrity_check(&self) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        self.query_raw_internal("PRAGMA integrity_check").await
+    }
+
+    async fn sqlite_checkpoint_truncate(&self) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        self.query_raw_internal("PRAGMA wal_checkpoint(TRUNCATE)")
+            .await
+    }
+
+    async fn sqlite_temp_store_memory(&self) -> Result<(), crate::DatabaseError> {
+        self.exec_raw_internal("PRAGMA temp_store = MEMORY").await
+    }
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         self.query_raw_internal(query).await
@@ -3389,7 +3406,6 @@ impl TursoDatabase {
 }
 
 impl TursoDatabase {
-    #[cfg(feature = "raw-sql")]
     pub(crate) async fn exec_raw_internal(
         &self,
         statement: &str,

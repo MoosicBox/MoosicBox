@@ -331,6 +331,7 @@ impl Database for ChecksumDatabase {
         Ok(None)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
         let mut hasher = self.hasher.lock().await;
         hasher.update(b"EXEC_RAW:");
@@ -437,6 +438,7 @@ impl Database for ChecksumDatabase {
         unimplemented!("list_tables not yet implemented for ChecksumDatabase")
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<switchy_database::Row>, DatabaseError> {
         let mut hasher = self.hasher.lock().await;
         hasher.update(b"QUERY_RAW:");
@@ -458,6 +460,7 @@ impl Database for ChecksumDatabase {
         Ok(Box::new(tx))
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn exec_raw_params(
         &self,
         query: &str,
@@ -475,6 +478,7 @@ impl Database for ChecksumDatabase {
         Ok(0)
     }
 
+    #[cfg(feature = "raw-sql")]
     async fn query_raw_params(
         &self,
         query: &str,
@@ -1383,6 +1387,7 @@ impl Digest for ExpressionType<'_> {
                     }
                 }
             }
+            #[cfg(feature = "raw-sql")]
             ExpressionType::Literal(expr) => {
                 hasher.update(b"LITERAL:");
                 if let Some(values) = expr.values() {

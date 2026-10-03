@@ -643,6 +643,27 @@ fn rusqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for RusqliteDatabase {
+    async fn check_connection(&self) -> Result<(), DatabaseError> {
+        self.query_raw_internal("SELECT 1").await?;
+        Ok(())
+    }
+
+    async fn sqlite_integrity_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        self.query_raw_internal("PRAGMA integrity_check").await
+    }
+
+    async fn sqlite_foreign_key_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        self.query_raw_internal("PRAGMA foreign_key_check").await
+    }
+
+    async fn sqlite_checkpoint_truncate(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        self.query_raw_internal("PRAGMA wal_checkpoint(TRUNCATE)")
+            .await
+    }
+
+    async fn sqlite_temp_store_memory(&self) -> Result<(), DatabaseError> {
+        self.exec_raw_internal("PRAGMA temp_store = MEMORY").await
+    }
     async fn begin_transaction_with_mode(
         &self,
         mode: TransactionMode,
@@ -4347,7 +4368,6 @@ fn sqlite_transform_query_for_params(
 }
 
 impl RusqliteDatabase {
-    #[cfg(feature = "raw-sql")]
     pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
         let connection = self.get_connection()?;
         log::trace!("exec_raw: query:\n{statement}");
@@ -4362,7 +4382,6 @@ impl RusqliteDatabase {
 }
 
 impl RusqliteDatabase {
-    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_internal(
         &self,
         query: &str,

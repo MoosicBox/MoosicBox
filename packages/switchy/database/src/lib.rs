@@ -1372,6 +1372,61 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     #[cfg(feature = "raw-sql")]
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
 
+    /// Checks connection availability without changing database contents.
+    ///
+    /// # Errors
+    /// Returns an execution error or unsupported for backends without this capability.
+    async fn check_connection(&self) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "connection check".into(),
+        ))
+    }
+
+    /// Runs SQLite's full integrity check. Each returned row contains an `integrity_check`
+    /// text value; `ok` is success, other values describe corruption.
+    /// This explicit maintenance operation may scan the entire database.
+    ///
+    /// # Errors
+    /// Returns an execution error or unsupported on other backends.
+    async fn sqlite_integrity_check(&self) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite integrity check".into(),
+        ))
+    }
+
+    /// Checks SQLite foreign keys, returning one row per violation (`table`, `rowid`,
+    /// `parent`, `fkid`). An empty result means no violations.
+    ///
+    /// # Errors
+    /// Returns an execution error or unsupported on other backends.
+    async fn sqlite_foreign_key_check(&self) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite foreign key check".into(),
+        ))
+    }
+
+    /// Requests a truncating SQLite WAL checkpoint. Returned `busy`, `log` and
+    /// `checkpointed` columns preserve SQLite's checkpoint outcome, including busy status.
+    ///
+    /// # Errors
+    /// Returns an execution error or unsupported on other backends.
+    async fn sqlite_checkpoint_truncate(&self) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite checkpoint".into(),
+        ))
+    }
+
+    /// Configures SQLite temporary storage in memory on this connection.
+    /// Call before creating temporary objects and use a single-connection handle.
+    ///
+    /// # Errors
+    /// Returns an execution error or unsupported on other backends.
+    async fn sqlite_temp_store_memory(&self) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite temporary storage".into(),
+        ))
+    }
+
     /// Initiates graceful backend-specific connection shutdown.
     ///
     /// Implementations with stateful connections should override this method. Calling close more
