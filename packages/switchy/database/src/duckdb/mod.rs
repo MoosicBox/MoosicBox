@@ -408,53 +408,74 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
-                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
-                    joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
-                });
-
-                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
-                    if filters.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "WHERE {}",
-                            filters
-                                .iter()
-                                .map(|x| format!("({})", x.to_sql()))
-                                .collect::<Vec<_>>()
-                                .join(" AND ")
-                        )
-                    }
-                });
-
-                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
-                    if sorts.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "ORDER BY {}",
-                            sorts
-                                .iter()
-                                .map(Sort::to_sql)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    }
-                });
-
+                let columns = if value.projections.is_empty() {
+                    crate::query::render_columns(value.columns, '"')
+                } else {
+                    value
+                        .projections
+                        .iter()
+                        .map(|projection| {
+                            let expression = projection.expression.to_sql();
+                            projection.alias.as_ref().map_or_else(
+                                || expression.clone(),
+                                |alias| {
+                                    let alias = alias.replace('"', "\"\"");
+                                    format!("{expression} AS \"{alias}\"")
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let joins = value
+                    .joins
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let filters = value
+                    .filters
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                let where_clause = if filters.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {filters}")
+                };
+                let groups = value
+                    .groups
+                    .iter()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let group_clause = if groups.is_empty() {
+                    String::new()
+                } else {
+                    format!("GROUP BY {groups}")
+                };
+                let sorts = value
+                    .sorts
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let sort_clause = if sorts.is_empty() {
+                    String::new()
+                } else {
+                    format!("ORDER BY {sorts}")
+                };
                 let limit = value
                     .limit
                     .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
-
                 format!(
-                    "SELECT {} {} FROM {} {} {} {} {}",
+                    "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_columns(value.columns, '"'),
-                    crate::query::render_identifier(value.table_name, '"'),
-                    joins,
-                    where_clause,
-                    sort_clause,
-                    limit
+                    crate::query::render_identifier(value.table_name, '"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -1009,11 +1030,11 @@ fn bexprs_to_values_opt(
 
 fn select_values(query: &SelectQuery<'_>) -> Vec<DuckDbDatabaseValue> {
     query
-        .values()
+        .params()
         .unwrap_or_default()
         .into_iter()
         .cloned()
-        .map(Into::into)
+        .map(DuckDbDatabaseValue::from)
         .collect()
 }
 
@@ -1997,18 +2018,7 @@ impl Database for DuckDbDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        let sql = format!(
-            "SELECT {} {} FROM {} {} {} {} {}",
-            if query.distinct { "DISTINCT" } else { "" },
-            crate::query::render_columns(query.columns, '"'),
-            crate::query::render_identifier(query.table_name, '"'),
-            build_join_clauses(query.joins.as_deref()),
-            build_where_clause(query.filters.as_deref()),
-            build_sort_clause(query.sorts.as_deref()),
-            query
-                .limit
-                .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
-        );
+        let sql = query.to_sql();
         let params = select_values(query);
 
         run_duckdb_blocking("duckdb_select", move || {
@@ -2033,13 +2043,8 @@ impl Database for DuckDbDatabase {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let sql = format!(
-            "SELECT {} {} FROM {} {} {} {} LIMIT 1",
-            if query.distinct { "DISTINCT" } else { "" },
-            crate::query::render_columns(query.columns, '"'),
-            crate::query::render_identifier(query.table_name, '"'),
-            build_join_clauses(query.joins.as_deref()),
-            build_where_clause(query.filters.as_deref()),
-            build_sort_clause(query.sorts.as_deref()),
+            "SELECT * FROM ({}) AS switchy_first LIMIT 1",
+            query.to_sql()
         );
         let params = select_values(query);
 
@@ -2602,18 +2607,7 @@ impl Database for DuckDbDatabase {
 impl Database for DuckDbTransaction {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         let connection = Arc::clone(&self.connection);
-        let sql = format!(
-            "SELECT {} {} FROM {} {} {} {} {}",
-            if query.distinct { "DISTINCT" } else { "" },
-            crate::query::render_columns(query.columns, '"'),
-            crate::query::render_identifier(query.table_name, '"'),
-            build_join_clauses(query.joins.as_deref()),
-            build_where_clause(query.filters.as_deref()),
-            build_sort_clause(query.sorts.as_deref()),
-            query
-                .limit
-                .map_or_else(String::new, |limit| format!("LIMIT {limit}"))
-        );
+        let sql = query.to_sql();
         let params = select_values(query);
 
         run_duckdb_blocking("duckdb_tx_select", move || {
@@ -2637,13 +2631,8 @@ impl Database for DuckDbTransaction {
     ) -> Result<Option<crate::Row>, DatabaseError> {
         let connection = Arc::clone(&self.connection);
         let sql = format!(
-            "SELECT {} {} FROM {} {} {} {} LIMIT 1",
-            if query.distinct { "DISTINCT" } else { "" },
-            crate::query::render_columns(query.columns, '"'),
-            crate::query::render_identifier(query.table_name, '"'),
-            build_join_clauses(query.joins.as_deref()),
-            build_where_clause(query.filters.as_deref()),
-            build_sort_clause(query.sorts.as_deref()),
+            "SELECT * FROM ({}) AS switchy_first LIMIT 1",
+            query.to_sql()
         );
         let params = select_values(query);
 

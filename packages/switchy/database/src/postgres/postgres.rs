@@ -277,51 +277,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 }
             }
             ExpressionType::SelectQuery(value) => {
-                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
-                    joins
-                        .iter()
-                        .map(|x| x.to_sql(index))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                });
-
-                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
-                    if filters.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "WHERE {}",
-                            filters
-                                .iter()
-                                .map(|x| format!("({})", x.to_sql(index)))
-                                .collect::<Vec<_>>()
-                                .join(" AND ")
-                        )
-                    }
-                });
-
-                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
-                    if sorts.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "ORDER BY {}",
-                            sorts
-                                .iter()
-                                .map(|x| x.to_sql(index))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    }
-                });
-
-                let limit = value
-                    .limit
-                    .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
-
-                format!(
-                    "SELECT {} {} FROM {} {} {} {} {}",
-                    if value.distinct { "DISTINCT" } else { "" },
+                let columns = if value.projections.is_empty() {
                     if cfg!(feature = "raw-sql") {
                         value
                             .columns
@@ -331,12 +287,73 @@ impl<T: Expression + ?Sized> ToSql for T {
                             .join(", ")
                     } else {
                         crate::query::render_columns(value.columns, '"')
-                    },
-                    crate::query::render_identifier(value.table_name, '"'),
-                    joins,
-                    where_clause,
-                    sort_clause,
-                    limit
+                    }
+                } else {
+                    value
+                        .projections
+                        .iter()
+                        .map(|projection| {
+                            let expression = projection.expression.to_sql(index);
+                            projection.alias.as_ref().map_or_else(
+                                || expression.clone(),
+                                |alias| {
+                                    let alias = alias.replace('"', "\"\"");
+                                    format!("{expression} AS \"{alias}\"")
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let joins = value
+                    .joins
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql(index))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let filters = value
+                    .filters
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql(index))
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                let where_clause = if filters.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {filters}")
+                };
+                let groups = value
+                    .groups
+                    .iter()
+                    .map(|x| x.to_sql(index))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let group_clause = if groups.is_empty() {
+                    String::new()
+                } else {
+                    format!("GROUP BY {groups}")
+                };
+                let sorts = value
+                    .sorts
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql(index))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let sort_clause = if sorts.is_empty() {
+                    String::new()
+                } else {
+                    format!("ORDER BY {sorts}")
+                };
+                let limit = value
+                    .limit
+                    .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
+                format!(
+                    "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
+                    if value.distinct { "DISTINCT" } else { "" },
+                    crate::query::render_identifier(value.table_name, '"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -541,6 +558,7 @@ impl Database for PostgresDatabase {
         let client = self.get_client().await?;
         Ok(select(
             &client,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -559,9 +577,8 @@ impl Database for PostgresDatabase {
         let client = self.get_client().await?;
         Ok(find_row(
             &client,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
@@ -849,6 +866,7 @@ impl Database for PostgresTransaction {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             &*self.client.lock().await,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -866,9 +884,8 @@ impl Database for PostgresTransaction {
     ) -> Result<Option<crate::Row>, DatabaseError> {
         Ok(find_row(
             &*self.client.lock().await,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
@@ -2508,6 +2525,7 @@ fn bexprs_to_params_opt(values: Option<&[Box<dyn BooleanExpression>]>) -> Vec<Pg
 #[allow(clippy::too_many_arguments)]
 async fn select(
     client: &Client,
+    typed: Option<&SelectQuery<'_>>,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -2516,15 +2534,26 @@ async fn select(
     sort: Option<&[Sort]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, PostgresDatabaseError> {
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '"');
     let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
-        columns
-            .iter()
-            .map(|x| format_identifier(x))
-            .collect::<Vec<_>>()
-            .join(", "),
+        {
+            #[cfg(feature = "raw-sql")]
+            {
+                columns
+                    .iter()
+                    .map(|x| format_identifier(x))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                crate::query::render_columns(columns, '"')
+            }
+        },
         build_join_clauses(joins),
         build_where_clause(filters, &index),
         build_sort_clause(sort, &index),
@@ -2536,6 +2565,8 @@ async fn select(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
+    let query = typed.map_or(query, |typed| typed.to_sql(&AtomicU16::new(0)));
+
     let statement = client.prepare(&query).await?;
     let column_names = statement
         .columns()
@@ -2543,7 +2574,17 @@ async fn select(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let filters = bexprs_to_params_opt(filters);
+    let filters = typed.map_or_else(
+        || bexprs_to_params_opt(filters),
+        |q| {
+            q.params()
+                .unwrap_or_default()
+                .into_iter()
+                .cloned()
+                .map(PgDatabaseValue::from)
+                .collect()
+        },
+    );
     let rows = client.query_raw(&statement, filters).await?;
 
     to_rows(&column_names, rows).await
@@ -2599,29 +2640,57 @@ async fn delete(
 
 async fn find_row(
     client: &Client,
-    table_name: &str,
-    distinct: bool,
-    columns: &[&str],
+    typed: Option<&SelectQuery<'_>>,
+    selection: (&str, bool, &[&str]),
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, PostgresDatabaseError> {
+    let (table_name, distinct, columns) = selection;
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '"');
     let index = AtomicU16::new(0);
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
-        columns
-            .iter()
-            .map(|x| format_identifier(x))
-            .collect::<Vec<_>>()
-            .join(", "),
+        {
+            #[cfg(feature = "raw-sql")]
+            {
+                columns
+                    .iter()
+                    .map(|x| format_identifier(x))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+            #[cfg(not(feature = "raw-sql"))]
+            {
+                crate::query::render_columns(columns, '"')
+            }
+        },
         build_join_clauses(joins),
         build_where_clause(filters, &index),
         build_sort_clause(sort, &index),
     );
 
-    let filters = bexprs_to_params_opt(filters);
+    let filters = typed.map_or_else(
+        || bexprs_to_params_opt(filters),
+        |q| {
+            q.params()
+                .unwrap_or_default()
+                .into_iter()
+                .cloned()
+                .map(PgDatabaseValue::from)
+                .collect()
+        },
+    );
     log::trace!("Running find_row query: {query} with params: {filters:?}");
+
+    let query = typed.map_or(query, |q| {
+        format!(
+            "SELECT * FROM ({}) AS switchy_first LIMIT 1",
+            q.to_sql(&AtomicU16::new(0))
+        )
+    });
 
     let statement = client.prepare(&query).await?;
     let column_names = statement
@@ -2887,6 +2956,10 @@ async fn upsert_chunk(
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, PostgresDatabaseError> {
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '"');
+    #[cfg(not(feature = "raw-sql"))]
+    let format_identifier = |name: &str| crate::query::render_identifier(name, '"');
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -2988,7 +3061,16 @@ async fn upsert_and_get_row(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<crate::Row, PostgresDatabaseError> {
-    match find_row(client, table_name, false, &["*"], filters, None, None).await? {
+    match find_row(
+        client,
+        None,
+        (table_name, false, &["*"]),
+        filters,
+        None,
+        None,
+    )
+    .await?
+    {
         Some(row) => {
             let updated = update_and_get_row(client, table_name, values, filters, limit)
                 .await?

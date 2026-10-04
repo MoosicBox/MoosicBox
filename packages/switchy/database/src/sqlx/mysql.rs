@@ -216,53 +216,74 @@ impl<T: Expression + ?Sized> ToSql for T {
             ExpressionType::QualifiedColumn(value) => value.render('`'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '`'),
             ExpressionType::SelectQuery(value) => {
-                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
-                    joins.iter().map(Join::to_sql).collect::<Vec<_>>().join(" ")
-                });
-
-                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
-                    if filters.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "WHERE {}",
-                            filters
-                                .iter()
-                                .map(|x| format!("({})", x.to_sql()))
-                                .collect::<Vec<_>>()
-                                .join(" AND ")
-                        )
-                    }
-                });
-
-                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
-                    if sorts.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "ORDER BY {}",
-                            sorts
-                                .iter()
-                                .map(Sort::to_sql)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    }
-                });
-
+                let columns = if value.projections.is_empty() {
+                    crate::query::render_columns(value.columns, '`')
+                } else {
+                    value
+                        .projections
+                        .iter()
+                        .map(|projection| {
+                            let expression = projection.expression.to_sql();
+                            projection.alias.as_ref().map_or_else(
+                                || expression.clone(),
+                                |alias| {
+                                    let alias = alias.replace('`', "``");
+                                    format!("{expression} AS `{alias}`")
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                let joins = value
+                    .joins
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let filters = value
+                    .filters
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                let where_clause = if filters.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {filters}")
+                };
+                let groups = value
+                    .groups
+                    .iter()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let group_clause = if groups.is_empty() {
+                    String::new()
+                } else {
+                    format!("GROUP BY {groups}")
+                };
+                let sorts = value
+                    .sorts
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let sort_clause = if sorts.is_empty() {
+                    String::new()
+                } else {
+                    format!("ORDER BY {sorts}")
+                };
                 let limit = value
                     .limit
                     .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
-
                 format!(
-                    "SELECT {} {} FROM {} {} {} {} {}",
+                    "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_columns(value.columns, '`'),
-                    crate::query::render_identifier(value.table_name, '`'),
-                    joins,
-                    where_clause,
-                    sort_clause,
-                    limit
+                    crate::query::render_identifier(value.table_name, '`')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -433,6 +454,7 @@ impl Database for MySqlSqlxDatabase {
 
         Ok(select(
             &mut connection,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -453,9 +475,8 @@ impl Database for MySqlSqlxDatabase {
 
         Ok(find_row(
             &mut connection,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
@@ -784,6 +805,7 @@ impl Database for MysqlSqlxTransaction {
 
         Ok(select(
             &mut *tx,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -807,9 +829,8 @@ impl Database for MysqlSqlxTransaction {
 
         Ok(find_row(
             &mut *tx,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
@@ -2639,6 +2660,7 @@ fn bexprs_to_values_opt(
 #[allow(clippy::too_many_arguments)]
 async fn select(
     connection: &mut MySqlConnection,
+    typed: Option<&SelectQuery<'_>>,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -2647,10 +2669,12 @@ async fn select(
     sort: Option<&[Sort]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '`');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '`'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
@@ -2662,6 +2686,8 @@ async fn select(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
+    let query = typed.map_or(query, ToSql::to_sql);
+
     let statement = connection.prepare(&query).await?;
     let column_names = statement
         .columns()
@@ -2669,7 +2695,19 @@ async fn select(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
-    let filters = bexprs_to_values_opt(filters);
+    let filters = typed.map_or_else(
+        || bexprs_to_values_opt(filters),
+        |q| {
+            Some(
+                q.params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(Into::into)
+                    .collect(),
+            )
+        },
+    );
     let query = bind_values(statement.query(), filters.as_deref())?;
 
     to_rows(&column_names, query.fetch(connection)).await
@@ -2749,21 +2787,27 @@ async fn delete(
 
 async fn find_row(
     connection: &mut MySqlConnection,
-    table_name: &str,
-    distinct: bool,
-    columns: &[&str],
+    typed: Option<&SelectQuery<'_>>,
+    selection: (&str, bool, &[&str]),
     filters: Option<&[Box<dyn BooleanExpression>]>,
     joins: Option<&[Join<'_>]>,
     sort: Option<&[Sort]>,
 ) -> Result<Option<crate::Row>, SqlxDatabaseError> {
+    let (table_name, distinct, columns) = selection;
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '`');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
         if distinct { "DISTINCT" } else { "" },
-        columns.join(", "),
+        crate::query::render_columns(columns, '`'),
         build_join_clauses(joins),
         build_where_clause(filters),
         build_sort_clause(sort),
     );
+
+    let query = typed.map_or(query, |q| {
+        format!("SELECT * FROM ({}) AS switchy_first LIMIT 1", q.to_sql())
+    });
 
     let statement = connection.prepare(&query).await?;
     let column_names = statement
@@ -2777,7 +2821,19 @@ async fn find_row(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let filters = bexprs_to_values_opt(filters);
+    let filters = typed.map_or_else(
+        || bexprs_to_values_opt(filters),
+        |q| {
+            Some(
+                q.params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(Into::into)
+                    .collect(),
+            )
+        },
+    );
     let query = bind_values(statement.query(), filters.as_deref())?;
 
     let mut query = query.fetch(connection);
@@ -3036,6 +3092,18 @@ async fn upsert_chunk(
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
+    #[cfg(not(feature = "raw-sql"))]
+    let table_name = crate::query::render_identifier(table_name, '`');
+    let format_identifier = |name: &str| {
+        #[cfg(feature = "raw-sql")]
+        {
+            format!("`{name}`")
+        }
+        #[cfg(not(feature = "raw-sql"))]
+        {
+            crate::query::render_identifier(name, '`')
+        }
+    };
     let first = values[0].as_slice();
     let expected_value_size = first.len();
 
@@ -3048,13 +3116,19 @@ async fn upsert_chunk(
 
     let set_clause = values[0]
         .iter()
-        .map(|(name, _value)| format!("`{name}` = EXCLUDED.`{name}`"))
+        .map(|(name, _value)| {
+            format!(
+                "{} = EXCLUDED.{}",
+                format_identifier(name),
+                format_identifier(name)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
     let column_names = values[0]
         .iter()
-        .map(|(key, _v)| format!("`{key}`"))
+        .map(|(key, _v)| format_identifier(key))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -3125,7 +3199,16 @@ async fn upsert_and_get_row(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<crate::Row, SqlxDatabaseError> {
-    match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
+    match find_row(
+        connection,
+        None,
+        (table_name, false, &["*"]),
+        filters,
+        None,
+        None,
+    )
+    .await?
+    {
         Some(row) => {
             let updated = update_and_get_row(connection, table_name, values, filters, limit)
                 .await?

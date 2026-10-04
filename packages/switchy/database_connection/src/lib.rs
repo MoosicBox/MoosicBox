@@ -873,6 +873,40 @@ pub fn open_sqlite_rusqlite(
     path: &std::path::Path,
     options: &SqliteOpenOptions,
 ) -> Result<switchy_database::rusqlite::RusqliteDatabase, InitSqliteRusqliteError> {
+    open_sqlite_rusqlite_with_policy(path, options, false)
+}
+
+/// Open a private disposable `SQLite` spool with a bounded 1 MiB page cache.
+///
+/// Journaling and synchronization are disabled and memory mapping is prohibited on
+/// every connection. This policy is only suitable for reconstructible temporary
+/// data, never canonical storage. The caller owns removal after closing the database.
+///
+/// # Errors
+/// Returns driver errors when opening or configuring any connection fails.
+#[cfg(feature = "sqlite-rusqlite")]
+pub fn open_sqlite_rusqlite_spool(
+    path: &std::path::Path,
+) -> Result<switchy_database::rusqlite::RusqliteDatabase, InitSqliteRusqliteError> {
+    open_sqlite_rusqlite_with_policy(
+        path,
+        &SqliteOpenOptions {
+            access: SqliteAccess::ReadWriteCreate,
+            allow_uri: false,
+            busy_timeout: std::time::Duration::ZERO,
+            foreign_keys: false,
+            connections: std::num::NonZeroUsize::MIN,
+        },
+        true,
+    )
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+fn open_sqlite_rusqlite_with_policy(
+    path: &std::path::Path,
+    options: &SqliteOpenOptions,
+    disposable: bool,
+) -> Result<switchy_database::rusqlite::RusqliteDatabase, InitSqliteRusqliteError> {
     use ::rusqlite::OpenFlags;
     let mut flags = match options.access {
         SqliteAccess::ReadOnly => OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -889,6 +923,12 @@ pub fn open_sqlite_rusqlite(
         let connection = ::rusqlite::Connection::open_with_flags(path, flags)?;
         connection.busy_timeout(options.busy_timeout)?;
         connection.pragma_update(None, "foreign_keys", options.foreign_keys)?;
+        if disposable {
+            connection.pragma_update(None, "journal_mode", "OFF")?;
+            connection.pragma_update(None, "synchronous", "OFF")?;
+            connection.pragma_update(None, "cache_size", -1024)?;
+            connection.pragma_update(None, "mmap_size", 0)?;
+        }
         connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(
             connection,
         )));

@@ -459,6 +459,14 @@ pub enum TableConstraint {
     IntegerEquals { column: String, value: i64 },
     /// Require a combination of columns to be unique.
     Unique(Vec<String>),
+    /// Require an ordered combination of columns to be the primary key.
+    PrimaryKey(Vec<String>),
+    /// Reference exact columns in another table.
+    ForeignKey {
+        column: String,
+        table: String,
+        referenced_column: String,
+    },
 }
 
 impl TableConstraint {
@@ -470,9 +478,27 @@ impl TableConstraint {
             )
         };
         match self {
+            Self::ForeignKey {
+                column,
+                table,
+                referenced_column,
+            } => format!(
+                "FOREIGN KEY ({}) REFERENCES {} ({})",
+                identifier(column),
+                identifier(table),
+                identifier(referenced_column)
+            ),
             Self::IntegerEquals { column, value } => {
                 format!("CHECK ({} = {value})", identifier(column))
             }
+            Self::PrimaryKey(columns) => format!(
+                "PRIMARY KEY ({})",
+                columns
+                    .iter()
+                    .map(|name| identifier(name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Self::Unique(columns) => format!(
                 "UNIQUE ({})",
                 columns
@@ -533,6 +559,34 @@ impl<'a> CreateTableStatement<'a> {
     #[must_use]
     pub fn unique_columns(mut self, columns: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.constraints.push(TableConstraint::Unique(
+            columns.into_iter().map(Into::into).collect(),
+        ));
+        self
+    }
+
+    /// Add a foreign key referencing an exact column in an exact table.
+    #[must_use]
+    pub fn foreign_key_column(
+        mut self,
+        column: impl Into<String>,
+        table: impl Into<String>,
+        referenced_column: impl Into<String>,
+    ) -> Self {
+        self.constraints.push(TableConstraint::ForeignKey {
+            column: column.into(),
+            table: table.into(),
+            referenced_column: referenced_column.into(),
+        });
+        self
+    }
+
+    /// Sets an ordered composite primary key using exact column identifiers.
+    #[must_use]
+    pub fn primary_key_columns(
+        mut self,
+        columns: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.constraints.push(TableConstraint::PrimaryKey(
             columns.into_iter().map(Into::into).collect(),
         ));
         self

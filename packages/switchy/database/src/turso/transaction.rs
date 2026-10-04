@@ -294,6 +294,7 @@ impl crate::Database for TursoTransaction {
     ) -> Result<Vec<Row>, DatabaseError> {
         Ok(super::select(
             &self.connection,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -312,9 +313,8 @@ impl crate::Database for TursoTransaction {
     ) -> Result<Option<Row>, DatabaseError> {
         Ok(super::find_row(
             &self.connection,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),

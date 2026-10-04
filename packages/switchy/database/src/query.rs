@@ -1455,6 +1455,33 @@ impl<'a> From<SelectQuery<'a>> for Box<dyn List + 'a> {
     }
 }
 
+/// A typed SELECT expression with an optional exact, quoted output name.
+#[derive(Debug)]
+pub struct Projection {
+    /// Expression evaluated by the database.
+    pub expression: Box<dyn Expression>,
+    /// Exact output name, never interpreted as SQL (including with `raw-sql`).
+    pub alias: Option<String>,
+}
+
+impl Projection {
+    /// Construct an unaliased projection.
+    #[must_use]
+    pub fn new(expression: impl Into<Box<dyn Expression>>) -> Self {
+        Self {
+            expression: expression.into(),
+            alias: None,
+        }
+    }
+
+    /// Assign an exact output name.
+    #[must_use]
+    pub fn alias(mut self, alias: impl Into<String>) -> Self {
+        self.alias = Some(alias.into());
+        self
+    }
+}
+
 /// SELECT query builder for retrieving data from tables
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
@@ -1465,6 +1492,10 @@ pub struct SelectQuery<'a> {
     pub distinct: bool,
     /// Columns to retrieve (empty means *)
     pub columns: &'a [&'a str],
+    /// Typed projections; when nonempty these replace the legacy columns.
+    pub projections: Vec<Projection>,
+    /// Typed GROUP BY expressions, in SQL order.
+    pub groups: Vec<Box<dyn Expression>>,
     /// WHERE clause filters
     pub filters: Option<Vec<Box<dyn BooleanExpression>>>,
     /// JOIN clauses
@@ -1510,7 +1541,24 @@ impl Expression for SelectQuery<'_> {
             })
             .unwrap_or_default();
 
-        let values: Vec<_> = [joins_values, filters_values, sorts_values].concat();
+        let projections_values = self
+            .projections
+            .iter()
+            .flat_map(|p| p.expression.values().unwrap_or_default())
+            .collect::<Vec<_>>();
+        let groups_values = self
+            .groups
+            .iter()
+            .flat_map(|p| p.values().unwrap_or_default())
+            .collect::<Vec<_>>();
+        let values: Vec<_> = [
+            projections_values,
+            joins_values,
+            filters_values,
+            groups_values,
+            sorts_values,
+        ]
+        .concat();
 
         if values.is_empty() {
             None
@@ -1538,6 +1586,8 @@ pub fn select(table_name: &str) -> SelectQuery<'_> {
         table_name,
         distinct: false,
         columns: &["*"],
+        projections: Vec::new(),
+        groups: Vec::new(),
         filters: None,
         joins: None,
         sorts: None,
@@ -1557,6 +1607,49 @@ impl FilterableQuery for SelectQuery<'_> {
 }
 
 impl<'a> SelectQuery<'a> {
+    /// Replace the legacy column list with typed projections.
+    #[must_use]
+    pub fn projections(mut self, projections: Vec<Projection>) -> Self {
+        self.projections = projections;
+        self
+    }
+
+    /// Append a typed SELECT expression.
+    #[must_use]
+    pub fn project(mut self, expression: impl Into<Box<dyn Expression>>) -> Self {
+        self.projections.push(Projection::new(expression));
+        self
+    }
+
+    /// Append a typed expression with an exact, quoted output name.
+    ///
+    /// ```
+    /// use switchy_database::query::{select, identifier, count_all, byte_length};
+    /// let inventory = select("events")
+    ///     .project(identifier("kind"))
+    ///     .project_as(count_all(), "event_count")
+    ///     .group_by(identifier("kind"));
+    /// let lengths = select("events")
+    ///     .project_as(byte_length(identifier("payload")), "payload_bytes");
+    /// ```
+    #[must_use]
+    pub fn project_as(
+        mut self,
+        expression: impl Into<Box<dyn Expression>>,
+        alias: impl Into<String>,
+    ) -> Self {
+        self.projections
+            .push(Projection::new(expression).alias(alias));
+        self
+    }
+
+    /// Append a typed GROUP BY expression.
+    #[must_use]
+    pub fn group_by(mut self, expression: impl Into<Box<dyn Expression>>) -> Self {
+        self.groups.push(expression.into());
+        self
+    }
+
     /// Adds DISTINCT modifier to return only unique rows
     #[must_use]
     pub const fn distinct(mut self) -> Self {
@@ -1977,6 +2070,8 @@ impl<'a> From<UpsertStatement<'a>> for SelectQuery<'a> {
             table_name: value.table_name,
             distinct: false,
             columns: &["*"],
+            projections: Vec::new(),
+            groups: Vec::new(),
             filters: value.filters,
             joins: None,
             sorts: None,

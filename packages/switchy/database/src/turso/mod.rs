@@ -114,6 +114,7 @@
 /// Transaction support for Turso database
 pub mod transaction;
 
+use crate::query::Expression as _;
 use thiserror::Error;
 use turso::{Builder, Value as TursoValue};
 
@@ -671,57 +672,74 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
             ExpressionType::QualifiedColumn(value) => value.render('"'),
             ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
             ExpressionType::SelectQuery(value) => {
-                let joins = value.joins.as_ref().map_or_else(String::new, |joins| {
-                    joins
+                let columns = if value.projections.is_empty() {
+                    crate::query::render_columns(value.columns, '"')
+                } else {
+                    value
+                        .projections
                         .iter()
-                        .map(ToSql::to_sql)
+                        .map(|projection| {
+                            let expression = projection.expression.to_sql();
+                            projection.alias.as_ref().map_or_else(
+                                || expression.clone(),
+                                |alias| {
+                                    let alias = alias.replace('"', "\"\"");
+                                    format!("{expression} AS \"{alias}\"")
+                                },
+                            )
+                        })
                         .collect::<Vec<_>>()
-                        .join(" ")
-                });
-
-                let where_clause = value.filters.as_ref().map_or_else(String::new, |filters| {
-                    if filters.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "WHERE {}",
-                            filters
-                                .iter()
-                                .map(|x| format!("({})", x.to_sql()))
-                                .collect::<Vec<_>>()
-                                .join(" AND ")
-                        )
-                    }
-                });
-
-                let sort_clause = value.sorts.as_ref().map_or_else(String::new, |sorts| {
-                    if sorts.is_empty() {
-                        String::new()
-                    } else {
-                        format!(
-                            "ORDER BY {}",
-                            sorts
-                                .iter()
-                                .map(ToSql::to_sql)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )
-                    }
-                });
-
+                        .join(", ")
+                };
+                let joins = value
+                    .joins
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let filters = value
+                    .filters
+                    .iter()
+                    .flatten()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(" AND ");
+                let where_clause = if filters.is_empty() {
+                    String::new()
+                } else {
+                    format!("WHERE {filters}")
+                };
+                let groups = value
+                    .groups
+                    .iter()
+                    .map(|x| x.to_sql())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let group_clause = if groups.is_empty() {
+                    String::new()
+                } else {
+                    format!("GROUP BY {groups}")
+                };
+                let sorts = value
+                    .sorts
+                    .iter()
+                    .flatten()
+                    .map(ToSql::to_sql)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let sort_clause = if sorts.is_empty() {
+                    String::new()
+                } else {
+                    format!("ORDER BY {sorts}")
+                };
                 let limit = value
                     .limit
                     .map_or_else(String::new, |limit| format!("LIMIT {limit}"));
-
                 format!(
-                    "SELECT {} {} FROM {} {} {} {} {}",
+                    "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_columns(value.columns, '"'),
-                    crate::query::render_identifier(value.table_name, '"'),
-                    joins,
-                    where_clause,
-                    sort_clause,
-                    limit
+                    crate::query::render_identifier(value.table_name, '"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -861,6 +879,7 @@ fn bexprs_to_values_opt(
 #[allow(clippy::too_many_arguments)]
 async fn select(
     connection: &turso::Connection,
+    typed: Option<&crate::query::SelectQuery<'_>>,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -880,7 +899,17 @@ async fn select(
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
-    let filter_params = bexprs_to_values_opt(filters).unwrap_or_default();
+    let query = typed.map_or(query, ToSql::to_sql);
+    let filter_params = typed.map_or_else(
+        || bexprs_to_values_opt(filters).unwrap_or_default(),
+        |q| {
+            q.params()
+                .unwrap_or_default()
+                .into_iter()
+                .cloned()
+                .collect()
+        },
+    );
     log::trace!("Running select query: {query} with params: {filter_params:?}");
 
     let mut stmt = connection.prepare(&query).await?;
@@ -904,13 +933,13 @@ async fn select(
 
 async fn find_row(
     connection: &turso::Connection,
-    table_name: &str,
-    distinct: bool,
-    columns: &[&str],
+    typed: Option<&crate::query::SelectQuery<'_>>,
+    selection: (&str, bool, &[&str]),
     filters: Option<&[Box<dyn crate::query::BooleanExpression>]>,
     joins: Option<&[crate::query::Join<'_>]>,
     sort: Option<&[crate::query::Sort]>,
 ) -> Result<Option<crate::Row>, TursoDatabaseError> {
+    let (table_name, distinct, columns) = selection;
     let table_name = crate::query::render_identifier(table_name, '"');
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} LIMIT 1",
@@ -921,7 +950,19 @@ async fn find_row(
         build_sort_clause(sort),
     );
 
-    let filter_params = bexprs_to_values_opt(filters).unwrap_or_default();
+    let query = typed.map_or(query, |q| {
+        format!("SELECT * FROM ({}) AS switchy_first LIMIT 1", q.to_sql())
+    });
+    let filter_params = typed.map_or_else(
+        || bexprs_to_values_opt(filters).unwrap_or_default(),
+        |q| {
+            q.params()
+                .unwrap_or_default()
+                .into_iter()
+                .cloned()
+                .collect()
+        },
+    );
     log::trace!("Running find_row query: {query} with params: {filter_params:?}");
 
     let mut stmt = connection.prepare(&query).await?;
@@ -1445,7 +1486,16 @@ async fn upsert_and_get_row(
             .ok_or_else(|| TursoDatabaseError::Query("UPSERT did not return a row".to_string()));
     }
 
-    match find_row(connection, table_name, false, &["*"], filters, None, None).await? {
+    match find_row(
+        connection,
+        None,
+        (table_name, false, &["*"]),
+        filters,
+        None,
+        None,
+    )
+    .await?
+    {
         Some(row) => {
             let updated = update_and_get_row(connection, table_name, values, filters, limit)
                 .await?
@@ -1582,6 +1632,7 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
         Ok(select(
             &*self.connection().await?,
+            Some(query),
             query.table_name,
             query.distinct,
             query.columns,
@@ -1600,9 +1651,8 @@ impl crate::Database for TursoDatabase {
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
         Ok(find_row(
             &*self.connection().await?,
-            query.table_name,
-            query.distinct,
-            query.columns,
+            Some(query),
+            (query.table_name, query.distinct, query.columns),
             query.filters.as_deref(),
             query.joins.as_deref(),
             query.sorts.as_deref(),
