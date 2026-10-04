@@ -3607,6 +3607,127 @@ fn select_values(
     values
 }
 
+/// Make an unconstrained integer column nullable within the caller's transaction.
+///
+/// Preserves integer values exactly. The caller must hold an active transaction;
+/// unsupported schema dependencies are rejected by SQLite without committing it.
+///
+/// # Errors
+/// Returns an error for autocommit connections, unsupported column types, or DDL failures.
+#[cfg(feature = "schema")]
+pub fn relax_integer_nullability_on_connection(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<(), DatabaseError> {
+    if connection.is_autocommit() {
+        return Err(DatabaseError::InvalidSchema(
+            "nullability migration requires an owned transaction".into(),
+        ));
+    }
+    let columns = rusqlite_get_table_columns(connection, table)?;
+    let info = columns
+        .iter()
+        .find(|info| info.name == column)
+        .ok_or_else(|| DatabaseError::InvalidSchema("column is missing".into()))?;
+    if info.data_type != crate::schema::DataType::BigInt
+        || info.is_primary_key
+        || info.default_value.is_some()
+    {
+        return Err(DatabaseError::InvalidSchema(
+            "expected unconstrained integer column".into(),
+        ));
+    }
+    if info.nullable {
+        return Ok(());
+    }
+    let declaration: String = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |row| row.get(0),
+        )
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let plain = format!("{} INTEGER NOT NULL", column.to_uppercase());
+    let quoted = format!(
+        "\"{}\" INTEGER NOT NULL",
+        column.replace('"', "\"\"").to_uppercase()
+    );
+    let body = declaration
+        .split_once('(')
+        .and_then(|(_, body)| body.rsplit_once(')').map(|(body, _)| body))
+        .ok_or_else(|| DatabaseError::InvalidSchema("unsupported table declaration".into()))?;
+    let supported = body.split(',').any(|part| {
+        let normalized = part
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_uppercase();
+        normalized == plain || normalized == quoted
+    });
+    if !supported {
+        return Err(DatabaseError::InvalidSchema(
+            "column declaration requires explicit schema recreation".into(),
+        ));
+    }
+    let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
+    let temporary_name = format!("{column}__nullable_migration");
+    let table = quote(table);
+    let column = quote(column);
+    let temporary = quote(&temporary_name);
+    connection
+        .execute_batch("SAVEPOINT switchy_nullable_column")
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let result = (|| -> Result<(), rusqlite::Error> {
+        connection.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {temporary} INTEGER"),
+            [],
+        )?;
+        connection.execute(&format!("UPDATE {table} SET {temporary} = {column}"), [])?;
+        connection.execute(&format!("ALTER TABLE {table} DROP COLUMN {column}"), [])?;
+        connection.execute(
+            &format!("ALTER TABLE {table} RENAME COLUMN {temporary} TO {column}"),
+            [],
+        )?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        connection
+            .execute_batch("ROLLBACK TO switchy_nullable_column; RELEASE switchy_nullable_column")
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        return Err(RusqliteDatabaseError::Rusqlite(error).into());
+    }
+    connection
+        .execute_batch("RELEASE switchy_nullable_column")
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(())
+}
+
+/// Execute a structured selection on an already owned SQLite connection.
+///
+/// This preserves the caller's transaction and configuration. It neither opens a
+/// connection nor starts or commits a transaction. Intended for incremental
+/// migrations whose transaction owner still uses the synchronous SQLite adapter.
+///
+/// # Errors
+/// Returns an error if query preparation, binding, execution, or decoding fails.
+pub fn select_on_connection(
+    connection: &Connection,
+    query: &SelectQuery<'_>,
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    select(
+        connection,
+        Some(query),
+        query.table_name,
+        query.distinct,
+        query.columns,
+        query.filters.as_deref(),
+        query.joins.as_deref(),
+        query.sorts.as_deref(),
+        query.limit,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn select(
     connection: &Connection,
