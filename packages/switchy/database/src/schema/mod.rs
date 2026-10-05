@@ -215,6 +215,8 @@
 //! };
 //! ```
 
+pub mod write_guard;
+
 use std::collections::BTreeMap;
 
 use crate::{Database, DatabaseError, DatabaseValue};

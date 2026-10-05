@@ -217,6 +217,13 @@ struct PoolState {
 type ConnectionPool = Arc<std::sync::Mutex<PoolState>>;
 
 pub use crate::TransactionMode;
+#[cfg(feature = "schema")]
+mod write_guard;
+#[cfg(feature = "schema")]
+pub use write_guard::{
+    install_write_guard_on_connection, verify_write_guard_on_connection,
+    verify_write_guards_on_connection,
+};
 
 /// `SQLite` database connection pool using `rusqlite`
 ///
@@ -748,6 +755,22 @@ fn rusqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for RusqliteDatabase {
+    #[cfg(feature = "schema")]
+    async fn verify_write_guards(
+        &self,
+        guards: &[crate::schema::write_guard::WriteGuard],
+    ) -> Result<bool, DatabaseError> {
+        let connection = self.get_connection()?;
+        verify_write_guards_on_connection(&*connection.lock().await, guards)
+    }
+    #[cfg(feature = "schema")]
+    async fn verify_write_guard(
+        &self,
+        guard: &crate::schema::write_guard::WriteGuard,
+    ) -> Result<bool, DatabaseError> {
+        let connection = self.get_connection()?;
+        verify_write_guard_on_connection(&*connection.lock().await, guard)
+    }
     async fn sqlite_change_observation(
         &self,
     ) -> Result<crate::SqliteChangeObservation, DatabaseError> {
@@ -1110,6 +1133,27 @@ impl Database for RusqliteDatabase {
 
 #[async_trait]
 impl Database for RusqliteTransaction {
+    #[cfg(feature = "schema")]
+    async fn verify_write_guards(
+        &self,
+        guards: &[crate::schema::write_guard::WriteGuard],
+    ) -> Result<bool, DatabaseError> {
+        verify_write_guards_on_connection(&*self.connection.lock().await, guards)
+    }
+    #[cfg(feature = "schema")]
+    async fn install_write_guard(
+        &self,
+        guard: &crate::schema::write_guard::WriteGuard,
+    ) -> Result<(), DatabaseError> {
+        install_write_guard_on_connection(&*self.connection.lock().await, guard)
+    }
+    #[cfg(feature = "schema")]
+    async fn verify_write_guard(
+        &self,
+        guard: &crate::schema::write_guard::WriteGuard,
+    ) -> Result<bool, DatabaseError> {
+        verify_write_guard_on_connection(&*self.connection.lock().await, guard)
+    }
     async fn exec_update_count(
         &self,
         statement: &UpdateStatement<'_>,

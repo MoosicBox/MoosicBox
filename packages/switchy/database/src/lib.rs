@@ -1174,6 +1174,48 @@ require("DELETE FROM items");
 "#
 )]
 pub trait Database: Send + Sync + std::fmt::Debug {
+    /// Install an exact finite write guard within an owned transaction.
+    /// # Errors
+    /// Rejects unsupported backends, invalid definitions and conflicting schema state.
+    #[cfg(feature = "schema")]
+    async fn install_write_guard(
+        &self,
+        _guard: &crate::schema::write_guard::WriteGuard,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "typed write guards".into(),
+        ))
+    }
+
+    /// Verify the exact versioned definition of a persistent write guard.
+    /// # Errors
+    /// Rejects unsupported backends, invalid definitions and database failures.
+    #[cfg(feature = "schema")]
+    async fn verify_write_guard(
+        &self,
+        _guard: &crate::schema::write_guard::WriteGuard,
+    ) -> Result<bool, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "typed write guards".into(),
+        ))
+    }
+
+    /// Verify a set of exact persistent guards; backends may batch metadata reads.
+    /// # Errors
+    /// Rejects unsupported backends, invalid definitions and database failures.
+    #[cfg(feature = "schema")]
+    async fn verify_write_guards(
+        &self,
+        guards: &[crate::schema::write_guard::WriteGuard],
+    ) -> Result<bool, DatabaseError> {
+        for guard in guards {
+            if !self.verify_write_guard(guard).await? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     /// Creates a SELECT query builder for the specified table
     fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
         query::select(table_name)
