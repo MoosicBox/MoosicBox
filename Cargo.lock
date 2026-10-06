@@ -3359,6 +3359,7 @@ dependencies = [
  "cargo_metadata 0.23.1",
  "chrono",
  "clap",
+ "clippier_md",
  "clippier_test_utilities",
  "crossterm 0.29.0",
  "ctrlc",

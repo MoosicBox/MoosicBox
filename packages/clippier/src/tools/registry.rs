@@ -398,7 +398,7 @@ impl ToolRegistry {
                     runner_args: runner_args.clone(),
                     tool_binary: tool.binary.clone(),
                 },
-                ToolKind::Cargo => return,
+                ToolKind::Cargo | ToolKind::BuiltinMarkdown => return,
             },
             &tool.native_requested_extensions,
             base_dir,
@@ -941,6 +941,10 @@ impl ToolRegistry {
                         &self.diagnostics,
                     );
                 self.available.insert(name.clone(), available_tool);
+            } else if name == "clippier_md" {
+                let mut bundled = tool.clone();
+                bundled.kind = ToolKind::BuiltinMarkdown;
+                self.available.insert(name.clone(), bundled);
             } else {
                 log::debug!("Tool '{name}' not found");
 
@@ -1006,6 +1010,7 @@ impl ToolRegistry {
     #[must_use]
     pub fn execution_mode(&self, name: &str) -> Option<String> {
         self.available.get(name).map(|tool| match &tool.kind {
+            ToolKind::BuiltinMarkdown => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
             ToolKind::Binary => "binary".to_string(),
             ToolKind::Runner { runner, .. } => format!("runner:{runner}"),
@@ -1205,6 +1210,7 @@ impl ToolInfo {
 
 fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
     match &tool.kind {
+        ToolKind::BuiltinMarkdown => ("builtin".to_string(), None),
         ToolKind::Cargo => ("cargo".to_string(), None),
         ToolKind::Binary => ("binary".to_string(), None),
         ToolKind::Runner { runner, .. } => ("runner".to_string(), Some(runner.clone())),
@@ -1322,6 +1328,37 @@ mod tests {
                 .get("dprint")
                 .and_then(|tool| tool.native_format_extensions.as_ref()),
             Some(&BTreeSet::from(["json".to_string()]))
+        );
+    }
+
+    #[test]
+    fn clippier_md_falls_back_to_bundled_library_when_required_binary_is_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let mut registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        registry.tools.retain(|name, _| name == "clippier_md");
+        registry.tools.get_mut("clippier_md").unwrap().binary = root
+            .path()
+            .join("missing-clippier-md")
+            .display()
+            .to_string();
+        registry.available.clear();
+        registry.config.required.push("clippier_md".to_string());
+        registry.detect_tools().unwrap();
+        assert_eq!(
+            registry.get("clippier_md").unwrap().kind,
+            ToolKind::BuiltinMarkdown
+        );
+        assert_eq!(
+            registry.execution_mode("clippier_md").as_deref(),
+            Some("builtin")
+        );
+        assert!(
+            registry
+                .list_tools()
+                .iter()
+                .any(|tool| tool.name == "clippier_md"
+                    && tool.available
+                    && tool.execution_mode == "builtin")
         );
     }
 

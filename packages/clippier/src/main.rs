@@ -312,6 +312,11 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Run the bundled Markdown formatter
+    Md {
+        #[command(subcommand)]
+        command: clippier_md::cli::Commands,
+    },
     /// Guide setup of clippier.toml in the current directory
     #[cfg(feature = "_tools")]
     Init {
@@ -960,6 +965,13 @@ async fn run() -> Result<(), BoxError> {
     let args = Args::parse();
 
     let result = match args.cmd {
+        Commands::Md { command } => {
+            let exit_code = clippier_md::cli::run(&command)?;
+            if exit_code != 0 {
+                std::process::exit(exit_code);
+            }
+            String::new()
+        }
         #[cfg(feature = "_tools")]
         Commands::Init {
             non_interactive,

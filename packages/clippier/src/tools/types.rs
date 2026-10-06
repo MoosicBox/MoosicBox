@@ -79,6 +79,8 @@ pub struct OverlapWarningSuppressRule {
 /// The kind of tool (how it's invoked)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolKind {
+    /// Markdown formatting provided by the bundled library.
+    BuiltinMarkdown,
     /// Invoked via cargo (e.g., `cargo fmt`, `cargo clippy`)
     Cargo,
     /// Invoked directly as a binary

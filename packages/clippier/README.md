@@ -1437,7 +1437,7 @@ By default, `fmt` auto-selects tools based on manifest/config files in the worki
 - `taplo.toml` -> `taplo`
 - `.shfmt.conf` -> `shfmt`
 - `dprint.json`/`dprint.jsonc` -> `dprint`
-- workspace includes `packages/clippier/md/Cargo.toml` -> `clippier_md` (requires the installed `clippier-md` binary)
+- workspace includes `packages/clippier/md/Cargo.toml` -> `clippier_md`
 
 Clippier only selects and runs tools that are already installed; it never installs tools or modifies your system environment.
 
@@ -1454,13 +1454,21 @@ or `nix-fallback = true` in `[runner]` only when ephemeral acquisition is
 intentional. `--no-runner-fallback` can disable a configured runner fallback for
 a command.
 Prettier is invoked with `--ignore-unknown` for unsupported file types. Use `.prettierignore` for parser-supported files you want excluded from formatting.
-`clippier_md` provides native strict check behavior for markdown in `fmt --check` and is the default markdown formatter in this workspace.
-It invokes the standalone `clippier-md` executable, not `cargo run`, so it works
-outside Rust workspaces without Cargo. Build/package it alongside Clippier with
-`cargo build -p clippier -p clippier_md --release`, and install both binaries
-from `target/release` into `PATH`. The tool ID remains
-`clippier_md`; executable overrides use that ID (for example,
-`--tool-path clippier_md=/path/to/clippier-md`).
+`clippier_md` provides native strict check behavior for markdown in `fmt --check`
+and is the default markdown formatter in this workspace. Both entry points use
+the same formatter library:
+
+- `clippier-md fmt ...`: lightweight standalone Markdown-only executable.
+- `clippier md fmt ...`: Markdown functionality bundled into full Clippier.
+
+The general `clippier fmt` runner prefers an explicit executable override, then
+`clippier-md` in `PATH`, then falls back to the bundled library in-process.
+No Cargo workspace, subprocess recursion, or separate formatter installation is
+required for the bundled fallback. Its inventory execution mode is `builtin`.
+The tool ID remains `clippier_md`; executable overrides use that ID (for example,
+`--tool-path clippier_md=/path/to/clippier-md`). Build just the standalone binary
+with `cargo build -p clippier_md --release`, or full Clippier with
+`cargo build -p clippier --release`.
 
 When both `biome` and `prettier` are explicitly selected, clippier emits overlap warnings when they can target the same extensions.
 Overlap warnings are computed dynamically from files currently present in the working directory plus relevant tool config filters (`biome.json` `files.includes` and `.prettierignore`).
@@ -1525,7 +1533,7 @@ TUI behavior for tool output:
 | `biome`        | JS/TS/JSON/CSS/etc.     | Format       | `biome.json`/`biome.jsonc` or `package.json`; installed explicit/local/PATH binary        |
 | `eslint`       | JS/TS                   | Lint         | ESLint flat/legacy config; installed explicit/local/PATH binary                           |
 | `dprint`       | Multi-language          | Format, Lint | `dprint.json`/`dprint.jsonc`; installed explicit/local/PATH binary                        |
-| `clippier_md`  | Markdown/MDX            | Format       | Workspace `packages/clippier/md/Cargo.toml`; installed explicit/PATH `clippier-md` binary |
+| `clippier_md`  | Markdown/MDX            | Format       | Explicit/PATH `clippier-md` binary, otherwise bundled library                             |
 | `remark`       | Markdown/MDX            | Format       | Native remark config; installed explicit/local/PATH binary                                |
 | `mdformat`     | Markdown                | Format       | `.mdformat.toml`, `pyproject.toml#tool.mdformat`, or Markdown content; installed binary   |
 | `yamlfmt`      | YAML                    | Format       | `.yamlfmt`/`yamlfmt.yml`/`yamlfmt.yaml`; installed binary                                 |

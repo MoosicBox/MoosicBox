@@ -1244,6 +1244,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         let (mut parts, args_start_index) = match &tool.kind {
+            ToolKind::BuiltinMarkdown => return None,
             ToolKind::Cargo => (("cargo".to_string(), args.clone()), 0),
             ToolKind::Binary => {
                 let binary = tool
@@ -1306,6 +1307,7 @@ impl<'a> ToolRunner<'a> {
                 parts.push(tool.binary.clone());
                 parts.join(" ")
             }
+            ToolKind::BuiltinMarkdown => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
         }
     }
@@ -1493,6 +1495,7 @@ impl<'a> ToolRunner<'a> {
         };
 
         let (program, mut final_args) = match &tool.kind {
+            ToolKind::BuiltinMarkdown => unreachable!("remark is not a bundled tool"),
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
                 let binary = tool
@@ -2063,6 +2066,51 @@ impl<'a> ToolRunner<'a> {
         self.scoped_file_args(tool)
     }
 
+    fn run_bundled_markdown(
+        &self,
+        tool: &Tool,
+        check_mode: bool,
+        start: Instant,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ToolResult {
+        let result = (|| -> anyhow::Result<(bool, String)> {
+            if cancelled() {
+                anyhow::bail!("Markdown formatting cancelled");
+            }
+            let working_dir = self.working_dir_path();
+            let files = self.scoped_file_args(tool).unwrap_or_default();
+            if files.is_empty() {
+                return Ok((true, String::new()));
+            }
+            let paths = files
+                .iter()
+                .map(|file| working_dir.join(file))
+                .collect::<Vec<_>>();
+            let config = clippier_md::load_config(&working_dir, None)?;
+            let summary = clippier_md::run_fmt_in(&working_dir, &paths, check_mode, true, &config)?;
+            let output = clippier_md::summary_to_output(
+                &summary,
+                clippier_md::OutputFormat::Text,
+                check_mode,
+                clippier_md::ColorMode::Never,
+            );
+            Ok((!check_mode || summary.changed.is_empty(), output))
+        })();
+        let (success, stdout, stderr) = match result {
+            Ok((success, output)) => (success, output, String::new()),
+            Err(error) => (false, String::new(), error.to_string()),
+        };
+        ToolResult {
+            tool_name: tool.name.clone(),
+            display_name: tool.display_name.clone(),
+            success,
+            exit_code: Some(i32::from(!success)),
+            stdout,
+            stderr,
+            duration: start.elapsed(),
+        }
+    }
+
     fn run_special_adapter(
         &self,
         tool: &Tool,
@@ -2072,6 +2120,10 @@ impl<'a> ToolRunner<'a> {
     ) -> Option<ToolResult> {
         let start_time = Instant::now();
         let entry = tool_catalog_entry(&tool.name)?;
+        if tool.kind == ToolKind::BuiltinMarkdown {
+            started();
+            return Some(self.run_bundled_markdown(tool, check_mode, start_time, cancelled));
+        }
         if check_mode
             && let crate::tools::catalog::ExecutionScope::Directory { filename_filter } =
                 entry.execution_scope
@@ -3374,6 +3426,27 @@ mod tests {
             Some(vec!["src/included.json".to_string()])
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn bundled_markdown_checks_and_formats_without_a_workspace() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("guide.md");
+        std::fs::write(&source, "#   Guide\n").unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        let mut tool = registry.get("clippier_md").unwrap().clone();
+        // Exercise the built-in path even when a standalone binary is installed.
+        tool.kind = ToolKind::BuiltinMarkdown;
+        tool.detected_path = None;
+        let runner = ToolRunner::new(&registry).with_working_dir(root.path());
+        let check = runner.run_single_tool(&tool, true);
+        assert!(!check.success);
+        assert_eq!(check.exit_code, Some(1));
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "#   Guide\n");
+        assert!(runner.run_single_tool(&tool, false).success);
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "# Guide\n");
+        assert!(runner.run_single_tool(&tool, true).success);
+        assert!(!root.path().join("Cargo.toml").exists());
     }
 
     #[test]

@@ -21,6 +21,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+pub mod cli;
+
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
@@ -554,7 +556,37 @@ pub fn run_fmt(
     config: &Config,
 ) -> Result<RunSummary> {
     let working_dir = std::env::current_dir().context("Failed to determine current directory")?;
-    let files = collect_markdown_files(paths, config, &working_dir)?;
+    run_fmt_in(&working_dir, paths, check, emit_diff, config)
+}
+
+/// Format Markdown with an explicit working directory, without changing process state.
+///
+/// # Errors
+///
+/// * Returns an error for invalid filters, traversal failures, or file read/write failures.
+#[allow(clippy::needless_collect)]
+pub fn run_fmt_in(
+    working_dir: &Path,
+    paths: &[PathBuf],
+    check: bool,
+    emit_diff: bool,
+    config: &Config,
+) -> Result<RunSummary> {
+    let paths = if paths.is_empty() {
+        vec![working_dir.to_path_buf()]
+    } else {
+        paths
+            .iter()
+            .map(|path| {
+                if path.is_absolute() {
+                    path.clone()
+                } else {
+                    working_dir.join(path)
+                }
+            })
+            .collect()
+    };
+    let files = collect_markdown_files(&paths, config, working_dir)?;
     let mut changed = Vec::new();
     let mut diff_reports = Vec::new();
     let mut diff_omitted_files = 0usize;
