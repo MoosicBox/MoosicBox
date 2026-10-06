@@ -1326,6 +1326,31 @@ mod tests {
     }
 
     #[test]
+    fn clippier_md_uses_configured_binary_without_a_cargo_workspace() {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("clippier-md");
+        std::fs::write(&executable, "").unwrap();
+        std::fs::write(root.path().join("guide.md"), "# Guide\n").unwrap();
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "clippier_md".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let tool = registry.get("clippier_md").unwrap();
+        assert!(matches!(tool.kind, ToolKind::Binary));
+        assert_eq!(tool.binary, "clippier-md");
+        assert_eq!(tool.detected_path.as_ref(), Some(&executable));
+        assert_eq!(tool.check_args, ["fmt", "--check", "."]);
+        assert_eq!(tool.format_args, ["fmt", "."]);
+        assert_eq!(
+            registry.execution_mode("clippier_md").as_deref(),
+            Some("binary")
+        );
+        assert!(!root.path().join("Cargo.toml").exists());
+    }
+
+    #[test]
     fn resolve_preferred_prettier_path_uses_local_prettier_bin() {
         let dir = temp_dir("clippier-prettier-priority");
         let bin_dir = dir.join("node_modules").join(".bin");

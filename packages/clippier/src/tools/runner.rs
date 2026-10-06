@@ -3377,6 +3377,34 @@ mod tests {
     }
 
     #[test]
+    fn clippier_md_binary_commands_use_scoped_files_without_cargo() {
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("clippier-md");
+        std::fs::write(&executable, "").unwrap();
+        std::fs::write(root.path().join("guide.md"), "# Guide\n").unwrap();
+        let mut config = ToolsConfig::default();
+        config.executables.insert(
+            "clippier_md".to_string(),
+            executable.to_string_lossy().to_string(),
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let runner = ToolRunner::new(&registry).with_working_dir(root.path());
+        let tool = registry.get("clippier_md").unwrap();
+        for check_mode in [false, true] {
+            let (program, args, _) = runner
+                .build_command_parts(tool, check_mode, Some(root.path()))
+                .unwrap();
+            assert_eq!(program, executable.to_string_lossy());
+            let expected = if check_mode {
+                vec!["fmt", "--check", "guide.md"]
+            } else {
+                vec!["fmt", "guide.md"]
+            };
+            assert_eq!(args, expected);
+        }
+    }
+
+    #[test]
     fn clippier_md_scope_uses_runner_working_directory_and_exclusions() {
         let dir = temp_dir("clippier-md-delegation-scope");
         let docs = dir.join("docs");
