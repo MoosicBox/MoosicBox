@@ -398,7 +398,9 @@ impl ToolRegistry {
                     runner_args: runner_args.clone(),
                     tool_binary: tool.binary.clone(),
                 },
-                ToolKind::Cargo | ToolKind::BuiltinMarkdown => return,
+                ToolKind::Cargo => return,
+                #[cfg(feature = "md")]
+                ToolKind::BuiltinMarkdown => return,
             },
             &tool.native_requested_extensions,
             base_dir,
@@ -941,11 +943,14 @@ impl ToolRegistry {
                         &self.diagnostics,
                     );
                 self.available.insert(name.clone(), available_tool);
-            } else if name == "clippier_md" {
-                let mut bundled = tool.clone();
-                bundled.kind = ToolKind::BuiltinMarkdown;
-                self.available.insert(name.clone(), bundled);
             } else {
+                #[cfg(feature = "md")]
+                if name == "clippier_md" {
+                    let mut bundled = tool.clone();
+                    bundled.kind = ToolKind::BuiltinMarkdown;
+                    self.available.insert(name.clone(), bundled);
+                    continue;
+                }
                 log::debug!("Tool '{name}' not found");
 
                 // Check if this tool is required
@@ -1010,6 +1015,7 @@ impl ToolRegistry {
     #[must_use]
     pub fn execution_mode(&self, name: &str) -> Option<String> {
         self.available.get(name).map(|tool| match &tool.kind {
+            #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
             ToolKind::Binary => "binary".to_string(),
@@ -1210,6 +1216,7 @@ impl ToolInfo {
 
 fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
     match &tool.kind {
+        #[cfg(feature = "md")]
         ToolKind::BuiltinMarkdown => ("builtin".to_string(), None),
         ToolKind::Cargo => ("cargo".to_string(), None),
         ToolKind::Binary => ("binary".to_string(), None),
@@ -1331,6 +1338,26 @@ mod tests {
         );
     }
 
+    #[cfg(not(feature = "md"))]
+    #[test]
+    fn clippier_md_without_bundling_requires_an_installed_binary() {
+        let root = tempfile::tempdir().unwrap();
+        let mut registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        registry.tools.retain(|name, _| name == "clippier_md");
+        registry.tools.get_mut("clippier_md").unwrap().binary = root
+            .path()
+            .join("missing-clippier-md")
+            .display()
+            .to_string();
+        registry.available.clear();
+        registry.config.required.push("clippier_md".to_string());
+        assert!(
+            matches!(registry.detect_tools(), Err(ToolError::RequiredToolNotFound(name))
+            if name == "clippier_md")
+        );
+    }
+
+    #[cfg(feature = "md")]
     #[test]
     fn clippier_md_falls_back_to_bundled_library_when_required_binary_is_missing() {
         let root = tempfile::tempdir().unwrap();

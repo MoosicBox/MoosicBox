@@ -217,7 +217,9 @@ fn run_tool_probe_command(
             command.arg(&tool.binary);
             command
         }
-        ToolKind::Cargo | ToolKind::BuiltinMarkdown => return None,
+        ToolKind::Cargo => return None,
+        #[cfg(feature = "md")]
+        ToolKind::BuiltinMarkdown => return None,
     };
 
     command.args(args).current_dir(base_dir);

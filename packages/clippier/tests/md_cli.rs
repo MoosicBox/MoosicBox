@@ -1,3 +1,5 @@
+#![cfg(feature = "md")]
+
 use std::process::Command;
 
 #[test]

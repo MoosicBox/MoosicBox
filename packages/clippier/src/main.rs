@@ -313,6 +313,7 @@ enum ReleaseCommands {
 #[derive(Subcommand)]
 enum Commands {
     /// Run the bundled Markdown formatter
+    #[cfg(feature = "md")]
     Md {
         #[command(subcommand)]
         command: clippier_md::cli::Commands,
@@ -965,6 +966,7 @@ async fn run() -> Result<(), BoxError> {
     let args = Args::parse();
 
     let result = match args.cmd {
+        #[cfg(feature = "md")]
         Commands::Md { command } => {
             let exit_code = clippier_md::cli::run(&command)?;
             if exit_code != 0 {

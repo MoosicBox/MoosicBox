@@ -1470,6 +1470,14 @@ The tool ID remains `clippier_md`; executable overrides use that ID (for example
 with `cargo build -p clippier_md --release`, or full Clippier with
 `cargo build -p clippier --release`.
 
+Bundled Markdown support is controlled by Clippier's default-enabled `md` feature.
+To omit the library, `clippier md` command, and in-process fallback, build with
+`--no-default-features` and opt into the other features you need (for example,
+`cargo build -p clippier --no-default-features --features format,check`).
+External `clippier-md` executable support remains available in the tool runner
+without `md`. Enable just the bundled Markdown command with
+`cargo build -p clippier --no-default-features --features md`.
+
 When both `biome` and `prettier` are explicitly selected, clippier emits overlap warnings when they can target the same extensions.
 Overlap warnings are computed dynamically from files currently present in the working directory plus relevant tool config filters (`biome.json` `files.includes` and `.prettierignore`).
 

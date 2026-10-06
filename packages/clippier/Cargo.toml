@@ -26,7 +26,7 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-clippier_md = { workspace = true }
+clippier_md = { workspace = true, optional = true }
 moosicbox_log_runtime = { workspace = true, features = [
     "env-filter",
     "file",
@@ -107,6 +107,7 @@ default = [
     "check",
     "format",
     "git-diff",
+    "md",
     "node-workspace",
     "publish",
     "release",
@@ -115,7 +116,10 @@ default = [
     "versioning",
 ]
 
+md = ["dep:clippier_md"]
+
 fail-on-warnings = [
+    "clippier_md?/fail-on-warnings",
     "moosicbox_log_runtime/fail-on-warnings",
     "switchy_async/fail-on-warnings",
     "switchy_fs/fail-on-warnings",

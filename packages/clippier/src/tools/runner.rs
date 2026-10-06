@@ -1244,6 +1244,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         let (mut parts, args_start_index) = match &tool.kind {
+            #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => return None,
             ToolKind::Cargo => (("cargo".to_string(), args.clone()), 0),
             ToolKind::Binary => {
@@ -1307,6 +1308,7 @@ impl<'a> ToolRunner<'a> {
                 parts.push(tool.binary.clone());
                 parts.join(" ")
             }
+            #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
         }
@@ -1495,6 +1497,7 @@ impl<'a> ToolRunner<'a> {
         };
 
         let (program, mut final_args) = match &tool.kind {
+            #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => unreachable!("remark is not a bundled tool"),
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
@@ -2066,6 +2069,7 @@ impl<'a> ToolRunner<'a> {
         self.scoped_file_args(tool)
     }
 
+    #[cfg(feature = "md")]
     fn run_bundled_markdown(
         &self,
         tool: &Tool,
@@ -2120,6 +2124,7 @@ impl<'a> ToolRunner<'a> {
     ) -> Option<ToolResult> {
         let start_time = Instant::now();
         let entry = tool_catalog_entry(&tool.name)?;
+        #[cfg(feature = "md")]
         if tool.kind == ToolKind::BuiltinMarkdown {
             started();
             return Some(self.run_bundled_markdown(tool, check_mode, start_time, cancelled));
@@ -3428,6 +3433,7 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    #[cfg(feature = "md")]
     #[test]
     fn bundled_markdown_checks_and_formats_without_a_workspace() {
         let root = tempfile::tempdir().unwrap();
