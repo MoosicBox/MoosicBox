@@ -71,25 +71,22 @@ async fn schema_keys_are_identifiers_without_raw() {
             );
             assert!(!db.table_exists("rejected").await.unwrap());
         }
+        db.create_table("parent(id)")
+            .column(column("id"))
+            .primary_key("id")
+            .execute(&db)
+            .await
+            .unwrap();
         db.create_table("literal_target")
             .column(column("id"))
             .foreign_key(("id", "parent(id)"))
             .execute(&db)
             .await
             .unwrap();
-        use switchy_database::{DatabaseValue, query::FilterableQuery};
-        let row = db
-            .select("sqlite_master")
-            .columns(&["sql"])
-            .where_eq("name", "literal_target")
-            .execute_first(&db)
-            .await
-            .unwrap()
-            .unwrap();
-        // Inspect the database's stored DDL, not repository implementation text.
-        assert_eq!(row.columns[0].1, DatabaseValue::String(
-            "CREATE TABLE literal_target(id INTEGER NOT NULL, FOREIGN KEY (\"id\") REFERENCES \"parent(id)\")".into()
-        ));
+        let target = db.get_table_info("literal_target").await.unwrap().unwrap();
+        let reference = target.foreign_keys.values().next().unwrap();
+        assert_eq!(reference.referenced_table, "parent(id)");
+        assert_eq!(reference.column, "id");
     }
     db.close().await.unwrap();
 }

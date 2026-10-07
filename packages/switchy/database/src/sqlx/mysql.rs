@@ -98,6 +98,54 @@ impl<T: Expression + ?Sized> ToSql for T {
     #[allow(clippy::too_many_lines)]
     fn to_sql(&self) -> String {
         match self.expression_type() {
+            #[cfg(feature = "schema")]
+            ExpressionType::SchemaPredicate(value) => value.mysql.clone(),
+            ExpressionType::JsonTypeIs(value) => format!(
+                "(json_type({}, {}) = '{}')",
+                value.expression.to_sql(),
+                value.path.sqlite(),
+                value.kind.sqlite()
+            ),
+            ExpressionType::StorageType(value) => format!("typeof({})", value.expression.to_sql()),
+            ExpressionType::Add(value) => {
+                format!("({} + {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::ZeroBlob(value) => format!("zeroblob({})", value.length),
+            ExpressionType::StorageCast(value) => format!(
+                "CAST({} AS {})",
+                value.expression.to_sql(),
+                match value.target {
+                    crate::query::StorageCastTarget::Blob => "BLOB",
+                    crate::query::StorageCastTarget::Text => "TEXT",
+                }
+            ),
+            ExpressionType::BoundedText(value) => format!(
+                "CASE WHEN typeof({}) = 'text' AND length(CAST({} AS BLOB)) <= {} THEN {} ELSE {} END",
+                value.expression.to_sql(),
+                value.expression.to_sql(),
+                value.max_bytes,
+                value.expression.to_sql(),
+                value.fallback.to_sql()
+            ),
+            ExpressionType::GtExpression(value) => {
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::EqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() { "IS" } else { "=" },
+                value.right.to_sql()
+            ),
+            ExpressionType::NotEqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() {
+                    "IS NOT"
+                } else {
+                    "!="
+                },
+                value.right.to_sql()
+            ),
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
                     format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
@@ -283,7 +331,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_identifier(value.table_name, '`')
+                    value.render_table('`')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -449,6 +497,30 @@ async fn mysql_get_column_dependencies(
 #[allow(clippy::significant_drop_tightening)]
 impl Database for MySqlSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         let pool = self.connection.lock().await;
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -470,6 +542,21 @@ impl Database for MySqlSqlxDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         let pool = self.connection.lock().await;
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -674,6 +761,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         let pool = self.connection.lock().await;
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -700,6 +792,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         let pool = self.connection.lock().await;
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -798,6 +895,30 @@ impl Database for MySqlSqlxDatabase {
 impl Database for MysqlSqlxTransaction {
     #[allow(clippy::significant_drop_tightening)]
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -822,6 +943,21 @@ impl Database for MysqlSqlxTransaction {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -1055,6 +1191,11 @@ impl Database for MysqlSqlxTransaction {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -1087,6 +1228,11 @@ impl Database for MysqlSqlxTransaction {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -1604,7 +1750,11 @@ async fn mysql_sqlx_exec_create_table(
 
     for constraint in &statement.constraints {
         query.push_str(", ");
-        query.push_str(&constraint.render('`'));
+        query.push_str(
+            &constraint
+                .render('`')
+                .map_err(|_| SqlxDatabaseError::InvalidRequest)?,
+        );
     }
 
     for (source, target) in &statement.foreign_keys {

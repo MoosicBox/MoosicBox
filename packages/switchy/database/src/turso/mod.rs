@@ -555,6 +555,54 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
     fn to_sql(&self) -> String {
         use crate::query::{ExpressionType, SortDirection};
         match self.expression_type() {
+            #[cfg(feature = "schema")]
+            ExpressionType::SchemaPredicate(value) => value.sqlite.clone(),
+            ExpressionType::JsonTypeIs(value) => format!(
+                "(json_type({}, {}) = '{}')",
+                value.expression.to_sql(),
+                value.path.sqlite(),
+                value.kind.sqlite()
+            ),
+            ExpressionType::StorageType(value) => format!("typeof({})", value.expression.to_sql()),
+            ExpressionType::Add(value) => {
+                format!("({} + {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::ZeroBlob(value) => format!("zeroblob({})", value.length),
+            ExpressionType::StorageCast(value) => format!(
+                "CAST({} AS {})",
+                value.expression.to_sql(),
+                match value.target {
+                    crate::query::StorageCastTarget::Blob => "BLOB",
+                    crate::query::StorageCastTarget::Text => "TEXT",
+                }
+            ),
+            ExpressionType::BoundedText(value) => format!(
+                "CASE WHEN typeof({}) = 'text' AND length(CAST({} AS BLOB)) <= {} THEN {} ELSE {} END",
+                value.expression.to_sql(),
+                value.expression.to_sql(),
+                value.max_bytes,
+                value.expression.to_sql(),
+                value.fallback.to_sql()
+            ),
+            ExpressionType::GtExpression(value) => {
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::EqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() { "IS" } else { "=" },
+                value.right.to_sql()
+            ),
+            ExpressionType::NotEqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() {
+                    "IS NOT"
+                } else {
+                    "!="
+                },
+                value.right.to_sql()
+            ),
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
                     format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
@@ -739,7 +787,7 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_identifier(value.table_name, '"')
+                    value.render_table('"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -1630,6 +1678,11 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Vec<crate::Row>, crate::DatabaseError> {
+        if query.table_alias.is_some() {
+            return Err(crate::DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         Ok(select(
             &*self.connection().await?,
             Some(query),
@@ -1649,6 +1702,11 @@ impl crate::Database for TursoDatabase {
         &self,
         query: &crate::query::SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, crate::DatabaseError> {
+        if query.table_alias.is_some() {
+            return Err(crate::DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         Ok(find_row(
             &*self.connection().await?,
             Some(query),
@@ -1800,6 +1858,11 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(crate::DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         exec_create_index(&*self.connection().await?, statement).await
     }
 
@@ -1816,6 +1879,11 @@ impl crate::Database for TursoDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), crate::DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(crate::DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         exec_alter_table(&*self.connection().await?, statement).await
     }
 
@@ -2165,7 +2233,7 @@ async fn exec_create_table(
 
     for constraint in &statement.constraints {
         query.push_str(", ");
-        query.push_str(&constraint.render('"'));
+        query.push_str(&constraint.render('"')?);
     }
 
     for (source, target) in &statement.foreign_keys {

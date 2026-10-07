@@ -25,7 +25,7 @@ switchy_time  = { workspace = true, features = ["chrono", "std"] }
 
 # DB Dependencies
 duckdb   = { workspace = true, optional = true }
-rusqlite = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true, features = ["backup"] }
 
 # sqlx dependencies
 sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"] }
@@ -111,6 +111,7 @@ default = [
     "uuid",
 ]
 raw-sql = []
+sqlite-test-fixtures = []
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",

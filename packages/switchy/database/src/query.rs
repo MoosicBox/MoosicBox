@@ -241,6 +241,27 @@ impl Expression for Join<'_> {
 /// different expression types when generating SQL. Each variant holds a reference
 /// to the actual expression object.
 pub enum ExpressionType<'a> {
+    /// SQLite JSON storage type predicate at a validated path.
+    JsonTypeIs(&'a JsonTypeIs),
+    /// SQLite storage-class observation.
+    StorageType(&'a StorageType),
+    /// Typed arithmetic addition.
+    Add(&'a Add),
+    /// SQLite zero-filled BLOB.
+    ZeroBlob(&'a ZeroBlob),
+    /// Typed SQLite storage-class cast.
+    StorageCast(&'a StorageCast),
+    #[cfg(feature = "schema")]
+    /// A closed persistent schema predicate with escaped constants.
+    SchemaPredicate(&'a SchemaPredicate),
+    /// A bounded SQLite text projection preserving invalid rows with a fallback.
+    BoundedText(&'a BoundedText),
+    /// Greater-than comparison between structured expressions.
+    GtExpression(&'a GtExpression),
+    /// Equality between structured expressions.
+    EqExpression(&'a EqExpression),
+    /// Inequality between structured expressions.
+    NotEqExpression(&'a NotEqExpression),
     /// Equality comparison expression
     Eq(&'a Eq),
     /// Greater than comparison expression
@@ -807,6 +828,423 @@ pub fn where_not_like(column: impl Into<Identifier>, pattern: impl Into<String>)
     }
 }
 
+/// A validated JSON object-member path; callers cannot supply SQL or path fragments.
+#[derive(Debug, Clone)]
+pub struct JsonPath {
+    member: String,
+}
+impl JsonPath {
+    /// Exact validated object member represented by this path.
+    #[must_use]
+    pub fn member_name(&self) -> &str {
+        &self.member
+    }
+
+    /// Select one exact object key using a conservative portable path segment.
+    ///
+    /// # Errors
+    /// * Rejects empty keys and characters other than ASCII letters, digits and underscore.
+    pub fn member(member: impl Into<String>) -> Result<Self, crate::DatabaseError> {
+        let member = member.into();
+        if member.is_empty()
+            || !member
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return Err(crate::DatabaseError::InvalidQuery(
+                "Invalid JSON object path segment".into(),
+            ));
+        }
+        Ok(Self { member })
+    }
+    pub(crate) fn sqlite(&self) -> String {
+        format!("'$.{}'", self.member)
+    }
+}
+/// Closed JSON value type names, distinct from SQL storage classes.
+#[derive(Debug, Clone, Copy)]
+pub enum JsonType {
+    /// JSON integer.
+    Integer,
+    /// JSON non-integer number.
+    Real,
+    /// JSON string.
+    Text,
+    /// Explicit JSON null (not a missing member).
+    Null,
+    /// JSON object.
+    Object,
+    /// JSON array.
+    Array,
+    /// JSON true.
+    True,
+    /// JSON false.
+    False,
+}
+impl JsonType {
+    pub(crate) const fn sqlite(self) -> &'static str {
+        match self {
+            Self::Integer => "integer",
+            Self::Real => "real",
+            Self::Text => "text",
+            Self::Null => "null",
+            Self::Object => "object",
+            Self::Array => "array",
+            Self::True => "true",
+            Self::False => "false",
+        }
+    }
+}
+/// Test a JSON member's type without fetching or parsing the JSON in the caller.
+#[derive(Debug)]
+pub struct JsonTypeIs {
+    /// Structured JSON operand.
+    pub expression: Box<dyn Expression>,
+    /// Validated object-member path.
+    pub path: JsonPath,
+    /// Required JSON type.
+    pub kind: JsonType,
+}
+impl BooleanExpression for JsonTypeIs {}
+impl Expression for JsonTypeIs {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::JsonTypeIs(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+/// Require an exact JSON type. Malformed JSON remains a backend execution error.
+#[must_use]
+pub fn json_type_is(
+    expression: impl Into<Box<dyn Expression>>,
+    path: JsonPath,
+    kind: JsonType,
+) -> JsonTypeIs {
+    JsonTypeIs {
+        expression: expression.into(),
+        path,
+        kind,
+    }
+}
+
+/// Observe SQLite's storage class without decoding the value.
+#[derive(Debug)]
+pub struct StorageType {
+    /// Structured operand.
+    pub expression: Box<dyn Expression>,
+}
+impl Expression for StorageType {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::StorageType(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+impl From<StorageType> for Box<dyn Expression> {
+    fn from(value: StorageType) -> Self {
+        Box::new(value)
+    }
+}
+/// Return SQLite's closed storage-class name (null/integer/real/text/blob).
+#[must_use]
+pub fn storage_type(expression: impl Into<Box<dyn Expression>>) -> StorageType {
+    StorageType {
+        expression: expression.into(),
+    }
+}
+
+/// Typed arithmetic addition used in atomic assignments.
+#[derive(Debug)]
+pub struct Add {
+    /// Structured left operand.
+    pub left: Box<dyn Expression>,
+    /// Structured right operand.
+    pub right: Box<dyn Expression>,
+}
+impl Expression for Add {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::Add(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        Some(
+            [
+                self.left.values().unwrap_or_default(),
+                self.right.values().unwrap_or_default(),
+            ]
+            .concat(),
+        )
+    }
+}
+impl From<Add> for Box<dyn Expression> {
+    fn from(value: Add) -> Self {
+        Box::new(value)
+    }
+}
+/// Add structured operands; values remain bound, never SQL fragments.
+#[must_use]
+pub fn add(left: impl Into<Box<dyn Expression>>, right: impl Into<Box<dyn Expression>>) -> Add {
+    Add {
+        left: left.into(),
+        right: right.into(),
+    }
+}
+
+/// A zero-filled SQLite BLOB, allocated by SQLite rather than the caller.
+#[derive(Debug)]
+pub struct ZeroBlob {
+    /// Requested byte length.
+    pub length: u32,
+}
+impl Expression for ZeroBlob {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::ZeroBlob(self)
+    }
+}
+impl From<ZeroBlob> for Box<dyn Expression> {
+    fn from(value: ZeroBlob) -> Self {
+        Box::new(value)
+    }
+}
+/// Construct a SQLite zero-filled BLOB. Oversized allocations fail at execution.
+#[must_use]
+pub const fn zero_blob(length: u32) -> ZeroBlob {
+    ZeroBlob { length }
+}
+/// Closed SQLite storage-class cast targets.
+#[derive(Debug, Clone, Copy)]
+pub enum StorageCastTarget {
+    /// BLOB storage.
+    Blob,
+    /// TEXT storage.
+    Text,
+}
+/// A typed storage-class cast with no caller type-name fragment.
+#[derive(Debug)]
+pub struct StorageCast {
+    /// Structured operand.
+    pub expression: Box<dyn Expression>,
+    /// Closed target.
+    pub target: StorageCastTarget,
+}
+impl Expression for StorageCast {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::StorageCast(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        self.expression.values()
+    }
+}
+impl From<StorageCast> for Box<dyn Expression> {
+    fn from(value: StorageCast) -> Self {
+        Box::new(value)
+    }
+}
+/// Cast a typed expression to SQLite BLOB storage.
+#[must_use]
+pub fn cast_blob(expression: impl Into<Box<dyn Expression>>) -> StorageCast {
+    StorageCast {
+        expression: expression.into(),
+        target: StorageCastTarget::Blob,
+    }
+}
+/// Cast a typed expression to SQLite TEXT storage.
+#[must_use]
+pub fn cast_text(expression: impl Into<Box<dyn Expression>>) -> StorageCast {
+    StorageCast {
+        expression: expression.into(),
+        target: StorageCastTarget::Text,
+    }
+}
+
+/// A closed persistent predicate rendered from the typed schema AST.
+#[cfg(feature = "schema")]
+#[derive(Debug)]
+pub struct SchemaPredicate {
+    pub(crate) sqlite: String,
+    #[cfg(feature = "mysql-sqlx")]
+    pub(crate) mysql: String,
+}
+#[cfg(feature = "schema")]
+impl SchemaPredicate {
+    /// Canonical escaped SQLite representation of this closed typed predicate.
+    #[must_use]
+    pub fn canonical_sqlite(&self) -> &str {
+        &self.sqlite
+    }
+}
+#[cfg(feature = "schema")]
+impl BooleanExpression for SchemaPredicate {}
+#[cfg(feature = "schema")]
+impl Expression for SchemaPredicate {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::SchemaPredicate(self)
+    }
+}
+/// Preserve a persistent predicate's literal AST for planner compatibility.
+///
+/// # Errors
+/// * Rejects malformed typed schema constants or predicates.
+#[cfg(feature = "schema")]
+pub fn schema_predicate(
+    predicate: &crate::schema::SchemaExpression,
+) -> Result<SchemaPredicate, crate::DatabaseError> {
+    Ok(SchemaPredicate {
+        sqlite: predicate.render('"')?,
+        #[cfg(feature = "mysql-sqlx")]
+        mysql: predicate.render('`')?,
+    })
+}
+
+/// A SQLite text projection that does not materialize oversized or wrongly typed values.
+#[derive(Debug)]
+pub struct BoundedText {
+    /// Exact column/expression to inspect.
+    pub expression: Box<dyn Expression>,
+    /// UTF-8 byte budget.
+    pub max_bytes: u64,
+    /// Value returned for non-text and oversized inputs, including NULL.
+    pub fallback: DatabaseValue,
+}
+impl Expression for BoundedText {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::BoundedText(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        // The inspected expression is rendered three times; retain bind order.
+        let mut values = Vec::new();
+        for _ in 0..3 {
+            values.extend(self.expression.values().unwrap_or_default());
+        }
+        values.push(&self.fallback);
+        Some(values)
+    }
+}
+impl From<BoundedText> for Box<dyn Expression> {
+    fn from(value: BoundedText) -> Self {
+        Box::new(value)
+    }
+}
+/// Project text only when its SQLite storage class is text and its byte length is bounded.
+/// NULL, non-text and oversized inputs yield the caller's typed fallback, never drop rows.
+#[must_use]
+pub fn bounded_text(
+    expression: impl Into<Box<dyn Expression>>,
+    max_bytes: u64,
+    fallback: DatabaseValue,
+) -> BoundedText {
+    BoundedText {
+        expression: expression.into(),
+        max_bytes,
+        fallback,
+    }
+}
+
+/// Equality between structured expressions, including qualified columns.
+#[derive(Debug)]
+pub struct EqExpression {
+    /// Structured left operand.
+    pub left: Box<dyn Expression>,
+    /// Structured right operand.
+    pub right: Box<dyn Expression>,
+}
+impl BooleanExpression for EqExpression {}
+impl Expression for EqExpression {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::EqExpression(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        Some(
+            [
+                self.left.values().unwrap_or_default(),
+                self.right.values().unwrap_or_default(),
+            ]
+            .concat(),
+        )
+    }
+}
+/// Inequality between structured expressions, including qualified columns.
+#[derive(Debug)]
+pub struct NotEqExpression {
+    /// Structured left operand.
+    pub left: Box<dyn Expression>,
+    /// Structured right operand.
+    pub right: Box<dyn Expression>,
+}
+impl BooleanExpression for NotEqExpression {}
+impl Expression for NotEqExpression {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::NotEqExpression(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        Some(
+            [
+                self.left.values().unwrap_or_default(),
+                self.right.values().unwrap_or_default(),
+            ]
+            .concat(),
+        )
+    }
+}
+/// Greater-than comparison between typed expressions.
+#[derive(Debug)]
+pub struct GtExpression {
+    /// Structured left operand.
+    pub left: Box<dyn Expression>,
+    /// Structured right operand.
+    pub right: Box<dyn Expression>,
+}
+impl BooleanExpression for GtExpression {}
+impl Expression for GtExpression {
+    fn expression_type(&self) -> ExpressionType<'_> {
+        ExpressionType::GtExpression(self)
+    }
+    fn values(&self) -> Option<Vec<&DatabaseValue>> {
+        Some(
+            [
+                self.left.values().unwrap_or_default(),
+                self.right.values().unwrap_or_default(),
+            ]
+            .concat(),
+        )
+    }
+}
+/// Compare typed expressions using strict greater-than ordering.
+#[must_use]
+pub fn where_gt_expression(
+    left: impl Into<Box<dyn Expression>>,
+    right: impl Into<Box<dyn Expression>>,
+) -> GtExpression {
+    GtExpression {
+        left: left.into(),
+        right: right.into(),
+    }
+}
+
+/// Compare typed expressions without flattening qualified column names.
+#[must_use]
+pub fn where_eq_expression(
+    left: impl Into<Box<dyn Expression>>,
+    right: impl Into<Box<dyn Expression>>,
+) -> EqExpression {
+    EqExpression {
+        left: left.into(),
+        right: right.into(),
+    }
+}
+/// Exclude equal typed expressions; a NULL right operand means IS NOT NULL.
+#[must_use]
+pub fn where_not_eq_expression(
+    left: impl Into<Box<dyn Expression>>,
+    right: impl Into<Box<dyn Expression>>,
+) -> NotEqExpression {
+    NotEqExpression {
+        left: left.into(),
+        right: right.into(),
+    }
+}
+
 /// Not equal comparison expression (!=)
 #[derive(Debug)]
 pub struct NotEq {
@@ -1326,6 +1764,36 @@ pub trait FilterableQuery
 where
     Self: Sized,
 {
+    /// Add a strict greater-than predicate over structured expressions.
+    #[must_use]
+    fn where_gt_expression(
+        self,
+        left: impl Into<Box<dyn Expression>>,
+        right: impl Into<Box<dyn Expression>>,
+    ) -> Self {
+        self.filter(Box::new(where_gt_expression(left, right)))
+    }
+
+    /// Add equality between structured expressions, including qualified columns.
+    #[must_use]
+    fn where_eq_expression(
+        self,
+        left: impl Into<Box<dyn Expression>>,
+        right: impl Into<Box<dyn Expression>>,
+    ) -> Self {
+        self.filter(Box::new(where_eq_expression(left, right)))
+    }
+
+    /// Add inequality between structured expressions, retaining NULL semantics.
+    #[must_use]
+    fn where_not_eq_expression(
+        self,
+        left: impl Into<Box<dyn Expression>>,
+        right: impl Into<Box<dyn Expression>>,
+    ) -> Self {
+        self.filter(Box::new(where_not_eq_expression(left, right)))
+    }
+
     /// Adds multiple filter conditions to the query
     #[must_use]
     fn filters(self, filters: Vec<Box<dyn BooleanExpression>>) -> Self {
@@ -1486,6 +1954,10 @@ impl Projection {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SelectQuery<'a> {
+    /// Exact table alias, independently quoted from the table name.
+    pub table_alias: Option<&'a str>,
+    /// Force an exact SQLite index; unsupported backends reject this option.
+    pub indexed_by: Option<&'a str>,
     /// Table to select from
     pub table_name: &'a str,
     /// Whether to return only distinct rows
@@ -1583,6 +2055,8 @@ impl Expression for SelectQuery<'_> {
 #[must_use]
 pub fn select(table_name: &str) -> SelectQuery<'_> {
     SelectQuery {
+        table_alias: None,
+        indexed_by: None,
         table_name,
         distinct: false,
         columns: &["*"],
@@ -1607,6 +2081,32 @@ impl FilterableQuery for SelectQuery<'_> {
 }
 
 impl<'a> SelectQuery<'a> {
+    /// Alias the selected table using an exact identifier, never a SQL fragment.
+    #[must_use]
+    pub const fn table_alias(mut self, alias: &'a str) -> Self {
+        self.table_alias = Some(alias);
+        self
+    }
+
+    #[cfg(feature = "_any_backend")]
+    pub(crate) fn render_table(&self, delimiter: char) -> String {
+        let table = render_identifier(self.table_name, delimiter);
+        self.table_alias.map_or_else(
+            || table.clone(),
+            |alias| {
+                format!(
+                    "{table} AS {delimiter}{}{delimiter}",
+                    alias.replace(delimiter, &format!("{delimiter}{delimiter}"))
+                )
+            },
+        )
+    }
+    /// Require the SQLite planner to use this exact index.
+    #[must_use]
+    pub const fn indexed_by(mut self, index: &'a str) -> Self {
+        self.indexed_by = Some(index);
+        self
+    }
     /// Replace the legacy column list with typed projections.
     #[must_use]
     pub fn projections(mut self, projections: Vec<Projection>) -> Self {
@@ -1843,7 +2343,48 @@ pub fn insert(table_name: &str) -> InsertStatement<'_> {
     }
 }
 
+/// INSERT with an exact conflict target and atomic affected-row count.
+pub struct InsertConflictStatement<'a> {
+    /// Structured insert.
+    pub insert: InsertStatement<'a>,
+    /// Exact unique columns whose conflict alone is ignored.
+    pub columns: Vec<String>,
+    /// SQLite OR IGNORE semantics, distinct from targeted conflict handling.
+    pub or_ignore: bool,
+}
+impl InsertConflictStatement<'_> {
+    /// Execute atomically, returning zero for an ignored conflict and one for insertion.
+    ///
+    /// # Errors
+    /// * Returns unsupported, invalid conflict-target, or unrelated constraint failures.
+    pub async fn execute_count(&self, db: &dyn Database) -> Result<u64, DatabaseError> {
+        db.exec_insert_conflict_count(self).await
+    }
+}
+
 impl<'a> InsertStatement<'a> {
+    /// Ignore only a conflict on the exact listed unique columns.
+    #[must_use]
+    pub fn on_conflict_do_nothing(
+        self,
+        columns: impl IntoIterator<Item = impl Into<String>>,
+    ) -> InsertConflictStatement<'a> {
+        InsertConflictStatement {
+            insert: self,
+            columns: columns.into_iter().map(Into::into).collect(),
+            or_ignore: false,
+        }
+    }
+    /// Use SQLite OR IGNORE for UNIQUE, primary-key, NOT NULL and CHECK conflicts.
+    /// Foreign-key failures are not suppressed.
+    #[must_use]
+    pub const fn or_ignore(self) -> InsertConflictStatement<'a> {
+        InsertConflictStatement {
+            insert: self,
+            columns: Vec::new(),
+            or_ignore: true,
+        }
+    }
     /// Sets multiple column-value pairs at once
     #[must_use]
     pub fn values<T: Into<Box<dyn Expression>>>(mut self, values: Vec<(&'a str, T)>) -> Self {
@@ -2067,6 +2608,8 @@ impl<'a> UpsertStatement<'a> {
 impl<'a> From<UpsertStatement<'a>> for SelectQuery<'a> {
     fn from(value: UpsertStatement<'a>) -> Self {
         Self {
+            table_alias: None,
+            indexed_by: None,
             table_name: value.table_name,
             distinct: false,
             columns: &["*"],

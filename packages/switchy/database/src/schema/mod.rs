@@ -215,7 +215,11 @@
 //! };
 //! ```
 
+mod expression;
+mod trigger;
 pub mod write_guard;
+pub use expression::{SchemaComparison, SchemaExpression};
+pub use trigger::{CreateTriggerStatement, TriggerAction, TriggerEvent, create_trigger};
 
 use std::collections::BTreeMap;
 
@@ -457,12 +461,20 @@ pub struct CreateTableStatement<'a> {
 /// Portable table constraints with no SQL-fragment inputs.
 #[derive(Debug, Clone)]
 pub enum TableConstraint {
+    /// A typed persistent CHECK predicate.
+    Check(SchemaExpression),
     /// Require a column to equal an integer (NULL retains SQL CHECK semantics).
     IntegerEquals { column: String, value: i64 },
     /// Require a combination of columns to be unique.
     Unique(Vec<String>),
     /// Require an ordered combination of columns to be the primary key.
     PrimaryKey(Vec<String>),
+    /// A composite reference preserving column order.
+    CompositeForeignKey {
+        columns: Vec<String>,
+        table: String,
+        referenced_columns: Vec<String>,
+    },
     /// Reference exact columns in another table.
     ForeignKey {
         column: String,
@@ -472,14 +484,40 @@ pub enum TableConstraint {
 }
 
 impl TableConstraint {
-    pub(crate) fn render(&self, quote: char) -> String {
+    pub(crate) fn render(&self, quote: char) -> Result<String, DatabaseError> {
         let identifier = |name: &str| {
             format!(
                 "{quote}{}{quote}",
                 name.replace(quote, &format!("{quote}{quote}"))
             )
         };
-        match self {
+        Ok(match self {
+            Self::CompositeForeignKey {
+                columns,
+                table,
+                referenced_columns,
+            } => {
+                if columns.is_empty() || columns.len() != referenced_columns.len() {
+                    return Err(DatabaseError::InvalidSchema(
+                        "Composite foreign key column count mismatch".into(),
+                    ));
+                }
+                format!(
+                    "FOREIGN KEY ({}) REFERENCES {} ({})",
+                    columns
+                        .iter()
+                        .map(|name| identifier(name))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    identifier(table),
+                    referenced_columns
+                        .iter()
+                        .map(|name| identifier(name))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Self::Check(predicate) => format!("CHECK ({})", predicate.render(quote)?),
             Self::ForeignKey {
                 column,
                 table,
@@ -509,7 +547,7 @@ impl TableConstraint {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-        }
+        })
     }
 }
 
@@ -547,6 +585,27 @@ pub const fn create_table(table_name: &str) -> CreateTableStatement<'_> {
 }
 
 impl<'a> CreateTableStatement<'a> {
+    /// Reference an ordered set of columns in another exact table.
+    #[must_use]
+    pub fn composite_foreign_key(
+        mut self,
+        columns: impl IntoIterator<Item = impl Into<String>>,
+        table: impl Into<String>,
+        referenced_columns: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        self.constraints.push(TableConstraint::CompositeForeignKey {
+            columns: columns.into_iter().map(Into::into).collect(),
+            table: table.into(),
+            referenced_columns: referenced_columns.into_iter().map(Into::into).collect(),
+        });
+        self
+    }
+    /// Require a typed persistent CHECK predicate.
+    #[must_use]
+    pub fn check(mut self, predicate: SchemaExpression) -> Self {
+        self.constraints.push(TableConstraint::Check(predicate));
+        self
+    }
     /// Require a column to equal an integer; combine with NOT NULL to reject NULL.
     #[must_use]
     pub fn check_integer_equals(mut self, column: impl Into<String>, value: i64) -> Self {
@@ -815,7 +874,11 @@ impl DropTableStatement<'_> {
 /// # }
 /// ```
 pub struct CreateIndexStatement<'a> {
+    /// Ordered key components; empty retains legacy column order.
+    pub ordered_columns: Vec<(&'a str, crate::query::SortDirection)>,
     pub index_name: &'a str,
+    /// Optional typed partial-index predicate.
+    pub predicate: Option<SchemaExpression>,
     pub table_name: &'a str,
     pub columns: Vec<&'a str>,
     pub unique: bool,
@@ -837,7 +900,9 @@ pub struct CreateIndexStatement<'a> {
 #[must_use]
 pub const fn create_index(index_name: &str) -> CreateIndexStatement<'_> {
     CreateIndexStatement {
+        ordered_columns: Vec::new(),
         index_name,
+        predicate: None,
         table_name: "",
         columns: vec![],
         unique: false,
@@ -846,6 +911,18 @@ pub const fn create_index(index_name: &str) -> CreateIndexStatement<'_> {
 }
 
 impl<'a> CreateIndexStatement<'a> {
+    /// Append an exact index column with explicit ordering.
+    #[must_use]
+    pub fn column_ordered(mut self, name: &'a str, direction: crate::query::SortDirection) -> Self {
+        self.ordered_columns.push((name, direction));
+        self
+    }
+    /// Restrict this index to rows matching a typed predicate.
+    #[must_use]
+    pub fn predicate(mut self, predicate: SchemaExpression) -> Self {
+        self.predicate = Some(predicate);
+        self
+    }
     /// Sets the table name for the index
     #[must_use]
     pub const fn table(mut self, table_name: &'a str) -> Self {
@@ -1066,6 +1143,8 @@ pub enum AlterOperation {
 /// # }
 /// ```
 pub struct AlterTableStatement<'a> {
+    /// Typed predicates attached to newly added columns.
+    pub column_checks: BTreeMap<String, SchemaExpression>,
     pub table_name: &'a str,
     pub operations: Vec<AlterOperation>,
 }
@@ -1083,12 +1162,26 @@ pub struct AlterTableStatement<'a> {
 #[must_use]
 pub const fn alter_table(table_name: &str) -> AlterTableStatement<'_> {
     AlterTableStatement {
+        column_checks: BTreeMap::new(),
         table_name,
         operations: vec![],
     }
 }
 
 impl AlterTableStatement<'_> {
+    /// Add a column with a persistent CHECK predicate.
+    #[must_use]
+    pub fn add_column_check(
+        mut self,
+        name: String,
+        data_type: DataType,
+        nullable: bool,
+        default: Option<DatabaseValue>,
+        predicate: SchemaExpression,
+    ) -> Self {
+        self.column_checks.insert(name.clone(), predicate);
+        self.add_column(name, data_type, nullable, default)
+    }
     /// Adds a new column to the table
     #[must_use]
     pub fn add_column(

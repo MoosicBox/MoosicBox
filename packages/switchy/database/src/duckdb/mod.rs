@@ -291,6 +291,54 @@ impl<T: Expression + ?Sized> ToSql for T {
     #[allow(clippy::too_many_lines)]
     fn to_sql(&self) -> String {
         match self.expression_type() {
+            #[cfg(feature = "schema")]
+            ExpressionType::SchemaPredicate(value) => value.sqlite.clone(),
+            ExpressionType::JsonTypeIs(value) => format!(
+                "(json_type({}, {}) = '{}')",
+                value.expression.to_sql(),
+                value.path.sqlite(),
+                value.kind.sqlite()
+            ),
+            ExpressionType::StorageType(value) => format!("typeof({})", value.expression.to_sql()),
+            ExpressionType::Add(value) => {
+                format!("({} + {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::ZeroBlob(value) => format!("zeroblob({})", value.length),
+            ExpressionType::StorageCast(value) => format!(
+                "CAST({} AS {})",
+                value.expression.to_sql(),
+                match value.target {
+                    crate::query::StorageCastTarget::Blob => "BLOB",
+                    crate::query::StorageCastTarget::Text => "TEXT",
+                }
+            ),
+            ExpressionType::BoundedText(value) => format!(
+                "CASE WHEN typeof({}) = 'text' AND length(CAST({} AS BLOB)) <= {} THEN {} ELSE {} END",
+                value.expression.to_sql(),
+                value.expression.to_sql(),
+                value.max_bytes,
+                value.expression.to_sql(),
+                value.fallback.to_sql()
+            ),
+            ExpressionType::GtExpression(value) => {
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::EqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() { "IS" } else { "=" },
+                value.right.to_sql()
+            ),
+            ExpressionType::NotEqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() {
+                    "IS NOT"
+                } else {
+                    "!="
+                },
+                value.right.to_sql()
+            ),
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
                     format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
@@ -475,7 +523,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_identifier(value.table_name, '"')
+                    value.render_table('"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -1485,7 +1533,9 @@ fn duckdb_default_value_sql(value: &DatabaseValue) -> String {
 }
 
 #[cfg(feature = "schema")]
-fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -> String {
+fn build_create_table_sql(
+    statement: &crate::schema::CreateTableStatement<'_>,
+) -> Result<String, DatabaseError> {
     let mut sql = String::new();
 
     // Create sequences for auto-increment columns first
@@ -1548,7 +1598,8 @@ fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -
         statement
             .constraints
             .iter()
-            .map(|constraint| constraint.render('"')),
+            .map(|constraint| constraint.render('"'))
+            .collect::<Result<Vec<_>, _>>()?,
     );
 
     for (col, ref_table) in &statement.foreign_keys {
@@ -1565,7 +1616,7 @@ fn build_create_table_sql(statement: &crate::schema::CreateTableStatement<'_>) -
 
     sql.push_str(&col_defs.join(", "));
     sql.push(')');
-    sql
+    Ok(sql)
 }
 
 #[cfg(feature = "schema")]
@@ -2016,6 +2067,30 @@ fn duckdb_get_table_info(
 #[allow(clippy::significant_drop_tightening)]
 impl Database for DuckDbDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let sql = query.to_sql();
@@ -2040,6 +2115,21 @@ impl Database for DuckDbDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let sql = format!(
@@ -2427,7 +2517,7 @@ impl Database for DuckDbDatabase {
     ) -> Result<(), DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
-        let sql = build_create_table_sql(statement);
+        let sql = build_create_table_sql(statement)?;
         run_duckdb_blocking("duckdb_exec_create_table", move || {
             exec_schema_ddl(&connection.blocking_lock(), &sql).map_err(Into::into)
         })
@@ -2455,6 +2545,11 @@ impl Database for DuckDbDatabase {
     ) -> Result<(), DatabaseError> {
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         let sql = build_create_index_sql(statement);
         run_duckdb_blocking("duckdb_exec_create_index", move || {
             exec_schema_ddl(&connection.blocking_lock(), &sql).map_err(Into::into)
@@ -2481,6 +2576,11 @@ impl Database for DuckDbDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         let _operation_guard = self.lock_operation_gate().await;
         let connection = self.get_connection();
         let sqls = build_alter_table_sqls(statement);
@@ -2606,6 +2706,30 @@ impl Database for DuckDbDatabase {
 #[allow(clippy::significant_drop_tightening)]
 impl Database for DuckDbTransaction {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         let connection = Arc::clone(&self.connection);
         let sql = query.to_sql();
         let params = select_values(query);
@@ -2629,6 +2753,21 @@ impl Database for DuckDbTransaction {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query
+            .filters
+            .iter()
+            .flatten()
+            .any(|filter| matches!(filter.expression_type(), ExpressionType::JsonTypeIs(_)))
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite JSON type predicate".into(),
+            ));
+        }
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         let connection = Arc::clone(&self.connection);
         let sql = format!(
             "SELECT * FROM ({}) AS switchy_first LIMIT 1",
@@ -2996,7 +3135,7 @@ impl Database for DuckDbTransaction {
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
         let connection = Arc::clone(&self.connection);
-        let sql = build_create_table_sql(statement);
+        let sql = build_create_table_sql(statement)?;
         run_duckdb_blocking("duckdb_tx_exec_create_table", move || {
             exec_schema_ddl(&connection.blocking_lock(), &sql).map_err(Into::into)
         })
@@ -3022,6 +3161,11 @@ impl Database for DuckDbTransaction {
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
         let connection = Arc::clone(&self.connection);
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         let sql = build_create_index_sql(statement);
         run_duckdb_blocking("duckdb_tx_exec_create_index", move || {
             exec_schema_ddl(&connection.blocking_lock(), &sql).map_err(Into::into)
@@ -3047,6 +3191,11 @@ impl Database for DuckDbTransaction {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         let connection = Arc::clone(&self.connection);
         let sqls = build_alter_table_sqls(statement);
         run_duckdb_blocking("duckdb_tx_exec_alter_table", move || {

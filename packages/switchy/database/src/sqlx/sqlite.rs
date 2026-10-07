@@ -140,6 +140,62 @@ impl<T: Expression + ?Sized> ToSql for T {
     #[allow(clippy::too_many_lines)]
     fn to_sql(&self, index: &AtomicU16) -> String {
         match self.expression_type() {
+            #[cfg(feature = "schema")]
+            ExpressionType::SchemaPredicate(value) => value.sqlite.clone(),
+            ExpressionType::JsonTypeIs(value) => format!(
+                "(json_type({}, {}) = '{}')",
+                value.expression.to_sql(index),
+                value.path.sqlite(),
+                value.kind.sqlite()
+            ),
+            ExpressionType::StorageType(value) => {
+                format!("typeof({})", value.expression.to_sql(index))
+            }
+            ExpressionType::Add(value) => format!(
+                "({} + {})",
+                value.left.to_sql(index),
+                value.right.to_sql(index)
+            ),
+            ExpressionType::ZeroBlob(value) => format!("zeroblob({})", value.length),
+            ExpressionType::StorageCast(value) => format!(
+                "CAST({} AS {})",
+                value.expression.to_sql(index),
+                match value.target {
+                    crate::query::StorageCastTarget::Blob => "BLOB",
+                    crate::query::StorageCastTarget::Text => "TEXT",
+                }
+            ),
+            ExpressionType::BoundedText(value) => format!(
+                "CASE WHEN typeof({}) = 'text' AND length(CAST({} AS BLOB)) <= {} THEN {} ELSE {} END",
+                value.expression.to_sql(index),
+                value.expression.to_sql(index),
+                value.max_bytes,
+                value.expression.to_sql(index),
+                value.fallback.to_sql(index)
+            ),
+            ExpressionType::GtExpression(value) => {
+                format!(
+                    "({} > {})",
+                    value.left.to_sql(index),
+                    value.right.to_sql(index)
+                )
+            }
+            ExpressionType::EqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(index),
+                if value.right.is_null() { "IS" } else { "=" },
+                value.right.to_sql(index)
+            ),
+            ExpressionType::NotEqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(index),
+                if value.right.is_null() {
+                    "IS NOT"
+                } else {
+                    "!="
+                },
+                value.right.to_sql(index)
+            ),
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
                     format!(
@@ -302,7 +358,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 }
                 #[cfg(not(feature = "raw-sql"))]
                 {
-                    crate::query::render_identifier(&value.value, '"')
+                    crate::query::render_identifier(&value.value, '`')
                 }
             }
             ExpressionType::SelectQuery(value) => {
@@ -382,7 +438,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_identifier(value.table_name, '"')
+                    value.render_table('"')
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -587,6 +643,20 @@ impl Database for SqliteSqlxDatabase {
         self.query_raw_internal("PRAGMA foreign_key_check").await
     }
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         Ok(select(
             self.get_connection_internal().await?.lock().await.as_mut(),
             Some(query),
@@ -605,6 +675,11 @@ impl Database for SqliteSqlxDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         Ok(find_row(
             self.get_connection_internal().await?.lock().await.as_mut(),
             Some(query),
@@ -775,6 +850,11 @@ impl Database for SqliteSqlxDatabase {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         sqlite_sqlx_exec_create_index(
             self.get_connection_internal().await?.lock().await.as_mut(),
             statement,
@@ -809,6 +889,11 @@ impl Database for SqliteSqlxDatabase {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         sqlite_sqlx_exec_alter_table(
             self.get_connection_internal().await?.lock().await.as_mut(),
             statement,
@@ -1528,7 +1613,11 @@ async fn sqlite_sqlx_exec_create_table(
 
     for constraint in &statement.constraints {
         query.push_str(", ");
-        query.push_str(&constraint.render('"'));
+        query.push_str(
+            &constraint
+                .render('"')
+                .map_err(|_| SqlxDatabaseError::InvalidRequest)?,
+        );
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -3285,6 +3374,20 @@ impl Expression for SqliteDatabaseValue {
 impl Database for SqliteSqlxTransaction {
     #[allow(clippy::significant_drop_tightening)]
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        if query.table_alias.is_some()
+            || query.indexed_by.is_some()
+            || query.projections.iter().any(|projection| {
+                matches!(
+                    projection.expression.expression_type(),
+                    ExpressionType::BoundedText(_)
+                )
+            })
+        {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite-only selection policy".into(),
+            ));
+        }
+
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -3309,6 +3412,11 @@ impl Database for SqliteSqlxTransaction {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        if query.table_alias.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Table alias on this execution path".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -3521,6 +3629,11 @@ impl Database for SqliteSqlxTransaction {
         &self,
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if statement.predicate.is_some() || !statement.ordered_columns.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Partial indexes on this backend".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()
@@ -3553,6 +3666,11 @@ impl Database for SqliteSqlxTransaction {
         &self,
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        if !statement.column_checks.is_empty() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Add-column CHECK on this backend".into(),
+            ));
+        }
         let mut transaction_guard = self.transaction.lock().await;
         let tx = transaction_guard
             .as_mut()

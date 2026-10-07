@@ -414,7 +414,30 @@ mod aggregate_rendering_tests {
         assert_eq!(maximum.values().unwrap(), vec![&operand]);
         #[cfg(not(feature = "raw-sql"))]
         {
-            assert_eq!(max(identifier("x\"; --")).to_sql(), "MAX(\"x\"\"; --\")");
+            let connection = rusqlite::Connection::open_in_memory().unwrap();
+            let malicious_name = "x`\"; --";
+            let column = crate::query::render_identifier(malicious_name, '`');
+            connection
+                .execute(
+                    &format!("CREATE TABLE quoted ({column} INTEGER NOT NULL)"),
+                    [],
+                )
+                .unwrap();
+            super::rusqlite_insert_count(
+                &connection,
+                &crate::query::insert("quoted").value(malicious_name, 7),
+            )
+            .unwrap();
+            let sql = format!(
+                "SELECT {} FROM quoted",
+                max(identifier(malicious_name)).to_sql()
+            );
+            assert_eq!(
+                connection
+                    .query_row(&sql, [], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                7
+            );
         }
         assert!(max(identifier("value")).values().is_none());
     }
@@ -428,6 +451,54 @@ impl<T: Expression + ?Sized> ToSql for T {
     #[allow(clippy::too_many_lines)]
     fn to_sql(&self) -> String {
         match self.expression_type() {
+            #[cfg(feature = "schema")]
+            ExpressionType::SchemaPredicate(value) => value.sqlite.clone(),
+            ExpressionType::JsonTypeIs(value) => format!(
+                "(json_type({}, {}) = '{}')",
+                value.expression.to_sql(),
+                value.path.sqlite(),
+                value.kind.sqlite()
+            ),
+            ExpressionType::StorageType(value) => format!("typeof({})", value.expression.to_sql()),
+            ExpressionType::Add(value) => {
+                format!("({} + {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::ZeroBlob(value) => format!("zeroblob({})", value.length),
+            ExpressionType::StorageCast(value) => format!(
+                "CAST({} AS {})",
+                value.expression.to_sql(),
+                match value.target {
+                    crate::query::StorageCastTarget::Blob => "BLOB",
+                    crate::query::StorageCastTarget::Text => "TEXT",
+                }
+            ),
+            ExpressionType::BoundedText(value) => format!(
+                "CASE WHEN typeof({}) = 'text' AND length(CAST({} AS BLOB)) <= {} THEN {} ELSE {} END",
+                value.expression.to_sql(),
+                value.expression.to_sql(),
+                value.max_bytes,
+                value.expression.to_sql(),
+                value.fallback.to_sql()
+            ),
+            ExpressionType::GtExpression(value) => {
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
+            }
+            ExpressionType::EqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() { "IS" } else { "=" },
+                value.right.to_sql()
+            ),
+            ExpressionType::NotEqExpression(value) => format!(
+                "({} {} {})",
+                value.left.to_sql(),
+                if value.right.is_null() {
+                    "IS NOT"
+                } else {
+                    "!="
+                },
+                value.right.to_sql()
+            ),
             ExpressionType::Eq(value) => {
                 if value.right.is_null() {
                     format!("({} IS {})", value.left.to_sql(), value.right.to_sql())
@@ -543,7 +614,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!("length(CAST({} AS BLOB))", value.expression.to_sql())
             }
             ExpressionType::QualifiedColumn(value) => value.render('"'),
-            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '"'),
+            // Backtick identifiers cannot fall back to SQLite double-quoted string literals.
+            ExpressionType::Identifier(value) => crate::query::render_identifier(&value.value, '`'),
             ExpressionType::SelectQuery(value) => {
                 let columns = if value.projections.is_empty() {
                     crate::query::render_columns(value.columns, '"')
@@ -612,7 +684,14 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!(
                     "SELECT {} {columns} FROM {} {joins} {where_clause} {group_clause} {sort_clause} {limit}",
                     if value.distinct { "DISTINCT" } else { "" },
-                    crate::query::render_identifier(value.table_name, '"')
+                    value.indexed_by.map_or_else(
+                        || value.render_table('"'),
+                        |index| format!(
+                            "{} INDEXED BY \"{}\"",
+                            value.render_table('"'),
+                            index.replace('"', "\"\"")
+                        )
+                    )
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
@@ -649,6 +728,37 @@ impl<T: Expression + ?Sized> ToSql for T {
     }
 }
 
+#[cfg(all(test, feature = "schema"))]
+mod persistent_index_compatibility_tests {
+    use super::*;
+    use crate::query::{FilterableQuery, schema_predicate, select};
+    use crate::schema::{SchemaComparison as C, SchemaExpression as E};
+
+    #[test]
+    fn historical_in_index_accepts_closed_literal_predicate() {
+        let connection = Connection::open_in_memory().unwrap();
+        // Frozen historical DDL is backend-private fixture input, not a caller SQL API.
+        connection.execute_batch("CREATE TABLE workflow_attempts(run_id TEXT, dispatch_identity TEXT, status TEXT, receipt_json TEXT); CREATE INDEX workflow_receipt_recovery_page ON workflow_attempts(run_id, dispatch_identity) WHERE status IN ('admitted', 'running', 'cancelling', 'sibling_cancelling') AND receipt_json IS NOT NULL;").unwrap();
+        let predicate = E::And(vec![
+            E::In(
+                Box::new(E::column("status")),
+                ["admitted", "running", "cancelling", "sibling_cancelling"]
+                    .into_iter()
+                    .map(|value| E::Text(value.into()))
+                    .collect(),
+            ),
+            E::column("receipt_json").compare(C::IsNot, E::Null),
+        ]);
+        let query = select("workflow_attempts")
+            .indexed_by("workflow_receipt_recovery_page")
+            .where_eq("run_id", "")
+            .where_gt("dispatch_identity", "")
+            .filter(Box::new(schema_predicate(&predicate).unwrap()))
+            .limit(1);
+        connection.prepare(&query.to_sql()).unwrap();
+    }
+}
+
 /// Errors specific to `SQLite` database operations using `rusqlite`
 ///
 /// Wraps errors from the underlying `rusqlite` driver plus additional error types
@@ -659,6 +769,9 @@ pub enum RusqliteDatabaseError {
     /// Error from the underlying `rusqlite` driver
     #[error(transparent)]
     Rusqlite(#[from] rusqlite::Error),
+    /// A BLOB result requires a bounded or explicitly cast projection.
+    #[error("BLOB result is unsupported; use a typed bounded projection")]
+    UnsupportedBlob,
     /// Returned row did not contain an ID column
     #[error("No ID")]
     NoId,
@@ -697,7 +810,10 @@ fn rusqlite_get_column_dependencies(
     let mut foreign_keys = Vec::new();
 
     // Find indexes that use this column
-    let index_list_query = format!("PRAGMA index_list({table_name})");
+    let index_list_query = format!(
+        "PRAGMA index_list({})",
+        crate::query::render_identifier(table_name, '"')
+    );
     let mut stmt = connection
         .prepare(&index_list_query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -709,7 +825,10 @@ fn rusqlite_get_column_dependencies(
         let index_name = index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
 
         // Check if this index uses the column we're interested in
-        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let index_info_query = format!(
+            "PRAGMA index_info({})",
+            crate::query::render_identifier(&index_name, '"')
+        );
         let mut col_stmt = connection
             .prepare(&index_info_query)
             .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -727,7 +846,10 @@ fn rusqlite_get_column_dependencies(
     }
 
     // Find foreign key constraints that use this column
-    let fk_list_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_list_query = format!(
+        "PRAGMA foreign_key_list({})",
+        crate::query::render_identifier(table_name, '"')
+    );
     let mut fk_stmt = connection
         .prepare(&fk_list_query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -755,6 +877,217 @@ fn rusqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for RusqliteDatabase {
+    async fn sqlite_is_autocommit(&self) -> Result<bool, DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Autocommit observation requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let autocommit = connection.lock().await.is_autocommit();
+        Ok(autocommit)
+    }
+
+    async fn sqlite_journal_mode(
+        &self,
+        mode: crate::SqliteJournalMode,
+    ) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Journal mode requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Journal mode requires autocommit".into(),
+            ));
+        }
+        let mode = match mode {
+            crate::SqliteJournalMode::Delete => "delete",
+            crate::SqliteJournalMode::Truncate => "truncate",
+            crate::SqliteJournalMode::Persist => "persist",
+            crate::SqliteJournalMode::Memory => "memory",
+            crate::SqliteJournalMode::Wal => "wal",
+            crate::SqliteJournalMode::Off => "off",
+        };
+        let actual: String = connection
+            .pragma_update_and_check(None, "journal_mode", mode, |row| row.get(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        if actual != mode {
+            return Err(DatabaseError::InvalidQuery(
+                "SQLite did not apply requested journal mode".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn sqlite_set_busy_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Busy timeout requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        connection
+            .busy_timeout(timeout)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn sqlite_foreign_keys(&self, enabled: bool) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite configuration requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "foreign_keys", enabled)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn sqlite_defer_foreign_keys(&self, defer: bool) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite configuration requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        if connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "defer_foreign_keys", defer)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    #[cfg(feature = "sqlite-test-fixtures")]
+    async fn sqlite_ignore_check_constraints(&self, ignore: bool) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite configuration requires a single-connection owner".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        if false {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "ignore_check_constraints", ignore)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn exec_insert_count(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_insert_count(&*connection.lock().await, statement)
+    }
+
+    async fn exec_insert_conflict_count(
+        &self,
+        statement: &crate::query::InsertConflictStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_insert_conflict_count(&*connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn sqlite_relax_integer_nullability(
+        &self,
+        table: &str,
+        column: &str,
+    ) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "Nullability migration requires a single-connection handle".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        relax_integer_nullability_on_connection(&*connection.lock().await, table, column)
+    }
+
+    async fn validate_select(&self, query: &SelectQuery<'_>) -> Result<(), DatabaseError> {
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        connection
+            .prepare(&query.to_sql())
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_trigger(
+        &self,
+        statement: &crate::schema::CreateTriggerStatement,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.get_connection()?;
+        connection
+            .lock()
+            .await
+            .execute_batch(&statement.render_sqlite()?)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn trigger_exists(&self, name: &str) -> Result<bool, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_trigger_exists(&*connection.lock().await, name)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn drop_trigger(&self, name: &str, if_exists: bool) -> Result<(), DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_drop_trigger(&*connection.lock().await, name, if_exists)
+    }
+    async fn sqlite_backup_to(&self, destination: &std::path::Path) -> Result<(), DatabaseError> {
+        if self.connection_count != 1 {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite backup requires a single-connection handle".into(),
+            ));
+        }
+        let connection = self.get_connection()?;
+        let connection = connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite backup requires a settled transaction".into(),
+            ));
+        }
+        connection
+            .backup(rusqlite::DatabaseName::Main, destination, None)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
     #[cfg(feature = "schema")]
     async fn verify_write_guards(
         &self,
@@ -1133,6 +1466,186 @@ impl Database for RusqliteDatabase {
 
 #[async_trait]
 impl Database for RusqliteTransaction {
+    async fn sqlite_change_observation(
+        &self,
+    ) -> Result<crate::SqliteChangeObservation, DatabaseError> {
+        let connection = self.connection.lock().await;
+        let data_version = connection
+            .query_row("PRAGMA data_version", [], |row| row.get(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        let total_changes = connection.total_changes();
+        drop(connection);
+        Ok(crate::SqliteChangeObservation {
+            data_version,
+            total_changes,
+        })
+    }
+    async fn sqlite_is_autocommit(&self) -> Result<bool, DatabaseError> {
+        Ok(self.connection.lock().await.is_autocommit())
+    }
+
+    async fn sqlite_journal_mode(
+        &self,
+        mode: crate::SqliteJournalMode,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Journal mode requires autocommit".into(),
+            ));
+        }
+        let mode = match mode {
+            crate::SqliteJournalMode::Delete => "delete",
+            crate::SqliteJournalMode::Truncate => "truncate",
+            crate::SqliteJournalMode::Persist => "persist",
+            crate::SqliteJournalMode::Memory => "memory",
+            crate::SqliteJournalMode::Wal => "wal",
+            crate::SqliteJournalMode::Off => "off",
+        };
+        let actual: String = connection
+            .pragma_update_and_check(None, "journal_mode", mode, |row| row.get(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        if actual != mode {
+            return Err(DatabaseError::InvalidQuery(
+                "SQLite did not apply requested journal mode".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn sqlite_set_busy_timeout(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        connection
+            .busy_timeout(timeout)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn sqlite_foreign_keys(&self, enabled: bool) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "foreign_keys", enabled)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn sqlite_integrity_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.connection.lock().await;
+        rusqlite_integrity_check(&connection, false)
+    }
+
+    async fn sqlite_foreign_key_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.connection.lock().await;
+        rusqlite_integrity_check(&connection, true)
+    }
+
+    async fn sqlite_defer_foreign_keys(&self, defer: bool) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        if connection.is_autocommit() {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "defer_foreign_keys", defer)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    #[cfg(feature = "sqlite-test-fixtures")]
+    async fn sqlite_ignore_check_constraints(&self, ignore: bool) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        if false {
+            return Err(DatabaseError::InvalidQuery(
+                "Invalid transaction state for SQLite configuration".into(),
+            ));
+        }
+        connection
+            .pragma_update(None, "ignore_check_constraints", ignore)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    async fn exec_insert_count(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        rusqlite_insert_count(&*self.connection.lock().await, statement)
+    }
+
+    async fn exec_insert_conflict_count(
+        &self,
+        statement: &crate::query::InsertConflictStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        rusqlite_insert_conflict_count(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn sqlite_relax_integer_nullability(
+        &self,
+        table: &str,
+        column: &str,
+    ) -> Result<(), DatabaseError> {
+        relax_integer_nullability_on_connection(&*self.connection.lock().await, table, column)
+    }
+
+    async fn validate_select(&self, query: &SelectQuery<'_>) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        connection
+            .prepare(&query.to_sql())
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_trigger(
+        &self,
+        statement: &crate::schema::CreateTriggerStatement,
+    ) -> Result<(), DatabaseError> {
+        self.connection
+            .lock()
+            .await
+            .execute_batch(&statement.render_sqlite()?)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn trigger_exists(&self, name: &str) -> Result<bool, DatabaseError> {
+        rusqlite_trigger_exists(&*self.connection.lock().await, name)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn drop_trigger(&self, name: &str, if_exists: bool) -> Result<(), DatabaseError> {
+        rusqlite_drop_trigger(&*self.connection.lock().await, name, if_exists)
+    }
+    async fn sqlite_backup_to(&self, destination: &std::path::Path) -> Result<(), DatabaseError> {
+        let connection = self.connection.lock().await;
+        if !connection.is_autocommit() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "SQLite backup requires a settled transaction".into(),
+            ));
+        }
+        connection
+            .backup(rusqlite::DatabaseName::Main, destination, None)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        drop(connection);
+        Ok(())
+    }
     #[cfg(feature = "schema")]
     async fn verify_write_guards(
         &self,
@@ -1684,6 +2197,24 @@ impl DatabaseTransaction for RusqliteTransaction {
     }
 }
 
+fn rusqlite_integrity_check(
+    connection: &Connection,
+    foreign_keys: bool,
+) -> Result<Vec<crate::Row>, DatabaseError> {
+    let statement = if foreign_keys {
+        "PRAGMA foreign_key_check"
+    } else {
+        "PRAGMA integrity_check"
+    };
+    let mut statement = connection
+        .prepare(statement)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let rows = statement
+        .query([])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(to_rows(&[], rows)?)
+}
+
 impl From<Value> for DatabaseValue {
     fn from(value: Value) -> Self {
         match value {
@@ -1704,7 +2235,13 @@ fn from_row(_column_names: &[String], row: &Row<'_>) -> Result<crate::Row, Rusql
         .column_names()
         .into_iter()
         .enumerate()
-        .map(|(index, name)| Ok((name.to_owned(), row.get::<_, Value>(index)?.into())))
+        .map(|(index, name)| {
+            let value = row.get::<_, Value>(index)?;
+            if matches!(value, Value::Blob(_)) {
+                return Err(RusqliteDatabaseError::UnsupportedBlob);
+            }
+            Ok((name.to_owned(), value.into()))
+        })
         .collect::<Result<Vec<_>, RusqliteDatabaseError>>()?;
 
     Ok(crate::Row { columns })
@@ -1926,7 +2463,7 @@ fn rusqlite_exec_create_table(
 
     for constraint in &statement.constraints {
         query.push_str(", ");
-        query.push_str(&constraint.render('"'));
+        query.push_str(&constraint.render('"')?);
     }
 
     for (source, target) in &statement.foreign_keys {
@@ -2182,6 +2719,35 @@ fn rusqlite_set_foreign_key_state(
 }
 
 #[cfg(feature = "schema")]
+fn rusqlite_trigger_exists(connection: &Connection, name: &str) -> Result<bool, DatabaseError> {
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='trigger' AND name=?1 UNION ALL SELECT 1 FROM sqlite_temp_schema WHERE type='trigger' AND name=?1)",
+            [name],
+            |row| row.get(0),
+        )
+        .map_err(RusqliteDatabaseError::Rusqlite)
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_drop_trigger(
+    connection: &Connection,
+    name: &str,
+    if_exists: bool,
+) -> Result<(), DatabaseError> {
+    let sql = format!(
+        "DROP TRIGGER {}\"{}\"",
+        if if_exists { "IF EXISTS " } else { "" },
+        name.replace('"', "\"\"")
+    );
+    connection
+        .execute(&sql, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
 pub(crate) fn rusqlite_exec_create_index(
     connection: &Connection,
     statement: &crate::schema::CreateIndexStatement<'_>,
@@ -2193,14 +2759,35 @@ pub(crate) fn rusqlite_exec_create_index(
         ""
     };
 
-    let columns_str = statement
+    let mut columns_str = statement
         .columns
         .iter()
         .map(|col| format!("`{}`", col.replace('`', "``")))
         .collect::<Vec<_>>()
         .join(", ");
+    if !statement.ordered_columns.is_empty() {
+        let ordered = statement
+            .ordered_columns
+            .iter()
+            .map(|(name, direction)| {
+                format!(
+                    "\"{}\" {}",
+                    name.replace('"', "\"\""),
+                    match direction {
+                        SortDirection::Asc => "ASC",
+                        SortDirection::Desc => "DESC",
+                    }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !columns_str.is_empty() {
+            columns_str.push_str(", ");
+        }
+        columns_str.push_str(&ordered);
+    }
 
-    let sql = format!(
+    let mut sql = format!(
         "CREATE {}INDEX {}{} ON {} ({})",
         unique_str,
         if_not_exists_str,
@@ -2208,6 +2795,10 @@ pub(crate) fn rusqlite_exec_create_index(
         crate::query::render_identifier(statement.table_name, '"'),
         columns_str
     );
+    if let Some(predicate) = &statement.predicate {
+        sql.push_str(" WHERE ");
+        sql.push_str(&predicate.render('"')?);
+    }
 
     connection
         .execute(&sql, [])
@@ -2324,8 +2915,14 @@ pub(crate) fn rusqlite_exec_alter_table(
                     None => String::new(),
                 };
 
+                let check = statement
+                    .column_checks
+                    .get(name)
+                    .map(|predicate| predicate.render('"').map(|sql| format!(" CHECK ({sql})")))
+                    .transpose()?
+                    .unwrap_or_default();
                 let sql = format!(
-                    "ALTER TABLE {} ADD COLUMN \"{}\" {}{}{}",
+                    "ALTER TABLE {} ADD COLUMN \"{}\" {}{}{}{check}",
                     crate::query::render_identifier(statement.table_name, '"'),
                     name.replace('"', "\"\""),
                     type_str,
@@ -2357,7 +2954,13 @@ pub(crate) fn rusqlite_exec_alter_table(
 
                             // Drop indexes (SQLite can drop indexes individually)
                             for index_name in indexes {
+                                #[cfg(feature = "raw-sql")]
                                 let drop_index_sql = format!("DROP INDEX IF EXISTS `{index_name}`");
+                                #[cfg(not(feature = "raw-sql"))]
+                                let drop_index_sql = format!(
+                                    "DROP INDEX IF EXISTS {}",
+                                    crate::query::render_identifier(&index_name, '"')
+                                );
                                 log::trace!("SQLite CASCADE dropping index: {drop_index_sql}");
                                 connection
                                     .execute(&drop_index_sql, [])
@@ -3785,6 +4388,10 @@ fn select(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let table_name = crate::query::render_identifier(table_name, '"');
+    let table_name = typed.and_then(|query| query.indexed_by).map_or_else(
+        || table_name.clone(),
+        |index| format!("{table_name} INDEXED BY \"{}\"", index.replace('"', "\"\"")),
+    );
     let query = format!(
         "SELECT {} {} FROM {table_name} {} {} {} {}",
         if distinct { "DISTINCT" } else { "" },
@@ -3979,6 +4586,93 @@ fn find_row(
         .next()?
         .map(|row| from_row(&column_names, row))
         .transpose()
+}
+
+fn rusqlite_insert_count(
+    connection: &Connection,
+    insert: &InsertStatement<'_>,
+) -> Result<u64, DatabaseError> {
+    let columns = insert
+        .values
+        .iter()
+        .map(|(name, _)| crate::query::render_identifier(name, '"'))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let columns = if insert.values.is_empty() {
+        String::new()
+    } else {
+        format!("({columns})")
+    };
+    let sql = format!(
+        "INSERT INTO {} {columns} {}",
+        crate::query::render_identifier(insert.table_name, '"'),
+        build_values_clause(&insert.values)
+    );
+    let mut prepared = connection
+        .prepare(&sql)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    bind_values(
+        &mut prepared,
+        Some(&exprs_to_values(&insert.values)),
+        false,
+        0,
+    )?;
+    Ok(prepared
+        .raw_execute()
+        .map_err(RusqliteDatabaseError::Rusqlite)? as u64)
+}
+
+fn rusqlite_insert_conflict_count(
+    connection: &Connection,
+    statement: &crate::query::InsertConflictStatement<'_>,
+) -> Result<u64, DatabaseError> {
+    if (!statement.or_ignore && statement.columns.is_empty()) || statement.insert.values.is_empty()
+    {
+        return Err(DatabaseError::InvalidQuery(
+            "Empty conflict target or insert values".into(),
+        ));
+    }
+    let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
+    let columns = statement
+        .insert
+        .values
+        .iter()
+        .map(|(name, _)| quote(name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let expressions = statement
+        .insert
+        .values
+        .iter()
+        .map(|(_, value)| value.to_sql())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let target = statement
+        .columns
+        .iter()
+        .map(|name| quote(name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = if statement.or_ignore {
+        format!(
+            "INSERT OR IGNORE INTO {} ({columns}) VALUES ({expressions})",
+            quote(statement.insert.table_name)
+        )
+    } else {
+        format!(
+            "INSERT INTO {} ({columns}) VALUES ({expressions}) ON CONFLICT ({target}) DO NOTHING",
+            quote(statement.insert.table_name)
+        )
+    };
+    let values = exprs_to_values(&statement.insert.values);
+    let mut prepared = connection
+        .prepare(&sql)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    bind_values(&mut prepared, Some(&values), false, 0)?;
+    let count = prepared
+        .raw_execute()
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(count as u64)
 }
 
 fn insert_and_get_row(
@@ -5035,6 +5729,39 @@ impl RusqliteTransaction {
 
 #[cfg(test)]
 mod tests {
+    #[switchy_async::test]
+    async fn typed_insert_count_and_missing_identifier_are_truthful() {
+        use crate::{
+            Database as _,
+            query::{identifier, insert, select, zero_blob},
+        };
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let transaction = RusqliteTransaction::new(Arc::clone(&connection));
+        let table = crate::schema::create_table("counted").columns(vec![crate::schema::Column {
+            name: "payload".into(),
+            nullable: false,
+            auto_increment: false,
+            data_type: crate::schema::DataType::Blob,
+            default: None,
+        }]);
+        table.execute(&transaction).await.unwrap();
+        let statement = insert("counted").value("payload", zero_blob(4));
+        assert_eq!(transaction.exec_insert_count(&statement).await.unwrap(), 1);
+        assert!(
+            select("counted")
+                .project(identifier("absent"))
+                .execute(&transaction)
+                .await
+                .is_err()
+        );
+        assert!(
+            transaction
+                .exec_insert_count(&insert("counted").value("absent", 1))
+                .await
+                .is_err()
+        );
+    }
+
     use super::*;
     use crate::query::{FilterableQuery, where_eq};
     use rusqlite::Connection;

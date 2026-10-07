@@ -878,8 +878,8 @@ pub fn open_sqlite_rusqlite(
 
 /// Open a private disposable `SQLite` spool with a bounded 1 MiB page cache.
 ///
-/// Journaling and synchronization are disabled and memory mapping is prohibited on
-/// every connection. This policy is only suitable for reconstructible temporary
+/// Journaling and synchronization are disabled, temporary storage is file-backed,
+/// and memory mapping is prohibited on every connection. This policy is only suitable for reconstructible temporary
 /// data, never canonical storage. The caller owns removal after closing the database.
 ///
 /// # Errors
@@ -899,6 +899,32 @@ pub fn open_sqlite_rusqlite_spool(
         },
         true,
     )
+}
+
+/// Initialize a private disposable `SQLite` database with file-backed temporary storage.
+///
+/// Uses the same bounded, non-durable policy as [`open_sqlite_rusqlite_spool`].
+/// Never use this initializer for canonical data.
+///
+/// # Errors
+/// * Returns driver errors when opening or configuring the connection fails.
+#[cfg(feature = "sqlite-rusqlite")]
+pub fn init_sqlite_disposable(
+    path: &std::path::Path,
+) -> Result<switchy_database::rusqlite::RusqliteDatabase, InitSqliteRusqliteError> {
+    open_sqlite_rusqlite_spool(path)
+}
+
+#[cfg(feature = "sqlite-rusqlite")]
+fn configure_sqlite_disposable(
+    connection: &::rusqlite::Connection,
+) -> Result<(), ::rusqlite::Error> {
+    connection.pragma_update(None, "journal_mode", "OFF")?;
+    connection.pragma_update(None, "synchronous", "OFF")?;
+    connection.pragma_update(None, "cache_size", -1024)?;
+    connection.pragma_update(None, "mmap_size", 0)?;
+    connection.pragma_update(None, "temp_store", "FILE")?;
+    Ok(())
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
@@ -924,10 +950,7 @@ fn open_sqlite_rusqlite_with_policy(
         connection.busy_timeout(options.busy_timeout)?;
         connection.pragma_update(None, "foreign_keys", options.foreign_keys)?;
         if disposable {
-            connection.pragma_update(None, "journal_mode", "OFF")?;
-            connection.pragma_update(None, "synchronous", "OFF")?;
-            connection.pragma_update(None, "cache_size", -1024)?;
-            connection.pragma_update(None, "mmap_size", 0)?;
+            configure_sqlite_disposable(&connection)?;
         }
         connections.push(std::sync::Arc::new(switchy_async::sync::Mutex::new(
             connection,
@@ -1342,6 +1365,30 @@ pub async fn init_postgres_raw_no_tls(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "sqlite-rusqlite")]
+    #[test]
+    fn disposable_policy_overrides_memory_temp_storage() {
+        let connection = ::rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .pragma_update(None, "temp_store", "MEMORY")
+            .unwrap();
+        configure_sqlite_disposable(&connection).unwrap();
+        for (setting, expected) in [
+            ("temp_store", 1_i64),
+            ("cache_size", -1024),
+            ("synchronous", 0),
+        ] {
+            let actual: i64 = connection
+                .pragma_query_value(None, setting, |row| row.get(0))
+                .unwrap();
+            assert_eq!(actual, expected, "{setting}");
+        }
+        let journal: String = connection
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .unwrap();
+        assert_eq!(journal, "off");
+    }
 
     #[test_log::test]
     fn test_credentials_from_url_postgres_with_password() {

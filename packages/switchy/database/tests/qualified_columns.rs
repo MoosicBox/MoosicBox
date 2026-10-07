@@ -28,6 +28,28 @@ async fn qualified_columns_are_expressions_not_fragments() {
         .execute(&db)
         .await
         .unwrap();
+    for (bound, expected) in [(6, 1), (7, 0), (8, 0)] {
+        assert_eq!(
+            db.select("items")
+                .where_gt_expression(qualified_column("items", "value"), bound)
+                .execute(&db)
+                .await
+                .unwrap()
+                .len(),
+            expected
+        );
+    }
+    assert!(
+        db.select("items")
+            .where_gt_expression(
+                qualified_column("items", "value"),
+                qualified_column("items", "value")
+            )
+            .execute(&db)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         db.select("items")
             .where_eq("value", qualified_column("items", "value"))
@@ -41,6 +63,47 @@ async fn qualified_columns_are_expressions_not_fragments() {
         db.select("items")
             .where_eq("value", qualified_column("items", "value"))
             .where_eq("value", 8)
+            .execute(&db)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    for value in [
+        switchy_database::DatabaseValue::Int64(7),
+        switchy_database::DatabaseValue::Null,
+    ] {
+        let equal = db
+            .select("items")
+            .where_eq_expression(qualified_column("items", "value"), value.clone())
+            .execute(&db)
+            .await
+            .unwrap();
+        let unequal = db
+            .select("items")
+            .where_not_eq_expression(qualified_column("items", "value"), value)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert_eq!(equal.len() + unequal.len(), 1);
+    }
+    assert_eq!(
+        db.select("items")
+            .where_eq_expression(
+                qualified_column("items", "value"),
+                qualified_column("items", "value")
+            )
+            .execute(&db)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        db.select("items")
+            .where_not_eq_expression(
+                qualified_column("items", "value"),
+                qualified_column("items", "value")
+            )
             .execute(&db)
             .await
             .unwrap()

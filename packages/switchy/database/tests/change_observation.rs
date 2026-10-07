@@ -60,6 +60,27 @@ async fn observations_are_connection_affine_non_mutating_and_fail_closed() {
     ));
     tx.rollback().await.unwrap();
     assert_eq!(remote, db.sqlite_change_observation().await.unwrap());
+    for commit in [false, true] {
+        let before = db.sqlite_change_observation().await.unwrap();
+        let tx = db.begin_transaction().await.unwrap();
+        assert_eq!(before, tx.sqlite_change_observation().await.unwrap());
+        tx.select("items").execute(tx.as_ref()).await.unwrap();
+        assert_eq!(before, tx.sqlite_change_observation().await.unwrap());
+        tx.insert("items")
+            .value("id", 3)
+            .execute(tx.as_ref())
+            .await
+            .unwrap();
+        let written = tx.sqlite_change_observation().await.unwrap();
+        assert_eq!(written.total_changes, before.total_changes + 1);
+        assert_eq!(written.data_version, before.data_version);
+        if commit {
+            tx.commit().await.unwrap();
+        } else {
+            tx.rollback().await.unwrap();
+        }
+        assert_eq!(written, db.sqlite_change_observation().await.unwrap());
+    }
     db.close().await.unwrap();
     assert!(matches!(
         db.sqlite_change_observation().await,

@@ -617,6 +617,26 @@ mod tests {
     use super::*;
     use switchy_database::DatabaseValue;
 
+    #[test]
+    fn typed_expression_checksums_preserve_operands_and_limits() {
+        use switchy_database::query::{bounded_text, qualified_column, where_gt_expression};
+        let digest = |expression: &dyn switchy_database::query::Expression| {
+            let mut hasher = Sha256::new();
+            expression.expression_type().update_digest(&mut hasher);
+            hasher.finalize()
+        };
+        let first = where_gt_expression(qualified_column("runs", "id"), 7);
+        let same = where_gt_expression(qualified_column("runs", "id"), 7);
+        let changed_column = where_gt_expression(qualified_column("runs", "other"), 7);
+        let changed_value = where_gt_expression(qualified_column("runs", "id"), 8);
+        assert_eq!(digest(&first), digest(&same));
+        assert_ne!(digest(&first), digest(&changed_column));
+        assert_ne!(digest(&first), digest(&changed_value));
+        let small = bounded_text(qualified_column("runs", "payload"), 10, DatabaseValue::Null);
+        let large = bounded_text(qualified_column("runs", "payload"), 20, DatabaseValue::Null);
+        assert_ne!(digest(&small), digest(&large));
+    }
+
     #[switchy_async::test]
     async fn test_same_operations_produce_identical_checksums() {
         let db1 = ChecksumDatabase::new();
@@ -1324,6 +1344,62 @@ impl Digest for ExpressionType<'_> {
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn update_digest(&self, hasher: &mut Sha256) {
         match self {
+            ExpressionType::GtExpression(expr) => {
+                hasher.update(b"GT_EXPRESSION:");
+                expr.left.expression_type().update_digest(hasher);
+                expr.right.expression_type().update_digest(hasher);
+            }
+            ExpressionType::EqExpression(expr) => {
+                hasher.update(b"EQ_EXPRESSION:");
+                expr.left.expression_type().update_digest(hasher);
+                expr.right.expression_type().update_digest(hasher);
+            }
+            ExpressionType::NotEqExpression(expr) => {
+                hasher.update(b"NOT_EQ_EXPRESSION:");
+                expr.left.expression_type().update_digest(hasher);
+                expr.right.expression_type().update_digest(hasher);
+            }
+            ExpressionType::Add(expr) => {
+                hasher.update(b"ADD:");
+                expr.left.expression_type().update_digest(hasher);
+                expr.right.expression_type().update_digest(hasher);
+            }
+            ExpressionType::StorageType(expr) => {
+                hasher.update(b"STORAGE_TYPE:");
+                expr.expression.expression_type().update_digest(hasher);
+            }
+            ExpressionType::StorageCast(expr) => {
+                hasher.update(b"STORAGE_CAST:");
+                hasher.update(match expr.target {
+                    switchy_database::query::StorageCastTarget::Blob => b"BLOB".as_slice(),
+                    switchy_database::query::StorageCastTarget::Text => b"TEXT".as_slice(),
+                });
+                expr.expression.expression_type().update_digest(hasher);
+            }
+            ExpressionType::ZeroBlob(expr) => {
+                hasher.update(b"ZERO_BLOB:");
+                hasher.update(expr.length.to_le_bytes());
+            }
+            ExpressionType::BoundedText(expr) => {
+                hasher.update(b"BOUNDED_TEXT:");
+                expr.expression.expression_type().update_digest(hasher);
+                hasher.update(expr.max_bytes.to_le_bytes());
+                expr.fallback.update_digest(hasher);
+            }
+            ExpressionType::JsonTypeIs(expr) => {
+                hasher.update(b"JSON_TYPE_IS:");
+                expr.expression.expression_type().update_digest(hasher);
+                let path = expr.path.member_name();
+                hasher.update((path.len() as u64).to_le_bytes());
+                hasher.update(path.as_bytes());
+                hasher.update(format!("{:?}", expr.kind).as_bytes());
+            }
+            ExpressionType::SchemaPredicate(expr) => {
+                hasher.update(b"SCHEMA_PREDICATE:");
+                let predicate = expr.canonical_sqlite();
+                hasher.update((predicate.len() as u64).to_le_bytes());
+                hasher.update(predicate.as_bytes());
+            }
             ExpressionType::Eq(expr) => {
                 hasher.update(b"EQ:");
                 if let Some(values) = expr.values() {

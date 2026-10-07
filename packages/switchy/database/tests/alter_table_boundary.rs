@@ -61,6 +61,105 @@ async fn basic_alter_names_are_exact() {
     db.close().await.unwrap();
 }
 
+#[cfg(feature = "cascade")]
+#[tokio::test]
+async fn cascade_dependencies_use_exact_identifiers_and_rollback_together() {
+    let db = RusqliteDatabase::new(vec![Arc::new(switchy_async::sync::Mutex::new(
+        rusqlite::Connection::open_in_memory().unwrap(),
+    ))]);
+    let (table, index) = if cfg!(feature = "raw-sql") {
+        ("cascade_items", "cascade_index")
+    } else {
+        ("cascade.items\"`; --", "index\"`); DROP TABLE sentinel; --")
+    };
+    for name in [table, "sentinel"] {
+        db.create_table(name)
+            .column(Column {
+                name: "id".into(),
+                data_type: DataType::BigInt,
+                nullable: false,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "payload".into(),
+                data_type: DataType::Text,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .execute(&db)
+            .await
+            .unwrap();
+    }
+    switchy_database::schema::create_index(index)
+        .table(table)
+        .column("payload")
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(matches!(
+        alter_table(table)
+            .drop_column_restrict("payload".into())
+            .execute(&db)
+            .await,
+        Err(switchy_database::DatabaseError::ForeignKeyViolation(_))
+    ));
+    assert!(
+        db.get_table_info(table)
+            .await
+            .unwrap()
+            .unwrap()
+            .indexes
+            .contains_key(index)
+    );
+
+    let transaction = db.begin_transaction().await.unwrap();
+    alter_table(table)
+        .drop_column_cascade("payload".into())
+        .execute(transaction.as_ref())
+        .await
+        .unwrap();
+    assert!(!transaction.column_exists(table, "payload").await.unwrap());
+    assert!(
+        !transaction
+            .get_table_info(table)
+            .await
+            .unwrap()
+            .unwrap()
+            .indexes
+            .contains_key(index)
+    );
+    transaction.rollback().await.unwrap();
+    assert!(db.column_exists(table, "payload").await.unwrap());
+    assert!(
+        db.get_table_info(table)
+            .await
+            .unwrap()
+            .unwrap()
+            .indexes
+            .contains_key(index)
+    );
+
+    alter_table(table)
+        .drop_column_cascade("payload".into())
+        .execute(&db)
+        .await
+        .unwrap();
+    assert!(!db.column_exists(table, "payload").await.unwrap());
+    assert!(
+        db.get_table_info(table)
+            .await
+            .unwrap()
+            .unwrap()
+            .indexes
+            .is_empty()
+    );
+    assert!(db.column_exists(table, "id").await.unwrap());
+    assert!(db.column_exists("sentinel", "payload").await.unwrap());
+    db.close().await.unwrap();
+}
+
 #[tokio::test]
 async fn rejected_modify_default_releases_connection_without_schema_changes() {
     let db = RusqliteDatabase::new(vec![Arc::new(switchy_async::sync::Mutex::new(

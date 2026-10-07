@@ -117,15 +117,13 @@ async fn check(db: &dyn Database) {
     #[cfg(not(feature = "raw-sql"))]
     {
         // SQL-looking names are literal identifiers, not expression fragments.
-        let row = db
-            .select("events")
-            .project_as(identifier("COUNT(*)"), "not_count")
-            .execute_first(db)
-            .await
-            .unwrap();
-        // SQLite may accept double-quoted unknown identifiers as strings, but never evaluates COUNT.
-        assert!(row.is_some());
-        assert_ne!(row.unwrap().get("not_count"), Some(DatabaseValue::Int64(3)));
+        assert!(
+            db.select("events")
+                .project_as(identifier("COUNT(*)"), "not_count")
+                .execute_first(db)
+                .await
+                .is_err()
+        );
     }
     #[cfg(not(feature = "raw-sql"))]
     {

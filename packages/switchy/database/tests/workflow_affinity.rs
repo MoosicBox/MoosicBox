@@ -47,6 +47,31 @@ async fn immediate_read_modify_write_is_affine_and_releases_on_every_exit() {
         .await
         .unwrap();
 
+    owner
+        .sqlite_journal_mode(switchy_database::SqliteJournalMode::Delete)
+        .await
+        .unwrap();
+    let transaction = owner.begin_transaction().await.unwrap();
+    let integrity = transaction.sqlite_integrity_check().await.unwrap();
+    assert_eq!(integrity.len(), 1);
+    assert_eq!(
+        integrity[0].columns[0].1,
+        switchy_database::DatabaseValue::String("ok".into())
+    );
+    assert!(
+        transaction
+            .sqlite_foreign_key_check()
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        transaction
+            .sqlite_journal_mode(switchy_database::SqliteJournalMode::Delete)
+            .await
+            .is_err()
+    );
+    transaction.rollback().await.unwrap();
     for commit in [false, true] {
         let tx = owner
             .begin_transaction_with_mode(TransactionMode::Immediate)

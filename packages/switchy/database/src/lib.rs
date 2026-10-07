@@ -999,7 +999,60 @@ pub enum DatabaseError {
     UInt32Overflow(u32),
 }
 
+/// Closed SQLite journal policies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteJournalMode {
+    /// Delete the rollback journal after commit.
+    Delete,
+    /// Truncate the rollback journal after commit.
+    Truncate,
+    /// Retain the rollback journal header/file.
+    Persist,
+    /// Keep rollback data in memory.
+    Memory,
+    /// Use write-ahead logging.
+    Wal,
+    /// Disable rollback journaling for disposable data only.
+    Off,
+}
+
+/// Backend-neutral database failure categories for recovery decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseErrorKind {
+    /// A competing database operation owns the required lock.
+    Busy,
+    /// A table or shared-cache lock prevents the operation.
+    Locked,
+    /// A database constraint rejected the operation.
+    Constraint,
+    /// The database is corrupt or is not a database file.
+    Corrupt,
+}
+
 impl DatabaseError {
+    /// Classify a database failure without exposing driver types.
+    #[allow(clippy::must_use_candidate)] // Option already carries must-use semantics.
+    pub const fn classification(&self) -> Option<DatabaseErrorKind> {
+        match self {
+            Self::Busy => Some(DatabaseErrorKind::Busy),
+            Self::Locked => Some(DatabaseErrorKind::Locked),
+            Self::ForeignKeyViolation(_) => Some(DatabaseErrorKind::Constraint),
+            #[cfg(feature = "sqlite-rusqlite")]
+            Self::Rusqlite(rusqlite::RusqliteDatabaseError::Rusqlite(
+                ::rusqlite::Error::SqliteFailure(error, _),
+            )) => match error.code {
+                ::rusqlite::ErrorCode::DatabaseBusy => Some(DatabaseErrorKind::Busy),
+                ::rusqlite::ErrorCode::DatabaseLocked => Some(DatabaseErrorKind::Locked),
+                ::rusqlite::ErrorCode::ConstraintViolation => Some(DatabaseErrorKind::Constraint),
+                ::rusqlite::ErrorCode::DatabaseCorrupt | ::rusqlite::ErrorCode::NotADatabase => {
+                    Some(DatabaseErrorKind::Corrupt)
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Checks if this error is a database connection error
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
@@ -1480,6 +1533,171 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn sqlite_checkpoint_truncate(&self) -> Result<Vec<Row>, DatabaseError> {
         Err(DatabaseError::UnsupportedOperation(
             "SQLite checkpoint".into(),
+        ))
+    }
+
+    #[cfg(feature = "schema")]
+    /// Install a structured persistent trigger guard.
+    ///
+    /// # Errors
+    /// * Returns invalid schema, backend errors, or unsupported operation.
+    async fn exec_create_trigger(
+        &self,
+        _statement: &schema::CreateTriggerStatement,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation("Typed triggers".into()))
+    }
+
+    #[cfg(feature = "schema")]
+    /// Check whether an exact trigger name exists.
+    ///
+    /// # Errors
+    /// * Returns backend errors or unsupported operation.
+    async fn trigger_exists(&self, _name: &str) -> Result<bool, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "Trigger metadata".into(),
+        ))
+    }
+
+    #[cfg(feature = "schema")]
+    /// Drop an exact trigger name, optionally accepting its absence.
+    ///
+    /// # Errors
+    /// * Returns backend errors or unsupported operation.
+    async fn drop_trigger(&self, _name: &str, _if_exists: bool) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation("Drop trigger".into()))
+    }
+
+    #[cfg(feature = "schema")]
+    /// Relax an INTEGER column's NOT NULL constraint on this exact SQLite connection.
+    ///
+    /// # Errors
+    /// * Returns unsupported for other backends or multi-connection owners.
+    /// * Returns schema/driver errors when safe reconstruction cannot preserve dependencies.
+    async fn sqlite_relax_integer_nullability(
+        &self,
+        _table: &str,
+        _column: &str,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite integer nullability".into(),
+        ))
+    }
+
+    #[cfg(feature = "sqlite-test-fixtures")]
+    /// Toggle CHECK enforcement for intentionally damaged SQLite fixtures.
+    ///
+    /// # Errors
+    /// * Returns unsupported or backend configuration failures.
+    async fn sqlite_ignore_check_constraints(&self, _ignore: bool) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite fixture CHECK enforcement".into(),
+        ))
+    }
+
+    /// Defer foreign-key checks on an active SQLite transaction.
+    ///
+    /// # Errors
+    /// * Rejects autocommit connections, unsupported backends or configuration failures.
+    async fn sqlite_defer_foreign_keys(&self, _defer: bool) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite deferred foreign keys".into(),
+        ))
+    }
+
+    /// Toggle foreign-key enforcement outside a transaction on the same owner connection.
+    ///
+    /// # Errors
+    /// * Rejects active transactions, pooled owners or configuration failures.
+    async fn sqlite_foreign_keys(&self, _enabled: bool) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite foreign-key enforcement".into(),
+        ))
+    }
+
+    /// Observe transaction state on this exact SQLite connection.
+    ///
+    /// # Errors
+    /// * Returns unsupported for pooled owners or other backends, or closed-connection errors.
+    async fn sqlite_is_autocommit(&self) -> Result<bool, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite autocommit observation".into(),
+        ))
+    }
+
+    /// Set an exact SQLite journal policy outside a transaction.
+    ///
+    /// # Errors
+    /// * Rejects pooled owners, active transactions, unsuccessful mode changes or backend failures.
+    async fn sqlite_journal_mode(&self, _mode: SqliteJournalMode) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite journal mode".into(),
+        ))
+    }
+
+    /// Set the SQLite busy timeout on this exact connection.
+    ///
+    /// # Errors
+    /// * Returns unsupported for pooled owners/other backends or configuration failures.
+    async fn sqlite_set_busy_timeout(
+        &self,
+        _timeout: std::time::Duration,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite busy timeout".into(),
+        ))
+    }
+
+    /// Execute a structured INSERT without decoding its returned rows.
+    ///
+    /// Constraint failures are preserved; triggers that ignore insertion return zero.
+    ///
+    /// # Errors
+    /// * Returns unsupported or constraint/execution failures.
+    async fn exec_insert_count(
+        &self,
+        _statement: &InsertStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "INSERT row count".into(),
+        ))
+    }
+
+    /// Execute a targeted conflict-ignoring INSERT atomically with an affected-row count.
+    ///
+    /// # Errors
+    /// * Returns unsupported or constraint/execution failures.
+    async fn exec_insert_conflict_count(
+        &self,
+        _statement: &query::InsertConflictStatement<'_>,
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "Targeted INSERT conflict handling".into(),
+        ))
+    }
+
+    /// Prepare a structured SELECT without stepping it or reading any rows.
+    ///
+    /// # Errors
+    /// * Returns planner/preparation errors or unsupported operation.
+    async fn validate_select(&self, _query: &SelectQuery<'_>) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "Prepare-only selection".into(),
+        ))
+    }
+
+    /// Copy the main `SQLite` database using this handle's exact connection.
+    ///
+    /// A pooled handle must contain exactly one connection; a transaction uses its
+    /// leased connection. The caller owns destination confinement and retention.
+    /// No alternate source connection is opened to bypass a transaction or lock.
+    ///
+    /// # Errors
+    /// * Returns unsupported for backends without online backup or pooled handles.
+    /// * Returns driver errors for locking, active write transactions, or destination failures.
+    async fn sqlite_backup_to(&self, _destination: &std::path::Path) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "SQLite online backup".into(),
         ))
     }
 
