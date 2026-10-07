@@ -1,11 +1,123 @@
 use super::{Connection, RusqliteDatabaseError};
 use crate::{
     DatabaseError,
-    schema::write_guard::{GuardEvent, GuardPredicate, GuardScalar, GuardValue, WriteGuard},
+    schema::write_guard::{
+        GuardEvent, GuardPredicate, GuardScalar, GuardValue, ObservationEvent, WriteGuard,
+        WriteObservation,
+    },
 };
 use rusqlite::OptionalExtension as _;
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
+
+fn observation_definition(observation: &WriteObservation) -> Result<String, DatabaseError> {
+    if observation
+        .table
+        .eq_ignore_ascii_case(&observation.target_table)
+        || observation.columns.is_empty()
+        || observation.columns.len() > 128
+    {
+        return Err(invalid());
+    }
+    let (event, row_event) = match observation.event {
+        ObservationEvent::AfterInsert => ("INSERT", GuardEvent::BeforeInsert),
+        ObservationEvent::AfterUpdate => ("UPDATE", GuardEvent::BeforeUpdate),
+        ObservationEvent::AfterDelete => ("DELETE", GuardEvent::BeforeDelete),
+    };
+    // Reuse the same finite predicate budget, without changing any guard definition.
+    validate_budget(&WriteGuard {
+        name: observation.name.clone(),
+        table: observation.table.clone(),
+        event: row_event,
+        reject_when: observation.when.clone(),
+        violation: "observation".into(),
+    })?;
+    let scope = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let mut columns = Vec::new();
+    let mut values = Vec::new();
+    let mut bytes =
+        observation.name.len() + observation.table.len() + observation.target_table.len();
+    for mapping in &observation.columns {
+        bytes = bytes
+            .checked_add(mapping.column.len())
+            .and_then(|n| n.checked_add(value_bytes(&mapping.value)))
+            .ok_or_else(invalid)?;
+        if bytes > 262_144 || !seen.insert(mapping.column.to_ascii_lowercase()) {
+            return Err(invalid());
+        }
+        columns.push(identifier(&mapping.column)?);
+        values.push(value(&mapping.value, row_event, &scope)?);
+    }
+    let sql = format!(
+        "CREATE TRIGGER {} AFTER {event} ON {} WHEN {} BEGIN INSERT INTO {} ({}) VALUES ({}); END",
+        identifier(&observation.name)?,
+        identifier(&observation.table)?,
+        predicate(&observation.when, row_event, &scope, 0)?,
+        identifier(&observation.target_table)?,
+        columns.join(","),
+        values.join(",")
+    );
+    if sql.len() > 524_288 {
+        return Err(invalid());
+    }
+    Ok(sql)
+}
+
+/// Install a finite after-transition observation in an owned transaction.
+/// # Errors
+/// Rejects autocommit, invalid mappings, conflicting schema and database failures.
+pub fn install_write_observation_on_connection(
+    connection: &Connection,
+    observation: &WriteObservation,
+) -> Result<(), DatabaseError> {
+    if connection.is_autocommit() {
+        return Err(DatabaseError::InvalidSchema(
+            "observation installation requires an owned transaction".into(),
+        ));
+    }
+    let sql = observation_definition(observation)?;
+    let stored: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?1",
+            [&observation.name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    if let Some(stored) = stored {
+        return if stored == sql {
+            Ok(())
+        } else {
+            Err(DatabaseError::InvalidSchema(
+                "conflicting write observation definition".into(),
+            ))
+        };
+    }
+    connection
+        .execute(&sql, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(())
+}
+
+/// Verify an exact observation without mutation or cached validity.
+/// # Errors
+/// Rejects invalid definitions and database failures.
+pub fn verify_write_observation_on_connection(
+    connection: &Connection,
+    observation: &WriteObservation,
+) -> Result<bool, DatabaseError> {
+    let sql = observation_definition(observation)?;
+    let stored: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?1",
+            [&observation.name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    Ok(stored.as_deref() == Some(sql.as_str()))
+}
 
 fn invalid() -> DatabaseError {
     DatabaseError::InvalidSchema("invalid typed write guard".into())
@@ -30,17 +142,55 @@ fn scalar(value: &GuardScalar) -> Result<String, DatabaseError> {
     })
 }
 fn value(
-    value: &GuardValue,
+    operand: &GuardValue,
     event: GuardEvent,
     scope: &BTreeSet<String>,
 ) -> Result<String, DatabaseError> {
-    Ok(match value {
-        GuardValue::NewColumn(column) => format!("NEW.{}", identifier(column)?),
-        GuardValue::OldColumn(column) if event == GuardEvent::BeforeUpdate => {
+    Ok(match operand {
+        GuardValue::NewColumn(column) if event != GuardEvent::BeforeDelete => {
+            format!("NEW.{}", identifier(column)?)
+        }
+        GuardValue::OldColumn(column) if event != GuardEvent::BeforeInsert => {
             format!("OLD.{}", identifier(column)?)
         }
         GuardValue::Column { relation, column } if scope.contains(relation) => {
             format!("{}.{}", identifier(relation)?, identifier(column)?)
+        }
+        GuardValue::BoundedText {
+            value: inner,
+            max_bytes,
+        }
+        | GuardValue::BoundedTextStatus {
+            value: inner,
+            max_bytes,
+        } => {
+            if !is_leaf(inner) {
+                return Err(invalid());
+            }
+            let source = value(inner, event, scope)?;
+            let retained = format!(
+                "typeof({source}) = 'text' AND length(CAST({source} AS BLOB)) <= {max_bytes}"
+            );
+            if matches!(operand, GuardValue::BoundedTextStatus { .. }) {
+                format!(
+                    "(CASE WHEN {source} IS NULL THEN 0 WHEN {retained} THEN 1 WHEN typeof({source}) = 'text' THEN 2 ELSE 3 END)"
+                )
+            } else {
+                format!("(CASE WHEN {retained} THEN {source} ELSE NULL END)")
+            }
+        }
+        GuardValue::IntegerOnly { value: inner } | GuardValue::IntegerStatus { value: inner } => {
+            if !is_leaf(inner) {
+                return Err(invalid());
+            }
+            let source = value(inner, event, scope)?;
+            if matches!(operand, GuardValue::IntegerStatus { .. }) {
+                format!(
+                    "(CASE WHEN {source} IS NULL THEN 0 WHEN typeof({source}) = 'integer' THEN 1 ELSE 2 END)"
+                )
+            } else {
+                format!("(CASE WHEN typeof({source}) = 'integer' THEN {source} ELSE NULL END)")
+            }
         }
         GuardValue::Constant(constant) => scalar(constant)?,
         _ => return Err(invalid()),
@@ -57,9 +207,26 @@ fn predicate(
     }
     let val = |v| value(v, event, scope);
     Ok(match p {
+        GuardPredicate::Not(inner) => format!(
+            "(NOT COALESCE({}, 0))",
+            predicate(inner, event, scope, depth + 1)?
+        ),
+        GuardPredicate::IntegerSuccessor { previous, next } => {
+            let previous = val(previous)?;
+            let next = val(next)?;
+            format!(
+                "(CASE WHEN typeof({previous}) = 'integer' AND typeof({next}) = 'integer' AND {previous} < 9223372036854775807 THEN {next} = {previous} + 1 ELSE 0 END)"
+            )
+        }
         GuardPredicate::Equal(a, b) => format!("({} = {})", val(a)?, val(b)?),
         GuardPredicate::NotEqual(a, b) => format!("({} <> {})", val(a)?, val(b)?),
         GuardPredicate::IsNull(v) => format!("({} IS NULL)", val(v)?),
+        GuardPredicate::ByteLengthAtMost(v, limit) => {
+            let source = val(v)?;
+            format!(
+                "(CASE WHEN typeof({source}) IN ('text','blob') THEN length(CAST({source} AS BLOB)) <= {limit} ELSE 0 END)"
+            )
+        }
         GuardPredicate::IsNotNull(v) => format!("({} IS NOT NULL)", val(v)?),
         GuardPredicate::InValues(v, values) => {
             if values.is_empty() {
@@ -93,7 +260,7 @@ fn predicate(
                     .join(op)
             )
         }
-        GuardPredicate::Exists(relation) => {
+        GuardPredicate::Exists(relation) | GuardPredicate::NotExists(relation) => {
             let mut scope = scope.clone();
             bind(&mut scope, &relation.alias)?;
             let mut from = format!(
@@ -118,8 +285,13 @@ fn predicate(
                 )
                 .map_err(|_| invalid())?;
             }
+            let prefix = if matches!(p, GuardPredicate::NotExists(_)) {
+                "NOT "
+            } else {
+                ""
+            };
             format!(
-                "EXISTS (SELECT 1 FROM {from} WHERE {})",
+                "{prefix}EXISTS (SELECT 1 FROM {from} WHERE {})",
                 predicate(&relation.predicate, event, &scope, depth + 1)?
             )
         }
@@ -152,7 +324,8 @@ fn validate_budget(guard: &WriteGuard) -> Result<(), DatabaseError> {
                 }
                 pending.extend(items.iter().map(|item| (item, depth + 1)));
             }
-            GuardPredicate::Exists(relation) => {
+            GuardPredicate::Not(inner) => pending.push((inner, depth + 1)),
+            GuardPredicate::Exists(relation) | GuardPredicate::NotExists(relation) => {
                 if relation.joins.len() > 32 {
                     return Err(invalid());
                 }
@@ -165,10 +338,17 @@ fn validate_budget(guard: &WriteGuard) -> Result<(), DatabaseError> {
                 }
                 pending.push((&relation.predicate, depth + 1));
             }
-            GuardPredicate::Equal(a, b) | GuardPredicate::NotEqual(a, b) => {
+            GuardPredicate::Equal(a, b)
+            | GuardPredicate::NotEqual(a, b)
+            | GuardPredicate::IntegerSuccessor {
+                previous: a,
+                next: b,
+            } => {
                 bytes += value_bytes(a) + value_bytes(b);
             }
-            GuardPredicate::IsNull(v) | GuardPredicate::IsNotNull(v) => bytes += value_bytes(v),
+            GuardPredicate::IsNull(v)
+            | GuardPredicate::IsNotNull(v)
+            | GuardPredicate::ByteLengthAtMost(v, _) => bytes += value_bytes(v),
             GuardPredicate::InValues(v, values) => {
                 if values.len() > remaining {
                     return Err(invalid());
@@ -190,12 +370,33 @@ fn validate_budget(guard: &WriteGuard) -> Result<(), DatabaseError> {
     }
     Ok(())
 }
-const fn value_bytes(value: &GuardValue) -> usize {
+const fn is_leaf(value: &GuardValue) -> bool {
+    matches!(
+        value,
+        GuardValue::NewColumn(_)
+            | GuardValue::OldColumn(_)
+            | GuardValue::Column { .. }
+            | GuardValue::Constant(_)
+    )
+}
+
+fn value_bytes(value: &GuardValue) -> usize {
     match value {
         GuardValue::NewColumn(v)
         | GuardValue::OldColumn(v)
         | GuardValue::Constant(GuardScalar::Text(v)) => v.len(),
         GuardValue::Column { relation, column } => relation.len() + column.len(),
+        GuardValue::BoundedText { value, .. }
+        | GuardValue::BoundedTextStatus { value, .. }
+        | GuardValue::IntegerOnly { value }
+        | GuardValue::IntegerStatus { value } => {
+            // Nested mappings are invalid; never recursively walk an untrusted value tree.
+            if is_leaf(value) {
+                24 + value_bytes(value)
+            } else {
+                262_145
+            }
+        }
         GuardValue::Constant(_) => 24,
     }
 }
@@ -213,6 +414,7 @@ fn definition(guard: &WriteGuard) -> Result<String, DatabaseError> {
     let event = match guard.event {
         GuardEvent::BeforeInsert => "INSERT",
         GuardEvent::BeforeUpdate => "UPDATE",
+        GuardEvent::BeforeDelete => "DELETE",
     };
     Ok(format!(
         "CREATE TRIGGER {} BEFORE {event} ON {} WHEN {} BEGIN SELECT RAISE(ABORT, 'switchy_guard_v1:{}'); END",

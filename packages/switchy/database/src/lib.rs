@@ -1227,6 +1227,48 @@ require("DELETE FROM items");
 "#
 )]
 pub trait Database: Send + Sync + std::fmt::Debug {
+    /// Install a finite observation within an owned transaction.
+    /// # Errors
+    /// Rejects unsupported backends, invalid mappings and conflicting definitions.
+    #[cfg(feature = "schema")]
+    async fn install_write_observation(
+        &self,
+        _observation: &crate::schema::write_guard::WriteObservation,
+    ) -> Result<(), DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "typed write observations".into(),
+        ))
+    }
+
+    /// Verify an exact persistent observation without changing schema.
+    /// # Errors
+    /// Rejects unsupported backends, invalid definitions and storage failures.
+    #[cfg(feature = "schema")]
+    async fn verify_write_observation(
+        &self,
+        _observation: &crate::schema::write_guard::WriteObservation,
+    ) -> Result<bool, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "typed write observations".into(),
+        ))
+    }
+
+    /// Verify observations incrementally; each metadata read is bounded.
+    /// # Errors
+    /// Rejects unsupported backends, invalid definitions and storage failures.
+    #[cfg(feature = "schema")]
+    async fn verify_write_observations(
+        &self,
+        observations: &[crate::schema::write_guard::WriteObservation],
+    ) -> Result<bool, DatabaseError> {
+        for observation in observations {
+            if !self.verify_write_observation(observation).await? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     /// Install an exact finite write guard within an owned transaction.
     /// # Errors
     /// Rejects unsupported backends, invalid definitions and conflicting schema state.

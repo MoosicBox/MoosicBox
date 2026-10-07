@@ -1089,6 +1089,14 @@ impl Database for RusqliteDatabase {
         Ok(())
     }
     #[cfg(feature = "schema")]
+    async fn verify_write_observation(
+        &self,
+        observation: &crate::schema::write_guard::WriteObservation,
+    ) -> Result<bool, DatabaseError> {
+        let connection = self.get_connection()?;
+        write_guard::verify_write_observation_on_connection(&*connection.lock().await, observation)
+    }
+    #[cfg(feature = "schema")]
     async fn verify_write_guards(
         &self,
         guards: &[crate::schema::write_guard::WriteGuard],
@@ -1645,6 +1653,26 @@ impl Database for RusqliteTransaction {
             .map_err(RusqliteDatabaseError::Rusqlite)?;
         drop(connection);
         Ok(())
+    }
+    #[cfg(feature = "schema")]
+    async fn install_write_observation(
+        &self,
+        observation: &crate::schema::write_guard::WriteObservation,
+    ) -> Result<(), DatabaseError> {
+        write_guard::install_write_observation_on_connection(
+            &*self.connection.lock().await,
+            observation,
+        )
+    }
+    #[cfg(feature = "schema")]
+    async fn verify_write_observation(
+        &self,
+        observation: &crate::schema::write_guard::WriteObservation,
+    ) -> Result<bool, DatabaseError> {
+        write_guard::verify_write_observation_on_connection(
+            &*self.connection.lock().await,
+            observation,
+        )
     }
     #[cfg(feature = "schema")]
     async fn verify_write_guards(
