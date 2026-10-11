@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use switchy_database::{
     Database,
-    query::{join_columns, qualified_column},
+    query::{JoinCondition, qualified_column},
     rusqlite::RusqliteDatabase,
     schema::{Column, DataType},
 };
@@ -38,28 +38,51 @@ async fn typed_join_preserves_equality_and_left_join_semantics() {
         .await
         .unwrap();
     for (left, expected) in [(false, 1), (true, 2)] {
-        let rows = db
-            .select("parents")
-            .joins(vec![join_columns(
-                "children",
-                qualified_column("parents", "id"),
-                qualified_column("children", "id"),
-                left,
-            )])
-            .execute(&db)
-            .await
-            .unwrap();
+        let condition = (
+            qualified_column("parents", "id"),
+            qualified_column("children", "id"),
+        );
+        let query = db.select("parents");
+        let query = if left {
+            query.left_join("children", condition)
+        } else {
+            query.join("children", condition)
+        };
+        let rows = query.execute(&db).await.unwrap();
         assert_eq!(rows.len(), expected);
     }
+    // A second ON condition must not filter unmatched parents out of a LEFT JOIN.
+    let rows = db
+        .select("parents")
+        .left_join(
+            "children",
+            JoinCondition::And(vec![
+                (
+                    qualified_column("parents", "id"),
+                    qualified_column("children", "id"),
+                )
+                    .into(),
+                (
+                    qualified_column("parents", "id"),
+                    qualified_column("children", "rowid"),
+                )
+                    .into(),
+            ]),
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 2);
     for name in ["id OR 1=1 --", "id\" = 1 OR 1=1 --", "children.id"] {
         assert!(
             db.select("parents")
-                .joins(vec![join_columns(
+                .join(
                     "children",
-                    qualified_column("parents", "id"),
-                    qualified_column("children", name),
-                    false
-                )])
+                    (
+                        qualified_column("parents", "id"),
+                        qualified_column("children", name),
+                    ),
+                )
                 .execute(&db)
                 .await
                 .is_err()
@@ -68,12 +91,13 @@ async fn typed_join_preserves_equality_and_left_join_semantics() {
     for table in ["children ON 1=1 --", "children\" ON 1=1 --"] {
         assert!(
             db.select("parents")
-                .joins(vec![join_columns(
+                .left_join(
                     table,
-                    qualified_column("parents", "id"),
-                    qualified_column("children", "id"),
-                    false,
-                )])
+                    (
+                        qualified_column("parents", "id"),
+                        qualified_column("children", "id"),
+                    ),
+                )
                 .execute(&db)
                 .await
                 .is_err()

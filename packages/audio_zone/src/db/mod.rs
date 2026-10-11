@@ -14,7 +14,7 @@ use switchy_database::{
     Database, DatabaseValue, boxed,
     config::ConfigDatabase,
     profiles::LibraryDatabase,
-    query::{FilterableQuery, identifier},
+    query::{FilterableQuery, identifier, qualified_column},
 };
 
 use crate::models::{CreateAudioZone, UpdateAudioZone};
@@ -213,7 +213,10 @@ pub async fn get_players(
         .columns(&["players.*"])
         .join(
             "audio_zone_players",
-            "audio_zone_players.player_id=players.id",
+            (
+                qualified_column("audio_zone_players", "player_id"),
+                qualified_column("players", "id"),
+            ),
         )
         .where_eq("audio_zone_players.audio_zone_id", audio_zone_id)
         .execute(&**db)

@@ -1,0 +1,25 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database"]
+description = "MoosicBox embedded historical SQL migrations"
+edition     = { workspace = true }
+keywords    = ["database", "migrations", "schema"]
+license     = { workspace = true }
+name        = "moosicbox_schema_migrations"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.4.0"
+
+[dependencies]
+include_dir      = { workspace = true }
+switchy_database = { workspace = true, features = ["raw-sql"] }
+switchy_schema   = { workspace = true, features = ["code", "raw-sql"] }
+
+[features]
+default = ["postgres", "sqlite"]
+fail-on-warnings = [
+    "switchy_database/fail-on-warnings",
+    "switchy_schema/fail-on-warnings",
+]
+postgres = []
+sqlite = []

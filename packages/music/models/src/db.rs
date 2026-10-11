@@ -13,7 +13,7 @@ use moosicbox_json_utils::{
 use switchy_database::{
     AsId, DatabaseValue, boxed,
     profiles::LibraryDatabase,
-    query::{FilterableQuery as _, SortDirection, where_not_eq},
+    query::{FilterableQuery as _, SortDirection, qualified_column, where_not_eq},
 };
 
 use crate::{AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource, TrackSize};
@@ -165,8 +165,20 @@ pub async fn get_all_album_version_qualities(
             "track_sizes.format",
             "tracks.source",
         ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .left_join(
+            "tracks",
+            (
+                qualified_column("tracks", "album_id"),
+                qualified_column("albums", "id"),
+            ),
+        )
+        .left_join(
+            "track_sizes",
+            (
+                qualified_column("track_sizes", "track_id"),
+                qualified_column("tracks", "id"),
+            ),
+        )
         .where_in("albums.id", album_ids)
         .sort("albums.id", SortDirection::Desc)
         .where_or(boxed![

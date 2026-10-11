@@ -11581,11 +11581,11 @@ dependencies = [
 name = "moosicbox_schema"
 version = "0.4.0"
 dependencies = [
- "include_dir",
  "log 0.4.33",
  "moosicbox_assert",
  "moosicbox_json_utils",
  "moosicbox_music_models",
+ "moosicbox_schema_migrations",
  "pretty_assertions",
  "serial_test",
  "switchy_async",
@@ -11597,6 +11597,15 @@ dependencies = [
  "test-log",
  "thiserror 2.0.19",
  "tokio",
+]
+
+[[package]]
+name = "moosicbox_schema_migrations"
+version = "0.4.0"
+dependencies = [
+ "include_dir",
+ "switchy_database",
+ "switchy_schema",
 ]
 
 [[package]]

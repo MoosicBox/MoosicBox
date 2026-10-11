@@ -15,9 +15,10 @@ use switchy_database::{
     DatabaseError, DatabaseValue, Row, boxed,
     profiles::LibraryDatabase,
     query::{
-        FilterableQuery, SortDirection, coalesce, identifier, literal, select, where_in,
-        where_not_eq,
+        FilterableQuery, JoinCondition, SortDirection, coalesce, identifier, qualified_column,
+        schema_predicate, select, where_in, where_not_eq,
     },
+    schema::SchemaExpression,
 };
 use thiserror::Error;
 
@@ -171,9 +172,27 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
             "tracks.source",
             "artists.api_sources as artist_api_sources",
         ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .join("artists", "artists.id=albums.artist_id")
+        .left_join(
+            "tracks",
+            (
+                qualified_column("tracks", "album_id"),
+                qualified_column("albums", "id"),
+            ),
+        )
+        .left_join(
+            "track_sizes",
+            (
+                qualified_column("track_sizes", "track_id"),
+                qualified_column("tracks", "id"),
+            ),
+        )
+        .join(
+            "artists",
+            (
+                qualified_column("artists", "id"),
+                qualified_column("albums", "artist_id"),
+            ),
+        )
         .sort("albums.id", SortDirection::Desc)
         .where_or(boxed![
             where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
@@ -205,8 +224,12 @@ pub async fn get_artist(
         db.select("artists")
             .join(
                 "api_sources",
-                "api_sources.entity_type='artists' AND api_sources.entity_id = artists.id",
+                (
+                    qualified_column("api_sources", "entity_id"),
+                    qualified_column("artists", "id"),
+                ),
             )
+            .where_eq_expression(qualified_column("api_sources", "entity_type"), "artists")
             .where_eq("api_sources.source", api_source.as_ref())
             .where_eq("api_sources.source_id", id)
             .execute_first(&**db)
@@ -228,7 +251,13 @@ pub async fn get_artist_by_album_id(
     Ok(db
         .select("artists")
         .where_eq("albums.id", id)
-        .join("albums", "albums.artist_id = artists.id")
+        .join(
+            "albums",
+            (
+                qualified_column("albums", "artist_id"),
+                qualified_column("artists", "id"),
+            ),
+        )
         .execute_first(&**db)
         .await?
         .as_ref()
@@ -247,7 +276,13 @@ pub async fn get_artists_by_album_ids(
     Ok(db
         .select("artists")
         .distinct()
-        .join("albums", "albums.artist_id = artists.id")
+        .join(
+            "albums",
+            (
+                qualified_column("albums", "artist_id"),
+                qualified_column("artists", "id"),
+            ),
+        )
         .where_in("album.id", album_ids.to_vec())
         .execute(&**db)
         .await?
@@ -265,7 +300,13 @@ pub async fn get_album_artist(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .join("albums", "albums.artist_id=artists.id")
+        .join(
+            "albums",
+            (
+                qualified_column("albums", "artist_id"),
+                qualified_column("artists", "id"),
+            ),
+        )
         .where_eq("albums.id", album_id)
         .execute_first(&**db)
         .await?
@@ -290,7 +331,13 @@ pub async fn get_album(
                 "artists.title as artist",
                 "artists.api_sources as artist_api_sources",
             ])
-            .join("artists", "artists.id = albums.artist_id")
+            .join(
+                "artists",
+                (
+                    qualified_column("artists", "id"),
+                    qualified_column("albums", "artist_id"),
+                ),
+            )
             .where_eq("albums.id", id)
             .execute_first(&**db)
             .await?
@@ -303,11 +350,21 @@ pub async fn get_album(
                 "artists.title as artist",
                 "artists.api_sources as artist_api_sources",
             ])
-            .join("artists", "artists.id = albums.artist_id")
+            .join(
+                "artists",
+                (
+                    qualified_column("artists", "id"),
+                    qualified_column("albums", "artist_id"),
+                ),
+            )
             .join(
                 "api_sources",
-                "api_sources.entity_type='albums' AND api_sources.entity_id = albums.id",
+                (
+                    qualified_column("api_sources", "entity_id"),
+                    qualified_column("albums", "id"),
+                ),
             )
+            .where_eq_expression(qualified_column("api_sources", "entity_type"), "albums")
             .where_eq("api_sources.source", api_source.as_ref())
             .where_eq("api_sources.source_id", id)
             .execute_first(&**db)
@@ -348,11 +405,34 @@ pub async fn get_album_tracks(
             "artists.api_sources as artist_api_sources",
         ])
         .where_eq("tracks.album_id", album_id)
-        .join("albums", "albums.id=tracks.album_id")
-        .join("artists", "artists.id=albums.artist_id")
+        .join(
+            "albums",
+            (
+                qualified_column("albums", "id"),
+                qualified_column("tracks", "album_id"),
+            ),
+        )
+        .join(
+            "artists",
+            (
+                qualified_column("artists", "id"),
+                qualified_column("albums", "artist_id"),
+            ),
+        )
         .left_join(
             "track_sizes",
-            "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
+            JoinCondition::And(vec![
+                (
+                    qualified_column("tracks", "id"),
+                    qualified_column("track_sizes", "track_id"),
+                )
+                    .into(),
+                (
+                    qualified_column("track_sizes", "format"),
+                    qualified_column("tracks", "format"),
+                )
+                    .into(),
+            ]),
         )
         .sort("number", SortDirection::Asc)
         .execute(&**db)
@@ -382,9 +462,27 @@ pub async fn get_artist_albums(
             "tracks.source",
             "artists.api_sources as artist_api_sources",
         ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
-        .join("artists", "artists.id=albums.artist_id")
+        .left_join(
+            "tracks",
+            (
+                qualified_column("tracks", "album_id"),
+                qualified_column("albums", "id"),
+            ),
+        )
+        .left_join(
+            "track_sizes",
+            (
+                qualified_column("track_sizes", "track_id"),
+                qualified_column("tracks", "id"),
+            ),
+        )
+        .join(
+            "artists",
+            (
+                qualified_column("artists", "id"),
+                qualified_column("albums", "artist_id"),
+            ),
+        )
         .where_eq("albums.artist_id", artist_id)
         .sort("albums.id", SortDirection::Desc)
         .execute(&**db)
@@ -494,12 +592,30 @@ pub async fn set_track_sizes(
         .upsert_multi("track_sizes")
         .unique(boxed![
             identifier("track_id"),
-            coalesce(boxed![identifier("format"), literal("''")]),
-            coalesce(boxed![identifier("audio_bitrate"), literal("0")]),
-            coalesce(boxed![identifier("overall_bitrate"), literal("0")]),
-            coalesce(boxed![identifier("bit_depth"), literal("0")]),
-            coalesce(boxed![identifier("sample_rate"), literal("0")]),
-            coalesce(boxed![identifier("channels"), literal("0")]),
+            coalesce(boxed![
+                identifier("format"),
+                schema_predicate(&SchemaExpression::Text(String::new()))?
+            ]),
+            coalesce(boxed![
+                identifier("audio_bitrate"),
+                schema_predicate(&SchemaExpression::Integer(0))?
+            ]),
+            coalesce(boxed![
+                identifier("overall_bitrate"),
+                schema_predicate(&SchemaExpression::Integer(0))?
+            ]),
+            coalesce(boxed![
+                identifier("bit_depth"),
+                schema_predicate(&SchemaExpression::Integer(0))?
+            ]),
+            coalesce(boxed![
+                identifier("sample_rate"),
+                schema_predicate(&SchemaExpression::Integer(0))?
+            ]),
+            coalesce(boxed![
+                identifier("channels"),
+                schema_predicate(&SchemaExpression::Integer(0))?
+            ]),
         ])
         .values(values.clone())
         .execute(&**db)
@@ -581,11 +697,34 @@ pub async fn get_tracks(
             "artists.api_sources as artist_api_sources",
         ])
         .filter_if_some(ids.map(|ids| where_in("tracks.id", ids.to_vec())))
-        .join("albums", "albums.id=tracks.album_id")
-        .join("artists", "artists.id=albums.artist_id")
+        .join(
+            "albums",
+            (
+                qualified_column("albums", "id"),
+                qualified_column("tracks", "album_id"),
+            ),
+        )
+        .join(
+            "artists",
+            (
+                qualified_column("artists", "id"),
+                qualified_column("albums", "artist_id"),
+            ),
+        )
         .left_join(
             "track_sizes",
-            "tracks.id=track_sizes.track_id AND track_sizes.format=tracks.format",
+            JoinCondition::And(vec![
+                (
+                    qualified_column("tracks", "id"),
+                    qualified_column("track_sizes", "track_id"),
+                )
+                    .into(),
+                (
+                    qualified_column("track_sizes", "format"),
+                    qualified_column("tracks", "format"),
+                )
+                    .into(),
+            ]),
         )
         .execute(&**db)
         .await?
@@ -922,12 +1061,18 @@ pub async fn add_tracks(
     Ok(db
         .upsert_multi("tracks")
         .unique(boxed![
-            coalesce(boxed![identifier("file"), literal("''")]),
+            coalesce(boxed![
+                identifier("file"),
+                schema_predicate(&SchemaExpression::Text(String::new()))?
+            ]),
             identifier("album_id"),
             identifier("title"),
             identifier("duration"),
             identifier("number"),
-            coalesce(boxed![identifier("format"), literal("''")]),
+            coalesce(boxed![
+                identifier("format"),
+                schema_predicate(&SchemaExpression::Text(String::new()))?
+            ]),
             identifier("source"),
         ])
         .values(values)

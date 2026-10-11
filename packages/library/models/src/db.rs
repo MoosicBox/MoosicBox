@@ -33,7 +33,9 @@ use moosicbox_music_models::{
     AlbumSource, AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource,
 };
 use switchy_database::{
-    AsId, Database, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery as _,
+    AsId, Database, DatabaseValue,
+    profiles::LibraryDatabase,
+    query::{FilterableQuery as _, qualified_column},
 };
 
 use crate::{LibraryAlbum, LibraryAlbumType, LibraryArtist, LibraryTrack, sort_album_versions};
@@ -535,8 +537,20 @@ pub async fn get_album_version_qualities(
             "tracks.format",
             "tracks.source",
         ])
-        .left_join("tracks", "tracks.album_id=albums.id")
-        .left_join("track_sizes", "track_sizes.track_id=tracks.id")
+        .left_join(
+            "tracks",
+            (
+                qualified_column("tracks", "album_id"),
+                qualified_column("albums", "id"),
+            ),
+        )
+        .left_join(
+            "track_sizes",
+            (
+                qualified_column("track_sizes", "track_id"),
+                qualified_column("tracks", "id"),
+            ),
+        )
         .where_eq("albums.id", album_id)
         .execute(&**db)
         .await?

@@ -107,6 +107,7 @@ default-members = [
     "packages/scan",
     "packages/scan/models",
     "packages/schema",
+    "packages/schema/migrations",
     "packages/search",
     "packages/server",
     "packages/server/simulator",
@@ -284,6 +285,7 @@ members = [
     "packages/scan",
     "packages/scan/models",
     "packages/schema",
+    "packages/schema/migrations",
     "packages/search",
     "packages/server",
     "packages/server/simulator",
@@ -465,6 +467,7 @@ moosicbox_resampler                = { version = "0.4.0", default-features = fal
 moosicbox_scan                     = { version = "0.4.0", default-features = false, path = "packages/scan" }
 moosicbox_scan_models              = { version = "0.4.0", default-features = false, path = "packages/scan/models" }
 moosicbox_schema                   = { version = "0.4.0", default-features = false, path = "packages/schema" }
+moosicbox_schema_migrations        = { version = "0.4.0", default-features = false, path = "packages/schema/migrations" }
 moosicbox_search                   = { version = "0.4.0", default-features = false, path = "packages/search" }
 moosicbox_server                   = { version = "0.4.0", default-features = false, path = "packages/server" }
 moosicbox_session                  = { version = "0.4.0", default-features = false, path = "packages/session" }

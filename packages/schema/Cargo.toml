@@ -22,9 +22,9 @@ switchy_database = { workspace = true, features = ["schema"] }
 switchy_env      = { workspace = true, features = ["simulator", "std"] }
 switchy_schema   = { workspace = true, features = ["code"] }
 
-include_dir = { workspace = true }
-log         = { workspace = true }
-thiserror   = { workspace = true }
+log                         = { workspace = true }
+moosicbox_schema_migrations = { workspace = true, optional = true }
+thiserror                   = { workspace = true }
 
 [dev-dependencies]
 moosicbox_json_utils = { workspace = true, features = ["database"] }
@@ -45,10 +45,19 @@ default = ["postgres", "sqlite"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",
+    "moosicbox_schema_migrations?/fail-on-warnings",
     "switchy_database/fail-on-warnings",
     "switchy_env/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
 ]
 
-postgres = ["switchy_database/postgres"]
-sqlite   = ["switchy_database/sqlite"]
+postgres = [
+    "dep:moosicbox_schema_migrations",
+    "moosicbox_schema_migrations/postgres",
+    "switchy_database/postgres",
+]
+sqlite = [
+    "dep:moosicbox_schema_migrations",
+    "moosicbox_schema_migrations/sqlite",
+    "switchy_database/sqlite",
+]

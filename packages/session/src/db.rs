@@ -24,7 +24,7 @@ use switchy_database::{
     Database, DatabaseValue,
     config::ConfigDatabase,
     profiles::LibraryDatabase,
-    query::{FilterableQuery as _, SortDirection, select, where_in},
+    query::{FilterableQuery as _, SortDirection, qualified_column, select, where_in},
 };
 
 use crate::models::{
@@ -78,7 +78,10 @@ pub async fn get_session_audio_zone(
         .columns(&["audio_zones.*"])
         .join(
             "audio_zone_sessions",
-            "audio_zones.id=audio_zone_sessions.audio_zone_id",
+            (
+                qualified_column("audio_zones", "id"),
+                qualified_column("audio_zone_sessions", "audio_zone_id"),
+            ),
         )
         .where_eq("audio_zone_sessions.session_id", session_id)
         .execute_first(&**db)
@@ -193,6 +196,8 @@ pub async fn create_session(
     })
 }
 
+// Typed JOIN operands spell out qualification rather than embedding SQL strings.
+#[allow(clippy::too_many_lines)]
 pub async fn update_session(
     db: &LibraryDatabase,
     session: &UpdateSession,
@@ -206,11 +211,17 @@ pub async fn update_session(
                     .columns(&["session_playlist_tracks.id"])
                     .join(
                         "session_playlists",
-                        "session_playlist_tracks.session_playlist_id=session_playlists.id",
+                        (
+                            qualified_column("session_playlist_tracks", "session_playlist_id"),
+                            qualified_column("session_playlists", "id"),
+                        ),
                     )
                     .join(
                         "sessions",
-                        "sessions.session_playlist_id=session_playlists.id",
+                        (
+                            qualified_column("sessions", "session_playlist_id"),
+                            qualified_column("session_playlists", "id"),
+                        ),
                     )
                     .where_eq("sessions.id", session.session_id),
             )
@@ -314,11 +325,17 @@ pub async fn delete_session(
                 .columns(&["session_playlist_tracks.id"])
                 .join(
                     "session_playlists",
-                    "session_playlist_tracks.session_playlist_id=session_playlists.id",
+                    (
+                        qualified_column("session_playlist_tracks", "session_playlist_id"),
+                        qualified_column("session_playlists", "id"),
+                    ),
                 )
                 .join(
                     "sessions",
-                    "sessions.session_playlist_id=session_playlists.id",
+                    (
+                        qualified_column("sessions", "session_playlist_id"),
+                        qualified_column("session_playlists", "id"),
+                    ),
                 )
                 .where_eq("sessions.id", session_id),
         )
@@ -398,7 +415,13 @@ pub async fn delete_connection(
             "players.id",
             select("players")
                 .columns(&["players.id"])
-                .join("connections", "connections.id=players.connection_id")
+                .join(
+                    "connections",
+                    (
+                        qualified_column("connections", "id"),
+                        qualified_column("players", "connection_id"),
+                    ),
+                )
                 .where_eq("connections.id", connection_id),
         )
         .execute(&**db)

@@ -61,8 +61,14 @@
 //! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
 //! let results = db.select("orders")
 //!     .columns(&["orders.id", "users.name"])
-//!     .join("users", "orders.user_id = users.id")  // INNER JOIN
-//!     .left_join("addresses", "users.address_id = addresses.id")  // LEFT JOIN
+//!     .join("users", (
+//!         qualified_column("orders", "user_id"),
+//!         qualified_column("users", "id"),
+//!     ))  // INNER JOIN
+//!     .left_join("addresses", (
+//!         qualified_column("users", "address_id"),
+//!         qualified_column("addresses", "id"),
+//!     ))  // LEFT JOIN
 //!     .execute(db)
 //!     .await?;
 //! # Ok(())
@@ -173,15 +179,45 @@ let _ = join("items", "1 = 1");
 use switchy_database::query::select;
 let _ = select("items").join("other", "1 = 1");
 ```
+```compile_fail
+use switchy_database::query::left_join;
+let _ = left_join("items", "1 = 1");
+```
+```compile_fail
+use switchy_database::query::select;
+let _ = select("items").left_join("other", "1 = 1");
+```
 "#
 )]
 #[derive(Debug, Clone)]
 pub enum JoinCondition {
     /// Equality between independently quoted, qualified columns.
     ColumnsEqual(QualifiedColumn, QualifiedColumn),
+    /// Conjunction of typed JOIN conditions. An empty conjunction is true.
+    And(Vec<Self>),
     /// Arbitrary SQL retained only for compatibility callers.
     #[cfg(feature = "raw-sql")]
     Raw(String),
+}
+
+impl From<(QualifiedColumn, QualifiedColumn)> for JoinCondition {
+    fn from((first, second): (QualifiedColumn, QualifiedColumn)) -> Self {
+        Self::ColumnsEqual(first, second)
+    }
+}
+
+#[cfg(feature = "raw-sql")]
+impl From<&str> for JoinCondition {
+    fn from(sql: &str) -> Self {
+        Self::Raw(sql.to_owned())
+    }
+}
+
+#[cfg(feature = "raw-sql")]
+impl From<String> for JoinCondition {
+    fn from(sql: String) -> Self {
+        Self::Raw(sql)
+    }
 }
 
 impl JoinCondition {
@@ -190,6 +226,19 @@ impl JoinCondition {
         match self {
             Self::ColumnsEqual(left, right) => {
                 format!("{} = {}", left.render(delimiter), right.render(delimiter))
+            }
+            Self::And(conditions) => {
+                if conditions.is_empty() {
+                    return "1 = 1".to_owned();
+                }
+                format!(
+                    "({})",
+                    conditions
+                        .iter()
+                        .map(|condition| condition.render(delimiter))
+                        .collect::<Vec<_>>()
+                        .join(" AND ")
+                )
             }
             #[cfg(feature = "raw-sql")]
             Self::Raw(sql) => sql.clone(),
@@ -1553,40 +1602,48 @@ pub fn where_or(conditions: Vec<Box<dyn BooleanExpression>>) -> Or {
     Or { conditions }
 }
 
-/// Creates an INNER JOIN clause
+/// Creates an INNER JOIN clause with a typed column pair.
+///
+/// SQL-string predicates are accepted only with the `raw-sql` feature.
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// use switchy_database::query::join;
+/// ```
+/// use switchy_database::query::{join, qualified_column};
 ///
-/// let join_clause = join("orders", "orders.user_id = users.id");
+/// let join_clause = join("orders", (
+///     qualified_column("orders", "user_id"),
+///     qualified_column("users", "id"),
+/// ));
 /// ```
 #[must_use]
-#[cfg(feature = "raw-sql")]
-pub fn join<'a>(table_name: &'a str, on: &str) -> Join<'a> {
+pub fn join(table_name: &str, on: impl Into<JoinCondition>) -> Join<'_> {
     Join {
         table_name,
-        on: JoinCondition::Raw(on.to_owned()),
+        on: on.into(),
         left: false,
     }
 }
 
-/// Creates a LEFT JOIN clause
+/// Creates a LEFT JOIN clause with a typed column pair.
+///
+/// SQL-string predicates are accepted only with the `raw-sql` feature.
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// use switchy_database::query::left_join;
+/// ```
+/// use switchy_database::query::{left_join, qualified_column};
 ///
-/// let join_clause = left_join("orders", "orders.user_id = users.id");
+/// let join_clause = left_join("orders", (
+///     qualified_column("orders", "user_id"),
+///     qualified_column("users", "id"),
+/// ));
 /// ```
 #[must_use]
-#[cfg(feature = "raw-sql")]
-pub fn left_join<'a>(table_name: &'a str, on: &str) -> Join<'a> {
+pub fn left_join(table_name: &str, on: impl Into<JoinCondition>) -> Join<'_> {
     Join {
         table_name,
-        on: JoinCondition::Raw(on.to_owned()),
+        on: on.into(),
         left: true,
     }
 }
@@ -2177,10 +2234,11 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
-    /// Adds an INNER JOIN clause
+    /// Adds an INNER JOIN with a typed column pair or a `JoinCondition`.
+    ///
+    /// SQL-string predicates require the `raw-sql` feature.
     #[must_use]
-    #[cfg(feature = "raw-sql")]
-    pub fn join(mut self, table_name: &'a str, on: &'a str) -> Self {
+    pub fn join(mut self, table_name: &'a str, on: impl Into<JoinCondition>) -> Self {
         if let Some(joins) = &mut self.joins {
             joins.push(join(table_name, on));
         } else {
@@ -2202,10 +2260,11 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
-    /// Adds a LEFT JOIN clause
+    /// Adds a LEFT JOIN with a typed column pair or a `JoinCondition`.
+    ///
+    /// SQL-string predicates require the `raw-sql` feature.
     #[must_use]
-    #[cfg(feature = "raw-sql")]
-    pub fn left_join(mut self, table_name: &'a str, on: &'a str) -> Self {
+    pub fn left_join(mut self, table_name: &'a str, on: impl Into<JoinCondition>) -> Self {
         if let Some(left_joins) = &mut self.joins {
             left_joins.push(left_join(table_name, on));
         } else {
@@ -3004,6 +3063,44 @@ mod tests {
         fn test_identifier_function() {
             let id = identifier("table.column");
             assert_eq!(id.value, "table.column");
+        }
+    }
+
+    mod typed_join_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn typed_join_helpers_and_chaining() {
+            let condition = || {
+                (
+                    qualified_column("orders", "user_id"),
+                    qualified_column("users", "id"),
+                )
+            };
+            let inner = join("users", condition());
+            let left = left_join("users", condition());
+            assert!(!inner.left);
+            assert!(left.left);
+            assert!(matches!(inner.on, JoinCondition::ColumnsEqual(..)));
+            assert!(matches!(left.on, JoinCondition::ColumnsEqual(..)));
+
+            let query = select("orders")
+                .join("users", condition())
+                .left_join("addresses", JoinCondition::from(condition()))
+                .join("more", condition());
+            let joins = query.joins.unwrap();
+            assert_eq!(joins.len(), 3);
+            assert_eq!(joins[0].table_name, "users");
+            assert!(!joins[0].left);
+            assert_eq!(joins[1].table_name, "addresses");
+            assert!(joins[1].left);
+            assert_eq!(joins[2].table_name, "more");
+            assert!(!joins[2].left);
+            assert!(
+                joins
+                    .iter()
+                    .all(|join| matches!(join.on, JoinCondition::ColumnsEqual(..)))
+            );
         }
     }
 
