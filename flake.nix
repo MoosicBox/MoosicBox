@@ -71,7 +71,7 @@
             opus-tools # Opus codec tools (opusenc, opusdec, opusinfo)
             portaudio # Cross-platform audio (wraps CoreAudio on macOS, ALSA on Linux)
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             alsa-lib
             alsa-lib.dev
             alsa-utils
@@ -125,7 +125,7 @@
             gdk-pixbuf
             at-spi2-atk
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             # Linux-specific GTK packages
             gtk3-x11
             gtk3-x11.dev
@@ -149,15 +149,15 @@
             cairo
             pango
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             # X11 and OpenGL packages (Linux-specific)
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXfixes
-            xorg.libXinerama
-            xorg.libXft
-            xorg.libXext
-            xorg.libXrender
+            libx11
+            libxcursor
+            libxfixes
+            libxinerama
+            libxft
+            libxext
+            libxrender
             libGL
             libGLU
             mesa
@@ -172,12 +172,12 @@
             vulkan-headers
             vulkan-validation-layers
           ]
-          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+          ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
             # Linux-specific display and graphics packages
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXrandr
-            xorg.libXi
+            libx11
+            libxcursor
+            libxrandr
+            libxi
             libGL
             mesa
             wayland
@@ -186,16 +186,16 @@
           ];
 
         # Wayland/X11 base packages (Linux-only display servers)
-        displayServerPackages = pkgs.lib.optionals pkgs.stdenv.isLinux (
+        displayServerPackages = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux (
           with pkgs;
           [
-            xorg.libX11
-            xorg.libxcb
-            xorg.xcbutil
-            xorg.xcbutilimage
-            xorg.xcbutilkeysyms
-            xorg.xcbutilwm
-            xorg.libXinerama
+            libx11
+            libxcb
+            libxcb-util
+            libxcb-image
+            libxcb-keysyms
+            libxcb-wm
+            libxinerama
             wayland
             wayland-protocols
             libxkbcommon
@@ -249,7 +249,7 @@
             ++ displayServerPackages
             ++ gtkPackages
             ++ extraPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.clang ];
 
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (GTK Backend)"
@@ -258,14 +258,14 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
                   pkgs.lib.makeLibraryPath (gtkPackages ++ displayServerPackages)
                 }"
                 export GDK_BACKEND=x11,wayland
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -294,7 +294,7 @@
             ++ audioPackages
             ++ fltkPackages
             ++ extraPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.clang ];
 
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (FLTK Backend)"
@@ -303,11 +303,11 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath fltkPackages}"
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -336,7 +336,7 @@
             ++ audioPackages
             ++ eguiPackages
             ++ extraPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.clang
               pkgs.darwin.apple_sdk.frameworks.Metal
               pkgs.darwin.apple_sdk.frameworks.MetalKit
@@ -349,12 +349,12 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath eguiPackages}"
                 export VK_ICD_FILENAMES="${pkgs.vulkan-loader}/share/vulkan/icd.d/lvp_icd.x86_64.json"
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -383,8 +383,8 @@
             ]
             ++ baseBuildTools
             ++ audioPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ displayServerPackages)
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux (gtkPackages ++ displayServerPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.clang ]
             ++ extraPackages;
 
             shellHook = ''
@@ -395,14 +395,14 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
                   pkgs.lib.makeLibraryPath (gtkPackages ++ displayServerPackages)
                 }"
                 export GDK_BACKEND=x11,wayland
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -467,8 +467,8 @@
             ++ baseBuildTools
             ++ audioPackages
             ++ displayServerPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.clang
               pkgs.portaudio
             ];
@@ -499,14 +499,14 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
                   pkgs.lib.makeLibraryPath (gtkPackages ++ fltkPackages ++ eguiPackages ++ displayServerPackages)
                 }"
                 export GDK_BACKEND=x11,wayland
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -534,8 +534,8 @@
             ++ baseBuildTools
             ++ audioPackages
             ++ displayServerPackages
-            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
-            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.clang
               pkgs.portaudio
             ];
@@ -561,14 +561,14 @@
               export TUNNEL_ACCESS_TOKEN=123
               export STATIC_TOKEN=123
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
                 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
                   pkgs.lib.makeLibraryPath (gtkPackages ++ fltkPackages ++ eguiPackages ++ displayServerPackages)
                 }"
                 export GDK_BACKEND=x11,wayland
               ''}
 
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
               ''}
@@ -676,7 +676,7 @@
               [
                 vulkan-loader
               ]
-              ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ amdvlk ];
+              ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ amdvlk ];
           };
 
           egui-player = mkEguiShell {
