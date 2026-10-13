@@ -2793,7 +2793,7 @@ mod tests {
             let val = DatabaseValue::Null;
             let params = val.params();
             assert!(params.is_some());
-            assert!(params.unwrap().is_empty());
+            assert_eq!(params.unwrap(), [] as [&DatabaseValue; 0]);
         }
 
         #[test_log::test]
@@ -2801,7 +2801,7 @@ mod tests {
             let val = DatabaseValue::Now;
             let params = val.params();
             assert!(params.is_some());
-            assert!(params.unwrap().is_empty());
+            assert_eq!(params.unwrap(), [] as [&DatabaseValue; 0]);
         }
 
         #[test_log::test]
@@ -2809,7 +2809,7 @@ mod tests {
             let val = DatabaseValue::NowPlus(SqlInterval::from_days(1));
             let params = val.params();
             assert!(params.is_some());
-            assert!(params.unwrap().is_empty());
+            assert_eq!(params.unwrap(), [] as [&DatabaseValue; 0]);
         }
 
         #[test_log::test]

@@ -695,7 +695,7 @@ mod tests {
             .expect("Missing active connection configuration");
         assert_eq!(config.api_url(), "http://127.0.0.1:9");
         assert_eq!(config.profile(), "master");
-        assert!(!config.connection_id().is_empty());
+        assert_ne!(config.connection_id().len(), 0);
 
         state
             .close_ws_connection()
@@ -960,7 +960,7 @@ mod tests {
             .await
             .expect("Failed to get connection ID");
 
-        assert!(!connection_id1.is_empty());
+        assert_ne!(connection_id1.len(), 0);
 
         // Getting again should return the same ID
         let connection_id2 = state

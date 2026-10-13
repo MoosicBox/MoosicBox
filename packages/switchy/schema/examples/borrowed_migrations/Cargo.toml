@@ -15,9 +15,10 @@ version     = { workspace = true }
 tests = false
 
 [dependencies]
-async-trait      = { workspace = true }
-switchy_async    = { workspace = true, features = ["macros", "tokio"] }
-switchy_database = { workspace = true }
+async-trait   = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+# This example deliberately demonstrates legacy SQL migrations.
+switchy_database = { workspace = true, features = ["raw-sql"] }
 switchy_schema   = { workspace = true, features = ["code"] }
 
 [features]

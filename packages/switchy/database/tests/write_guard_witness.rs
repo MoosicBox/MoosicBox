@@ -299,13 +299,13 @@ async fn delete_uses_old_and_invalid_row_references_are_rejected() {
             .len(),
         1
     );
-    assert!(
+    assert_eq!(
         db.select("rows")
             .where_eq("id", 2_i64)
             .execute(&db)
             .await
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        []
     );
 }
 

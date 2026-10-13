@@ -1721,7 +1721,7 @@ mod tests {
                 }
                 _ => unreachable!(),
             };
-            assert!(last_empty.is_empty());
+            assert_eq!(last_empty.len(), 0);
 
             // Test DownTo with non-existent target
             let applied = vec!["002_test".to_string(), "001_test".to_string()];

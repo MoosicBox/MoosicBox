@@ -3,7 +3,7 @@
 //! This module provides functionality to parse HTML strings into [`Container`](crate::Container) trees
 //! and generate HTML/CSS output from container structures. Requires the `html` feature to be enabled.
 
-use std::{borrow::Cow, collections::BTreeMap, iter::once};
+use std::{borrow::Cow, collections::BTreeMap, iter::once, str::FromStr};
 
 use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
@@ -65,6 +65,14 @@ impl<'a> TryFrom<&'a str> for crate::Container {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl FromStr for crate::Container {
+    type Err = ParseError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         let result = tl::parse(value, ParserOptions::new())?;
 
         Ok(Self {
@@ -1745,21 +1753,18 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 },
                 "textarea" => {
                     // Extract text content from child Raw nodes (textarea value is text content, not an attribute)
-                    let raw_value = node
-                        .children()
-                        .map(|children| {
-                            children
-                                .top()
-                                .iter()
-                                .filter_map(|child| {
-                                    child.get(parser).and_then(|node| match node {
-                                        Node::Raw(x) => Some(x.as_utf8_str().to_string()),
-                                        _ => None,
-                                    })
+                    let raw_value = node.children().map_or_else(String::new, |children| {
+                        children
+                            .top()
+                            .iter()
+                            .filter_map(|child| {
+                                child.get(parser).and_then(|node| match node {
+                                    Node::Raw(x) => Some(x.as_utf8_str().to_string()),
+                                    _ => None,
                                 })
-                                .collect::<String>()
-                        })
-                        .unwrap_or_default();
+                            })
+                            .collect::<String>()
+                    });
 
                     // Decode HTML entities in the textarea value
                     let value = html_escape::decode_html_entities(&raw_value).to_string();
@@ -1945,8 +1950,8 @@ mod test {
     use crate::{Container, Flex, Input, Number, TextDecoration};
     use hyperchad_color::Color;
     use hyperchad_transformer_models::{
-        FontWeight, ImageFit, ImageLoading, LayoutDirection, LinkTarget, Route, Selector,
-        SwapStrategy, TextDecorationLine, TextDecorationStyle,
+        FontWeight, ImageFit, ImageLoading, LayoutDirection, LayoutOverflow, LinkTarget, Route,
+        Selector, SwapStrategy, TextDecorationLine, TextDecorationStyle,
     };
 
     /// Module for diff generation between Container values.
@@ -2270,6 +2275,43 @@ mod test {
         let container: Container = html.try_into().unwrap();
         let child = &container.children[0];
         assert_eq!(child.font_weight, Some(FontWeight::Lighter));
+    }
+
+    #[test]
+    fn test_html_from_str_matches_try_from() {
+        fn clear_generated_ids(container: &mut Container) {
+            container.id = 0;
+            for child in &mut container.children {
+                clear_generated_ids(child);
+            }
+        }
+
+        for html in ["", "<div>Hello &amp; world</div>", "<textarea></textarea>"] {
+            let mut parsed = html.parse::<Container>().unwrap();
+            let mut borrowed = Container::try_from(html).unwrap();
+            let mut owned = Container::try_from(html.to_string()).unwrap();
+            clear_generated_ids(&mut parsed);
+            clear_generated_ids(&mut borrowed);
+            clear_generated_ids(&mut owned);
+
+            assert_eq!(parsed, borrowed);
+            assert_eq!(parsed, owned);
+            assert_eq!(parsed.overflow_x, LayoutOverflow::Squash);
+            assert_eq!(parsed.overflow_y, LayoutOverflow::Squash);
+        }
+    }
+
+    #[test]
+    fn test_textarea_value_decodes_entities() {
+        let container = "<textarea>&lt;Hello&gt; &amp; goodbye</textarea>"
+            .parse::<Container>()
+            .unwrap();
+
+        if let crate::Element::Textarea { value, .. } = &container.children[0].element {
+            assert_eq!(value, "<Hello> & goodbye");
+        } else {
+            panic!("Expected Textarea element");
+        }
     }
 
     #[test]

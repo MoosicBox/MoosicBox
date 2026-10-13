@@ -363,7 +363,7 @@ mod tests {
     fn test_database_profiles_names_empty() {
         let profiles = DatabaseProfiles::default();
         let names = profiles.names();
-        assert!(names.is_empty());
+        assert_eq!(names, [] as [String; 0]);
     }
 
     #[test_log::test]

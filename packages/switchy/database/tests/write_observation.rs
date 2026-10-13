@@ -230,8 +230,8 @@ async fn observation_target_failure_aborts_source_statement() {
             .await
             .is_err()
     );
-    assert!(db.select("source").execute(&db).await.unwrap().is_empty());
-    assert!(db.select("events").execute(&db).await.unwrap().is_empty());
+    assert_eq!(db.select("source").execute(&db).await.unwrap(), []);
+    assert_eq!(db.select("events").execute(&db).await.unwrap(), []);
     db.insert("source")
         .value("id", 2_i64)
         .value("value", 10_i64)
@@ -260,7 +260,7 @@ async fn absent_observation_does_not_change_independent_writers() {
         .execute(&db)
         .await
         .unwrap();
-    assert!(db.select("events").execute(&db).await.unwrap().is_empty());
+    assert_eq!(db.select("events").execute(&db).await.unwrap(), []);
 }
 
 #[tokio::test]

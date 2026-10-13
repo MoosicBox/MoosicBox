@@ -1801,7 +1801,7 @@ mod tests {
         assert_eq!(album.cover, None);
         assert!(!album.explicit);
         assert_eq!(album.release_date, None);
-        assert!(album.media_metadata_tags.is_empty());
+        assert_eq!(album.media_metadata_tags.len(), 0);
     }
 
     #[test_log::test]
@@ -1867,7 +1867,7 @@ mod tests {
         assert_eq!(track.album_cover, None);
         assert_eq!(track.copyright, None);
         assert!(!track.explicit);
-        assert!(track.media_metadata_tags.is_empty());
+        assert_eq!(track.media_metadata_tags.len(), 0);
     }
 
     #[test_log::test]

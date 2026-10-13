@@ -19,9 +19,10 @@ name = "state_migration_test"
 path = "src/main.rs"
 
 [dependencies]
-async-trait               = { workspace = true }
-switchy_async             = { workspace = true, features = ["macros", "tokio"] }
-switchy_database          = { workspace = true, features = ["schema"] }
+async-trait   = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+# This example deliberately demonstrates legacy SQL migrations.
+switchy_database          = { workspace = true, features = ["raw-sql", "schema"] }
 switchy_schema            = { workspace = true }
 switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 

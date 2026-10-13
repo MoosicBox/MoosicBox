@@ -627,8 +627,53 @@ async fn sqlite_get_column_dependencies(
 
 #[async_trait]
 impl Database for SqliteSqlxDatabase {
+    async fn sqlite_foreign_keys(&self, enabled: bool) -> Result<(), DatabaseError> {
+        let connection = self.get_connection_internal().await?;
+        let mut connection = connection.lock().await;
+        let statement = if enabled {
+            "PRAGMA foreign_keys = ON"
+        } else {
+            "PRAGMA foreign_keys = OFF"
+        };
+        sqlx::query(statement)
+            .execute(&mut **connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        let actual: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&mut **connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        drop(connection);
+        if (actual != 0) != enabled {
+            return Err(DatabaseError::InvalidQuery(
+                "SQLite did not apply requested foreign key enforcement".into(),
+            ));
+        }
+        Ok(())
+    }
+
     async fn sqlite_foreign_key_check(&self) -> Result<Vec<crate::Row>, DatabaseError> {
-        self.query_raw_internal("PRAGMA foreign_key_check").await
+        let connection = self.get_connection_internal().await?;
+        let mut connection = connection.lock().await;
+        let rows = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&mut **connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        drop(connection);
+        rows.iter()
+            .map(|row| {
+                from_row(
+                    &[
+                        "table".into(),
+                        "rowid".into(),
+                        "parent".into(),
+                        "fkid".into(),
+                    ],
+                    row,
+                )
+                .map_err(Into::into)
+            })
+            .collect()
     }
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         if query.table_alias.is_some()
@@ -4300,7 +4345,7 @@ mod introspection_tests {
             let columns = db.get_table_columns(name).await.unwrap();
             assert!(columns.is_empty(), "unexpected columns for {name:?}");
         }
-        assert!(!db.get_table_columns("users").await.unwrap().is_empty());
+        assert_ne!(db.get_table_columns("users").await.unwrap(), []);
         assert!(db.table_exists("users").await.unwrap());
         db.close().await.unwrap();
     }
@@ -4771,7 +4816,7 @@ mod introspection_tests {
             .get_table_columns("users")
             .await
             .expect("get_table_columns should work in transaction");
-        assert!(!columns.is_empty());
+        assert_ne!(columns, []);
 
         let table_info = tx
             .get_table_info("users")
@@ -4836,6 +4881,7 @@ impl SqliteSqlxDatabase {
 }
 
 impl SqliteSqlxDatabase {
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_internal(
         &self,
         query: &str,

@@ -1391,7 +1391,7 @@ mod tests {
         let statement = create_index("test_index");
         assert_eq!(statement.index_name, "test_index");
         assert_eq!(statement.table_name, "");
-        assert!(statement.columns.is_empty());
+        assert_eq!(statement.columns, [] as [String; 0]);
         assert!(!statement.unique);
         assert!(!statement.if_not_exists);
     }

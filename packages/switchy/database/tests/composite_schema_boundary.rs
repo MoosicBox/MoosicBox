@@ -28,9 +28,15 @@ async fn composite_keys_and_explicit_references_preserve_order_and_exact_names()
         .execute(&db)
         .await
         .unwrap();
+    // Legacy schema column declarations accept SQL fragments with raw-sql.
+    // Composite keys and rusqlite returning inserts receive exact physical names.
+    #[cfg(feature = "raw-sql")]
+    let key_column = "\"key, quoted\"\"\"";
+    #[cfg(not(feature = "raw-sql"))]
+    let key_column = "key, quoted\"";
     db.create_table("child")
         .column(column("producer"))
-        .column(column("key, quoted\""))
+        .column(column(key_column))
         .column(column("event_seq"))
         .primary_key_columns(["producer", "key, quoted\""])
         .foreign_key_column("event_seq", "parent", "event_seq")

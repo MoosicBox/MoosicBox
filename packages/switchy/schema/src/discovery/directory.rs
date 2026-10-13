@@ -366,7 +366,7 @@ mod tests {
 
         // Test empty migration
         let empty_migration = migration_map.get("003_empty_migration").unwrap();
-        assert!(empty_migration.up_sql.as_ref().unwrap().trim().is_empty());
+        assert_eq!(empty_migration.up_sql.as_ref().unwrap().trim(), "");
         assert!(empty_migration.down_sql.is_none());
 
         // Test that migration with no SQL files is not included

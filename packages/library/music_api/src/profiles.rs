@@ -221,7 +221,7 @@ mod tests {
     fn test_library_music_api_profiles_names_empty() {
         let profiles = LibraryMusicApiProfiles::default();
         let names = profiles.names();
-        assert!(names.is_empty());
+        assert_eq!(names.len(), 0);
     }
 
     /// Tests that adding a profile with the same name replaces the existing one.

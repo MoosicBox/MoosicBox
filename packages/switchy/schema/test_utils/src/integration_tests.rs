@@ -48,8 +48,7 @@ pub async fn demonstrate_rollback_functionality() -> Result<(), crate::TestError
     // Create a simple migration that creates a table
     let migration: Arc<dyn Migration<'static> + 'static> = Arc::new(TestMigration {
         id: "001_create_users_table".to_string(),
-        up_sql: Some("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string()),
-        down_sql: Some("DROP TABLE users".to_string()),
+        operation: TestOperation::CreateUsers,
     });
 
     // Run migration with rollback enabled
@@ -114,23 +113,15 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
     let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = vec![
         Arc::new(TestMigration {
             id: "001_create_users".to_string(),
-            up_sql: Some(
-                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)".to_string(),
-            ),
-            down_sql: Some("DROP TABLE users".to_string()),
+            operation: TestOperation::CreateUsers,
         }),
         Arc::new(TestMigration {
             id: "002_add_email_column".to_string(),
-            up_sql: Some("ALTER TABLE users ADD COLUMN email TEXT".to_string()),
-            down_sql: Some("ALTER TABLE users DROP COLUMN email".to_string()),
+            operation: TestOperation::AddEmail,
         }),
         Arc::new(TestMigration {
             id: "003_create_posts".to_string(),
-            up_sql: Some(
-                "CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT NOT NULL)"
-                    .to_string(),
-            ),
-            down_sql: Some("DROP TABLE posts".to_string()),
+            operation: TestOperation::CreatePosts,
         }),
     ];
 
@@ -209,8 +200,14 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
 #[cfg(feature = "sqlite")]
 struct TestMigration {
     id: String,
-    up_sql: Option<String>,
-    down_sql: Option<String>,
+    operation: TestOperation,
+}
+
+#[cfg(feature = "sqlite")]
+enum TestOperation {
+    CreateUsers,
+    AddEmail,
+    CreatePosts,
 }
 
 #[cfg(feature = "sqlite")]
@@ -224,15 +221,38 @@ impl switchy_schema::migration::Migration<'static> for TestMigration {
         &self,
         db: &dyn switchy_database::Database,
     ) -> Result<(), switchy_schema::MigrationError> {
-        if let Some(sql) = &self.up_sql
-            && !sql.is_empty()
-        {
-            #[cfg(feature = "raw-sql")]
-            db.exec_raw(sql).await?;
-            #[cfg(not(feature = "raw-sql"))]
-            {
-                let _ = db;
-                return Err(switchy_schema::MigrationError::RawSqlDisabled);
+        use switchy_database::schema::{Column, DataType};
+
+        let column = |name: &str, data_type, nullable| Column {
+            name: name.to_string(),
+            nullable,
+            auto_increment: false,
+            data_type,
+            default: None,
+        };
+        match self.operation {
+            TestOperation::CreateUsers => {
+                db.create_table("users")
+                    .column(column("id", DataType::Int, false))
+                    .column(column("name", DataType::Text, false))
+                    .primary_key("id")
+                    .execute(db)
+                    .await?;
+            }
+            TestOperation::AddEmail => {
+                db.alter_table("users")
+                    .add_column("email".to_string(), DataType::Text, true, None)
+                    .execute(db)
+                    .await?;
+            }
+            TestOperation::CreatePosts => {
+                db.create_table("posts")
+                    .column(column("id", DataType::Int, false))
+                    .column(column("user_id", DataType::Int, true))
+                    .column(column("title", DataType::Text, false))
+                    .primary_key("id")
+                    .execute(db)
+                    .await?;
             }
         }
         Ok(())
@@ -242,15 +262,18 @@ impl switchy_schema::migration::Migration<'static> for TestMigration {
         &self,
         db: &dyn switchy_database::Database,
     ) -> Result<(), switchy_schema::MigrationError> {
-        if let Some(sql) = &self.down_sql
-            && !sql.is_empty()
-        {
-            #[cfg(feature = "raw-sql")]
-            db.exec_raw(sql).await?;
-            #[cfg(not(feature = "raw-sql"))]
-            {
-                let _ = db;
-                return Err(switchy_schema::MigrationError::RawSqlDisabled);
+        match self.operation {
+            TestOperation::CreateUsers => {
+                db.drop_table("users").execute(db).await?;
+            }
+            TestOperation::AddEmail => {
+                db.alter_table("users")
+                    .drop_column("email".to_string())
+                    .execute(db)
+                    .await?;
+            }
+            TestOperation::CreatePosts => {
+                db.drop_table("posts").execute(db).await?;
             }
         }
         Ok(())

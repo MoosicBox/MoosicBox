@@ -1,6 +1,7 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use insta::assert_snapshot;
 use switchy_async::test;
+use switchy_database::schema::{Column, DataType};
 use switchy_fs::TempDir;
 use switchy_schema::migration::Migration;
 
@@ -72,7 +73,23 @@ async fn test_code_migration_checksum_calculation() {
             &self,
             db: &dyn switchy_database::Database,
         ) -> Result<(), switchy_schema::MigrationError> {
-            db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+            db.create_table("users")
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Int,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
                 .await
                 .map_err(|e| switchy_schema::MigrationError::Execution(e.to_string()))?;
             Ok(())
@@ -82,7 +99,8 @@ async fn test_code_migration_checksum_calculation() {
             &self,
             db: &dyn switchy_database::Database,
         ) -> Result<(), switchy_schema::MigrationError> {
-            db.exec_raw("DROP TABLE users")
+            db.drop_table("users")
+                .execute(db)
                 .await
                 .map_err(|e| switchy_schema::MigrationError::Execution(e.to_string()))?;
             Ok(())
@@ -113,7 +131,30 @@ async fn test_code_migration_checksum_calculation() {
             &self,
             db: &dyn switchy_database::Database,
         ) -> Result<(), switchy_schema::MigrationError> {
-            db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)") // Different SQL!
+            db.create_table("users")
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Int,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .column(Column {
+                    name: "email".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db) // Different schema!
                 .await
                 .map_err(|e| switchy_schema::MigrationError::Execution(e.to_string()))?;
             Ok(())
@@ -123,7 +164,8 @@ async fn test_code_migration_checksum_calculation() {
             &self,
             db: &dyn switchy_database::Database,
         ) -> Result<(), switchy_schema::MigrationError> {
-            db.exec_raw("DROP TABLE users")
+            db.drop_table("users")
+                .execute(db)
                 .await
                 .map_err(|e| switchy_schema::MigrationError::Execution(e.to_string()))?;
             Ok(())

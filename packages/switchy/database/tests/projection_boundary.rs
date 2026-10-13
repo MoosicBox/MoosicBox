@@ -10,7 +10,7 @@ use switchy_database::{
     schema::{Column, DataType},
 };
 
-#[switchy_async::test]
+#[tokio::test]
 async fn typed_inventory_and_byte_length() {
     #[cfg(feature = "sqlite-sqlx")]
     let db = {
@@ -31,7 +31,7 @@ async fn typed_inventory_and_byte_length() {
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
-#[switchy_async::test]
+#[tokio::test]
 async fn rusqlite_inventory_and_byte_length() {
     let db = switchy_database::rusqlite::RusqliteDatabase::new(vec![Arc::new(
         switchy_async::sync::Mutex::new(rusqlite::Connection::open_in_memory().unwrap()),

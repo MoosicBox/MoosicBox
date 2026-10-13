@@ -747,7 +747,7 @@ mod tests {
 
         // No origins enabled, request None
         let result = get_origins_or_default(&db, None).await.unwrap();
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
     }
 
     #[cfg(feature = "local")]

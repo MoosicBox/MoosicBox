@@ -1893,7 +1893,7 @@ mod tests {
                 assert_eq!(track.album_type, TidalAlbumType::EpsAndSingles);
                 assert!(track.copyright.is_none());
                 assert!(!track.explicit);
-                assert!(track.media_metadata_tags.is_empty());
+                assert_eq!(track.media_metadata_tags.len(), 0);
             }
         }
     }
@@ -1946,10 +1946,10 @@ mod tests {
         let api_track: moosicbox_music_models::api::ApiTrack = api_tidal_track.into();
         assert_eq!(api_track.track_id, Id::from(0_u64));
         assert_eq!(api_track.number, 0);
-        assert!(api_track.title.is_empty());
+        assert_eq!(api_track.title.len(), 0);
         assert!((api_track.duration - 0.0).abs() < f64::EPSILON);
-        assert!(api_track.album.is_empty());
-        assert!(api_track.artist.is_empty());
+        assert_eq!(api_track.album.len(), 0);
+        assert_eq!(api_track.artist.len(), 0);
         assert!(!api_track.contains_cover);
         assert!(api_track.date_released.is_none());
         assert!(api_track.date_added.is_none());

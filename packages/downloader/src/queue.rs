@@ -1139,8 +1139,8 @@ mod tests {
     fn test_download_queue_state_new_is_empty() {
         let state = DownloadQueueState::new();
 
-        assert!(state.tasks.is_empty());
-        assert!(state.results.is_empty());
+        assert_eq!(state.tasks.len(), 0);
+        assert_eq!(state.results.len(), 0);
         assert!(state.current_task().is_none());
     }
 
@@ -1246,7 +1246,7 @@ mod tests {
         assert_eq!(state.tasks.len(), 1);
 
         state.finish_task(&task);
-        assert!(state.tasks.is_empty());
+        assert_eq!(state.tasks.len(), 0);
     }
 
     #[test_log::test]

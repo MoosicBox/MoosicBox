@@ -144,15 +144,10 @@ pub async fn assert_column_exists(
     column_name: &str,
     _expected_type: &str,
 ) -> Result<(), DatabaseError> {
-    // Use query builder to check if column exists by trying to select it
-    // No LIMIT so SQLite validates the column name
-    match query::select(table_name)
-        .columns(&[column_name])
-        .execute(db)
-        .await
-    {
-        Ok(_) => Ok(()), // Column exists - we can't easily check type without more complex queries
-        Err(_) => Err(DatabaseError::NoRow), // Column doesn't exist
+    if db.column_exists(table_name, column_name).await? {
+        Ok(())
+    } else {
+        Err(DatabaseError::NoRow)
     }
 }
 
@@ -200,17 +195,11 @@ pub async fn assert_column_not_exists(
     table_name: &str,
     column_name: &str,
 ) -> Result<(), DatabaseError> {
-    // Use query builder to check if column exists - if it succeeds, column exists (error)
-    // No LIMIT so SQLite validates the column name
-    query::select(table_name)
-        .columns(&[column_name])
-        .execute(db)
-        .await
-        .inspect(|x| log::debug!("Column exists: {column_name}, rows: {x:?}"))
-        .map_or_else(
-            |_| Ok(()),
-            |_| Err(DatabaseError::NoRow), // Column exists but shouldn't
-        )
+    if db.column_exists(table_name, column_name).await? {
+        Err(DatabaseError::NoRow)
+    } else {
+        Ok(())
+    }
 }
 
 /// Verifies that a table has exactly the expected number of rows
@@ -896,7 +885,7 @@ mod tests {
         let db = create_empty_in_memory().await.unwrap();
 
         // Enable foreign keys
-        db.exec_raw("PRAGMA foreign_keys = ON").await.unwrap();
+        db.sqlite_foreign_keys(true).await.unwrap();
 
         // Create tables with foreign key relationship using schema query builder
         db.create_table("users")
@@ -935,7 +924,7 @@ mod tests {
                 default: None,
             })
             .primary_key("id")
-            .foreign_key(("user_id", "users(id)"))
+            .foreign_key_column("user_id", "users", "id")
             .execute(&*db)
             .await
             .unwrap();

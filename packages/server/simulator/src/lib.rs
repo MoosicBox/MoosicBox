@@ -252,7 +252,7 @@ mod tests {
 
             handle_actions(&mut sim);
 
-            assert!(sim.bounced_hosts.is_empty());
+            assert_eq!(sim.bounced_hosts.len(), 0);
         }
 
         #[test_log::test]
