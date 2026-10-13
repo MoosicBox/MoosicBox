@@ -11120,6 +11120,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "bmux_tui",
+ "bmux_tui_components",
  "clap",
  "crossterm 0.29.0",
  "moosicbox_log_runtime",

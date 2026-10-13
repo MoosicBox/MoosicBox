@@ -657,17 +657,21 @@ mod tui {
         watch_filter_state_to_rule,
     };
     use anyhow::{Context, Result};
-    use bmux_tui::geometry::Rect;
+    use bmux_tui::component::{Component, Constraints, LayoutCx};
+    use bmux_tui::composition::TextBlock;
+    use bmux_tui::geometry::{Rect, Size};
     use bmux_tui::paint::{LocalRect, PaintCx};
     use bmux_tui::style::{Color, Modifier, Style};
     use bmux_tui::terminal::Terminal;
-    use bmux_tui::text::{Line, Span};
+    use bmux_tui::text::{Line, Span, Text, TextWrap};
+    use bmux_tui_components::pane::{Pane, PaneComponent, PaneState};
     use crossterm::cursor::{Hide, Show};
     use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
     use crossterm::execute;
     use crossterm::terminal;
     use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
     use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    use std::cell::Cell;
     use std::collections::{BTreeMap, VecDeque};
     use std::io::{BufRead, Read, Seek, Write};
     use std::path::{Path, PathBuf};
@@ -1667,65 +1671,47 @@ mod tui {
         if area.is_empty() {
             return;
         }
-        let style = Style::default();
-        let right = area.x.saturating_add(area.width.saturating_sub(1));
-        let bottom = area.y.saturating_add(area.height.saturating_sub(1));
-        for x in area.x..=right {
-            paint.set_cell(i32::from(x), i64::from(area.y), "─", style);
-            paint.set_cell(i32::from(x), i64::from(bottom), "─", style);
-        }
-        for y in area.y..=bottom {
-            paint.set_cell(i32::from(area.x), i64::from(y), "│", style);
-            paint.set_cell(i32::from(right), i64::from(y), "│", style);
-        }
-        for (x, y, glyph) in [
-            (area.x, area.y, "┌"),
-            (right, area.y, "┐"),
-            (area.x, bottom, "└"),
-            (right, bottom, "┘"),
-        ] {
-            paint.set_cell(i32::from(x), i64::from(y), glyph, style);
-        }
-        let width = area.width.saturating_sub(2);
+        // Log/profile strings are untrusted text, never terminal commands.
         let title = title
             .chars()
             .filter(|character| !character.is_control())
             .collect::<String>();
-        let title = Line::raw(title);
-        // write_line clears its entire rectangle. Restrict that rectangle to
-        // the title's display cells so it cannot erase the remaining border.
-        let title_width = u16::try_from(title.width().min(usize::from(width))).unwrap_or(width);
-        paint.write_line(
-            LocalRect::new(i32::from(area.x) + 1, i64::from(area.y), title_width, 1),
-            &title,
+        let text = Text {
+            lines: lines
+                .iter()
+                .take(usize::from(area.height.saturating_sub(2)))
+                .map(|line| Line {
+                    spans: line
+                        .spans
+                        .iter()
+                        .map(|span| {
+                            Span::styled(
+                                span.content
+                                    .chars()
+                                    .filter(|character| !character.is_control())
+                                    .collect::<String>(),
+                                span.style,
+                            )
+                        })
+                        .collect(),
+                })
+                .collect(),
+        };
+        let size = Size::new(area.width, area.height);
+        let state = Cell::new(PaneState::new(Rect::new(0, 0, area.width, area.height)));
+        let pane = PaneComponent::new(
+            format!("watch.{title}"),
+            Pane::new().title(title),
+            &state,
+            TextBlock::new(text).wrap(TextWrap::None),
         );
-        for (row, line) in (0..area.height.saturating_sub(2)).zip(lines) {
-            // Log/profile strings are untrusted text, never terminal commands.
-            let safe_line = Line {
-                spans: line
-                    .spans
-                    .iter()
-                    .map(|span| {
-                        Span::styled(
-                            span.content
-                                .chars()
-                                .filter(|character| !character.is_control())
-                                .collect::<String>(),
-                            span.style,
-                        )
-                    })
-                    .collect(),
-            };
-            paint.write_line(
-                LocalRect::new(
-                    i32::from(area.x) + 1,
-                    i64::from(area.y) + 1 + i64::from(row),
-                    width,
-                    1,
-                ),
-                &safe_line,
-            );
-        }
+        let layout = pane.layout(Constraints::tight(size), &mut LayoutCx::new());
+        paint.with_child(
+            i32::from(area.x),
+            i64::from(area.y),
+            LocalRect::new(0, 0, area.width, area.height),
+            |paint| pane.paint(&layout, paint),
+        );
     }
 
     fn viewport_height() -> usize {

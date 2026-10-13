@@ -18,6 +18,14 @@ Generic log watching, filtering, and optional TUI.
 - `persistence-json`: enables profile state persistence APIs (`profiles_list`, `profile_show`, `profile_delete`, `profile_rename`)
 - `tui`: enables interactive watch mode entry point (`run_watch`), rendered with `bmux_tui`; no Ratatui backend is required.
 
+### Panel composition
+
+Status, logs, filters, and info use `bmux_tui_components::pane::PaneComponent`
+with `TextBlock` children. The component owns borders, Unicode title clipping,
+and content bounds; the watcher does not hand-paint chrome or replace border
+rows. Content remains unwrapped, styled, and sanitized before composition.
+Pane mouse interaction is disabled; watcher navigation remains application-owned.
+
 ### Interactive resource limits
 
 The watcher displays a rolling window, not a complete log archive: at most
