@@ -1,3 +1,4 @@
+mod lookup;
 use super::{Connection, RusqliteDatabaseError};
 use crate::{
     DatabaseError,
@@ -47,7 +48,13 @@ fn observation_definition(observation: &WriteObservation) -> Result<String, Data
             return Err(invalid());
         }
         columns.push(identifier(&mapping.column)?);
-        values.push(value(&mapping.value, row_event, &scope)?);
+        values.push(match &mapping.value {
+            GuardValue::UniqueScalarLookup(selector) => lookup::render(selector, row_event, false)?,
+            GuardValue::UniqueScalarLookupStatus(selector) => {
+                lookup::render(selector, row_event, true)?
+            }
+            _ => value(&mapping.value, row_event, &scope)?,
+        });
     }
     let sql = format!(
         "CREATE TRIGGER {} AFTER {event} ON {} WHEN {} BEGIN INSERT INTO {} ({}) VALUES ({}); END",
@@ -76,6 +83,7 @@ pub fn install_write_observation_on_connection(
             "observation installation requires an owned transaction".into(),
         ));
     }
+    lookup::verify(connection, observation)?;
     let sql = observation_definition(observation)?;
     let stored: Option<String> = connection
         .query_row(
@@ -107,6 +115,7 @@ pub fn verify_write_observation_on_connection(
     connection: &Connection,
     observation: &WriteObservation,
 ) -> Result<bool, DatabaseError> {
+    lookup::verify(connection, observation)?;
     let sql = observation_definition(observation)?;
     let stored: Option<String> = connection
         .query_row(
@@ -382,6 +391,9 @@ const fn is_leaf(value: &GuardValue) -> bool {
 
 fn value_bytes(value: &GuardValue) -> usize {
     match value {
+        GuardValue::UniqueScalarLookup(lookup) | GuardValue::UniqueScalarLookupStatus(lookup) => {
+            lookup::budget(lookup)
+        }
         GuardValue::NewColumn(v)
         | GuardValue::OldColumn(v)
         | GuardValue::Constant(GuardScalar::Text(v)) => v.len(),

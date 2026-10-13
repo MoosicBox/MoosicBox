@@ -37,9 +37,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use switchy_database::DatabaseError;
-use switchy_schema::{
-    MigrationError as SwitchyMigrationError, discovery::code::CodeMigrationSource,
-};
+use switchy_schema::MigrationError as SwitchyMigrationError;
 use thiserror::Error;
 
 /// Error type for database migration operations

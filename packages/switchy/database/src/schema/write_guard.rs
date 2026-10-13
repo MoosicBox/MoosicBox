@@ -73,9 +73,46 @@ pub enum GuardScalar {
     Text(String),
     Bool(bool),
 }
+/// Source-row key for an observation-only unique scalar lookup.
+/// No SQL fragments, relation expressions or nested lookups are accepted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ObservationLookupKey {
+    /// NEW source column; unavailable for deletion observations.
+    NewColumn(String),
+    /// OLD source column; unavailable for insertion observations.
+    OldColumn(String),
+}
+
+/// Finite indexed lookup evaluated in the source statement's transaction.
+///
+/// Installation and verification require a non-partial, single-column BINARY
+/// unique index (or INTEGER primary key) for `key_column`. The scalar selector
+/// must be a real column. Missing mappings never abort source writes by themselves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UniqueScalarLookup {
+    /// Mapping table identifier.
+    pub table: String,
+    /// Unique indexed mapping key column.
+    pub key_column: String,
+    /// Source OLD/NEW column used as the equality key.
+    pub key: ObservationLookupKey,
+    /// Mapping column whose complete TEXT value is retained.
+    pub value_column: String,
+    /// Inclusive UTF-8 byte bound, 1 through 1,048,576.
+    pub max_bytes: u32,
+}
+
 /// A column reference or scalar constant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuardValue {
+    /// Observation destination only: retain complete TEXT for exactly one match.
+    /// Missing, ambiguous, NULL, oversized or unsupported values produce NULL.
+    UniqueScalarLookup(UniqueScalarLookup),
+    /// Observation destination only: matching lookup status.
+    /// 0 = missing, 1 = complete TEXT, 2 = ambiguous, 3 = NULL value,
+    /// 4 = oversized TEXT, 5 = unsupported value or key storage type.
+    /// Pair with `UniqueScalarLookup` using the identical selector and bound.
+    UniqueScalarLookupStatus(UniqueScalarLookup),
     NewColumn(String),
     OldColumn(String),
     Column {
