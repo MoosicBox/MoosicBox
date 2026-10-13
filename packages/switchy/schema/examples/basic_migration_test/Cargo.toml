@@ -23,7 +23,7 @@ async-trait   = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "time", "tokio"] }
 # This example deliberately demonstrates legacy SQL migrations.
 switchy_database          = { workspace = true, features = ["raw-sql", "schema"] }
-switchy_schema            = { workspace = true }
+switchy_schema            = { workspace = true, features = ["raw-sql"] }
 switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 
 [features]
