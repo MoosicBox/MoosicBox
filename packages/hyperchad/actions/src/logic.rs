@@ -430,6 +430,23 @@ impl<T: Serialize, C: Serialize> std::fmt::Display for IfExpression<T, C> {
 }
 
 #[cfg(feature = "serde")]
+impl<T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> std::str::FromStr
+    for IfExpression<T, C>
+{
+    type Err = serde_json::Error;
+
+    /// Parses an `IfExpression` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `IfExpression`
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(value)
+    }
+}
+
+#[cfg(feature = "serde")]
 impl<'a, T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> TryFrom<&'a str>
     for IfExpression<T, C>
 {
@@ -442,7 +459,7 @@ impl<'a, T: for<'de> Deserialize<'de>, C: for<'de> Deserialize<'de>> TryFrom<&'a
     /// * If the string is not valid JSON
     /// * If the JSON structure doesn't match `IfExpression`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        serde_json::from_str(value)
+        value.parse()
     }
 }
 
@@ -623,6 +640,21 @@ impl std::fmt::Display for If {
 }
 
 #[cfg(feature = "serde")]
+impl std::str::FromStr for If {
+    type Err = serde_json::Error;
+
+    /// Parses an `If` conditional from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `If`
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(value)
+    }
+}
+
+#[cfg(feature = "serde")]
 impl<'a> TryFrom<&'a str> for If {
     type Error = serde_json::Error;
 
@@ -633,7 +665,7 @@ impl<'a> TryFrom<&'a str> for If {
     /// * If the string is not valid JSON
     /// * If the JSON structure doesn't match `If`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        serde_json::from_str(value)
+        value.parse()
     }
 }
 
@@ -1996,6 +2028,36 @@ mod tests {
         let value: Value = serde_json::from_str(json).unwrap();
 
         assert_eq!(value, Value::String("hello world".to_string()));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_logic_from_str_matches_try_from() {
+        let conditional = if_stmt(Condition::Bool(true), ActionType::NoOp);
+        let json = conditional.to_string();
+        assert_eq!(json.parse::<If>().unwrap(), conditional);
+        assert_eq!(If::try_from(json.as_str()).unwrap(), conditional);
+        assert!("invalid".parse::<If>().is_err());
+
+        let expression = IfExpression {
+            condition: Condition::Bool(true),
+            value: Some("yes".to_string()),
+            default: Some("no".to_string()),
+        };
+        let json = expression.to_string();
+        assert_eq!(
+            json.parse::<IfExpression<String, Condition>>().unwrap(),
+            expression
+        );
+        assert_eq!(
+            IfExpression::<String, Condition>::try_from(json.as_str()).unwrap(),
+            expression
+        );
+        assert!(
+            "invalid"
+                .parse::<IfExpression<String, Condition>>()
+                .is_err()
+        );
     }
 
     #[cfg(feature = "serde")]

@@ -1396,6 +1396,36 @@ impl<'a> MigrationRunner<'a> {
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "code")]
+    #[switchy_async::test]
+    async fn typed_code_migrations_run_without_raw_sql() {
+        use super::MigrationRunner;
+        use crate::discovery::code::{CodeMigration, CodeMigrationSource};
+        use switchy_database::schema::{Column, DataType, create_table, drop_table};
+
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .unwrap();
+        let create = create_table("typed_runner_test").column(Column {
+            name: "id".to_string(),
+            data_type: DataType::Int,
+            nullable: false,
+            auto_increment: false,
+            default: None,
+        });
+        let mut source = CodeMigrationSource::new();
+        source.add_migration(CodeMigration::new(
+            "001_typed".to_string(),
+            Box::new(create),
+            Some(Box::new(drop_table("typed_runner_test"))),
+        ));
+        let runner = MigrationRunner::new(Box::new(source));
+        runner.run(&*db).await.unwrap();
+        assert!(db.table_exists("typed_runner_test").await.unwrap());
+        runner.run(&*db).await.unwrap();
+    }
+
+    // These compatibility fixtures deliberately execute SQL strings.
+    #[cfg(all(feature = "code", feature = "raw-sql"))]
     mod code {
         use super::super::*;
         use crate::discovery::code::{CodeMigration, CodeMigrationSource};

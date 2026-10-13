@@ -796,10 +796,12 @@ mod tests {
                 .expect("Failed to load selected connection"),
             Some(connection.clone())
         );
-        assert_eq!(
+        // Activation schedules the WebSocket task before returning. The unavailable
+        // endpoint can already have advanced it to its first reconnect attempt.
+        assert!(matches!(
             state.connection_status().await,
-            ConnectionStatus::Connecting
-        );
+            ConnectionStatus::Connecting | ConnectionStatus::Reconnecting { .. }
+        ));
         let config = state
             .connection_config
             .read()

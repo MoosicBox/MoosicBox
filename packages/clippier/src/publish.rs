@@ -1922,7 +1922,7 @@ mod tests {
         let default = feature_values(features, "default");
 
         assert_eq!(decimal, ["models/api", "serde/derive"]);
-        assert!(target_only.is_empty());
+        assert_eq!(target_only.len(), 0);
         assert_eq!(default, ["decimal", "test-utils"]);
     }
 

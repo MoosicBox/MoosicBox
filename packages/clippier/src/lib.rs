@@ -6207,7 +6207,7 @@ skip-features = ["simd"]
         .unwrap();
 
         // Verify that both "simd" and "fail-on-warnings" are skipped
-        assert!(!result.is_empty());
+        assert_ne!(result.len(), 0);
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6260,7 +6260,7 @@ skip-features = ["*-default"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(result.len(), 0);
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()

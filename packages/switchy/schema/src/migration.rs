@@ -12,6 +12,8 @@
 //! - [`CodeMigration`](crate::discovery::code::CodeMigration) with owned SQL strings
 //!
 //! ```rust
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! use std::sync::Arc;
 //! use switchy_schema::migration::Migration;
 //! use switchy_database::Database;
@@ -33,6 +35,7 @@
 //!         Ok(())
 //!     }
 //! }
+//! # }
 //! ```
 //!
 //! ### Borrowed Migrations (`'a`)

@@ -1,4 +1,4 @@
-#![cfg(feature = "snapshots")]
+#![cfg(all(feature = "snapshots", feature = "raw-sql"))]
 
 use std::path::PathBuf;
 use switchy_schema_test_utils::snapshots::MigrationSnapshotTest;

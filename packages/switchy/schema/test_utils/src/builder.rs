@@ -383,7 +383,7 @@ impl<'a> MigrationTestBuilder<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "raw-sql"))]
 mod tests {
     use super::*;
     use std::sync::Arc;

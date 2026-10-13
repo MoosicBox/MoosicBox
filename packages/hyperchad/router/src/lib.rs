@@ -2438,19 +2438,19 @@ mod tests {
         #[test_log::test]
         fn test_client_info_default() {
             let info = ClientInfo::default();
-            assert!(!info.os.name.is_empty());
+            assert_ne!(info.os.name.len(), 0);
         }
 
         #[test_log::test]
         fn test_default_client_info_static() {
             let info = DEFAULT_CLIENT_INFO.clone();
-            assert!(!info.os.name.is_empty());
+            assert_ne!(info.os.name.len(), 0);
         }
 
         #[test_log::test]
         fn test_request_info_default() {
             let info = RequestInfo::default();
-            assert!(!info.client.os.name.is_empty());
+            assert_ne!(info.client.os.name.len(), 0);
         }
     }
 

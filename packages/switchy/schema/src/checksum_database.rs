@@ -15,6 +15,8 @@
 //! ## Usage
 //!
 //! ```rust
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! use switchy_schema::ChecksumDatabase;
 //! use switchy_database::Database;
 //!
@@ -29,6 +31,7 @@
 //! let checksum = db.finalize().await;
 //! assert_eq!(checksum.len(), 32); // SHA-256 produces 32 bytes
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!
@@ -150,6 +153,8 @@ impl Savepoint for ChecksumSavepoint {
 /// # Examples
 ///
 /// ```
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema::ChecksumDatabase;
 /// use switchy_database::Database;
 ///
@@ -163,6 +168,7 @@ impl Savepoint for ChecksumSavepoint {
 /// let checksum = db.finalize().await;
 /// assert_eq!(checksum.len(), 32); // SHA-256 produces 32 bytes
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 #[derive(Debug)]
@@ -643,8 +649,12 @@ mod tests {
         let db2 = ChecksumDatabase::new();
 
         // Perform identical operations on both
-        db1.exec_raw("CREATE TABLE test").await.unwrap();
-        db2.exec_raw("CREATE TABLE test").await.unwrap();
+        db1.exec_create_table(&db1.create_table("test"))
+            .await
+            .unwrap();
+        db2.exec_create_table(&db2.create_table("test"))
+            .await
+            .unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -661,8 +671,12 @@ mod tests {
         let db2 = ChecksumDatabase::new();
 
         // Perform different operations
-        db1.exec_raw("CREATE TABLE test1").await.unwrap();
-        db2.exec_raw("CREATE TABLE test2").await.unwrap();
+        db1.exec_create_table(&db1.create_table("test1"))
+            .await
+            .unwrap();
+        db2.exec_create_table(&db2.create_table("test2"))
+            .await
+            .unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -716,27 +730,39 @@ mod tests {
         let db = ChecksumDatabase::new();
 
         // Perform operation on parent
-        db.exec_raw("PARENT_OP").await.unwrap();
+        db.exec_create_table(&db.create_table("parent"))
+            .await
+            .unwrap();
 
         // Begin transaction and perform operation
         let tx = db.begin_transaction().await.unwrap();
-        tx.exec_raw("TX_OP").await.unwrap();
+        tx.exec_create_table(&db.create_table("transaction"))
+            .await
+            .unwrap();
         tx.commit().await.unwrap();
 
         // Perform another operation on parent
-        db.exec_raw("PARENT_OP2").await.unwrap();
+        db.exec_create_table(&db.create_table("parent2"))
+            .await
+            .unwrap();
 
         let checksum = db.finalize().await;
 
         // Create another database with the same sequence of operations
         let db2 = ChecksumDatabase::new();
-        db2.exec_raw("PARENT_OP").await.unwrap();
+        db2.exec_create_table(&db2.create_table("parent"))
+            .await
+            .unwrap();
 
         let tx2 = db2.begin_transaction().await.unwrap();
-        tx2.exec_raw("TX_OP").await.unwrap();
+        tx2.exec_create_table(&db2.create_table("transaction"))
+            .await
+            .unwrap();
         tx2.commit().await.unwrap();
 
-        db2.exec_raw("PARENT_OP2").await.unwrap();
+        db2.exec_create_table(&db2.create_table("parent2"))
+            .await
+            .unwrap();
 
         let checksum2 = db2.finalize().await;
 
@@ -750,13 +776,16 @@ mod tests {
     async fn test_same_operations_with_without_transactions_differ() {
         // Without transaction
         let db1 = ChecksumDatabase::new();
-        db1.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        db1.exec_insert(&db1.insert("test").value("id", 1))
+            .await
+            .unwrap();
         let checksum1 = db1.finalize().await;
 
         // With transaction
         let db2 = ChecksumDatabase::new();
         let tx = db2.begin_transaction().await.unwrap();
-        tx.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        let insert = db2.insert("test").value("id", 1);
+        tx.exec_insert(&insert).await.unwrap();
         tx.commit().await.unwrap();
         let checksum2 = db2.finalize().await;
 
@@ -772,7 +801,8 @@ mod tests {
         // Test rollback produces different checksum than commit
         let db3 = ChecksumDatabase::new();
         let tx = db3.begin_transaction().await.unwrap();
-        tx.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        let insert = db3.insert("test").value("id", 1);
+        tx.exec_insert(&insert).await.unwrap();
         tx.rollback().await.unwrap();
         let checksum3 = db3.finalize().await;
 
@@ -888,6 +918,7 @@ mod tests {
         db.exec_delete_first(&delete).await.unwrap();
 
         // Test raw execution
+        #[cfg(feature = "raw-sql")]
         db.exec_raw("SELECT 1").await.unwrap();
 
         // Test close methods

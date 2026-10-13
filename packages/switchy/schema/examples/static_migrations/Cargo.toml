@@ -22,6 +22,7 @@ switchy_schema = { workspace = true, features = [
     "code",
     "directory",
     "embedded",
+    "raw-sql",
 ] }
 
 [features]

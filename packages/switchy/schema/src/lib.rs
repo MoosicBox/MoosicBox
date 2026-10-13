@@ -111,6 +111,8 @@
 //! Define migrations programmatically in Rust:
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! # #[cfg(feature = "code")]
 //! # {
 //! use switchy_schema::{
@@ -126,6 +128,7 @@
 //! ));
 //!
 //! let runner = MigrationRunner::new(Box::new(source));
+//! # }
 //! # }
 //! ```
 //!

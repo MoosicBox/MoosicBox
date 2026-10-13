@@ -50,13 +50,17 @@ thiserror           = { workspace = true }
 tokio               = { workspace = true }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
-switchy_database  = { workspace = true, features = ["schema"] }
-test-log          = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
+# Keep the mock's trait surface aligned when workspace tests unify raw SQL support.
+moosicbox_downloader = { workspace = true, features = ["raw-sql"] }
+pretty_assertions    = { workspace = true }
+switchy_database     = { workspace = true, features = ["schema"] }
+test-log             = { workspace = true }
+tokio                = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
 default = ["all-formats", "api", "openapi"]
+
+raw-sql = ["switchy_database/raw-sql"]
 
 fail-on-warnings = [
     "moosicbox_assert/fail-on-warnings",

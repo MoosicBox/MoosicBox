@@ -8,6 +8,8 @@
 //! Most code migrations own their data and use the `'static` lifetime:
 //!
 //! ```rust
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! use switchy_schema::discovery::code::{CodeMigration, CodeMigrationSource};
 //! use switchy_database::Executable;
 //!
@@ -21,6 +23,7 @@
 //! // Add to a migration source
 //! let mut source = CodeMigrationSource::new();
 //! source.add_migration(migration);
+//! # }
 //! ```
 //!
 //! ## Query Builder Example
@@ -92,6 +95,8 @@
 //! Collecting multiple code migrations:
 //!
 //! ```rust
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! use switchy_schema::discovery::code::{CodeMigration, CodeMigrationSource};
 //! use switchy_schema::migration::MigrationSource;
 //!
@@ -114,6 +119,7 @@
 //! // Get all migrations (sorted by ID)
 //! let migrations = source.migrations().await?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!
@@ -185,6 +191,8 @@ use switchy_database::Executable;
 /// ## Basic SQL Migration
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema::discovery::code::CodeMigration;
 ///
 /// let migration = CodeMigration::new(
@@ -192,11 +200,14 @@ use switchy_database::Executable;
 ///     Box::new("CREATE TABLE users (id INTEGER PRIMARY KEY)".to_string()),
 ///     Some(Box::new("DROP TABLE users".to_string())),
 /// );
+/// # }
 /// ```
 ///
 /// ## Migration Without Rollback
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema::discovery::code::CodeMigration;
 ///
 /// let migration = CodeMigration::new(
@@ -204,6 +215,7 @@ use switchy_database::Executable;
 ///     Box::new("INSERT INTO users (id) SELECT id FROM legacy_users".to_string()),
 ///     None, // No rollback possible for data migration
 /// );
+/// # }
 /// ```
 pub struct CodeMigration<'a> {
     id: String,
@@ -341,6 +353,8 @@ where
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema::discovery::code::{CodeMigration, CodeMigrationSource};
 ///
 /// let mut source = CodeMigrationSource::new();
@@ -356,6 +370,7 @@ where
 ///     Box::new("ALTER TABLE users ADD COLUMN email TEXT".to_string()),
 ///     None,
 /// ));
+/// # }
 /// ```
 pub struct CodeMigrationSource<'a> {
     migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
@@ -396,8 +411,10 @@ impl<'a> MigrationSource<'a> for CodeMigrationSource<'a> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "raw-sql", feature = "auto-reverse"))]
     use super::*;
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_creation() {
         let up_sql = Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY);".to_string());
@@ -408,6 +425,7 @@ mod tests {
         assert_eq!(migration.id(), "001_create_test");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_source() {
         let mut source = CodeMigrationSource::new();
@@ -426,6 +444,7 @@ mod tests {
         assert_eq!(migrations[0].id(), "001_test");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_with_query_builder() {
         // Test using the database query builders
@@ -451,6 +470,7 @@ mod tests {
         assert_eq!(migration.id(), "001_create_users");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_source_ordering() {
         let mut source = CodeMigrationSource::new();
@@ -482,6 +502,7 @@ mod tests {
         assert_eq!(migrations[2].id(), "003_third");
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_source_list() {
         let mut source = CodeMigrationSource::new();
@@ -516,6 +537,7 @@ mod tests {
         assert_eq!(list[1].description, None);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_migration_checksums() {
         use sha2::{Digest, Sha256};
@@ -561,6 +583,7 @@ mod tests {
         assert_eq!(down_checksum_no_down, expected_empty_hash);
     }
 
+    #[cfg(feature = "raw-sql")]
     #[switchy_async::test]
     async fn test_code_operation_changes_produce_different_checksums() {
         // Migration with INSERT operation

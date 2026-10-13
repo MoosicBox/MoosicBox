@@ -869,7 +869,7 @@ mod tests {
     fn test_basic_markdown() {
         let md = "**bold** and *italic*";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
@@ -925,28 +925,28 @@ mod tests {
     fn test_links() {
         let md = "[link](https://example.com)";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
     fn test_code_block() {
         let md = "```rust\nfn main() {}\n```";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
     fn test_list() {
         let md = "- Item 1\n- Item 2\n- Item 3";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
     fn test_table() {
         let md = "| Header |\n|--------|\n| Cell   |";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[cfg(feature = "xss-protection")]
@@ -976,7 +976,7 @@ mod tests {
         let container = markdown_to_container(md);
         assert_eq!(container.element, Element::Div);
         assert!(container.classes.contains(&"markdown".to_string()));
-        assert!(container.children.is_empty());
+        assert_eq!(container.children.len(), 0);
     }
 
     #[test_log::test]
@@ -1002,7 +1002,7 @@ mod tests {
             ..Default::default()
         };
         let container = markdown_to_container_with_options(md, options);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
@@ -1014,7 +1014,7 @@ mod tests {
         };
         let container = markdown_to_container_with_options(md, options);
         // When strikethrough is disabled, the ~~ should be treated as literal text
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
@@ -1025,7 +1025,7 @@ mod tests {
             ..Default::default()
         };
         let container = markdown_to_container_with_options(md, options);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
@@ -1044,14 +1044,14 @@ mod tests {
     fn test_hard_break() {
         let md = "Line 1  \nLine 2";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
     }
 
     #[test_log::test]
     fn test_inline_code() {
         let md = "This is `inline code` text";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(container.children.len(), 0);
         // Verify inline code styling is applied
         if let Some(paragraph) = container.children.first() {
             let has_inline_code = paragraph.children.iter().any(|child| {

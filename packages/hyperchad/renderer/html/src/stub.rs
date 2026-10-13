@@ -204,9 +204,9 @@ mod tests {
     fn test_stub_app_new() {
         let tag_renderer = DefaultHtmlTagRenderer::default();
         let app = StubApp::new(tag_renderer);
-        assert!(app.css_urls.is_empty());
-        assert!(app.css_paths.is_empty());
-        assert!(app.inline_css.is_empty());
+        assert_eq!(app.css_urls.len(), 0);
+        assert_eq!(app.css_paths.len(), 0);
+        assert_eq!(app.inline_css.len(), 0);
     }
 
     #[test_log::test]

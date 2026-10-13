@@ -259,7 +259,7 @@ mod tests {
             .expect_err("should fail to parse");
         let error: TunnelRequestError = json_error.into();
         // Just verify it converts without panicking
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string().len(), 0);
     }
 
     #[test_log::test]
@@ -268,7 +268,7 @@ mod tests {
         // Use a regex with unclosed parenthesis which is a valid runtime error
         let regex_error = regex::Regex::new("(unclosed").expect_err("should fail to parse");
         let error: TunnelRequestError = regex_error.into();
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string().len(), 0);
     }
 
     #[test_log::test]

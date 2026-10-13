@@ -904,7 +904,7 @@ mod tests {
         ];
 
         for status in statuses {
-            assert!(!connection_status_content(&status).is_empty());
+            assert_ne!(connection_status_content(&status).len(), 0);
         }
     }
 

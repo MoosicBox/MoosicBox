@@ -352,7 +352,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             let mut headers = self.headers(&content).unwrap_or_default();
             let navigation = match &content {
                 hyperchad_renderer::Content::View(view) => view.response.navigation.as_ref(),
-                _ => None,
+                hyperchad_renderer::Content::Raw { .. } => None,
+                #[cfg(feature = "json")]
+                hyperchad_renderer::Content::Json(_) => None,
             };
             let status = if full && navigation.is_some() {
                 303
@@ -533,7 +535,7 @@ mod tests {
     #[test_log::test]
     fn test_parse_cookies_empty_string() {
         let cookies = parse_cookies("");
-        assert!(cookies.is_empty());
+        assert_eq!(cookies.len(), 0);
     }
 
     #[test_log::test]
@@ -562,6 +564,6 @@ mod tests {
     #[test_log::test]
     fn test_parse_cookies_semicolon_only() {
         let cookies = parse_cookies(";;;");
-        assert!(cookies.is_empty());
+        assert_eq!(cookies.len(), 0);
     }
 }

@@ -5,7 +5,7 @@ use switchy_async::test as async_test;
 use switchy_database::Database;
 use switchy_schema::checksum_database::ChecksumDatabase;
 
-#[cfg(all(feature = "embedded", feature = "code"))]
+#[cfg(all(feature = "embedded", feature = "code", feature = "raw-sql"))]
 #[async_test]
 async fn test_all_migration_types_async_flow() {
     use std::sync::Arc;
@@ -166,27 +166,39 @@ async fn test_complex_transaction_flows_produce_stable_checksums() {
 
         // Begin TX1
         let tx1 = db.begin_transaction().await.unwrap();
-        tx1.exec_raw("Operation A").await.unwrap();
+        tx1.exec_create_table(&db.create_table("operation_A"))
+            .await
+            .unwrap();
 
         // Begin TX2 (nested in TX1)
         let tx2 = tx1.begin_transaction().await.unwrap();
-        tx2.exec_raw("Operation B").await.unwrap();
+        tx2.exec_create_table(&db.create_table("operation_B"))
+            .await
+            .unwrap();
 
         // Begin TX3 (nested in TX2)
         let tx3 = tx2.begin_transaction().await.unwrap();
-        tx3.exec_raw("Operation C").await.unwrap();
+        tx3.exec_create_table(&db.create_table("operation_C"))
+            .await
+            .unwrap();
         tx3.commit().await.unwrap(); // Commit TX3
 
-        tx2.exec_raw("Operation D").await.unwrap();
+        tx2.exec_create_table(&db.create_table("operation_D"))
+            .await
+            .unwrap();
 
         // Begin TX4 (nested in TX2)
         let tx4 = tx2.begin_transaction().await.unwrap();
-        tx4.exec_raw("Operation E").await.unwrap();
+        tx4.exec_create_table(&db.create_table("operation_E"))
+            .await
+            .unwrap();
         tx4.rollback().await.unwrap(); // Rollback TX4
 
         tx2.commit().await.unwrap(); // Commit TX2
 
-        tx1.exec_raw("Operation F").await.unwrap();
+        tx1.exec_create_table(&db.create_table("operation_F"))
+            .await
+            .unwrap();
         tx1.commit().await.unwrap(); // Commit TX1
 
         db.finalize().await
@@ -197,28 +209,42 @@ async fn test_complex_transaction_flows_produce_stable_checksums() {
         let db = ChecksumDatabase::new();
 
         // Operation at depth 0
-        db.exec_raw("ROOT_OP_1").await.unwrap();
+        db.exec_create_table(&db.create_table("root1"))
+            .await
+            .unwrap();
 
         let tx1 = db.begin_transaction().await.unwrap();
-        tx1.exec_raw("TX1_OP_1").await.unwrap();
+        tx1.exec_create_table(&db.create_table("TX1_OP_1"))
+            .await
+            .unwrap();
 
         let tx2 = tx1.begin_transaction().await.unwrap();
-        tx2.exec_raw("TX2_OP_1").await.unwrap();
+        tx2.exec_create_table(&db.create_table("TX2_OP_1"))
+            .await
+            .unwrap();
 
         let tx3 = tx2.begin_transaction().await.unwrap();
-        tx3.exec_raw("TX3_OP_1").await.unwrap();
+        tx3.exec_create_table(&db.create_table("TX3_OP_1"))
+            .await
+            .unwrap();
         tx3.commit().await.unwrap();
 
         // Back to TX2 level
-        tx2.exec_raw("TX2_OP_2").await.unwrap();
+        tx2.exec_create_table(&db.create_table("TX2_OP_2"))
+            .await
+            .unwrap();
         tx2.commit().await.unwrap();
 
         // Back to TX1 level
-        tx1.exec_raw("TX1_OP_2").await.unwrap();
+        tx1.exec_create_table(&db.create_table("TX1_OP_2"))
+            .await
+            .unwrap();
         tx1.commit().await.unwrap();
 
         // Back to root level
-        db.exec_raw("ROOT_OP_2").await.unwrap();
+        db.exec_create_table(&db.create_table("root2"))
+            .await
+            .unwrap();
 
         db.finalize().await
     }

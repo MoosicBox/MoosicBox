@@ -247,7 +247,7 @@ mod tests {
 
         assert!(matches!(playback_error, PlaybackError::Decode(_)));
         // OpenStream error should have "OpenStreamError" in its display
-        assert!(!playback_error.to_string().is_empty());
+        assert_ne!(playback_error.to_string().len(), 0);
     }
 
     #[test_log::test]
@@ -266,7 +266,7 @@ mod tests {
             let playback_error: PlaybackError = decode_error.into();
             assert!(matches!(playback_error, PlaybackError::Decode(_)));
             // All variants should have non-empty display output
-            assert!(!playback_error.to_string().is_empty());
+            assert_ne!(playback_error.to_string().len(), 0);
         }
     }
 }

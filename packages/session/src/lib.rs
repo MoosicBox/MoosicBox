@@ -454,8 +454,8 @@ mod tests {
                 connection_id,
                 output_id,
             } => {
-                assert!(connection_id.is_empty());
-                assert!(output_id.is_empty());
+                assert_eq!(connection_id.len(), 0);
+                assert_eq!(output_id.len(), 0);
             }
             PlaybackTarget::AudioZone { .. } => panic!("Expected ConnectionOutput variant"),
         }

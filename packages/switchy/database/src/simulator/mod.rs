@@ -420,7 +420,7 @@ impl SimulationDatabase {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "raw-sql"))]
 mod tests {
     use super::*;
     use crate::{Database, query::FilterableQuery};

@@ -453,7 +453,7 @@ mod tests {
     #[test_log::test]
     fn test_simulation_data_default() {
         let data = SimulationData::default();
-        assert!(data.users.is_empty());
+        assert_eq!(data.users.len(), 0);
         assert!(data.api_responses.is_empty());
         assert!(data.database_state.is_empty());
     }
@@ -462,8 +462,8 @@ mod tests {
     fn test_simulator_default() {
         let simulator = HyperChadSimulator::default();
         assert_eq!(simulator.app_config.name, "test-app");
-        assert!(simulator.enabled_renderers.is_empty());
-        assert!(simulator.mock_data.users.is_empty());
+        assert_eq!(simulator.enabled_renderers.len(), 0);
+        assert_eq!(simulator.mock_data.users.len(), 0);
         assert!(simulator.web_server.is_none());
     }
 

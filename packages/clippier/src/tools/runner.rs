@@ -2502,7 +2502,7 @@ mod tests {
             runner.with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
                 "other.rs",
             )])));
-        assert!(runner.tui_tool_metadata(&[rustfmt, prettier]).is_empty());
+        assert_eq!(runner.tui_tool_metadata(&[rustfmt, prettier]).len(), 0);
         assert_eq!(
             ToolRunner::new(&registry)
                 .tui_tool_metadata(&[rustfmt])
@@ -2831,7 +2831,7 @@ mod tests {
         std::fs::remove_file(root.path().join("execution-order")).unwrap();
         let (suppressed_order, suppressed_warnings) = ordered_markdown_pipeline(root.path(), true);
         assert_eq!(suppressed_order, order);
-        assert!(suppressed_warnings.is_empty());
+        assert_eq!(suppressed_warnings.len(), 0);
     }
 
     #[cfg(unix)]
@@ -3039,7 +3039,7 @@ mod tests {
                 expected.push(file.clone());
                 assert_eq!(binary, name);
                 assert_eq!(args, expected, "{name} check={check}");
-                assert!(warnings.is_empty());
+                assert_eq!(warnings.len(), 0);
             }
         }
     }
@@ -3088,12 +3088,12 @@ mod tests {
         let mut args = tool.check_args.clone();
         ToolRunner::replace_default_path_args(&tool, &mut args, &files);
         assert_eq!(args, ["lint", ".", "--path", "api/selected.proto"]);
-        assert!(tool.format_args.is_empty());
+        assert_eq!(tool.format_args.len(), 0);
         let tool = tool_catalog_entry("cppcheck").unwrap().tool();
         let mut args = tool.check_args.clone();
         ToolRunner::replace_default_path_args(&tool, &mut args, &["src/selected.cpp".to_owned()]);
         assert_eq!(args, ["--error-exitcode=1", "src/selected.cpp"]);
-        assert!(tool.format_args.is_empty());
+        assert_eq!(tool.format_args.len(), 0);
     }
 
     #[test]
@@ -3119,7 +3119,7 @@ mod tests {
                 ToolRunner::replace_default_path_args(&tool, &mut args, &files);
                 assert_eq!(args, vec![write.to_owned(), files[0].clone()]);
             } else {
-                assert!(tool.format_args.is_empty());
+                assert_eq!(tool.format_args.len(), 0);
             }
         }
     }
@@ -3142,7 +3142,7 @@ mod tests {
                 ToolRunner::replace_default_path_args(&tool, &mut args, &["analysis.R".to_owned()]);
                 assert_eq!(args, ["format", "analysis.R"]);
             } else {
-                assert!(tool.format_args.is_empty());
+                assert_eq!(tool.format_args.len(), 0);
             }
         }
     }
@@ -3217,7 +3217,7 @@ mod tests {
                 "action.yaml"
             ]
         );
-        assert!(tool.format_args.is_empty());
+        assert_eq!(tool.format_args.len(), 0);
     }
 
     #[test]

@@ -191,7 +191,7 @@ mod tests {
 
         let (workspace_deps, external_deps) = parse_dependencies(&json, &workspace_members);
 
-        assert!(workspace_deps.is_empty());
+        assert_eq!(workspace_deps.len(), 0);
         assert_eq!(external_deps.len(), 3);
         assert!(external_deps.iter().any(|d| d.name == "lodash"));
         assert!(external_deps.iter().any(|d| d.name == "express"));

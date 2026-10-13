@@ -1558,7 +1558,7 @@ mod tests {
             } => {
                 if which::which("bunx").is_ok() {
                     assert_eq!(runner, "bunx");
-                    assert!(runner_args.is_empty());
+                    assert_eq!(runner_args.len(), 0);
                     assert_eq!(tool_binary, "prettier");
                 } else if which::which("pnpm").is_ok() {
                     assert_eq!(runner, "pnpm");

@@ -387,6 +387,8 @@ pub async fn assert_row_count_min(
 /// # Example
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema_test_utils::assertions::assert_foreign_key_integrity;
 /// use switchy_database::{Database, schema::{Column, DataType}};
 ///
@@ -436,6 +438,7 @@ pub async fn assert_row_count_min(
 /// // Verify foreign key integrity
 /// assert_foreign_key_integrity(db).await?;
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 pub async fn assert_foreign_key_integrity(db: &dyn Database) -> Result<(), DatabaseError> {

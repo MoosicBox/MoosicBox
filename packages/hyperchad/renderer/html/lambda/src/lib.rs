@@ -422,7 +422,7 @@ mod tests {
     fn test_content_html_empty() {
         let html = Content::Html(String::new());
         match html {
-            Content::Html(s) => assert!(s.is_empty()),
+            Content::Html(s) => assert_eq!(s.len(), 0),
             Content::Raw { .. } => panic!("Expected Html variant"),
             #[cfg(feature = "json")]
             Content::Json(_) => panic!("Expected Html variant"),

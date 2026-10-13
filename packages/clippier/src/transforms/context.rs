@@ -688,7 +688,7 @@ build_dep = { version = "3.0", features = ["build_feature"] }
 
         let regular_dep = deps.iter().find(|d| d.name == "regular_dep").unwrap();
         assert!(!regular_dep.optional);
-        assert!(regular_dep.features.is_empty());
+        assert_eq!(regular_dep.features.len(), 0);
 
         let optional_dep = deps.iter().find(|d| d.name == "optional_dep").unwrap();
         assert!(optional_dep.optional);

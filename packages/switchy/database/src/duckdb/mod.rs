@@ -347,11 +347,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 }
             }
             ExpressionType::Gt(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid > comparison with NULL");
-                } else {
-                    format!("({} > {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid > comparison with NULL");
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::In(value) => {
                 format!("{} IN ({})", value.left.to_sql(), value.values.to_sql())
@@ -360,11 +357,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 format!("{} NOT IN ({})", value.left.to_sql(), value.values.to_sql())
             }
             ExpressionType::Lt(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid < comparison with NULL");
-                } else {
-                    format!("({} < {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid < comparison with NULL");
+                format!("({} < {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Or(value) => format!(
                 "({})",
@@ -385,18 +379,12 @@ impl<T: Expression + ?Sized> ToSql for T {
                     .join(" AND ")
             ),
             ExpressionType::Gte(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid >= comparison with NULL");
-                } else {
-                    format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid >= comparison with NULL");
+                format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Lte(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid <= comparison with NULL");
-                } else {
-                    format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid <= comparison with NULL");
+                format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",

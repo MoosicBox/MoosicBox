@@ -610,11 +610,8 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                 }
             }
             ExpressionType::Gt(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid > comparison with NULL");
-                } else {
-                    format!("({} > {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid > comparison with NULL");
+                format!("({} > {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::In(value) => {
                 format!("{} IN ({})", value.left.to_sql(), value.values.to_sql())
@@ -623,11 +620,8 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                 format!("{} NOT IN ({})", value.left.to_sql(), value.values.to_sql())
             }
             ExpressionType::Lt(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid < comparison with NULL");
-                } else {
-                    format!("({} < {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid < comparison with NULL");
+                format!("({} < {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Or(value) => format!(
                 "({})",
@@ -648,18 +642,12 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                     .join(" AND ")
             ),
             ExpressionType::Gte(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid >= comparison with NULL");
-                } else {
-                    format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid >= comparison with NULL");
+                format!("({} >= {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Lte(value) => {
-                if value.right.is_null() {
-                    panic!("Invalid <= comparison with NULL");
-                } else {
-                    format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
-                }
+                assert!(!value.right.is_null(), "Invalid <= comparison with NULL");
+                format!("({} <= {})", value.left.to_sql(), value.right.to_sql())
             }
             ExpressionType::Join(value) => format!(
                 "{} JOIN {} ON {}",
@@ -3946,9 +3934,36 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
+    // Signal after close has registered its waiter on the transaction's lock.
+    // A sleep cannot establish that ordering, particularly with a frozen clock.
+    #[cfg(feature = "raw-sql")]
+    async fn spawn_close_waiter(
+        db: std::sync::Arc<TursoDatabase>,
+    ) -> switchy_async::task::JoinHandle<Result<(), crate::DatabaseError>> {
+        use std::future::Future as _;
+
+        let (waiting, started) = switchy_async::sync::oneshot::channel();
+        let close_task = switchy_async::task::spawn(async move {
+            let mut close = std::pin::pin!(db.close());
+            std::future::poll_fn(|cx| {
+                assert!(close.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+            waiting.send(()).expect("close waiter receiver exists");
+            close.await
+        });
+        // Callers use real_time so this bound works with the simulator too.
+        switchy_async::time::timeout(std::time::Duration::from_secs(1), started)
+            .await
+            .expect("close waiter did not start")
+            .expect("close waiter sender exists");
+        close_task
+    }
+
     #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
-    #[switchy_async::test]
+    #[switchy_async::test(real_time)]
     async fn dropped_transaction_releases_close_waiter() {
         let db_path = unique_test_database_path("dropped-transaction-close");
         let db = std::sync::Arc::new(
@@ -3960,15 +3975,11 @@ mod tests {
             .await
             .expect("table creates");
         let transaction = db.begin_transaction().await.expect("transaction begins");
-        let closing = std::sync::Arc::clone(&db);
-        let close_task = switchy_async::task::spawn(async move { closing.close().await });
-        #[cfg(feature = "simulator")]
-        let mut close_task = close_task;
-        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
-        assert!(!close_task.is_finished());
+        let close_task = spawn_close_waiter(db.clone()).await;
         drop(transaction);
-        close_task
+        switchy_async::time::timeout(std::time::Duration::from_secs(1), close_task)
             .await
+            .expect("close timed out after transaction drop")
             .expect("close task joins")
             .expect("database closes after transaction drop");
         let _ = std::fs::remove_file(db_path);
@@ -3976,7 +3987,7 @@ mod tests {
 
     #[cfg(feature = "raw-sql")]
     #[allow(clippy::significant_drop_tightening)]
-    #[switchy_async::test]
+    #[switchy_async::test(real_time)]
     async fn close_waits_for_transaction_completion() {
         let db_path = unique_test_database_path("transaction-close");
         let db = std::sync::Arc::new(
@@ -3993,15 +4004,11 @@ mod tests {
             .await
             .expect("transaction inserts");
 
-        let closing = std::sync::Arc::clone(&db);
-        let close_task = switchy_async::task::spawn(async move { closing.close().await });
-        #[cfg(feature = "simulator")]
-        let mut close_task = close_task;
-        switchy_async::time::sleep(std::time::Duration::from_millis(25)).await;
-        assert!(!close_task.is_finished());
+        let close_task = spawn_close_waiter(db.clone()).await;
         transaction.commit().await.expect("transaction commits");
-        close_task
+        switchy_async::time::timeout(std::time::Duration::from_secs(1), close_task)
             .await
+            .expect("close timed out after transaction commit")
             .expect("close task joins")
             .expect("database closes");
         assert_eq!(

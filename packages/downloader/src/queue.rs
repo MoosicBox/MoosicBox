@@ -802,10 +802,12 @@ mod tests {
             Ok(())
         }
 
+        #[cfg(feature = "raw-sql")]
         async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {
             Ok(())
         }
 
+        #[cfg(feature = "raw-sql")]
         async fn query_raw(&self, _statement: &str) -> Result<Vec<Row>, DatabaseError> {
             Ok(vec![])
         }

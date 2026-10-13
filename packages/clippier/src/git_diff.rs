@@ -823,7 +823,7 @@ mod tests {
     fn test_parse_cargo_lock_empty_input() {
         let changes: Vec<(char, String)> = vec![];
         let result = parse_cargo_lock_changes(&changes);
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
     }
 
     #[test]
@@ -1081,7 +1081,7 @@ version = '1.0.0'
         let changed = vec!["unknown_dep".to_string()];
         let result = find_packages_affected_by_external_deps(&dep_map, &changed);
 
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
     }
 
     #[test]

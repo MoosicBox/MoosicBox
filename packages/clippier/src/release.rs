@@ -1984,7 +1984,7 @@ features = []
             package_config.feature_policy,
             SemverFeaturePolicy::ExplicitOnly
         );
-        assert!(package_config.features.is_empty());
+        assert_eq!(package_config.features.len(), 0);
         assert_eq!(
             config.for_package("other").feature_policy,
             SemverFeaturePolicy::All
@@ -2169,7 +2169,7 @@ publish = false
         let second =
             handle_independentize_command(&config, OutputType::Json).expect("second apply");
         let report: IndependentizeReport = serde_json::from_str(&second).expect("second report");
-        assert!(report.packages.is_empty());
+        assert_eq!(report.packages.len(), 0);
     }
 
     #[test]

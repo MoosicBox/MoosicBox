@@ -385,7 +385,11 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
         let executable = write_successful_tool(temp.path(), fixture.tool);
         let tool_path = format!("{}={}", fixture.tool, executable.display());
 
-        for (command, extra_args) in [("fmt", vec!["--scope", "all"]), ("check", vec![])] {
+        for (command, extra_args) in [
+            ("fmt", vec!["--scope", "all"]),
+            #[cfg(feature = "check")]
+            ("check", vec![]),
+        ] {
             if command == "fmt"
                 && matches!(
                     fixture.tool,
@@ -439,7 +443,7 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "check"))]
 #[test]
 fn mixed_monorepo_resolves_nested_configs_ownership_linters_exclusions_and_overrides() {
     let temp = tempfile::tempdir().unwrap();
@@ -581,29 +585,32 @@ fn default_fmt_and_list_never_invoke_acquisition_runners() {
         .collect::<Vec<_>>();
     assert!(unavailable.contains(&"prettier"));
 
-    let checked = Command::new(env!("CARGO_BIN_EXE_clippier"))
-        .arg("check")
-        .arg("--working-dir")
-        .arg(temp.path())
-        .arg("--output")
-        .arg("json")
-        .env("PATH", temp.path())
-        .output()
-        .unwrap();
-    assert!(
-        checked.status.success(),
-        "{}",
-        String::from_utf8_lossy(&checked.stderr)
-    );
-    let check_json: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
-    assert_eq!(check_json["total"], 0);
-    assert!(
-        check_json["plan"]["unavailable_tools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|tool| tool == "prettier")
-    );
+    #[cfg(feature = "check")]
+    {
+        let checked = Command::new(env!("CARGO_BIN_EXE_clippier"))
+            .arg("check")
+            .arg("--working-dir")
+            .arg(temp.path())
+            .arg("--output")
+            .arg("json")
+            .env("PATH", temp.path())
+            .output()
+            .unwrap();
+        assert!(
+            checked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        let check_json: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+        assert_eq!(check_json["total"], 0);
+        assert!(
+            check_json["plan"]["unavailable_tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|tool| tool == "prettier")
+        );
+    }
 
     let listed = Command::new(env!("CARGO_BIN_EXE_clippier"))
         .arg("fmt")

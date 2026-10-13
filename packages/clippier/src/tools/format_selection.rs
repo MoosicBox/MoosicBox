@@ -288,14 +288,14 @@ mod tests {
 
         let error = resolve_format_selection(&dir, FormatScope::Branch, Some("does-not-exist"))
             .unwrap_err();
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string().len(), 0);
         std::fs::remove_dir_all(dir).unwrap();
 
         let unborn = temp_dir("clippier-format-missing-head");
         Repository::init(&unborn).unwrap();
         let error =
             resolve_format_selection(&unborn, FormatScope::Branch, Some("HEAD")).unwrap_err();
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string().len(), 0);
         std::fs::remove_dir_all(unborn).unwrap();
     }
 

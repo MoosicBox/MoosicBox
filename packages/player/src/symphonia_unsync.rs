@@ -103,18 +103,18 @@ mod tests {
         let playback_error: PlaybackError = decode_error.into();
 
         assert!(matches!(playback_error, PlaybackError::Decode(_)));
-        assert!(!playback_error.to_string().is_empty());
+        assert_ne!(playback_error.to_string().len(), 0);
     }
 
     #[test_log::test]
     fn test_playback_error_display_variants() {
         // Test Decode variant display with PlayStream error
         let error = PlaybackError::Decode(DecodeError::AudioDecode(AudioDecodeError::PlayStream));
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string().len(), 0);
 
         // Test that errors can be debugged
         let debug_str = format!("{error:?}");
-        assert!(!debug_str.is_empty());
+        assert_ne!(debug_str.len(), 0);
     }
 
     #[test_log::test]
@@ -133,7 +133,7 @@ mod tests {
             let playback_error: PlaybackError = decode_error.into();
             assert!(matches!(playback_error, PlaybackError::Decode(_)));
             // All variants should have non-empty display output
-            assert!(!playback_error.to_string().is_empty());
+            assert_ne!(playback_error.to_string().len(), 0);
         }
     }
 }

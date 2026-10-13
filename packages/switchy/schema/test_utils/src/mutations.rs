@@ -21,6 +21,8 @@ use switchy_database::Executable;
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use std::{collections::BTreeMap, sync::Arc};
 /// use switchy_schema_test_utils::mutations::MutationProvider;
 /// use switchy_database::Executable;
@@ -34,6 +36,7 @@ use switchy_database::Executable;
 ///
 /// // This mutation will be executed after migration "001_create_users"
 /// let mutation = mutations.get_mutation("001_create_users").await;
+/// # }
 /// # }
 /// ```
 #[async_trait]
@@ -63,6 +66,8 @@ pub trait MutationProvider: Send + Sync {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use std::{collections::BTreeMap, sync::Arc};
 /// use switchy_schema_test_utils::mutations::MutationProvider;
 /// use switchy_database::Executable;
@@ -81,6 +86,7 @@ pub trait MutationProvider: Send + Sync {
 /// // Use with verify_migrations_with_mutations
 /// // verify_migrations_with_mutations(db, migrations, mutations).await?;
 /// # }
+/// # }
 /// ```
 #[async_trait]
 impl MutationProvider for BTreeMap<String, Arc<dyn Executable>> {
@@ -97,6 +103,8 @@ impl MutationProvider for BTreeMap<String, Arc<dyn Executable>> {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use std::sync::Arc;
 /// use switchy_schema_test_utils::mutations::MutationProvider;
 /// use switchy_database::Executable;
@@ -109,6 +117,7 @@ impl MutationProvider for BTreeMap<String, Arc<dyn Executable>> {
 ///
 /// // Use with verify_migrations_with_mutations
 /// // verify_migrations_with_mutations(db, migrations, mutations).await?;
+/// # }
 /// # }
 /// ```
 #[async_trait]
@@ -128,6 +137,8 @@ impl MutationProvider for Vec<(String, Arc<dyn Executable>)> {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use switchy_schema_test_utils::mutations::{MutationBuilder, MutationProvider};
 /// use switchy_database::Executable;
 ///
@@ -139,6 +150,7 @@ impl MutationProvider for Vec<(String, Arc<dyn Executable>)> {
 ///
 /// // Use with verify_migrations_with_mutations
 /// // verify_migrations_with_mutations(db, migrations, mutations).await?;
+/// # }
 /// # }
 /// ```
 pub struct MutationBuilder {
@@ -191,8 +203,8 @@ mod tests {
     #[switchy_async::test]
     async fn test_mutation_builder() {
         let mutations = MutationBuilder::new()
-            .add_mutation("001_test", "SELECT 1")
-            .add_mutation("002_test", "SELECT 2")
+            .add_mutation("001_test", switchy_database::schema::create_table("test_1"))
+            .add_mutation("002_test", switchy_database::schema::create_table("test_2"))
             .build();
 
         assert_eq!(mutations.len(), 2);
@@ -211,11 +223,11 @@ mod tests {
         let mut mutations = BTreeMap::new();
         mutations.insert(
             "001_test".to_string(),
-            Arc::new("SELECT 1".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_1")) as Arc<dyn Executable>,
         );
         mutations.insert(
             "002_test".to_string(),
-            Arc::new("SELECT 2".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_2")) as Arc<dyn Executable>,
         );
 
         // Test existing mutation
@@ -232,11 +244,11 @@ mod tests {
         let mutations = vec![
             (
                 "001_test".to_string(),
-                Arc::new("SELECT 1".to_string()) as Arc<dyn Executable>,
+                Arc::new(switchy_database::schema::create_table("test_1")) as Arc<dyn Executable>,
             ),
             (
                 "002_test".to_string(),
-                Arc::new("SELECT 2".to_string()) as Arc<dyn Executable>,
+                Arc::new(switchy_database::schema::create_table("test_2")) as Arc<dyn Executable>,
             ),
         ];
 
@@ -256,8 +268,8 @@ mod tests {
     #[switchy_async::test]
     async fn test_mutation_builder_as_provider() {
         let mutations = MutationBuilder::new()
-            .add_mutation("001_test", "SELECT 1")
-            .add_mutation("002_test", "SELECT 2")
+            .add_mutation("001_test", switchy_database::schema::create_table("test_1"))
+            .add_mutation("002_test", switchy_database::schema::create_table("test_2"))
             .build();
 
         // Test that builder result works as MutationProvider
@@ -274,15 +286,15 @@ mod tests {
         let mut mutations = BTreeMap::new();
         mutations.insert(
             "003_third".to_string(),
-            Arc::new("SELECT 3".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_3")) as Arc<dyn Executable>,
         );
         mutations.insert(
             "001_first".to_string(),
-            Arc::new("SELECT 1".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_1")) as Arc<dyn Executable>,
         );
         mutations.insert(
             "002_second".to_string(),
-            Arc::new("SELECT 2".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_2")) as Arc<dyn Executable>,
         );
 
         // BTreeMap should maintain sorted order
@@ -295,7 +307,7 @@ mod tests {
         let mut mutations = BTreeMap::new();
         mutations.insert(
             "001_test".to_string(),
-            Arc::new("SELECT 1".to_string()) as Arc<dyn Executable>,
+            Arc::new(switchy_database::schema::create_table("test_1")) as Arc<dyn Executable>,
         );
 
         // Test that we can call get_mutation multiple times (Arc cloning)

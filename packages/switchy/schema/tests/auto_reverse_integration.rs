@@ -40,9 +40,25 @@ async fn test_reversible_index_migration() {
     let db = create_empty_in_memory().await.unwrap();
 
     // Setup: create table first
-    db.exec_raw("CREATE TABLE users (id INT, email TEXT)")
-        .await
-        .unwrap();
+    db.exec_create_table(
+        &create_table("users")
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::Int,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "email".to_string(),
+                data_type: DataType::Text,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            }),
+    )
+    .await
+    .unwrap();
 
     // Create index using auto-reversible migration
     let create_idx = create_index("idx_users_email")
@@ -66,7 +82,15 @@ async fn test_reversible_column_migration() {
     let db = create_empty_in_memory().await.unwrap();
 
     // Setup: create table
-    db.exec_raw("CREATE TABLE users (id INT)").await.unwrap();
+    db.exec_create_table(&create_table("users").column(Column {
+        name: "id".to_string(),
+        data_type: DataType::Int,
+        nullable: true,
+        auto_increment: false,
+        default: None,
+    }))
+    .await
+    .unwrap();
 
     // Add column using auto-reversible operation
     // Note: Using individual parameters instead of Column struct

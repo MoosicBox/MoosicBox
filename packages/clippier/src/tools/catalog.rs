@@ -2092,8 +2092,8 @@ mod tests {
         for entry in TOOL_CATALOG {
             assert!(names.insert(entry.name), "duplicate tool {}", entry.name);
             assert!(entry.binary.is_ascii());
-            assert!(!entry.binary.is_empty());
-            assert!(!entry.capabilities.is_empty());
+            assert_ne!(entry.binary.len(), 0);
+            assert_ne!(entry.capabilities.len(), 0);
             assert!(
                 entry
                     .signals
@@ -2137,10 +2137,10 @@ mod tests {
                     "{} cannot format",
                     entry.name
                 );
-                assert!(!entry.format_extensions.is_empty());
+                assert_ne!(entry.format_extensions.len(), 0);
             }
             if entry.capabilities.contains(&ToolCapability::Lint) {
-                assert!(!entry.lint_extensions.is_empty());
+                assert_ne!(entry.lint_extensions.len(), 0);
             }
             assert!(
                 entry

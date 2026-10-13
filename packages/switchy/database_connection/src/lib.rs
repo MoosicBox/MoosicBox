@@ -507,9 +507,8 @@ pub async fn init(
                 feature = "sqlite-sqlx"
             )))]
             panic!("Invalid database features")
-        } else {
-            panic!("Invalid database features")
         }
+        panic!("Invalid database features")
     }
 }
 

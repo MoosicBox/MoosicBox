@@ -2393,7 +2393,7 @@ dev_dep = "1.0"
         let package_a_cargo = validator.package_cargo_values.get("pkg_a").unwrap();
 
         let features = validator.get_features_to_check("pkg_a", package_a_cargo);
-        assert!(!features.is_empty());
+        assert_ne!(features.len(), 0);
         assert!(features.contains(&"fail-on-warnings".to_string()));
         assert!(features.contains(&"test-feature".to_string()));
     }
@@ -3328,7 +3328,7 @@ serde = []
     #[test]
     fn test_resolve_skip_features_empty_vec_returns_empty() {
         let result = resolve_skip_features(&Some(vec![]));
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
     }
 
     #[test]

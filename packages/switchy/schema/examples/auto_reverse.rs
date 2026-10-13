@@ -55,8 +55,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("--------------------------------------");
 
     // First, create a table for the index
-    db.exec_raw("CREATE TABLE products (id INT PRIMARY KEY, name TEXT, price REAL)")
-        .await?;
+    db.exec_create_table(
+        &create_table("products")
+            .column(Column {
+                name: "id".to_string(),
+                data_type: DataType::Int,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "name".to_string(),
+                data_type: DataType::Text,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .column(Column {
+                name: "price".to_string(),
+                data_type: DataType::Real,
+                nullable: true,
+                auto_increment: false,
+                default: None,
+            })
+            .primary_key("id"),
+    )
+    .await?;
 
     let create_index_stmt = create_index("idx_products_name")
         .table("products")

@@ -2244,7 +2244,7 @@ mod tests {
             );
 
             // When overflow_buf is not empty, it should prepend to buf and clear overflow_buf
-            assert!(overflow_buf.is_empty());
+            assert_eq!(overflow_buf.len(), 0);
             assert_eq!(buf, "overflow_data_existing_content");
             assert_eq!(prefix, "11111|2|");
         }
@@ -2301,8 +2301,8 @@ mod tests {
             );
 
             // When both are empty, they should remain empty
-            assert!(buf.is_empty());
-            assert!(overflow_buf.is_empty());
+            assert_eq!(buf.len(), 0);
+            assert_eq!(overflow_buf.len(), 0);
         }
     }
 }

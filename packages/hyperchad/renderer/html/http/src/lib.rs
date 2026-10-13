@@ -880,7 +880,7 @@ mod tests {
             let response = app.process(&req).await.unwrap();
 
             assert_eq!(response.status(), 204);
-            assert!(response.body().is_empty());
+            assert_eq!(response.body().len(), 0);
         }
 
         #[test_log::test(switchy_async::test)]
@@ -1149,7 +1149,7 @@ mod tests {
             );
             // View without primary returns empty string for html content
             let body_str = std::str::from_utf8(response.body()).unwrap();
-            assert!(body_str.is_empty());
+            assert_eq!(body_str.len(), 0);
         }
 
         #[test_log::test(switchy_async::test)]
@@ -1166,7 +1166,7 @@ mod tests {
 
             // Router returning None should produce a 204 No Content response
             assert_eq!(response.status(), 204);
-            assert!(response.body().is_empty());
+            assert_eq!(response.body().len(), 0);
         }
 
         #[test_log::test(switchy_async::test)]

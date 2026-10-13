@@ -1641,7 +1641,7 @@ mod tests {
                 assert!(!track.contains_cover);
                 assert_eq!(track.copyright, None);
                 assert!(!track.explicit);
-                assert!(track.media_metadata_tags.is_empty());
+                assert_eq!(track.media_metadata_tags.len(), 0);
             }
         }
     }

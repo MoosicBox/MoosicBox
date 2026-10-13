@@ -731,6 +731,7 @@ impl Default for VersionTracker {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "raw-sql")]
     #[test_log::test(switchy_async::test)]
     async fn test_ensure_table_exists_upgrades_legacy_schema() {
         let db = switchy_schema_test_utils::create_empty_in_memory()
@@ -786,6 +787,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "raw-sql")]
     #[test_log::test(switchy_async::test)]
     async fn test_ensure_table_exists_completes_partial_legacy_upgrade() {
         let db = switchy_schema_test_utils::create_empty_in_memory()
@@ -831,6 +833,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "raw-sql")]
     #[test_log::test(switchy_async::test)]
     async fn test_ensure_table_exists_rejects_unknown_schema() {
         let db = switchy_schema_test_utils::create_empty_in_memory()

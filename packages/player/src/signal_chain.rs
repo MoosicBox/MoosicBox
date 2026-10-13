@@ -603,7 +603,7 @@ mod tests {
 
             // Use the OpenStream variant which exists in AudioDecodeError
             let audio_error = SignalChainProcessorError::AudioDecode(AudioDecodeError::OpenStream);
-            assert!(!audio_error.to_string().is_empty());
+            assert_ne!(audio_error.to_string().len(), 0);
         }
     }
 
@@ -782,7 +782,7 @@ mod tests {
             assert_eq!(&buf[..3], &[10, 20, 30]);
 
             // Overflow should be empty
-            assert!(processor.overflow.is_empty());
+            assert_eq!(processor.overflow.len(), 0);
         }
     }
 

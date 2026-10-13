@@ -1333,7 +1333,9 @@ mod bundled_lifecycle_tests {
         assert!(error.to_string().contains("injected bind failure"));
     }
 
-    #[switchy_async::test]
+    // The simulator clock does not advance automatically, including for the
+    // timeout guarding this wall-clock delay.
+    #[switchy_async::test(real_time)]
     async fn startup_waits_for_delayed_terminal_result() {
         let (mut startup, sender) = BundledStartup::pending();
         switchy_async::runtime::Handle::current().spawn_with_name(

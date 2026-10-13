@@ -3098,7 +3098,7 @@ mod get_parent_directories_tests {
     fn test_parent_directories_for_root() {
         let parents = get_parent_directories("/");
         // Root has no parents
-        assert!(parents.is_empty());
+        assert_eq!(parents, Vec::<String>::new());
     }
 
     #[test_log::test]
@@ -3120,8 +3120,23 @@ mod get_directory_children_tests {
         sync::create_dir_all("/empty").unwrap();
 
         let (files, subdirs) = get_directory_children("/empty");
-        assert!(files.is_empty());
-        assert!(subdirs.is_empty());
+        assert_eq!(files, Vec::<String>::new());
+        assert_eq!(subdirs, Vec::<String>::new());
+    }
+
+    #[test_log::test]
+    fn test_children_empty_after_removing_mixed_content() {
+        reset_fs();
+        sync::create_dir_all("/removed/sub/nested").unwrap();
+        sync::write("/removed/file.txt", b"data").unwrap();
+        sync::write("/removed/sub/nested/file.txt", b"nested data").unwrap();
+
+        sync::remove_dir_all("/removed").unwrap();
+        sync::create_dir_all("/removed").unwrap();
+
+        let (files, subdirs) = get_directory_children("/removed");
+        assert_eq!(files, Vec::<String>::new());
+        assert_eq!(subdirs, Vec::<String>::new());
     }
 
     #[test_log::test]
@@ -3134,7 +3149,7 @@ mod get_directory_children_tests {
         let (mut files, subdirs) = get_directory_children("/files_only");
         files.sort();
         assert_eq!(files, vec!["a.txt", "b.txt"]);
-        assert!(subdirs.is_empty());
+        assert_eq!(subdirs, Vec::<String>::new());
     }
 
     #[test_log::test]
@@ -3145,7 +3160,7 @@ mod get_directory_children_tests {
 
         let (files, mut subdirs) = get_directory_children("/dirs_only");
         subdirs.sort();
-        assert!(files.is_empty());
+        assert_eq!(files, Vec::<String>::new());
         assert_eq!(subdirs, vec!["subdir1", "subdir2"]);
     }
 
@@ -3168,7 +3183,7 @@ mod get_directory_children_tests {
 
         let (files, mut subdirs) = get_directory_children("/");
         subdirs.sort();
-        assert!(files.is_empty());
+        assert_eq!(files, Vec::<String>::new());
         assert!(subdirs.contains(&"root_test".to_string()));
         assert!(subdirs.contains(&"another".to_string()));
     }

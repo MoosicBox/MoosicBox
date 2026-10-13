@@ -1335,6 +1335,21 @@ impl std::fmt::Display for ActionType {
 }
 
 #[cfg(feature = "serde")]
+impl std::str::FromStr for ActionType {
+    type Err = serde_json::Error;
+
+    /// Parses an `ActionType` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `ActionType`
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(value)
+    }
+}
+
+#[cfg(feature = "serde")]
 impl<'a> TryFrom<&'a str> for ActionType {
     type Error = serde_json::Error;
 
@@ -1345,7 +1360,7 @@ impl<'a> TryFrom<&'a str> for ActionType {
     /// * If the string is not valid JSON
     /// * If the JSON structure doesn't match `ActionType`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        serde_json::from_str(value)
+        value.parse()
     }
 }
 
@@ -1376,6 +1391,21 @@ impl std::fmt::Display for StyleAction {
 }
 
 #[cfg(feature = "serde")]
+impl std::str::FromStr for StyleAction {
+    type Err = serde_json::Error;
+
+    /// Parses a `StyleAction` from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// * If the string is not valid JSON
+    /// * If the JSON structure doesn't match `StyleAction`
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(value)
+    }
+}
+
+#[cfg(feature = "serde")]
 impl<'a> TryFrom<&'a str> for StyleAction {
     type Error = serde_json::Error;
 
@@ -1386,7 +1416,7 @@ impl<'a> TryFrom<&'a str> for StyleAction {
     /// * If the string is not valid JSON
     /// * If the JSON structure doesn't match `StyleAction`
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        serde_json::from_str(value)
+        value.parse()
     }
 }
 
@@ -1405,6 +1435,24 @@ pub mod prelude {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test_log::test]
+    fn test_action_from_str_matches_try_from() {
+        let action = ActionType::Navigate {
+            url: "/home".to_string(),
+        };
+        let json = action.to_string();
+        assert_eq!(json.parse::<ActionType>().unwrap(), action);
+        assert_eq!(ActionType::try_from(json.as_str()).unwrap(), action);
+        assert!("invalid".parse::<ActionType>().is_err());
+
+        let style = StyleAction::SetFocus(true);
+        let json = style.to_string();
+        assert_eq!(json.parse::<StyleAction>().unwrap(), style);
+        assert_eq!(StyleAction::try_from(json.as_str()).unwrap(), style);
+        assert!("invalid".parse::<StyleAction>().is_err());
+    }
 
     #[test_log::test]
     fn test_action_effect_delay_off() {

@@ -1345,7 +1345,7 @@ format-order = 20
             None,
         );
 
-        assert!(warnings.is_empty());
+        assert_eq!(warnings.len(), 0);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1374,7 +1374,7 @@ format-order = 20
             None,
         );
 
-        assert!(warnings.is_empty());
+        assert_eq!(warnings.len(), 0);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1486,7 +1486,7 @@ format-order = 20
             &std::collections::BTreeMap::new(),
         );
 
-        assert!(warnings.is_empty());
+        assert_eq!(warnings.len(), 0);
     }
 
     #[test]

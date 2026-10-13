@@ -708,7 +708,7 @@ mod tests {
         // Note: This test depends on the actual command line arguments,
         // so we're just checking that it doesn't panic
         let args = get_cargoified_args();
-        assert!(!args.is_empty());
+        assert_ne!(args.len(), 0);
     }
 
     #[test_log::test]

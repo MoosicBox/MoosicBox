@@ -15,8 +15,12 @@ version     = { workspace = true }
 tests = false
 
 [dependencies]
-switchy_async    = { workspace = true, features = ["macros", "rt-multi-thread"] }
-switchy_database = { workspace = true, features = ["schema", "turso"] }
+switchy_async = { workspace = true, features = ["macros", "rt-multi-thread"] }
+switchy_database = { workspace = true, features = [
+    "raw-sql",
+    "schema",
+    "turso",
+] }
 
 [features]
 fail-on-warnings = [

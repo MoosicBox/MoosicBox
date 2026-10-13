@@ -591,7 +591,7 @@ mod tests {
 
         let sorted = sort_artists(artists, &request);
 
-        assert!(sorted.is_empty());
+        assert_eq!(sorted.len(), 0);
     }
 
     #[test_log::test]
@@ -609,6 +609,6 @@ mod tests {
 
         let filtered = filter_artists(artists, &request);
 
-        assert!(filtered.is_empty());
+        assert_eq!(filtered.len(), 0);
     }
 }

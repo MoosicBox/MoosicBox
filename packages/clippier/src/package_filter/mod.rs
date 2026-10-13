@@ -265,7 +265,7 @@ mod tests {
         let result =
             apply_filters(&packages, &package_paths, temp_path, &skip_filters, &[]).unwrap();
 
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
     }
 
     #[test]

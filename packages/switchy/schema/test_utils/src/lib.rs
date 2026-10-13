@@ -38,6 +38,8 @@
 //! ### Testing Data Migrations
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! # #[cfg(feature = "sqlite")]
 //! # {
 //! use switchy_schema_test_utils::MigrationTestBuilder;
@@ -62,11 +64,14 @@
 //! # Ok(())
 //! # }
 //! # }
+//! # }
 //! ```
 //!
 //! ### Multiple Breakpoints
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "raw-sql")]
+//! # {
 //! # #[cfg(feature = "sqlite")]
 //! # {
 //! use switchy_schema_test_utils::MigrationTestBuilder;
@@ -88,6 +93,7 @@
 //!     .run(db)
 //!     .await?;
 //! # Ok(())
+//! # }
 //! # }
 //! # }
 //! ```
@@ -250,6 +256,8 @@ pub async fn verify_migrations_full_cycle<'a>(
 /// # Examples
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use std::sync::Arc;
 /// use switchy_schema_test_utils::{verify_migrations_with_state, TestError};
 /// use switchy_schema::migration::Migration;
@@ -268,6 +276,7 @@ pub async fn verify_migrations_full_cycle<'a>(
 ///     })
 /// ).await?;
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 pub async fn verify_migrations_with_state<'a, F>(
@@ -321,6 +330,8 @@ where
 /// # Examples
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "raw-sql")]
+/// # {
 /// use std::{collections::BTreeMap, sync::Arc};
 /// use switchy_schema_test_utils::{verify_migrations_with_mutations, TestError, mutations::MutationProvider};
 /// use switchy_schema::migration::Migration;
@@ -337,6 +348,7 @@ where
 /// // Test migrations with mutations
 /// verify_migrations_with_mutations(db, migrations, mutation_map).await?;
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 pub async fn verify_migrations_with_mutations<'a, M>(
@@ -379,7 +391,7 @@ where
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "raw-sql"))]
 mod tests {
     use super::*;
     use std::sync::Arc;

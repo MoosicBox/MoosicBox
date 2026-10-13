@@ -3,6 +3,8 @@
 //! These tests verify that the migration system properly handles failures,
 //! tracks status correctly, and provides working recovery mechanisms.
 
+#![cfg(feature = "raw-sql")]
+
 use switchy_schema::{migration::MigrationStatus, version::VersionTracker};
 use switchy_schema_test_utils::create_empty_in_memory;
 

@@ -3,7 +3,7 @@
 //! These examples demonstrate how to use the snapshot testing functionality
 //! and serve as both documentation and verification that the APIs work correctly.
 
-#![cfg(feature = "snapshots")]
+#![cfg(all(feature = "snapshots", feature = "raw-sql"))]
 
 use std::sync::Arc;
 use switchy_schema::discovery::embedded::EmbeddedMigration;

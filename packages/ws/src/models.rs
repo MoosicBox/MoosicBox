@@ -518,7 +518,7 @@ mod tests {
             InboundPayload::RegisterConnection(p) => {
                 assert_eq!(p.payload.connection_id, "conn-456");
                 assert_eq!(p.payload.name, "My Connection");
-                assert!(p.payload.players.is_empty());
+                assert_eq!(p.payload.players.len(), 0);
             }
             _ => panic!("Expected RegisterConnection variant"),
         }
@@ -725,7 +725,7 @@ mod tests {
 
         match payload {
             OutboundPayload::Connections(p) => {
-                assert!(p.payload.is_empty());
+                assert_eq!(p.payload.len(), 0);
             }
             _ => panic!("Expected Connections variant"),
         }
