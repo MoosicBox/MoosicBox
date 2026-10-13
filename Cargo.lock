@@ -11121,10 +11121,10 @@ name = "moosicbox_log_watch"
 version = "0.4.0"
 dependencies = [
  "anyhow",
+ "bmux_tui",
  "clap",
  "crossterm 0.29.0",
  "moosicbox_log_runtime",
- "ratatui",
  "regex",
  "serde",
  "serde_json",

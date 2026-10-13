@@ -3,7 +3,7 @@ authors     = { workspace = true }
 categories  = ["development-tools"]
 description = "Generic log watching, filtering, and optional TUI"
 edition     = { workspace = true }
-keywords    = ["log", "ratatui", "tail", "watch"]
+keywords    = ["bmux", "log", "tail", "watch"]
 license     = { workspace = true }
 name        = "moosicbox_log_watch"
 readme      = "README.md"
@@ -20,10 +20,10 @@ anyhow = { workspace = true }
 regex  = { workspace = true }
 time   = { workspace = true, features = ["formatting", "parsing"] }
 
+bmux_tui              = { workspace = true, optional = true }
 clap                  = { workspace = true, features = ["derive", "env"], optional = true }
 crossterm             = { workspace = true, optional = true }
 moosicbox_log_runtime = { workspace = true, optional = true }
-ratatui               = { workspace = true, optional = true }
 serde                 = { workspace = true, features = ["derive"], optional = true }
 serde_json            = { workspace = true, optional = true }
 
@@ -33,4 +33,4 @@ fail-on-warnings = ["moosicbox_log_runtime?/fail-on-warnings"]
 
 cli              = ["dep:clap", "dep:moosicbox_log_runtime"]
 persistence-json = ["dep:serde", "dep:serde_json"]
-tui              = ["dep:crossterm", "dep:ratatui"]
+tui              = ["dep:bmux_tui", "dep:crossterm"]

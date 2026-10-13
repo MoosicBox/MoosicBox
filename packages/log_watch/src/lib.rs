@@ -645,24 +645,40 @@ pub fn profile_rename(state_file: &Path, from: &str, to: &str) -> Result<()> {
 mod tui {
     //! Terminal user interface for live log watching.
 
-    use super::*;
+    #[cfg(feature = "persistence-json")]
+    use super::{
+        JsonLinesWatchConfig, WatchProfileState, profile_show, read_state_file,
+        watch_filter_rule_to_state, write_state_file,
+    };
+    use super::{
+        LogFilterCaseMode, LogFilterKind, LogFilterRule, ProfileDetails, WatchInputFormat,
+        WatchRunConfig, WatchSource, active_log_file_path, line_matches_since,
+        line_visible_in_watch, normalize_profile_name, parse_since_cutoff,
+        watch_filter_state_to_rule,
+    };
+    use anyhow::{Context, Result};
+    use bmux_tui::geometry::Rect;
+    use bmux_tui::paint::{LocalRect, PaintCx};
+    use bmux_tui::style::{Color, Modifier, Style};
+    use bmux_tui::terminal::Terminal;
+    use bmux_tui::text::{Line, Span};
     use crossterm::cursor::{Hide, Show};
     use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
     use crossterm::execute;
     use crossterm::terminal;
     use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
     use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-    use ratatui::Terminal;
-    use ratatui::backend::CrosstermBackend;
-    use ratatui::layout::{Constraint, Direction, Layout};
-    use ratatui::style::{Color, Modifier, Style};
-    use ratatui::text::{Line, Span};
-    use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
     use std::collections::{BTreeMap, VecDeque};
-    use std::io::{Read, Seek, Write};
+    use std::io::{BufRead, Read, Seek, Write};
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
+    use time::OffsetDateTime;
 
     const WATCH_BUFFER_LIMIT: usize = 20_000;
+    // Fail explicitly on oversized records; never pretend truncated output is complete.
+    const WATCH_LINE_LIMIT: usize = 64 * 1024;
+    const WATCH_READ_LIMIT: u64 = 64 * 1024;
+    const WATCH_RETAINED_BYTES: usize = 16 * 1024 * 1024;
     const WATCH_STATUS_HEIGHT: u16 = 4;
     const WATCH_FILTER_HEIGHT: u16 = 5;
     const WATCH_INFO_HEIGHT: u16 = 3;
@@ -769,6 +785,7 @@ mod tui {
         }
     }
 
+    #[cfg(feature = "persistence-json")]
     fn format_column_value(value: &str, width: Option<usize>) -> String {
         let Some(width) = width else {
             return value.to_string();
@@ -802,7 +819,7 @@ mod tui {
                 style = style.add_modifier(Modifier::BOLD);
             }
             if self.underline {
-                style = style.add_modifier(Modifier::UNDERLINED);
+                style = style.add_modifier(Modifier::UNDERLINE);
             }
             style
         }
@@ -859,16 +876,16 @@ mod tui {
             (4, false) => Color::Blue,
             (5, false) => Color::Magenta,
             (6, false) => Color::Cyan,
-            (7, false) => Color::Gray,
-            (0, true) => Color::DarkGray,
-            (1, true) => Color::LightRed,
-            (2, true) => Color::LightGreen,
-            (3, true) => Color::LightYellow,
-            (4, true) => Color::LightBlue,
-            (5, true) => Color::LightMagenta,
-            (6, true) => Color::LightCyan,
-            (7, true) => Color::White,
-            _ => Color::Reset,
+            (7, false) => Color::White,
+            (0, true) => Color::BrightBlack,
+            (1, true) => Color::BrightRed,
+            (2, true) => Color::BrightGreen,
+            (3, true) => Color::BrightYellow,
+            (4, true) => Color::BrightBlue,
+            (5, true) => Color::BrightMagenta,
+            (6, true) => Color::BrightCyan,
+            (7, true) => Color::BrightWhite,
+            _ => Color::Default,
         }
     }
 
@@ -910,7 +927,7 @@ mod tui {
             .replace("\\u001B", "\u{001b}")
     }
 
-    fn ansi_to_line(line: &str) -> Line<'static> {
+    fn ansi_to_line(line: &str) -> Line {
         let decoded = decode_escaped_ansi(line);
         let bytes = decoded.as_bytes();
         let mut spans = Vec::new();
@@ -933,6 +950,7 @@ mod tui {
 
             if index + 1 >= bytes.len() || bytes[index + 1] != b'[' {
                 index += 1;
+                segment_start = index;
                 continue;
             }
 
@@ -942,6 +960,7 @@ mod tui {
             }
 
             if final_index >= bytes.len() {
+                segment_start = decoded.len();
                 break;
             }
 
@@ -966,23 +985,39 @@ mod tui {
             spans.push(Span::raw(String::new()));
         }
 
-        Line::from(spans)
+        Line { spans }
     }
 
-    struct UiGuard;
+    struct UiGuard {
+        active: bool,
+    }
 
     impl UiGuard {
         fn activate() -> Result<Self> {
             enable_raw_mode().context("failed enabling raw mode for watch")?;
+            let guard = Self { active: true };
             let mut stdout = std::io::stdout();
             execute!(stdout, EnterAlternateScreen, Hide)
                 .context("failed entering alternate screen")?;
-            Ok(Self)
+            Ok(guard)
+        }
+
+        fn finish(mut self) -> Result<()> {
+            let mut stdout = std::io::stdout();
+            let screen = execute!(stdout, Show, LeaveAlternateScreen);
+            let raw = disable_raw_mode();
+            screen.context("failed restoring watch screen/cursor")?;
+            raw.context("failed restoring watch terminal mode")?;
+            self.active = false;
+            Ok(())
         }
     }
 
     impl Drop for UiGuard {
         fn drop(&mut self) {
+            if !self.active {
+                return;
+            }
             let mut stdout = std::io::stdout();
             let _ = execute!(stdout, Show, LeaveAlternateScreen);
             let _ = disable_raw_mode();
@@ -997,9 +1032,23 @@ mod tui {
     /// * Returns an error when log files cannot be opened, read, or tailed.
     /// * Returns an error when terminal raw mode or alternate screen setup fails.
     /// * Returns an error when rendering or keyboard event handling fails.
+    /// * Returns an error when watcher record, filter, preload, or frame budgets are exceeded.
+    /// * Returns an error when terminal cleanup fails on normal exit.
     /// * Returns an error when persistence is enabled and state cannot be read or written.
     #[allow(clippy::too_many_lines, clippy::collapsible_match)]
     pub fn run_watch(config: WatchRunConfig) -> Result<()> {
+        anyhow::ensure!(config.title.len() <= 4096, "watch title exceeds 4096 bytes");
+        #[cfg(feature = "persistence-json")]
+        if let Some(path) = config.state_file.as_deref() {
+            match std::fs::metadata(path) {
+                Ok(metadata) => anyhow::ensure!(
+                    metadata.len() <= 1024 * 1024,
+                    "watch profile state exceeds 1 MiB"
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         let profile_name = normalize_profile_name(config.profile.as_deref())?;
 
         #[cfg(feature = "persistence-json")]
@@ -1037,6 +1086,24 @@ mod tui {
             None => None,
         };
 
+        let configured_patterns = config
+            .include
+            .iter()
+            .chain(&config.include_i)
+            .chain(&config.exclude)
+            .chain(&config.exclude_i)
+            .collect::<Vec<_>>();
+        anyhow::ensure!(
+            configured_patterns.len() + persisted_profile.filters.len() <= 256
+                && configured_patterns
+                    .iter()
+                    .all(|pattern| pattern.len() <= 4096)
+                && persisted_profile
+                    .filters
+                    .iter()
+                    .all(|filter| filter.pattern.len() <= 4096),
+            "watch filter budget exceeded (256 rules, 4096 bytes per pattern)"
+        );
         let mut filters = persisted_profile
             .filters
             .iter()
@@ -1069,7 +1136,7 @@ mod tui {
             });
         let mut active_path = source_active_path(&source);
         let mut entries = VecDeque::new();
-        let mut pending_fragment = String::new();
+        let mut pending_fragment = Vec::new();
         let mut read_offset = 0_u64;
 
         if active_path.exists() {
@@ -1091,14 +1158,16 @@ mod tui {
                 .len();
         }
 
-        let _guard = UiGuard::activate()?;
-        let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))
-            .context("failed initializing TUI")?;
+        let guard = UiGuard::activate()?;
+        let (cols, rows) = terminal::size().context("failed reading terminal size")?;
+        let mut terminal = Terminal::new(std::io::stdout(), checked_terminal_area(cols, rows)?);
 
         let save_state = |filters: &[LogFilterRule],
                           quick_filter: Option<&str>,
                           selected_filter: usize|
          -> Result<()> {
+            #[cfg(not(feature = "persistence-json"))]
+            let _ = (filters, quick_filter, selected_filter);
             #[cfg(feature = "persistence-json")]
             {
                 if let Some(state_file) = config.state_file.as_deref() {
@@ -1117,6 +1186,13 @@ mod tui {
         };
 
         loop {
+            anyhow::ensure!(
+                filters.len() <= 256 && filters.iter().all(|filter| filter.pattern.len() <= 4096),
+                "watch filter budget exceeded (256 rules, 4096 bytes per pattern)"
+            );
+            if let Some(pattern) = quick_filter.as_deref() {
+                anyhow::ensure!(pattern.len() <= 4096, "quick filter exceeds 4096 bytes");
+            }
             let newest_path = source_active_path(&source);
             if newest_path != active_path {
                 active_path = newest_path;
@@ -1143,9 +1219,7 @@ mod tui {
                             entries.push_back(WatchEntry::from_line(&line, &config.input_format));
                         }
                     }
-                    while entries.len() > WATCH_BUFFER_LIMIT {
-                        let _ = entries.pop_front();
-                    }
+                    trim_entries(&mut entries, WATCH_BUFFER_LIMIT);
                     if auto_follow {
                         log_cursor = usize::MAX;
                     }
@@ -1189,6 +1263,10 @@ mod tui {
             if key.kind != KeyEventKind::Press {
                 continue;
             }
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                break;
+            }
+            let prompted = matches!(key.code, KeyCode::Char('a' | 'x' | '/'));
 
             let viewport = viewport_height();
             match key.code {
@@ -1339,10 +1417,15 @@ mod tui {
                 }
                 _ => {}
             }
+            // Canonical prompts write outside the retained frame. Repaint even
+            // when terminal dimensions did not change.
+            if prompted {
+                terminal.reset();
+            }
         }
 
         save_state(&filters, quick_filter.as_deref(), selected_filter)?;
-        Ok(())
+        guard.finish()
     }
 
     fn seed_filters(
@@ -1454,30 +1537,65 @@ mod tui {
         max_entries: usize,
         input_format: &WatchInputFormat,
     ) -> Result<()> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("failed reading log file {}", path.display()))?;
-        for line in content.lines() {
+        let mut file = std::fs::File::open(path)?;
+        let preload_end = file.metadata()?.len();
+        anyhow::ensure!(
+            preload_end <= WATCH_RETAINED_BYTES as u64,
+            "initial log exceeds 16 MiB watch preload budget: {}",
+            path.display()
+        );
+        let mut offset = 0;
+        let mut pending = Vec::new();
+        while offset < preload_end {
+            let Some(batch) = read_log_delta(&mut file, path, &mut offset, &mut pending)? else {
+                break;
+            };
+            for line in batch {
+                if line_matches_since(&line, since_cutoff) {
+                    entries.push_back(WatchEntry::from_line(
+                        line.trim_end_matches('\r'),
+                        input_format,
+                    ));
+                }
+            }
+            trim_entries(entries, max_entries.min(lines));
+        }
+        if !pending.is_empty() {
+            let line = std::str::from_utf8(&pending).context("invalid UTF-8 in log record")?;
             if line_matches_since(line, since_cutoff) {
                 entries.push_back(WatchEntry::from_line(line, input_format));
             }
-        }
-        while entries.len() > max_entries {
-            let _ = entries.pop_front();
-        }
-        if entries.len() > lines {
-            let drop = entries.len().saturating_sub(lines);
-            for _ in 0..drop {
-                let _ = entries.pop_front();
-            }
+            trim_entries(entries, max_entries.min(lines));
         }
         Ok(())
+    }
+
+    fn trim_entries(entries: &mut VecDeque<WatchEntry>, max_entries: usize) {
+        let mut bytes = entries.iter().map(entry_bytes).sum::<usize>();
+        while entries.len() > max_entries || bytes > WATCH_RETAINED_BYTES {
+            if let Some(entry) = entries.pop_front() {
+                bytes = bytes.saturating_sub(entry_bytes(&entry));
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn entry_bytes(entry: &WatchEntry) -> usize {
+        entry.raw.len()
+            + entry.display.len()
+            + entry
+                .fields
+                .iter()
+                .map(|(key, value)| key.len() + value.len())
+                .sum::<usize>()
     }
 
     fn read_log_delta(
         file: &mut std::fs::File,
         path: &Path,
         read_offset: &mut u64,
-        pending_fragment: &mut String,
+        pending_fragment: &mut Vec<u8>,
     ) -> Result<Option<Vec<String>>> {
         let metadata = file
             .metadata()
@@ -1485,46 +1603,141 @@ mod tui {
         let file_len = metadata.len();
         if file_len < *read_offset {
             *read_offset = 0;
+            pending_fragment.clear();
         }
         if file_len == *read_offset {
             return Ok(None);
         }
-
         file.seek(std::io::SeekFrom::Start(*read_offset))
             .with_context(|| format!("failed seeking {}", path.display()))?;
-        let mut chunk = String::new();
-        file.read_to_string(&mut chunk)
+        let mut chunk = Vec::new();
+        file.take(WATCH_READ_LIMIT)
+            .read_to_end(&mut chunk)
             .with_context(|| format!("failed reading appended logs from {}", path.display()))?;
-        *read_offset = file_len;
-
-        pending_fragment.push_str(&chunk);
+        *read_offset += chunk.len() as u64;
+        if chunk.is_empty() {
+            return Ok(None);
+        }
+        pending_fragment.extend_from_slice(&chunk);
         let mut complete = Vec::new();
-        let ends_with_newline = pending_fragment.ends_with('\n');
-        for segment in pending_fragment.split('\n') {
-            complete.push(segment.to_string());
+        let mut start = 0;
+        for (index, byte) in pending_fragment.iter().enumerate() {
+            if *byte == b'\n' {
+                let record = &pending_fragment[start..index];
+                anyhow::ensure!(
+                    record.len() <= WATCH_LINE_LIMIT,
+                    "log record exceeds 64 KiB watch limit"
+                );
+                complete.push(
+                    std::str::from_utf8(record)
+                        .context("invalid UTF-8 in log record")?
+                        .to_string(),
+                );
+                start = index + 1;
+            }
         }
-        if !ends_with_newline {
-            let last = complete.pop().unwrap_or_default();
-            *pending_fragment = last;
-        } else {
-            pending_fragment.clear();
-        }
-        if let Some(last) = complete.last()
-            && last.is_empty()
-        {
-            let _ = complete.pop();
-        }
+        pending_fragment.drain(..start);
+        anyhow::ensure!(
+            pending_fragment.len() <= WATCH_LINE_LIMIT,
+            "unfinished log record exceeds 64 KiB watch limit"
+        );
         Ok(Some(complete))
     }
 
+    fn checked_terminal_area(cols: u16, rows: u16) -> Result<Rect> {
+        anyhow::ensure!(
+            usize::from(cols) * usize::from(rows) <= 1_000_000,
+            "terminal exceeds watch frame budget (1,000,000 cells)"
+        );
+        Ok(Rect::new(0, 0, cols, rows))
+    }
+
+    fn watch_areas(area: Rect) -> Vec<Rect> {
+        bmux_tui::layout::Layout::vertical()
+            .constraints(vec![
+                bmux_tui::layout::Constraint::Length(WATCH_STATUS_HEIGHT),
+                bmux_tui::layout::Constraint::Min(5),
+                bmux_tui::layout::Constraint::Length(WATCH_FILTER_HEIGHT),
+                bmux_tui::layout::Constraint::Length(WATCH_INFO_HEIGHT),
+            ])
+            .split(area)
+    }
+
+    fn paint_panel(paint: &mut PaintCx<'_, '_>, area: Rect, title: &str, lines: &[Line]) {
+        if area.is_empty() {
+            return;
+        }
+        let style = Style::default();
+        let right = area.x.saturating_add(area.width.saturating_sub(1));
+        let bottom = area.y.saturating_add(area.height.saturating_sub(1));
+        for x in area.x..=right {
+            paint.set_cell(i32::from(x), i64::from(area.y), "─", style);
+            paint.set_cell(i32::from(x), i64::from(bottom), "─", style);
+        }
+        for y in area.y..=bottom {
+            paint.set_cell(i32::from(area.x), i64::from(y), "│", style);
+            paint.set_cell(i32::from(right), i64::from(y), "│", style);
+        }
+        for (x, y, glyph) in [
+            (area.x, area.y, "┌"),
+            (right, area.y, "┐"),
+            (area.x, bottom, "└"),
+            (right, bottom, "┘"),
+        ] {
+            paint.set_cell(i32::from(x), i64::from(y), glyph, style);
+        }
+        let width = area.width.saturating_sub(2);
+        let title = title
+            .chars()
+            .filter(|character| !character.is_control())
+            .collect::<String>();
+        let title = Line::raw(title);
+        // write_line clears its entire rectangle. Restrict that rectangle to
+        // the title's display cells so it cannot erase the remaining border.
+        let title_width = u16::try_from(title.width().min(usize::from(width))).unwrap_or(width);
+        paint.write_line(
+            LocalRect::new(i32::from(area.x) + 1, i64::from(area.y), title_width, 1),
+            &title,
+        );
+        for (row, line) in (0..area.height.saturating_sub(2)).zip(lines) {
+            // Log/profile strings are untrusted text, never terminal commands.
+            let safe_line = Line {
+                spans: line
+                    .spans
+                    .iter()
+                    .map(|span| {
+                        Span::styled(
+                            span.content
+                                .chars()
+                                .filter(|character| !character.is_control())
+                                .collect::<String>(),
+                            span.style,
+                        )
+                    })
+                    .collect(),
+            };
+            paint.write_line(
+                LocalRect::new(
+                    i32::from(area.x) + 1,
+                    i64::from(area.y) + 1 + i64::from(row),
+                    width,
+                    1,
+                ),
+                &safe_line,
+            );
+        }
+    }
+
     fn viewport_height() -> usize {
-        let (_, rows) = terminal::size().unwrap_or((120, 40));
-        rows.saturating_sub(WATCH_STATUS_HEIGHT + WATCH_FILTER_HEIGHT + WATCH_INFO_HEIGHT) as usize
+        let (cols, rows) = terminal::size().unwrap_or((120, 40));
+        watch_areas(Rect::new(0, 0, cols, rows))[1]
+            .height
+            .saturating_sub(2) as usize
     }
 
     #[allow(clippy::too_many_arguments)]
     fn render(
-        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+        terminal: &mut Terminal<std::io::Stdout>,
         title: &str,
         active_path: &Path,
         entries: &VecDeque<WatchEntry>,
@@ -1537,63 +1750,59 @@ mod tui {
         auto_follow: bool,
         status_message: &str,
     ) -> Result<()> {
+        let (cols, rows) = terminal::size().context("failed reading terminal size")?;
+        let area = checked_terminal_area(cols, rows)?;
+        if terminal.area() != area {
+            terminal.resize(area);
+        }
         let mut visible_lines = entries
             .iter()
             .filter(|entry| entry_visible_in_watch(entry, filters, quick_filter))
-            .map(|entry| entry.display.clone())
+            .map(|entry| entry.display.as_str())
             .collect::<Vec<_>>();
         if visible_lines.is_empty() {
-            visible_lines.push("(no visible log lines)".to_string());
+            visible_lines.push("(no visible log lines)");
         }
 
         let cursor = log_cursor.min(visible_lines.len().saturating_sub(1));
-        let viewport_height = viewport_height().max(1);
+        let viewport_height = watch_areas(terminal.area())[1]
+            .height
+            .saturating_sub(2)
+            .max(1) as usize;
         let start = cursor.saturating_sub(viewport_height.saturating_sub(1));
         let end = (start + viewport_height).min(visible_lines.len());
         let visible_slice = &visible_lines[start..end];
 
-        terminal.draw(|frame| {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(WATCH_STATUS_HEIGHT),
-                    Constraint::Min(5),
-                    Constraint::Length(WATCH_FILTER_HEIGHT),
-                    Constraint::Length(WATCH_INFO_HEIGHT),
-                ])
-                .split(frame.area());
+        terminal.draw(|paint| {
+            let chunks = watch_areas(paint.clip());
 
             let mode = if paused { "PAUSED" } else { "LIVE" };
             let follow = if auto_follow { "follow" } else { "manual" };
             let header_text = vec![
-                Line::from(vec![
+                Line { spans: vec![
                     Span::styled(title, Style::default().fg(Color::Cyan)),
                     Span::raw(format!(
-                        "  [{mode}] [{follow}] profile={} total={} visible={} file={}",
+                        "  [{mode}] [{follow}] profile={} window={} visible={} file={}",
                         profile_name,
                         entries.len(),
                         visible_lines.len(),
                         active_path.display()
                     )),
-                ]),
-                Line::from(
+                ] },
+                Line::raw(
                     "keys: q quit | p pause | j/k move | g/G top/bottom | ctrl-u/d half-page | pgup/pgdn page | a/x add | t toggle | i case | d delete | c clear | / search",
                 ),
             ];
-            let header = Paragraph::new(header_text)
-                .block(Block::default().borders(Borders::ALL).title("Status"));
-            frame.render_widget(header, chunks[0]);
+            paint_panel(paint, chunks[0], "Status", &header_text);
 
-            let log_items = visible_slice
+            let log_lines = visible_slice
                 .iter()
-                .map(|line| ListItem::new(ansi_to_line(line)))
+                .map(|line| ansi_to_line(line))
                 .collect::<Vec<_>>();
-            let logs_block =
-                List::new(log_items).block(Block::default().borders(Borders::ALL).title("Logs"));
-            frame.render_widget(logs_block, chunks[1]);
+            paint_panel(paint, chunks[1], "Logs", &log_lines);
 
             let filter_lines = if filters.is_empty() {
-                vec![Line::from("(none)")]
+                vec![Line::raw("(none)")]
             } else {
                 filters
                     .iter()
@@ -1614,16 +1823,14 @@ mod tui {
                         } else {
                             ""
                         };
-                        Line::from(format!(
+                        Line::raw(format!(
                             "{marker} {kind} [{enabled}|{case}] /{}{error}",
                             filter.pattern
                         ))
                     })
                     .collect()
             };
-            let filter_panel = Paragraph::new(filter_lines)
-                .block(Block::default().borders(Borders::ALL).title("Filters"));
-            frame.render_widget(filter_panel, chunks[2]);
+            paint_panel(paint, chunks[2], "Filters", &filter_lines);
 
             let footer_text = if status_message.is_empty() {
                 match quick_filter {
@@ -1635,9 +1842,7 @@ mod tui {
             } else {
                 status_message.to_string()
             };
-            let footer =
-                Paragraph::new(footer_text).block(Block::default().borders(Borders::ALL).title("Info"));
-            frame.render_widget(footer, chunks[3]);
+            paint_panel(paint, chunks[3], "Info", &[Line::raw(footer_text)]);
         })?;
 
         Ok(())
@@ -1652,8 +1857,11 @@ mod tui {
             stdout.flush().context("failed flushing prompt")?;
         }
 
-        let mut input = String::new();
-        let read_result = std::io::stdin().read_line(&mut input);
+        let mut input = Vec::new();
+        let read_result = std::io::stdin()
+            .lock()
+            .take(4097)
+            .read_until(b'\n', &mut input);
 
         {
             let mut stdout = std::io::stdout();
@@ -1662,11 +1870,324 @@ mod tui {
         enable_raw_mode().context("failed re-enabling raw mode after prompt")?;
         read_result.context("failed reading prompt input")?;
 
+        anyhow::ensure!(input.len() <= 4096, "watch prompt exceeds 4096 bytes");
+        let input = std::str::from_utf8(&input).context("invalid UTF-8 in watch prompt")?;
         let trimmed = input.trim().to_string();
         if trimmed.is_empty() {
             return Ok(None);
         }
         Ok(Some(trimmed))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[cfg(feature = "persistence-json")]
+        use crate::JsonLineColumn;
+        use bmux_tui::buffer::Buffer;
+        use bmux_tui::frame::Frame;
+        use bmux_tui::geometry::Point;
+        use std::fs::{File, OpenOptions};
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        struct Fixture(PathBuf);
+        impl Fixture {
+            fn new(bytes: &[u8]) -> Self {
+                static NEXT: AtomicU64 = AtomicU64::new(0);
+                let path = std::env::temp_dir().join(format!(
+                    "log-watch-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&path)
+                    .expect("owned fixture");
+                file.write_all(bytes).expect("fixture bytes");
+                Self(path)
+            }
+            fn append(&self, bytes: &[u8]) {
+                OpenOptions::new()
+                    .append(true)
+                    .open(&self.0)
+                    .unwrap()
+                    .write_all(bytes)
+                    .unwrap();
+            }
+        }
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+
+        #[test]
+        fn ansi_styles_match_basic_bright_indexed_and_rgb_colors() {
+            let line = ansi_to_line(
+                "plain\x1b[31;1;4mred\x1b[0mnormal\x1b[97mwhite\x1b[38;5;123mindexed\x1b[48;2;1;2;3mrgb",
+            );
+            assert_eq!(line.spans[0].content, "plain");
+            assert_eq!(line.spans[1].style.fg, Some(Color::Red));
+            assert!(
+                line.spans[1]
+                    .style
+                    .modifiers
+                    .contains(Modifier::BOLD | Modifier::UNDERLINE)
+            );
+            assert_eq!(line.spans[2].style, Style::default());
+            assert_eq!(line.spans[3].style.fg, Some(Color::BrightWhite));
+            assert_eq!(line.spans[4].style.fg, Some(Color::Indexed(123)));
+            assert_eq!(line.spans[5].style.bg, Some(Color::Rgb(1, 2, 3)));
+            assert_eq!(
+                ansi_to_line("\\x1b[32mgreen").spans[0].style.fg,
+                Some(Color::Green)
+            );
+        }
+
+        #[test]
+        fn panel_titles_preserve_the_remaining_top_border() {
+            for title in [
+                "Status",
+                "Logs",
+                "Filters",
+                "Info",
+                "",
+                "界",
+                "a title longer than the pane",
+            ] {
+                let area = Rect::new(0, 0, 20, 4);
+                let mut buffer = Buffer::empty(area);
+                let mut frame = Frame::new(&mut buffer);
+                paint_panel(
+                    &mut PaintCx::new(&mut frame),
+                    area,
+                    title,
+                    &[Line::raw("body")],
+                );
+                assert_eq!(buffer.get(Point::new(0, 0)).unwrap().symbol, "┌");
+                assert_eq!(buffer.get(Point::new(19, 0)).unwrap().symbol, "┐");
+                let title_width = Line::raw(title).width().min(18);
+                for x in (1 + u16::try_from(title_width).unwrap())..19 {
+                    assert_eq!(
+                        buffer.get(Point::new(x, 0)).unwrap().symbol,
+                        "─",
+                        "title={title:?}, x={x}"
+                    );
+                }
+                assert_eq!(buffer.get(Point::new(1, 1)).unwrap().symbol, "b");
+            }
+        }
+
+        #[test]
+        fn panels_clip_unicode_and_preserve_style() {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, 12, 5));
+            let mut frame = Frame::new(&mut buffer);
+            paint_panel(
+                &mut PaintCx::new(&mut frame),
+                Rect::new(0, 0, 12, 5),
+                "Logs",
+                &[
+                    ansi_to_line("\x1b[31mhello界and overflow"),
+                    Line::raw("second"),
+                    Line::raw("third"),
+                    Line::raw("hidden"),
+                ],
+            );
+            assert_eq!(buffer.get(Point::new(0, 0)).unwrap().symbol, "┌");
+            assert_eq!(buffer.get(Point::new(11, 1)).unwrap().symbol, "│");
+            assert_eq!(
+                buffer.get(Point::new(1, 1)).unwrap().style.fg,
+                Some(Color::Red)
+            );
+            assert_eq!(buffer.get(Point::new(1, 3)).unwrap().symbol, "t");
+            assert_eq!(buffer.get(Point::new(1, 4)).unwrap().symbol, "─");
+        }
+
+        #[test]
+        fn untrusted_control_sequences_cannot_escape_the_panel() {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 4));
+            let mut frame = Frame::new(&mut buffer);
+            paint_panel(
+                &mut PaintCx::new(&mut frame),
+                Rect::new(0, 0, 20, 4),
+                "Logs",
+                &[
+                    ansi_to_line("before\x1b]52;c;payload\x07after\x1b["),
+                    Line::raw("raw\x1b[2J\r\n"),
+                ],
+            );
+            assert!(
+                buffer
+                    .cells()
+                    .iter()
+                    .all(|cell| !cell.symbol.chars().any(char::is_control))
+            );
+        }
+
+        #[test]
+        fn unchanged_frames_do_not_emit_output() {
+            let area = Rect::new(0, 0, 20, 4);
+            let mut terminal = Terminal::new(Vec::new(), area);
+            let draw = |paint: &mut PaintCx<'_, '_>| {
+                paint_panel(paint, area, "Logs", &[Line::raw("same")])
+            };
+            terminal.draw(draw).unwrap();
+            let first = terminal.retained_buffer().unwrap().clone();
+            terminal.draw(draw).unwrap();
+            assert_eq!(terminal.retained_buffer().unwrap().cells(), first.cells());
+            // The second identical draw must report no repaint work.
+            let stats = terminal.draw(draw).unwrap();
+            assert_eq!(stats.changed_cells, 0);
+        }
+
+        #[test]
+        fn layouts_cover_small_and_resized_terminals_without_overlap() {
+            for (cols, rows) in [(0, 0), (1, 1), (8, 5), (80, 24), (120, 40)] {
+                let area = Rect::new(0, 0, cols, rows);
+                let chunks = watch_areas(area);
+                assert_eq!(chunks.len(), 4);
+                assert_eq!(
+                    chunks
+                        .iter()
+                        .map(|chunk| u32::from(chunk.height))
+                        .sum::<u32>(),
+                    u32::from(rows)
+                );
+                for pair in chunks.windows(2) {
+                    assert!(pair[0].y + pair[0].height <= pair[1].y);
+                }
+                let mut buffer = Buffer::empty(area);
+                let mut frame = Frame::new(&mut buffer);
+                for chunk in chunks {
+                    paint_panel(
+                        &mut PaintCx::new(&mut frame),
+                        chunk,
+                        "Status",
+                        &[Line::raw("test")],
+                    );
+                }
+            }
+            assert!(checked_terminal_area(u16::MAX, u16::MAX).is_err());
+        }
+
+        #[test]
+        fn delta_handles_partial_utf8_blank_lines_and_truncation() {
+            let fixture = Fixture::new(b"one\n\n\xe2");
+            let mut file = File::open(&fixture.0).unwrap();
+            let mut offset = 0;
+            let mut pending = Vec::new();
+            assert_eq!(
+                read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending)
+                    .unwrap()
+                    .unwrap(),
+                ["one", ""]
+            );
+            fixture.append(b"\x82\xac\npartial");
+            assert_eq!(
+                read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending)
+                    .unwrap()
+                    .unwrap(),
+                ["€"]
+            );
+            std::fs::write(&fixture.0, b"new\n").unwrap();
+            assert_eq!(
+                read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending)
+                    .unwrap()
+                    .unwrap(),
+                ["new"]
+            );
+            assert!(pending.is_empty());
+        }
+
+        #[test]
+        fn read_budget_defers_backlog_without_losing_lines() {
+            let bytes = b"ok\n".repeat(50_000);
+            let fixture = Fixture::new(&bytes);
+            let mut file = File::open(&fixture.0).unwrap();
+            let mut offset = 0;
+            let mut pending = Vec::new();
+            let mut lines = Vec::new();
+            while let Some(batch) =
+                read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending).unwrap()
+            {
+                lines.extend(batch);
+            }
+            assert_eq!(lines.len(), 50_000);
+            assert_eq!(offset, bytes.len() as u64);
+            assert!(pending.is_empty());
+        }
+
+        #[test]
+        fn oversized_record_fails_explicitly() {
+            let fixture = Fixture::new(&vec![b'x'; WATCH_LINE_LIMIT + 1]);
+            let mut file = File::open(&fixture.0).unwrap();
+            let mut offset = 0;
+            let mut pending = Vec::new();
+            assert!(read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending).is_ok());
+            assert!(
+                read_log_delta(&mut file, &fixture.0, &mut offset, &mut pending)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("64 KiB")
+            );
+        }
+
+        #[test]
+        fn preload_preserves_tail_crlf_and_final_fragment() {
+            let fixture = Fixture::new(b"old\r\nkeep\r\nfinal");
+            let mut entries = VecDeque::new();
+            preload_entries(
+                &fixture.0,
+                &mut entries,
+                2,
+                None,
+                WATCH_BUFFER_LIMIT,
+                &WatchInputFormat::PlainText,
+            )
+            .unwrap();
+            assert_eq!(
+                entries
+                    .iter()
+                    .map(|entry| entry.raw.as_str())
+                    .collect::<Vec<_>>(),
+                ["keep", "final"]
+            );
+        }
+
+        #[cfg(feature = "persistence-json")]
+        #[test]
+        fn json_columns_and_profile_wire_format_remain_compatible() {
+            let format = WatchInputFormat::JsonLines(JsonLinesWatchConfig {
+                columns: vec![JsonLineColumn::new("LVL", "level")],
+            });
+            let entry = WatchEntry::from_line(r#"{"level":"WARN","message":"hello"}"#, &format);
+            assert!(entry.display.contains("WARN"));
+            assert!(entry_visible_in_watch(&entry, &[], Some("hello")));
+            let rule = LogFilterRule::new(
+                LogFilterKind::Include,
+                "WARN".into(),
+                LogFilterCaseMode::Insensitive,
+            );
+            let fixture = Fixture::new(br#"{"version":1,"profiles":{}}"#);
+            save_profile_state(
+                &fixture.0,
+                "default",
+                &[rule],
+                Some("hello"),
+                Some("1h"),
+                20,
+                0,
+            )
+            .unwrap();
+            let restored = profile_show(&fixture.0, Some("default")).unwrap();
+            assert_eq!(restored.quick_filter.as_deref(), Some("hello"));
+            assert_eq!(restored.filters[0].pattern, "WARN");
+            assert_eq!(
+                restored.filters[0].case_mode,
+                LogFilterCaseMode::Insensitive
+            );
+        }
     }
 }
 

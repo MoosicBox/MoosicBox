@@ -10,13 +10,24 @@ Generic log watching, filtering, and optional TUI.
 - filtering lines with include/exclude regex rules (`LogFilterRule`, `line_visible_in_watch`)
 - parsing `--since` duration values and RFC3339 timestamp cutoff checks
 - optional profile/state persistence via JSON (`persistence-json` feature)
-- optional interactive ratatui-based log watch UI (`tui` feature)
+- optional interactive BMUX-based log watch UI (`tui` feature)
 
 ## Features
 
 - `default` (empty)
 - `persistence-json`: enables profile state persistence APIs (`profiles_list`, `profile_show`, `profile_delete`, `profile_rename`)
-- `tui`: enables interactive watch mode entry point (`run_watch`)
+- `tui`: enables interactive watch mode entry point (`run_watch`), rendered with `bmux_tui`; no Ratatui backend is required.
+
+### Interactive resource limits
+
+The watcher displays a rolling window, not a complete log archive: at most
+20,000 entries and 16 MiB of retained string content. It reads at most 64 KiB
+per input/render iteration, deferring unread backlog without skipping bytes.
+Records over 64 KiB, prompts over 4 KiB, more than 256 filters, oversized
+terminal frames, and initial preload files over 16 MiB fail explicitly rather
+than silently appearing complete. Use noninteractive log tools for larger
+archives. Terminal modes are restored on normal exit and errors; Ctrl-C exits
+the watcher as well as `q`.
 
 ## Installation
 
