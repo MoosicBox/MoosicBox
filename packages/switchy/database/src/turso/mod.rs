@@ -118,11 +118,9 @@ use crate::query::Expression as _;
 use thiserror::Error;
 use turso::{Builder, Value as TursoValue};
 
-use crate::{
-    DatabaseValue,
-    query_transform::{QuestionMarkHandler, transform_query_for_params},
-    sql_interval::SqlInterval,
-};
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
+use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};
+use crate::{DatabaseValue, sql_interval::SqlInterval};
 
 pub use transaction::TursoTransaction;
 
@@ -415,6 +413,7 @@ pub(crate) fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
     }
 }
 
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
 pub(crate) fn turso_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
@@ -3532,6 +3531,7 @@ impl TursoDatabase {
 }
 
 impl TursoDatabase {
+    #[cfg(any(feature = "raw-sql", feature = "schema"))]
     pub(crate) async fn query_raw_params_internal(
         &self,
         query: &str,

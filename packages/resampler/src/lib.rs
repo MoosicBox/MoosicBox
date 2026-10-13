@@ -393,7 +393,7 @@ mod tests {
 
         let output = result.unwrap();
         // Output should be interleaved stereo
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         // Should be even number of samples (stereo)
         assert_eq!(output.len() % 2, 0);
     }
@@ -426,7 +426,7 @@ mod tests {
         }
         let result = resampler.resample(&input_buffer2);
         assert!(result.is_some());
-        assert!(!result.unwrap().is_empty());
+        assert_ne!(result.unwrap(), []);
     }
 
     /// Test that flush returns None when buffer is empty
@@ -463,7 +463,7 @@ mod tests {
         let result = resampler.flush();
         assert!(result.is_some());
         let output = result.unwrap();
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         assert_eq!(output.len() % 2, 0);
     }
 
@@ -568,7 +568,7 @@ mod tests {
         // Verify output is stereo (even number of samples)
         assert_eq!(output.len() % 2, 0);
         // Verify we got some output samples
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         // The actual output size depends on the resampler's FFT implementation details,
         // but we can verify it's in a reasonable range for the rate conversion
         assert!(
@@ -596,7 +596,7 @@ mod tests {
 
         let output = result.unwrap();
         // Mono output should have exactly as many samples as frames
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
     }
 
     /// Test downsampling (higher to lower sample rate)
@@ -625,7 +625,7 @@ mod tests {
         // Verify output is stereo (even number of samples)
         assert_eq!(output.len() % 2, 0);
         // Verify we got some output samples
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         // For downsampling 48kHz -> 44.1kHz, we expect fewer output samples than input
         // Since we have 1024 frames * 2 channels = 2048 input samples interleaved,
         // and the ratio is approximately 44100/48000 ≈ 0.919, we expect roughly
@@ -710,7 +710,7 @@ mod tests {
         let result = resampler.flush();
         assert!(result.is_some());
         let output = result.unwrap();
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         assert_eq!(output.len() % 2, 0);
     }
 
@@ -784,7 +784,7 @@ mod tests {
         assert!(result.is_some());
 
         let output = result.unwrap();
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         assert_eq!(output.len() % 2, 0);
 
         // With 6x upsampling, we expect significantly more output samples
@@ -892,7 +892,7 @@ mod tests {
             "Flush should return Some when exactly duration samples remain"
         );
         let output = flush_result.unwrap();
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
         assert_eq!(output.len() % 2, 0, "Output should be stereo");
     }
 
@@ -1054,7 +1054,7 @@ mod tests {
         assert!(result.is_some());
 
         let output = result.unwrap();
-        assert!(!output.is_empty());
+        assert_ne!(output, []);
 
         // With 1:1 ratio, output frames should be very close to input frames
         let output_frames = output.len() / 2;

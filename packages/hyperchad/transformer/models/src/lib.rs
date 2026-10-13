@@ -319,6 +319,19 @@ impl TryFrom<&String> for Selector {
 impl TryFrom<&str> for Selector {
     type Error = ParseSelectorError;
 
+    /// Parses a selector using its string representation.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `ParseSelectorError` if the string is not a valid selector format
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl std::str::FromStr for Selector {
+    type Err = ParseSelectorError;
+
     /// Attempts to parse a selector from a string slice.
     ///
     /// Supports the following formats:
@@ -345,7 +358,7 @@ impl TryFrom<&str> for Selector {
     ///
     /// # Ok::<(), hyperchad_transformer_models::ParseSelectorError>(())
     /// ```
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value {
             "self" => Self::SelfTarget,
             value => {

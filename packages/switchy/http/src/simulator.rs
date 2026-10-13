@@ -189,7 +189,7 @@ mod tests {
 
         // Verify response body consumption works
         let text = response.text().await.unwrap();
-        assert!(text.is_empty());
+        assert_eq!(text, "");
     }
 
     /// Test that all HTTP method convenience methods are correctly wired through the macro.
@@ -321,7 +321,7 @@ mod tests {
 
             let mut response = Response::default();
             let text = response.text().await.unwrap();
-            assert!(text.is_empty());
+            assert_eq!(text, "");
         }
     }
 

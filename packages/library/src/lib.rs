@@ -122,6 +122,7 @@ pub enum LibraryFavoriteArtistsError {
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the artist query must be awaited to retrieve its results"]
 pub async fn favorite_artists(
     db: &LibraryDatabase,
     offset: Option<u32>,
@@ -395,6 +396,7 @@ pub enum LibraryFavoriteAlbumsError {
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn favorite_albums(
     db: &LibraryDatabase,
     request: &AlbumsRequest,
@@ -542,6 +544,7 @@ pub enum LibraryFavoriteTracksError {
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn favorite_tracks(
     db: &LibraryDatabase,
     track_ids: Option<&[Id]>,
@@ -666,6 +669,7 @@ pub enum LibraryArtistAlbumsError {
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn artist_albums(
     db: &LibraryDatabase,
     artist_id: &Id,
@@ -729,6 +733,7 @@ pub enum LibraryAlbumTracksError {
 /// * If there was a database error
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn album_tracks(
     db: &LibraryDatabase,
     album_id: &Id,

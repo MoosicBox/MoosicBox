@@ -421,7 +421,7 @@ mod tests {
 
         // Should get at most 2 ports (the number available in the range)
         assert!(ports.len() <= 2);
-        assert!(!ports.is_empty()); // Should still get some ports if available
+        assert_ne!(ports, [] as [u16; 0]); // Should still get some ports if available
 
         for port in ports {
             assert!(range.contains(&port));
@@ -652,7 +652,7 @@ mod tests {
         let reservation = PortReservation::new(range);
         let ports = reservation.reserve_ports(0);
 
-        assert!(ports.is_empty());
+        assert_eq!(ports, [] as [u16; 0]);
     }
 
     #[test_log::test]

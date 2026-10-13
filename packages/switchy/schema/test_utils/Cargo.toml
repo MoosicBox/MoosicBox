@@ -47,7 +47,11 @@ fail-on-warnings = [
     "switchy_database_connection?/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
 ]
-raw-sql = ["switchy_database/raw-sql", "switchy_schema/raw-sql"]
+raw-sql = [
+    "switchy_database/raw-sql",
+    "switchy_database_connection?/raw-sql",
+    "switchy_schema/raw-sql",
+]
 snapshots = [
     "dep:insta",
     "dep:serde",

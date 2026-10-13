@@ -1,5 +1,5 @@
 //! Sync preserves bytes under native and no-crash simulator semantics.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn sync_reports_backend_support_without_changing_bytes() {

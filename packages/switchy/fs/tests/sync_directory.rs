@@ -1,5 +1,5 @@
 //! Directory publication acknowledgement across native and no-crash backends.
-#![cfg(all(feature = "sync", unix))]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator"), unix))]
 
 #[test]
 fn sync_validates_directory_and_preserves_published_bytes() {

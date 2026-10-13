@@ -1,5 +1,5 @@
 //! Publication behavior is shared by native and no-crash simulated backends.
-#![cfg(all(feature = "sync", unix))]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator"), unix))]
 
 #[test]
 fn publication_replaces_only_after_exclusive_staging() {

@@ -3015,7 +3015,7 @@ mod tests {
         };
 
         assert!(page.has_more());
-        assert!(page.items().is_empty());
+        assert_eq!(page.items(), [] as [i32; 0]);
         assert_eq!(page.offset(), 0);
         assert_eq!(page.limit(), 10);
     }
@@ -3443,7 +3443,7 @@ mod tests {
         });
 
         // Initial page is empty but has_more is true
-        assert!(response.items().is_empty());
+        assert_eq!(response.items(), [] as [i32; 0]);
         assert!(response.has_more());
 
         // Fetching rest should get the actual data
@@ -3485,7 +3485,7 @@ mod tests {
         let pages = response.rest_of_pages().await.unwrap();
         // The fetch function returns an empty page, which is included in results
         assert_eq!(pages.len(), 1);
-        assert!(pages[0].items().is_empty());
+        assert_eq!(pages[0].items(), [] as [i32; 0]);
         assert!(fetch_called.load(std::sync::atomic::Ordering::SeqCst));
     }
 

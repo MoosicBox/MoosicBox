@@ -46,7 +46,7 @@ impl CancellationToken {
     /// Returns a future that completes when this token is cancelled.
     ///
     /// The returned future implements `FusedFuture`, making it safe to use in select loops.
-    #[must_use]
+    #[must_use = "cancellation is only observed when the future is polled"]
     pub fn cancelled(&self) -> impl FusedFuture<Output = ()> + '_ {
         self.inner.cancelled().fuse()
     }

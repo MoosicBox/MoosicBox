@@ -1,5 +1,5 @@
 //! Participating owners contend on opened file identity.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn lock_contends_across_rename_and_releases_on_drop() {

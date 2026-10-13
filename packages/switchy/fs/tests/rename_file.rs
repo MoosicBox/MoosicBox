@@ -1,5 +1,5 @@
 //! File publication behavior shared by native and simulated backends.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn replacement_preserves_open_handles_and_failed_publication() {

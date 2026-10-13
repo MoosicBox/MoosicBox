@@ -82,12 +82,12 @@ use crate::{Database, DatabaseError, DatabaseValue, Row};
 /// Render an exact identifier, preserving the transitional raw-enabled behavior.
 #[cfg(any(
     feature = "sqlite-rusqlite",
-    feature = "duckdb",
-    feature = "turso",
-    feature = "mysql-sqlx",
     feature = "sqlite-sqlx",
+    feature = "postgres-raw",
     feature = "postgres-sqlx",
-    feature = "postgres-raw"
+    feature = "mysql-sqlx",
+    feature = "duckdb",
+    feature = "turso"
 ))]
 pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     if cfg!(feature = "raw-sql") {
@@ -221,7 +221,15 @@ impl From<String> for JoinCondition {
 }
 
 impl JoinCondition {
-    #[cfg(feature = "_any_backend")]
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         match self {
             Self::ColumnsEqual(left, right) => {
@@ -265,7 +273,15 @@ pub const fn join_columns(
 }
 
 impl Join<'_> {
-    #[cfg(feature = "_any_backend")]
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         #[cfg(feature = "raw-sql")]
         if matches!(self.on, JoinCondition::Raw(_)) {
@@ -650,8 +666,8 @@ impl QualifiedColumn {
     #[cfg(any(
         feature = "sqlite-rusqlite",
         feature = "sqlite-sqlx",
-        feature = "postgres-sqlx",
         feature = "postgres-raw",
+        feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
         feature = "turso"
@@ -906,6 +922,15 @@ impl JsonPath {
         }
         Ok(Self { member })
     }
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
     pub(crate) fn sqlite(&self) -> String {
         format!("'$.{}'", self.member)
     }
@@ -931,6 +956,15 @@ pub enum JsonType {
     False,
 }
 impl JsonType {
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
     pub(crate) const fn sqlite(self) -> &'static str {
         match self {
             Self::Integer => "integer",
@@ -2145,7 +2179,15 @@ impl<'a> SelectQuery<'a> {
         self
     }
 
-    #[cfg(feature = "_any_backend")]
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "mysql-sqlx",
+        feature = "duckdb",
+        feature = "turso"
+    ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         let table = render_identifier(self.table_name, delimiter);
         self.table_alias.map_or_else(

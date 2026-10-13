@@ -351,7 +351,7 @@ mod tests {
         let body = RequestBody::form(empty);
         let (bytes, content_type) = body.to_bytes_and_content_type().unwrap();
 
-        assert!(bytes.is_empty());
+        assert_eq!(bytes, [] as [u8; 0]);
         assert_eq!(content_type, "application/x-www-form-urlencoded");
     }
 

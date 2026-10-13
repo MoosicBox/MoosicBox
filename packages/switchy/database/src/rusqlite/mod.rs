@@ -5757,6 +5757,7 @@ impl RusqliteTransaction {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "schema")]
     #[switchy_async::test]
     async fn typed_insert_count_and_missing_identifier_are_truthful() {
         use crate::{

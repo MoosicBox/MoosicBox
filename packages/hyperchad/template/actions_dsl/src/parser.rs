@@ -1181,7 +1181,7 @@ mod tests {
             } => {
                 assert_eq!(enum_name, "Option");
                 assert_eq!(variant, "Some");
-                assert!(fields.is_empty());
+                assert_eq!(fields, [] as [hyperchad_actions::dsl::Pattern; 0]);
             }
             _ => panic!("Expected enum variant pattern"),
         }
@@ -1244,7 +1244,7 @@ mod tests {
         let result = Parser::parse2(parse_closure, input).unwrap();
         match result {
             Expression::Closure { params, body: _ } => {
-                assert!(params.is_empty());
+                assert_eq!(params, [] as [String; 0]);
             }
             _ => panic!("Expected closure expression"),
         }
@@ -1391,7 +1391,7 @@ mod tests {
         let result = Parser::parse2(parse_expression, input).unwrap();
         match result {
             Expression::Array(exprs) => {
-                assert!(exprs.is_empty());
+                assert_eq!(exprs, [] as [hyperchad_actions::dsl::Expression; 0]);
             }
             _ => panic!("Expected array expression"),
         }
@@ -1462,7 +1462,10 @@ mod tests {
                 then_block,
                 else_block,
             } => {
-                assert!(!then_block.statements.is_empty());
+                assert_ne!(
+                    then_block.statements,
+                    [] as [hyperchad_actions::dsl::Statement; 0]
+                );
                 assert!(else_block.is_some());
             }
             _ => panic!("Expected if statement"),
@@ -1483,7 +1486,10 @@ mod tests {
                 then_block,
                 else_block,
             } => {
-                assert!(!then_block.statements.is_empty());
+                assert_ne!(
+                    then_block.statements,
+                    [] as [hyperchad_actions::dsl::Statement; 0]
+                );
                 assert!(else_block.is_none());
             }
             _ => panic!("Expected if statement"),
@@ -1505,7 +1511,10 @@ mod tests {
                 body,
             } => {
                 assert_eq!(pattern, "item");
-                assert!(!body.statements.is_empty());
+                assert_ne!(
+                    body.statements,
+                    [] as [hyperchad_actions::dsl::Statement; 0]
+                );
             }
             _ => panic!("Expected for statement"),
         }
@@ -1521,7 +1530,10 @@ mod tests {
         let result = Parser::parse2(parse_statement, input).unwrap();
         match result {
             Statement::While { condition: _, body } => {
-                assert!(!body.statements.is_empty());
+                assert_ne!(
+                    body.statements,
+                    [] as [hyperchad_actions::dsl::Statement; 0]
+                );
             }
             _ => panic!("Expected while statement"),
         }
@@ -1531,7 +1543,10 @@ mod tests {
     fn test_parse_empty_dsl() {
         let input = quote! {};
         let result = parse_dsl.parse2(input).unwrap();
-        assert!(result.statements.is_empty());
+        assert_eq!(
+            result.statements,
+            [] as [hyperchad_actions::dsl::Statement; 0]
+        );
     }
 
     #[test_log::test]
@@ -1645,7 +1660,7 @@ mod tests {
                 args,
             } => {
                 assert_eq!(method, "to_string");
-                assert!(args.is_empty());
+                assert_eq!(args, [] as [hyperchad_actions::dsl::Expression; 0]);
             }
             _ => panic!("Expected method call expression"),
         }
@@ -1767,7 +1782,10 @@ mod tests {
                 then_block,
                 else_block,
             } => {
-                assert!(!then_block.statements.is_empty());
+                assert_ne!(
+                    then_block.statements,
+                    [] as [hyperchad_actions::dsl::Statement; 0]
+                );
                 // Else block should contain a nested if
                 let else_block = else_block.expect("Expected else block");
                 assert_eq!(else_block.statements.len(), 1);

@@ -379,40 +379,44 @@ impl Database for SimulationDatabase {
 }
 
 impl SimulationDatabase {
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn exec_raw_internal(&self, statement: &str) -> Result<(), DatabaseError> {
-        self.inner.exec_raw(statement).await
+        self.inner.exec_raw_internal(statement).await
     }
 }
 
 impl SimulationDatabase {
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_internal(
         &self,
         query: &str,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         // Delegate to inner database implementation
-        self.inner.query_raw(query).await
+        self.inner.query_raw_internal(query).await
     }
 }
 
 impl SimulationDatabase {
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn exec_raw_params_internal(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
         // Delegate to inner database implementation
-        self.inner.exec_raw_params(query, params).await
+        self.inner.exec_raw_params_internal(query, params).await
     }
 }
 
 impl SimulationDatabase {
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_params_internal(
         &self,
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         // Delegate to inner database implementation
-        self.inner.query_raw_params(query, params).await
+        self.inner.query_raw_params_internal(query, params).await
     }
 }
 

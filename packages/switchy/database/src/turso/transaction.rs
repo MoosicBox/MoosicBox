@@ -15,11 +15,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use async_trait::async_trait;
 
-use crate::{DatabaseError, DatabaseValue, Row};
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
+use crate::DatabaseValue;
+use crate::{DatabaseError, Row};
 
-use super::{
-    TursoDatabaseError, from_turso_row, to_turso_params, turso_transform_query_for_params,
-};
+use super::TursoDatabaseError;
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
+use super::turso_transform_query_for_params;
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
+use super::{from_turso_row, to_turso_params};
 
 #[cfg(feature = "schema")]
 use std::sync::LazyLock;
@@ -783,6 +787,7 @@ fn strip_identifier_quotes(identifier: &str) -> String {
 }
 
 impl TursoTransaction {
+    #[cfg(any(feature = "raw-sql", feature = "schema"))]
     pub(crate) async fn query_raw_internal(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
         let mut stmt = self
             .connection
@@ -812,6 +817,7 @@ impl TursoTransaction {
 }
 
 impl TursoTransaction {
+    #[cfg(any(feature = "raw-sql", feature = "schema"))]
     pub(crate) async fn query_raw_params_internal(
         &self,
         query: &str,

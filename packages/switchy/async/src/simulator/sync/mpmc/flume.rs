@@ -382,19 +382,19 @@ impl<T> Sender<T> {
                     }
                 }
             }
-        } else {
-            // Unbounded - just try once
-            match self.try_send(value) {
-                Ok(()) => {
-                    log::trace!("Channel send() succeeded immediately");
-                    Ok(())
-                }
-                Err(TrySendError::Disconnected(v)) => {
-                    log::trace!("Channel send() failed: no receivers");
-                    Err(SendError(v))
-                }
-                Err(TrySendError::Full(_)) => unreachable!("Unbounded channel cannot be full"),
+        }
+
+        // Unbounded - just try once
+        match self.try_send(value) {
+            Ok(()) => {
+                log::trace!("Channel send() succeeded immediately");
+                Ok(())
             }
+            Err(TrySendError::Disconnected(v)) => {
+                log::trace!("Channel send() failed: no receivers");
+                Err(SendError(v))
+            }
+            Err(TrySendError::Full(_)) => unreachable!("Unbounded channel cannot be full"),
         }
     }
 

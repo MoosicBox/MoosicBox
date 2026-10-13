@@ -52,7 +52,7 @@ mod tests {
     #[test_log::test]
     fn test_manifest_dir_str_is_not_empty() {
         // MANIFEST_DIR_STR should contain a valid path
-        assert!(!MANIFEST_DIR_STR.is_empty());
+        assert_ne!(MANIFEST_DIR_STR, "");
         assert!(MANIFEST_DIR_STR.contains("hyperchad"));
         assert!(MANIFEST_DIR_STR.contains("js_bundler"));
     }

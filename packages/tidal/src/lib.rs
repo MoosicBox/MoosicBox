@@ -692,6 +692,7 @@ pub enum TidalArtistOrderDirection {
 /// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the artist query must be awaited to retrieve its results"]
 pub async fn favorite_artists(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
@@ -969,6 +970,7 @@ impl From<AlbumSort> for TidalAlbumOrderDirection {
 /// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
@@ -1284,6 +1286,7 @@ pub enum TidalTrackOrderDirection {
 /// * If no user ID is available
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn favorite_tracks(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
@@ -1572,6 +1575,7 @@ impl ToValueType<TidalAlbumType> for &Value {
 /// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
@@ -1684,6 +1688,7 @@ pub async fn artist_albums(
 /// * If a database error occurred
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,

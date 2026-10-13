@@ -386,7 +386,7 @@ mod tests {
             report("release", 99),
         ])
         .unwrap();
-        assert!(variance.incompatibilities.is_empty());
+        assert_eq!(variance.incompatibilities, [] as [String; 0]);
         assert_eq!(variance.scenarios[0].samples, 3);
         assert_eq!(variance.scenarios[0].spread_bytes, 2);
         assert_eq!(
@@ -399,8 +399,8 @@ mod tests {
     fn rejects_incompatible_variance_samples() {
         let variance =
             characterize_variance(&[report("release", 100), report("dev", 100)]).unwrap();
-        assert!(!variance.incompatibilities.is_empty());
-        assert!(variance.scenarios.is_empty());
+        assert_ne!(variance.incompatibilities, [] as [String; 0]);
+        assert_eq!(variance.scenarios, [] as [ScenarioVariance; 0]);
     }
 
     #[test]
@@ -505,6 +505,6 @@ mod tests {
         let comparison = compare_reports(&report("release", 100), &report("dev", 125));
         assert!(!comparison.is_compatible());
         assert!(comparison.incompatibilities[0].contains("profile differs"));
-        assert!(comparison.scenarios.is_empty());
+        assert_eq!(comparison.scenarios, [] as [ScenarioComparison; 0]);
     }
 }

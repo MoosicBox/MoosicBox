@@ -2961,7 +2961,14 @@ impl SilkDecoder {
         Ok(residual_q14)
     }
 
-    #[allow(dead_code, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+    // Preserve separate product and accumulation rounding in this legacy floating-point
+    // reference path. Fused multiply-add would change sample values relative to it.
+    #[allow(
+        dead_code,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        clippy::suboptimal_flops
+    )]
     fn ltp_synthesis_voiced_old(
         &self,
         excitation_q23: &[i32],
@@ -4902,7 +4909,7 @@ mod tests {
                 let pdf = get_pulse_split_pdf(size, count);
                 assert!(pdf.is_some(), "Missing PDF for size={size}, count={count}");
                 let pdf_arr = pdf.unwrap();
-                assert!(!pdf_arr.is_empty());
+                assert_ne!(pdf_arr.len(), 0);
                 assert_eq!(pdf_arr[pdf_arr.len() - 1], 0, "PDF must end with 0");
             }
         }

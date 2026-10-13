@@ -903,6 +903,7 @@ pub async fn artist(
 /// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the artist query must be awaited to retrieve its results"]
 pub async fn favorite_artists(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
@@ -1057,6 +1058,7 @@ pub async fn remove_favorite_artist(
 /// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn artist_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     artist_id: &Id,
@@ -1230,6 +1232,7 @@ async fn request_favorite_albums(
 /// * If failed to fetch the Qobuz app ID
 /// * If failed to parse the JSON response
 #[async_recursion]
+#[must_use = "the album query must be awaited to retrieve its results"]
 pub async fn favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,
@@ -1423,6 +1426,7 @@ pub async fn remove_favorite_album(
 /// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn album_tracks(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     album_id: &Id,
@@ -1576,6 +1580,7 @@ pub async fn track(
 /// * If failed to parse the JSON response
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
+#[must_use = "the track query must be awaited to retrieve its results"]
 pub async fn favorite_tracks(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     offset: Option<u32>,

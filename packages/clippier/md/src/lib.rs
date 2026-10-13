@@ -5707,8 +5707,8 @@ mod tests {
                 .iter()
                 .any(|path| path.ends_with("nested-git/included.md"))
         );
-        assert!(explicit.is_empty());
-        assert!(relative_explicit.is_empty());
+        assert_eq!(explicit, [] as [std::path::PathBuf; 0]);
+        assert_eq!(relative_explicit, [] as [std::path::PathBuf; 0]);
 
         std::fs::remove_dir_all(&dir).expect("failed to clean temp dir");
     }

@@ -1,5 +1,5 @@
 //! Cursor and append semantics agree across native and simulated filesystems.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn overwrite_sparse_and_append_writes() {

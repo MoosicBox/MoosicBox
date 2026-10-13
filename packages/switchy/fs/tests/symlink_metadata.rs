@@ -1,5 +1,5 @@
 //! No-follow entry inspection preserves backend semantics.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn inspect_existing_and_missing_entries() {

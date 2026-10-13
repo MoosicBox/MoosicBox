@@ -1,5 +1,5 @@
 //! Native and simulator seek/read edge semantics.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 #[test]
 fn eof_and_negative_seek() {
     use std::io::{Read as _, Seek as _, SeekFrom};

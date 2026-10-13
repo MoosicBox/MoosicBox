@@ -373,7 +373,7 @@ mod tests {
     fn test_names_empty_when_no_profiles() {
         let profiles = Profiles::default();
         let names = profiles.names();
-        assert!(names.is_empty());
+        assert_eq!(names, [] as [String; 0]);
     }
 
     #[test_log::test]

@@ -844,7 +844,7 @@ mod tests {
 
         assert!(view.primary.is_some());
         assert!(view.fragments.is_empty());
-        assert!(view.delete_selectors.is_empty());
+        assert_eq!(view.delete_selectors, [] as [Selector; 0]);
     }
 
     #[test_log::test]
@@ -991,7 +991,7 @@ mod tests {
 
         assert!(view.primary.is_some());
         assert!(view.fragments.is_empty());
-        assert!(view.delete_selectors.is_empty());
+        assert_eq!(view.delete_selectors, [] as [Selector; 0]);
     }
 
     #[test_log::test]
@@ -1238,7 +1238,7 @@ mod tests {
         let view = view.unwrap();
         assert!(view.primary.is_some());
         assert!(view.fragments.is_empty());
-        assert!(view.delete_selectors.is_empty());
+        assert_eq!(view.delete_selectors, [] as [Selector; 0]);
     }
 
     #[test_log::test]

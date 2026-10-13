@@ -2137,7 +2137,7 @@ mod tests {
     fn test_parse_path_pattern_root_only() {
         let pattern = parse_path_pattern("/");
 
-        assert!(pattern.segments().is_empty());
+        assert_eq!(pattern.segments(), []);
     }
 
     #[test]

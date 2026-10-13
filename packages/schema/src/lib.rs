@@ -608,46 +608,6 @@ pub async fn get_postgres_config_migrations() -> Result<
     Ok(source.migrations().await?)
 }
 
-/// Stub function when `SQLite` feature is not enabled
-///
-/// Returns an empty migration source.
-#[cfg(not(feature = "sqlite"))]
-#[allow(unused, clippy::missing_const_for_fn)]
-#[must_use]
-fn sqlite_config_migrations() -> CodeMigrationSource<'static> {
-    CodeMigrationSource::new()
-}
-
-/// Stub function when `SQLite` feature is not enabled
-///
-/// Returns an empty migration source.
-#[cfg(not(feature = "sqlite"))]
-#[allow(unused, clippy::missing_const_for_fn)]
-#[must_use]
-fn sqlite_library_migrations() -> CodeMigrationSource<'static> {
-    CodeMigrationSource::new()
-}
-
-/// Stub function when `postgres` feature is not enabled
-///
-/// Returns an empty migration source.
-#[cfg(not(feature = "postgres"))]
-#[allow(unused, clippy::missing_const_for_fn)]
-#[must_use]
-fn postgres_config_migrations() -> CodeMigrationSource<'static> {
-    CodeMigrationSource::new()
-}
-
-/// Stub function when `postgres` feature is not enabled
-///
-/// Returns an empty migration source.
-#[cfg(not(feature = "postgres"))]
-#[allow(unused, clippy::missing_const_for_fn)]
-#[must_use]
-fn postgres_library_migrations() -> CodeMigrationSource<'static> {
-    CodeMigrationSource::new()
-}
-
 #[cfg(test)]
 mod tests {
     #[cfg(any(feature = "postgres", feature = "sqlite"))]

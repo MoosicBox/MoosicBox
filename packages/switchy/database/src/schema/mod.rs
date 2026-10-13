@@ -484,6 +484,15 @@ pub enum TableConstraint {
 }
 
 impl TableConstraint {
+    #[cfg(any(
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+        feature = "postgres-sqlx",
+        feature = "postgres-raw",
+        feature = "mysql-sqlx",
+        feature = "turso",
+        feature = "duckdb"
+    ))]
     pub(crate) fn render(&self, quote: char) -> Result<String, DatabaseError> {
         let identifier = |name: &str| {
             format!(

@@ -3998,7 +3998,7 @@ mod tests {
         match result {
             Expression::Call { function, args } => {
                 assert_eq!(function, "get_event_value");
-                assert!(args.is_empty());
+                assert_eq!(args, [] as [hyperchad_actions::dsl::Expression; 0]);
             }
             _ => panic!("Expected Call expression"),
         }
@@ -4034,7 +4034,7 @@ mod tests {
             } => match *left {
                 Expression::Call { function, args } => {
                     assert_eq!(function, "get_event_value");
-                    assert!(args.is_empty());
+                    assert_eq!(args, [] as [hyperchad_actions::dsl::Expression; 0]);
                 }
                 _ => panic!("Expected Call expression in left"),
             },

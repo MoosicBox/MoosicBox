@@ -1086,7 +1086,10 @@ mod tests {
     fn test_nested_formatting() {
         let md = "**bold with *italic* inside**";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1100,7 +1103,10 @@ mod tests {
     fn test_image() {
         let md = "![Alt text](https://example.com/image.png)";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         // Verify image element properties
         if let Some(paragraph) = container.children.first() {
             let has_image = paragraph.children.iter().any(|child| {
@@ -1126,7 +1132,10 @@ mod tests {
     fn test_code_block_with_language() {
         let md = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         if let Some(code_block) = container.children.first() {
             assert!(
                 code_block
@@ -1141,7 +1150,10 @@ mod tests {
     fn test_code_block_without_language() {
         let md = "```\nplain code\n```";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         if let Some(code_block) = container.children.first() {
             assert!(
                 code_block
@@ -1166,7 +1178,10 @@ mod tests {
         };
         let md = "**bold** text";
         let container = markdown_to_container_with_options(md, options);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1183,7 +1198,10 @@ mod tests {
     fn test_table_with_multiple_rows() {
         let md = "| Col1 | Col2 |\n|------|------|\n| A    | B    |\n| C    | D    |";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         if let Some(table) = container.children.first() {
             assert_eq!(table.element, Element::Table);
             assert!(table.classes.contains(&"markdown-table".to_string()));
@@ -1290,7 +1308,10 @@ mod tests {
         };
         let container = markdown_to_container_with_options(md, options);
         // Safe HTML should pass through
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1313,7 +1334,10 @@ mod tests {
     fn test_link_with_title() {
         let md = "[Link](https://example.com)";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         if let Some(paragraph) = container.children.first() {
             let has_link = paragraph.children.iter().any(|child| {
                 matches!(child.element, Element::Anchor { .. })
@@ -1341,7 +1365,10 @@ mod tests {
             ..Default::default()
         };
         let container = markdown_to_container_with_options(md, options);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1352,7 +1379,10 @@ mod tests {
             ..Default::default()
         };
         let container = markdown_to_container_with_options(md, options);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1397,14 +1427,20 @@ mod tests {
     fn test_nested_lists() {
         let md = "- Item 1\n  - Nested 1\n  - Nested 2\n- Item 2";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
     fn test_bold_and_italic_combined() {
         let md = "***bold and italic***";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[test_log::test]
@@ -1428,7 +1464,10 @@ mod tests {
         };
         let container = markdown_to_container_with_options(md, options);
         // When tables are disabled, markdown should be treated as text
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[cfg(feature = "xss-protection")]
@@ -1547,7 +1586,10 @@ mod tests {
     fn test_indented_code_block() {
         let md = "    indented code\n    more code";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         if let Some(code_block) = container.children.first() {
             assert!(
                 code_block
@@ -2202,7 +2244,10 @@ mod tests {
     fn test_nested_blockquote() {
         let md = "> Outer quote\n> > Nested quote";
         let container = markdown_to_container(md);
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
         // Verify nested blockquote structure
         if let Some(outer) = container.children.first() {
             assert!(outer.classes.contains(&"markdown-blockquote".to_string()));
@@ -2276,7 +2321,10 @@ mod tests {
         };
         let container = markdown_to_container_with_options(md, options);
         // The main text paragraph should still be rendered
-        assert!(!container.children.is_empty());
+        assert_ne!(
+            container.children,
+            [] as [hyperchad_transformer::Container; 0]
+        );
     }
 
     #[cfg(feature = "xss-protection")]
@@ -2425,7 +2473,10 @@ mod tests {
             let container = markdown_to_container_with_options(md, options);
 
             // Should still work, falling back to plain text syntax
-            assert!(!container.children.is_empty());
+            assert_ne!(
+                container.children,
+                [] as [hyperchad_transformer::Container; 0]
+            );
             if let Some(code_block) = container.children.first() {
                 assert!(
                     code_block
@@ -2433,7 +2484,10 @@ mod tests {
                         .contains(&"markdown-code-block".to_string())
                 );
                 // Even with unknown language, should have span children
-                assert!(!code_block.children.is_empty());
+                assert_ne!(
+                    code_block.children,
+                    [] as [hyperchad_transformer::Container; 0]
+                );
             }
         }
 
@@ -2447,9 +2501,15 @@ mod tests {
             let container = markdown_to_container_with_options(md, options);
 
             // Should still work with plain text
-            assert!(!container.children.is_empty());
+            assert_ne!(
+                container.children,
+                [] as [hyperchad_transformer::Container; 0]
+            );
             if let Some(code_block) = container.children.first() {
-                assert!(!code_block.children.is_empty());
+                assert_ne!(
+                    code_block.children,
+                    [] as [hyperchad_transformer::Container; 0]
+                );
             }
         }
 

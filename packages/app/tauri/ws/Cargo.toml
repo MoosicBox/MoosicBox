@@ -20,6 +20,7 @@ moosicbox_logging   = { workspace = true, features = ["macros"] }
 
 switchy_async = { workspace = true, features = [
     "macros",
+    "net",
     "sync",
     "time",
     "tokio",

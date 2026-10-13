@@ -6315,7 +6315,10 @@ skip-features = ["test-*"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6369,7 +6372,10 @@ skip-features = ["v?"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6422,7 +6428,10 @@ skip-features = ["*", "!enable-bob"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6475,7 +6484,10 @@ skip-features = ["*", "!enable-*"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6531,7 +6543,10 @@ skip-features = ["*-default", "test-*", "!test-utils"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6598,7 +6613,10 @@ skip-features = ["*-default"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6788,7 +6806,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6850,7 +6871,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -6911,7 +6935,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -7023,7 +7050,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let required_features = result[0]
             .get("requiredFeatures")
             .unwrap()
@@ -7084,7 +7114,10 @@ required-features = ["test-*"]
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let required_features = result[0]
             .get("requiredFeatures")
             .unwrap()
@@ -7261,7 +7294,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -7321,7 +7357,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -7386,7 +7425,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let features = result[0].get("features").unwrap().as_array().unwrap();
         let feature_names: Vec<String> = features
             .iter()
@@ -7446,7 +7488,10 @@ os = "ubuntu"
         .await
         .unwrap();
 
-        assert!(!result.is_empty());
+        assert_ne!(
+            result,
+            [] as [serde_json::Map<String, serde_json::Value>; 0]
+        );
         let required_features = result[0]
             .get("requiredFeatures")
             .unwrap()

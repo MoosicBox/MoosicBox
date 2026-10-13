@@ -526,16 +526,13 @@ where
             StyleAction::SetVisibility(visibility) => {
                 self.visibility_manager
                     .add_override(element_id, trigger, Some(*visibility));
-                true
             }
             StyleAction::SetDisplay(display) => {
                 self.display_manager
                     .add_override(element_id, trigger, *display);
-                true
             }
             StyleAction::SetFocus(_focus) => {
                 // TODO: Implement focus management
-                true
             }
             StyleAction::SetBackground(background) => {
                 let color = if let Some(background) = background {
@@ -548,9 +545,9 @@ where
                 };
                 self.background_manager
                     .add_override(element_id, trigger, color);
-                true
             }
         }
+        true
     }
 
     /// Cleans up a style action (reverses its effects)

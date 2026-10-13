@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content};
+//! use hyperchad_renderer_html_lambda::{LambdaApp, LambdaResponseProcessor, Content, PreparedResponse};
 //! use hyperchad_renderer::ToRenderRunner;
 //! use async_trait::async_trait;
 //! use std::sync::Arc;

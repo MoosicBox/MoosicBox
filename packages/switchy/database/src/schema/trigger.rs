@@ -125,6 +125,7 @@ impl CreateTriggerStatement {
         db.exec_create_trigger(&self).await
     }
 
+    #[cfg(feature = "sqlite-rusqlite")]
     pub(crate) fn render_sqlite(&self) -> Result<String, DatabaseError> {
         let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
         let event = match &self.event {

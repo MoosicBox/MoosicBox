@@ -1,5 +1,5 @@
 //! Exclusive creation must preserve the existing file across backends.
-#![cfg(feature = "sync")]
+#![cfg(all(feature = "sync", any(feature = "std", feature = "simulator")))]
 
 #[test]
 fn exclusive_creation_preserves_existing_bytes() {
@@ -23,7 +23,18 @@ fn exclusive_creation_preserves_existing_bytes() {
     assert!(matches!(result, Err(error) if error.kind() == ErrorKind::AlreadyExists));
     assert_eq!(read(&path).unwrap(), b"retained");
     let child = path.join("child");
-    let result = OpenOptions::new().write(true).create_new(true).open(&child);
-    assert!(matches!(result, Err(error) if error.kind() == ErrorKind::NotADirectory));
+    let error = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&child)
+        .err()
+        .expect("creating a child of a file must fail");
+    // Native Windows reports ERROR_PATH_NOT_FOUND for a non-directory parent;
+    // Unix and the simulator report NotADirectory. Both must reject creation.
+    if cfg!(all(windows, not(feature = "simulator"))) {
+        assert_eq!(error.kind(), ErrorKind::NotFound);
+    } else {
+        assert_eq!(error.kind(), ErrorKind::NotADirectory);
+    }
     assert!(!switchy_fs::exists(&child));
 }
