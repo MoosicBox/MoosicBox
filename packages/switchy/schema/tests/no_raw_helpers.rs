@@ -21,7 +21,7 @@ async fn foreign_key_inspection_preserves_unsupported_errors() {
 }
 
 #[switchy_async::test]
-async fn sql_migration_demonstrations_fail_closed() {
-    assert!(demonstrate_rollback_functionality().await.is_err());
-    assert!(demonstrate_complex_breakpoint_patterns().await.is_err());
+async fn typed_migration_demonstrations_work_without_raw_sql() {
+    demonstrate_rollback_functionality().await.unwrap();
+    demonstrate_complex_breakpoint_patterns().await.unwrap();
 }

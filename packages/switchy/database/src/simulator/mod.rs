@@ -671,7 +671,7 @@ mod tests {
 
         // Test with nonexistent table
         let empty_columns = db.get_table_columns("nonexistent").await.unwrap();
-        assert!(empty_columns.is_empty());
+        assert_eq!(empty_columns.len(), 0);
 
         let no_table_info = db.get_table_info("nonexistent").await.unwrap();
         assert!(no_table_info.is_none());

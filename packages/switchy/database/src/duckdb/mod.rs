@@ -4265,7 +4265,7 @@ mod tests {
         let db = create_test_db();
 
         let columns = db.get_table_columns("test_table").await.unwrap();
-        assert!(!columns.is_empty());
+        assert_ne!(columns.len(), 0);
 
         let col_names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
         assert!(col_names.contains(&"id"), "Should contain 'id'");

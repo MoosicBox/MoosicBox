@@ -4547,7 +4547,7 @@ mod introspection_tests {
 
         // Initially should be empty
         let tables = db.list_tables().await.expect("Failed to list tables");
-        assert!(tables.is_empty());
+        assert_eq!(tables.len(), 0);
 
         // Create a table
         db.exec_raw("CREATE TABLE dynamic_table (id INTEGER, name TEXT)")

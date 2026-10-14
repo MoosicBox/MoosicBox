@@ -1353,22 +1353,22 @@ mod tests {
         let deps = super::get_column_dependencies(&*tx, "simple_table", "email")
             .await
             .unwrap();
-        assert!(deps.indexes.is_empty());
-        assert!(deps.foreign_keys.is_empty());
+        assert_eq!(deps.indexes.len(), 0);
+        assert_eq!(deps.foreign_keys.len(), 0);
 
         // Test nonexistent column
         let deps = super::get_column_dependencies(&*tx, "simple_table", "nonexistent")
             .await
             .unwrap();
-        assert!(deps.indexes.is_empty());
-        assert!(deps.foreign_keys.is_empty());
+        assert_eq!(deps.indexes.len(), 0);
+        assert_eq!(deps.foreign_keys.len(), 0);
 
         // Test nonexistent table
         let deps = super::get_column_dependencies(&*tx, "nonexistent_table", "email")
             .await
             .unwrap();
-        assert!(deps.indexes.is_empty());
-        assert!(deps.foreign_keys.is_empty());
+        assert_eq!(deps.indexes.len(), 0);
+        assert_eq!(deps.foreign_keys.len(), 0);
 
         tx.commit().await.unwrap();
     }

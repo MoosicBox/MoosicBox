@@ -35,8 +35,9 @@ switchy_database_connection = { workspace = true, features = [
     "turso",
 ] }
 switchy_fs = { workspace = true, features = ["std"] }
-switchy_schema = { workspace = true, features = ["all-discovery"] }
-thiserror = { workspace = true }
+# The CLI executes user-provided SQL migration files, so opt in explicitly.
+switchy_schema = { workspace = true, features = ["all-discovery", "raw-sql"] }
+thiserror      = { workspace = true }
 
 [dev-dependencies]
 assert_cmd  = { workspace = true }

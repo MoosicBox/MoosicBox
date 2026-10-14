@@ -338,7 +338,7 @@ mod tests {
             .where_eq("email", "alice@example.com")
             .execute(db.as_ref())
             .await?;
-        assert!(!alice_results.is_empty());
+        assert_ne!(alice_results.len(), 0);
 
         Ok(())
     }
