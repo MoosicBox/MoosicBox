@@ -10,7 +10,7 @@ links       = "app-tauri-plugin-player"
 name        = "app-tauri-plugin-player"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.4.0"
+version     = "0.5.0"
 
 [package.metadata]
 examples = false

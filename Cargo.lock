@@ -803,7 +803,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app-tauri-plugin-player"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "tauri",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "async_cancel"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "ctrlc",
  "pretty_env_logger",
@@ -1368,7 +1368,7 @@ dependencies = [
 
 [[package]]
 name = "async_simulated"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "pretty_env_logger",
  "switchy_async",
@@ -2184,7 +2184,7 @@ dependencies = [
 
 [[package]]
 name = "basic_migration_test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "switchy_async",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "basic_usage"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "env_logger 0.11.11",
@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "bloaty"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2572,7 +2572,7 @@ dependencies = [
 
 [[package]]
 name = "borrowed_migrations_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "switchy_async",
@@ -3345,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "clippier"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3392,7 +3392,7 @@ dependencies = [
 
 [[package]]
 name = "clippier_md"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3408,7 +3408,7 @@ dependencies = [
 
 [[package]]
 name = "clippier_test_utilities"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clippier",
  "serde",
@@ -7044,14 +7044,14 @@ dependencies = [
 
 [[package]]
 name = "gpipe"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "gpipe_ast",
 ]
 
 [[package]]
 name = "gpipe_ast"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -7548,7 +7548,7 @@ dependencies = [
 
 [[package]]
 name = "http_simple_get"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "pretty_env_logger",
@@ -7746,7 +7746,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_actions",
  "hyperchad_app",
@@ -7778,7 +7778,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_actions"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "flume 0.12.0",
  "hyperchad_color",
@@ -7795,7 +7795,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_app"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "clap",
@@ -7824,7 +7824,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_color"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "color-hex",
  "egui",
@@ -7839,7 +7839,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_details_summary_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad",
@@ -7849,7 +7849,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_docs_config"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_docs_config_derive",
  "serde",
@@ -7859,7 +7859,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_docs_config_derive"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7868,7 +7868,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_docs_site"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "hyperchad",
@@ -7877,7 +7877,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_http_events_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad",
@@ -7887,7 +7887,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_js_bundler"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "log 0.4.33",
@@ -7908,7 +7908,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_markdown"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "gh-emoji",
  "hyperchad_color",
@@ -7924,7 +7924,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_markdown_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad",
@@ -7935,7 +7935,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7953,7 +7953,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_egui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "eframe",
@@ -7983,7 +7983,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_fltk"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8006,7 +8006,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8036,7 +8036,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html_actix"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -8068,7 +8068,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html_cdn"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_renderer",
  "hyperchad_router",
@@ -8081,7 +8081,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html_http"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "flume 0.12.0",
@@ -8105,7 +8105,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html_lambda"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8122,7 +8122,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_html_web_server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8138,7 +8138,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_vanilla_js"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "const_format",
@@ -8158,7 +8158,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_renderer_vanilla_js_hash"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "const-hex",
  "const_format",
@@ -8168,7 +8168,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_router"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -8195,7 +8195,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_select_dropdown_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad",
@@ -8205,7 +8205,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_shared_state"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "flume 0.12.0",
@@ -8223,7 +8223,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_shared_state_bridge"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_router",
  "hyperchad_shared_state_models",
@@ -8233,7 +8233,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_shared_state_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "bmux_codec",
@@ -8244,7 +8244,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_shared_state_transport"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "flume 0.12.0",
@@ -8262,7 +8262,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_shared_state_transport_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "flume 0.12.0",
@@ -8274,7 +8274,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_simulator"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad_test_utils",
@@ -8291,7 +8291,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_state"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.33",
@@ -8307,7 +8307,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_template"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
@@ -8329,7 +8329,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_template_actions_dsl"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_actions",
  "log 0.4.33",
@@ -8342,7 +8342,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_template_macros"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad_color",
  "hyperchad_template",
@@ -8360,7 +8360,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_test_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "moosicbox_assert",
  "serde",
@@ -8372,7 +8372,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_transformer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bumpalo",
  "html-escape",
@@ -8403,7 +8403,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_transformer_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -8415,7 +8415,7 @@ dependencies = [
 
 [[package]]
 name = "hyperchad_web_server_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "hyperchad",
@@ -10325,7 +10325,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "moosicbox_admin_htmx",
  "moosicbox_app_models",
@@ -10374,7 +10374,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_aconverter"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "futures",
@@ -10391,7 +10391,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_admin_htmx"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-htmx",
  "actix-web",
@@ -10415,7 +10415,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "app-tauri-plugin-player",
  "async-trait",
@@ -10462,7 +10462,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_client"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -10470,7 +10470,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_create_config"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "log 0.4.33",
@@ -10483,7 +10483,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_music_api_api",
@@ -10492,7 +10492,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_native"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "console-subscriber",
  "flume 0.12.0",
@@ -10529,7 +10529,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_native_bundled"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_app_models",
@@ -10546,7 +10546,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_native_image"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "rust-embed",
@@ -10554,7 +10554,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_native_ui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytesize",
  "hyperchad",
@@ -10579,7 +10579,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_state"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "hyperchad",
  "log 0.4.33",
@@ -10611,7 +10611,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_tauri_bundled"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -10631,7 +10631,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_app_ws"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10650,7 +10650,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_arb"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -10661,7 +10661,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_assert"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "colored",
  "log 0.4.33",
@@ -10671,7 +10671,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_async_service"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "flume 0.12.0",
@@ -10686,7 +10686,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_audio_decoder"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "flume 0.12.0",
@@ -10707,7 +10707,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_audio_encoder"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "audiopus",
  "fdk-aac",
@@ -10724,7 +10724,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_audio_output"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "atomic_float",
@@ -10755,7 +10755,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_audio_zone"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "log 0.4.33",
@@ -10774,7 +10774,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_audio_zone_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -10800,7 +10800,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_auth"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "futures",
@@ -10821,7 +10821,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_channel_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -10835,7 +10835,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_config"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "home",
@@ -10857,7 +10857,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_date_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "log 0.4.33",
@@ -10866,7 +10866,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_downloader"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -10905,7 +10905,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_env_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "pretty_assertions",
@@ -10914,7 +10914,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_files"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -10956,7 +10956,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_image"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "clap",
@@ -10974,7 +10974,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_json_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -10990,7 +10990,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_library"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -11020,7 +11020,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_library_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.33",
@@ -11038,7 +11038,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_library_music_api"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -11063,7 +11063,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_load_balancer"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.33",
@@ -11106,7 +11106,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_log_runtime"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_fs",
  "thiserror 2.0.19",
@@ -11117,7 +11117,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_log_watch"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "bmux_tui",
@@ -11133,7 +11133,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_logging"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "free_log_client",
  "log 0.4.33",
@@ -11145,7 +11145,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_marketing_site"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "console-subscriber",
@@ -11165,7 +11165,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_marketing_site_ui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytesize",
  "chrono",
@@ -11177,7 +11177,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_mdns"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kanal",
  "log 0.4.33",
@@ -11193,7 +11193,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_menu"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "log 0.4.33",
@@ -11221,7 +11221,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_menu_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -11243,7 +11243,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_middleware"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "futures",
@@ -11257,7 +11257,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_music_api"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -11276,7 +11276,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_music_api_api"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "futures",
@@ -11293,7 +11293,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_music_api_helpers"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_music_api",
@@ -11303,7 +11303,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_music_api_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_json_utils",
@@ -11320,7 +11320,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_music_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -11341,7 +11341,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_opus"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "audiopus",
  "bytes",
@@ -11355,7 +11355,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_opus_native"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_opus_native_test_vectors",
@@ -11368,7 +11368,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_opus_native_libopus"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "cmake",
  "thiserror 2.0.19",
@@ -11376,7 +11376,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_opus_native_test_vectors"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "moosicbox_opus_native_libopus",
  "serde_json",
@@ -11384,7 +11384,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_paging"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "futures",
  "log 0.4.33",
@@ -11398,7 +11398,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_parsing_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "test-log",
  "thiserror 2.0.19",
@@ -11406,7 +11406,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_player"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -11447,7 +11447,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_profiles"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "futures",
@@ -11460,7 +11460,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_qobuz"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -11497,7 +11497,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_remote_library"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "moosicbox_menu_models",
@@ -11513,7 +11513,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_resampler"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "arrayvec",
  "log 0.4.33",
@@ -11525,7 +11525,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_scan"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -11569,7 +11569,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_scan_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -11579,7 +11579,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_schema"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_assert",
@@ -11601,7 +11601,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_schema_migrations"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "include_dir",
  "switchy_database",
@@ -11610,7 +11610,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_search"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "chrono",
@@ -11634,7 +11634,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-htmx",
@@ -11713,7 +11713,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_server_simulator"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "log 0.4.33",
@@ -11737,7 +11737,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_session"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "log 0.4.33",
@@ -11760,7 +11760,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_session_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_audio_zone_models",
@@ -11775,7 +11775,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_stream_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -11793,7 +11793,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_tidal"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -11828,7 +11828,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_tunnel"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -11849,7 +11849,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_tunnel_sender"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -11889,7 +11889,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_tunnel_server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-web",
@@ -11931,7 +11931,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_upnp"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "flume 0.12.0",
@@ -11960,7 +11960,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_ws"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.33",
@@ -11983,7 +11983,7 @@ dependencies = [
 
 [[package]]
 name = "moosicbox_yt"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -12100,7 +12100,7 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "mutation_migration_test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "switchy_async",
@@ -13095,7 +13095,7 @@ dependencies = [
 
 [[package]]
 name = "openport"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "serial_test",
@@ -16713,7 +16713,7 @@ dependencies = [
 
 [[package]]
 name = "simvar"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "simvar_harness",
  "simvar_utils",
@@ -16721,7 +16721,7 @@ dependencies = [
 
 [[package]]
 name = "simvar_api_testing_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "serde",
@@ -16737,7 +16737,7 @@ dependencies = [
 
 [[package]]
 name = "simvar_basic_web_server_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "serde",
@@ -16752,7 +16752,7 @@ dependencies = [
 
 [[package]]
 name = "simvar_harness"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "btparse",
  "color-backtrace",
@@ -16772,7 +16772,7 @@ dependencies = [
 
 [[package]]
 name = "simvar_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serial_test",
  "switchy",
@@ -17266,7 +17266,7 @@ dependencies = [
 
 [[package]]
 name = "state_migration_test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.33",
@@ -17313,7 +17313,7 @@ dependencies = [
 
 [[package]]
 name = "static_migrations_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "switchy_async",
@@ -17983,7 +17983,7 @@ dependencies = [
 
 [[package]]
 name = "switchy"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_async",
  "switchy_async_macros",
@@ -18007,7 +18007,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_age"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "age",
  "sha2 0.11.0",
@@ -18016,7 +18016,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "flume 0.12.0",
  "futures",
@@ -18035,7 +18035,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async_cargo"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "log 0.4.33",
@@ -18047,7 +18047,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_async_macros"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "proc-macro-crate 3.5.0",
@@ -18058,7 +18058,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_database"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-trait",
@@ -18095,7 +18095,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_database_connection"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aws-config",
  "aws-sdk-ssm",
@@ -18118,7 +18118,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_env"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "serial_test",
@@ -18128,7 +18128,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_fs"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "libc",
@@ -18144,7 +18144,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_http"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -18164,7 +18164,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_http_models"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "moosicbox_assert",
@@ -18176,7 +18176,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_mdns"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "hostname",
@@ -18191,7 +18191,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_p2p"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "switchy_async",
@@ -18204,7 +18204,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_random"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "rand 0.8.5",
@@ -18213,7 +18213,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_schema"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -18236,7 +18236,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_schema_cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "assert_cmd",
  "async-trait",
@@ -18261,7 +18261,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_schema_test_utils"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "insta",
@@ -18280,7 +18280,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_tcp"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -18299,7 +18299,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_telemetry"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "actix-web-opentelemetry",
@@ -18320,7 +18320,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_time"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "log 0.4.33",
@@ -18332,7 +18332,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_upnp"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-web",
  "async-recursion",
@@ -18356,7 +18356,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_uuid"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "serde",
@@ -18368,7 +18368,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -18403,7 +18403,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_actix"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -18422,14 +18422,14 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "moosicbox_assert",
 ]
 
 [[package]]
 name = "switchy_web_server_cors"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "moosicbox_assert",
  "switchy_http_models",
@@ -18438,21 +18438,21 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_basic_handler"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_web_server",
 ]
 
 [[package]]
 name = "switchy_web_server_example_basic_handler_standalone"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_web_server",
 ]
 
 [[package]]
 name = "switchy_web_server_example_combined_extractors_standalone"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -18461,7 +18461,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_from_request_test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_async",
  "switchy_web_server",
@@ -18469,7 +18469,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_handler_macro_test"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "switchy_async",
@@ -18478,7 +18478,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_json_extractor_standalone"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -18487,7 +18487,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_nested_get"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "switchy_async",
@@ -18496,7 +18496,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_openapi"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "log 0.4.33",
  "moosicbox_log_runtime",
@@ -18506,7 +18506,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_query_extractor_standalone"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "switchy_web_server",
@@ -18514,7 +18514,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_example_simple_get"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "env_logger 0.11.11",
  "switchy",
@@ -18523,7 +18523,7 @@ dependencies = [
 
 [[package]]
 name = "switchy_web_server_simulator"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytes",
  "log 0.4.33",
@@ -19451,7 +19451,7 @@ dependencies = [
 
 [[package]]
 name = "temp_dir_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_fs",
 ]
@@ -20595,7 +20595,7 @@ dependencies = [
 
 [[package]]
 name = "turso_basic_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_async",
  "switchy_database",
@@ -20773,7 +20773,7 @@ dependencies = [
 
 [[package]]
 name = "turso_transactions_example"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "switchy_async",
  "switchy_database",
