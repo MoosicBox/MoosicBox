@@ -748,7 +748,8 @@ enum Commands {
         #[arg(short = 'p', long = "package", value_delimiter = ',')]
         packages: Option<Vec<String>>,
 
-        /// Print the publish plan without running `cargo publish`
+        /// Validate publish manifests and print the plan without running `cargo publish`
+        /// (does not perform Cargo packaging or compilation verification)
         #[arg(long)]
         dry_run: bool,
 

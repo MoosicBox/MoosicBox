@@ -31,7 +31,8 @@ pub struct PublishConfig {
     pub workspace_root: PathBuf,
     /// Specific packages to publish. Normal/build workspace dependencies are included automatically.
     pub packages: Option<Vec<String>>,
-    /// Compute and print the publish plan without running `cargo publish`.
+    /// Validate publish manifests and print the plan without running `cargo publish`.
+    /// This does not perform Cargo packaging or compilation verification.
     pub dry_run: bool,
     /// Run Cargo's local verification step.
     pub verify: bool,
@@ -505,6 +506,8 @@ pub async fn handle_publish_command(
             needs_publish.insert(name.clone());
         }
     }
+
+    validate_publish_manifests(&workspace_root, &packages, &needs_publish)?;
 
     validate_publish_dependencies_available(&client, &packages, &needs_publish, &already_published)
         .await?;
@@ -1282,6 +1285,16 @@ fn sanitize_manifest(
     packages: &BTreeMap<String, PublishPackageInfo>,
     manifest_path: &Path,
 ) -> Result<(), BoxError> {
+    let manifest = sanitized_manifest(workspace_root, packages, manifest_path)?;
+    fs::write(manifest_path, toml::to_string_pretty(&manifest)?)?;
+    Ok(())
+}
+
+fn sanitized_manifest(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    manifest_path: &Path,
+) -> Result<toml::Value, BoxError> {
     let workspace_toml = read_toml(&workspace_root.join("Cargo.toml"))?;
     let mut manifest = read_toml(manifest_path)?;
     let package_versions = packages
@@ -1296,8 +1309,69 @@ fn sanitize_manifest(
         table.remove("workspace");
     }
 
-    fs::write(manifest_path, toml::to_string_pretty(&manifest)?)?;
-    Ok(())
+    Ok(manifest)
+}
+
+fn validate_publish_manifests(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package_names: &BTreeSet<String>,
+) -> Result<(), BoxError> {
+    let mut failures = Vec::new();
+    for name in package_names {
+        let package = packages
+            .get(name)
+            .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
+        let manifest_path = package
+            .package_path
+            .as_ref()
+            .ok_or_else(|| format!("Missing package path for '{name}'"))?
+            .join("Cargo.toml");
+        match sanitized_manifest(workspace_root, packages, &manifest_path) {
+            Ok(manifest) => {
+                for dependency in missing_publish_dependency_versions(&manifest) {
+                    failures.push(format!(
+                        "{}@{}: dependency {dependency} does not specify a nonempty version requirement",
+                        package.name, package.version
+                    ));
+                }
+            }
+            Err(error) => failures.push(format!("{}@{}: {error}", package.name, package.version)),
+        }
+    }
+    if failures.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "Publish manifest preflight failed (no packages uploaded):\n  {}\nNormal and build dependencies require versions, including optional and target-specific dependencies. Git/path sources are not substitutes for registry version requirements.",
+        failures.join("\n  ")
+    )
+    .into())
+}
+
+fn missing_publish_dependency_versions(manifest: &toml::Value) -> Vec<String> {
+    let mut failures = Vec::new();
+    let mut check_sections = |table: &toml::Value, prefix: &str| {
+        for section in ["dependencies", "build-dependencies"] {
+            if let Some(dependencies) = table.get(section).and_then(toml::Value::as_table) {
+                for (name, dependency) in dependencies {
+                    let version = dependency
+                        .as_str()
+                        .or_else(|| dependency.get("version").and_then(toml::Value::as_str));
+                    if version.is_none_or(|version| version.trim().is_empty()) {
+                        failures.push(format!("'{name}' in [{prefix}{section}]"));
+                    }
+                }
+            }
+        }
+    };
+    check_sections(manifest, "");
+    if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
+        for (target, table) in targets {
+            check_sections(table, &format!("target.{target}."));
+        }
+    }
+    failures
 }
 
 fn read_toml(path: &Path) -> Result<toml::Value, BoxError> {
@@ -1679,6 +1753,105 @@ mod tests {
         assert!(!packages["vectors"].publishable);
         let plan = build_publish_plan(&packages, None).unwrap();
         assert_eq!(plan.publish_order, ["decoder"]);
+    }
+
+    #[test]
+    fn publish_manifest_preflight_reports_all_missing_versions_after_sanitization() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(
+            workspace.path().join("Cargo.toml"),
+            r#"[workspace]
+[workspace.dependencies]
+bmux_keyboard = { git = "https://example.com/bmux", optional = true }
+versioned = { version = "1.0.0", git = "https://example.com/valid" }
+"#,
+        )
+        .unwrap();
+        let mut packages = BTreeMap::new();
+        for name in ["first", "second"] {
+            let directory = workspace.path().join(name);
+            std::fs::create_dir(&directory).unwrap();
+            std::fs::write(
+                directory.join("Cargo.toml"),
+                format!(
+                    r#"[package]
+name = "{name}"
+version = "0.1.0"
+[dependencies]
+bmux_keyboard = {{ workspace = true, optional = true }}
+versioned = {{ workspace = true }}
+plain = "1.0.0"
+empty = {{ version = "" }}
+[build-dependencies]
+local_tool = {{ path = "../local_tool" }}
+[dev-dependencies]
+local_tests = {{ path = "../local_tests" }}
+[target.'cfg(windows)'.dependencies]
+renamed = {{ package = "actual_name", git = "https://example.com/windows" }}
+[target.'cfg(unix)'.build-dependencies]
+build_tool = {{ git = "https://example.com/build" }}
+[target.'cfg(unix)'.dev-dependencies]
+ignored = {{ path = "../ignored" }}
+"#
+                ),
+            )
+            .unwrap();
+            packages.insert(
+                name.to_string(),
+                package(name, true, []).with_package_path(directory),
+            );
+        }
+        let names = packages.keys().cloned().collect();
+        let error = validate_publish_manifests(workspace.path(), &packages, &names)
+            .unwrap_err()
+            .to_string();
+        for name in ["first", "second"] {
+            assert!(error.contains(&format!("{name}@0.1.0")));
+        }
+        for dependency in [
+            "bmux_keyboard",
+            "empty",
+            "local_tool",
+            "renamed",
+            "build_tool",
+        ] {
+            assert_eq!(error.matches(&format!("'{dependency}'")).count(), 2);
+        }
+        assert!(error.contains("target.cfg(windows).dependencies"));
+        assert!(error.contains("target.cfg(unix).build-dependencies"));
+        for ignored in ["versioned", "plain", "local_tests", "ignored"] {
+            assert!(!error.contains(&format!("'{ignored}'")));
+        }
+        // Preflight must not rewrite the source manifests.
+        let original = std::fs::read_to_string(workspace.path().join("first/Cargo.toml")).unwrap();
+        assert!(original.contains("workspace = true"));
+        assert!(original.contains("[dev-dependencies]"));
+    }
+
+    #[test]
+    fn publish_manifest_preflight_accepts_inferred_workspace_path_versions() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(workspace.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+        std::fs::write(
+            workspace.path().join("app.toml"),
+            "[dependencies]\ncore = { path = \"../core\" }\n",
+        )
+        .unwrap();
+        let packages = BTreeMap::from([("core".to_string(), package("core", true, []))]);
+        let manifest = sanitized_manifest(
+            workspace.path(),
+            &packages,
+            &workspace.path().join("app.toml"),
+        )
+        .unwrap();
+        assert_eq!(
+            missing_publish_dependency_versions(&manifest),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            manifest["dependencies"]["core"]["version"].as_str(),
+            Some("0.1.0")
+        );
     }
 
     #[test]
