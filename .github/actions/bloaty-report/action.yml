@@ -15,7 +15,7 @@ runs:
               GH_TOKEN: ${{ github.token }}
               GH_PAGER: cat
               GH_PROMPT_DISABLED: "1"
-              ARTIFACT: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.95.0
+              ARTIFACT: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.99.0
           run: |
               mkdir -p baseline
               gh run list --workflow bloaty.yml --branch master --status success --limit 30 --json databaseId --jq '.[].databaseId' > baseline-runs.txt
@@ -48,7 +48,7 @@ runs:
           if: always()
           uses: actions/upload-artifact@v6
           with:
-              name: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.95.0
+              name: bloaty-v4-${{ inputs.package }}-release-ubuntu-24.04-rust-1.99.0
               path: report.*
               if-no-files-found: error
               retention-days: 90

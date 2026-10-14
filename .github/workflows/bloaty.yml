@@ -80,7 +80,7 @@ jobs:
             # Override the setup default so measurements use a fixed compiler.
             - uses: dtolnay/rust-toolchain@master
               with:
-                  toolchain: "1.95.0"
+                  toolchain: "1.99.0"
             - name: Analyze final artifacts
               uses: ./.github/actions/clippier
               with:
@@ -118,7 +118,7 @@ jobs:
             - uses: actions/checkout@v6
             - uses: dtolnay/rust-toolchain@master
               with:
-                  toolchain: "1.95.0"
+                  toolchain: "1.99.0"
             - uses: actions/download-artifact@v8
               with:
                   name: bloaty-plan
