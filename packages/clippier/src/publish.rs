@@ -796,7 +796,7 @@ async fn validate_publish_dependencies_available(
             }
 
             return Err(format!(
-                "Package '{name}' depends on '{dependency}@{}', but that version is not published and is not publishable in this workspace",
+                "Package '{name}' depends on '{dependency}@{}', but that version is not published and is not publishable in this workspace. Normal and build dependencies, including optional dependencies with disabled features, must be available on crates.io. For test-only dependencies, move the tests into a separate unpublished test-runner package",
                 dependency_package.version
             )
             .into());
@@ -1645,6 +1645,40 @@ mod tests {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
         )
+    }
+
+    #[test]
+    fn publish_metadata_keeps_unpublished_test_runner_out_of_library_dependencies() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(
+            workspace.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"decoder\", \"vectors\", \"runner\"]\nresolver = \"2\"\n",
+        )
+        .unwrap();
+        for (name, extra) in [
+            ("decoder", ""),
+            ("vectors", "publish = false\n"),
+            (
+                "runner",
+                "publish = false\n[dev-dependencies]\ndecoder = { path = \"../decoder\" }\nvectors = { path = \"../vectors\" }\n",
+            ),
+        ] {
+            let directory = workspace.path().join(name);
+            std::fs::create_dir_all(directory.join("src")).unwrap();
+            std::fs::write(directory.join("src/lib.rs"), "").unwrap();
+            std::fs::write(
+                directory.join("Cargo.toml"),
+                format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\n{extra}"),
+            )
+            .unwrap();
+        }
+
+        let packages = load_publish_packages(workspace.path()).unwrap();
+        assert!(packages["decoder"].publish_dependencies.is_empty());
+        assert!(!packages["runner"].publishable);
+        assert!(!packages["vectors"].publishable);
+        let plan = build_publish_plan(&packages, None).unwrap();
+        assert_eq!(plan.publish_order, ["decoder"]);
     }
 
     #[test]

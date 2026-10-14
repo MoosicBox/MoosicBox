@@ -1,0 +1,29 @@
+[package]
+authors     = { workspace = true }
+description = "Reference-vector integration tests for the native Opus decoder"
+edition     = { workspace = true }
+license     = { workspace = true }
+name        = "moosicbox_opus_native_test_runner"
+publish     = false
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[package.metadata]
+examples = false
+
+[dev-dependencies]
+moosicbox_opus_native              = { workspace = true }
+moosicbox_opus_native_test_vectors = { workspace = true }
+
+[features]
+default = ["celt", "hybrid", "silk"]
+
+fail-on-warnings = [
+    "moosicbox_opus_native/fail-on-warnings",
+    "moosicbox_opus_native_test_vectors/fail-on-warnings",
+]
+
+celt       = ["moosicbox_opus_native/celt"]
+hybrid     = ["celt", "moosicbox_opus_native/hybrid", "silk"]
+resampling = ["moosicbox_opus_native/resampling"]
+silk       = ["moosicbox_opus_native/silk"]

@@ -1,4 +1,6 @@
-#![cfg(feature = "test-vectors")]
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_opus_native_test_vectors::{calculate_snr, test_vectors_dir};
 
@@ -96,8 +98,7 @@ fn test_decode_silk_vectors() {
             let delay_samples_total = delay_samples_per_channel * usize::from(vector.channels);
 
             eprintln!(
-                "  Algorithmic delay: {} samples/ch (libopus includes as zeros, we skip)",
-                delay_samples_per_channel
+                "  Algorithmic delay: {delay_samples_per_channel} samples/ch (libopus includes as zeros, we skip)"
             );
 
             // DEBUG: Show raw expected PCM before skipping delay
@@ -137,7 +138,7 @@ fn test_decode_silk_vectors() {
             if snr.is_infinite() {
                 eprintln!("  SNR: ∞ dB (bit-exact)");
             } else {
-                eprintln!("  SNR: {} dB", snr);
+                eprintln!("  SNR: {snr} dB");
             }
 
             assert!(
@@ -153,6 +154,8 @@ fn test_decode_silk_vectors() {
 #[cfg(test)]
 mod basic_tests {
     use super::*;
+    #[cfg(feature = "silk")]
+    use std::fmt::Write as _;
 
     #[test]
     fn test_snr_utilities() {
@@ -194,11 +197,10 @@ mod basic_tests {
 
         eprintln!(
             "Packet hex: {}",
-            vector
-                .packet
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<String>()
+            vector.packet.iter().fold(String::new(), |mut hex, byte| {
+                write!(hex, "{byte:02x}").unwrap();
+                hex
+            })
         );
 
         let sample_rate = SampleRate::from_hz(vector.sample_rate).unwrap();
@@ -252,22 +254,16 @@ mod basic_tests {
         }
 
         let snr = calculate_snr(expected, actual);
-        eprintln!("SNR: {:.2} dB", snr);
+        eprintln!("SNR: {snr:.2} dB");
 
         if diff_count > 0 {
             eprintln!("First diff at sample {}", first_diff_idx.unwrap());
-            eprintln!(
-                "Stereo decoding has {} differences (max diff: {})",
-                diff_count, max_diff
-            );
+            eprintln!("Stereo decoding has {diff_count} differences (max diff: {max_diff})");
 
             // Accept high SNR (>50dB) as pass - ±1 sample differences are common in fixed-point implementations
             assert!(
                 snr > 50.0,
-                "SNR too low: {:.2} dB (expected > 50 dB). {} differences, max diff: {}",
-                snr,
-                diff_count,
-                max_diff
+                "SNR too low: {snr:.2} dB (expected > 50 dB). {diff_count} differences, max diff: {max_diff}"
             );
         }
     }
@@ -279,12 +275,12 @@ fn test_decode_silk_vectors_skip_delay() {
     use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     use moosicbox_opus_native_test_vectors::vectors_available;
 
+    const DELAY_SAMPLES: usize = 5;
+
     if !vectors_available() {
         eprintln!("Skipping: test vectors not generated");
         return;
     }
-
-    const DELAY_SAMPLES: usize = 5;
 
     for bandwidth in &["nb"] {
         use moosicbox_opus_native_test_vectors::TestVector;
@@ -336,10 +332,7 @@ fn test_decode_silk_vectors_skip_delay() {
             // Find first mismatch
             for (i, (&exp, &act)) in expected_shifted.iter().zip(actual.iter()).enumerate() {
                 if exp != act {
-                    eprintln!(
-                        "  First mismatch at sample {}: expected {}, got {}",
-                        i, exp, act
-                    );
+                    eprintln!("  First mismatch at sample {i}: expected {exp}, got {act}");
                     eprintln!(
                         "  Context: exp[{}..{}] = {:?}",
                         i.saturating_sub(5),
@@ -357,7 +350,7 @@ fn test_decode_silk_vectors_skip_delay() {
             }
 
             let snr = calculate_snr(expected_shifted, actual);
-            eprintln!("  SNR (with delay compensation): {} dB", snr);
+            eprintln!("  SNR (with delay compensation): {snr} dB");
 
             if snr > 20.0 {
                 eprintln!("  ✓ Much better SNR with delay compensation!");
@@ -383,14 +376,11 @@ fn test_decode_celt_vectors() {
 
         let vectors_dir = test_vectors_dir().join("celt").join(bandwidth);
         if !vectors_dir.exists() {
-            eprintln!(
-                "Skipping {}: directory doesn't exist: {:?}",
-                bandwidth, vectors_dir
-            );
+            eprintln!("Skipping {bandwidth}: directory doesn't exist: {vectors_dir:?}");
             continue;
         }
 
-        eprintln!("Loading {} vectors from {:?}", bandwidth, vectors_dir);
+        eprintln!("Loading {bandwidth} vectors from {vectors_dir:?}");
 
         let vectors = TestVector::load_all(&vectors_dir).unwrap_or_else(|e| {
             panic!("Failed to load CELT test vectors from {vectors_dir:?}: {e}");
@@ -426,8 +416,7 @@ fn test_decode_celt_vectors() {
 
             if delay > 0 {
                 eprintln!(
-                    "  Algorithmic delay: {} samples/ch (libopus includes as zeros, we skip)",
-                    delay
+                    "  Algorithmic delay: {delay} samples/ch (libopus includes as zeros, we skip)"
                 );
             }
 
@@ -479,7 +468,7 @@ fn test_decode_celt_vectors() {
             if snr.is_infinite() {
                 eprintln!("  SNR: ∞ dB (bit-exact)");
             } else {
-                eprintln!("  SNR: {} dB", snr);
+                eprintln!("  SNR: {snr} dB");
             }
 
             assert!(
@@ -556,8 +545,7 @@ fn test_decode_hybrid_vectors() {
 
             if delay > 0 {
                 eprintln!(
-                    "  Algorithmic delay: {} samples (libopus includes as zeros, we skip)",
-                    delay
+                    "  Algorithmic delay: {delay} samples (libopus includes as zeros, we skip)"
                 );
             }
 
@@ -576,7 +564,7 @@ fn test_decode_hybrid_vectors() {
             if snr.is_infinite() {
                 eprintln!("  SNR: ∞ dB (bit-exact)");
             } else {
-                eprintln!("  SNR: {} dB", snr);
+                eprintln!("  SNR: {snr} dB");
             }
 
             assert!(

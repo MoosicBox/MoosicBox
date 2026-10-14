@@ -70,8 +70,11 @@ The `build.rs` script generates test vectors with the following signal types:
 ## Running Tests
 
 ```bash
-# Run all integration tests (requires SILK feature)
-cargo test -p moosicbox_opus_native --features silk --test integration_tests
+# Run all reference-vector integration tests in the unpublished runner
+cargo test -p moosicbox_opus_native_test_runner
+
+# Run only SILK tests
+cargo test -p moosicbox_opus_native_test_runner --no-default-features --features silk
 
 # The tests will:
 # 1. Load test vectors from $OUT_DIR/generated
@@ -80,7 +83,7 @@ cargo test -p moosicbox_opus_native --features silk --test integration_tests
 # 4. Assert expected quality thresholds (bit-exact for SILK checks, SNR thresholds for CELT/hybrid)
 ```
 
-**Note**: Test vectors are generated automatically during the build, so they're always available when tests run.
+**Note**: Test vectors are generated automatically when the unpublished test runner is built. Ordinary decoder builds and tests do not depend on the vector generator. CI includes the runner in the standard affected-package build/test matrix; neither the runner nor the vector package is published.
 
 ## Package Components
 

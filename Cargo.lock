@@ -11358,7 +11358,6 @@ name = "moosicbox_opus_native"
 version = "0.5.0"
 dependencies = [
  "log 0.4.33",
- "moosicbox_opus_native_test_vectors",
  "moosicbox_resampler",
  "symphonia",
  "test-case",
@@ -11372,6 +11371,14 @@ version = "0.5.0"
 dependencies = [
  "cmake",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "moosicbox_opus_native_test_runner"
+version = "0.5.0"
+dependencies = [
+ "moosicbox_opus_native",
+ "moosicbox_opus_native_test_vectors",
 ]
 
 [[package]]
