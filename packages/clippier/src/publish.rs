@@ -1302,6 +1302,17 @@ impl Drop for SanitizedPackage {
 }
 
 fn copy_dir(from: &Path, to: &Path) -> Result<(), BoxError> {
+    copy_dir_contents(from, to).map_err(|error| {
+        format!(
+            "Failed to copy {} to {}: {error}",
+            from.display(),
+            to.display()
+        )
+        .into()
+    })
+}
+
+fn copy_dir_contents(from: &Path, to: &Path) -> Result<(), BoxError> {
     fs::create_dir_all(to)?;
 
     for entry in fs::read_dir(from)? {
@@ -1314,6 +1325,7 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), BoxError> {
             || entry.file_name() == "target"
             || entry.file_name() == ".git"
             || entry.file_name() == ".cargo"
+            || entry.file_name() == "node_modules"
         {
             continue;
         }
@@ -1321,10 +1333,23 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), BoxError> {
         if file_type.is_dir() {
             copy_dir(&source, &destination)?;
         } else if file_type.is_file() {
-            fs::copy(&source, &destination)?;
+            fs::copy(&source, &destination).map_err(|error| {
+                format!(
+                    "Failed to copy file {} to {}: {error}",
+                    source.display(),
+                    destination.display()
+                )
+            })?;
         } else if file_type.is_symlink() {
             let target = fs::read_link(&source)?;
-            create_symlink(&target, &destination)?;
+            create_symlink(&target, &destination).map_err(|error| {
+                format!(
+                    "Failed to copy symlink {} to {} (target {}): {error}",
+                    source.display(),
+                    destination.display(),
+                    target.display()
+                )
+            })?;
         }
     }
 

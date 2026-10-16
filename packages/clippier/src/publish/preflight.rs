@@ -37,6 +37,7 @@ fn prepare_workspace(
         root,
     };
     let mut paths = BTreeMap::new();
+    let mut sources = BTreeMap::new();
     for name in pending {
         let package = &packages[name];
         let source = fs::canonicalize(
@@ -48,8 +49,19 @@ fn prepare_workspace(
         let relative = source.strip_prefix(&workspace_root)?;
         // Keep the original package-relative layout, including a root package.
         let destination = staged.root.join("source").join(relative);
-        copy_dir(&source, &destination)?;
+        sources.insert(source, destination.clone());
         paths.insert(name.clone(), destination);
+    }
+    // A parent copy already includes its nested packages. Copy only outermost
+    // roots, independent of package-name/order, before sanitizing any manifests.
+    for (source, destination) in &sources {
+        if !source
+            .ancestors()
+            .skip(1)
+            .any(|parent| sources.contains_key(parent))
+        {
+            copy_dir(source, destination)?;
+        }
     }
     if workspace_root.join(".cargo").exists() {
         copy_dir(&workspace_root.join(".cargo"), &staged.root.join(".cargo"))?;

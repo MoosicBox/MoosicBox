@@ -454,6 +454,101 @@ fn root_package_and_nested_members_keep_relative_layout() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn nested_packages_with_symlinks_are_copied_once_in_either_order() {
+    let mut fixture = Fixture::new(&[
+        ("clippier-fixture-parent", ""),
+        ("clippier-fixture-child", ""),
+    ]);
+    let parent = fixture.packages["clippier-fixture-parent"]
+        .package_path
+        .clone()
+        .unwrap();
+    let child = parent.join("nested");
+    fs::rename(
+        fixture.packages["clippier-fixture-child"]
+            .package_path
+            .as_ref()
+            .unwrap(),
+        &child,
+    )
+    .unwrap();
+    fixture
+        .packages
+        .get_mut("clippier-fixture-child")
+        .unwrap()
+        .package_path = Some(child.clone());
+    let manifest_path = child.join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path).unwrap();
+    fs::write(
+        &manifest_path,
+        manifest.replace("[package]", "[package]\nexclude = [\"dangling-link\"]"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("src/lib.rs", child.join("source-link")).unwrap();
+    std::os::unix::fs::symlink("missing", child.join("dangling-link")).unwrap();
+    let modules = child.join("node_modules");
+    fs::create_dir(&modules).unwrap();
+    std::os::unix::fs::symlink(".pnpm/missing", modules.join("dependency")).unwrap();
+    for pending in [
+        vec![
+            "clippier-fixture-parent".into(),
+            "clippier-fixture-child".into(),
+        ],
+        vec![
+            "clippier-fixture-child".into(),
+            "clippier-fixture-parent".into(),
+        ],
+    ] {
+        let staged =
+            prepare_workspace(fixture.directory.path(), &fixture.packages, &pending).unwrap();
+        let copied = staged.root.join("source/clippier-fixture-parent/nested");
+        assert_eq!(
+            fs::read_link(copied.join("source-link")).unwrap(),
+            Path::new("src/lib.rs")
+        );
+        assert_eq!(
+            fs::read_link(copied.join("dangling-link")).unwrap(),
+            Path::new("missing")
+        );
+        assert!(!copied.join("node_modules").exists());
+        let mut command = package_command(&staged, &PublishConfig::default());
+        command.arg("--offline");
+        output(&mut command);
+    }
+    assert!(modules.join("dependency").is_symlink());
+    assert_eq!(
+        fs::read_link(child.join("dangling-link")).unwrap(),
+        Path::new("missing")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn copy_errors_identify_conflicting_symlink_paths() {
+    let fixture = Fixture::new(&[("clippier-fixture-app", "")]);
+    let source = fixture.directory.path().join("copy-source");
+    let destination = fixture.directory.path().join("copy-destination");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    std::os::unix::fs::symlink("missing", source.join("link")).unwrap();
+    fs::write(destination.join("link"), "existing file").unwrap();
+    let error = copy_dir(&source, &destination).unwrap_err().to_string();
+    assert!(
+        error.contains(&source.join("link").display().to_string()),
+        "{error}"
+    );
+    assert!(
+        error.contains(&destination.join("link").display().to_string()),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read_to_string(destination.join("link")).unwrap(),
+        "existing file"
+    );
+}
+
 #[test]
 fn pending_links_do_not_override_older_registry_requirements() {
     let fixture = Fixture::new(&[
