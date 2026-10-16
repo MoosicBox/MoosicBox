@@ -532,10 +532,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
                 #[cfg(feature = "uuid")]
                 DatabaseValue::UuidOpt(None) => "NULL".to_string(),
-                DatabaseValue::Now => "NOW()::TIMESTAMP".to_string(),
+                // Convert the instant to UTC before dropping its timezone.
+                DatabaseValue::Now => "timezone('UTC', NOW())".to_string(),
                 DatabaseValue::NowPlus(interval) => {
                     let interval_str = format_duckdb_interval(interval);
-                    format!("(NOW()::TIMESTAMP + INTERVAL '{interval_str}')")
+                    format!("(timezone('UTC', NOW()) + INTERVAL '{interval_str}')")
                 }
                 _ => "?".to_string(),
             },
@@ -1440,10 +1441,12 @@ fn duckdb_transform_query_for_params(
     params: &[DatabaseValue],
 ) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
     transform_query_for_params(query, params, &QuestionMarkHandler, |param| match param {
-        DatabaseValue::Now => Some("NOW()::TIMESTAMP".to_string()),
+        DatabaseValue::Now => Some("timezone('UTC', NOW())".to_string()),
         DatabaseValue::NowPlus(interval) => {
             let interval_str = format_duckdb_interval(interval);
-            Some(format!("(NOW()::TIMESTAMP + INTERVAL '{interval_str}')"))
+            Some(format!(
+                "(timezone('UTC', NOW()) + INTERVAL '{interval_str}')"
+            ))
         }
         _ => None,
     })
@@ -1506,10 +1509,10 @@ fn duckdb_default_value_sql(value: &DatabaseValue) -> String {
         DatabaseValue::UInt64(v) | DatabaseValue::UInt64Opt(Some(v)) => v.to_string(),
         DatabaseValue::Real32(v) | DatabaseValue::Real32Opt(Some(v)) => v.to_string(),
         DatabaseValue::Real64(v) | DatabaseValue::Real64Opt(Some(v)) => v.to_string(),
-        DatabaseValue::Now => "NOW()::TIMESTAMP".to_string(),
+        DatabaseValue::Now => "timezone('UTC', NOW())".to_string(),
         DatabaseValue::NowPlus(interval) => {
             let interval_str = format_duckdb_interval(interval);
-            format!("(NOW()::TIMESTAMP + INTERVAL '{interval_str}')")
+            format!("(timezone('UTC', NOW()) + INTERVAL '{interval_str}')")
         }
         DatabaseValue::DateTime(v) => format!("'{v}'"),
         _ => "NULL".to_string(),
@@ -3775,6 +3778,24 @@ mod tests {
     use crate::query::{FilterableQuery, where_eq};
     use std::sync::Arc;
     use switchy_async::sync::Mutex;
+
+    #[test]
+    fn now_uses_utc_in_non_utc_sessions() {
+        let conn = Connection::open_in_memory().unwrap();
+        for timezone in ["UTC", "America/New_York"] {
+            conn.execute_batch(&format!("SET TimeZone = '{timezone}'"))
+                .unwrap();
+            let expression = DatabaseValue::Now.to_sql();
+            let difference: f64 = conn
+                .query_row(
+                    &format!("SELECT epoch({expression}) - epoch(NOW())"),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(difference.abs() < 0.001, "{timezone}: {difference}");
+        }
+    }
 
     const CONNECTION_POOL_SIZE: u8 = 5;
 
