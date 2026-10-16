@@ -267,3 +267,42 @@ fn text_clean_plan_diff_and_explanation_remain_distinct() {
     assert!(text.contains("--- "));
     assert!(text.contains("-unused"));
 }
+
+#[test]
+fn bmux_report_colors_are_explicit_and_never_leak_into_json_or_plain_output() {
+    let f = Fixture::new();
+    let forced = f.run(&["--color", "always"]);
+    assert!(forced.status.success());
+    let forced = String::from_utf8(forced.stdout).unwrap();
+    assert!(forced.contains("\x1b["));
+    // BMUX emits styled inline rows, not an alternate screen or cursor control session.
+    assert!(!forced.contains("\x1b[?1049"));
+    assert!(!forced.contains("\x1b[?25"));
+    let lines = bmux_tui::ansi::ansi_to_lines(&forced);
+    let restored = lines
+        .iter()
+        .map(bmux_tui::text::Line::plain_text)
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(restored.contains("Machete | FINDINGS"));
+    assert!(restored.contains("unused [normal]"));
+    for args in [vec!["--color", "never"], vec!["--color", "auto"]] {
+        let output = f.run(&args);
+        assert!(output.status.success());
+        assert!(!output.stdout.contains(&0x1b));
+    }
+    let (_, plain) = f.json(&["--output", "json"]);
+    let (forced, json) = f.json(&["--color", "always", "--output", "json"]);
+    assert!(!forced.stdout.contains(&0x1b));
+    assert_eq!(json, plain);
+    // An explicit CLI color choice overrides NO_COLOR; auto still honors it.
+    for (mode, expected) in [("always", true), ("never", false), ("auto", false)] {
+        let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+            .current_dir(f.dir.path())
+            .env("NO_COLOR", "1")
+            .args(["machete", "--color", mode])
+            .output()
+            .unwrap();
+        assert_eq!(output.stdout.contains(&0x1b), expected);
+    }
+}

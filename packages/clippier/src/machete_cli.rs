@@ -93,6 +93,9 @@ struct Flags {
     /// Include exact manifest differences in plan/apply output
     #[arg(long, global = true)]
     diff: bool,
+    /// Color output automatically, always, or never (JSON is always unstyled)
+    #[arg(long, global = true, value_enum, default_value_t = clippier::ColorMode::Auto)]
+    color: clippier::ColorMode,
     /// Show every declaration and diagnostic instead of the concise summary
     #[arg(long, global = true)]
     verbose: bool,
@@ -165,18 +168,141 @@ fn emit(flags: &Flags, result: &Envelope<'_>) -> Result<(), BoxError> {
             writeln!(out)?;
         }
         Output::Text => {
+            let mut text = Vec::new();
             if let Some(report) = result.report {
-                render_analysis(&mut out, flags, result.outcome, report)?;
+                render_analysis(&mut text, flags, result.outcome, report)?;
             }
             if let Some(diff) = result.diff {
-                write!(out, "{diff}")?;
+                write!(text, "{diff}")?;
             }
             if let Some(error) = result.error {
-                writeln!(out, "Error: {error}")?;
+                writeln!(text, "Error: {error}")?;
+            }
+            let color = use_color(flags.color);
+            if color {
+                render_styled(&mut out, std::str::from_utf8(&text)?)?;
+            } else {
+                out.write_all(&text)?;
             }
         }
     }
     Ok(())
+}
+
+fn use_color(mode: clippier::ColorMode) -> bool {
+    match mode {
+        clippier::ColorMode::Always => true,
+        clippier::ColorMode::Never => false,
+        clippier::ColorMode::Auto => {
+            io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+                && std::env::var_os("TERM").is_none_or(|term| term != "dumb")
+        }
+    }
+}
+
+// Reuse BMUX's styled text, Unicode cell measurement and inline ANSI backend.
+// No raw mode, alternate screen, cursor hiding, event loop, or terminal ownership.
+fn render_styled(out: &mut impl Write, text: &str) -> Result<(), BoxError> {
+    use bmux_tui::{ansi::write_ansi_inline_frame, buffer::Buffer, geometry::Rect};
+    for raw in text.lines() {
+        let line = style_report_line(raw);
+        // Render one row at a time: verbose reports never allocate a whole screen.
+        // Extremely long detail lines remain intact rather than getting clipped.
+        let Ok(width) = u16::try_from(line.width().max(1)) else {
+            writeln!(out, "{raw}")?;
+            continue;
+        };
+        let area = Rect::new(0, 0, width, 1);
+        let mut buffer = Buffer::empty(area);
+        buffer.write_line(area, &line);
+        write_ansi_inline_frame(out, &buffer)?;
+    }
+    Ok(())
+}
+
+fn style_report_line(raw: &str) -> bmux_tui::text::Line {
+    use bmux_tui::{
+        style::{Color, Modifier, Style},
+        text::{Line, Span},
+    };
+    let accent = Style::new().fg(Color::Rgb(110, 205, 235));
+    let success = Style::new().fg(Color::Rgb(120, 210, 155));
+    let warning = Style::new().fg(Color::Rgb(240, 195, 105));
+    let danger = Style::new().fg(Color::Rgb(245, 125, 140));
+    let muted = Style::new().fg(Color::Rgb(150, 160, 180));
+    let bold = |style: Style| style.add_modifier(Modifier::BOLD);
+    if let Some(outcome) = raw.strip_prefix("Machete | ") {
+        let status = match outcome {
+            "CLEAN" | "APPLIED" => success,
+            "FAILED" | "FINDINGS" => danger,
+            "INCOMPLETE" | "NOT_APPLIED" => warning,
+            _ => accent,
+        };
+        return Line::from_spans(vec![
+            Span::styled("Machete", bold(accent)),
+            Span::styled(" | ", muted),
+            Span::styled(outcome, bold(status)),
+        ]);
+    }
+    if raw.contains(" unused, ") {
+        let parts = raw.split(", ").collect::<Vec<_>>();
+        let mut spans = Vec::new();
+        for (index, part) in parts.iter().enumerate() {
+            if index != 0 {
+                spans.push(Span::styled(", ", muted));
+            }
+            let zero = part.starts_with("0 ");
+            let style = if zero {
+                muted
+            } else if part.ends_with(" unused") {
+                bold(danger)
+            } else if part.ends_with(" unverified") {
+                bold(warning)
+            } else if part.ends_with(" used") {
+                success
+            } else {
+                muted
+            };
+            spans.push(Span::styled(*part, style));
+        }
+        return Line::from_spans(spans);
+    }
+    let style = if raw.starts_with("--- ") || raw.starts_with("+++ ") || raw.starts_with("@@ ") {
+        bold(accent)
+    } else if raw.starts_with('+') {
+        success
+    } else if raw.starts_with('-') {
+        danger
+    } else if raw.starts_with("Error:") || raw.starts_with("Unused dependencies:") {
+        bold(danger)
+    } else if raw.starts_with("Unverified dependencies")
+        || raw.starts_with("Analysis is incomplete")
+        || raw.starts_with("Apply is blocked")
+    {
+        warning
+    } else if raw.starts_with("No unused dependencies") {
+        if raw.contains("incomplete") {
+            warning
+        } else {
+            success
+        }
+    } else if raw.starts_with("Coverage diagnostics:") || raw.ends_with(':') {
+        bold(accent)
+    } else if raw.starts_with("  ") && !raw.starts_with("    ") {
+        accent
+    } else if raw.starts_with("    ") && raw.contains(" [") {
+        if let Some((name, reason)) = raw.split_once(" - ") {
+            return Line::from_spans(vec![
+                Span::styled(name, bold(accent)),
+                Span::styled(format!(" - {reason}"), muted),
+            ]);
+        }
+        muted
+    } else {
+        muted
+    };
+    Line::from_spans(vec![Span::styled(raw, style)])
 }
 
 fn render_analysis(

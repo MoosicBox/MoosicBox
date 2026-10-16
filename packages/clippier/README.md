@@ -43,6 +43,12 @@ Incomplete analysis is explicitly distinguished from a clean result. Use
 `--verbose` for all declarations and diagnostics, `--explain` for source evidence,
 or `--output json` for the complete unchanged structured report.
 
+Terminal reports use BMUX styled text and its inline ANSI renderer: cyan headings,
+green successful results, amber uncertainty, and coral findings/errors. Colors are
+automatic on terminals; redirected output stays plain. `NO_COLOR` and `TERM=dumb`
+disable automatic colors. Override with `--color always` or `--color never`.
+JSON never contains styling. Reports do not enter raw mode or use an alternate screen.
+
 Normal and build dependencies are checked by default;
 dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest
 selects that member by default; use a workspace root to scan the workspace.
