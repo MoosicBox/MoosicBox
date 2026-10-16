@@ -12,6 +12,124 @@ use clippier::machete::{
 };
 use std::fs;
 
+fn scoped_generated_fixture() -> (
+    tempfile::TempDir,
+    clippier::machete::generated::ScopedGeneratedEvidence,
+) {
+    use clippier::machete::generated::{
+        GeneratedEvidence, GeneratedScope, GeneratedSource, GeneratedTargetRole, InputFingerprint,
+        ScopedGeneratedEvidence,
+    };
+    let root = tempfile::tempdir().unwrap();
+    fs::write(
+        root.path().join("Cargo.toml"),
+        "[package]\nname='generated'\nversion='0.1.0'\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("generated.rs"),
+        "pub fn item() { dependency::run(); }\n",
+    )
+    .unwrap();
+    let source = GeneratedSource {
+        owner_manifest: "Cargo.toml".into(),
+        target_role: GeneratedTargetRole::Library,
+        profile: "dev".into(),
+        output: InputFingerprint::capture(root.path(), std::path::Path::new("generated.rs"))
+            .unwrap(),
+        inputs: vec![
+            InputFingerprint::capture(root.path(), std::path::Path::new("Cargo.toml")).unwrap(),
+        ],
+    };
+    let scoped = ScopedGeneratedEvidence {
+        scope: GeneratedScope {
+            owner_manifest: "Cargo.toml".into(),
+            target_role: GeneratedTargetRole::Library,
+            build_profile: "dev".into(),
+            target_triple: "x86_64-unknown-linux-gnu".into(),
+            features: ["enabled".into()].into(),
+            cfgs: ["unix".into()].into(),
+            cargo_identity: "a".repeat(64),
+            rustc_identity: "b".repeat(64),
+        },
+        evidence: GeneratedEvidence {
+            sources: vec![source],
+        },
+    };
+    (root, scoped)
+}
+
+#[test]
+fn scoped_generated_evidence_validates_scope_without_claiming_semantics() {
+    use clippier::machete::generated::validate_scoped_generated_evidence;
+    let (root, supplied) = scoped_generated_fixture();
+    let report =
+        validate_scoped_generated_evidence(root.path(), &supplied, &supplied.scope).unwrap();
+    assert!(report.sources[0].names.contains("dependency"));
+    assert!(
+        report.sources[0]
+            .diagnostics
+            .iter()
+            .any(|reason| reason.contains("semantic resolution remain unproven"))
+    );
+    for field in 0..8 {
+        let mut expected = supplied.scope.clone();
+        match field {
+            0 => expected.owner_manifest = "other/Cargo.toml".into(),
+            1 => {
+                expected.target_role =
+                    clippier::machete::generated::GeneratedTargetRole::Binary("tool".into());
+            }
+            2 => expected.build_profile = "release".into(),
+            3 => expected.target_triple = "aarch64-unknown-linux-gnu".into(),
+            4 => {
+                expected.features.insert("other".into());
+            }
+            5 => {
+                expected.cfgs.insert("custom".into());
+            }
+            6 => expected.cargo_identity = "c".repeat(64),
+            _ => expected.rustc_identity = "d".repeat(64),
+        }
+        assert!(validate_scoped_generated_evidence(root.path(), &supplied, &expected).is_err());
+    }
+}
+
+#[test]
+fn generated_evidence_rejects_conflicts_staleness_and_wrong_owner() {
+    use clippier::machete::generated::{
+        validate_generated_evidence, validate_scoped_generated_evidence,
+    };
+    let (root, mut supplied) = scoped_generated_fixture();
+    let mut conflicting = supplied.evidence.sources[0].inputs[0].clone();
+    conflicting.bytes.push(b' ');
+    supplied.evidence.sources[0].inputs.push(conflicting);
+    let error = validate_generated_evidence(root.path(), &supplied.evidence).unwrap_err();
+    assert!(error.to_string().contains("conflicting"));
+    supplied.evidence.sources[0].inputs.pop();
+    supplied.evidence.sources[0].owner_manifest = "other/Cargo.toml".into();
+    assert!(validate_scoped_generated_evidence(root.path(), &supplied, &supplied.scope).is_err());
+    supplied.evidence.sources[0].owner_manifest = "Cargo.toml".into();
+    fs::write(root.path().join("generated.rs"), "pub fn changed() {}\n").unwrap();
+    assert!(
+        validate_scoped_generated_evidence(root.path(), &supplied, &supplied.scope)
+            .unwrap_err()
+            .to_string()
+            .contains("stale")
+    );
+}
+
+#[test]
+fn generated_scope_rejects_missing_identity_and_empty_evidence() {
+    use clippier::machete::generated::validate_scoped_generated_evidence;
+    let (root, mut supplied) = scoped_generated_fixture();
+    supplied.scope.rustc_identity = "version-label-not-a-hash".into();
+    assert!(validate_scoped_generated_evidence(root.path(), &supplied, &supplied.scope).is_err());
+    supplied.scope.rustc_identity = "b".repeat(64);
+    supplied.evidence.sources.clear();
+    assert!(validate_scoped_generated_evidence(root.path(), &supplied, &supplied.scope).is_err());
+}
+
 /// Deliberate coordinator-only execution: select a real installed Cargo/rustc pair
 /// via `CLIPPIER_TEST_CARGO` and `CLIPPIER_TEST_RUSTC`, then run this ignored test.
 #[cfg(unix)]

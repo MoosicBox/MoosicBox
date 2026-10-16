@@ -26,7 +26,10 @@ struct Inventory {
     precision: bool,
     profile: Option<super::AnalysisProfile>,
     source_kind: Option<DependencyKind>,
+    conditions: super::conditions::ConditionQueries,
+    source_evidence: BTreeMap<PathBuf, std::rc::Rc<source::Evidence>>,
     observations: Vec<(PathBuf, DependencyKind, super::resolution::Observation)>,
+    observation_targets: BTreeMap<usize, (String, Option<String>)>,
 }
 
 pub(super) fn optional(path: &Path) -> Result<Option<Vec<u8>>, BoxError> {
@@ -463,20 +466,421 @@ struct PackageEvidence {
     build: BTreeSet<String>,
     diagnostics: BTreeSet<String>,
 }
+type ReferencePosition = (usize, usize, String);
+
+fn resolved_import_gaps(
+    syntax: &super::resolution::syntax::SyntaxIndex,
+    instance: &super::module_graph::SourceInstance,
+    graph: &super::module_graph::ModuleGraph,
+) -> BTreeSet<String> {
+    use super::module_graph::Namespace;
+    use super::resolution::syntax::{Namespace as SyntaxNamespace, Resolution};
+    let mut resolved_import_gaps = BTreeSet::<String>::new();
+    let mut references_by_import = BTreeMap::<usize, Vec<_>>::new();
+    for reference in &syntax.references {
+        if let Resolution::Import(import) = reference.resolution {
+            references_by_import
+                .entry(import)
+                .or_default()
+                .push(reference);
+        }
+    }
+    for (import_id, import) in syntax.imports.iter().enumerate() {
+        if import.absolute || import.glob || !import.conditions.is_empty() {
+            continue;
+        }
+        let Some((name, prefix)) = import.path.split_last() else {
+            continue;
+        };
+        let Some(owner) = graph.child_module(instance.module, &syntax.scopes[import.scope].module)
+        else {
+            continue;
+        };
+        let resolved = [Namespace::Type, Namespace::Value, Namespace::Macro]
+            .into_iter()
+            .flat_map(|namespace| graph.imported(owner, prefix, name, namespace))
+            .collect::<Vec<_>>();
+        let required_namespaces_resolved = references_by_import
+            .get(&import_id)
+            .into_iter()
+            .flatten()
+            .all(|reference| {
+                let namespace = match reference.namespace {
+                    SyntaxNamespace::Type => Namespace::Type,
+                    SyntaxNamespace::Value => Namespace::Value,
+                    SyntaxNamespace::Macro => Namespace::Macro,
+                    SyntaxNamespace::Lifetime => return false,
+                };
+                let bindings = graph.imported(owner, prefix, name, namespace);
+                if bindings.is_empty()
+                    && namespace == Namespace::Type
+                    && graph.glob_resolved(owner, prefix)
+                    && resolved
+                        .iter()
+                        .all(|binding| binding.definition.2 == Namespace::Value)
+                {
+                    return true;
+                }
+                !bindings.is_empty()
+                    && bindings.iter().all(|binding| !binding.conditional)
+                    && bindings
+                        .iter()
+                        .map(|binding| &binding.definition)
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                        == 1
+            });
+        if !resolved.is_empty()
+            && resolved.iter().all(|binding| !binding.conditional)
+            && required_namespaces_resolved
+        {
+            resolved_import_gaps.insert(format!(
+                "import target namespace requires module graph resolution: {} ({}{} at {}:{})",
+                import.path.join("::"),
+                if import.public { "reexport " } else { "" },
+                import.alias.as_deref().unwrap_or("*"),
+                import.line,
+                import.column
+            ));
+        }
+    }
+    resolved_import_gaps
+}
+
+/// An imported value does not occupy the type namespace used by crate roots.
+fn value_only_external_references(
+    syntax: &super::resolution::syntax::SyntaxIndex,
+    instance: &super::module_graph::SourceInstance,
+    graph: &super::module_graph::ModuleGraph,
+) -> BTreeSet<ReferencePosition> {
+    use super::module_graph::Namespace;
+    use super::resolution::syntax::{Namespace as SyntaxNamespace, Resolution};
+    let mut positions = BTreeSet::new();
+    for reference in &syntax.references {
+        let Resolution::Import(import_id) = reference.resolution else {
+            continue;
+        };
+        if reference.namespace != SyntaxNamespace::Type || reference.path.len() < 2 {
+            continue;
+        }
+        let import = &syntax.imports[import_id];
+        if import.absolute || import.glob || !import.conditions.is_empty() {
+            continue;
+        }
+        let Some((name, prefix)) = import.path.split_last() else {
+            continue;
+        };
+        let Some(owner) = graph.child_module(instance.module, &syntax.scopes[import.scope].module)
+        else {
+            continue;
+        };
+        if !graph.glob_resolved(owner, prefix)
+            || !graph
+                .imported(owner, prefix, name, Namespace::Type)
+                .is_empty()
+            || !graph
+                .imported(owner, prefix, name, Namespace::Macro)
+                .is_empty()
+        {
+            continue;
+        }
+        let values = graph.imported(owner, prefix, name, Namespace::Value);
+        if values.is_empty() || values.iter().any(|binding| binding.conditional) {
+            continue;
+        }
+        positions.insert((reference.line, reference.column, reference.path[0].clone()));
+    }
+    positions
+}
+
+fn local_reference_positions(
+    syntax: &super::resolution::syntax::SyntaxIndex,
+    instance: &super::module_graph::SourceInstance,
+    graph: &super::module_graph::ModuleGraph,
+) -> BTreeSet<ReferencePosition> {
+    use super::module_graph::Namespace;
+    use super::resolution::syntax::{Namespace as SyntaxNamespace, Resolution};
+    let path = &instance.path;
+    let mut local_references = BTreeSet::new();
+    for reference in &syntax.references {
+        if reference.absolute
+            || !matches!(
+                reference.resolution,
+                Resolution::External | Resolution::Import(_)
+            )
+        {
+            continue;
+        }
+        let Some(name) = reference.path.first() else {
+            continue;
+        };
+        let namespace = if reference.path.len() > 1 {
+            Namespace::Type
+        } else {
+            match reference.namespace {
+                SyntaxNamespace::Type => Namespace::Type,
+                SyntaxNamespace::Value => Namespace::Value,
+                SyntaxNamespace::Macro => Namespace::Macro,
+                SyntaxNamespace::Lifetime => continue,
+            }
+        };
+        let Some(owner) =
+            graph.child_module(instance.module, &syntax.scopes[reference.scope].module)
+        else {
+            continue;
+        };
+        if graph
+            .sources
+            .iter()
+            .filter(|source| source.path == *path)
+            .count()
+            == 1
+            && graph.module_at(path, reference.line) != Some(owner)
+        {
+            continue;
+        }
+        let mut bindings = graph.lookup(owner, name, namespace);
+        let mut scope = Some(reference.scope);
+        while bindings.is_empty() {
+            let Some(current) = scope else {
+                break;
+            };
+            for import in syntax.imports.iter().filter(|import| {
+                import.scope == current
+                    && import.glob
+                    && !import.absolute
+                    && import.conditions.is_empty()
+            }) {
+                bindings.extend(graph.imported(owner, &import.path, name, namespace));
+            }
+            scope = syntax.scopes[current].parent;
+        }
+        if !bindings.is_empty()
+            && bindings.iter().all(|binding| !binding.conditional)
+            && bindings
+                .iter()
+                .map(|binding| &binding.definition)
+                .collect::<BTreeSet<_>>()
+                .len()
+                == 1
+        {
+            local_references.insert((reference.line, reference.column, name.clone()));
+        }
+    }
+    local_references
+}
+
+fn source_diagnostics(
+    path: &Path,
+    root: &Path,
+    inventory: &mut Inventory,
+    diagnostics: &mut BTreeSet<String>,
+    context: (
+        &source::Evidence,
+        &super::module_graph::SourceInstance,
+        &super::module_graph::ModuleGraph,
+    ),
+    resolved_import_gaps: &BTreeSet<String>,
+) -> Result<(), BoxError> {
+    let (evidence, instance, graph) = context;
+    for reason in &evidence.incomplete {
+        if resolved_import_gaps.contains(reason) {
+            continue;
+        }
+        if reason == "glob import requires cross-file namespace resolution"
+            && evidence.syntax.as_ref().is_some_and(|syntax| {
+                syntax
+                    .imports
+                    .iter()
+                    .filter(|import| import.glob)
+                    .all(|import| {
+                        !import.absolute
+                            && import.conditions.is_empty()
+                            && graph
+                                .child_module(instance.module, &syntax.scopes[import.scope].module)
+                                .is_some_and(|owner| graph.glob_resolved(owner, &import.path))
+                    })
+            })
+        {
+            continue;
+        }
+        diagnostics.insert(format!("{}: {reason}", path.display()));
+    }
+    for reason in &evidence.advisory {
+        inventory
+            .diagnostics
+            .insert(format!("advisory: {}: {reason}", path.display()));
+    }
+    for reason in &evidence.uncertain {
+        diagnostics.insert(format!(
+            "advisory: {}: {reason}; unreferenced candidates remain protected",
+            path.display()
+        ));
+    }
+    // Rust module/include edges were traversed in semantic module contexts by
+    // ModuleGraph. Retain non-Rust include snapshots for plan staleness checks.
+    for include in &evidence.includes {
+        let include = normalize(&path.parent().ok_or("source has no parent")?.join(include));
+        if include.is_dir() {
+            diagnostics.insert(format!(
+                "included source path is a directory: {}",
+                include.display()
+            ));
+            continue;
+        }
+        if include.extension().is_some_and(|s| s == "rs") {
+            continue;
+        }
+        if include.starts_with(root) {
+            let bytes = optional(&include)?;
+            if bytes.is_none() {
+                diagnostics.insert(format!("missing included file: {}", include.display()));
+            }
+            inventory.files.insert(include, bytes);
+        } else {
+            diagnostics.insert(format!(
+                "include outside discovery root: {}",
+                include.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn record_source_evidence(
+    path: &Path,
+    inventory: &mut Inventory,
+    names: &mut BTreeSet<String>,
+    diagnostics: &mut BTreeSet<String>,
+    context: (&source::Evidence, &super::module_graph::SourceInstance),
+    local_references: &BTreeSet<ReferencePosition>,
+) {
+    let (evidence, instance) = context;
+    inventory
+        .observations
+        .extend(
+            evidence
+                .observations
+                .iter()
+                .cloned()
+                .filter_map(|mut observation| {
+                    if local_references.contains(&(
+                        observation.line,
+                        observation.column,
+                        observation.name.clone(),
+                    )) {
+                        return None;
+                    }
+                    observation
+                        .conditions
+                        .extend(instance.conditions.iter().cloned());
+                    if observation.conditions.iter().any(|condition| {
+                        inventory.profile.as_ref().is_some_and(|profile| {
+                            super::evaluate_condition(condition, profile)
+                                == super::ConditionValue::False
+                        })
+                    }) {
+                        return None;
+                    }
+                    let satisfiability =
+                        inventory.conditions.satisfiability(&observation.conditions);
+                    if satisfiability == super::conditions::Satisfiability::Exhausted {
+                        diagnostics.insert("condition satisfiability budget exhausted".into());
+                    }
+                    (satisfiability != super::conditions::Satisfiability::Unsat).then(|| {
+                        (
+                            path.to_owned(),
+                            inventory.source_kind.unwrap_or(DependencyKind::Normal),
+                            observation,
+                        )
+                    })
+                }),
+        );
+    let retained_names = inventory
+        .observations
+        .iter()
+        .filter(|(file, _, _)| file == path)
+        .map(|(_, _, observation)| observation)
+        .filter(|observation| {
+            !local_references.contains(&(
+                observation.line,
+                observation.column,
+                observation.name.clone(),
+            ))
+        })
+        .map(|observation| observation.name.as_str())
+        .collect::<BTreeSet<_>>();
+    names.extend(
+        evidence
+            .names
+            .iter()
+            .filter(|name| {
+                !inventory.precision
+                    || retained_names.contains(name.as_str())
+                    || !evidence
+                        .observations
+                        .iter()
+                        .any(|observation| observation.name == **name)
+            })
+            .cloned(),
+    );
+}
+
+fn record_namespace_fallback(
+    text: &str,
+    inventory: &mut Inventory,
+    names: &mut BTreeSet<String>,
+    diagnostics: &mut BTreeSet<String>,
+    evidence: &source::Evidence,
+    instance: &super::module_graph::SourceInstance,
+    graph: &super::module_graph::ModuleGraph,
+) {
+    let path = &instance.path;
+    if let Some(syntax) = &evidence.syntax {
+        let fallback = value_only_external_references(syntax, instance, graph);
+        if !fallback.is_empty() {
+            // Reuse tokenizer-owned cfg/span information rather than inventing
+            // unconditional evidence for an AST reference in a conditional body.
+            let mut lexical = source::inspect_with(text, false, inventory.profile.as_ref());
+            lexical.observations.retain(|observation| {
+                fallback.contains(&(
+                    observation.line,
+                    observation.column,
+                    observation.name.clone(),
+                ))
+            });
+            lexical.names = lexical
+                .observations
+                .iter()
+                .map(|observation| observation.name.clone())
+                .collect();
+            record_source_evidence(
+                path,
+                inventory,
+                names,
+                diagnostics,
+                (&lexical, instance),
+                &BTreeSet::new(),
+            );
+        }
+    }
+}
+
 fn add_source(
     path: &Path,
     root: &Path,
     inventory: &mut Inventory,
     names: &mut BTreeSet<String>,
     diagnostics: &mut BTreeSet<String>,
-    seen: &mut BTreeSet<PathBuf>,
+    instance: &super::module_graph::SourceInstance,
+    graph: &super::module_graph::ModuleGraph,
 ) -> Result<(), BoxError> {
     let path = normalize(path);
     if !path.starts_with(root) {
         diagnostics.insert(format!("source outside discovery root: {}", path.display()));
         return Ok(());
     }
-    if !seen.insert(path.clone()) {
+    if ignored_directory(&path, inventory)? {
         return Ok(());
     }
     let canonical = fs::canonicalize(&path);
@@ -491,71 +895,168 @@ fn add_source(
         ));
         return Ok(());
     }
-    let bytes = optional(&path)?;
-    inventory.files.insert(path.clone(), bytes.clone());
+    let bytes = if let Some(bytes) = inventory.files.get(&path) {
+        bytes.clone()
+    } else {
+        let bytes = optional(&path)?;
+        inventory.files.insert(path.clone(), bytes.clone());
+        bytes
+    };
     let Some(bytes) = bytes else {
         diagnostics.insert(format!("missing source: {}", path.display()));
         return Ok(());
     };
     let source_text = std::str::from_utf8(&bytes)
         .map_err(|error| format!("invalid UTF-8 source {}: {error}", path.display()))?;
-    let evidence =
-        source::inspect_with(source_text, inventory.precision, inventory.profile.as_ref());
-    inventory
-        .observations
-        .extend(evidence.observations.iter().cloned().map(|observation| {
-            (
-                path.clone(),
-                inventory.source_kind.unwrap_or(DependencyKind::Normal),
-                observation,
-            )
-        }));
-    names.extend(evidence.names);
-    for reason in evidence.incomplete {
-        diagnostics.insert(format!("{}: {reason}", path.display()));
-    }
-    for reason in evidence.advisory {
-        inventory
-            .diagnostics
-            .insert(format!("advisory: {}: {reason}", path.display()));
-    }
-    for reason in evidence.uncertain {
-        diagnostics.insert(format!(
-            "advisory: {}: {reason}; unreferenced candidates remain protected",
-            path.display()
+    let evidence = if let Some(evidence) = inventory.source_evidence.get(&path) {
+        std::rc::Rc::clone(evidence)
+    } else {
+        let evidence = std::rc::Rc::new(source::inspect_parsed(
+            source_text,
+            inventory.precision,
+            inventory.profile.as_ref(),
+            graph.parsed(&path),
         ));
-    }
-    for module in evidence.modules {
-        let module_base = module_base(&path, inventory)?;
-        let direct = module_base.join(format!("{module}.rs"));
-        let nested = module_base.join(&module).join("mod.rs");
-        let candidate = if direct.exists() { direct } else { nested };
-        if !ignored_directory(&candidate, inventory)? {
-            add_source(&candidate, root, inventory, names, diagnostics, seen)?;
-        }
-    }
-    for include in evidence.includes {
-        let include = normalize(&path.parent().ok_or("source has no parent")?.join(include));
-        if include.is_dir() {
-            diagnostics.insert(format!(
-                "included source path is a directory: {}",
-                include.display()
+        inventory
+            .source_evidence
+            .insert(path.clone(), std::rc::Rc::clone(&evidence));
+        evidence
+    };
+    let (local_references, resolved_import_gaps) = evidence.syntax.as_ref().map_or_else(
+        || (BTreeSet::new(), BTreeSet::new()),
+        |syntax| {
+            (
+                local_reference_positions(syntax, instance, graph),
+                resolved_import_gaps(syntax, instance, graph),
+            )
+        },
+    );
+    record_namespace_fallback(
+        source_text,
+        inventory,
+        names,
+        diagnostics,
+        &evidence,
+        instance,
+        graph,
+    );
+    record_source_evidence(
+        &path,
+        inventory,
+        names,
+        diagnostics,
+        (&evidence, instance),
+        &local_references,
+    );
+    source_diagnostics(
+        &path,
+        root,
+        inventory,
+        diagnostics,
+        (&evidence, instance, graph),
+        &resolved_import_gaps,
+    )
+}
+
+fn source_graph(
+    source: &Path,
+    root: &Path,
+    inventory: &mut Inventory,
+) -> Result<super::module_graph::ModuleGraph, BoxError> {
+    let profile = inventory.profile.clone();
+    let graph = super::module_graph::ModuleGraph::build(source, profile.as_ref(), |candidate| {
+        let candidate = normalize(candidate);
+        if !candidate.starts_with(root) {
+            inventory.diagnostics.insert(format!(
+                "source outside discovery root: {}",
+                candidate.display()
             ));
+            return Ok(None);
+        }
+        if ignored_directory(&candidate, inventory)? {
+            return Ok(Some(String::new()));
+        }
+        if fs::canonicalize(&candidate)
+            .as_ref()
+            .is_ok_and(|actual| *actual != candidate)
+        {
+            inventory
+                .diagnostics
+                .insert(format!("symlinked source: {}", candidate.display()));
+            return Ok(None);
+        }
+        if candidate.is_dir() {
+            inventory.diagnostics.insert(format!(
+                "source path is a directory, not a Rust file: {}",
+                candidate.display()
+            ));
+            return Ok(None);
+        }
+        let bytes = if let Some(bytes) = inventory.files.get(&candidate) {
+            bytes.clone()
+        } else {
+            let bytes = optional(&candidate)?;
+            inventory.files.insert(candidate.clone(), bytes.clone());
+            bytes
+        };
+        bytes
+            .map(|bytes| {
+                String::from_utf8(bytes).map_err(|error| {
+                    format!("invalid UTF-8 source {}: {error}", candidate.display()).into()
+                })
+            })
+            .transpose()
+    })?;
+    Ok(graph)
+}
+
+/// Validate orphan snapshots without inventing compilation units or use evidence.
+fn validate_orphan_sources(
+    manifest: &Path,
+    manifests: &BTreeMap<PathBuf, DocumentMut>,
+    inventory: &Inventory,
+    reached: &BTreeSet<PathBuf>,
+    diagnostics: &mut BTreeSet<String>,
+) -> Result<(), BoxError> {
+    let directory = manifest.parent().ok_or("manifest has no parent")?;
+    let candidates = inventory
+        .files
+        .keys()
+        .filter(|file| {
+            file.extension().is_some_and(|extension| extension == "rs")
+                && file.starts_with(directory)
+                && !reached.contains(*file)
+        })
+        .filter(|file| {
+            !manifests.keys().any(|other| {
+                other != manifest
+                    && other.parent().is_some_and(|nested| {
+                        nested.starts_with(directory) && file.starts_with(nested)
+                    })
+            })
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    for file in candidates {
+        if ignored_directory(&file, inventory)? {
             continue;
         }
-        if include.extension().is_some_and(|s| s == "rs") {
-            add_source(&include, root, inventory, names, diagnostics, seen)?;
-        } else if !include.starts_with(root) {
-            diagnostics.insert(format!(
-                "include outside discovery root: {}",
-                include.display()
-            ));
-        } else {
-            let bytes = optional(&include)?;
-            if bytes.is_none() {
-                diagnostics.insert(format!("missing included file: {}", include.display()));
+        let relative = file.strip_prefix(directory)?;
+        if !["src", "tests", "examples", "benches"]
+            .iter()
+            .any(|root| relative.starts_with(root))
+        {
+            continue;
+        }
+        if let Some(bytes) = inventory.files.get(&file).and_then(Option::as_ref) {
+            let text = std::str::from_utf8(bytes)
+                .map_err(|error| format!("invalid UTF-8 source {}: {error}", file.display()))?;
+            if let Err(error) = syn::parse_file(text) {
+                diagnostics.insert(format!(
+                    "cannot parse orphan source {}: {error}",
+                    file.display()
+                ));
             }
-            inventory.files.insert(include, bytes);
         }
     }
     Ok(())
@@ -575,6 +1076,7 @@ fn package_evidence(
             .diagnostics
             .insert(format!("no Rust targets discovered in {}", path.display()));
     }
+    let mut reached = BTreeSet::new();
     for (source, kind) in sources {
         // Explicitly ignored source trees remain excluded, even for named targets.
         if ignored_directory(&source, inventory)? {
@@ -586,22 +1088,47 @@ fn package_evidence(
             DependencyKind::Dev => &mut evidence.dev,
             DependencyKind::Build => &mut evidence.build,
         };
-        add_source(
-            &source,
-            root,
-            inventory,
-            names,
-            &mut evidence.diagnostics,
-            &mut BTreeSet::new(),
-        )?;
+        let observation_start = inventory.observations.len();
+        let target_label = source_target_label(&source, path, doc, kind);
+        let graph = source_graph(&source, root, inventory)?;
+        evidence
+            .diagnostics
+            .extend(graph.diagnostics.iter().cloned());
+        for instance in &graph.sources {
+            reached.insert(instance.path.clone());
+            add_source(
+                &instance.path,
+                root,
+                inventory,
+                names,
+                &mut evidence.diagnostics,
+                instance,
+                &graph,
+            )?;
+        }
+        for position in observation_start..inventory.observations.len() {
+            inventory
+                .observation_targets
+                .insert(position, target_label.clone());
+        }
     }
+    validate_orphan_sources(
+        path,
+        manifests,
+        inventory,
+        &reached,
+        &mut evidence.diagnostics,
+    )?;
     if inventory.precision {
         for (_, kind, observation) in &mut inventory.observations {
+            let without_test = inventory.conditions.without_test(&observation.conditions);
+            if without_test == super::conditions::Satisfiability::Exhausted {
+                evidence
+                    .diagnostics
+                    .insert("test attribution condition budget exhausted".into());
+            }
             if *kind == DependencyKind::Normal
-                && observation
-                    .conditions
-                    .iter()
-                    .any(|condition| condition == "test")
+                && without_test == super::conditions::Satisfiability::Unsat
             {
                 *kind = DependencyKind::Dev;
             }
@@ -625,7 +1152,36 @@ fn package_evidence(
             .insert(observation.name.clone());
         }
     }
+    inventory.source_evidence.clear();
     Ok(evidence)
+}
+
+fn dev_feature_contribution(doc: &DocumentMut, key: &str, dev: &Item) -> bool {
+    let Some(normal) = doc
+        .get("dependencies")
+        .and_then(|dependencies| dependencies.get(key))
+    else {
+        return false;
+    };
+    let features = |item: &Item| {
+        item.get("features")
+            .and_then(Item::as_array)
+            .map(|features| {
+                features
+                    .iter()
+                    .filter_map(toml_edit::Value::as_str)
+                    .map(str::to_owned)
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default()
+    };
+    let normal_features = features(normal);
+    !features(dev).is_subset(&normal_features)
+        || (normal.get("default-features").and_then(Item::as_bool) == Some(false)
+            && dev.get("default-features").and_then(Item::as_bool) != Some(false))
+        // Workspace-owned feature sets are not fully represented in this table.
+        || (dev.get("workspace").and_then(Item::as_bool) == Some(true)
+            && normal.get("workspace").and_then(Item::as_bool) != Some(true))
 }
 
 fn feature_reference(doc: &DocumentMut, key: &str) -> bool {
@@ -863,10 +1419,28 @@ fn capture(
             .profile
             .as_ref()
             .map(|profile| super::conditions::activate(profile, doc));
+        if let Some(profile) = &inventory.profile {
+            let activation = super::conditions::activate_features(profile, doc);
+            for feature in activation.unresolved_features {
+                inventory
+                    .diagnostics
+                    .insert(format!("unresolved analysis profile feature: {feature}"));
+            }
+        }
         if let Some((profile, _)) = &activated {
-            inventory.profile = Some(profile.clone());
+            let mut profile = profile.clone();
+            // An invalid requested feature still represents the user's cfg
+            // assumption; retain it while reporting invalid Cargo activation.
+            if let Some(requested) = &inventory.profile {
+                profile.features.extend(requested.features.iter().cloned());
+                profile.features.sort();
+                profile.features.dedup();
+            }
+            inventory.profile = Some(profile);
         }
         inventory.observations.clear();
+        inventory.observation_targets.clear();
+        inventory.source_evidence.clear();
         let mut evidence = if package_selected || audit_mode {
             package_evidence(path, doc, &manifests, &root, &mut inventory)?
         } else {
@@ -903,6 +1477,16 @@ fn capture(
         inventory
             .diagnostics
             .extend(evidence.diagnostics.iter().cloned());
+        let observations_by_name = inventory.observations.iter().enumerate().fold(
+            BTreeMap::<String, Vec<usize>>::new(),
+            |mut index, (position, (_, _, observation))| {
+                index
+                    .entry(observation.name.to_ascii_lowercase())
+                    .or_default()
+                    .push(position);
+                index
+            },
+        );
         for (kind, target, table) in sections(doc) {
             for (key, item) in table.iter() {
                 let workspace = item.get("workspace").and_then(Item::as_bool) == Some(true);
@@ -1001,7 +1585,10 @@ fn capture(
                     || feature_reference(doc, key),
                     |(_, deps)| deps.contains(key),
                 );
+                let dev_contribution =
+                    kind == DependencyKind::Dev && dev_feature_contribution(doc, key, item);
                 let used = feature_used
+                    || dev_contribution
                     || implicit_reference(key, doc)
                     || rule_excluded
                     || used_derives
@@ -1066,7 +1653,12 @@ fn capture(
                         "no lexical or structural reference found",
                     )
                 };
-                for (file, source_kind, observation) in &inventory.observations {
+                for position in observations_by_name
+                    .get(&name.to_ascii_lowercase())
+                    .into_iter()
+                    .flatten()
+                {
+                    let (file, source_kind, observation) = &inventory.observations[*position];
                     let owns = match kind {
                         DependencyKind::Build => *source_kind == DependencyKind::Build,
                         DependencyKind::Dev => {
@@ -1082,9 +1674,21 @@ fn capture(
                             column: observation.column,
                             kind: observation.kind,
                             source_target: *source_kind,
-                            source_target_role: source_target_label(file, path, doc, *source_kind)
+                            source_target_role: inventory
+                                .observation_targets
+                                .get(position)
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    source_target_label(file, path, doc, *source_kind)
+                                })
                                 .0,
-                            source_target_name: source_target_label(file, path, doc, *source_kind)
+                            source_target_name: inventory
+                                .observation_targets
+                                .get(position)
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    source_target_label(file, path, doc, *source_kind)
+                                })
                                 .1,
                             dependency_kind: kind,
                             target: target.clone(),
@@ -1096,7 +1700,10 @@ fn capture(
                     }
                 }
                 for (present, origin) in [
-                    (feature_used, super::EvidenceKind::Feature),
+                    (
+                        feature_used || dev_contribution,
+                        super::EvidenceKind::Feature,
+                    ),
                     (implicit_reference(key, doc), super::EvidenceKind::Implicit),
                 ] {
                     if present {
@@ -1266,7 +1873,7 @@ fn capture(
         && !dependencies
             .iter()
             .any(|dependency| dependency.status == DependencyStatus::Incomplete);
-    let report = MacheteReport {
+    let mut report = MacheteReport {
         root,
         evidence: structured,
         coverage: super::AnalysisCoverage {
@@ -1281,6 +1888,7 @@ fn capture(
         applied: false,
         lockfile_preserved: true,
     };
+    report.canonicalize_evidence();
     let sealed_changes = changes
         .iter()
         .map(|c| (c.path.clone(), c.before.clone(), c.after.clone()))
@@ -1476,29 +2084,6 @@ pub fn load_verification_options(
     Ok(effective(&layers(&requested, &inventory), options).verification)
 }
 
-fn module_base(path: &Path, inventory: &Inventory) -> Result<PathBuf, BoxError> {
-    let directory = path.parent().ok_or("source has no parent")?;
-    let target_directory = directory.file_name().is_some_and(|name| {
-        name == "tests"
-            || name == "examples"
-            || name == "benches"
-            || (name == "bin"
-                && directory
-                    .parent()
-                    .is_some_and(|parent| parent.file_name().is_some_and(|name| name == "src")))
-    });
-    let module_base = if inventory.target_roots.contains(path)
-        || target_directory
-        || path.file_name().is_some_and(|name| {
-            name == "lib.rs" || name == "main.rs" || name == "mod.rs" || name == "build.rs"
-        }) {
-        directory.to_owned()
-    } else {
-        directory.join(path.file_stem().ok_or("source stem missing")?)
-    };
-    Ok(module_base)
-}
-
 fn fill_workspace_inventory(
     input: &mut super::audit::AuditInput,
     root_path: &Path,
@@ -1527,6 +2112,50 @@ fn fill_workspace_inventory(
                     .to_owned(),
             });
         }
+    }
+}
+
+fn automatic_target_kind(
+    file: &Path,
+    directory: &Path,
+    doc: &DocumentMut,
+) -> Option<DependencyKind> {
+    let relative = file.strip_prefix(directory).ok()?;
+    let parts = relative
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let automatic = |flag: &str| {
+        doc.get("package")
+            .and_then(|package| package.get(flag))
+            .and_then(Item::as_bool)
+            != Some(false)
+    };
+    let normal = (relative == Path::new("src/lib.rs")
+        && automatic("autolib")
+        && doc.get("lib").and_then(|lib| lib.get("path")).is_none())
+        || (relative == Path::new("src/main.rs") && automatic("autobins"))
+        || (parts.first().is_some_and(|part| part == "src")
+            && parts.get(1).is_some_and(|part| part == "bin")
+            && automatic("autobins")
+            && (parts.len() == 3 || (parts.len() == 4 && parts[3] == "main.rs")));
+    let dev = [
+        ("tests", "autotests"),
+        ("examples", "autoexamples"),
+        ("benches", "autobenches"),
+    ]
+    .iter()
+    .any(|(directory, flag)| {
+        parts.first().is_some_and(|part| part == directory)
+            && automatic(flag)
+            && (parts.len() == 2 || (parts.len() == 3 && parts[2] == "main.rs"))
+    });
+    if normal {
+        Some(DependencyKind::Normal)
+    } else if dev {
+        Some(DependencyKind::Dev)
+    } else {
+        None
     }
 }
 
@@ -1559,14 +2188,9 @@ fn package_sources(
         }) {
             continue;
         }
-        let relative = file.strip_prefix(directory)?;
-        if relative.starts_with("src") {
-            sources.insert(file.clone(), DependencyKind::Normal);
-        } else if ["tests", "examples", "benches"]
-            .iter()
-            .any(|dir| relative.starts_with(dir))
-        {
-            sources.insert(file.clone(), DependencyKind::Dev);
+        if let Some(kind) = automatic_target_kind(file, directory, doc) {
+            inventory.target_roots.insert(file.clone());
+            sources.insert(file.clone(), kind);
         }
     }
     if let Some(build_path) = build_path {
@@ -1595,10 +2219,20 @@ fn package_sources(
                 } else if let Some(name) = target.get("name").and_then(Item::as_str) {
                     let conventional = directory.join(default_dir).join(format!("{name}.rs"));
                     let nested = directory.join(default_dir).join(name).join("main.rs");
-                    if !conventional.exists()
-                        && !nested.exists()
-                        && (section != "bin" || !directory.join("src/main.rs").exists())
+                    if conventional.exists()
+                        || nested.exists()
+                        || (section == "bin" && directory.join("src/main.rs").exists())
                     {
+                        let target_path = if conventional.exists() {
+                            conventional
+                        } else if nested.exists() {
+                            nested
+                        } else {
+                            directory.join("src/main.rs")
+                        };
+                        inventory.target_roots.insert(target_path.clone());
+                        sources.insert(target_path, kind);
+                    } else {
                         diagnostics.insert(format!(
                             "unresolved {section} target {name} in {}",
                             path.display()
@@ -1794,4 +2428,68 @@ fn load_generated(
         }
     }
     Ok(Some(validated))
+}
+
+#[cfg(test)]
+mod discovery_context_tests {
+    use super::*;
+
+    #[test]
+    fn dev_features_and_default_features_are_not_removed_with_duplicate_normal_use() {
+        let doc: DocumentMut = "[dependencies]\nshared={version='1.0.0',default-features=false,features=['base']}\n[dev-dependencies]\nshared={version='1.0.0',features=['base','testing']}\n".parse().unwrap();
+        assert!(dev_feature_contribution(
+            &doc,
+            "shared",
+            &doc["dev-dependencies"]["shared"]
+        ));
+        let doc: DocumentMut = "[dependencies]\nshared={version='1.0.0',features=['base']}\n[dev-dependencies]\nshared={version='1.0.0',features=['base']}\n".parse().unwrap();
+        assert!(!dev_feature_contribution(
+            &doc,
+            "shared",
+            &doc["dev-dependencies"]["shared"]
+        ));
+    }
+
+    #[test]
+    fn orphan_validation_adds_no_dependency_observations_and_keeps_snapshot() {
+        let file = PathBuf::from("/pkg/src/orphan.rs");
+        let manifest = PathBuf::from("/pkg/Cargo.toml");
+        let mut inventory = Inventory::default();
+        inventory
+            .files
+            .insert(file.clone(), Some(b"{ invalid".to_vec()));
+        let mut diagnostics = BTreeSet::new();
+        validate_orphan_sources(
+            &manifest,
+            &BTreeMap::new(),
+            &inventory,
+            &BTreeSet::new(),
+            &mut diagnostics,
+        )
+        .unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("orphan source"))
+        );
+        assert!(inventory.observations.is_empty());
+        assert_eq!(inventory.files[&file], Some(b"{ invalid".to_vec()));
+    }
+
+    #[test]
+    fn custom_target_root_labels_survive_child_source_ownership() {
+        let doc: DocumentMut =
+            "[package]\nname='pkg'\n[lib]\nname='custom'\npath='custom/root.rs'\n"
+                .parse()
+                .unwrap();
+        assert_eq!(
+            source_target_label(
+                Path::new("/pkg/custom/root.rs"),
+                Path::new("/pkg/Cargo.toml"),
+                &doc,
+                DependencyKind::Normal
+            ),
+            ("LIBRARY".into(), Some("custom".into()))
+        );
+    }
 }

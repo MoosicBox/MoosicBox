@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 pub(super) struct Evidence {
     pub names: BTreeSet<String>,
     pub observations: Vec<super::resolution::Observation>,
+    /// Per-file namespace/import edges for cross-file module resolution.
+    pub syntax: Option<super::resolution::syntax::SyntaxIndex>,
     positions: Vec<usize>,
     pub incomplete: BTreeSet<String>,
     pub advisory: BTreeSet<String>,
@@ -24,13 +26,36 @@ pub(super) fn inspect_with(
     precision: bool,
     profile: Option<&super::AnalysisProfile>,
 ) -> Evidence {
+    inspect_parsed(text, precision, profile, None)
+}
+
+/// Inspect a cached syntax tree without parsing the same source a second time.
+/// The tree must have been parsed from exactly `text` to preserve source spans.
+pub(super) fn inspect_parsed(
+    text: &str,
+    precision: bool,
+    profile: Option<&super::AnalysisProfile>,
+    parsed: Option<&syn::File>,
+) -> Evidence {
     let mut result = Evidence::default();
     let tokens = tokenize(text, &mut result);
     let (tokens, positions, conditions) =
         super::resolution::condition_tokens(tokens, &result.positions, profile);
     collect_names(&tokens, &mut result.names);
-    let (observations, gaps) =
-        super::resolution::resolve(text, &tokens, &positions, &conditions, precision);
+    let (observations, gaps, syntax) = parsed.map_or_else(
+        || super::resolution::resolve(text, &tokens, &positions, &conditions, precision),
+        |parsed| {
+            super::resolution::resolve_parsed(
+                text,
+                &tokens,
+                &positions,
+                &conditions,
+                precision,
+                Some(parsed),
+            )
+        },
+    );
+    result.syntax = syntax;
     if precision {
         result.names = observations
             .iter()
@@ -158,6 +183,7 @@ fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {
             i = end;
             continue;
         }
+        let identifier_start = i;
         if bytes[i..].starts_with(b"r#")
             && bytes
                 .get(i + 2)
@@ -173,7 +199,7 @@ fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {
                 i += 1;
             }
             let name = text[start..i].to_owned();
-            result.positions.push(start);
+            result.positions.push(identifier_start);
             tokens.push(name);
             continue;
         }

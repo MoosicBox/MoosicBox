@@ -11,6 +11,7 @@ use super::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -238,34 +239,38 @@ fn verify_candidates(
     copy_project(&root, &pristine, &root)?;
     validate_evidence(plan)?;
     validate_copied_evidence(plan, &root, &pristine)?;
-    let mut scopes = Vec::new();
-    if options.combined && !plan.changes.is_empty() {
-        scopes.push((
-            "combined".to_owned(),
-            (0..plan.changes.len()).collect::<Vec<_>>(),
-        ));
-    }
-    if options.individual {
-        for (index, change) in plan.changes.iter().enumerate() {
-            scopes.push((change.path.display().to_string(), vec![index]));
-        }
-    }
+    let scopes = verification_scopes(plan, options);
     let mut report = VerificationReport { profiles: Vec::new(), diagnostics: vec![
         "Finite profiles are not universal dependency-absence or compiler-name-resolution proof. Candidate compilation failure is not usage proof; no verification outcome authorizes global apply.".into(),
         "Copies prune target/.git before traversal and reject sealed inputs under those directories; other ignored/generated inputs are retained.".into(),
         "Temporary copies are not a security sandbox: build scripts and proc macros run with caller privileges.".into(),
         "Empty isolated Cargo home; offline missing dependencies/toolchains are baseline environment failures. Candidate lockfiles are explicitly refreshed offline only in the disposable copy before locked compilation; preparation failures are reported separately and prevent candidate compilation. Individual scope is a manifest replacement, not a single declaration.".into(),
     ] };
+    let cargo_identity = bounded_identity(&options.cargo_path)?;
+    let rustc_identity = bounded_identity(&options.rustc_path)?;
+    report.diagnostics.push(format!(
+        "Selected executable identities: cargo SHA-256 {cargo_identity}; rustc SHA-256 {rustc_identity}. These identify executables, not the full sysroot or external input closure."
+    ));
+    // Profiles differing only in labels or selector ordering compile the same
+    // unit group. Reuse the pristine baseline, never candidate build state.
+    let mut baselines = BTreeMap::new();
     for profile in &options.profiles {
         if scopes.is_empty() {
             break;
         }
-        let baseline_dir = tempfile::tempdir()?;
-        let baseline_project = baseline_dir.path().join("project");
-        copy_project(&pristine, &baseline_project, &pristine)?;
         let args = arguments(profile);
+        let key = baseline_key(profile);
         validate_evidence(plan)?;
-        let baseline = execute(&baseline_project, baseline_dir.path(), &args, options)?;
+        let baseline = if let Some(baseline) = baselines.get(&key) {
+            VerificationCommandReport::clone(baseline)
+        } else {
+            let baseline_dir = tempfile::tempdir()?;
+            let baseline_project = baseline_dir.path().join("project");
+            copy_project(&pristine, &baseline_project, &pristine)?;
+            let baseline = execute(&baseline_project, baseline_dir.path(), &args, options)?;
+            baselines.insert(key, baseline.clone());
+            baseline
+        };
         for (scope, indices) in &scopes {
             let candidate_dir = tempfile::tempdir()?;
             let candidate_project = candidate_dir.path().join("project");
@@ -309,7 +314,31 @@ fn verify_candidates(
         }
     }
     validate_evidence(plan)?;
+    if bounded_identity(&options.cargo_path)? != cargo_identity
+        || bounded_identity(&options.rustc_path)? != rustc_identity
+    {
+        return Err("toolchain changed during compiler verification".into());
+    }
     Ok(report)
+}
+
+fn verification_scopes(
+    plan: &MachetePlan,
+    options: &VerificationOptions,
+) -> Vec<(String, Vec<usize>)> {
+    let mut scopes = Vec::new();
+    if options.combined && !plan.changes.is_empty() {
+        scopes.push(("combined".to_owned(), (0..plan.changes.len()).collect()));
+    }
+    if options.individual {
+        scopes.extend(
+            plan.changes
+                .iter()
+                .enumerate()
+                .map(|(index, change)| (change.path.display().to_string(), vec![index])),
+        );
+    }
+    scopes
 }
 
 /// The only unlocked Cargo operation in verification; always scratch-only.
@@ -574,6 +603,9 @@ pub fn expand_machete_project(
     if profile.packages.len() > 1 {
         return Err("expansion requires a single library package".into());
     }
+    if matches!(profile.operation, VerificationOperation::TestNoRun) {
+        return Err("library expansion does not support test-no-run profiles".into());
+    }
     let root = root.canonicalize()?;
     let isolation = tempfile::tempdir()?;
     let project = isolation.path().join("project");
@@ -592,9 +624,16 @@ pub fn expand_machete_project(
     args[0] = "rustc".into();
     args.extend(["--lib".into(), "--".into(), "-Zunpretty=expanded".into()]);
     let command = execute(&project, isolation.path(), &args, &policy)?;
+    validate_capture_inputs(&root, &inputs)?;
+    if bounded_identity(&policy.cargo_path)? != cargo_identity
+        || bounded_identity(&policy.rustc_path)? != rustc_identity
+    {
+        return Err("toolchain changed during expansion capture".into());
+    }
     let expanded_rust = if matches!(command.status, VerificationStatus::Passed)
         && !command.output_truncated
         && !command.stdout.trim().is_empty()
+        && syn::parse_file(&command.stdout).is_ok()
     {
         Some(command.stdout.clone())
     } else {
@@ -615,6 +654,71 @@ pub fn expand_machete_project(
         expanded_rust,
         diagnostics,
     })
+}
+
+/// Revalidate a library expansion capture against the selected profile and tools.
+///
+/// This performs file I/O only: no Cargo, compiler, macro or build script executes.
+/// Passing establishes declared copied-file freshness and tool executable identity,
+/// not semantic resolution, input closure, or permission to remove dependencies.
+///
+/// # Errors
+/// * Profile/tool mismatch, failed/truncated/empty capture or malformed expanded Rust.
+/// * Changed, added or removed copied inputs; unsafe paths or copy/identity errors.
+pub fn validate_expansion_report(
+    root: &Path,
+    report: &ExpansionReport,
+    expected_profile: &VerificationProfile,
+    cargo_path: &Path,
+    rustc_path: &Path,
+) -> Result<(), BoxError> {
+    if serde_json::to_vec(&report.profile)? != serde_json::to_vec(expected_profile)?
+        || report.cargo_path != cargo_path
+        || report.rustc_path != rustc_path
+        || bounded_identity(cargo_path)? != report.cargo_identity
+        || bounded_identity(rustc_path)? != report.rustc_identity
+    {
+        return Err("expansion capture profile/toolchain mismatch".into());
+    }
+    let mut expected_arguments = arguments(expected_profile);
+    expected_arguments[0] = "rustc".into();
+    expected_arguments.extend(["--lib".into(), "--".into(), "-Zunpretty=expanded".into()]);
+    if report.command.arguments != expected_arguments {
+        return Err("expansion command differs from the selected library profile".into());
+    }
+    if !matches!(report.command.status, VerificationStatus::Passed)
+        || report.command.output_truncated
+    {
+        return Err("expansion capture is failed or truncated".into());
+    }
+    let text = report
+        .expanded_rust
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+        .ok_or("expansion capture has no complete output")?;
+    if text != report.command.stdout {
+        return Err("expansion text differs from captured compiler output".into());
+    }
+    syn::parse_file(text)?;
+    validate_capture_inputs(&root.canonicalize()?, &report.inputs)
+}
+
+fn validate_capture_inputs(
+    root: &Path,
+    expected: &[super::generated::InputFingerprint],
+) -> Result<(), BoxError> {
+    // Reapply the copy policy without copying bytes or executing producers.
+    // Additions/deletions matter; pruned artifact trees deliberately do not.
+    let mut actual = Vec::new();
+    fingerprint_copy(root, root, &mut actual, &mut 0)?;
+    if actual.len() != expected.len()
+        || actual.iter().zip(expected).any(|(actual, expected)| {
+            actual.path != expected.path || actual.bytes != expected.bytes
+        })
+    {
+        return Err("expansion capture copied input inventory changed".into());
+    }
+    Ok(())
 }
 
 fn bounded_identity(path: &Path) -> Result<String, BoxError> {
@@ -654,14 +758,38 @@ fn fingerprint_copy(
         .collect::<Result<Vec<_>, _>>()?;
     entries.sort();
     for path in entries {
-        if path.is_dir() {
+        let name = path.file_name().ok_or("input filename missing")?;
+        if name == "target" || name == ".git" {
+            continue;
+        }
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() || (!metadata.is_file() && !metadata.is_dir()) {
+            return Err("expansion provenance rejects symlinks and non-regular inputs".into());
+        }
+        if name == ".cargo" || name == "rust-toolchain" || name == "rust-toolchain.toml" {
+            return Err(
+                "expansion provenance refuses ambiguous Cargo/toolchain configuration".into(),
+            );
+        }
+        if metadata.is_dir() {
             fingerprint_copy(root, &path, result, total)?;
         } else {
-            let size = usize::try_from(fs::metadata(&path)?.len())?;
+            if name == "Cargo.toml" {
+                validate_manifest(&path, root)?;
+            }
+            let size = usize::try_from(metadata.len())?;
             if size > 16 * 1024 * 1024 || total.saturating_add(size) > 64 * 1024 * 1024 {
                 return Err("expansion provenance exceeds 16 MiB per input or 64 MiB total".into());
             }
-            let bytes = fs::read(&path)?;
+            let mut bytes = Vec::new();
+            fs::File::open(&path)?
+                .take(16 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > 16 * 1024 * 1024
+                || total.saturating_add(bytes.len()) > 64 * 1024 * 1024
+            {
+                return Err("expansion provenance grew beyond capture size limits".into());
+            }
             *total += bytes.len();
             result.push(super::generated::InputFingerprint {
                 path: path.strip_prefix(root)?.to_owned(),
@@ -670,6 +798,15 @@ fn fingerprint_copy(
         }
     }
     Ok(())
+}
+
+fn baseline_key(profile: &VerificationProfile) -> Vec<String> {
+    let mut canonical = profile.clone();
+    canonical.packages.sort();
+    canonical.packages.dedup();
+    canonical.features.sort();
+    canonical.features.dedup();
+    arguments(&canonical)
 }
 
 fn arguments(profile: &VerificationProfile) -> Vec<String> {
@@ -1176,7 +1313,7 @@ mod tests {
     }
 
     #[test]
-    fn baselines_are_reused_per_profile_but_not_between_calls() {
+    fn baselines_are_reused_per_equivalent_unit_group_but_not_between_calls() {
         let tool = tempfile::tempdir().unwrap();
         let log = tool.path().join("commands");
         let mut options = toolchain(
@@ -1192,10 +1329,11 @@ mod tests {
             ..Default::default()
         });
         let (_root, plan) = plan_fixture();
-        for expected in [10, 20] {
+        for expected in [9, 18] {
             let report = verify_machete_plan(&plan, &options).unwrap();
             assert_eq!(report.profiles.len(), 4);
-            // Two profiles each run one baseline, two preparations, two candidates.
+            // Equivalent profile labels share one baseline, with four preparations
+            // and four independent candidates. A new call must rerun its baseline.
             assert_eq!(fs::read_to_string(&log).unwrap().lines().count(), expected);
             assert!(
                 report.profiles.iter().all(|profile| matches!(
@@ -1520,6 +1658,113 @@ mod tests {
         fs::write(&separated, "").unwrap();
         options.linker_path = Some(separated);
         assert!(validate_options(&options).is_err());
+    }
+
+    #[test]
+    fn expansion_report_validation_is_nonexecuting_and_checks_integrity() {
+        let root = tempfile::tempdir().unwrap();
+        fs::write(
+            root.path().join("Cargo.toml"),
+            "[package]\nname='capture'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        let tools = tempfile::tempdir().unwrap();
+        let cargo = tools.path().join("cargo");
+        let rustc = tools.path().join("rustc");
+        // Not executable: validation must only read the selected artifacts.
+        fs::write(&cargo, "cargo artifact").unwrap();
+        fs::write(&rustc, "rustc artifact").unwrap();
+        let mut inputs = Vec::new();
+        fingerprint_copy(root.path(), root.path(), &mut inputs, &mut 0).unwrap();
+        let profile = VerificationProfile {
+            name: "captured".into(),
+            ..Default::default()
+        };
+        let text = "pub fn expanded() {}\n";
+        let mut report = ExpansionReport {
+            profile: profile.clone(),
+            cargo_path: cargo.clone(),
+            rustc_path: rustc.clone(),
+            cargo_identity: bounded_identity(&cargo).unwrap(),
+            rustc_identity: bounded_identity(&rustc).unwrap(),
+            inputs,
+            command: VerificationCommandReport {
+                arguments: vec![
+                    "rustc".into(),
+                    "--offline".into(),
+                    "--locked".into(),
+                    "--lib".into(),
+                    "--".into(),
+                    "-Zunpretty=expanded".into(),
+                ],
+                status: VerificationStatus::Passed,
+                exit_code: Some(0),
+                stdout: text.into(),
+                stderr: String::new(),
+                output_truncated: false,
+            },
+            expanded_rust: Some(text.into()),
+            diagnostics: Vec::new(),
+        };
+        validate_expansion_report(root.path(), &report, &profile, &cargo, &rustc).unwrap();
+        report.command.output_truncated = true;
+        assert!(validate_expansion_report(root.path(), &report, &profile, &cargo, &rustc).is_err());
+        report.command.output_truncated = false;
+        report.expanded_rust = Some("pub fn forged() {}".into());
+        assert!(validate_expansion_report(root.path(), &report, &profile, &cargo, &rustc).is_err());
+        report.expanded_rust = Some(text.into());
+        fs::write(&rustc, "changed compiler").unwrap();
+        assert!(validate_expansion_report(root.path(), &report, &profile, &cargo, &rustc).is_err());
+    }
+
+    #[test]
+    fn equivalent_profile_labels_and_selector_order_share_baselines() {
+        let first = VerificationProfile {
+            name: "first".into(),
+            packages: vec!["b".into(), "a".into()],
+            features: vec!["two".into(), "one".into()],
+            ..Default::default()
+        };
+        let mut second = first.clone();
+        second.name = "second".into();
+        second.packages.reverse();
+        second.features.reverse();
+        second.features.push("one".into());
+        assert_eq!(baseline_key(&first), baseline_key(&second));
+        second.release = true;
+        assert_ne!(baseline_key(&first), baseline_key(&second));
+        second.release = false;
+        second.target = Some("other-target".into());
+        assert_ne!(baseline_key(&first), baseline_key(&second));
+    }
+
+    #[test]
+    fn expansion_inventory_detects_added_removed_and_changed_inputs() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("src")).unwrap();
+        fs::write(
+            root.path().join("Cargo.toml"),
+            "[package]\nname='capture'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        fs::write(root.path().join("src/lib.rs"), "pub fn item() {}\n").unwrap();
+        let mut inputs = Vec::new();
+        fingerprint_copy(root.path(), root.path(), &mut inputs, &mut 0).unwrap();
+        validate_capture_inputs(root.path(), &inputs).unwrap();
+        // Build artifacts are deliberately outside the copied source inventory.
+        fs::create_dir(root.path().join("target")).unwrap();
+        fs::write(root.path().join("target/artifact"), "ignored").unwrap();
+        validate_capture_inputs(root.path(), &inputs).unwrap();
+        fs::write(root.path().join("src/added.rs"), "pub fn added() {}\n").unwrap();
+        assert!(validate_capture_inputs(root.path(), &inputs).is_err());
+        let mut added = inputs.clone();
+        added.push(super::super::generated::InputFingerprint {
+            path: "missing.rs".into(),
+            bytes: Vec::new(),
+        });
+        assert!(validate_capture_inputs(root.path(), &added).is_err());
+        fs::write(root.path().join("src/lib.rs"), "pub fn changed() {}\n").unwrap();
+        assert!(validate_capture_inputs(root.path(), &inputs).is_err());
     }
 
     #[test]

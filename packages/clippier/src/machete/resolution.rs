@@ -160,7 +160,61 @@ fn shadowed(scopes: &[Scope], mut scope: usize, name: &str, index: usize) -> boo
     }
 }
 
+#[path = "syntax.rs"]
+pub mod syntax;
+
 pub(super) fn resolve(
+    text: &str,
+    tokens: &[String],
+    positions: &[usize],
+    conditions: &[Vec<String>],
+    precision: bool,
+) -> (
+    Vec<Observation>,
+    BTreeSet<String>,
+    Option<syntax::SyntaxIndex>,
+) {
+    resolve_parsed(text, tokens, positions, conditions, precision, None)
+}
+
+pub(super) fn resolve_parsed(
+    text: &str,
+    tokens: &[String],
+    positions: &[usize],
+    conditions: &[Vec<String>],
+    precision: bool,
+    parsed: Option<&syn::File>,
+) -> (
+    Vec<Observation>,
+    BTreeSet<String>,
+    Option<syntax::SyntaxIndex>,
+) {
+    if precision {
+        let analyzed = parsed.map_or_else(
+            || syntax::analyze(text, positions, conditions),
+            |file| Ok(syntax::analyze_parsed(text, file, positions, conditions)),
+        );
+        match analyzed {
+            Ok((mut observations, gaps, index)) => {
+                // Macro token trees are intentionally not interpreted as Rust AST.
+                // Retain their lexical evidence and expansion uncertainty.
+                let (lexical, _) = lexical_resolve(text, tokens, positions, conditions, false);
+                observations.extend(lexical.into_iter().filter(|o| !o.uncertainty.is_empty()));
+                return (observations, gaps, Some(index));
+            }
+            Err(error) => {
+                let (observations, mut gaps) =
+                    lexical_resolve(text, tokens, positions, conditions, false);
+                gaps.insert(format!("Rust syntax could not be indexed: {error}"));
+                return (observations, gaps, None);
+            }
+        }
+    }
+    let (observations, gaps) = lexical_resolve(text, tokens, positions, conditions, false);
+    (observations, gaps, None)
+}
+
+fn lexical_resolve(
     text: &str,
     tokens: &[String],
     positions: &[usize],
@@ -172,6 +226,24 @@ pub(super) fn resolve(
         import_bindings(tokens, scopes, &token_scopes, conditions, precision);
     let derive_members = derive_members(tokens, precision, &mut gaps);
     let mut observations = Vec::new();
+    let mut locations = Vec::with_capacity(positions.len());
+    let mut characters = text.char_indices().peekable();
+    let (mut line, mut column) = (1, 1);
+    for &offset in positions {
+        while let Some(&(position, ch)) = characters.peek() {
+            if position >= offset {
+                break;
+            }
+            characters.next();
+            if ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+        locations.push((line, column));
+    }
     let mut macro_stack = Vec::new();
     for (index, token) in tokens.iter().enumerate() {
         if matches!(token.as_str(), "(" | "[" | "{") {
@@ -207,16 +279,7 @@ pub(super) fn resolve(
                 || own_binding
                 || !shadowed(&scopes, token_scopes[index], token, index)
             {
-                let offset = positions.get(index).copied().unwrap_or(0).min(text.len());
-                let prefix = &text[..offset];
-                let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-                let column = prefix
-                    .rsplit('\n')
-                    .next()
-                    .unwrap_or_default()
-                    .chars()
-                    .count()
-                    + 1;
+                let (line, column) = locations.get(index).copied().unwrap_or((1, 1));
                 observations.push(Observation {
                     name: token.clone(),
                     line,
@@ -349,13 +412,11 @@ fn import_bindings(
                     if let Some(alias) = tokens.get(cursor + 1) {
                         if cursor == index + 2 && conditions.get(index).is_none_or(Vec::is_empty) {
                             scopes[scope].bindings.insert(alias.clone(), 0);
-                        } else if tokens
-                            .iter()
-                            .enumerate()
-                            .any(|(i, name)| name == alias && at(tokens, i + 1, "::"))
-                        {
+                        } else if precision {
+                            // Only the parse-error fallback reaches this branch.
+                            // Successful AST indexing resolves aliases directly.
                             gaps.insert(format!(
-                                "imported alias {alias} has an unresolved type/value namespace"
+                                "imported alias {alias} requires syntax resolution"
                             ));
                         }
                     }

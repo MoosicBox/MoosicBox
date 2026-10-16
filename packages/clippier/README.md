@@ -130,6 +130,25 @@ reference origin, source-target role/name, conditions, uncertainty and coverage.
 scope/import resolution and distinct development/build ownership are enabled by default. This is not
 compiler-complete name resolution; unsupported scopes remain explicit gaps.
 
+### Evidence-size and performance regression checks
+
+`tests/machete_performance.rs` checks bounded nested-module and dependency-width
+fixtures without wall-clock thresholds. Its contracts require exact duplicate
+facts to disappear while retaining distinct source positions, conditions,
+declaration kinds and target predicates. Repeated analysis also checks source
+edits and missing-module arrival/deletion; these are freshness checks, not a claim
+that a persistent incremental cache exists. The tests do not execute Cargo or
+compiler subprocesses themselves.
+
+For runtime comparisons, use the same release executable arguments, coverage
+scope and JSON output destination. Record the executable SHA-256, wall/CPU time,
+peak RSS and report size; compare repeated paired runs on the same machine.
+Correct report size alone does not establish linear execution: parse counts and
+observation-index work need separate instrumentation. A faster report with lost
+contexts, suppressed gaps or reduced coverage is not a performance improvement.
+Passing these regression checks does not prove arbitrary macro expansion or
+compiler-complete dependency absence.
+
 Named profiles belong in `clippier.toml`:
 
 ```toml

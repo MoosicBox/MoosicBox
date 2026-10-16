@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// The origin of a dependency observation; feature wiring is not source usage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EvidenceKind {
     /// A qualified source path.
@@ -24,7 +24,7 @@ pub enum EvidenceKind {
 }
 
 /// An observation resolved to a specific dependency declaration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct DependencyEvidence {
     /// Consumer manifest, identifying declaration ownership.
     pub manifest_path: PathBuf,

@@ -240,6 +240,25 @@ fn apply_native_expectations(case: &Value, expected: &mut [Value]) {
     }
 }
 
+fn assert_parse_failure_is_protected(
+    report: &clippier::machete::MacheteReport,
+    plan: &clippier::machete::MachetePlan,
+    base: &Path,
+) {
+    assert!(!report.complete);
+    assert!(plan.changes.iter().all(|change| {
+        !report.dependencies.iter().any(|dependency| {
+            dependency.status == clippier::machete::DependencyStatus::Incomplete
+                && dependency.manifest_path == change.path
+        })
+    }));
+    assert!(clippier::machete::apply_machete_plan(plan).is_err());
+    assert!(files(base).iter().any(|(path, bytes)| {
+        path.extension().is_some_and(|extension| extension == "rs")
+            && std::str::from_utf8(bytes).is_ok_and(|text| syn::parse_file(text).is_err())
+    }));
+}
+
 fn run_case(case: &Value) {
     let temp = tempfile::tempdir().unwrap();
     let base = fs::canonicalize(temp.path()).unwrap();
@@ -292,6 +311,17 @@ fn run_case(case: &Value) {
         case["id"]
     );
     assert_used_ignores(case);
+    // Some imported lexical probes are deliberately fragments rather than Rust
+    // files. The syntax-backed engine must fail closed on those exact bytes;
+    // never make an invalid file removable just to reproduce a regex outcome.
+    if report
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.starts_with("cannot parse source "))
+    {
+        assert_parse_failure_is_protected(&report, &plan, &base);
+        return;
+    }
     let mut expected = case["expected"].as_array().unwrap().clone();
     apply_native_expectations(case, &mut expected);
     expected.sort_by_key(Value::to_string);

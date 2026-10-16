@@ -269,7 +269,7 @@ fn literal_external_module_and_build_helper_are_inspected() {
         "src/lib.rs",
         "#[path = \"../helper.rs\"] mod helper;",
     );
-    write(dir.path(), "helper.rs", "unused::go();");
+    write(dir.path(), "helper.rs", "fn run() { unused::go(); }");
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
     assert!(
@@ -373,7 +373,7 @@ fn dynamic_text_includes_are_advisory_and_rust_candidates_stay_protected() {
     write(
         dir.path(),
         "src/lib.rs",
-        "const TEXT:&str=include_str!(concat!(env!(\"DIR\"),\"/index.js\")); used::run(); unused::run();",
+        "const TEXT:&str=include_str!(concat!(env!(\"DIR\"),\"/index.js\")); fn run() { used::run(); unused::run(); }",
     );
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
@@ -382,7 +382,7 @@ fn dynamic_text_includes_are_advisory_and_rust_candidates_stay_protected() {
     write(
         dir.path(),
         "src/lib.rs",
-        "include!(concat!(env!(\"OUT_DIR\"),\"/generated.rs\")); used::run(); unused::run();",
+        "include!(concat!(env!(\"OUT_DIR\"),\"/generated.rs\")); fn run() { used::run(); unused::run(); }",
     );
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
@@ -390,7 +390,7 @@ fn dynamic_text_includes_are_advisory_and_rust_candidates_stay_protected() {
     write(
         dir.path(),
         "src/lib.rs",
-        "include!(concat!(env!(\"OUT_DIR\"),\"/generated.rs\")); used::run();",
+        "include!(concat!(env!(\"OUT_DIR\"),\"/generated.rs\")); fn run() { used::run(); }",
     );
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(!plan.report.complete);
@@ -466,7 +466,7 @@ fn local_library_names_and_aliases_are_resolved_without_cargo() {
     write(
         dir.path(),
         "app/src/lib.rs",
-        "custom_library::run(); alias::run();",
+        "fn run() { custom_library::run(); alias::run(); }",
     );
     write(
         dir.path(),
@@ -493,9 +493,13 @@ fn inline_module_paths_preserve_the_module_directory_stack() {
     write(
         dir.path(),
         "src/lib.rs",
-        "mod outer { mod inner { mod external; } } used::run();",
+        "mod outer { mod inner { mod external; } } fn run() { used::run(); }",
     );
-    write(dir.path(), "src/outer/inner/external.rs", "unused::run();");
+    write(
+        dir.path(),
+        "src/outer/inner/external.rs",
+        "fn run() { unused::run(); }",
+    );
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
     assert!(!plan.report.has_unused());
@@ -548,7 +552,7 @@ fn explicit_metadata_maps_library_names_and_protects_manifest_evidence() {
     write(
         dir.path(),
         "src/lib.rs",
-        "custom_name::run(); unused::run();",
+        "fn run() { custom_name::run(); unused::run(); }",
     );
     let mut options = options(dir.path());
     options.metadata = Some(metadata);
@@ -745,7 +749,7 @@ fn precision_import_reexport_positions_and_alias_package_are_structured() {
 #[test]
 fn unsupported_resolution_and_unexpanded_macros_fail_closed_by_default() {
     let dir = fixture();
-    for source in ["use crate::local::*;", "fn run<T>() {}", "paste! { item };"] {
+    for source in ["use crate::local::*;", "paste! { item };"] {
         write(dir.path(), "src/lib.rs", source);
         let report = analyze_machete(&precise(dir.path())).unwrap();
         assert_eq!(
@@ -865,7 +869,7 @@ fn precision_dependency_kind_ownership_does_not_credit_production_to_dev() {
     write(
         dir.path(),
         "src/lib.rs",
-        "used::run(); #[cfg(test)] mod tests { fn run(){ unused::run(); } }",
+        "fn run() { used::run(); } #[cfg(test)] mod tests { fn run(){ unused::run(); } }",
     );
     let mut options = precise(dir.path());
     options.kinds = vec![DependencyKind::Normal, DependencyKind::Dev];
@@ -947,8 +951,8 @@ fn precision_target_labels_use_custom_manifest_roles_not_directory_guesses() {
         "Cargo.toml",
         "[package]\nname='fixture'\nversion='0.1.0'\n[lib]\nname='custom_lib'\npath='custom/root.rs'\n[[example]]\nname='demo'\npath='custom/demo.rs'\n[dependencies]\nused='1.0.0'\n",
     );
-    write(dir.path(), "custom/root.rs", "used::run();");
-    write(dir.path(), "custom/demo.rs", "used::run();");
+    write(dir.path(), "custom/root.rs", "fn run() { used::run(); }");
+    write(dir.path(), "custom/demo.rs", "fn run() { used::run(); }");
     let report = analyze_machete(&precise(dir.path())).unwrap();
     assert!(
         report
@@ -970,7 +974,11 @@ fn precision_target_labels_use_custom_manifest_roles_not_directory_guesses() {
 fn precision_development_only_reference_reaches_hygiene_recommendation() {
     let dir = fixture();
     write(dir.path(), "src/lib.rs", "pub fn empty() {}");
-    write(dir.path(), "tests/check.rs", "used::run();");
+    write(
+        dir.path(),
+        "tests/check.rs",
+        "#[test] fn run() { used::run(); }",
+    );
     let report = audit_machete(&precise(dir.path())).unwrap();
     assert!(
         report
@@ -1011,7 +1019,7 @@ fn profile_inner_cfg_does_not_erase_following_outer_source() {
     write(
         dir.path(),
         "src/lib.rs",
-        "mod nested { #![cfg(feature=\"disabled\")] unused::run(); }\nused::run();",
+        "mod nested { #![cfg(feature=\"disabled\")] fn run() { unused::run(); } }\nfn run() { used::run(); }",
     );
     let mut options = precise(dir.path());
     options.profile = Some("minimal".into());

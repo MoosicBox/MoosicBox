@@ -9,6 +9,7 @@ mod discover;
 mod evidence;
 pub mod generated;
 mod metadata;
+mod module_graph;
 mod resolution;
 mod source;
 #[cfg(feature = "machete-verify")]
@@ -234,6 +235,12 @@ pub struct MacheteReport {
 }
 
 impl MacheteReport {
+    /// Keep one copy of each exact fact, retaining distinct owners, contexts and provenance.
+    pub(super) fn canonicalize_evidence(&mut self) {
+        self.evidence.sort_unstable();
+        self.evidence.dedup();
+    }
+
     /// Whether any selected declaration has no observed reference.
     #[must_use]
     pub fn has_unused(&self) -> bool {
