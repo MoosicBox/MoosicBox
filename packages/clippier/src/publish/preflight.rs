@@ -161,7 +161,16 @@ fn link_pending_dependencies(
     Ok(())
 }
 
+#[cfg(test)]
 fn package_command(staged: &SanitizedPackage, config: &PublishConfig) -> Command {
+    package_command_with_cache(staged, config, None)
+}
+
+fn package_command_with_cache(
+    staged: &SanitizedPackage,
+    config: &PublishConfig,
+    verification_cache: Option<&Path>,
+) -> Command {
     let mut command = Command::new("cargo");
     command
         .arg("package")
@@ -174,6 +183,9 @@ fn package_command(staged: &SanitizedPackage, config: &PublishConfig) -> Command
         .arg(cargo_color_arg(config.color))
         .current_dir(staged.root())
         .env("CARGO_TARGET_DIR", staged.target_dir());
+    if let Some(cache) = verification_cache.filter(|_| config.verify) {
+        command.env("CARGO_BUILD_BUILD_DIR", cache);
+    }
     if !config.verify {
         command.arg("--no-verify");
     }
@@ -200,12 +212,22 @@ pub(super) fn validate_with_failures(
     failures: Vec<String>,
 ) -> Result<(), BoxError> {
     let mut diagnostics = diagnostics::Diagnostics::default();
+    // Own only a run-scoped cache. Cargo's build directory can also contain its
+    // extracted package work area; sources/manifests/lockfiles are still freshly
+    // staged and Cargo re-extracts each archive before verifying it.
+    let verification_cache = config.verify.then(verification_cache).transpose()?;
     collect_package_checks(
         packages,
         pending,
         config,
         failures,
-        |closure| match validate_package(workspace_root, packages, closure, config) {
+        |closure| match validate_package(
+            workspace_root,
+            packages,
+            closure,
+            config,
+            verification_cache.as_ref().map(SanitizedPackage::root),
+        ) {
             Ok(()) => Ok(()),
             Err(error) if !config.fail_fast => {
                 let findings =
@@ -289,14 +311,31 @@ fn pending_dependencies(
     }
 }
 
+/// Own the run-scoped Cargo build directory; manifests and lockfiles are freshly
+/// staged for every check and packaged contents are re-extracted by Cargo.
+fn verification_cache() -> Result<SanitizedPackage, BoxError> {
+    let root = std::env::temp_dir().join(format!(
+        "clippier-verification-cache-{}-{}",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    ));
+    fs::create_dir(&root)?;
+    Ok(SanitizedPackage {
+        package_path: root.clone(),
+        root,
+    })
+}
+
 fn validate_package(
     workspace_root: &Path,
     packages: &BTreeMap<String, PublishPackageInfo>,
     pending: &[String],
     config: &PublishConfig,
+    verification_cache: Option<&Path>,
 ) -> Result<(), BoxError> {
     let staged = prepare_workspace(workspace_root, packages, pending)?;
-    let output = run_streaming_command(package_command(&staged, config))?;
+    let command = package_command_with_cache(&staged, config, verification_cache);
+    let output = run_streaming_command(command)?;
     if !output.status.success() {
         return Err(format!(
             "Cargo packaging/resolution failed with status {}:\n{}",

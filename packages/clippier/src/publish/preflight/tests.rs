@@ -1076,3 +1076,108 @@ fn resumed_warn_dependency_continues_packaging_but_never_uploads_in_dry_run() {
         assert_eq!(reports[1].status, PublishPackageStatus::DryRun);
     }
 }
+
+#[test]
+fn verification_cache_reuses_dependencies_without_hiding_packaged_errors() {
+    let fixture = Fixture::new(&[(
+        "clippier-fixture-app",
+        "[dependencies]\nclippier-fixture-reusable = \"1\"\n",
+    )]);
+    let registry = Registry::new();
+    registry.add("clippier-fixture-reusable", "1.0.0", None, false);
+    let cache = verification_cache().unwrap();
+    let cache_path = cache.root().to_path_buf();
+    let config = PublishConfig {
+        verify: true,
+        color: super::super::ColorMode::Never,
+        ..PublishConfig::default()
+    };
+    for attempt in 0..4 {
+        if attempt == 2 {
+            fs::write(
+                fixture.packages["clippier-fixture-app"]
+                    .package_path
+                    .as_ref()
+                    .unwrap()
+                    .join("src/lib.rs"),
+                "compile_error!(\"broken packaged code\");",
+            )
+            .unwrap();
+        }
+        if attempt == 3 {
+            registry.add("clippier-fixture-reusable", "1.0.0", None, true);
+        }
+        let staged = fixture.stage();
+        let mut command = package_command_with_cache(&staged, &config, Some(cache.root()));
+        command.arg("--verbose");
+        registry.configure(&mut command);
+        let result = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        if attempt == 0 {
+            assert!(result.status.success(), "{stderr}");
+            assert!(
+                stderr.contains("Compiling clippier-fixture-reusable"),
+                "{stderr}"
+            );
+        } else if attempt == 3 {
+            assert!(!result.status.success(), "{stderr}");
+            assert!(stderr.contains("1.0.0 is yanked"), "{stderr}");
+        } else {
+            assert!(
+                stderr.contains("Fresh clippier-fixture-reusable"),
+                "{stderr}"
+            );
+            if attempt == 1 {
+                assert!(result.status.success(), "{stderr}");
+            } else {
+                assert!(!result.status.success(), "{stderr}");
+                assert!(stderr.contains("broken packaged code"), "{stderr}");
+            }
+        }
+        assert!(!fixture.directory.path().join("Cargo.lock").exists());
+    }
+    drop(cache);
+    assert!(!cache_path.exists());
+}
+
+#[test]
+fn verification_cache_does_not_mask_changed_feature_configuration() {
+    let fixture = Fixture::new(&[(
+        "clippier-fixture-features",
+        "[features]\ndefault = []\nbroken = []\n",
+    )]);
+    let source = fixture.packages["clippier-fixture-features"]
+        .package_path
+        .as_ref()
+        .unwrap();
+    fs::write(
+        source.join("src/lib.rs"),
+        "#[cfg(feature = \"broken\")] compile_error!(\"feature mismatch\");",
+    )
+    .unwrap();
+    let cache = verification_cache().unwrap();
+    let config = PublishConfig {
+        verify: true,
+        color: super::super::ColorMode::Never,
+        ..PublishConfig::default()
+    };
+    for broken in [false, true] {
+        if broken {
+            let manifest = fs::read_to_string(source.join("Cargo.toml")).unwrap();
+            fs::write(
+                source.join("Cargo.toml"),
+                manifest.replace("default = []", "default = [\"broken\"]"),
+            )
+            .unwrap();
+        }
+        let staged = fixture.stage();
+        let mut command = package_command_with_cache(&staged, &config, Some(cache.root()));
+        command.arg("--offline");
+        let result = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(result.status.success(), !broken, "{stderr}");
+        if broken {
+            assert!(stderr.contains("feature mismatch"), "{stderr}");
+        }
+    }
+}

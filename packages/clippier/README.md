@@ -945,7 +945,17 @@ together. Full-package Cargo checks remain authoritative. Multiple independent f
 package can now be exposed in a single run, but conflicts within a single dependency's graph may
 still require another run after fixing its first failure.
 
-Per-package validation may repeat work for shared dependency closures, especially with `--verify`.
+Per-package validation still checks each dependency closure separately. With `--verify`,
+preflight shares a fresh, run-scoped Cargo build directory (`CARGO_BUILD_BUILD_DIR`) so Cargo can
+reuse compatible compiled dependencies across checks. Package staging, dependency resolution,
+lockfiles and temporary registry selection remain independent; each archive is verified by Cargo.
+The cache is removed when preflight finishes, including on errors, and never uses the checkout's
+build artifacts. This optimization requires Cargo support for `build.build-dir`; older Cargo
+versions may ignore it and retain the slower isolated builds. Upload-time verification is unchanged.
+
+This retains normal Cargo cache semantics, not a clean rebuild of every dependency for every
+package: build scripts must correctly declare their inputs. Each new preflight starts with an
+empty build cache. Cargo may still rebuild when features, paths, toolchains or other inputs differ.
 
 Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to compile packaged contents. Without it, packaging/resolution still runs, but compilation is explicitly reported as not requested. JSON package reports include `packaging_validated` and `compilation_verified`. `clippier release publish --dry-run` uses the same preflight.
 
