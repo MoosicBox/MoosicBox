@@ -118,6 +118,31 @@ fn projected_features(manifest: &toml::Value, alias: &str) -> toml::Value {
     features
 }
 
+// Cargo removes Git/path source selections in published dependency declarations.
+// Keep staging paths only when explicitly linking pending workspace packages.
+fn registry_dependency(mut dependency: Dependency) -> Dependency {
+    if dependency.requirement().is_some()
+        && let Some(table) = dependency.specification.as_table_mut()
+    {
+        for key in ["git", "branch", "tag", "rev", "path"] {
+            table.remove(key);
+        }
+    }
+    dependency
+}
+
+fn registry_manifest(manifest: &mut toml::Value) {
+    for dependency in dependencies(manifest) {
+        let dependency = registry_dependency(dependency);
+        let section = if let Some(target) = &dependency.target {
+            &mut manifest["target"][target][&dependency.section]
+        } else {
+            &mut manifest[&dependency.section]
+        };
+        section[&dependency.alias] = dependency.specification;
+    }
+}
+
 fn probe_manifest(manifest: &toml::Value, dependency: &Dependency) -> toml::Value {
     let mut probe = toml::Value::Table(toml::toml! {
         [package]
@@ -228,11 +253,21 @@ fn parallel_ordered<T: Sync, R: Send>(
     })
 }
 
+fn diagnostic_signature(error: &str) -> String {
+    let lines = error.lines().collect::<Vec<_>>();
+    let start = lines
+        .iter()
+        .position(|line| line.trim_start().starts_with("error:"))
+        .unwrap_or(0);
+    lines[start..].join("\n")
+}
+
 #[derive(Default)]
 pub(super) struct Diagnostics {
     probes: BTreeMap<String, Result<(), String>>,
     indexes: BTreeMap<String, Result<Vec<IndexVersion>, String>>,
     emitted: BTreeSet<String>,
+    error_groups: BTreeMap<String, usize>,
     failed_packages: BTreeSet<String>,
 }
 
@@ -277,14 +312,20 @@ impl Diagnostics {
             .as_ref()
             .ok_or("Missing package path")?
             .join("Cargo.toml");
-        let manifest = sanitized_manifest(workspace_root, packages, &path)?;
+        let mut manifest = sanitized_manifest(workspace_root, packages, &path)?;
+        registry_manifest(&mut manifest);
         let started = Instant::now();
         let pending_set = pending.iter().cloned().collect::<BTreeSet<_>>();
         let mut jobs = Vec::new();
         let mut scheduled = BTreeSet::new();
         let mut entries = Vec::new();
         let mut cache_hits = 0;
+        let mut skipped = Vec::new();
         for dependency in dependencies(&manifest) {
+            if dependency.requirement().is_none() {
+                skipped.push(format!("Supplemental probe skipped: {name} -> {}: no registry version requirement; see authoritative manifest validation.", dependency.label()));
+                continue;
+            }
             let probe = probe_manifest(&manifest, &dependency);
             let mut needed = BTreeSet::new();
             if dependency.crates_io() && pending_set.contains(dependency.name()) {
@@ -335,7 +376,8 @@ impl Diagnostics {
             index_fetches,
             started.elapsed().as_secs_f64()
         );
-        Ok(self.collect_findings(name, entries))
+        skipped.extend(self.collect_findings(name, entries));
+        Ok(skipped)
     }
 
     fn collect_findings(
@@ -350,8 +392,22 @@ impl Diagnostics {
             if let Err(error) = result
                 && self.emitted.insert(key)
             {
+                let signature = diagnostic_signature(error);
+                let next_id = self.error_groups.len() + 1;
+                let (id, repeated) = match self.error_groups.entry(signature) {
+                    std::collections::btree_map::Entry::Occupied(entry) => (*entry.get(), true),
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(next_id);
+                        (next_id, false)
+                    }
+                };
+                let detail = if repeated {
+                    format!("Same diagnostic as dependency-probe group #{id} above (not repeated).")
+                } else {
+                    format!("Dependency-probe group #{id}:\n{error}")
+                };
                 findings.push(format!(
-                    "Additional dependency-probe failure: {name} -> {}:\n{error}",
+                    "Additional dependency-probe failure: {name} -> {}:\n{detail}",
                     dependency.label()
                 ));
             }
@@ -475,6 +531,48 @@ fn run_probe(
     )
 }
 
+fn normalize_pending_manifests(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    needed: &[String],
+    staged: &SanitizedPackage,
+) -> Result<(), BoxError> {
+    for name in needed {
+        let source = fs::canonicalize(
+            packages[name]
+                .package_path
+                .as_ref()
+                .ok_or("Missing dependency path")?,
+        )?;
+        let root = fs::canonicalize(workspace_root)?;
+        let path = staged
+            .root
+            .join("source")
+            .join(source.strip_prefix(root)?)
+            .join("Cargo.toml");
+        let mut dependency_manifest = read_toml(&path)?;
+        // Preserve only the pending links prepared by prepare_workspace.
+        let links = dependencies(&dependency_manifest)
+            .into_iter()
+            .filter(|entry| {
+                entry.specification.get("path").is_some()
+                    && needed.iter().any(|name| name == entry.name())
+            })
+            .collect::<Vec<_>>();
+        registry_manifest(&mut dependency_manifest);
+        for entry in links {
+            let section = if let Some(target) = &entry.target {
+                &mut dependency_manifest["target"][target][&entry.section]
+            } else {
+                &mut dependency_manifest[&entry.section]
+            };
+            section[&entry.alias] = entry.specification;
+        }
+        fs::write(path, toml::to_string_pretty(&dependency_manifest)?)?;
+    }
+    Ok(())
+}
+
 fn run_probe_with(
     workspace_root: &Path,
     packages: &BTreeMap<String, PublishPackageInfo>,
@@ -503,6 +601,7 @@ fn run_probe_with(
     } else {
         prepare_workspace(workspace_root, packages, needed)?
     };
+    normalize_pending_manifests(workspace_root, packages, needed, &staged)?;
     if needed.iter().any(|name| name == dependency.name()) {
         let source = fs::canonicalize(
             packages[dependency.name()]

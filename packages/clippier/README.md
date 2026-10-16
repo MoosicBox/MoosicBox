@@ -1117,7 +1117,12 @@ clippier publish --dry-run --fail-fast # Stop after the first preflight failure
 ```
 
 The final failure summary includes package names, Cargo diagnostics, validated/failed/unchecked
-counts, and potentially blocked dependency checks. This checks every package, but cannot promise
+counts, and potentially blocked dependency checks. The concise completion summary is printed **after**
+all diagnostics, ending with an explicit failed/no-uploads result. Repeated identical supplemental
+probe errors are shown once with numbered references from other affected dependencies. Probes model
+published registry requirements (not Git branches or source paths), retaining staging links only for
+pending workspace packages; full-package Cargo checks remain authoritative.
+This checks every package, but cannot promise
 all errors inside one package: Cargo's resolver stops at its first error in each dependency graph.
 Fixing a failed dependency can therefore expose further issues in dependent packages. Workspace
 metadata or invalid/cyclic publish plans that prevent constructing the queue remain fatal.

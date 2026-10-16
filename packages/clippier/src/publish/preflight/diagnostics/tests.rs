@@ -376,3 +376,62 @@ fn benchmark_serial_and_parallel_cargo_probes() {
         );
     }
 }
+
+#[test]
+fn published_dependency_sources_preserve_registry_features_and_renames() {
+    let mut manifest: toml::Value = toml::from_str(r#"
+        [dependencies]
+        renamed = { package = "external", version = "^0.4.0", git = "https://invalid.example/repo", branch = "master", features = ["required"], optional = true, default-features = false }
+        local = { version = "1.0.0", path = "../local" }
+        alternate = { version = "2.0.0", registry = "company" }
+        missing = { git = "https://invalid.example/repo" }
+        [target.'cfg(windows)'.build-dependencies]
+        tool = { version = "3.0.0", git = "https://invalid.example/repo", rev = "deadbeef" }
+    "#).unwrap();
+    registry_manifest(&mut manifest);
+    let renamed = &manifest["dependencies"]["renamed"];
+    assert!(renamed.get("git").is_none());
+    assert!(renamed.get("branch").is_none());
+    assert_eq!(renamed["package"].as_str(), Some("external"));
+    assert_eq!(renamed["version"].as_str(), Some("^0.4.0"));
+    assert_eq!(renamed["features"][0].as_str(), Some("required"));
+    assert_eq!(renamed["optional"].as_bool(), Some(true));
+    assert_eq!(renamed["default-features"].as_bool(), Some(false));
+    assert!(manifest["dependencies"]["local"].get("path").is_none());
+    assert_eq!(
+        manifest["dependencies"]["alternate"]["registry"].as_str(),
+        Some("company")
+    );
+    assert!(manifest["dependencies"]["missing"].get("git").is_some());
+    assert!(
+        manifest["target"]["cfg(windows)"]["build-dependencies"]["tool"]
+            .get("rev")
+            .is_none()
+    );
+}
+
+#[test]
+fn repeated_supplemental_errors_are_grouped_without_losing_dependency_labels() {
+    let manifest: toml::Value =
+        toml::from_str("[dependencies]\na = '1.0.0'\nb = '1.0.0'\n").unwrap();
+    let mut diagnostics = Diagnostics::default();
+    for key in ["a", "b"] {
+        diagnostics.probes.insert(key.into(), Err(format!("Updating crates.io index ({key})\nerror: shared registry unavailable\nCaused by:\n  network failure")));
+    }
+    // Avoid real index reads; these results are already conclusive for this test.
+    let entries = dependencies(&manifest)
+        .into_iter()
+        .map(|dep| (dep.alias.clone(), dep, true))
+        .collect();
+    let findings = diagnostics.collect_findings("fixture", entries).join("\n");
+    assert_eq!(
+        findings
+            .matches("error: shared registry unavailable")
+            .count(),
+        1
+    );
+    assert!(findings.contains("fixture -> a [dependencies]"));
+    assert!(findings.contains("fixture -> b [dependencies]"));
+    assert!(findings.contains("Same diagnostic as dependency-probe group #1"));
+    assert_eq!(diagnostics.error_groups.len(), 1);
+}

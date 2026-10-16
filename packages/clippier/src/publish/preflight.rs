@@ -352,7 +352,25 @@ fn collect_package_checks(
     if failures.is_empty() {
         return Ok(());
     }
-    Err(format!("Publish preflight failed (no packages uploaded):\n{}\nPackaging validated: {passed}; failed/blocked: {}; not checked: {}. Cargo can report only the first resolver error in each dependency graph; blocked checks may expose further issues after their dependencies are fixed.\n\n{}", if config.fail_fast { "Stopped early (--fail-fast)." } else { "Checked every pending package." }, failed.len(), pending.len() - passed - failed.len(), failures.join("\n\n")).into())
+    let completion = if config.fail_fast {
+        "Stopped early (--fail-fast)."
+    } else {
+        "Checked every pending package."
+    };
+    let failed_packages = failed.iter().cloned().collect::<Vec<_>>().join(", ");
+    Err(format!(
+        "Publish preflight failed (no packages uploaded):\n\n{}\n\n\
+         Publish preflight summary (no packages uploaded)\n\
+         {completion}\n\
+         Packaging validated: {passed}; failed/blocked: {}; not checked: {}.\n\
+         Failed/blocked packages: {failed_packages}\n\
+         Additional validation failures: {}.\n\
+         Full-package checks are authoritative; dependency probes are supplemental diagnostics.\n\
+         Cargo can report only the first resolver error in each dependency graph; blocked checks may expose further issues after their dependencies are fixed.\n\
+         Result: FAILED (no packages uploaded).",
+        failures.join("\n\n"), failed.len(), pending.len() - passed - failed.len(),
+        failures.len() - failed.len(),
+    ).into())
 }
 
 fn pending_dependencies(

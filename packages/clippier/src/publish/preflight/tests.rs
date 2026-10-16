@@ -1422,3 +1422,22 @@ fn fail_fast_verification_stops_before_later_packaging_error() {
     assert!(!error.contains("invalid manifest"), "{error}");
     assert!(error.contains("not checked: 1"), "{error}");
 }
+
+#[test]
+fn failure_summary_is_last_even_after_large_supplemental_output() {
+    let packages = BTreeMap::from([(
+        "app".into(),
+        PublishPackageInfo::new("app", "0.1.0", true, BTreeSet::new()),
+    )]);
+    let error = collect_package_checks(&packages, &["app".into()], &PublishConfig::default(), vec!["manifest validation failure".into()], |_| {
+        Err(format!("Full-package check: failed\nAdditional dependency-probe failure:\n{}\nEND_OF_DIAGNOSTICS", "detail\n".repeat(10000)).into())
+    }).unwrap_err().to_string();
+    assert!(
+        error.find("END_OF_DIAGNOSTICS").unwrap()
+            < error.find("Publish preflight summary").unwrap()
+    );
+    assert!(error.contains("Packaging validated: 0; failed/blocked: 1; not checked: 0"));
+    assert!(error.contains("Additional validation failures: 1"));
+    assert!(error.contains("Failed/blocked packages: app"));
+    assert!(error.ends_with("Result: FAILED (no packages uploaded)."));
+}
