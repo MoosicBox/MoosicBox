@@ -28,6 +28,8 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 mod preflight;
 pub(crate) mod purity;
+#[cfg(test)]
+mod retry_tests;
 
 pub use purity::{PublishPurityError, PurityAssessment, PurityStatus};
 
@@ -1302,14 +1304,32 @@ fn publish_package(
 ) -> Result<PublishAttempt, BoxError> {
     let sanitized = SanitizedPackage::prepare(workspace_root, packages, package)?;
 
+    publish_with_retry(
+        package,
+        config,
+        || {
+            run_streaming_command(build_publish_command(
+                sanitized.manifest_path(),
+                sanitized.root(),
+                sanitized.target_dir(),
+                config,
+            ))
+        },
+        thread::sleep,
+    )
+}
+
+// Injection keeps retry/termination coverage independent of registry uploads and
+// wall-clock sleeps. Every retry still runs the real Cargo publication command.
+fn publish_with_retry(
+    package: &PublishPackageInfo,
+    config: &PublishConfig,
+    mut publish: impl FnMut() -> Result<CommandOutput, BoxError>,
+    mut sleep: impl FnMut(Duration),
+) -> Result<PublishAttempt, BoxError> {
     let mut attempts = 0;
     loop {
-        let output = run_streaming_command(build_publish_command(
-            sanitized.manifest_path(),
-            sanitized.root(),
-            sanitized.target_dir(),
-            config,
-        ))?;
+        let output = publish()?;
         if output.status.success() {
             return Ok(PublishAttempt::Published);
         }
@@ -1329,7 +1349,7 @@ fn publish_package(
                 attempts,
                 config.rate_limit_retries,
             );
-            thread::sleep(rate_limit.wait);
+            sleep(rate_limit.wait);
             continue;
         }
 
@@ -1412,19 +1432,59 @@ fn format_duration(duration: Duration) -> String {
 }
 
 fn parse_rate_limit(stderr: &str) -> Option<RateLimit> {
-    if !stderr.contains("429 Too Many Requests") {
+    parse_rate_limit_at(stderr, Utc::now())
+}
+
+fn parse_rate_limit_at(stderr: &str, now: DateTime<Utc>) -> Option<RateLimit> {
+    // Match Cargo's status diagnostics, not arbitrary occurrences of "429" in a
+    // package name, URL or warning. libcurl's header-only response omits the reason.
+    let rate_limited = stderr.lines().any(|line| {
+        let line = line.trim();
+        [
+            "status 429",
+            "failed to get a 200 OK response, got 429",
+            "HTTP/1.1 429",
+            "HTTP/2 429",
+        ]
+        .iter()
+        .any(|marker| {
+            line.match_indices(marker).any(|(start, marker)| {
+                line[start + marker.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(|next| next.is_whitespace() || matches!(next, ')' | ':' | ','))
+            })
+        })
+    });
+    if !rate_limited {
         return None;
     }
 
-    let retry_at = parse_retry_after(stderr);
-    let wait = retry_at.map_or(Duration::from_mins(1), |retry_at| {
-        retry_at
-            .signed_duration_since(Utc::now())
+    let header = stderr
+        .lines()
+        .filter_map(|line| line.trim().split_once(':'))
+        .find(|(name, _)| name.eq_ignore_ascii_case("retry-after"))
+        .map(|(_, value)| value.trim());
+    let header_date = header
+        .and_then(|value| DateTime::parse_from_rfc2822(value).ok())
+        .map(|date| date.with_timezone(&Utc));
+    let retry_at = match (parse_retry_after(stderr), header_date) {
+        (Some(body), Some(header)) => Some(body.max(header)),
+        (body, header) => body.or(header),
+    };
+    let dated_wait = retry_at.map(|date| {
+        date.signed_duration_since(now)
             .to_std()
             .unwrap_or(Duration::ZERO)
-            + Duration::from_secs(5)
+            .saturating_add(Duration::from_secs(5))
     });
-
+    let seconds_wait = header
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(|seconds| Duration::from_secs(seconds).saturating_add(Duration::from_secs(5)));
+    let wait = match (dated_wait, seconds_wait) {
+        (Some(date), Some(seconds)) => date.max(seconds),
+        (date, seconds) => date.or(seconds).unwrap_or(Duration::from_mins(1)),
+    };
     Some(RateLimit { retry_at, wait })
 }
 

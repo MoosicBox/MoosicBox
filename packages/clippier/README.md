@@ -1086,6 +1086,12 @@ counts, and potentially blocked dependency checks. This checks every package, bu
 all errors inside one package: Cargo's resolver stops at its first error in each dependency graph.
 Fixing a failed dependency can therefore expose further issues in dependent packages. Workspace
 metadata or invalid/cyclic publish plans that prevent constructing the queue remain fatal.
+Publication retries HTTP 429 responses up to `--rate-limit-retries` times (default: 3),
+including Cargo's header-only `got 429` response format. Retry deadlines in crates.io's message
+and `Retry-After` date/seconds headers are honored with a five-second safety margin. If no valid
+retry instruction is available, Clippier waits one minute before retrying. Other failures are not
+silently retried; exhausting the budget still reports a publication failure.
+
 Preflight first attempts one native `cargo package --workspace --no-verify` operation over the
 pending queue. This stages the queue once and packages shared pending dependencies once, rather
 than repeating every dependency closure. Cargo generates a separate lockfile for each archive;
