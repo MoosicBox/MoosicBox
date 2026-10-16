@@ -294,7 +294,7 @@ fn validate_package(
 
 // Cargo configuration is inherited from directories and CARGO_HOME. Overrides can
 // conceal registry failures or make the preflight resolve a different source.
-fn audit_cargo_configuration(workspace_root: &Path) -> Result<(), BoxError> {
+pub(super) fn audit_cargo_configuration(workspace_root: &Path) -> Result<(), BoxError> {
     let mut directories = workspace_root
         .ancestors()
         .map(|p| p.join(".cargo"))

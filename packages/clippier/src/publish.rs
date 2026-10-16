@@ -18,11 +18,18 @@ use cargo_metadata::{DependencyKind as CargoDependencyKind, MetadataCommand, Pac
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::{ColorMode, OutputType, cargo_workspace::normalize_workspace_root};
+use crate::{
+    ColorMode, OutputType,
+    cargo_workspace::normalize_workspace_root,
+    preferences::{PreferencesOverrides, PurityPolicy, resolve_preferences},
+};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 mod preflight;
+pub(crate) mod purity;
+
+pub use purity::{PublishPurityError, PurityAssessment, PurityStatus};
 
 const CRATES_IO_API: &str = "https://crates.io/api/v1";
 
@@ -34,6 +41,8 @@ pub struct PublishConfig {
     pub workspace_root: PathBuf,
     /// Specific packages to publish. Normal/build workspace dependencies are included automatically.
     pub packages: Option<Vec<String>>,
+    /// Override workspace/user/environment purity policy; `None` resolves preferences.
+    pub purity: Option<PurityPolicy>,
     /// Package and resolve the pending queue without uploading. Compilation requires `verify`.
     pub dry_run: bool,
     /// Stop publish preflight after its first failure instead of checking every package.
@@ -57,6 +66,7 @@ impl Default for PublishConfig {
         Self {
             workspace_root: PathBuf::from("."),
             packages: None,
+            purity: None,
             dry_run: false,
             fail_fast: false,
             verify: false,
@@ -98,6 +108,9 @@ pub struct PublishPackageReport {
     /// Whether packaged contents were compiled during preflight this run.
     #[serde(default)]
     pub compilation_verified: bool,
+    /// Exact registry artifact comparison, when this version was already published.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purity: Option<PurityAssessment>,
 }
 
 impl PublishPackageReport {
@@ -113,6 +126,7 @@ impl PublishPackageReport {
             status,
             packaging_validated: false,
             compilation_verified: false,
+            purity: None,
         }
     }
 }
@@ -122,12 +136,34 @@ impl PublishPackageReport {
 pub struct PublishReport {
     /// Packages in the order they were considered.
     pub packages: Vec<PublishPackageReport>,
+    /// Number of exact artifact comparisons that matched.
+    pub purity_pure: usize,
+    /// Number of exact artifact comparisons that differed.
+    pub purity_impure: usize,
+    /// Number of exact artifact comparisons that could not be completed.
+    pub purity_unknown: usize,
 }
 
 impl PublishReport {
     #[must_use]
-    const fn new(packages: Vec<PublishPackageReport>) -> Self {
-        Self { packages }
+    fn new(packages: Vec<PublishPackageReport>) -> Self {
+        let count = |status| {
+            packages
+                .iter()
+                .filter(|package| {
+                    package
+                        .purity
+                        .as_ref()
+                        .is_some_and(|assessment| assessment.status == status)
+                })
+                .count()
+        };
+        Self {
+            purity_pure: count(PurityStatus::Pure),
+            purity_impure: count(PurityStatus::Impure),
+            purity_unknown: count(PurityStatus::Unknown),
+            packages,
+        }
     }
 
     #[must_use]
@@ -202,6 +238,17 @@ impl PublishReport {
             self.count(PublishPackageStatus::Published)
         ));
 
+        lines.push(format!(
+            "  purity: {} pure, {} impure, {} unknown",
+            self.purity_pure, self.purity_impure, self.purity_unknown
+        ));
+        for assessment in self
+            .packages
+            .iter()
+            .filter_map(|package| package.purity.as_ref())
+        {
+            lines.push(format!("  {}", purity::summary(assessment)));
+        }
         lines.join("\n")
     }
 }
@@ -455,6 +502,7 @@ fn visit_publish_package(
 /// * If crates.io cannot be queried
 /// * If Cargo packaging, fresh dependency resolution, or requested compilation fails
 /// * If Cargo source overrides prevent registry-faithful preflight validation
+/// * If shared preferences cannot be resolved or strict purity is impure/unknown
 /// * If `cargo publish` fails
 #[allow(clippy::too_many_lines)]
 pub async fn handle_publish_command(
@@ -462,12 +510,22 @@ pub async fn handle_publish_command(
     output: OutputType,
 ) -> Result<String, BoxError> {
     let workspace_root = normalize_workspace_root(&config.workspace_root);
+    let mut config = config;
+    let purity_policy = resolve_preferences(
+        &workspace_root,
+        PreferencesOverrides {
+            purity: config.purity,
+        },
+    )?
+    .publish
+    .purity;
+    config.purity = Some(purity_policy);
     eprintln!(
         "{} {}",
         paint(config.color, "34", "Loading workspace metadata from"),
         paint(config.color, "36;1", &workspace_root.display().to_string())
     );
-    let packages = load_publish_packages(&workspace_root)?;
+    let (workspace_root, packages) = load_publish_packages(&workspace_root)?;
     let client = crates_io_client()?;
 
     let initial_plan = build_publish_plan(&packages, config.packages.as_deref())?;
@@ -551,6 +609,59 @@ pub async fn handle_publish_command(
         }
     }
 
+    assess_remaining_dependencies(
+        &packages,
+        &needs_publish,
+        &config,
+        &mut reports,
+        |package| {
+            let client = &client;
+            let packages = &packages;
+            let workspace_root = &workspace_root;
+            let pending = &needs_publish;
+            let config = &config;
+            async move {
+                if !crate_version_exists(client, &package.name, &package.version).await? {
+                    return Ok(None);
+                }
+                Ok(Some(
+                    purity::assess(workspace_root, packages, &package, pending, config, client)
+                        .await,
+                ))
+            }
+        },
+    )
+    .await?;
+
+    let mut assessments = Vec::new();
+    for report in &mut reports {
+        if report.status != PublishPackageStatus::AlreadyPublished || report.purity.is_some() {
+            continue;
+        }
+        let assessment = purity::assess(
+            &workspace_root,
+            &packages,
+            &packages[&report.name],
+            &needs_publish,
+            &config,
+            &client,
+        )
+        .await;
+        purity::warn(purity_policy, &assessment);
+        report.purity = Some(assessment.clone());
+        assessments.push(assessment);
+        if config.fail_fast {
+            purity::enforce(purity_policy, &assessments)?;
+        }
+    }
+    assessments = reports
+        .iter()
+        .filter_map(|report| report.purity.clone())
+        .collect();
+    // This gate precedes all uploads (including independent packages), even in dry-run
+    // or when the selected closure has no pending uploads.
+    purity::enforce(purity_policy, &assessments)?;
+
     for name in &needs_publish {
         let selected = BTreeSet::from([name.clone()]);
         let mut record = |result: Result<(), BoxError>| -> Result<(), BoxError> {
@@ -612,6 +723,104 @@ pub async fn handle_publish_command(
     }
 }
 
+/// Purity reachability is deliberately separate from upload planning: disabled
+/// nodes stop publication, but cannot hide registry-backed transitive inputs.
+fn pending_consumer_closure(
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &BTreeSet<String>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut consumers = BTreeMap::<String, Vec<String>>::new();
+    for consumer in pending {
+        let mut stack = vec![consumer.as_str()];
+        let mut seen = BTreeSet::new();
+        while let Some(name) = stack.pop() {
+            if !seen.insert(name) {
+                continue;
+            }
+            if name != consumer.as_str() {
+                consumers
+                    .entry(name.to_string())
+                    .or_default()
+                    .push(consumer.clone());
+            }
+            if let Some(package) = packages.get(name) {
+                stack.extend(package.publish_dependencies.iter().map(String::as_str));
+            }
+        }
+    }
+    consumers
+}
+
+/// The lookup seam returns None only for a confirmed absent exact version.
+/// Errors become UNKNOWN assessments, preserving strict fail-closed behavior.
+async fn assess_remaining_dependencies<F, Fut>(
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &BTreeSet<String>,
+    config: &PublishConfig,
+    reports: &mut Vec<PublishPackageReport>,
+    mut lookup: F,
+) -> Result<(), BoxError>
+where
+    F: FnMut(PublishPackageInfo) -> Fut,
+    Fut: std::future::Future<Output = Result<Option<PurityAssessment>, BoxError>>,
+{
+    let policy = config.purity.unwrap_or_default();
+    for (name, consumers) in pending_consumer_closure(packages, pending) {
+        if pending.contains(&name)
+            || reports.iter().any(|report| {
+                report.name == name
+                    && (report.status == PublishPackageStatus::AlreadyPublished
+                        || report.purity.is_some())
+            })
+        {
+            continue;
+        }
+        let Some(package) = packages.get(&name) else {
+            continue;
+        };
+        let assessment = match lookup(package.clone()).await {
+            Ok(None) => continue,
+            Ok(Some(mut assessment)) => {
+                assessment.affected_pending_consumers = consumers;
+                assessment
+            }
+            Err(error) => PurityAssessment {
+                name: name.clone(),
+                version: package.version.clone(),
+                status: PurityStatus::Unknown,
+                affected_pending_consumers: consumers,
+                added: Vec::new(),
+                removed: Vec::new(),
+                changed: Vec::new(),
+                diagnostics: vec![format!(
+                    "Registry availability could not be checked: {error}"
+                )],
+            },
+        };
+        purity::warn(policy, &assessment);
+        if let Some(report) = reports.iter_mut().find(|report| report.name == name) {
+            report.purity = Some(assessment);
+        } else {
+            let status = if package.publishable {
+                PublishPackageStatus::AlreadyPublished
+            } else {
+                PublishPackageStatus::PublishDisabled
+            };
+            let mut report = PublishPackageReport::new(&name, &package.version, status);
+            report.purity = Some(assessment);
+            reports.push(report);
+        }
+        if config.fail_fast {
+            let assessments = reports
+                .iter()
+                .filter_map(|report| report.purity.clone())
+                .collect::<Vec<_>>();
+            purity::enforce(policy, &assessments)?;
+        }
+    }
+    Ok(())
+}
+
 async fn publish_pending_queue(
     workspace_root: &Path,
     packages: &BTreeMap<String, PublishPackageInfo>,
@@ -620,6 +829,13 @@ async fn publish_pending_queue(
     client: &reqwest::Client,
     reports: &mut Vec<PublishPackageReport>,
 ) -> Result<(), BoxError> {
+    let purity_policy = config.purity.unwrap_or_default();
+    // Repeat the gate at the upload seam so direct queue tests cannot bypass it.
+    let assessments = reports
+        .iter()
+        .filter_map(|report| report.purity.clone())
+        .collect::<Vec<_>>();
+    purity::enforce(purity_policy, &assessments)?;
     preflight::validate(workspace_root, packages, publish_order, config)?;
     for (index, name) in publish_order.iter().enumerate() {
         let package = packages
@@ -665,19 +881,17 @@ async fn publish_pending_queue(
 
         match publish_attempt {
             PublishAttempt::AlreadyPublished => {
-                log_publish_event_with_detail(
-                    config.color,
-                    "33",
-                    "Skipping",
-                    &package.name,
-                    &package.version,
-                    "(already published)",
+                reports.push(
+                    assess_publish_race(
+                        workspace_root,
+                        packages,
+                        package,
+                        &publish_order[index + 1..],
+                        config,
+                        client,
+                    )
+                    .await?,
                 );
-                reports.push(PublishPackageReport::new(
-                    &package.name,
-                    &package.version,
-                    PublishPackageStatus::AlreadyPublished,
-                ));
             }
             PublishAttempt::Published => {
                 if let Err(error) = wait_for_crate_version(
@@ -716,6 +930,38 @@ async fn publish_pending_queue(
     }
 
     Ok(())
+}
+
+// A version may appear after preflight. Check its artifact before any subsequent upload.
+async fn assess_publish_race(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package: &PublishPackageInfo,
+    remaining: &[String],
+    config: &PublishConfig,
+    client: &reqwest::Client,
+) -> Result<PublishPackageReport, BoxError> {
+    let pending = remaining.iter().cloned().collect();
+    let assessment =
+        purity::assess(workspace_root, packages, package, &pending, config, client).await;
+    let policy = config.purity.unwrap_or_default();
+    purity::warn(policy, &assessment);
+    purity::enforce(policy, std::slice::from_ref(&assessment))?;
+    log_publish_event_with_detail(
+        config.color,
+        "33",
+        "Skipping",
+        &package.name,
+        &package.version,
+        "(already published)",
+    );
+    let mut report = PublishPackageReport::new(
+        &package.name,
+        &package.version,
+        PublishPackageStatus::AlreadyPublished,
+    );
+    report.purity = Some(assessment);
+    Ok(report)
 }
 
 fn print_failure_summary(
@@ -785,7 +1031,7 @@ fn print_failure_summary(
 
 fn load_publish_packages(
     workspace_root: &Path,
-) -> Result<BTreeMap<String, PublishPackageInfo>, BoxError> {
+) -> Result<(PathBuf, BTreeMap<String, PublishPackageInfo>), BoxError> {
     let mut command = MetadataCommand::new();
     command.current_dir(workspace_root).no_deps();
     let metadata = command.exec()?;
@@ -845,7 +1091,7 @@ fn load_publish_packages(
         );
     }
 
-    Ok(packages)
+    Ok((metadata.workspace_root.into_std_path_buf(), packages))
 }
 
 fn filter_packages_to_publish(
@@ -1307,21 +1553,19 @@ impl SanitizedPackage {
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         let sanitized_package_path = root.join(relative_package_path);
-
-        if workspace_root.join(".cargo").exists() {
-            copy_dir(&workspace_root.join(".cargo"), &root.join(".cargo"))?;
-        }
-        copy_dir(&package_path, &sanitized_package_path)?;
-        sanitize_manifest(
-            &workspace_root,
-            packages,
-            &sanitized_package_path.join("Cargo.toml"),
-        )?;
-
-        Ok(Self {
+        // Install cleanup before staging can fail, including unknown purity checks.
+        let staged = Self {
             root,
             package_path: sanitized_package_path,
-        })
+        };
+
+        if workspace_root.join(".cargo").exists() {
+            copy_dir(&workspace_root.join(".cargo"), &staged.root.join(".cargo"))?;
+        }
+        copy_dir(&package_path, &staged.package_path)?;
+        sanitize_manifest(&workspace_root, packages, &staged.manifest_path())?;
+
+        Ok(staged)
     }
 
     fn root(&self) -> &Path {
@@ -1894,7 +2138,7 @@ mod tests {
             .unwrap();
         }
 
-        let packages = load_publish_packages(workspace.path()).unwrap();
+        let (_, packages) = load_publish_packages(workspace.path()).unwrap();
         assert!(packages["decoder"].publish_dependencies.is_empty());
         assert!(!packages["runner"].publishable);
         assert!(!packages["vectors"].publishable);

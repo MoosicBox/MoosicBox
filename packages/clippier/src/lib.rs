@@ -60,6 +60,10 @@ mod cargo_workspace;
 /// and Unicode support.
 pub mod package_filter;
 
+/// Shared user and workspace preferences.
+#[cfg(feature = "publish")]
+pub mod preferences;
+
 /// Cargo workspace publishing support.
 #[cfg(feature = "publish")]
 pub mod publish;

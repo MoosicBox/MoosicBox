@@ -769,3 +769,304 @@ fn source_overrides_are_rejected_instead_of_producing_false_success() {
     assert!(error.contains("source overrides"), "{error}");
     assert!(error.contains("no packages uploaded"), "{error}");
 }
+
+#[test]
+fn resumed_registry_artifact_detects_edited_local_source_and_unchanged_exact_version() {
+    use super::super::PurityStatus;
+    use super::super::purity::{ManifestVersionPolicy, compare, normalized_archive_entries};
+    let fixture = Fixture::new(&[("clippier-fixture-published", "")]);
+    let staged = fixture.stage();
+    output(&mut package_command(&staged, &PublishConfig::default()));
+    let packaged = staged
+        .target_dir()
+        .join("package/clippier-fixture-published-0.1.0.crate");
+    // Serve the exact Cargo-produced artifact through the existing real local registry
+    // layout; compare only this exact version, never a latest-version approximation.
+    let registry = Registry::new();
+    registry.add("clippier-fixture-published", "0.1.0", None, false);
+    let published_path = registry
+        .directory
+        .path()
+        .join("downloads/clippier-fixture-published/0.1.0/download");
+    fs::copy(&packaged, &published_path).unwrap();
+    let published =
+        normalized_archive_entries(&published_path, ManifestVersionPolicy::Preserve).unwrap();
+    let package = &fixture.packages["clippier-fixture-published"];
+    let local = normalized_archive_entries(&packaged, ManifestVersionPolicy::Preserve).unwrap();
+    assert_eq!(
+        compare(package, &local, &published, vec![]).status,
+        PurityStatus::Pure
+    );
+    fs::write(
+        package.package_path.as_ref().unwrap().join("src/lib.rs"),
+        "pub fn edited() {}\n",
+    )
+    .unwrap();
+    let edited = fixture.stage();
+    output(&mut package_command(&edited, &PublishConfig::default()));
+    let local = normalized_archive_entries(
+        &edited
+            .target_dir()
+            .join("package/clippier-fixture-published-0.1.0.crate"),
+        ManifestVersionPolicy::Preserve,
+    )
+    .unwrap();
+    let assessment = compare(package, &local, &published, vec!["pending-b".into()]);
+    assert_eq!(assessment.status, PurityStatus::Impure);
+    assert_eq!(assessment.changed, ["src/lib.rs"]);
+    assert_eq!(assessment.affected_pending_consumers, ["pending-b"]);
+}
+
+#[test]
+fn resumed_impure_or_unknown_dependency_blocks_entire_queue_before_cargo_or_upload() {
+    use super::super::{
+        PublishPackageReport, PublishPackageStatus, PurityAssessment, PurityStatus,
+    };
+    use crate::preferences::PurityPolicy;
+    let fixture = Fixture::new(&[
+        ("clippier-fixture-b", ""),
+        ("clippier-fixture-independent", ""),
+    ]);
+    for status in [PurityStatus::Impure, PurityStatus::Unknown] {
+        for dry_run in [false, true] {
+            let assessment = PurityAssessment {
+                name: "a".into(),
+                version: "0.5.0".into(),
+                status,
+                affected_pending_consumers: vec!["clippier-fixture-b".into()],
+                added: Vec::new(),
+                removed: Vec::new(),
+                changed: vec!["src/lib.rs".into()],
+                diagnostics: vec!["fixture diagnostic".into()],
+            };
+            let mut report =
+                PublishPackageReport::new("a", "0.5.0", PublishPackageStatus::AlreadyPublished);
+            report.purity = Some(assessment);
+            let mut reports = vec![report];
+            // Invalid root proves the strict gate precedes even Cargo packaging.
+            let error = completed(super::super::publish_pending_queue(
+                &fixture.directory.path().join("does-not-exist"),
+                &fixture.packages,
+                &[
+                    "clippier-fixture-b".into(),
+                    "clippier-fixture-independent".into(),
+                ],
+                &PublishConfig {
+                    dry_run,
+                    purity: Some(PurityPolicy::RequirePure),
+                    ..PublishConfig::default()
+                },
+                &reqwest::Client::new(),
+                &mut reports,
+            ))
+            .unwrap_err();
+            assert!(
+                error
+                    .downcast_ref::<super::super::PublishPurityError>()
+                    .is_some(),
+                "{error}"
+            );
+            assert_eq!(reports.len(), 1);
+        }
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // Exercise discovery, status, reporting, and the upload gate together.
+fn disabled_published_dependency_is_assessed_transitively_and_gates_uploads() {
+    use super::super::{
+        PublishPackageReport, PublishPackageStatus, PurityAssessment, PurityStatus,
+    };
+    use crate::preferences::PurityPolicy;
+    let mut fixture = Fixture::new(&[
+        ("clippier-fixture-b", ""),
+        ("a", ""),
+        ("transitive", ""),
+        ("unrelated", ""),
+    ]);
+    fixture
+        .packages
+        .get_mut("clippier-fixture-b")
+        .unwrap()
+        .publish_dependencies
+        .insert("a".into());
+    fixture.packages.get_mut("a").unwrap().publishable = false;
+    fixture
+        .packages
+        .get_mut("a")
+        .unwrap()
+        .publish_dependencies
+        .insert("transitive".into());
+    fixture.packages.get_mut("unrelated").unwrap().publishable = false;
+    let pending = BTreeSet::from(["clippier-fixture-b".into()]);
+    let upload_plan =
+        super::super::build_publish_plan(&fixture.packages, Some(&["clippier-fixture-b".into()]))
+            .unwrap();
+    assert_eq!(
+        upload_plan.publish_order,
+        ["clippier-fixture-b", "transitive"]
+    );
+    assert_eq!(
+        super::super::pending_consumer_closure(&fixture.packages, &pending)
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
+        ["a", "transitive"]
+    );
+    for policy in [PurityPolicy::RequirePure, PurityPolicy::Warn] {
+        let config = PublishConfig {
+            purity: Some(policy),
+            dry_run: true,
+            ..PublishConfig::default()
+        };
+        let mut reports = vec![PublishPackageReport::new(
+            "unrelated",
+            "0.1.0",
+            PublishPackageStatus::PublishDisabled,
+        )];
+        let mut checked = Vec::new();
+        completed(super::super::assess_remaining_dependencies(
+            &fixture.packages,
+            &pending,
+            &config,
+            &mut reports,
+            |package| {
+                checked.push(package.name.clone());
+                std::future::ready(Ok(Some(PurityAssessment {
+                    name: package.name.clone(),
+                    version: package.version,
+                    status: if package.name == "a" {
+                        PurityStatus::Impure
+                    } else {
+                        PurityStatus::Pure
+                    },
+                    affected_pending_consumers: Vec::new(),
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                    changed: vec!["src/lib.rs".into()],
+                    diagnostics: Vec::new(),
+                })))
+            },
+        ))
+        .unwrap();
+        assert_eq!(checked, ["a", "transitive"]);
+        let report = reports.iter().find(|report| report.name == "a").unwrap();
+        assert_eq!(report.status, PublishPackageStatus::PublishDisabled);
+        assert_eq!(
+            report.purity.as_ref().unwrap().affected_pending_consumers,
+            ["clippier-fixture-b"]
+        );
+        assert!(reports[0].purity.is_none());
+        assert_eq!(
+            super::super::PublishReport::new(reports.clone()).purity_impure,
+            1
+        );
+        // The queue gate must run before Cargo or any upload, including independent
+        // pending packages. Warn must proceed through real Cargo dry-run packaging.
+        let order = if policy == PurityPolicy::RequirePure {
+            vec!["clippier-fixture-b".into(), "independent".into()]
+        } else {
+            vec!["clippier-fixture-b".into()]
+        };
+        let result = completed(super::super::publish_pending_queue(
+            fixture.directory.path(),
+            &fixture.packages,
+            &order,
+            &config,
+            &reqwest::Client::new(),
+            &mut reports,
+        ));
+        if policy == PurityPolicy::RequirePure {
+            assert!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<super::super::PublishPurityError>()
+                    .is_some()
+            );
+        } else {
+            result.unwrap();
+        }
+    }
+}
+
+#[test]
+fn never_published_disabled_dependency_and_unrelated_roots_have_no_purity_warning() {
+    use super::super::{PublishPackageReport, PublishPackageStatus};
+    let mut fixture = Fixture::new(&[("b", ""), ("a", ""), ("unrelated", "")]);
+    fixture
+        .packages
+        .get_mut("b")
+        .unwrap()
+        .publish_dependencies
+        .insert("a".into());
+    fixture.packages.get_mut("a").unwrap().publishable = false;
+    fixture.packages.get_mut("unrelated").unwrap().publishable = false;
+    let mut reports = vec![
+        PublishPackageReport::new("a", "0.1.0", PublishPackageStatus::PublishDisabled),
+        PublishPackageReport::new("unrelated", "0.1.0", PublishPackageStatus::PublishDisabled),
+    ];
+    let mut checked = Vec::new();
+    completed(super::super::assess_remaining_dependencies(
+        &fixture.packages,
+        &BTreeSet::from(["b".into()]),
+        &PublishConfig::default(),
+        &mut reports,
+        |package| {
+            checked.push(package.name);
+            std::future::ready(Ok(None))
+        },
+    ))
+    .unwrap();
+    assert_eq!(checked, ["a"]);
+    assert!(reports.iter().all(|report| report.purity.is_none()));
+    completed(super::super::assess_remaining_dependencies(
+        &fixture.packages,
+        &BTreeSet::new(),
+        &PublishConfig::default(),
+        &mut reports,
+        |_| -> std::future::Ready<Result<Option<super::super::PurityAssessment>, BoxError>> {
+            panic!("Disabled roots without pending consumers must not query registry");
+        },
+    ))
+    .unwrap();
+}
+
+#[test]
+fn resumed_warn_dependency_continues_packaging_but_never_uploads_in_dry_run() {
+    use super::super::{
+        PublishPackageReport, PublishPackageStatus, PurityAssessment, PurityStatus,
+    };
+    use crate::preferences::PurityPolicy;
+    let fixture = Fixture::new(&[("clippier-fixture-b", "")]);
+    for status in [PurityStatus::Impure, PurityStatus::Unknown] {
+        let mut report =
+            PublishPackageReport::new("a", "0.5.0", PublishPackageStatus::AlreadyPublished);
+        report.purity = Some(PurityAssessment {
+            name: "a".into(),
+            version: "0.5.0".into(),
+            status,
+            affected_pending_consumers: vec!["clippier-fixture-b".into()],
+            added: Vec::new(),
+            removed: Vec::new(),
+            changed: vec!["src/lib.rs".into()],
+            diagnostics: Vec::new(),
+        });
+        let mut reports = vec![report];
+        completed(super::super::publish_pending_queue(
+            fixture.directory.path(),
+            &fixture.packages,
+            &["clippier-fixture-b".into()],
+            &PublishConfig {
+                dry_run: true,
+                purity: Some(PurityPolicy::Warn),
+                ..PublishConfig::default()
+            },
+            &reqwest::Client::new(),
+            &mut reports,
+        ))
+        .unwrap();
+        assert_eq!(reports.len(), 2);
+        assert_eq!(reports[0].purity.as_ref().unwrap().status, status);
+        assert_eq!(reports[1].status, PublishPackageStatus::DryRun);
+    }
+}

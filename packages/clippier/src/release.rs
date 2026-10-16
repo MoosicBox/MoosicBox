@@ -12,10 +12,8 @@ use std::{
 };
 
 use cargo_metadata::{Metadata, PackageId};
-use flate2::read::GzDecoder;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use tar::Archive;
 use toml_edit::{DocumentMut, value};
 
 use crate::{
@@ -26,6 +24,7 @@ use crate::{
     },
 };
 
+use super::preferences::PurityPolicy;
 use super::publish::{PublishConfig, handle_publish_command};
 
 mod semver_checks;
@@ -1142,38 +1141,10 @@ fn download_crate(
 }
 
 fn normalized_archive_entries(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, BoxError> {
-    let decoder = GzDecoder::new(fs::File::open(path)?);
-    let mut archive = Archive::new(decoder);
-    let mut entries = BTreeMap::new();
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        if !entry.header().entry_type().is_file() {
-            continue;
-        }
-        let path = entry.path()?.to_string_lossy().replace('\\', "/");
-        let relative = path.split_once('/').map_or(path.as_str(), |(_, path)| path);
-        if relative == ".cargo_vcs_info.json" || relative == "Cargo.toml.orig" {
-            continue;
-        }
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut bytes)?;
-        if relative == "Cargo.toml" {
-            bytes = normalize_generated_manifest(&bytes)?;
-        }
-        entries.insert(relative.to_string(), bytes);
-    }
-    Ok(entries)
-}
-
-fn normalize_generated_manifest(bytes: &[u8]) -> Result<Vec<u8>, BoxError> {
-    let mut manifest = toml::from_str::<toml::Value>(&String::from_utf8(bytes.to_vec())?)?;
-    if let Some(package) = manifest
-        .get_mut("package")
-        .and_then(toml::Value::as_table_mut)
-    {
-        package.remove("version");
-    }
-    Ok(serde_json::to_vec(&manifest)?)
+    super::publish::purity::normalized_archive_entries(
+        path,
+        super::publish::purity::ManifestVersionPolicy::IgnorePackageVersion,
+    )
 }
 
 fn checkable_library_target(target: &cargo_metadata::Target) -> bool {
@@ -1265,6 +1236,8 @@ pub struct ReleasePublishConfig {
     pub verify: bool,
     /// Permit unrelated dirty workspace files during publishing.
     pub allow_dirty: bool,
+    /// Override publication purity policy, or inherit resolved preferences.
+    pub purity: Option<PurityPolicy>,
     /// Color mode for publication output.
     pub color: ColorMode,
     /// Maximum seconds to wait for a newly published crate to become available.
@@ -1339,6 +1312,7 @@ pub async fn handle_release_publish_command(
             fail_fast: config.fail_fast,
             verify: config.verify,
             allow_dirty: config.allow_dirty,
+            purity: config.purity,
             color: config.color,
             publish_timeout: std::time::Duration::from_secs(config.publish_timeout_secs),
             publish_poll_interval: std::time::Duration::from_secs(config.publish_poll_secs),
@@ -2290,9 +2264,38 @@ edition = "2024"
 [dependencies]
 serde = "1"
 "#;
+        let directory = switchy_fs::tempdir().expect("archive fixture directory");
+        let normalize = |name: &str, manifest: &[u8]| {
+            let path = directory.path().join(name);
+            let encoder = flate2::write::GzEncoder::new(
+                fs::File::create(&path).expect("archive file"),
+                flate2::Compression::default(),
+            );
+            let mut archive = tar::Builder::new(encoder);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(manifest.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, "demo/Cargo.toml", manifest)
+                .expect("archive manifest");
+            archive
+                .into_inner()
+                .expect("finish archive")
+                .finish()
+                .expect("finish compression");
+            normalized_archive_entries(&path).expect("normalized archive")
+        };
         assert_eq!(
-            normalize_generated_manifest(compact).unwrap(),
-            normalize_generated_manifest(formatted).unwrap()
+            normalize("compact.crate", compact),
+            normalize("formatted.crate", formatted)
+        );
+        let changed = String::from_utf8(compact.to_vec())
+            .expect("UTF-8 manifest")
+            .replace("edition=\"2024\"", "edition=\"2021\"");
+        assert_ne!(
+            normalize("compact.crate", compact),
+            normalize("changed.crate", changed.as_bytes())
         );
     }
 

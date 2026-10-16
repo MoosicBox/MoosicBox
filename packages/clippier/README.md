@@ -877,6 +877,45 @@ Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to c
 
 Cargo source replacements, path source overrides, and crates.io index overrides are rejected rather than allowing a mirror or patch to conceal a broken publish graph. Registry state can still change after validation; preflight is not a reservation of versions or an atomic multi-crate upload.
 
+### Publish Purity and Shared Preferences
+
+An already-published package can become **impure** when its local packageable contents change without a version bump. During a resumed publish, pending consumers would receive the original registry artifact rather than those local changes. Clippier checks the exact published versions in the selected normal/build dependency closure and warns by default; it does not assume a content difference necessarily breaks a consumer.
+
+```bash
+# Warn about differences, but continue (the default)
+clippier publish --purity warn
+
+# Require matching published artifacts before uploading any pending packages
+clippier publish --require-pure
+clippier publish --dry-run --purity require-pure
+
+# The same preference applies to release publication
+clippier release publish --purity require-pure
+```
+
+Strict purity rejects both confirmed differences and checks whose result is unavailable. In warning mode, unavailable checks are reported as unknown rather than pure. Existing packaging, dependency, and release-preparation errors remain fatal regardless of purity policy. `--allow-dirty` controls Git cleanliness, and `--verify` controls compilation; neither disables purity assessment. Publication is not an atomic registry transaction, and completed uploads cannot be rolled back if a later race or error is discovered.
+
+Configure preferences in the workspace-root `clippier.toml`, or use `$XDG_CONFIG_HOME/clippier/clippier.toml` for personal defaults. When `XDG_CONFIG_HOME` is unset or not absolute, the user file falls back to `$HOME/.config/clippier/clippier.toml`.
+
+```toml
+[publish]
+purity = "require-pure" # "warn" by default
+```
+
+Precedence, highest first: explicit CLI/API options, `CLIPPIER_PUBLISH_PURITY`, workspace preferences, user preferences, built-in defaults. Settings merge individually. These are overridable preferences, not an administrative enforcement mechanism; pass an explicit policy in CI when required. Package-local files do not override workspace-wide publication policy. The user preference file does not inject CI steps, commands, or environment variables.
+
+```bash
+CLIPPIER_PUBLISH_PURITY=require-pure clippier publish
+clippier config show --workspace .
+clippier config show --workspace /path/to/workspace --output json
+```
+
+`config show` reports effective preference values and their sources, not unrelated configuration or credentials. Missing optional files are allowed; malformed files or invalid policy values are errors. `--purity warn` explicitly overrides an inherited strict preference; `--purity` and `--require-pure` cannot be combined.
+
+Purity compares normalized Cargo package contents, not Git revisions or compressed archive bytes. Packaging metadata such as archive timestamps, `.cargo_vcs_info.json`, and `Cargo.toml.orig` does not establish impurity; effective manifests, source files, documentation, build scripts, and packaged lockfiles do. Changes to excluded files are irrelevant. A matching artifact does not guarantee every downstream semver resolution or feature combination will work.
+
+To resolve an impure release, publish a new version of the changed dependency and update consumers' requirements, or restore its local contents to the published version. Publishing the same version again cannot replace its registry artifact.
+
 ### Bump Cargo Workspace Versions
 
 Bump or set workspace package versions and internal path dependency requirements together:

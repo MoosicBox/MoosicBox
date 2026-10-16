@@ -13,6 +13,8 @@ use clap::{Parser, Subcommand};
 
 #[cfg(any(feature = "check", feature = "format", feature = "publish"))]
 use clippier::ColorMode;
+#[cfg(feature = "publish")]
+use clippier::preferences::{PreferencesOverrides, PurityPolicy, resolve_preferences};
 #[cfg(feature = "release")]
 use clippier::release::{
     IndependentizeConfig, ReleasePrepareConfig, ReleasePublishConfig, ReleaseStatusConfig,
@@ -771,6 +773,20 @@ enum VersionCommands {
     },
 }
 
+#[cfg(feature = "publish")]
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Show effective preferences and where each value came from
+    Show {
+        /// Path to the workspace root or Cargo.toml
+        #[arg(long, default_value = ".")]
+        workspace: PathBuf,
+        /// Output format
+        #[arg(long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+    },
+}
+
 #[cfg(feature = "release")]
 #[derive(Subcommand)]
 enum ReleaseCommands {
@@ -939,6 +955,12 @@ enum ReleaseCommands {
         /// Allow unrelated dirty workspace files
         #[arg(long)]
         allow_dirty: bool,
+        /// Package purity policy (overrides configuration)
+        #[arg(long, value_enum)]
+        purity: Option<PurityPolicy>,
+        /// Require packaged contents to match the published source
+        #[arg(long, conflicts_with = "purity")]
+        require_pure: bool,
         /// Seconds to wait for registry availability
         #[arg(long, default_value_t = 300)]
         publish_timeout_secs: u64,
@@ -1405,6 +1427,12 @@ enum Commands {
         #[command(subcommand)]
         command: VersionCommands,
     },
+    /// Inspect effective Clippier preferences
+    #[cfg(feature = "publish")]
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
     /// Publish Cargo workspace crates to crates.io in dependency order
     #[cfg(feature = "publish")]
     Publish {
@@ -1431,6 +1459,14 @@ enum Commands {
         /// Pass `--allow-dirty` to `cargo publish`
         #[arg(long)]
         allow_dirty: bool,
+
+        /// Package purity policy (overrides configuration)
+        #[arg(long, value_enum)]
+        purity: Option<PurityPolicy>,
+
+        /// Require packaged contents to match the published source
+        #[arg(long, conflicts_with = "purity")]
+        require_pure: bool,
 
         /// Seconds to wait for each newly-published crate to appear on crates.io
         #[arg(long, default_value_t = 300)]
@@ -2073,6 +2109,8 @@ async fn run() -> Result<(), BoxError> {
                 fail_fast,
                 verify,
                 allow_dirty,
+                purity,
+                require_pure,
                 publish_timeout_secs,
                 publish_poll_secs,
                 rate_limit_retries,
@@ -2097,6 +2135,8 @@ async fn run() -> Result<(), BoxError> {
                         fail_fast,
                         verify,
                         allow_dirty,
+                        purity: purity
+                            .or_else(|| require_pure.then_some(PurityPolicy::RequirePure)),
                         color,
                         publish_timeout_secs,
                         publish_poll_secs,
@@ -2159,6 +2199,16 @@ async fn run() -> Result<(), BoxError> {
             }
         },
         #[cfg(feature = "publish")]
+        Commands::Config { command } => match command {
+            ConfigCommands::Show { workspace, output } => {
+                let preferences = resolve_preferences(&workspace, PreferencesOverrides::default())?;
+                match output {
+                    OutputType::Raw => preferences.to_raw_string(),
+                    OutputType::Json => serde_json::to_string_pretty(&preferences)?,
+                }
+            }
+        },
+        #[cfg(feature = "publish")]
         Commands::Publish {
             workspace_root,
             packages,
@@ -2166,6 +2216,8 @@ async fn run() -> Result<(), BoxError> {
             fail_fast,
             verify,
             allow_dirty,
+            purity,
+            require_pure,
             publish_timeout_secs,
             publish_poll_secs,
             rate_limit_retries,
@@ -2179,6 +2231,7 @@ async fn run() -> Result<(), BoxError> {
                 fail_fast,
                 verify,
                 allow_dirty,
+                purity: purity.or_else(|| require_pure.then_some(PurityPolicy::RequirePure)),
                 color,
                 publish_timeout: std::time::Duration::from_secs(publish_timeout_secs),
                 publish_poll_interval: std::time::Duration::from_secs(publish_poll_secs),
@@ -2339,4 +2392,125 @@ async fn run() -> Result<(), BoxError> {
     }
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "publish"))]
+mod publish_cli_tests {
+    use super::*;
+
+    fn publish_flags(arguments: &[&str]) -> (Option<PurityPolicy>, bool) {
+        match Args::try_parse_from(arguments)
+            .expect("valid publish arguments")
+            .cmd
+        {
+            Commands::Publish {
+                purity,
+                require_pure,
+                ..
+            } => (purity, require_pure),
+            #[cfg(feature = "release")]
+            Commands::Release {
+                command:
+                    ReleaseCommands::Publish {
+                        purity,
+                        require_pure,
+                        ..
+                    },
+            } => (purity, require_pure),
+            _ => panic!("expected a publish command"),
+        }
+    }
+
+    fn check_publish_purity_flags(command: &[&str]) {
+        assert_eq!(publish_flags(command), (None, false));
+        for (value, expected) in [
+            ("warn", PurityPolicy::Warn),
+            ("require-pure", PurityPolicy::RequirePure),
+        ] {
+            let mut arguments = command.to_vec();
+            arguments.extend(["--purity", value]);
+            assert_eq!(publish_flags(&arguments), (Some(expected), false));
+        }
+        let mut arguments = command.to_vec();
+        arguments.push("--require-pure");
+        assert_eq!(publish_flags(&arguments), (None, true));
+
+        for flags in [
+            ["--purity", "warn", "--require-pure"],
+            ["--require-pure", "--purity", "require-pure"],
+        ] {
+            let mut arguments = command.to_vec();
+            arguments.extend(flags);
+            let error = Args::try_parse_from(arguments)
+                .err()
+                .expect("purity switches must conflict");
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+        let mut arguments = command.to_vec();
+        arguments.extend(["--purity", "invalid"]);
+        assert_eq!(
+            Args::try_parse_from(arguments)
+                .err()
+                .expect("unknown purity policy must be rejected")
+                .kind(),
+            clap::error::ErrorKind::InvalidValue
+        );
+    }
+
+    #[test]
+    fn publish_purity_flags() {
+        check_publish_purity_flags(&["clippier", "publish"]);
+    }
+
+    #[cfg(feature = "release")]
+    #[test]
+    fn release_publish_purity_flags() {
+        check_publish_purity_flags(&["clippier", "release", "publish"]);
+    }
+
+    #[test]
+    fn config_show_defaults() {
+        let args = Args::try_parse_from(["clippier", "config", "show"])
+            .expect("config show accepts defaults");
+        assert!(matches!(
+            args.cmd,
+            Commands::Config {
+                command: ConfigCommands::Show { workspace, output: OutputType::Raw },
+            } if workspace == std::path::Path::new(".")
+        ));
+    }
+
+    #[test]
+    fn config_show_workspace_and_output() {
+        for output in ["raw", "json"] {
+            let args = Args::try_parse_from([
+                "clippier",
+                "config",
+                "show",
+                "--workspace",
+                ".",
+                "--output",
+                output,
+            ])
+            .expect("config show accepts workspace and output");
+            let Commands::Config {
+                command:
+                    ConfigCommands::Show {
+                        workspace,
+                        output: parsed_output,
+                    },
+            } = args.cmd
+            else {
+                panic!("expected config show");
+            };
+            assert_eq!(workspace, PathBuf::from("."));
+            assert!(matches!(
+                (output, parsed_output),
+                ("raw", OutputType::Raw) | ("json", OutputType::Json)
+            ));
+        }
+        assert!(
+            Args::try_parse_from(["clippier", "config", "show", "--output", "invalid",]).is_err()
+        );
+    }
 }
