@@ -996,6 +996,102 @@ fn disabled_published_dependency_is_assessed_transitively_and_gates_uploads() {
 }
 
 #[test]
+fn published_packages_without_pending_consumers_skip_purity_checks() {
+    use super::super::{PublishPackageReport, PublishPackageStatus};
+    use crate::preferences::PurityPolicy;
+    let mut fixture = Fixture::new(&[("a", ""), ("b", ""), ("unrelated", "")]);
+    fixture
+        .packages
+        .get_mut("b")
+        .unwrap()
+        .publish_dependencies
+        .insert("a".into());
+    for pending in [BTreeSet::new(), BTreeSet::from(["unrelated".into()])] {
+        let mut reports = vec![PublishPackageReport::new(
+            "a",
+            "0.1.0",
+            PublishPackageStatus::AlreadyPublished,
+        )];
+        let config = PublishConfig {
+            purity: Some(PurityPolicy::RequirePure),
+            ..PublishConfig::default()
+        };
+        completed(super::super::assess_remaining_dependencies(
+            &fixture.packages,
+            &pending,
+            &config,
+            &mut reports,
+            |_| -> std::future::Ready<Result<Option<super::super::PurityAssessment>, BoxError>> {
+                panic!("Unconsumed published packages must not be packaged or downloaded");
+            },
+        ))
+        .unwrap();
+        assert_eq!(reports[0].status, PublishPackageStatus::AlreadyPublished);
+        assert!(reports[0].purity.is_none());
+        let remaining = pending.into_iter().collect::<Vec<_>>();
+        let report = completed(super::super::assess_publish_race(
+            &fixture.directory.path().join("does-not-exist"),
+            &fixture.packages,
+            &fixture.packages["a"],
+            &remaining,
+            &config,
+            &reqwest::Client::new(),
+        ))
+        .unwrap();
+        assert!(report.purity.is_none());
+    }
+}
+
+#[test]
+fn published_dependency_of_pending_consumer_still_checks_purity() {
+    use super::super::{
+        PublishPackageReport, PublishPackageStatus, PurityAssessment, PurityStatus,
+    };
+    use crate::preferences::PurityPolicy;
+    let mut fixture = Fixture::new(&[("a", ""), ("b", "")]);
+    fixture
+        .packages
+        .get_mut("b")
+        .unwrap()
+        .publish_dependencies
+        .insert("a".into());
+    let mut reports = vec![PublishPackageReport::new(
+        "a",
+        "0.1.0",
+        PublishPackageStatus::AlreadyPublished,
+    )];
+    let config = PublishConfig {
+        purity: Some(PurityPolicy::RequirePure),
+        ..PublishConfig::default()
+    };
+    completed(super::super::assess_remaining_dependencies(
+        &fixture.packages,
+        &BTreeSet::from(["b".into()]),
+        &config,
+        &mut reports,
+        |package| {
+            std::future::ready(Ok(Some(PurityAssessment {
+                name: package.name,
+                version: package.version,
+                status: PurityStatus::Impure,
+                affected_pending_consumers: Vec::new(),
+                added: Vec::new(),
+                removed: Vec::new(),
+                changed: vec!["src/lib.rs".into()],
+                diagnostics: Vec::new(),
+            })))
+        },
+    ))
+    .unwrap();
+    let assessment = reports[0].purity.as_ref().unwrap();
+    assert_eq!(assessment.affected_pending_consumers, ["b"]);
+    assert!(
+        super::super::purity::enforce(PurityPolicy::RequirePure, std::slice::from_ref(assessment))
+            .is_err()
+    );
+}
+
+#[test]
 fn never_published_disabled_dependency_and_unrelated_roots_have_no_purity_warning() {
     use super::super::{PublishPackageReport, PublishPackageStatus};
     let mut fixture = Fixture::new(&[("b", ""), ("a", ""), ("unrelated", "")]);

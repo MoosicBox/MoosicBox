@@ -633,33 +633,11 @@ pub async fn handle_publish_command(
     )
     .await?;
 
-    let mut assessments = Vec::new();
-    for report in &mut reports {
-        if report.status != PublishPackageStatus::AlreadyPublished || report.purity.is_some() {
-            continue;
-        }
-        let assessment = purity::assess(
-            &workspace_root,
-            &packages,
-            &packages[&report.name],
-            &needs_publish,
-            &config,
-            &client,
-        )
-        .await;
-        purity::warn(purity_policy, &assessment, config.color);
-        report.purity = Some(assessment.clone());
-        assessments.push(assessment);
-        if config.fail_fast {
-            purity::enforce(purity_policy, &assessments)?;
-        }
-    }
-    assessments = reports
+    let assessments = reports
         .iter()
         .filter_map(|report| report.purity.clone())
-        .collect();
-    // This gate precedes all uploads (including independent packages), even in dry-run
-    // or when the selected closure has no pending uploads.
+        .collect::<Vec<_>>();
+    // Check every relevant dependency before uploading any pending package.
     purity::enforce(purity_policy, &assessments)?;
 
     for name in &needs_publish {
@@ -767,11 +745,9 @@ where
     let policy = config.purity.unwrap_or_default();
     for (name, consumers) in pending_consumer_closure(packages, pending) {
         if pending.contains(&name)
-            || reports.iter().any(|report| {
-                report.name == name
-                    && (report.status == PublishPackageStatus::AlreadyPublished
-                        || report.purity.is_some())
-            })
+            || reports
+                .iter()
+                .any(|report| report.name == name && report.purity.is_some())
         {
             continue;
         }
@@ -942,11 +918,19 @@ async fn assess_publish_race(
     client: &reqwest::Client,
 ) -> Result<PublishPackageReport, BoxError> {
     let pending = remaining.iter().cloned().collect();
-    let assessment =
-        purity::assess(workspace_root, packages, package, &pending, config, client).await;
-    let policy = config.purity.unwrap_or_default();
-    purity::warn(policy, &assessment, config.color);
-    purity::enforce(policy, std::slice::from_ref(&assessment))?;
+    let mut report = PublishPackageReport::new(
+        &package.name,
+        &package.version,
+        PublishPackageStatus::AlreadyPublished,
+    );
+    if pending_consumer_closure(packages, &pending).contains_key(&package.name) {
+        let assessment =
+            purity::assess(workspace_root, packages, package, &pending, config, client).await;
+        let policy = config.purity.unwrap_or_default();
+        purity::warn(policy, &assessment, config.color);
+        purity::enforce(policy, std::slice::from_ref(&assessment))?;
+        report.purity = Some(assessment);
+    }
     log_publish_event_with_detail(
         config.color,
         "33",
@@ -955,12 +939,6 @@ async fn assess_publish_race(
         &package.version,
         "(already published)",
     );
-    let mut report = PublishPackageReport::new(
-        &package.name,
-        &package.version,
-        PublishPackageStatus::AlreadyPublished,
-    );
-    report.purity = Some(assessment);
     Ok(report)
 }
 

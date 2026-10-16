@@ -149,7 +149,7 @@ fn unsafe_ambiguous_and_oversized_archives_are_unknown_not_equal() {
 }
 
 #[test]
-fn strict_empty_queue_still_rejects_published_root_and_warnings_are_bounded() {
+fn strict_assessments_preserve_details_and_warnings_are_bounded() {
     let assessment = PurityAssessment {
         name: "a".into(),
         version: "0.5.0".into(),

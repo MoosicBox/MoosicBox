@@ -979,7 +979,7 @@ Cargo source replacements, path source overrides, and crates.io index overrides 
 
 ### Publish Purity and Shared Preferences
 
-An already-published package can become **impure** when its local packageable contents change without a version bump. During a resumed publish, pending consumers would receive the original registry artifact rather than those local changes. Clippier checks the exact published versions in the selected normal/build dependency closure and warns by default; it does not assume a content difference necessarily breaks a consumer.
+An already-published package can become **impure** when its local packageable contents change without a version bump. During a resumed publish, pending consumers would receive the original registry artifact rather than those local changes. Clippier checks the exact published versions needed by pending packages in the selected normal/build dependency closure and warns by default; it does not assume a content difference necessarily breaks a consumer. Already-published packages with no pending direct or transitive dependents are skipped without purity checks or warnings, even with `require-pure`.
 
 ```bash
 # Warn about differences, but continue (the default)
