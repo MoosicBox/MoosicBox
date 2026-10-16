@@ -647,7 +647,7 @@ pub async fn handle_publish_command(
             &client,
         )
         .await;
-        purity::warn(purity_policy, &assessment);
+        purity::warn(purity_policy, &assessment, config.color);
         report.purity = Some(assessment.clone());
         assessments.push(assessment);
         if config.fail_fast {
@@ -797,7 +797,7 @@ where
                 )],
             },
         };
-        purity::warn(policy, &assessment);
+        purity::warn(policy, &assessment, config.color);
         if let Some(report) = reports.iter_mut().find(|report| report.name == name) {
             report.purity = Some(assessment);
         } else {
@@ -945,7 +945,7 @@ async fn assess_publish_race(
     let assessment =
         purity::assess(workspace_root, packages, package, &pending, config, client).await;
     let policy = config.purity.unwrap_or_default();
-    purity::warn(policy, &assessment);
+    purity::warn(policy, &assessment, config.color);
     purity::enforce(policy, std::slice::from_ref(&assessment))?;
     log_publish_event_with_detail(
         config.color,

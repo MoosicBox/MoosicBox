@@ -165,10 +165,41 @@ fn strict_empty_queue_still_rejects_published_root_and_warnings_are_bounded() {
     let structured = error.downcast_ref::<PublishPurityError>().unwrap();
     assert_eq!(structured.assessments[0].added.len(), 100);
     let text = summary(&assessment);
-    assert!(text.contains("added=100"));
-    assert!(text.contains("file-7"));
-    assert!(!text.contains("file-8"));
-    assert!(!text.contains('\n'));
+    assert_eq!(text, "a@0.5.0: could not verify published contents");
+    let text = diagnostic(PurityPolicy::Warn, &assessment, crate::ColorMode::Never);
+    assert!(text.contains("warning: a@0.5.0 could not verify"));
+    assert!(text.contains("Reason: unsafe archive"));
+    assert!(text.contains("Continuing."));
+    assert!(!text.contains("added="));
+    assert!(!text.contains('\u{1b}'));
+    let mut impure = assessment.clone();
+    impure.status = PurityStatus::Impure;
+    let text = diagnostic(PurityPolicy::Warn, &impure, crate::ColorMode::Always);
+    assert!(text.contains("\u{1b}[33;1mwarning"));
+    assert!(text.contains("\u{1b}[36;1ma@0.5.0"));
+    assert!(text.contains("Consumers will receive the crates.io version"));
+    assert!(text.contains("Added: file-0, file-1, file-2 (+97 more)"));
+    assert!(!text.contains("file-3"));
+    assert!(!text.contains("Reason:"));
+    assert_eq!(
+        summary(&impure),
+        "a@0.5.0: differs from crates.io (100 added)"
+    );
+    let json = serde_json::to_string(&impure).unwrap();
+    assert!(!json.contains("\\u001b"));
+    assert!(json.contains("file-99"));
+    impure.status = PurityStatus::Pure;
+    assert_eq!(
+        diagnostic(PurityPolicy::Warn, &impure, crate::ColorMode::Always),
+        ""
+    );
+    let text = diagnostic(
+        PurityPolicy::RequirePure,
+        &assessment,
+        crate::ColorMode::Always,
+    );
+    assert!(text.contains("\u{1b}[31;1merror"));
+    assert!(text.contains("Publishing blocked"));
 }
 
 #[test]

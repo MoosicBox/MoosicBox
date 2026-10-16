@@ -386,48 +386,120 @@ fn bounded_text(text: &str) -> String {
     result
 }
 
-fn bounded_list(label: &str, values: &[String]) -> String {
-    format!(
-        "{label}={} [{}{}]",
-        values.len(),
-        values
-            .iter()
-            .take(8)
-            .map(|value| bounded_text(value))
-            .collect::<Vec<_>>()
-            .join(", "),
-        if values.len() > 8 { ", …" } else { "" }
-    )
+fn file_changes(assessment: &PurityAssessment) -> String {
+    [
+        (assessment.changed.len(), "modified"),
+        (assessment.added.len(), "added"),
+        (assessment.removed.len(), "removed"),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, label)| format!("{count} {label}"))
+    .collect::<Vec<_>>()
+    .join(", ")
 }
 
 pub(super) fn summary(assessment: &PurityAssessment) -> String {
-    format!(
-        "purity {:?}: {}@{}; {}; {}; {}; {}; {}",
-        assessment.status,
+    let package = format!(
+        "{}@{}",
         bounded_text(&assessment.name),
-        bounded_text(&assessment.version),
-        bounded_list(
-            "affected pending consumers",
-            &assessment.affected_pending_consumers
+        bounded_text(&assessment.version)
+    );
+    match assessment.status {
+        PurityStatus::Pure => format!("{package}: matches crates.io"),
+        PurityStatus::Impure => format!(
+            "{package}: differs from crates.io ({})",
+            file_changes(assessment)
         ),
-        bounded_list("added", &assessment.added),
-        bounded_list("removed", &assessment.removed),
-        bounded_list("changed", &assessment.changed),
-        bounded_list("diagnostics", &assessment.diagnostics)
-    )
+        PurityStatus::Unknown => format!("{package}: could not verify published contents"),
+    }
 }
 
-pub(super) fn warn(policy: PurityPolicy, assessment: &PurityAssessment) {
-    if assessment.status == PurityStatus::Pure {
-        return;
-    }
-    let action = if policy == PurityPolicy::RequirePure {
-        "BLOCKING subsequent uploads (including dry-run)"
+fn preview(values: &[String]) -> String {
+    let text = values
+        .iter()
+        .take(3)
+        .map(|value| bounded_text(value))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if values.len() > 3 {
+        format!("{text} (+{} more)", values.len() - 3)
     } else {
-        "WARNING: continuing under warn policy"
+        text
+    }
+}
+
+fn diagnostic(
+    policy: PurityPolicy,
+    assessment: &PurityAssessment,
+    color: crate::ColorMode,
+) -> String {
+    use super::{format_package_name, paint};
+    let blocking = policy == PurityPolicy::RequirePure;
+    let (severity, code) = if blocking {
+        ("error", "31;1")
+    } else {
+        ("warning", "33;1")
     };
-    eprintln!(
-        "{action}: {}. Bump the dependency version and update dependent requirements, or restore published contents; resolve unknown comparison diagnostics before retrying. Earlier uploads cannot be rolled back.",
-        summary(assessment)
+    let package = format_package_name(
+        color,
+        &bounded_text(&assessment.name),
+        &bounded_text(&assessment.version),
     );
+    let explanation = match assessment.status {
+        PurityStatus::Impure => "local contents differ from the published version",
+        PurityStatus::Unknown => "could not verify the published contents",
+        PurityStatus::Pure => return String::new(),
+    };
+    let mut lines = vec![format!(
+        "{}: {package} {explanation}",
+        paint(color, code, severity)
+    )];
+    if assessment.status == PurityStatus::Impure {
+        lines
+            .push("  Consumers will receive the crates.io version, not your local changes.".into());
+        for (label, files) in [
+            ("Modified", &assessment.changed),
+            ("Added", &assessment.added),
+            ("Removed", &assessment.removed),
+        ] {
+            if !files.is_empty() {
+                lines.push(format!("  {label}: {}", preview(files)));
+            }
+        }
+        lines.push("  Publish a new version and update dependent requirements, or restore the published contents.".into());
+    } else {
+        if let Some(reason) = assessment.diagnostics.first() {
+            lines.push(format!("  Reason: {}", bounded_text(reason)));
+        }
+        lines.push(
+            "  Resolve the comparison failure and retry; this package has not been confirmed pure."
+                .into(),
+        );
+    }
+    if !assessment.affected_pending_consumers.is_empty() {
+        lines.push(format!(
+            "  Affected packages: {}",
+            preview(&assessment.affected_pending_consumers)
+        ));
+    }
+    let action = if blocking {
+        "Publishing blocked: require-pure is enabled."
+    } else {
+        "Continuing. Use --require-pure to block publishing when purity cannot be established."
+    };
+    lines.push(format!("  {}", paint(color, code, action)));
+    lines.join("\n")
+}
+
+pub(super) fn warn(policy: PurityPolicy, assessment: &PurityAssessment, color: crate::ColorMode) {
+    use std::io::IsTerminal as _;
+    let color = match color {
+        crate::ColorMode::Auto if !std::io::stderr().is_terminal() => crate::ColorMode::Never,
+        color => color,
+    };
+    let text = diagnostic(policy, assessment, color);
+    if !text.is_empty() {
+        eprintln!("{text}");
+    }
 }
