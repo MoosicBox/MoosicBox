@@ -40,6 +40,668 @@ use clippier::tools::build_tools_config;
 #[cfg(feature = "format")]
 use clippier::tools::{FormatScope, apply_format_cli_overrides};
 
+#[cfg(feature = "upgrade")]
+mod upgrade_cli {
+    use std::{
+        io::{self, BufRead, IsTerminal, Write},
+        path::PathBuf,
+    };
+
+    use clap::{Args, Subcommand, ValueEnum};
+    use clippier::upgrade::{
+        DependencyKind, LockfilePolicy, PinnedPolicy, PrereleasePolicy, RegistryOptions,
+        RegistryOverrides, SourcePolicy, UpgradeOptions, UpgradePolicy, UpgradeReport,
+        UpgradeStatus, apply_upgrade_plan, build_upgrade_plan,
+    };
+    use serde::Serialize;
+
+    use super::BoxError;
+
+    #[derive(Args)]
+    pub struct UpgradeCli {
+        #[command(subcommand)]
+        command: Option<UpgradeCommand>,
+        #[command(flatten)]
+        flags: UpgradeFlags,
+    }
+
+    #[derive(Subcommand)]
+    enum UpgradeCommand {
+        /// Preview upgrades without modifying project files
+        Plan,
+    }
+
+    #[derive(Clone, Copy, Default, ValueEnum)]
+    enum Output {
+        #[default]
+        Text,
+        Json,
+    }
+
+    #[derive(Args)]
+    #[allow(clippy::struct_excessive_bools)] // Independent, presence-tracked CLI switches.
+    struct UpgradeFlags {
+        /// Cargo.toml or workspace directory (defaults to the current directory)
+        #[arg(long, global = true)]
+        manifest_path: Option<PathBuf>,
+        /// Explicit clippier.toml (otherwise discovered at the workspace root)
+        #[arg(long = "config", alias = "config-path", global = true)]
+        config_path: Option<PathBuf>,
+        /// Dependency names or aliases to include (glob patterns)
+        #[arg(
+            short = 'd',
+            long = "dependency",
+            alias = "dependencies",
+            value_delimiter = ',',
+            global = true
+        )]
+        dependencies: Vec<String>,
+        /// Workspace packages to include (glob patterns)
+        #[arg(
+            short = 'p',
+            long = "package",
+            alias = "packages",
+            value_delimiter = ',',
+            global = true
+        )]
+        packages: Vec<String>,
+        /// Dependency names or aliases to exclude (glob patterns)
+        #[arg(long, value_delimiter = ',', global = true)]
+        exclude: Vec<String>,
+        /// Dependency kinds: normal, dev, build
+        #[arg(long, alias = "kind", value_enum, value_delimiter = ',', global = true)]
+        kinds: Vec<DependencyKind>,
+        /// Stay within existing compatibility requirements (the default)
+        #[arg(long, conflicts_with = "incompatible", global = true)]
+        compatible: bool,
+        /// Allow requirements to cross compatibility boundaries
+        #[arg(long, conflicts_with = "lockfile_only", global = true)]
+        incompatible: bool,
+        /// Preserve or upgrade exact version pins
+        #[arg(long, alias = "pins", value_enum, global = true)]
+        pinned: Option<PinnedPolicy>,
+        /// Preserve prerelease eligibility or allow prereleases
+        #[arg(long, value_enum, global = true)]
+        prerelease: Option<PrereleasePolicy>,
+        /// Explicit safe default: Git dependencies are always excluded from upgrades
+        #[arg(long, global = true)]
+        skip_git_dependencies: bool,
+        /// Registry-only upgrades, or include versioned path dependencies
+        #[arg(long, value_enum, global = true)]
+        source: Option<SourcePolicy>,
+        /// Explicit Rust compiler version ceiling for candidate releases
+        #[arg(long, global = true)]
+        msrv: Option<String>,
+        /// Lockfile policy (overrides configuration)
+        #[arg(long, value_enum, global = true)]
+        lockfile: Option<LockfilePolicy>,
+        /// Disable lockfile updates, overriding configuration
+        #[arg(long, conflicts_with_all = ["lockfile", "lockfile_only", "resolve_lockfile"], global = true)]
+        no_lockfile: bool,
+        /// Update only Cargo.lock, without changing manifest requirements
+        #[arg(long, global = true)]
+        lockfile_only: bool,
+        /// Resolve an exact lockfile preview in an isolated snapshot
+        #[arg(long, global = true)]
+        resolve_lockfile: bool,
+        /// Preview only; equivalent to `upgrade plan`
+        #[arg(long, global = true)]
+        dry_run: bool,
+        /// Skip confirmation only; all planning and safety checks still run
+        #[arg(short = 'y', long, global = true)]
+        yes: bool,
+        /// Include the planned diff (unresolved lockfiles are labeled)
+        #[arg(long, global = true)]
+        diff: bool,
+        /// Report format; JSON emits exactly one report on stdout
+        #[arg(long, value_enum, default_value = "text", global = true)]
+        output: Output,
+        /// Preview only, exiting unsuccessfully if changes are needed
+        #[arg(long, global = true)]
+        check: bool,
+        /// Use only locally cached registry data
+        #[arg(long, global = true)]
+        offline: bool,
+        /// Registry request timeout in seconds
+        #[arg(long, alias = "registry-timeout-seconds", value_parser = clap::value_parser!(u64).range(1..), global = true)]
+        timeout_seconds: Option<u64>,
+        /// Maximum registry request retries
+        #[arg(long, alias = "registry-max-retries", global = true)]
+        max_retries: Option<u32>,
+        /// Maximum simultaneous registry requests
+        #[arg(long, alias = "registry-max-concurrency", value_parser = positive_usize, global = true)]
+        max_concurrency: Option<usize>,
+    }
+
+    fn positive_usize(value: &str) -> Result<usize, String> {
+        value
+            .parse::<usize>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| "expected a positive integer".to_owned())
+    }
+
+    impl UpgradeFlags {
+        fn options(&self) -> UpgradeOptions {
+            let defaults = RegistryOptions::default();
+            UpgradeOptions {
+                manifest_path: self.manifest_path.clone(),
+                config_path: self.config_path.clone(),
+                dependencies: self.dependencies.clone(),
+                packages: self.packages.clone(),
+                exclude: self.exclude.clone(),
+                kinds: self.kinds.clone(),
+                policy: if self.incompatible {
+                    Some(UpgradePolicy::Incompatible)
+                } else if self.compatible {
+                    Some(UpgradePolicy::Compatible)
+                } else {
+                    None
+                },
+                pinned: self.pinned,
+                prerelease: self.prerelease,
+                source: self.source,
+                lockfile: if self.no_lockfile {
+                    Some(LockfilePolicy::None)
+                } else {
+                    self.lockfile
+                },
+                msrv: self.msrv.clone(),
+                lockfile_only: self.lockfile_only,
+                resolve_lockfile: self.resolve_lockfile,
+                registry_overrides: RegistryOverrides {
+                    offline: self.offline.then_some(true),
+                    timeout_seconds: self.timeout_seconds,
+                    max_retries: self.max_retries,
+                    max_concurrency: self.max_concurrency,
+                },
+                registry: RegistryOptions {
+                    offline: self.offline,
+                    timeout_seconds: self.timeout_seconds.unwrap_or(defaults.timeout_seconds),
+                    max_retries: self.max_retries.unwrap_or(defaults.max_retries),
+                    max_concurrency: self.max_concurrency.unwrap_or(defaults.max_concurrency),
+                },
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Serialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    enum Outcome {
+        Planned,
+        Unchanged,
+        Applied,
+        CheckFailed,
+        Cancelled,
+        Blocked,
+        PlanningFailed,
+        ApplyFailed,
+    }
+
+    #[derive(Clone, Copy, Serialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    enum Scope {
+        Plan,
+        Check,
+        Apply,
+    }
+
+    // These are CLI overrides, not a reconstruction of the engine's merged config.
+    #[derive(Serialize)]
+    struct RequestedSettings<'a> {
+        policy: Option<UpgradePolicy>,
+        pinned: Option<PinnedPolicy>,
+        prerelease: Option<PrereleasePolicy>,
+        source: Option<SourcePolicy>,
+        lockfile_policy: Option<LockfilePolicy>,
+        msrv: Option<&'a str>,
+        lockfile_only: bool,
+        resolve_lockfile: bool,
+        offline: Option<bool>,
+        timeout_seconds: Option<u64>,
+        max_retries: Option<u32>,
+        max_concurrency: Option<usize>,
+        packages: &'a [String],
+        dependencies: &'a [String],
+        exclude: &'a [String],
+        kinds: &'a [DependencyKind],
+    }
+
+    #[derive(Serialize)]
+    struct Envelope<'a, 'r> {
+        schema_version: u32,
+        scope: Scope,
+        cli_overrides: RequestedSettings<'a>,
+        #[serde(flatten)]
+        result: &'a Report<'r>,
+    }
+
+    #[derive(Serialize)]
+    struct Report<'a> {
+        outcome: Outcome,
+        #[serde(rename = "report")]
+        details: Option<&'a UpgradeReport>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        diff: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<&'a str>,
+    }
+
+    fn write_text(writer: &mut impl Write, report: &UpgradeReport) -> io::Result<()> {
+        writeln!(writer, "Workspace: {}", report.workspace_root.display())?;
+        for dependency in &report.dependencies {
+            writeln!(
+                writer,
+                "{} / {}: {} -> {} ({:?}: {})",
+                dependency.package,
+                dependency.alias,
+                dependency.previous.as_deref().unwrap_or("-"),
+                dependency.requirement.as_deref().unwrap_or("-"),
+                dependency.status,
+                dependency.reason
+            )?;
+        }
+        writeln!(
+            writer,
+            "Manifests: {}; lockfile: {:?}; applied: {}",
+            report.manifests.len(),
+            report.lockfile,
+            report.applied
+        )
+    }
+
+    fn emit(flags: &UpgradeFlags, scope: Scope, report: &Report<'_>) -> Result<(), BoxError> {
+        let mut stdout = io::stdout().lock();
+        match flags.output {
+            Output::Json => {
+                let options = flags.options();
+                let envelope = Envelope {
+                    schema_version: 1,
+                    scope,
+                    cli_overrides: RequestedSettings {
+                        policy: options.policy,
+                        pinned: options.pinned,
+                        prerelease: options.prerelease,
+                        source: options.source,
+                        lockfile_policy: options.lockfile,
+                        msrv: flags.msrv.as_deref(),
+                        lockfile_only: flags.lockfile_only,
+                        resolve_lockfile: flags.resolve_lockfile,
+                        offline: options.registry_overrides.offline,
+                        timeout_seconds: flags.timeout_seconds,
+                        max_retries: flags.max_retries,
+                        max_concurrency: flags.max_concurrency,
+                        packages: &flags.packages,
+                        dependencies: &flags.dependencies,
+                        exclude: &flags.exclude,
+                        kinds: &flags.kinds,
+                    },
+                    result: report,
+                };
+                serde_json::to_writer(&mut stdout, &envelope)?;
+                writeln!(stdout)?;
+            }
+            Output::Text => {
+                writeln!(stdout, "{:?}", report.outcome)?;
+                if let Some(inner) = report.details {
+                    write_text(&mut stdout, inner)?;
+                }
+                if let Some(diff) = report.diff {
+                    write!(stdout, "{diff}")?;
+                }
+            }
+        }
+        if let Some(error) = report.error {
+            eprintln!("{error}");
+        }
+        Ok(())
+    }
+
+    // One read only: EOF, empty input, and every answer other than y/yes cancel.
+    fn read_confirmation(reader: &mut impl BufRead) -> io::Result<bool> {
+        let mut answer = String::new();
+        reader.read_line(&mut answer)?;
+        Ok(matches!(
+            answer.trim().to_ascii_lowercase().as_str(),
+            "y" | "yes"
+        ))
+    }
+
+    const fn confirmation_needed(yes: bool, has_work: bool) -> bool {
+        has_work && !yes
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub async fn run(command: &UpgradeCli) -> Result<u8, BoxError> {
+        let flags = &command.flags;
+        let scope = if flags.check {
+            Scope::Check
+        } else if command.command.is_some() || flags.dry_run {
+            Scope::Plan
+        } else {
+            Scope::Apply
+        };
+        let plan = match build_upgrade_plan(&flags.options()).await {
+            Ok(plan) => plan,
+            Err(error) => {
+                emit(
+                    flags,
+                    scope,
+                    &Report {
+                        outcome: Outcome::PlanningFailed,
+                        details: None,
+                        diff: None,
+                        error: Some(&error.to_string()),
+                    },
+                )?;
+                return Ok(1);
+            }
+        };
+        let diff = plan.diff();
+        let report = plan.report();
+        let has_work = report.pending;
+        let shown_diff = flags.diff.then_some(diff.as_str());
+        if !report.blockers.is_empty() {
+            let message = report.blockers.join("; ");
+            emit(
+                flags,
+                scope,
+                &Report {
+                    outcome: Outcome::Blocked,
+                    details: Some(report),
+                    diff: shown_diff,
+                    error: Some(&message),
+                },
+            )?;
+            return Ok(1);
+        }
+        let preview = command.command.is_some() || flags.dry_run || flags.check;
+        if preview || !has_work {
+            let failed_check = flags.check && has_work;
+            emit(
+                flags,
+                scope,
+                &Report {
+                    outcome: if failed_check {
+                        Outcome::CheckFailed
+                    } else if has_work {
+                        Outcome::Planned
+                    } else {
+                        Outcome::Unchanged
+                    },
+                    details: Some(report),
+                    diff: shown_diff,
+                    error: None,
+                },
+            )?;
+            return Ok(u8::from(failed_check));
+        }
+        if confirmation_needed(flags.yes, has_work) {
+            // JSON stdout must remain a single final report. Preview and prompt use stderr.
+            let mut stderr = io::stderr().lock();
+            write_text(&mut stderr, report)?;
+            if let Some(diff) = shown_diff {
+                write!(stderr, "{diff}")?;
+            }
+            if !io::stdin().is_terminal()
+                || !io::stdout().is_terminal()
+                || !io::stderr().is_terminal()
+            {
+                drop(stderr);
+                emit(
+                    flags,
+                    scope,
+                    &Report {
+                        outcome: Outcome::Blocked,
+                        details: Some(report),
+                        diff: shown_diff,
+                        error: Some(
+                            "Confirmation requires terminal input/output; use --yes to apply or --dry-run to preview.",
+                        ),
+                    },
+                )?;
+                return Ok(1);
+            }
+            write!(stderr, "Apply these upgrades? [y/N] ")?;
+            stderr.flush()?;
+            drop(stderr);
+            let confirmation = read_confirmation(&mut io::stdin().lock());
+            match confirmation {
+                Ok(true) => {}
+                answer => {
+                    let message = match answer {
+                        Err(error) => {
+                            format!("Upgrade cancelled: could not read confirmation: {error}")
+                        }
+                        _ => "Upgrade cancelled; no changes applied.".to_owned(),
+                    };
+                    let mut cancelled = report.clone();
+                    cancelled.cancelled = true;
+                    cancelled.status = UpgradeStatus::Cancelled;
+                    emit(
+                        flags,
+                        scope,
+                        &Report {
+                            outcome: Outcome::Cancelled,
+                            details: Some(&cancelled),
+                            diff: shown_diff,
+                            error: Some(&message),
+                        },
+                    )?;
+                    return Ok(1);
+                }
+            }
+        }
+        match apply_upgrade_plan(&plan).await {
+            Ok(applied) => {
+                emit(
+                    flags,
+                    scope,
+                    &Report {
+                        outcome: Outcome::Applied,
+                        details: Some(&applied),
+                        diff: shown_diff,
+                        error: None,
+                    },
+                )?;
+                Ok(0)
+            }
+            Err(error) => {
+                let mut failed = report.clone();
+                failed.status = UpgradeStatus::Failed;
+                emit(
+                    flags,
+                    scope,
+                    &Report {
+                        outcome: Outcome::ApplyFailed,
+                        details: Some(&failed),
+                        diff: shown_diff,
+                        error: Some(&error.to_string()),
+                    },
+                )?;
+                Ok(1)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::io::Cursor;
+
+        use clap::Parser;
+
+        use super::*;
+
+        fn parse(args: &[&str]) -> UpgradeCli {
+            let args = crate::Args::try_parse_from(args).unwrap();
+            let crate::Commands::Upgrade(command) = args.cmd else {
+                panic!("expected upgrade")
+            };
+            command
+        }
+
+        #[test]
+        fn default_applies_but_yes_only_changes_confirmation() {
+            let default = parse(&["clippier", "upgrade"]);
+            let yes = parse(&[
+                "clippier",
+                "upgrade",
+                "--skip-git-dependencies",
+                "--compatible",
+                "-y",
+            ]);
+            assert!(default.command.is_none());
+            assert!(!default.flags.dry_run);
+            assert!(default.flags.options().policy.is_none());
+            assert!(yes.flags.yes);
+            assert!(yes.flags.skip_git_dependencies);
+            assert_eq!(yes.flags.options().policy, Some(UpgradePolicy::Compatible));
+            assert_eq!(
+                default.flags.options().lockfile,
+                yes.flags.options().lockfile
+            );
+            assert!(default.flags.options().registry_overrides.offline.is_none());
+            assert!(
+                default
+                    .flags
+                    .options()
+                    .registry_overrides
+                    .timeout_seconds
+                    .is_none()
+            );
+            assert!(
+                default
+                    .flags
+                    .options()
+                    .registry_overrides
+                    .max_retries
+                    .is_none()
+            );
+            assert!(
+                default
+                    .flags
+                    .options()
+                    .registry_overrides
+                    .max_concurrency
+                    .is_none()
+            );
+            assert!(confirmation_needed(false, true));
+            assert!(!confirmation_needed(true, true));
+            assert!(!confirmation_needed(false, false));
+        }
+
+        #[test]
+        fn plan_accepts_options_before_and_after_subcommand() {
+            let command = parse(&[
+                "clippier",
+                "upgrade",
+                "--offline",
+                "plan",
+                "--compatible",
+                "--dependency",
+                "serde,tokio",
+                "-p",
+                "app",
+                "--exclude",
+                "old*",
+                "--kinds",
+                "normal,dev,build",
+                "--no-lockfile",
+                "--output",
+                "json",
+            ]);
+            assert!(command.command.is_some());
+            let options = command.flags.options();
+            assert!(options.registry.offline);
+            assert_eq!(options.policy, Some(UpgradePolicy::Compatible));
+            assert_eq!(options.lockfile, Some(LockfilePolicy::None));
+            assert_eq!(options.dependencies, ["serde", "tokio"]);
+            assert_eq!(options.packages, ["app"]);
+            assert_eq!(options.exclude, ["old*"]);
+            assert_eq!(
+                options.kinds,
+                [
+                    DependencyKind::Normal,
+                    DependencyKind::Dev,
+                    DependencyKind::Build
+                ]
+            );
+        }
+
+        #[test]
+        fn rejects_conflicts_and_invalid_limits() {
+            for args in [
+                vec!["--compatible", "--incompatible"],
+                vec!["--lockfile-only", "--incompatible"],
+                vec!["--no-lockfile", "--lockfile", "refresh"],
+                vec!["--no-lockfile", "--resolve-lockfile"],
+                vec!["--max-concurrency", "0"],
+                vec!["--timeout-seconds", "0"],
+            ] {
+                let mut command = vec!["clippier", "upgrade"];
+                command.extend(args);
+                assert!(crate::Args::try_parse_from(command).is_err());
+            }
+        }
+
+        #[test]
+        fn maps_explicit_policies_and_registry_limits() {
+            let command = parse(&[
+                "clippier",
+                "upgrade",
+                "--incompatible",
+                "--pins",
+                "upgrade",
+                "--prerelease",
+                "allow",
+                "--source",
+                "include-path",
+                "--lockfile",
+                "resolve",
+                "--resolve-lockfile",
+                "--config",
+                "custom.toml",
+                "--manifest-path",
+                "Cargo.toml",
+                "--msrv",
+                "1.85.0",
+                "--timeout-seconds",
+                "7",
+                "--max-retries",
+                "0",
+                "--max-concurrency",
+                "2",
+            ]);
+            let options = command.flags.options();
+            assert_eq!(options.policy, Some(UpgradePolicy::Incompatible));
+            assert_eq!(options.pinned, Some(PinnedPolicy::Upgrade));
+            assert_eq!(options.prerelease, Some(PrereleasePolicy::Allow));
+            assert_eq!(options.source, Some(SourcePolicy::IncludePath));
+            assert_eq!(options.lockfile, Some(LockfilePolicy::Resolve));
+            assert!(options.resolve_lockfile);
+            assert_eq!(options.config_path, Some(PathBuf::from("custom.toml")));
+            assert_eq!(options.manifest_path, Some(PathBuf::from("Cargo.toml")));
+            assert_eq!(options.msrv.as_deref(), Some("1.85.0"));
+            assert_eq!(options.registry.timeout_seconds, 7);
+            assert_eq!(options.registry.max_retries, 0);
+            assert_eq!(options.registry.max_concurrency, 2);
+        }
+
+        #[test]
+        fn confirmation_accepts_only_yes_and_reads_once() {
+            for answer in ["y\n", "yes\n", "Y\n", "YeS\n", " yes \n"] {
+                assert!(read_confirmation(&mut Cursor::new(answer)).unwrap());
+            }
+            for answer in ["", "\n", "n\n", "no\n", "sure\n", "yes please\n", "n\ny\n"] {
+                assert!(!read_confirmation(&mut Cursor::new(answer)).unwrap());
+            }
+            let mut input = Cursor::new("n\nyes\n");
+            assert!(!read_confirmation(&mut input).unwrap());
+            assert_eq!(input.position(), 2);
+        }
+    }
+}
+
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Parser)]
@@ -315,6 +977,9 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Upgrade dependency requirements and the lockfile (plan first, then confirm)
+    #[cfg(feature = "upgrade")]
+    Upgrade(upgrade_cli::UpgradeCli),
     /// Run the bundled Markdown formatter
     #[cfg(feature = "md")]
     Md {
@@ -973,6 +1638,14 @@ async fn run() -> Result<(), BoxError> {
     let args = Args::parse();
 
     let result = match args.cmd {
+        #[cfg(feature = "upgrade")]
+        Commands::Upgrade(command) => {
+            let exit_code = upgrade_cli::run(&command).await?;
+            if exit_code != 0 {
+                std::process::exit(i32::from(exit_code));
+            }
+            return Ok(());
+        }
         #[cfg(feature = "md")]
         Commands::Md { command } => {
             let exit_code = clippier_md::cli::run(&command)?;

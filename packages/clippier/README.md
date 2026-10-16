@@ -247,6 +247,7 @@ Clippier supports optional features:
 - **`format`** (default): Enable the `fmt` command for running formatters
 - **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
 - **`publish`** (default): Enable the `publish` command for Cargo workspace crate publishing
+- **`upgrade`** (default): Native Cargo dependency upgrade plans, confirmation, and lockfile updates
 - **`versioning`** (default): Enable the `version` command for Cargo workspace version bumps
 - **`transforms-vendored`** (default): Enable Lua transform scripts with vendored Lua runtime
 - **`transforms-system`**: Enable Lua transform scripts using system Lua installation
@@ -255,6 +256,94 @@ Clippier supports optional features:
 ## Usage
 
 Clippier provides several subcommands for different analysis tasks:
+
+### Native Cargo dependency upgrades
+
+Clippier discovers registry releases and edits requirements natively; it does not
+install, invoke, or depend on `cargo-edit`. Cargo itself performs lockfile resolution.
+
+```bash
+clippier upgrade plan --compatible
+clippier upgrade plan --incompatible --diff
+clippier upgrade plan --output json
+clippier upgrade                         # summary, then Apply? [y/N]
+clippier upgrade --incompatible --yes    # explicit non-interactive acceptance
+clippier upgrade --no-lockfile           # manifests only
+clippier upgrade --lockfile-only --yes   # preserve manifests, refresh Cargo.lock
+clippier upgrade plan --resolve-lockfile --diff
+clippier upgrade --dependency serde --exclude tokio --package 'my_*'
+```
+
+`--dry-run` is equivalent to `upgrade plan`; `--check` is a read-only CI check.
+Compatible mode is the default. Incompatible mode allows releases outside existing
+requirements; it does not implicitly permit changing pins or introducing prereleases.
+`--pinned upgrade`, `--prerelease allow`, and `--msrv <VERSION>` are independent
+controls. Dependency kinds can be restricted with `--kinds normal,dev,build`.
+
+Application displays a summary before prompting. Only `y`/`yes` (case-insensitive)
+accepts; any other input or EOF cancels. Non-interactive application requires
+`--yes` when work exists. Preview and no-work operations never prompt. `--yes`
+does not bypass validation or policy. JSON output remains on stdout, with prompts
+and diagnostics on stderr.
+
+By default, upgrades also refresh the lockfile, even if requirements are already
+current. `--lockfile resolve` requests minimal reconciliation; `--no-lockfile`
+(or `--lockfile none`) disables lockfile changes. Lockfile-only mode cannot be
+combined with incompatible mode. Git and path declarations remain untouched by
+default; `--skip-git-dependencies` explicitly selects the existing safe default.
+Cargo resolution must preserve protected locked identities or fail before live
+writes. Transitive changes can be required by resolution.
+
+Ordinary plans show exact manifest edits and label unresolved lockfile work.
+`--resolve-lockfile` performs isolated Cargo resolution to preview exact lockfile
+changes. Application rechecks captured inputs and uses that staged result; it does
+not silently replace an approved exact preview with a fresh resolution.
+
+Configure defaults in the workspace `clippier.toml`; policy enum values use
+`SCREAMING_SNAKE_CASE`, and CLI values use kebab-case:
+
+```toml
+[upgrade]
+policy = "COMPATIBLE"
+pinned = "PRESERVE"
+prerelease = "PRESERVE"
+source = "REGISTRY_ONLY"
+lockfile = "REFRESH"
+exclude = ["some_dependency"]
+kinds = ["NORMAL", "DEV", "BUILD"]
+
+[upgrade.registry]
+offline = false
+timeout-seconds = 30
+max-retries = 2
+max-concurrency = 8
+
+[[upgrade.rules]]
+dependency = "some_dependency"
+registry = "crates-io"
+policy = "COMPATIBLE"
+pinned = "PRESERVE"
+```
+
+Rules apply in order and may also restrict aliases, consumer packages, targets,
+and dependency kinds. They cannot broaden global selection. Explicit CLI policy
+overrides win over matching rules. Shared workspace dependencies with conflicting
+consumer policies are rejected rather than given an arbitrary policy.
+
+CLI overrides take precedence over file configuration. Registry settings are
+presence-tracked, so omitted CLI flags do not erase configured values. Automatic
+acceptance is deliberately a CLI-only decision. Unknown upgrade settings are
+errors. Sparse registries and Cargo source replacements are source-aware; unsupported
+authenticated/git/local-index arrangements fail explicitly rather than falling back
+to crates.io. Offline discovery supports the canonical crates.io sparse cache;
+alternate-registry offline disk caches are not supported.
+
+Isolated lockfile resolution snapshots Cargo inputs rather than copying arbitrary
+assets or dotenv/credential files. External path dependencies, required symlinked
+inputs, relative environment entries, and unsupported path-bearing Cargo settings
+fail explicitly before project writes. Discovery does not prove that an upgrade
+builds; run your normal checks afterward. GitHub Actions upgrades use `--yes` and
+retain separate compatible and incompatible validation branches.
 
 ### Dependencies Analysis
 

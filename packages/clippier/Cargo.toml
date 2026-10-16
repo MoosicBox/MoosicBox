@@ -100,6 +100,7 @@ clippier_test_utilities = { workspace = true, features = ["git-diff"] }
 flate2                  = { workspace = true }
 insta                   = { workspace = true, features = ["json", "redactions", "yaml"] }
 sha2                    = { workspace = true }
+switchy_time            = { workspace = true }
 tar                     = { workspace = true }
 tempfile                = { workspace = true }
 test-log                = { workspace = true }
@@ -116,6 +117,7 @@ default = [
     "release",
     "tools-tui",
     "transforms-vendored",
+    "upgrade",
     "versioning",
 ]
 
@@ -149,6 +151,15 @@ release = [
     "dep:toml_edit",
     "publish",
     "switchy_async/net",
+]
+upgrade = [
+    "dep:cargo_metadata",
+    "dep:reqwest",
+    "dep:semver",
+    "dep:tempfile",
+    "dep:toml_edit",
+    "switchy_async/net",
+    "switchy_async/time",
 ]
 versioning = ["dep:cargo_metadata", "dep:toml_edit"]
 

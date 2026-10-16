@@ -9,44 +9,6 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    build-cargo-upgrade:
-        name: Build cargo-upgrade
-        strategy:
-            fail-fast: true
-            matrix:
-                os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        runs-on: ${{ matrix.os }}
-        steps:
-            - uses: dtolnay/rust-toolchain@stable
-            - uses: actions/checkout@v6
-            - name: Setup cargo-upgrade
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  repo: https://github.com/BSteffaniak/cargo-edit
-                  command: cargo install -f cargo-edit --git https://github.com/BSteffaniak/cargo-edit --branch add-skip-git-dependencies
-                  shell: bash
-                  output-path: ~/.cargo/bin/cargo-upgrade${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-                  artifact-name: cargo-upgrade-${{ matrix.os }}-binary
-                  cache-key-prefix: cargo-upgrade
-                  make-executable: true
-                  verify-command: --help
-            - uses: actions/upload-artifact@v6
-              if: ${{ matrix.os == 'macos-latest' }}
-              with:
-                  name: cargo-upgrade-macos
-                  path: ~/.cargo/bin/cargo-upgrade
-            - uses: actions/upload-artifact@v6
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              with:
-                  name: cargo-upgrade-ubuntu
-                  path: ~/.cargo/bin/cargo-upgrade
-            - uses: actions/upload-artifact@v6
-              if: ${{ matrix.os == 'windows-latest' }}
-              with:
-                  name: cargo-upgrade.exe
-                  path: ~/.cargo/bin/cargo-upgrade.exe
-
     build-cargo-machete:
         name: Build cargo-machete
         strategy:
@@ -88,7 +50,6 @@ jobs:
     upgrade-dependencies:
         name: Upgrade dependencies (compatible and incompatible)
         runs-on: ubuntu-latest
-        needs: [build-cargo-upgrade]
         outputs:
             compatible-upgraded: ${{ steps.upgrade-compatible.outputs.upgraded }}
             incompatible-upgraded: ${{ steps.upgrade-incompatible.outputs.upgraded }}
@@ -126,38 +87,13 @@ jobs:
               with:
                   components: rustfmt, clippy
 
-            - uses: actions/download-artifact@v8
-              if: ${{ runner.os == 'macOS' }}
-              with:
-                  name: cargo-upgrade-macos
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ runner.os == 'Linux' }}
-              with:
-                  name: cargo-upgrade-ubuntu
-                  path: ~/.cargo/bin
-
-            - uses: actions/download-artifact@v8
-              if: ${{ runner.os == 'Windows' }}
-              with:
-                  name: cargo-upgrade.exe
-                  path: ~/.cargo/bin
-
-            - name: Make cargo-upgrade executable
-              if: ${{ runner.os == 'macOS' }}
+            - name: Build native Clippier upgrader
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-upgrade
-
-            - name: Make cargo-upgrade executable
-              if: ${{ runner.os == 'Linux' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-upgrade
-
-            - name: Make cargo-upgrade executable
-              if: ${{ runner.os == 'Windows' }}
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-upgrade.exe
+              run: |
+                  cargo build --release -p clippier --no-default-features --features upgrade
+                  mkdir -p "$RUNNER_TEMP/clippier-upgrade"
+                  cp target/release/clippier "$RUNNER_TEMP/clippier-upgrade/clippier"
+                  echo "$RUNNER_TEMP/clippier-upgrade" >> "$GITHUB_PATH"
 
             - name: Setup git config
               run: |
@@ -172,8 +108,7 @@ jobs:
               id: upgrade-compatible
               shell: bash
               run: |
-                  cargo upgrade --skip-git-dependencies
-                  cargo update
+                  clippier upgrade --skip-git-dependencies --compatible --yes
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found compatible upgrades"
                       git add .
@@ -193,8 +128,7 @@ jobs:
               id: upgrade-incompatible
               shell: bash
               run: |
-                  cargo upgrade --skip-git-dependencies --incompatible
-                  cargo update
+                  clippier upgrade --skip-git-dependencies --incompatible --yes
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found incompatible upgrades"
                       git add .

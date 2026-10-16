@@ -3386,6 +3386,7 @@ dependencies = [
  "switchy_async",
  "switchy_fs",
  "switchy_random",
+ "switchy_time",
  "tar",
  "tempfile",
  "test-log",

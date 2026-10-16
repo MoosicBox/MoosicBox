@@ -68,6 +68,10 @@ pub mod publish;
 #[cfg(feature = "versioning")]
 pub mod versioning;
 
+/// Native Cargo dependency upgrade planning and application.
+#[cfg(feature = "upgrade")]
+pub mod upgrade;
+
 /// Stateless Cargo release preparation support.
 #[cfg(feature = "release")]
 pub mod release;
