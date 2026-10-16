@@ -178,3 +178,92 @@ fn failures_emit_structured_json_and_do_not_mutate() {
     assert!(value["error"].as_str().unwrap().contains("unknown"));
     assert!(!f.dir.path().join("target").exists());
 }
+
+#[test]
+fn text_output_prioritizes_findings_and_keeps_suppressed_rows_in_verbose_only() {
+    let f = Fixture::new();
+    fs::write(
+        f.dir.path().join("clippier.toml"),
+        "[machete]\nignored=['used']\n",
+    )
+    .unwrap();
+    let output = f.run(&[]);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.starts_with("Machete | FINDINGS\n"));
+    assert!(text.contains("1 unused, 0 unverified, 0 used, 1 ignored"));
+    assert!(text.contains("Unused dependencies:\n  fixture (Cargo.toml)\n    unused [normal]"));
+    assert!(!text.contains("Ignored:"));
+    assert!(!text.contains(&f.dir.path().display().to_string()));
+    let verbose = String::from_utf8(f.run(&["--verbose"]).stdout).unwrap();
+    assert!(verbose.contains("used (Normal): Ignored"));
+    assert!(verbose.contains("unused (Normal): Unused"));
+}
+
+#[test]
+fn text_output_groups_repeated_diagnostics_without_claiming_incomplete_is_clean() {
+    let f = Fixture::new();
+    let mut source = String::new();
+    for i in 0..30 {
+        source.push_str(&format!("mod m{i};\n"));
+        fs::write(
+            f.dir.path().join(format!("src/m{i}.rs")),
+            "pub fn run(){ unknown::emit!(); }\n",
+        )
+        .unwrap();
+    }
+    fs::write(f.dir.path().join("src/lib.rs"), source).unwrap();
+    let output = f.run(&[]);
+    assert_eq!(output.status.code(), Some(2));
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("Machete | INCOMPLETE"));
+    assert!(text.contains("Unverified dependencies (not removable)"));
+    assert!(
+        text.contains("30 limitations, 30 advisories")
+            || text.contains("0 limitations, 30 advisories"),
+        "{text}"
+    );
+    assert!(text.contains("Unexpanded macros/attributes"));
+    assert!(text.contains("Apply is blocked"));
+    assert!(text.contains("--verbose"));
+    assert!(text.lines().count() < 30, "{text}");
+    assert!(!text.contains("src/m0.rs"));
+    let verbose = f.run(&["--verbose"]);
+    assert_eq!(verbose.status.code(), Some(2));
+    let verbose = String::from_utf8(verbose.stdout).unwrap();
+    assert!(verbose.contains("src/m0.rs"));
+    let (_, json) = f.json(&["--output", "json"]);
+    assert_eq!(json["report"]["diagnostics"].as_array().unwrap().len(), 30);
+    let (plain_output, plain_json) = f.json(&["--output", "json"]);
+    let (verbose_output, verbose_json) = f.json(&["--verbose", "--output", "json"]);
+    assert_eq!(plain_output.status.code(), verbose_output.status.code());
+    assert_eq!(plain_json, verbose_json);
+    assert_eq!(json["report"]["complete"], false);
+}
+
+#[test]
+fn text_clean_plan_diff_and_explanation_remain_distinct() {
+    let f = Fixture::new();
+    fs::write(
+        f.dir.path().join("src/lib.rs"),
+        "pub fn run(){used::run(); unused::run();}\n",
+    )
+    .unwrap();
+    let text = String::from_utf8(f.run(&[]).stdout).unwrap();
+    assert!(text.starts_with("Machete | CLEAN\n"));
+    assert!(text.contains("No unused dependencies identified."));
+    assert!(!text.contains("Analysis is incomplete"));
+    let explained = String::from_utf8(f.run(&["--explain"]).stdout).unwrap();
+    assert!(explained.contains("Evidence:"));
+    fs::write(
+        f.dir.path().join("src/lib.rs"),
+        "pub fn run(){used::run();}\n",
+    )
+    .unwrap();
+    let plan = f.run(&["plan", "--diff"]);
+    let text = String::from_utf8(plan.stdout).unwrap();
+    assert!(text.starts_with("Machete | PLANNED\n"));
+    assert!(text.contains("Unused dependencies:"));
+    assert!(text.contains("--- "));
+    assert!(text.contains("-unused"));
+}

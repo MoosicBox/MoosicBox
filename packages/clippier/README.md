@@ -37,6 +37,12 @@ asks for confirmation; `apply --yes` explicitly accepts it non-interactively.
 Cargo.lock is preserved. Incomplete or stale evidence prevents application.
 Review a plan before applying it.
 
+Default text output shows status counts, findings grouped by package, and a bounded
+summary of coverage diagnostics—not every ignored declaration or repeated warning.
+Incomplete analysis is explicitly distinguished from a clean result. Use
+`--verbose` for all declarations and diagnostics, `--explain` for source evidence,
+or `--output json` for the complete unchanged structured report.
+
 Normal and build dependencies are checked by default;
 dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest
 selects that member by default; use a workspace root to scan the workspace.

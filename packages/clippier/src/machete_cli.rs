@@ -1,6 +1,7 @@
 //! Native dependency analysis CLI; mutation is explicit and confirmation stays here.
 use std::fmt::Write as _;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     io::{self, IsTerminal, Write},
     path::PathBuf,
 };
@@ -92,6 +93,9 @@ struct Flags {
     /// Include exact manifest differences in plan/apply output
     #[arg(long, global = true)]
     diff: bool,
+    /// Show every declaration and diagnostic instead of the concise summary
+    #[arg(long, global = true)]
+    verbose: bool,
     /// Resolve dependency library names through explicitly requested, offline locked Cargo metadata
     #[arg(long, global = true)]
     with_metadata: bool,
@@ -162,34 +166,7 @@ fn emit(flags: &Flags, result: &Envelope<'_>) -> Result<(), BoxError> {
         }
         Output::Text => {
             if let Some(report) = result.report {
-                writeln!(out, "Workspace: {}", report.root.display())?;
-                for dep in &report.dependencies {
-                    if dep.status != DependencyStatus::Used {
-                        writeln!(
-                            out,
-                            "{} / {} ({:?}): {:?}: {}",
-                            dep.package, dep.dependency, dep.kind, dep.status, dep.reason
-                        )?;
-                    }
-                }
-                if flags.explain {
-                    writeln!(
-                        out,
-                        "Coverage: {}",
-                        serde_json::to_string(&report.coverage)?
-                    )?;
-                    for evidence in &report.evidence {
-                        writeln!(out, "Evidence: {}", serde_json::to_string(evidence)?)?;
-                    }
-                }
-                for diagnostic in &report.diagnostics {
-                    writeln!(out, "Diagnostic: {diagnostic}")?;
-                }
-                writeln!(
-                    out,
-                    "Outcome: {}; complete: {}; applied: {}; Cargo.lock preserved: {}",
-                    result.outcome, report.complete, report.applied, report.lockfile_preserved
-                )?;
+                render_analysis(&mut out, flags, result.outcome, report)?;
             }
             if let Some(diff) = result.diff {
                 write!(out, "{diff}")?;
@@ -198,6 +175,211 @@ fn emit(flags: &Flags, result: &Envelope<'_>) -> Result<(), BoxError> {
                 writeln!(out, "Error: {error}")?;
             }
         }
+    }
+    Ok(())
+}
+
+fn render_analysis(
+    out: &mut impl Write,
+    flags: &Flags,
+    outcome: &str,
+    report: &MacheteReport,
+) -> Result<(), BoxError> {
+    let count = |status| {
+        report
+            .dependencies
+            .iter()
+            .filter(|d| d.status == status)
+            .count()
+    };
+    let packages = report
+        .dependencies
+        .iter()
+        .map(|d| &d.manifest_path)
+        .collect::<BTreeSet<_>>()
+        .len();
+    let unused = count(DependencyStatus::Unused);
+    let uncertain = count(DependencyStatus::Incomplete);
+    writeln!(
+        out,
+        "Machete | {}",
+        if report.applied { "APPLIED" } else { outcome }
+    )?;
+    writeln!(
+        out,
+        "{packages} packages, {} dependency declarations",
+        report.dependencies.len()
+    )?;
+    writeln!(
+        out,
+        "{unused} unused, {uncertain} unverified, {} used, {} ignored, {} not selected",
+        count(DependencyStatus::Used),
+        count(DependencyStatus::Ignored),
+        count(DependencyStatus::Skipped)
+    )?;
+    writeln!(out)?;
+    if unused == 0 {
+        writeln!(
+            out,
+            "No unused dependencies identified{}",
+            if report.complete {
+                "."
+            } else {
+                " (analysis incomplete)."
+            }
+        )?;
+    }
+    render_findings(out, report)?;
+    render_diagnostics(out, report)?;
+    if !report.complete {
+        writeln!(
+            out,
+            "\nAnalysis is incomplete: this is not proof that the workspace has no unused dependencies."
+        )?;
+        writeln!(
+            out,
+            "Apply is blocked for incomplete analysis; check exits with status 2."
+        )?;
+    }
+    if report.applied {
+        writeln!(
+            out,
+            "\nManifest changes applied; Cargo.lock preserved: {}.",
+            report.lockfile_preserved
+        )?;
+    }
+    if !report.diagnostics.is_empty() || !report.complete {
+        writeln!(
+            out,
+            "\nDetails: --verbose for full diagnostics; --explain for source evidence; --output json for structured results."
+        )?;
+        writeln!(out, "Use --packages <name> to focus on a package.")?;
+    }
+    if flags.verbose {
+        writeln!(out, "\nAll declarations:")?;
+        for dep in &report.dependencies {
+            writeln!(
+                out,
+                "  {} / {} ({:?}): {:?}: {}",
+                dep.package, dep.dependency, dep.kind, dep.status, dep.reason
+            )?;
+        }
+        writeln!(out, "\nFull diagnostics:")?;
+        for diagnostic in &report.diagnostics {
+            writeln!(
+                out,
+                "  {}",
+                diagnostic.replace(&format!("{}/", report.root.display()), "")
+            )?;
+        }
+    }
+    if flags.explain {
+        writeln!(
+            out,
+            "\nCoverage: {}",
+            serde_json::to_string(&report.coverage)?
+        )?;
+        for evidence in &report.evidence {
+            writeln!(out, "Evidence: {}", serde_json::to_string(evidence)?)?;
+        }
+    }
+    Ok(())
+}
+
+fn render_findings(out: &mut impl Write, report: &MacheteReport) -> Result<(), BoxError> {
+    for (status, heading) in [
+        (DependencyStatus::Unused, "Unused dependencies"),
+        (
+            DependencyStatus::Incomplete,
+            "Unverified dependencies (not removable)",
+        ),
+    ] {
+        if !report.dependencies.iter().any(|dep| dep.status == status) {
+            continue;
+        }
+        writeln!(out, "{heading}:")?;
+        let mut previous = None;
+        for dep in report
+            .dependencies
+            .iter()
+            .filter(|dep| dep.status == status)
+        {
+            if previous != Some(&dep.manifest_path) {
+                let relative = dep
+                    .manifest_path
+                    .strip_prefix(&report.root)
+                    .unwrap_or(&dep.manifest_path);
+                writeln!(out, "  {} ({})", dep.package, relative.display())?;
+                previous = Some(&dep.manifest_path);
+            }
+            let kind = match dep.kind {
+                DependencyKind::Normal => "normal",
+                DependencyKind::Build => "build",
+                DependencyKind::Dev => "dev",
+            };
+            write!(out, "    {} [{kind}]", dep.dependency)?;
+            if let Some(target) = &dep.target {
+                write!(out, " [{target}]")?;
+            }
+            writeln!(out, " - {}", dep.reason)?;
+        }
+    }
+    Ok(())
+}
+
+// Presentation-only grouping; JSON retains every original diagnostic unchanged.
+fn render_diagnostics(out: &mut impl Write, report: &MacheteReport) -> Result<(), BoxError> {
+    if report.diagnostics.is_empty() {
+        return Ok(());
+    }
+    let mut groups = BTreeMap::<(bool, String), usize>::new();
+    let advisory_count = report
+        .diagnostics
+        .iter()
+        .filter(|d| d.starts_with("advisory:"))
+        .count();
+    for diagnostic in &report.diagnostics {
+        let advisory = diagnostic.starts_with("advisory:");
+        let text = diagnostic.strip_prefix("advisory: ").unwrap_or(diagnostic);
+        let reason = text.split_once(": ").map_or(text, |(_, reason)| reason);
+        let category = if reason.contains("unexpanded Rust macro") {
+            "Unexpanded macros/attributes; generated references are unknown"
+        } else if reason.starts_with("imported alias ") {
+            "Import aliases with unresolved type/value namespaces"
+        } else {
+            reason
+        };
+        *groups.entry((advisory, category.to_owned())).or_default() += 1;
+    }
+    let mut groups = groups.into_iter().collect::<Vec<_>>();
+    // Inventory failures precede advisories; frequent causes precede rare ones.
+    groups.sort_by(
+        |((a_advisory, a_reason), a_count), ((b_advisory, b_reason), b_count)| {
+            a_advisory
+                .cmp(b_advisory)
+                .then_with(|| b_count.cmp(a_count))
+                .then_with(|| a_reason.cmp(b_reason))
+        },
+    );
+    writeln!(
+        out,
+        "\nCoverage diagnostics: {} ({} limitations, {advisory_count} advisories)",
+        report.diagnostics.len(),
+        report.diagnostics.len() - advisory_count
+    )?;
+    for ((advisory, reason), count) in groups.iter().take(5) {
+        writeln!(
+            out,
+            "  {count:>5}  {}{reason}",
+            if *advisory { "[advisory] " } else { "" }
+        )?;
+    }
+    if groups.len() > 5 {
+        writeln!(
+            out,
+            "  ... {} more diagnostic categories; see --verbose",
+            groups.len() - 5
+        )?;
     }
     Ok(())
 }
