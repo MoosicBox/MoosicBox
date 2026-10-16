@@ -30,6 +30,10 @@ pub enum ToolError {
     #[error("Required tool '{0}' not found. Please install it and ensure it's in your PATH.")]
     RequiredToolNotFound(String),
 
+    /// Bundled analysis was required but not compiled in.
+    #[error("Tool 'clippier-machete' requires a Clippier build with the 'machete' feature enabled")]
+    MacheteFeatureDisabled,
+
     /// Failed to detect a tool
     #[error("Failed to detect tool '{0}': {1}")]
     DetectionFailed(String, String),
@@ -398,7 +402,7 @@ impl ToolRegistry {
                     runner_args: runner_args.clone(),
                     tool_binary: tool.binary.clone(),
                 },
-                ToolKind::Cargo => return,
+                ToolKind::BuiltinMachete | ToolKind::Cargo => return,
                 #[cfg(feature = "md")]
                 ToolKind::BuiltinMarkdown => return,
             },
@@ -592,6 +596,9 @@ impl ToolRegistry {
         probe_results: &std::sync::Mutex<BTreeMap<String, bool>>,
     ) -> Option<ToolResolution> {
         let entry = tool_catalog_entry(name)?;
+        if tool.kind == ToolKind::BuiltinMachete {
+            return None;
+        }
         if let Some(local_bin) = entry.local_bin {
             let mut directory = Some(base_dir);
             while let Some(dir) = directory {
@@ -804,6 +811,9 @@ impl ToolRegistry {
         base_dir: &Path,
         config: &ToolsConfig,
     ) -> Option<PathBuf> {
+        if name == "clippier-machete" {
+            return None;
+        }
         if let Some(path) = config.get_path(name) {
             return Self::resolve_configured_executable(base_dir, path);
         }
@@ -840,6 +850,18 @@ impl ToolRegistry {
     #[allow(clippy::too_many_lines)]
     fn detect_tools(&mut self) -> Result<(), ToolError> {
         for (name, tool) in &self.tools {
+            // Native analysis must bypass configured paths, PATH and runner probes.
+            if tool.kind == ToolKind::BuiltinMachete {
+                if self.config.should_skip(name) {
+                    continue;
+                }
+                if cfg!(feature = "machete") {
+                    self.available.insert(name.clone(), tool.clone());
+                } else if self.config.is_required(name) {
+                    return Err(ToolError::MacheteFeatureDisabled);
+                }
+                continue;
+            }
             if let Ok(mut diagnostics) = self.diagnostics.lock() {
                 diagnostics.executables_resolved += 1;
             }
@@ -1017,6 +1039,7 @@ impl ToolRegistry {
         self.available.get(name).map(|tool| match &tool.kind {
             #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => "builtin".to_string(),
+            ToolKind::BuiltinMachete => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
             ToolKind::Binary => "binary".to_string(),
             ToolKind::Runner { runner, .. } => format!("runner:{runner}"),
@@ -1218,6 +1241,7 @@ fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
     match &tool.kind {
         #[cfg(feature = "md")]
         ToolKind::BuiltinMarkdown => ("builtin".to_string(), None),
+        ToolKind::BuiltinMachete => ("builtin".to_string(), None),
         ToolKind::Cargo => ("cargo".to_string(), None),
         ToolKind::Binary => ("binary".to_string(), None),
         ToolKind::Runner { runner, .. } => ("runner".to_string(), Some(runner.clone())),
@@ -1226,6 +1250,46 @@ fn execution_metadata(tool: &Tool) -> (String, Option<String>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_machete_never_resolves_an_executable() {
+        let root = tempfile::tempdir().unwrap();
+        let mut registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        registry.tools.retain(|name, _| name == "clippier-machete");
+        registry.available.clear();
+        registry
+            .config
+            .required
+            .push("clippier-machete".to_string());
+        let before = registry.diagnostics.lock().unwrap().executables_resolved;
+        let result = registry.detect_tools();
+        if cfg!(feature = "machete") {
+            result.unwrap();
+            assert_eq!(
+                registry.get("clippier-machete").unwrap().kind,
+                ToolKind::BuiltinMachete
+            );
+            assert_eq!(
+                registry.execution_mode("clippier-machete").as_deref(),
+                Some("builtin")
+            );
+        } else {
+            assert!(matches!(result, Err(ToolError::MacheteFeatureDisabled)));
+            assert!(!registry.is_available("clippier-machete"));
+        }
+        assert_eq!(
+            registry.diagnostics.lock().unwrap().executables_resolved,
+            before
+        );
+        assert!(
+            ToolRegistry::installed_path("clippier-machete", root.path(), &registry.config)
+                .is_none()
+        );
+        registry.config.skip.push("clippier-machete".to_string());
+        registry.available.clear();
+        registry.detect_tools().unwrap();
+        assert!(!registry.is_available("clippier-machete"));
+    }
+
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1771,6 +1835,7 @@ mod tests {
 
     #[test]
     fn list_tools_with_plan_reports_configured_and_selected_states() {
+        let root = tempfile::tempdir().unwrap();
         let mut tools = BTreeMap::new();
         let available = BTreeMap::new();
         let tool = TOOL_CATALOG
@@ -1794,7 +1859,7 @@ mod tests {
                 crate::tools::discovery::NativeConfigCache::default(),
             )),
             probe_results: std::sync::Mutex::new(BTreeMap::new()),
-            working_dir: std::env::temp_dir(),
+            working_dir: root.path().to_path_buf(),
         };
         let plan = crate::tools::ToolPlan {
             tools: vec![crate::tools::PlannedTool {
@@ -1821,10 +1886,13 @@ mod tests {
         assert_eq!(info[0].format_extensions, vec!["md"]);
         assert_eq!(info[0].format_order, Some(10));
         assert!(info[0].evidence.as_deref().unwrap().contains(".prettierrc"));
+        assert_eq!(registry.diagnostics.lock().unwrap().probes_executed, 0);
+        assert_eq!(registry.diagnostics.lock().unwrap().executables_resolved, 0);
     }
 
     #[test]
     fn list_tools_includes_runner_execution_metadata() {
+        let root = tempfile::tempdir().unwrap();
         let mut tools = BTreeMap::new();
         let mut available = BTreeMap::new();
 
@@ -1857,12 +1925,14 @@ mod tests {
                 crate::tools::discovery::NativeConfigCache::default(),
             )),
             probe_results: std::sync::Mutex::new(BTreeMap::new()),
-            working_dir: std::env::temp_dir(),
+            working_dir: root.path().to_path_buf(),
         };
 
         let info = registry.list_tools();
         assert_eq!(info.len(), 1);
         assert_eq!(info[0].execution_mode, "runner");
         assert_eq!(info[0].runner, Some("nix".to_string()));
+        assert_eq!(registry.diagnostics.lock().unwrap().probes_executed, 0);
+        assert_eq!(registry.diagnostics.lock().unwrap().executables_resolved, 0);
     }
 }

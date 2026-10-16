@@ -72,6 +72,10 @@ pub mod publish;
 #[cfg(feature = "versioning")]
 pub mod versioning;
 
+/// Native unused Cargo dependency analysis and guarded removal planning.
+#[cfg(feature = "machete")]
+pub mod machete;
+
 /// Native Cargo dependency upgrade planning and application.
 #[cfg(feature = "upgrade")]
 pub mod upgrade;

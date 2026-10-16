@@ -258,7 +258,7 @@ handle_binary_not_found() {
         echo "\`\`\`yaml"
         echo "- name: Build clippier"
         echo "  run: |"
-        echo "    cargo build --package clippier --features git-diff --release"
+        echo "    cargo build --package clippier --features git-diff,machete --release"
         echo "\`\`\`"
         echo ""
         echo "Or use the clippier action's built-in build step (automatic for most commands)."
@@ -1336,11 +1336,6 @@ setup_workspace_ci_environment() {
         echo "🛠️  Installing toolchains"
 
         # Check for common cargo tools
-        if echo "$toolchains" | jq -e 'map(select(. == "cargo-machete" or . == "machete")) | length > 0' >/dev/null 2>&1; then
-            echo "📦 Installing cargo-machete (from BSteffaniak fork)"
-            cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete || true
-        fi
-
         if echo "$toolchains" | jq -e 'map(select(. == "taplo" or . == "taplo-cli")) | length > 0' >/dev/null 2>&1; then
             echo "📦 Installing taplo-cli"
             cargo install taplo-cli || true

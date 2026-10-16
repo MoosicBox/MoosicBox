@@ -58,7 +58,7 @@ fn cleanup_test_artifacts() {
 
 **Dev Dependencies for Async Tests:**
 
-When writing async tests using `#[test_log::test(switchy_async::test)]`, you need `tokio` as a dev dependency for tests to work in non-simulator mode. However, `cargo-machete` will flag this as unused since it's only used through macro expansion.
+When writing async tests using `#[test_log::test(switchy_async::test)]`, you need `tokio` as a dev dependency for tests to work in non-simulator mode. However, `clippier machete` can flag this as unused since it's only used through macro expansion.
 
 Add to your `Cargo.toml`:
 
@@ -67,8 +67,12 @@ Add to your `Cargo.toml`:
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 test-log      = { workspace = true }
 tokio         = { workspace = true }
+```
 
-[package.metadata.cargo-machete]
+Preserve the false-positive suppression in the package's `clippier.toml`:
+
+```toml
+[machete]
 ignored = ["tokio"]
 ```
 

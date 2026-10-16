@@ -6,3 +6,6 @@ os = "macos"
 
 [[config]]
 os = "windows"
+
+[machete]
+ignored = ["moosicbox_env_utils"]

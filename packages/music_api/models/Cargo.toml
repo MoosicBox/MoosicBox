@@ -14,9 +14,6 @@ version     = "0.5.0"
 examples = false
 tests    = false
 
-[package.metadata.cargo-machete]
-ignored = ["strum"]
-
 [dependencies]
 moosicbox_json_utils   = { workspace = true, features = ["serde_json"] }
 moosicbox_music_models = { workspace = true }

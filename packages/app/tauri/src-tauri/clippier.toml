@@ -34,3 +34,6 @@ features = ["jack"]
 [[config]]
 os   = "windows"
 rust = { skip-features = ["asio"] }
+
+[machete]
+ignored = ["strum", "tauri-build"]

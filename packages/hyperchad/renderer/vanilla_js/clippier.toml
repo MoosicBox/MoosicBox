@@ -3,3 +3,6 @@ os = 'ubuntu'
 
 [[config.dependencies]]
 toolchain = 'pnpm'
+
+[machete]
+ignored = ["hyperchad_js_bundler", "hyperchad_renderer_vanilla_js_hash"]

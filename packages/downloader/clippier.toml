@@ -1,2 +1,6 @@
 [[ci-steps]]
 toolchain = "free_disk_space"
+
+[machete]
+# Test-only self dependency aligns raw-sql cfgs with the unified Database trait.
+ignored = ["moosicbox_downloader"]

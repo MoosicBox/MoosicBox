@@ -939,6 +939,35 @@ fn is_universal_excluded_dir(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn native_machete_discovery_is_manifest_based() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("Cargo.toml"), "[workspace]\n").unwrap();
+        let registry = crate::tools::ToolRegistry::new(
+            crate::tools::ToolsConfig::default(),
+            Some(root.path()),
+        )
+        .unwrap();
+        let plan =
+            crate::tools::plan_tools(&registry, &[crate::tools::ToolCapability::Lint]).unwrap();
+        if cfg!(feature = "machete") {
+            assert_eq!(
+                plan.tools
+                    .iter()
+                    .filter(|tool| tool.name == "clippier-machete")
+                    .count(),
+                1
+            );
+        } else {
+            assert!(
+                !plan
+                    .tools
+                    .iter()
+                    .any(|tool| tool.name == "clippier-machete")
+            );
+        }
+    }
+
+    #[test]
     fn binary_detection_handles_unicode_and_probe_boundaries() {
         for bytes in [b"".as_slice(), "hello 🦀\n".as_bytes(), b"\t\r\n"] {
             assert!(!super::binary_sample(bytes));

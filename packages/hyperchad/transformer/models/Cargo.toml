@@ -17,9 +17,6 @@ tests    = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
-[package.metadata.cargo-machete]
-ignored = ["proptest"]
-
 [dependencies]
 moosicbox_assert = { workspace = true }
 

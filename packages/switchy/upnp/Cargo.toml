@@ -16,9 +16,6 @@ examples = true
 [package.metadata.workspaces]
 group = "switchy"
 
-[package.metadata.cargo-machete]
-ignored = ["tokio"]
-
 [dependencies]
 moosicbox_assert = { workspace = true }
 

@@ -13,10 +13,6 @@ version     = "0.5.0"
 [package.metadata]
 examples = true
 
-[package.metadata.cargo-machete]
-# Test-only self dependency aligns raw-sql cfgs with the unified Database trait.
-ignored = ["moosicbox_downloader"]
-
 [dependencies]
 moosicbox_assert         = { workspace = true }
 moosicbox_config         = { workspace = true }

@@ -32,3 +32,6 @@ os = "macos"
 [[config.dependencies]]
 command  = "brew install berkeley-db@5 jack"
 features = ["jack"]
+
+[machete]
+ignored = ["strum", "tracy-client"]

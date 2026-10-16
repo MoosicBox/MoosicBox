@@ -3,3 +3,6 @@ toolchain = 'pnpm'
 
 [[config]]
 os = 'ubuntu'
+
+[machete]
+ignored = []

@@ -128,6 +128,13 @@ jobs:
               run: |
                   cargo install cargo-audit --locked
 
+            - name: Install native Clippier machete binary
+              shell: bash
+              run: |
+                  mkdir -p ~/.cargo/bin
+                  cp target/release/clippier ~/.cargo/bin/clippier
+                  chmod +x ~/.cargo/bin/clippier
+
             - name: Check security with AI
               id: ai
               uses: ./.github/actions/ai-checker
@@ -262,7 +269,7 @@ jobs:
                       - `cargo fmt`
                       - `cargo test`
                       - `cargo clippy --all-targets -- -D warnings`
-                      - `cargo-machete --with-metadata`
+                      - `clippier machete check`
                       - `prettier` and `taplo` formatting
 
                       ### 📝 Review Guidelines:

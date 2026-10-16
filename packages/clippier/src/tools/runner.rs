@@ -186,6 +186,9 @@ pub struct ToolRunner<'a> {
     registry: &'a ToolRegistry,
     /// Working directory to run tools in
     working_dir: Option<&'a Path>,
+    /// Explicit workspace/package scope for native dependency analysis.
+    #[cfg(feature = "machete")]
+    machete_options: Option<crate::machete::MacheteOptions>,
     /// Whether to stream output in real-time (only used in sequential mode)
     stream_output: bool,
     /// Whether to run tools in parallel
@@ -256,6 +259,8 @@ impl<'a> ToolRunner<'a> {
         Self {
             registry,
             working_dir: None,
+            #[cfg(feature = "machete")]
+            machete_options: None,
             stream_output: true,
             parallel: true,
             color_mode: ColorMode::Auto,
@@ -273,6 +278,15 @@ impl<'a> ToolRunner<'a> {
             overlap_warnings: Vec::new(),
             selection_fallback: false,
         }
+    }
+
+    /// Sets the workspace manifest and package filters for native dependency analysis.
+    /// The caller should select this tool only once per workspace scope.
+    #[cfg(feature = "machete")]
+    #[must_use]
+    pub fn with_machete_options(mut self, options: crate::machete::MacheteOptions) -> Self {
+        self.machete_options = Some(options);
+        self
     }
 
     /// Sets the working directory for tool execution
@@ -1247,6 +1261,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         let (mut parts, args_start_index) = match &tool.kind {
+            ToolKind::BuiltinMachete => return None,
             #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => return None,
             ToolKind::Cargo => (("cargo".to_string(), args.clone()), 0),
@@ -1313,6 +1328,7 @@ impl<'a> ToolRunner<'a> {
             }
             #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => "builtin".to_string(),
+            ToolKind::BuiltinMachete => "builtin".to_string(),
             ToolKind::Cargo => "cargo".to_string(),
         }
     }
@@ -1502,6 +1518,7 @@ impl<'a> ToolRunner<'a> {
         let (program, mut final_args) = match &tool.kind {
             #[cfg(feature = "md")]
             ToolKind::BuiltinMarkdown => unreachable!("remark is not a bundled tool"),
+            ToolKind::BuiltinMachete => unreachable!("remark is not a bundled tool"),
             ToolKind::Cargo => ("cargo".to_string(), args.clone()),
             ToolKind::Binary => {
                 let binary = tool
@@ -2118,6 +2135,86 @@ impl<'a> ToolRunner<'a> {
         }
     }
 
+    #[cfg(feature = "machete")]
+    fn cancelled_machete_result(tool: &Tool, start: Instant) -> ToolResult {
+        ToolResult::failure(
+            tool.name.clone(),
+            tool.display_name.clone(),
+            Some(130),
+            String::new(),
+            "Dependency analysis cancelled".to_string(),
+            start.elapsed(),
+        )
+    }
+
+    #[cfg(feature = "machete")]
+    fn run_bundled_machete(
+        &self,
+        tool: &Tool,
+        start: Instant,
+        cancelled: &dyn Fn() -> bool,
+    ) -> ToolResult {
+        use std::fmt::Write as _;
+
+        if cancelled() {
+            return Self::cancelled_machete_result(tool, start);
+        }
+        let mut options = self.machete_options.clone().unwrap_or_default();
+        if options.manifest_path.is_none() {
+            options.manifest_path = Some(self.working_dir_path().join("Cargo.toml"));
+        }
+        let result = crate::machete::analyze_machete(&options);
+        if cancelled() {
+            return Self::cancelled_machete_result(tool, start);
+        }
+        match result {
+            Ok(report) => {
+                let success = report.complete && !report.has_unused();
+                let mut stdout = String::new();
+                for dependency in &report.dependencies {
+                    if matches!(
+                        dependency.status,
+                        crate::machete::DependencyStatus::Unused
+                            | crate::machete::DependencyStatus::Incomplete
+                    ) {
+                        let _ = writeln!(
+                            stdout,
+                            "{}: {} ({:?}, {:?}) at {}: {}",
+                            dependency.package,
+                            dependency.dependency,
+                            dependency.kind,
+                            dependency.status,
+                            dependency.manifest_path.display(),
+                            dependency.reason,
+                        );
+                    }
+                }
+                if success {
+                    stdout.push_str("No unused dependencies found.\n");
+                } else if !report.complete {
+                    stdout.push_str("Dependency analysis is incomplete.\n");
+                }
+                ToolResult {
+                    tool_name: tool.name.clone(),
+                    display_name: tool.display_name.clone(),
+                    success,
+                    exit_code: Some(i32::from(!success)),
+                    stdout,
+                    stderr: report.diagnostics.join("\n"),
+                    duration: start.elapsed(),
+                }
+            }
+            Err(error) => ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                Some(1),
+                String::new(),
+                error.to_string(),
+                start.elapsed(),
+            ),
+        }
+    }
+
     fn run_special_adapter(
         &self,
         tool: &Tool,
@@ -2127,6 +2224,20 @@ impl<'a> ToolRunner<'a> {
     ) -> Option<ToolResult> {
         let start_time = Instant::now();
         let entry = tool_catalog_entry(&tool.name)?;
+        if tool.kind == ToolKind::BuiltinMachete {
+            started();
+            #[cfg(feature = "machete")]
+            return Some(self.run_bundled_machete(tool, start_time, cancelled));
+            #[cfg(not(feature = "machete"))]
+            return Some(ToolResult::failure(
+                tool.name.clone(),
+                tool.display_name.clone(),
+                Some(1),
+                String::new(),
+                "Native machete analysis requires the 'machete' feature".to_string(),
+                start_time.elapsed(),
+            ));
+        }
         #[cfg(feature = "md")]
         if tool.kind == ToolKind::BuiltinMarkdown {
             started();
@@ -2400,6 +2511,117 @@ pub fn results_to_json(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "machete")]
+    #[test]
+    fn bundled_machete_attributes_findings_and_preserves_manifests() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("src")).unwrap();
+        let manifest = "[package]\nname = \"adapter_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[dependencies]\nunused_dep = \"1.0.0\"\n";
+        std::fs::write(root.path().join("Cargo.toml"), manifest).unwrap();
+        std::fs::write(root.path().join("src/lib.rs"), "pub fn example() {}\n").unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        let tool = registry.get("clippier-machete").unwrap();
+        let runner = ToolRunner::new(&registry).with_working_dir(root.path());
+        assert!(
+            runner
+                .build_command_parts(tool, true, Some(root.path()))
+                .is_none()
+        );
+        let result = runner.run_single_tool(tool, true);
+        assert!(!result.success, "{result:?}");
+        assert!(
+            result.stdout.contains("adapter_fixture: unused_dep"),
+            "{result:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("Cargo.toml")).unwrap(),
+            manifest
+        );
+        assert!(!root.path().join("Cargo.lock").exists());
+        let result = runner
+            .with_machete_options(crate::machete::MacheteOptions {
+                exclude: vec!["adapter_fixture".to_string()],
+                ..Default::default()
+            })
+            .run_single_tool(tool, true);
+        assert!(result.success, "{result:?}");
+    }
+
+    #[cfg(feature = "machete")]
+    #[test]
+    fn bundled_machete_workspace_runs_once_with_package_filters() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"selected\", \"other\"]\nresolver = \"2\"\n",
+        )
+        .unwrap();
+        for package in ["selected", "other"] {
+            let directory = root.path().join(package);
+            std::fs::create_dir_all(directory.join("src")).unwrap();
+            std::fs::write(directory.join("Cargo.toml"), format!(
+                "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[dependencies]\nunused_dep = \"1.0.0\"\n",
+            )).unwrap();
+            std::fs::write(directory.join("src/lib.rs"), "pub fn example() {}\n").unwrap();
+        }
+        let config = ToolsConfig {
+            skip: crate::tools::TOOL_CATALOG
+                .iter()
+                .filter(|entry| entry.name != "clippier-machete")
+                .map(|entry| entry.name.to_string())
+                .collect(),
+            ..Default::default()
+        };
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let plan = crate::tools::plan_tools(&registry, &[ToolCapability::Lint]).unwrap();
+        let runner = ToolRunner::new(&registry)
+            .with_working_dir(root.path())
+            .with_tool_plan(&plan)
+            .with_stream_output(false)
+            .with_machete_options(crate::machete::MacheteOptions {
+                packages: vec!["selected".to_string()],
+                ..Default::default()
+            });
+        let results = runner
+            .run_specific(&["clippier-machete"], &["selected", "other"], true)
+            .unwrap();
+        assert_eq!(results.results.len(), 1);
+        assert_eq!(results.failure_count, 1);
+        let result = &results.results[0];
+        assert_eq!(result.tool_name, "clippier-machete");
+        assert_eq!(
+            result.stdout.matches("selected: unused_dep").count(),
+            1,
+            "{result:?}"
+        );
+        assert!(!result.stdout.contains("other: unused_dep"), "{result:?}");
+        assert_eq!(
+            results
+                .execution_modes
+                .get("clippier-machete")
+                .map(String::as_str),
+            Some("builtin")
+        );
+        assert!(!root.path().join("Cargo.lock").exists());
+    }
+
+    #[test]
+    fn bundled_machete_never_constructs_an_external_command() {
+        let root = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(ToolsConfig::default(), Some(root.path())).unwrap();
+        let tool = tool_catalog_entry("clippier-machete").unwrap().tool();
+        let runner = ToolRunner::new(&registry).with_working_dir(root.path());
+        assert!(
+            runner
+                .build_command_parts(&tool, true, Some(root.path()))
+                .is_none()
+        );
+        let result = runner.run_single_tool(&tool, true);
+        assert!(!result.success);
+        #[cfg(not(feature = "machete"))]
+        assert!(result.stderr.contains("requires the 'machete' feature"));
+    }
+
     use super::*;
     use crate::tools::{ToolCapability, ToolsConfig};
     #[cfg(feature = "tools-tui")]

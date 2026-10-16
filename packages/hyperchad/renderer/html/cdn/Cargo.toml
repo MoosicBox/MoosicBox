@@ -16,9 +16,6 @@ examples = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
-[package.metadata.cargo-machete]
-ignored = ["tokio"]
-
 [dependencies]
 hyperchad_renderer = { workspace = true }
 hyperchad_router   = { workspace = true, features = ["static-routes"] }

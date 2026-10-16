@@ -16,9 +16,6 @@ examples = true
 [package.metadata.workspaces]
 group = "switchy"
 
-[package.metadata.cargo-machete]
-ignored = ["tokio"]
-
 [dependencies]
 switchy_async               = { workspace = true, optional = true }
 switchy_async_macros        = { workspace = true, optional = true }

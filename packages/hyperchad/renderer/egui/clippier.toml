@@ -5,3 +5,6 @@ dependencies = ["hyperchad_renderer", "hyperchad_transformer"]
 feature      = "profiling-tracing"
 reason       = "egui uses puffin internally; incompatible with tracing profiling backend"
 type         = "allow-missing"
+
+[machete]
+ignored = ["hyperchad_color", "image", "tracy-client", "wgpu"]

@@ -16,9 +16,6 @@ examples = true
 [package.metadata.workspaces]
 group = "hyperchad"
 
-[package.metadata.cargo-machete]
-ignored = []
-
 [dependencies]
 log         = { workspace = true }
 switchy_env = { workspace = true, features = ["std"] }

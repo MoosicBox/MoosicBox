@@ -17,9 +17,6 @@ examples = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
-[package.metadata.cargo-machete]
-ignored = ["hyperchad_js_bundler", "hyperchad_renderer_vanilla_js_hash"]
-
 [build-dependencies]
 hyperchad_js_bundler               = { workspace = true, features = ["swc"] }
 hyperchad_renderer_vanilla_js_hash = { workspace = true }

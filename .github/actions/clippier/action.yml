@@ -752,6 +752,9 @@ runs:
               CLIPPIER_FEATURES: ${{ inputs.clippier-features }}
           run: |
               features="$CLIPPIER_FEATURES"
+              if [[ ",$features," != *,machete,* ]]; then
+                features="${features:+$features,}machete"
+              fi
               if [[ "$COMMAND" == release-* ]] && [[ ",$features," != *,release,* ]]; then
                 features="${features:+$features,}release"
               fi

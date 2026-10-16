@@ -1,0 +1,2 @@
+[machete]
+ignored = ["profiling", "strum"]

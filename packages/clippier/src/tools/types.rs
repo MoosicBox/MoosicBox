@@ -79,6 +79,8 @@ pub struct OverlapWarningSuppressRule {
 /// The kind of tool (how it's invoked)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolKind {
+    /// Dependency analysis provided by the bundled library; never an executable.
+    BuiltinMachete,
     /// Markdown formatting provided by the bundled library.
     #[cfg(feature = "md")]
     BuiltinMarkdown,

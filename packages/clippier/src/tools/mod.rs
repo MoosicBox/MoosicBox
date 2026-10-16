@@ -217,7 +217,7 @@ fn run_tool_probe_command(
             command.arg(&tool.binary);
             command
         }
-        ToolKind::Cargo => return None,
+        ToolKind::BuiltinMachete | ToolKind::Cargo => return None,
         #[cfg(feature = "md")]
         ToolKind::BuiltinMarkdown => return None,
     };

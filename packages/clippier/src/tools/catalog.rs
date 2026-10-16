@@ -77,6 +77,8 @@ pub enum ToolAdapter {
     Rustfmt,
     /// Workspace-local Clippier Markdown delegation.
     ClippierMarkdown,
+    /// In-process workspace dependency analysis.
+    ClippierMachete,
     /// Prettier ignore-path behavior.
     Prettier,
     /// Biome configuration and VCS flags.
@@ -198,6 +200,8 @@ pub struct ToolCatalogEntry {
 /// Declarative executable kind used by catalog entries.
 #[derive(Debug, Clone, Copy)]
 pub enum ToolKindSpec {
+    /// Bundled dependency analysis, unavailable without the machete feature.
+    BuiltinMachete,
     /// Invoke through Cargo.
     Cargo,
     /// Invoke a standalone binary.
@@ -213,6 +217,7 @@ impl ToolCatalogEntry {
             self.display_name,
             self.binary,
             match self.kind {
+                ToolKindSpec::BuiltinMachete => ToolKind::BuiltinMachete,
                 ToolKindSpec::Cargo => ToolKind::Cargo,
                 ToolKindSpec::Binary => ToolKind::Binary,
             },
@@ -402,6 +407,24 @@ macro_rules! entry {
 /// All built-in integrations. This is the canonical source for registration,
 /// discovery signals, capabilities, extensions, and ownership priority.
 pub const TOOL_CATALOG: &[ToolCatalogEntry] = &[
+    ToolCatalogEntry {
+        native_adapter: ToolAdapter::ClippierMachete,
+        ..entry!(
+            "clippier-machete",
+            "Clippier Machete",
+            "clippier-machete",
+            BuiltinMachete,
+            LINT,
+            NONE,
+            NONE,
+            &["Cargo.toml"],
+            NONE,
+            NONE,
+            NONE,
+            &["rs", "toml"],
+            100
+        )
+    },
     ToolCatalogEntry {
         file_arguments: FileArguments::None,
         native_adapter: ToolAdapter::Rustfmt,

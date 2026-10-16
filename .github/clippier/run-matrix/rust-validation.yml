@@ -34,6 +34,6 @@ format:
     strategy: "combined"
 
 machete:
-    commands: cd "$GITHUB_WORKSPACE" && cargo machete --with-metadata "{{matrix.package.path}}"
-    label: "Cargo machete"
+    commands: cd "$GITHUB_WORKSPACE" && ~/.cargo/bin/clippier machete check --manifest-path "{{matrix.package.path}}/Cargo.toml"
+    label: "Clippier machete"
     strategy: "combined"

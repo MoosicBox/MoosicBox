@@ -16,9 +16,6 @@ examples = false
 [package.metadata.workspaces]
 group = "hyperchad"
 
-[package.metadata.cargo-machete]
-ignored = ["hyperchad_color", "image", "tracy-client", "wgpu"]
-
 [dependencies]
 hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
 hyperchad_color = { workspace = true, features = ["egui"] }

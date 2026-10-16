@@ -9,8 +9,8 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    build-cargo-machete:
-        name: Build cargo-machete
+    build-clippier-machete:
+        name: Build Clippier machete
         strategy:
             fail-fast: true
             matrix:
@@ -19,33 +19,25 @@ jobs:
         steps:
             - uses: dtolnay/rust-toolchain@stable
             - uses: actions/checkout@v6
-            - name: Setup cargo-machete
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  github-token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  repo: https://github.com/BSteffaniak/cargo-machete
-                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
-                  shell: bash
-                  output-path: ~/.cargo/bin/cargo-machete${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-                  artifact-name: cargo-machete-${{ matrix.os }}-binary
-                  cache-key-prefix: cargo-machete
-                  make-executable: true
-                  verify-command: --version
+            - name: Build native Clippier machete
+              shell: bash
+              run: cargo install --path packages/clippier --features git-diff,machete --force
+
             - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'macos-latest' }}
               with:
-                  name: cargo-machete-macos
-                  path: ~/.cargo/bin/cargo-machete
+                  name: clippier-machete-macos
+                  path: ~/.cargo/bin/clippier
             - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'ubuntu-latest' }}
               with:
-                  name: cargo-machete-ubuntu
-                  path: ~/.cargo/bin/cargo-machete
+                  name: clippier-machete-ubuntu
+                  path: ~/.cargo/bin/clippier
             - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'windows-latest' }}
               with:
-                  name: cargo-machete.exe
-                  path: ~/.cargo/bin/cargo-machete.exe
+                  name: clippier-machete.exe
+                  path: ~/.cargo/bin/clippier.exe
 
     upgrade-dependencies:
         name: Upgrade dependencies (compatible and incompatible)
@@ -172,7 +164,7 @@ jobs:
                   git-compare-branch: master
                   os-suffix: -latest
                   jq-filter: |
-                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli" and . != "cargo-machete" and . != "machete")) | join("\n")))
+                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli")) | join("\n")))
                       | (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
                       | (group_by([.name, .os]) | map({key: "\(.[0].name)|\(.[0].os)", value: length}) | from_entries) as $osCounts
                       | to_entries
@@ -196,7 +188,7 @@ jobs:
     test-compatible:
         name: 👶 ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
         runs-on: ${{ matrix.package.os }}
-        needs: [upgrade-dependencies, validate-compatible, build-cargo-machete]
+        needs: [upgrade-dependencies, validate-compatible, build-clippier-machete]
         if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
         strategy:
             fail-fast: false
@@ -224,15 +216,15 @@ jobs:
                   package-json: ${{ toJson(matrix.package) }}
                   skip-checkout: "true"
 
-            - name: Download cargo-machete
+            - name: Download Clippier machete
               uses: actions/download-artifact@v8
               with:
-                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
+                  name: ${{ matrix.package.os == 'windows-latest' && 'clippier-machete.exe' || matrix.package.os == 'macos-latest' && 'clippier-machete-macos' || 'clippier-machete-ubuntu' }}
                   path: ~/.cargo/bin
 
-            - name: Make cargo-machete executable
+            - name: Make Clippier machete executable
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
+              run: chmod +x ~/.cargo/bin/clippier${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
             - name: Validate ${{ matrix.package.name }}
               uses: ./.github/actions/clippier
@@ -311,7 +303,7 @@ jobs:
                   git-compare-branch: master
                   os-suffix: -latest
                   jq-filter: |
-                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli" and . != "cargo-machete" and . != "machete")) | join("\n")))
+                      map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli")) | join("\n")))
                       | (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
                       | (group_by([.name, .os]) | map({key: "\(.[0].name)|\(.[0].os)", value: length}) | from_entries) as $osCounts
                       | to_entries
@@ -336,7 +328,7 @@ jobs:
         name: 👴 ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
         runs-on: ${{ matrix.package.os }}
         needs:
-            [upgrade-dependencies, validate-incompatible, build-cargo-machete]
+            [upgrade-dependencies, validate-incompatible, build-clippier-machete]
         if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' && needs.validate-incompatible.outputs.matrix != '[]' }}
         strategy:
             fail-fast: false
@@ -364,15 +356,15 @@ jobs:
                   package-json: ${{ toJson(matrix.package) }}
                   skip-checkout: "true"
 
-            - name: Download cargo-machete
+            - name: Download Clippier machete
               uses: actions/download-artifact@v8
               with:
-                  name: ${{ matrix.package.os == 'windows-latest' && 'cargo-machete.exe' || matrix.package.os == 'macos-latest' && 'cargo-machete-macos' || 'cargo-machete-ubuntu' }}
+                  name: ${{ matrix.package.os == 'windows-latest' && 'clippier-machete.exe' || matrix.package.os == 'macos-latest' && 'clippier-machete-macos' || 'clippier-machete-ubuntu' }}
                   path: ~/.cargo/bin
 
-            - name: Make cargo-machete executable
+            - name: Make Clippier machete executable
               shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-machete${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
+              run: chmod +x ~/.cargo/bin/clippier${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
 
             - name: Validate ${{ matrix.package.name }}
               uses: ./.github/actions/clippier

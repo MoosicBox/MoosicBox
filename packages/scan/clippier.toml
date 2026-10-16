@@ -1,0 +1,2 @@
+[machete]
+ignored = ["strum", "switchy_database_connection"]

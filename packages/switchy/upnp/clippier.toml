@@ -8,3 +8,6 @@ features = ["default", "player"]
 [[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install libpulse-dev"
 features = ["default", "player"]
+
+[machete]
+ignored = ["tokio"]

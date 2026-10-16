@@ -1,3 +1,6 @@
 [[config]]
 os   = "ubuntu"
 rust = { nightly = true }
+
+[machete]
+ignored = ["rustc_version"]

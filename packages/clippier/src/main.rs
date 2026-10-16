@@ -42,6 +42,9 @@ use clippier::tools::build_tools_config;
 #[cfg(feature = "format")]
 use clippier::tools::{FormatScope, apply_format_cli_overrides};
 
+#[cfg(feature = "machete")]
+mod machete_cli;
+
 #[cfg(feature = "upgrade")]
 mod upgrade_cli {
     use std::{
@@ -999,6 +1002,9 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Analyze unused Cargo dependencies and preview or apply removals
+    #[cfg(feature = "machete")]
+    Machete(machete_cli::MacheteCli),
     /// Upgrade dependency requirements and the lockfile (plan first, then confirm)
     #[cfg(feature = "upgrade")]
     Upgrade(upgrade_cli::UpgradeCli),
@@ -1674,6 +1680,14 @@ async fn run() -> Result<(), BoxError> {
     let args = Args::parse();
 
     let result = match args.cmd {
+        #[cfg(feature = "machete")]
+        Commands::Machete(command) => {
+            let exit_code = machete_cli::run(&command)?;
+            if exit_code != 0 {
+                std::process::exit(i32::from(exit_code));
+            }
+            return Ok(());
+        }
         #[cfg(feature = "upgrade")]
         Commands::Upgrade(command) => {
             let exit_code = upgrade_cli::run(&command).await?;

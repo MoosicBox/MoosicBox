@@ -17,9 +17,6 @@ tests    = false
 [package.metadata.workspaces]
 independent = true
 
-[package.metadata.cargo-machete]
-ignored-dirs = ["test-resources", "tests/transforms/fixtures"]
-
 [[bin]]
 name              = "clippier"
 path              = "src/main.rs"
@@ -111,6 +108,7 @@ default = [
     "check",
     "format",
     "git-diff",
+    "machete",
     "md",
     "node-workspace",
     "publish",
@@ -121,7 +119,8 @@ default = [
     "versioning",
 ]
 
-md = ["dep:clippier_md"]
+machete = ["dep:toml_edit"]
+md      = ["dep:clippier_md"]
 
 fail-on-warnings = [
     "clippier_md?/fail-on-warnings",

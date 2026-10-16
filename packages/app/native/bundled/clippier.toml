@@ -26,3 +26,6 @@ command = '''
       libgtk-3-dev \
       libsoup-3.0-dev
 '''
+
+[machete]
+ignored = ["moosicbox_app_models", "strum", "thiserror"]

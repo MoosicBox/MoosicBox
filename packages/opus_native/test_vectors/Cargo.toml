@@ -14,9 +14,6 @@ version     = { workspace = true }
 examples = false
 tests    = false
 
-[package.metadata.cargo-machete]
-ignored = ["moosicbox_opus_native_libopus"]
-
 [dependencies]
 serde_json = { workspace = true }
 

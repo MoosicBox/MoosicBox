@@ -1,2 +1,5 @@
 [[ci-steps]]
 toolchain = "free_disk_space"
+
+[machete]
+ignored = ["tokio"]

@@ -20,9 +20,6 @@ name              = "moosicbox_server"
 path              = "src/main.rs"
 required-features = []
 
-[package.metadata.cargo-machete]
-ignored = ["strum", "tracy-client"]
-
 [package.metadata.cargo-udeps.ignore]
 normal = ["moosicbox_schema", "tracy-client"]
 

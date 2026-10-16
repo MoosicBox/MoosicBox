@@ -563,8 +563,8 @@ Create `.github/ai-verification.yml`:
 ```yaml
 # Setup steps (run once)
 setup:
-    - name: Install cargo-machete
-      run: cargo install cargo-machete || true
+    - name: Build native Clippier machete
+      run: cargo install --path packages/clippier --features machete --force
 
 # Verification steps (run before each commit)
 verification:

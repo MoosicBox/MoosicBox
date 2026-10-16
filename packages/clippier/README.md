@@ -18,6 +18,56 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
 - **Multi-Workspace Support**: Native support for Cargo and Node.js (npm, pnpm, bun) monorepos
 
+## Native unused-dependency analysis
+
+The default-enabled `machete` feature provides native dependency analysis; no
+`cargo-machete` executable or fork is needed. Builds using
+`--no-default-features` must opt in with `--features machete`.
+
+```bash
+clippier machete                         # Analyze without changing files
+clippier machete check                   # Read-only CI check; fail on findings
+clippier machete plan --diff --output json # Preview proposed changes; read-only
+clippier machete apply --yes             # Explicitly apply reviewed changes
+```
+
+All forms accept `--manifest-path` and `--config`. Analysis, checks, and plans
+never modify manifests or invoke Cargo by default. `apply` displays a plan and
+asks for confirmation; `apply --yes` explicitly accepts it non-interactively.
+Cargo.lock is preserved. Incomplete or stale evidence prevents application.
+Review a plan before applying it.
+
+Normal and build dependencies are checked by default, matching cargo-machete;
+dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest
+selects that member by default; use a workspace root to scan the workspace.
+`.gitignore` and `.ignore` are respected; `--no-ignore` includes those files
+without disabling explicit `ignored-dirs` settings.
+
+For dependencies whose library crate name differs from their package name,
+local path dependencies are resolved natively. `--with-metadata` explicitly runs
+`cargo metadata --format-version 1 --offline --locked` for resolved library names;
+it requires a current lockfile and cached dependencies. This is opt-in, not part
+of ordinary read-only planning. It does not run builds or expand macros.
+
+`clippier check --tools clippier-machete` uses the same native analyzer once per
+selected scope, without finding, installing, or spawning cargo-machete.
+
+Configuration belongs only in `clippier.toml`, not Cargo metadata:
+
+```toml
+[machete]
+ignored = ["tokio"]
+ignored-dirs = ["test-resources"]
+```
+
+These are example suppressions, not recommended defaults. Preserve existing
+accepted false-positive suppressions when migrating. Ancestor/root defaults and
+descendant configuration layers accumulate; ignored directories are relative to
+the directory declaring their `clippier.toml`. Move each Cargo metadata
+`ignored`/`ignored-dirs` list into `[machete]` in the same directory's
+`clippier.toml`, then remove the old metadata table. Native analysis does not read
+legacy `cargo-machete` metadata.
+
 ## Ecosystem coverage
 
 The catalog includes Oxfmt, Oxlint, isort, Pyright, Bandit, RuboCop,

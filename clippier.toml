@@ -10,9 +10,6 @@ feature-policy = "explicit-only"
 
 # Common toolchains needed for full workspace CI
 [[dependencies]]
-toolchain = "cargo-machete"
-
-[[dependencies]]
 toolchain = "taplo"
 
 [runner]
@@ -45,3 +42,11 @@ indentation = "preserve"
 
 [tools.clippier-md.files]
 exclude = ["/packages/clippier/md/tests/parity/fixtures/**"]
+
+[machete]
+ignored = [
+    "log",
+    "moosicbox_assert",
+    "moosicbox_env_utils",
+    "moosicbox_logging",
+]

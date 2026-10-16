@@ -2,3 +2,6 @@ git-submodules = true
 
 [[config]]
 os = "ubuntu"
+
+[machete]
+ignored = ["cmake"]
