@@ -918,7 +918,23 @@ counts, and potentially blocked dependency checks. This checks every package, bu
 all errors inside one package: Cargo's resolver stops at its first error in each dependency graph.
 Fixing a failed dependency can therefore expose further issues in dependent packages. Workspace
 metadata or invalid/cyclic publish plans that prevent constructing the queue remain fatal.
-After a package fails, Clippier also runs **supplemental dependency diagnostics**
+Preflight first attempts one native `cargo package --workspace --no-verify` operation over the
+pending queue. This stages the queue once and packages shared pending dependencies once, rather
+than repeating every dependency closure. Cargo generates a separate lockfile for each archive;
+this is not a feature-unified workspace build. Every archive lockfile is checked before crediting
+batch success. If a lockfile is missing/unsupported or references a pending package outside the
+original root's pending dependency closure, the batch is not credited and Clippier falls back to
+fresh independent closure checks. Failed batches likewise fall back, so independent failures are
+still collected without treating partially produced archives as successful checks.
+
+With `--verify`, packaging/resolution must pass before independent compilation checks begin.
+This gives resolver failures earlier, but deliberately retains the original per-root verification
+contexts: batch success is not proof of identical compiler dependency selection. Verification can
+therefore still repeat closure staging/packaging. `--fail-fast` and single-root queues retain the
+original direct path; fail-fast preserves the first packaging or compilation failure. Purity
+comparison remains separate because its lockfile/version-normalization policy differs.
+
+After a package fails an independent check, Clippier runs **supplemental dependency diagnostics**
 (unless `--fail-fast` is set). It resolves each normal/build dependency in isolation, including
 optional and target-specific entries, and preserves aliases, source settings, explicit features,
 and relevant default-feature forwarding. Pending workspace dependencies use the same native

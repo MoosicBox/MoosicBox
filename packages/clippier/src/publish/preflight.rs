@@ -5,7 +5,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use super::{
@@ -13,7 +13,11 @@ use super::{
     read_toml, run_streaming_command, sanitize_manifest,
 };
 
+mod batch;
 mod diagnostics;
+
+#[cfg(test)]
+mod reuse_tests;
 
 #[cfg(test)]
 mod tests;
@@ -211,6 +215,62 @@ pub(super) fn validate_with_failures(
     config: &PublishConfig,
     failures: Vec<String>,
 ) -> Result<(), BoxError> {
+    if pending.is_empty() {
+        return if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(failures.join("\n\n").into())
+        };
+    }
+    if config.fail_fast || pending.len() == 1 {
+        return validate_independent(workspace_root, packages, pending, config, failures);
+    }
+    let packaging_config = PublishConfig {
+        verify: false,
+        ..config.clone()
+    };
+    // Keep fail-fast attribution and ordering unchanged. Otherwise Cargo's native
+    // batch prepares each archive once; failed/unsafe batches get fresh per-root
+    // resolution, never partially credited artifacts or a synthetic root failure.
+    eprintln!(
+        "Preflight packaging batch: {} pending packages (no compilation)",
+        pending.len()
+    );
+    let packaging_passed =
+        match batch::validate(workspace_root, packages, pending, &packaging_config) {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!(
+                    "Preflight batch not credited: {error}; falling back to independent checks"
+                );
+                false
+            }
+        };
+    if !packaging_passed {
+        validate_independent(
+            workspace_root,
+            packages,
+            pending,
+            &packaging_config,
+            failures,
+        )?;
+    } else if !failures.is_empty() {
+        return collect_package_checks(packages, pending, &packaging_config, failures, |_| Ok(()));
+    }
+    if config.verify {
+        eprintln!("Packaging/resolution complete; starting independent compilation verification");
+        validate_independent(workspace_root, packages, pending, config, Vec::new())?;
+    }
+    Ok(())
+}
+
+fn validate_independent(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &[String],
+    config: &PublishConfig,
+    failures: Vec<String>,
+) -> Result<(), BoxError> {
     let mut diagnostics = diagnostics::Diagnostics::default();
     // Own only a run-scoped cache. Cargo's build directory can also contain its
     // extracted package work area; sources/manifests/lockfiles are still freshly
@@ -333,9 +393,18 @@ fn validate_package(
     config: &PublishConfig,
     verification_cache: Option<&Path>,
 ) -> Result<(), BoxError> {
+    let started = Instant::now();
     let staged = prepare_workspace(workspace_root, packages, pending)?;
+    let staged_in = started.elapsed();
     let command = package_command_with_cache(&staged, config, verification_cache);
     let output = run_streaming_command(command)?;
+    eprintln!(
+        "Preflight independent check: {} package attempts; staging {:.2}s, Cargo {:.2}s; compilation {}",
+        pending.len(),
+        staged_in.as_secs_f64(),
+        started.elapsed().saturating_sub(staged_in).as_secs_f64(),
+        if config.verify { "enabled" } else { "disabled" }
+    );
     if !output.status.success() {
         return Err(format!(
             "Cargo packaging/resolution failed with status {}:\n{}",

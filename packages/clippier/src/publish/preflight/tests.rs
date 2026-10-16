@@ -1181,3 +1181,147 @@ fn verification_cache_does_not_mask_changed_feature_configuration() {
         }
     }
 }
+
+#[test]
+fn native_batch_failure_falls_back_without_hiding_independent_errors() {
+    let fixture = Fixture::new(&[
+        ("clippier-fixture-first", ""),
+        ("clippier-fixture-second", ""),
+        ("clippier-fixture-healthy", ""),
+    ]);
+    for name in ["clippier-fixture-first", "clippier-fixture-second"] {
+        fs::write(
+            fixture.packages[name]
+                .package_path
+                .as_ref()
+                .unwrap()
+                .join("Cargo.toml"),
+            format!("[package]\nname = \"{name}\"\nversion = \"not-a-version\"\n"),
+        )
+        .unwrap();
+    }
+    let error = validate(
+        fixture.directory.path(),
+        &fixture.packages,
+        &[
+            "clippier-fixture-first".into(),
+            "clippier-fixture-second".into(),
+            "clippier-fixture-healthy".into(),
+        ],
+        &PublishConfig::default(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("clippier-fixture-first"), "{error}");
+    assert!(error.contains("clippier-fixture-second"), "{error}");
+    assert!(
+        error.contains("Packaging validated: 1; failed/blocked: 2; not checked: 0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn successful_batch_does_not_hide_prior_preflight_failures() {
+    let fixture = Fixture::new(&[
+        ("clippier-fixture-first", ""),
+        ("clippier-fixture-second", ""),
+    ]);
+    let pending = fixture.packages.keys().cloned().collect::<Vec<_>>();
+    let error = validate_with_failures(
+        fixture.directory.path(),
+        &fixture.packages,
+        &pending,
+        &PublishConfig::default(),
+        vec!["prior manifest failure".into()],
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("prior manifest failure"), "{error}");
+    assert!(
+        error.contains("Packaging validated: 2; failed/blocked: 0; not checked: 0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn successful_packaging_batch_does_not_replace_independent_verification() {
+    let fixture = Fixture::new(&[
+        ("clippier-fixture-first", ""),
+        ("clippier-fixture-second", ""),
+    ]);
+    fs::write(
+        fixture.packages["clippier-fixture-second"]
+            .package_path
+            .as_ref()
+            .unwrap()
+            .join("src/lib.rs"),
+        "compile_error!(\"independent verification required\");",
+    )
+    .unwrap();
+    let error = validate(
+        fixture.directory.path(),
+        &fixture.packages,
+        &[
+            "clippier-fixture-first".into(),
+            "clippier-fixture-second".into(),
+        ],
+        &PublishConfig {
+            verify: true,
+            ..PublishConfig::default()
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        error.contains("independent verification required"),
+        "{error}"
+    );
+    assert!(
+        error.contains("Packaging validated: 1; failed/blocked: 1; not checked: 0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn fail_fast_verification_stops_before_later_packaging_error() {
+    let fixture = Fixture::new(&[
+        ("clippier-fixture-first", ""),
+        ("clippier-fixture-second", ""),
+    ]);
+    fs::write(
+        fixture.packages["clippier-fixture-first"]
+            .package_path
+            .as_ref()
+            .unwrap()
+            .join("src/lib.rs"),
+        "compile_error!(\"first compilation failure\");",
+    )
+    .unwrap();
+    fs::write(
+        fixture.packages["clippier-fixture-second"]
+            .package_path
+            .as_ref()
+            .unwrap()
+            .join("Cargo.toml"),
+        "invalid manifest",
+    )
+    .unwrap();
+    let error = validate(
+        fixture.directory.path(),
+        &fixture.packages,
+        &[
+            "clippier-fixture-first".into(),
+            "clippier-fixture-second".into(),
+        ],
+        &PublishConfig {
+            verify: true,
+            fail_fast: true,
+            ..PublishConfig::default()
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("first compilation failure"), "{error}");
+    assert!(!error.contains("invalid manifest"), "{error}");
+    assert!(error.contains("not checked: 1"), "{error}");
+}
