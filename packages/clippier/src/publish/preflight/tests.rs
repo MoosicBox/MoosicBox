@@ -8,15 +8,15 @@ use sha2::{Digest as _, Sha256};
 
 static CARGO_PACKAGING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-struct Fixture {
+pub(super) struct Fixture {
     // Cargo's temporary registry is shared by invocations using the same Cargo home.
     _packaging: std::sync::MutexGuard<'static, ()>,
-    directory: tempfile::TempDir,
-    packages: BTreeMap<String, PublishPackageInfo>,
+    pub(super) directory: tempfile::TempDir,
+    pub(super) packages: BTreeMap<String, PublishPackageInfo>,
 }
 
 impl Fixture {
-    fn new(specs: &[(&str, &str)]) -> Self {
+    pub(super) fn new(specs: &[(&str, &str)]) -> Self {
         let packaging = CARGO_PACKAGING
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -67,12 +67,12 @@ fn output(command: &mut Command) -> std::process::Output {
 
 /// A real, isolated Cargo registry, including downloadable .crate archives.
 /// Tests never query crates.io and never configure a publish/upload endpoint.
-struct Registry {
-    directory: tempfile::TempDir,
+pub(super) struct Registry {
+    pub(super) directory: tempfile::TempDir,
 }
 
 impl Registry {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let registry = Self {
             directory: tempfile::tempdir().unwrap(),
         };
@@ -85,7 +85,13 @@ impl Registry {
         registry
     }
 
-    fn add(&self, name: &str, version: &str, dependency: Option<(&str, &str)>, yanked: bool) {
+    pub(super) fn add(
+        &self,
+        name: &str,
+        version: &str,
+        dependency: Option<(&str, &str)>,
+        yanked: bool,
+    ) {
         let mut archive = tar::Builder::new(flate2::write::GzEncoder::new(
             Vec::new(),
             flate2::Compression::default(),
@@ -154,7 +160,7 @@ impl Registry {
         ]));
     }
 
-    fn configure(&self, command: &mut Command) {
+    pub(super) fn configure(&self, command: &mut Command) {
         command
             .env("CARGO_HOME", self.directory.path().join("home"))
             .arg("--config")

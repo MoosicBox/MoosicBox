@@ -921,6 +921,27 @@ counts, and potentially blocked dependency checks. This checks every package, bu
 all errors inside one package: Cargo's resolver stops at its first error in each dependency graph.
 Fixing a failed dependency can therefore expose further issues in dependent packages. Workspace
 metadata or invalid/cyclic publish plans that prevent constructing the queue remain fatal.
+After a package fails, Clippier also runs **supplemental dependency diagnostics**
+(unless `--fail-fast` is set). It resolves each normal/build dependency in isolation, including
+optional and target-specific entries, and preserves aliases, source settings, explicit features,
+and relevant default-feature forwarding. Pending workspace dependencies use the same native
+staging mechanism. Identical probes are cached across packages for the current invocation;
+repeated findings are reported once at their first occurrence.
+
+Failed crates.io dependency probes are supplemented by registry-index checks for requirements
+with no published matches or only yanked matches. Network/index failures are labeled unresolved,
+not treated as proof of a missing version. Alternate registries and git/path sources still use
+Cargo probes, but are not audited against crates.io. The index audit checks the direct requirement;
+Cargo probe diagnostics can expose transitive failures. We do not enumerate every possible
+transitive candidate version, which could incorrectly flag unused versions as blockers.
+
+Reports distinguish full-package checks, additional dependency-probe failures, registry-index
+findings, and unresolved checks. An isolated probe is diagnostic evidence only: it does not change
+the source manifest, authorize publication, compile dependencies, or prove that dependencies work
+together. Full-package Cargo checks remain authoritative. Multiple independent failures in one
+package can now be exposed in a single run, but conflicts within a single dependency's graph may
+still require another run after fixing its first failure.
+
 Per-package validation may repeat work for shared dependency closures, especially with `--verify`.
 
 Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to compile packaged contents. Without it, packaging/resolution still runs, but compilation is explicitly reported as not requested. JSON package reports include `packaging_validated` and `compilation_verified`. `clippier release publish --dry-run` uses the same preflight.

@@ -13,6 +13,8 @@ use super::{
     read_toml, run_streaming_command, sanitize_manifest,
 };
 
+mod diagnostics;
+
 #[cfg(test)]
 mod tests;
 
@@ -197,9 +199,22 @@ pub(super) fn validate_with_failures(
     config: &PublishConfig,
     failures: Vec<String>,
 ) -> Result<(), BoxError> {
-    collect_package_checks(packages, pending, config, failures, |closure| {
-        validate_package(workspace_root, packages, closure, config)
-    })
+    let mut diagnostics = diagnostics::Diagnostics::default();
+    collect_package_checks(
+        packages,
+        pending,
+        config,
+        failures,
+        |closure| match validate_package(workspace_root, packages, closure, config) {
+            Ok(()) => Ok(()),
+            Err(error) if !config.fail_fast => {
+                let findings =
+                    diagnostics.investigate(workspace_root, packages, pending, closure, config);
+                Err(format!("Full-package check: {error}\n{}", findings.join("\n\n")).into())
+            }
+            Err(error) => Err(error),
+        },
+    )
 }
 
 fn collect_package_checks(
