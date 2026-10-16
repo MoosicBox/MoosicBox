@@ -96,6 +96,175 @@ fn real_path_dependency_removal_refreshes_only_scratch_lockfile() {
     assert!(!root.path().join("target").exists());
 }
 
+#[cfg(unix)]
+fn macro_fixture() -> tempfile::TempDir {
+    let root = tempfile::tempdir().unwrap();
+    for directory in ["src", "hidden/src", "emitter/src", "capture"] {
+        fs::create_dir_all(root.path().join(directory)).unwrap();
+    }
+    let manifest = "[package]\nname='macro-consumer'\nversion='0.1.0'\nedition='2021'\n[workspace]\nexclude=['hidden','emitter']\n[dependencies]\nhidden={path='hidden'}\nemitter={path='emitter'}\n";
+    fs::write(root.path().join("Cargo.toml"), manifest).unwrap();
+    fs::write(root.path().join("src/lib.rs"), "emitter::emit!();\n").unwrap();
+    fs::write(
+        root.path().join("hidden/Cargo.toml"),
+        "[package]\nname='hidden'\nversion='0.1.0'\nedition='2021'\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("hidden/src/lib.rs"),
+        "pub fn answer()->u32{42}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.path().join("emitter/Cargo.toml"),
+        "[package]\nname='emitter'\nversion='0.1.0'\nedition='2021'\n[lib]\nproc-macro=true\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("emitter/src/lib.rs"), "extern crate proc_macro;\n#[proc_macro]\npub fn emit(_:proc_macro::TokenStream)->proc_macro::TokenStream{\n\"pub fn answer()->u32 { hidden::answer() }\".parse().unwrap()\n}\n").unwrap();
+    let lockfile = "version=4\n[[package]]\nname='macro-consumer'\nversion='0.1.0'\ndependencies=['emitter','hidden']\n[[package]]\nname='emitter'\nversion='0.1.0'\n[[package]]\nname='hidden'\nversion='0.1.0'\n";
+    fs::write(root.path().join("Cargo.lock"), lockfile).unwrap();
+    root
+}
+
+#[cfg(unix)]
+fn configure_macro_capture(root: &std::path::Path) {
+    use clippier::machete::generated::{
+        GeneratedEvidence, GeneratedSource, GeneratedTargetRole, InputFingerprint,
+    };
+    use std::path::Path;
+    fs::write(
+        root.join("capture/expanded.rs"),
+        "pub fn answer()->u32 { hidden::answer() }\n",
+    )
+    .unwrap();
+    let inputs = [
+        "Cargo.toml",
+        "src/lib.rs",
+        "emitter/Cargo.toml",
+        "emitter/src/lib.rs",
+    ]
+    .iter()
+    .map(|path| InputFingerprint::capture(root, Path::new(path)).unwrap())
+    .collect();
+    let evidence = GeneratedEvidence {
+        sources: vec![GeneratedSource {
+            owner_manifest: "Cargo.toml".into(),
+            target_role: GeneratedTargetRole::Library,
+            profile: "macro-check".into(),
+            output: InputFingerprint::capture(root, Path::new("capture/expanded.rs")).unwrap(),
+            inputs,
+        }],
+    };
+    fs::write(
+        root.join("capture/evidence.json"),
+        serde_json::to_vec(&evidence).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.join("clippier.toml"),
+        "[machete]\nevidence-path='capture/evidence.json'\n",
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "explicit compiler execution; coordinator supplies installed toolchain paths"]
+fn real_procedural_macro_hidden_dependency_is_caught_and_captured_evidence_retains_it() {
+    use clippier::machete::{DependencyStatus, apply_machete_plan, verify::VerificationStatus};
+
+    let root = macro_fixture();
+    let manifest = fs::read_to_string(root.path().join("Cargo.toml")).unwrap();
+    let lockfile = fs::read_to_string(root.path().join("Cargo.lock")).unwrap();
+    let options = MacheteOptions {
+        manifest_path: Some(root.path().to_owned()),
+        packages: vec!["macro-consumer".into()],
+        ..Default::default()
+    };
+    let plan = plan_machete(&options).unwrap();
+    // Document the default scanner's remaining blind spot instead of claiming
+    // that optional verification automatically changes ordinary analysis.
+    assert!(
+        plan.report
+            .dependencies
+            .iter()
+            .any(|dep| dep.dependency == "hidden" && dep.status == DependencyStatus::Unused)
+    );
+    assert_eq!(plan.changes.len(), 1);
+    let verification = verify_machete_plan(
+        &plan,
+        &VerificationOptions {
+            allow_execution: true,
+            cargo_path: std::env::var_os("CLIPPIER_TEST_CARGO")
+                .expect("select Cargo")
+                .into(),
+            rustc_path: std::env::var_os("CLIPPIER_TEST_RUSTC")
+                .expect("select rustc")
+                .into(),
+            linker_path: Some(
+                std::env::var_os("CLIPPIER_TEST_LINKER")
+                    .expect("select linker")
+                    .into(),
+            ),
+            profiles: vec![VerificationProfile {
+                name: "macro-check".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let observed = &verification.profiles[0];
+    assert!(
+        matches!(observed.baseline.status, VerificationStatus::Passed),
+        "{:?}",
+        observed.baseline
+    );
+    assert!(matches!(
+        observed.candidate_preparation.as_ref().unwrap().status,
+        VerificationStatus::Passed
+    ));
+    assert!(
+        matches!(observed.candidate_result.status, VerificationStatus::Failed),
+        "{:?}",
+        observed.candidate_result
+    );
+    assert!(observed.candidate_result.stderr.contains("hidden"));
+    assert_eq!(
+        fs::read_to_string(root.path().join("Cargo.toml")).unwrap(),
+        manifest
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("Cargo.lock")).unwrap(),
+        lockfile
+    );
+    assert!(!root.path().join("target").exists());
+
+    // The same positive usage, explicitly captured with current producer inputs,
+    // reaches ordinary analysis through configuration, without running Cargo.
+    configure_macro_capture(root.path());
+    let retained = plan_machete(&options).unwrap();
+    assert!(
+        retained
+            .report
+            .dependencies
+            .iter()
+            .any(|dep| dep.dependency == "hidden" && dep.status == DependencyStatus::Used)
+    );
+    assert_eq!(retained.changes.len(), 0);
+    fs::write(
+        root.path().join("emitter/src/lib.rs"),
+        "// producer changed\n",
+    )
+    .unwrap();
+    assert!(plan_machete(&options).is_err());
+    assert!(apply_machete_plan(&retained).is_err());
+    assert_eq!(
+        fs::read_to_string(root.path().join("Cargo.toml")).unwrap(),
+        manifest
+    );
+}
+
 #[test]
 fn defaults_never_invoke_compiler_and_preserve_project_bytes() {
     let root = tempfile::tempdir().unwrap();

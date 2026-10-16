@@ -65,6 +65,21 @@ These are example suppressions, not recommended defaults. Ancestor/root defaults
 and descendant configuration layers accumulate; ignored directories are relative
 to the directory declaring their `clippier.toml`.
 
+## What ordinary `clippier machete` enables
+
+The bare command performs non-executing analysis. It collects structured evidence,
+retains references across unselected cfg branches, protects incomplete/generated
+source inventories, and consumes fresh configured `evidence-path` captures.
+It does **not** automatically enable `--precision`, choose a named `--profile`,
+run hygiene audits, execute compiler verification, or expand procedural macros.
+
+A procedural macro can introduce a dependency name absent from handwritten Rust.
+Without captured expansion evidence, ordinary scanning can still flag that needed
+dependency as unused. Use explicit verification to challenge such findings against
+a passing baseline; verification reports do not automatically change scanner
+classifications or gate a subsequent `apply`. A successful finite build is not
+universal absence proof. Review findings before removal.
+
 ## Dependency evidence, profiles, and hygiene
 
 ```bash
@@ -129,6 +144,8 @@ execution capability. Configuration still belongs only in `clippier.toml`:
 [machete.verification]
 cargo_path = "/absolute/path/to/installed/toolchain/bin/cargo"
 rustc_path = "/absolute/path/to/installed/toolchain/bin/rustc"
+# Optional canonical linker path, needed when cc is unavailable in the isolated PATH:
+linker_path = "/absolute/path/to/installed/linker"
 combined = true
 individual = false
 timeout_ms = 120000

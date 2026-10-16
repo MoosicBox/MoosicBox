@@ -34,6 +34,68 @@ fn json(output: &Output) -> Value {
         )
     })
 }
+fn declaration_status(value: &Value, alias: &str) -> String {
+    value["report"]["dependencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|dependency| dependency["dependency"] == alias)
+        .unwrap()["status"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+#[test]
+fn default_command_retains_conditional_and_renamed_references_without_execution() {
+    let dir = fixture();
+    fs::write(dir.path().join("Cargo.toml"), "[package]\nname='advanced'\nversion='0.1.0'\nedition='2021'\n[workspace]\n[dependencies]\nrenamed={package='real-package',version='1.0.0'}\nconditional='1.0.0'\nunused='1.0.0'\n").unwrap();
+    fs::write(dir.path().join("src/lib.rs"), "pub use renamed::Thing as PublicThing;\n#[cfg(target_os=\"windows\")] pub fn platform(){conditional::run();}\n").unwrap();
+    // No subcommand, precision, profile, metadata, or execution options.
+    let output = run(&dir, &["--output", "json"]);
+    assert!(output.status.success());
+    let value = json(&output);
+    assert_eq!(declaration_status(&value, "renamed"), "USED");
+    assert_eq!(declaration_status(&value, "conditional"), "USED");
+    assert_eq!(declaration_status(&value, "unused"), "UNUSED");
+    assert_eq!(value["report"]["coverage"]["precision"], false);
+    assert_eq!(value["report"]["coverage"]["profile_limited"], false);
+    assert!(!dir.path().join("target").exists());
+    assert!(!dir.path().join("Cargo.lock").exists());
+}
+
+#[test]
+fn default_command_protects_dynamic_generated_includes_instead_of_claiming_absence() {
+    let dir = fixture();
+    fs::write(
+        dir.path().join("src/lib.rs"),
+        "include!(concat!(env!(\"OUT_DIR\"),\"/generated.rs\"));\n",
+    )
+    .unwrap();
+    let before = fs::read(dir.path().join("Cargo.toml")).unwrap();
+    let output = run(&dir, &["--output", "json"]);
+    assert_eq!(output.status.code(), Some(2));
+    let value = json(&output);
+    assert_eq!(declaration_status(&value, "used"), "INCOMPLETE");
+    assert_eq!(declaration_status(&value, "unused"), "INCOMPLETE");
+    assert_eq!(fs::read(dir.path().join("Cargo.toml")).unwrap(), before);
+    assert!(!dir.path().join("target").exists());
+}
+
+#[test]
+fn precision_is_opt_in_and_does_not_confuse_a_local_module_with_an_external_crate() {
+    let dir = fixture();
+    fs::write(
+        dir.path().join("src/lib.rs"),
+        "mod used {pub fn run(){}}\npub fn run(){used::run();}\n",
+    )
+    .unwrap();
+    let baseline = json(&run(&dir, &["--output", "json"]));
+    assert_eq!(declaration_status(&baseline, "used"), "USED");
+    let precise = json(&run(&dir, &["--precision", "--output", "json"]));
+    assert_eq!(declaration_status(&precise, "used"), "UNUSED");
+}
+
 #[test]
 fn precision_explanation_has_source_positions_without_mutating_manifests() {
     let dir = fixture();

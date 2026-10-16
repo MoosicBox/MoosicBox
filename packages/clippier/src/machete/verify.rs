@@ -62,6 +62,9 @@ pub struct VerificationOptions {
     pub cargo_path: PathBuf,
     /// Absolute real rustc binary from the same selected installed toolchain.
     pub rustc_path: PathBuf,
+    /// Optional explicitly selected native linker for build scripts and proc macros.
+    /// Passed as a single encoded rustc option; ambient compiler flags are never inherited.
+    pub linker_path: Option<PathBuf>,
     /// Selected finite configurations; at least one is required.
     pub profiles: Vec<VerificationProfile>,
     /// Check the complete removal set.
@@ -79,6 +82,7 @@ impl Default for VerificationOptions {
             allow_execution: false,
             cargo_path: PathBuf::new(),
             rustc_path: PathBuf::new(),
+            linker_path: None,
             profiles: Vec::new(),
             combined: true,
             individual: false,
@@ -351,6 +355,17 @@ fn validate_options(options: &VerificationOptions) -> Result<(), BoxError> {
                 "select an absolute canonical installed {name} binary (not rustup proxy)"
             )
             .into());
+        }
+    }
+    if let Some(linker) = &options.linker_path {
+        if !linker.is_absolute() || !linker.is_file() || linker.canonicalize()? != *linker {
+            return Err("select an absolute canonical installed linker".into());
+        }
+        if linker
+            .to_str()
+            .is_none_or(|value| value.contains('\u{001f}'))
+        {
+            return Err("linker path must be UTF-8 without the Cargo flag separator".into());
         }
     }
     if options.cargo_path.parent() != options.rustc_path.parent() {
@@ -726,6 +741,12 @@ fn isolated_command(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
+    if let Some(linker) = &options.linker_path {
+        command.env(
+            "CARGO_ENCODED_RUSTFLAGS",
+            format!("-Clinker={}", linker.display()),
+        );
+    }
     Ok(command)
 }
 
@@ -1206,6 +1227,34 @@ mod tests {
                 .any(|text| text.contains("already installed nightly"))
         );
         assert!(report.command.stderr.contains("requires nightly"));
+    }
+
+    #[test]
+    fn explicit_linker_is_one_encoded_option_and_invalid_paths_are_rejected() {
+        let root = tempfile::tempdir().unwrap();
+        let mut options = toolchain(root.path(), "#!/bin/sh\nexit 0\n");
+        let linker = root.path().join("linker with spaces");
+        fs::write(&linker, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(&linker, fs::Permissions::from_mode(0o755)).unwrap();
+        options.linker_path = Some(linker.clone());
+        validate_options(&options).unwrap();
+        let command = isolated_command(root.path(), root.path(), &[], &options).unwrap();
+        let flags = command
+            .get_envs()
+            .find(|(key, _)| *key == "CARGO_ENCODED_RUSTFLAGS")
+            .unwrap()
+            .1
+            .unwrap();
+        assert_eq!(
+            flags,
+            std::ffi::OsStr::new(&format!("-Clinker={}", linker.display()))
+        );
+        options.linker_path = Some("relative-linker".into());
+        assert!(validate_options(&options).is_err());
+        let separated = root.path().join("bad\u{001f}linker");
+        fs::write(&separated, "").unwrap();
+        options.linker_path = Some(separated);
+        assert!(validate_options(&options).is_err());
     }
 
     #[test]
