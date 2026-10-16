@@ -574,6 +574,6 @@ mod tests {
         // Error should have no source
         assert!(error.source().is_none());
         // Display should work
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string(), "");
     }
 }

@@ -20,7 +20,7 @@ group = "hyperchad"
 moosicbox_assert = { workspace = true }
 
 base64     = { workspace = true }
-bmux_codec = { workspace = true }
+bmux_codec = { workspace = true, features = ["serde", "stable"] }
 serde      = { workspace = true, features = ["derive"] }
 thiserror  = { workspace = true }
 

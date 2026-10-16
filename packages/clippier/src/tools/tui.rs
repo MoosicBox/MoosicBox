@@ -589,12 +589,12 @@ impl Component for LogBody<'_> {
             "log-body".into(),
             constraints.constrain(bmux_tui::component::LogicalSize::new(
                 constraints.max_width(),
-                self.0.lines.len(),
+                u64::try_from(self.0.lines.len()).unwrap_or(u64::MAX),
             )),
         )
     }
     fn paint(&self, layout: &LayoutNode, cx: &mut PaintCx<'_, '_>) {
-        let height = layout.size.height;
+        let height = usize::try_from(layout.size.height).unwrap_or(usize::MAX);
         let start = self
             .0
             .lines
@@ -605,7 +605,7 @@ impl Component for LogBody<'_> {
                 bmux_tui::paint::LocalRect::new(
                     0,
                     i64::try_from(row).unwrap_or(i64::MAX),
-                    layout.size.width,
+                    u16::try_from(layout.size.width).unwrap_or(u16::MAX),
                     1,
                 ),
                 line,

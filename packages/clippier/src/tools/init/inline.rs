@@ -302,7 +302,7 @@ pub(super) fn render_scene(
     let mut cx = LayoutCx::new();
     let viewport = ScrollViewComponent::new(
         "checklist",
-        LogicalSize::new(width, 0),
+        LogicalSize::new(u64::from(width), 0),
         scroll.get(),
         sections,
     )
@@ -337,7 +337,7 @@ pub(super) fn render_scene(
     };
     let detail_view = ScrollViewComponent::new(
         "detail-view",
-        LogicalSize::new(width, 0),
+        LogicalSize::new(u64::from(width), 0),
         ScrollViewState::new(),
         detail,
     );

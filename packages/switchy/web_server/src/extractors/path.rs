@@ -648,7 +648,7 @@ mod tests {
                 position,
                 reason,
             } => {
-                assert!(segment.is_empty());
+                assert_eq!(segment, "");
                 assert_eq!(position, 2);
                 assert_eq!(reason, "segment is empty after URL decoding");
             }

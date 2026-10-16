@@ -2488,25 +2488,27 @@ dependencies = [
 
 [[package]]
 name = "bmux_codec"
-version = "0.0.1-alpha.1"
+version = "0.0.1-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "459b2ad08cc15428db36330fb4ee7a8b840e356eaf4bfd265851e62cd7ea1d41"
+checksum = "e4e73deccffba43c64f9e8b5e77da709e50757575987cb4978abc73e2be4748f"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "bmux_keyboard"
-version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#5843a9a8793d64423224f3952374ed7349d5ad9a"
+version = "0.0.1-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b61a9c70d350c0830e42b63b6bb4f1e82233adbaedfd494b16ed6e59eba70709"
 dependencies = [
  "crossterm 0.29.0",
 ]
 
 [[package]]
 name = "bmux_text_edit"
-version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#5843a9a8793d64423224f3952374ed7349d5ad9a"
+version = "0.0.1-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14b257a76839f57bf8bac58906d88dec3ae1978555df1f8a3f6d1ab675cb4297"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2515,21 +2517,26 @@ dependencies = [
 
 [[package]]
 name = "bmux_tui"
-version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#5843a9a8793d64423224f3952374ed7349d5ad9a"
+version = "0.0.1-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "708f7590b18c8d9a2ed0d86ad647bb01f9aeb82f38833acdb2c7b5ecba9d466d"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
  "crossterm 0.29.0",
  "futures-util",
+ "image",
+ "libc",
  "unicode-segmentation",
  "unicode-width 0.2.2",
+ "zeroize",
 ]
 
 [[package]]
 name = "bmux_tui_components"
-version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#5843a9a8793d64423224f3952374ed7349d5ad9a"
+version = "0.0.1-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "760bc3abf88b1eaa1c4d0fd3f4953c72ddbbeb405764ec87979dc33244bb22ef"
 dependencies = [
  "bmux_keyboard",
  "bmux_tui",
@@ -2537,12 +2544,15 @@ dependencies = [
 
 [[package]]
 name = "bmux_tui_runtime"
-version = "0.0.1-alpha.1"
-source = "git+https://github.com/BSteffaniak/bmux?branch=master#5843a9a8793d64423224f3952374ed7349d5ad9a"
+version = "0.0.1-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1414ba944de88547eb31c8577c64b5baa3bf099c32af9cae20f31e340538bf52"
 dependencies = [
+ "bmux_keyboard",
  "bmux_tui",
  "futures-util",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
@@ -23241,9 +23251,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 dependencies = [
  "zeroize_derive",
 ]
