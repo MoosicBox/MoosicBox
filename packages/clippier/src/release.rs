@@ -1253,11 +1253,14 @@ pub struct ReleasePrepareConfig {
 
 /// Configuration for verified stateless publication.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Mirrors independent publish CLI switches.
 pub struct ReleasePublishConfig {
     /// Status selection used to reconstruct pending packages.
     pub status: ReleaseStatusConfig,
     /// Compute and report publication without uploading crates.
     pub dry_run: bool,
+    /// Stop publication preflight after the first failure.
+    pub fail_fast: bool,
     /// Run Cargo's local package verification before upload.
     pub verify: bool,
     /// Permit unrelated dirty workspace files during publishing.
@@ -1333,6 +1336,7 @@ pub async fn handle_release_publish_command(
             workspace_root,
             packages: Some(status.publish_order),
             dry_run: config.dry_run,
+            fail_fast: config.fail_fast,
             verify: config.verify,
             allow_dirty: config.allow_dirty,
             color: config.color,

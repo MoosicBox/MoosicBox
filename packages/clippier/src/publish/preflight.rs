@@ -187,35 +187,109 @@ pub(super) fn validate(
     pending: &[String],
     config: &PublishConfig,
 ) -> Result<(), BoxError> {
-    if pending.is_empty() {
-        return Ok(());
-    }
-    if !pending.is_empty() {
+    validate_with_failures(workspace_root, packages, pending, config, Vec::new())
+}
+
+pub(super) fn validate_with_failures(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &[String],
+    config: &PublishConfig,
+    failures: Vec<String>,
+) -> Result<(), BoxError> {
+    collect_package_checks(packages, pending, config, failures, |closure| {
+        validate_package(workspace_root, packages, closure, config)
+    })
+}
+
+fn collect_package_checks(
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &[String],
+    config: &PublishConfig,
+    mut failures: Vec<String>,
+    mut check: impl FnMut(&[String]) -> Result<(), BoxError>,
+) -> Result<(), BoxError> {
+    let pending_set = pending.iter().cloned().collect::<BTreeSet<_>>();
+    let mut failed = BTreeSet::new();
+    let mut passed = 0;
+    for (index, name) in pending.iter().enumerate() {
+        let mut closure = BTreeSet::new();
+        pending_dependencies(name, packages, &pending_set, &mut closure);
+        let blocked_by = closure.intersection(&failed).cloned().collect::<Vec<_>>();
         eprintln!(
-            "Packaging/resolving {} pending package(s) before any uploads; compilation {}",
+            "Preflight {}/{}: {name} (packaging/resolution; compilation {})",
+            index + 1,
             pending.len(),
             if config.verify {
                 "enabled"
             } else {
-                "not requested (use --verify)"
+                "not requested"
             }
         );
-    }
-    let result = (|| {
-        let staged = prepare_workspace(workspace_root, packages, pending)?;
-        let output = run_streaming_command(package_command(&staged, config))?;
-        if !output.status.success() {
-            return Err(format!(
-                "Cargo packaging/resolution failed with status {}:\n{}",
-                output.status, output.stderr
-            )
-            .into());
+        // Separate workspaces prevent one broken dependency graph from hiding
+        // errors in independent packages. Include pending dependencies so Cargo
+        // can stage their unpublished versions natively, without registry patches.
+        let result = check(&closure.into_iter().collect::<Vec<_>>());
+        match result {
+            Ok(()) => passed += 1,
+            Err(error) => {
+                let context = if blocked_by.is_empty() {
+                    "failed".to_string()
+                } else {
+                    format!(
+                        "potentially blocked by previously failed pending dependencies: {}",
+                        blocked_by.join(", ")
+                    )
+                };
+                failures.push(format!(
+                    "{name}@{} ({context}):\n{error}",
+                    packages[name].version
+                ));
+                failed.insert(name.clone());
+                if config.fail_fast {
+                    break;
+                }
+            }
         }
-        Ok(())
-    })();
-    result.map_err(|error: BoxError| {
-        format!("Publish packaging preflight failed (no packages uploaded):\n{error}").into()
-    })
+    }
+    if failures.is_empty() {
+        return Ok(());
+    }
+    Err(format!("Publish preflight failed (no packages uploaded):\n{}\nPackaging validated: {passed}; failed/blocked: {}; not checked: {}. Cargo can report only the first resolver error in each dependency graph; blocked checks may expose further issues after their dependencies are fixed.\n\n{}", if config.fail_fast { "Stopped early (--fail-fast)." } else { "Checked every pending package." }, failed.len(), pending.len() - passed - failed.len(), failures.join("\n\n")).into())
+}
+
+fn pending_dependencies(
+    name: &str,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &BTreeSet<String>,
+    closure: &mut BTreeSet<String>,
+) {
+    if !closure.insert(name.to_string()) {
+        return;
+    }
+    for dependency in &packages[name].publish_dependencies {
+        if pending.contains(dependency) {
+            pending_dependencies(dependency, packages, pending, closure);
+        }
+    }
+}
+
+fn validate_package(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &[String],
+    config: &PublishConfig,
+) -> Result<(), BoxError> {
+    let staged = prepare_workspace(workspace_root, packages, pending)?;
+    let output = run_streaming_command(package_command(&staged, config))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Cargo packaging/resolution failed with status {}:\n{}",
+            output.status, output.stderr
+        )
+        .into());
+    }
+    Ok(())
 }
 
 // Cargo configuration is inherited from directories and CARGO_HOME. Overrides can

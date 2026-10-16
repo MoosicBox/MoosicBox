@@ -28,6 +28,7 @@ const CRATES_IO_API: &str = "https://crates.io/api/v1";
 
 /// Configuration for publishing a Cargo workspace.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Independent CLI switches, not mutually exclusive states.
 pub struct PublishConfig {
     /// Path to the workspace root or workspace `Cargo.toml`.
     pub workspace_root: PathBuf,
@@ -35,6 +36,8 @@ pub struct PublishConfig {
     pub packages: Option<Vec<String>>,
     /// Package and resolve the pending queue without uploading. Compilation requires `verify`.
     pub dry_run: bool,
+    /// Stop publish preflight after its first failure instead of checking every package.
+    pub fail_fast: bool,
     /// Compile packaged contents during preflight and verify again before upload.
     pub verify: bool,
     /// Pass `--allow-dirty` to `cargo publish`.
@@ -55,6 +58,7 @@ impl Default for PublishConfig {
             workspace_root: PathBuf::from("."),
             packages: None,
             dry_run: false,
+            fail_fast: false,
             verify: false,
             allow_dirty: false,
             color: ColorMode::Auto,
@@ -482,8 +486,8 @@ pub async fn handle_publish_command(
         )
     );
     let mut reports = Vec::new();
-    let mut already_published = BTreeSet::new();
     let mut needs_publish = BTreeSet::new();
+    let mut preflight_failures = Vec::new();
 
     for name in &initial_plan.publish_disabled {
         if let Some(package) = packages.get(name) {
@@ -516,7 +520,19 @@ pub async fn handle_publish_command(
             &package.version,
             "on crates.io",
         );
-        if crate_version_exists(&client, &package.name, &package.version).await? {
+        let exists = match crate_version_exists(&client, &package.name, &package.version).await {
+            Ok(exists) => exists,
+            Err(error) if !config.fail_fast => {
+                preflight_failures.push(format!(
+                    "{name}: registry availability could not be checked: {error}"
+                ));
+                // Still diagnose this package, but never upload when registry state is unknown.
+                needs_publish.insert(name.clone());
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if exists {
             log_publish_event_with_detail(
                 config.color,
                 "33",
@@ -525,7 +541,6 @@ pub async fn handle_publish_command(
                 &package.version,
                 "(already published)",
             );
-            already_published.insert(name.clone());
             reports.push(PublishPackageReport::new(
                 &package.name,
                 &package.version,
@@ -536,19 +551,44 @@ pub async fn handle_publish_command(
         }
     }
 
-    validate_publish_manifests(&workspace_root, &packages, &needs_publish)?;
-
-    validate_publish_dependencies_available(&client, &packages, &needs_publish, &already_published)
-        .await?;
-
-    if !needs_publish.is_empty() {
-        validate_package_categories_available(&client, &packages, &needs_publish).await?;
+    for name in &needs_publish {
+        let selected = BTreeSet::from([name.clone()]);
+        let mut record = |result: Result<(), BoxError>| -> Result<(), BoxError> {
+            if let Err(error) = result {
+                if config.fail_fast {
+                    return Err(error);
+                }
+                preflight_failures.push(format!("{name}: {error}"));
+            }
+            Ok(())
+        };
+        record(validate_publish_manifests(
+            &workspace_root,
+            &packages,
+            &selected,
+        ))?;
+        record(
+            validate_publish_dependencies_available(&client, &packages, &selected, &needs_publish)
+                .await,
+        )?;
+        record(validate_package_categories_available(&client, &packages, &selected).await)?;
     }
 
     let packages_to_publish = filter_packages_to_publish(&packages, &needs_publish);
     let final_plan = build_publish_plan(&packages_to_publish, None)?;
 
     let publish_order = final_plan.publish_order;
+    if !preflight_failures.is_empty() {
+        // Still run Cargo checks to discover independent packaging failures.
+        return preflight::validate_with_failures(
+            &workspace_root,
+            &packages,
+            &publish_order,
+            &config,
+            preflight_failures,
+        )
+        .map(|()| String::new());
+    }
     publish_pending_queue(
         &workspace_root,
         &packages,
@@ -831,6 +871,7 @@ async fn validate_publish_dependencies_available(
     needs_publish: &BTreeSet<String>,
     already_published: &BTreeSet<String>,
 ) -> Result<(), BoxError> {
+    let mut failures = Vec::new();
     for name in needs_publish {
         let package = packages
             .get(name)
@@ -845,25 +886,31 @@ async fn validate_publish_dependencies_available(
                 .get(dependency)
                 .ok_or_else(|| format!("Unknown workspace package '{dependency}'"))?;
 
-            if crate_version_exists(
+            match crate_version_exists(
                 client,
                 &dependency_package.name,
                 &dependency_package.version,
             )
-            .await?
+            .await
             {
-                continue;
+                Ok(true) => continue,
+                Err(error) => {
+                    failures.push(format!("{name}: cannot check {dependency}: {error}"));
+                    continue;
+                }
+                Ok(false) => {}
             }
-
-            return Err(format!(
+            failures.push(format!(
                 "Package '{name}' depends on '{dependency}@{}', but that version is not published and is not publishable in this workspace. Normal and build dependencies, including optional dependencies with disabled features, must be available on crates.io. For test-only dependencies, move the tests into a separate unpublished test-runner package",
                 dependency_package.version
-            )
-            .into());
+            ));
         }
     }
-
-    Ok(())
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n").into())
+    }
 }
 
 fn crates_io_client() -> Result<reqwest::Client, BoxError> {

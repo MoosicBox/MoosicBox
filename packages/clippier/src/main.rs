@@ -268,6 +268,9 @@ enum ReleaseCommands {
         /// Package and resolve pending crates without uploading (use --verify to compile)
         #[arg(long)]
         dry_run: bool,
+        /// Stop publication preflight after its first failure
+        #[arg(long)]
+        fail_fast: bool,
         /// Run Cargo package verification
         #[arg(long)]
         verify: bool,
@@ -751,6 +754,10 @@ enum Commands {
         /// Package and resolve all pending crates without uploading (use --verify to compile)
         #[arg(long)]
         dry_run: bool,
+
+        /// Stop publication preflight after its first failure
+        #[arg(long)]
+        fail_fast: bool,
 
         /// Compile packaged contents during preflight and verify again before upload
         #[arg(long)]
@@ -1390,6 +1397,7 @@ async fn run() -> Result<(), BoxError> {
                 semver_current_features,
                 semver_baseline_features,
                 dry_run,
+                fail_fast,
                 verify,
                 allow_dirty,
                 publish_timeout_secs,
@@ -1413,6 +1421,7 @@ async fn run() -> Result<(), BoxError> {
                             semver_baseline_features,
                         },
                         dry_run,
+                        fail_fast,
                         verify,
                         allow_dirty,
                         color,
@@ -1481,6 +1490,7 @@ async fn run() -> Result<(), BoxError> {
             workspace_root,
             packages,
             dry_run,
+            fail_fast,
             verify,
             allow_dirty,
             publish_timeout_secs,
@@ -1493,6 +1503,7 @@ async fn run() -> Result<(), BoxError> {
                 workspace_root,
                 packages,
                 dry_run,
+                fail_fast,
                 verify,
                 allow_dirty,
                 color,

@@ -623,6 +623,133 @@ fn failed_preparation_cleans_staging_without_modifying_source() {
 }
 
 #[test]
+fn collection_continues_after_independent_failures_and_labels_blocked_checks() {
+    let mut fixture = Fixture::new(&[
+        ("first", ""),
+        ("second", ""),
+        ("dependent", ""),
+        ("healthy", ""),
+    ]);
+    fixture
+        .packages
+        .get_mut("dependent")
+        .unwrap()
+        .publish_dependencies
+        .insert("first".into());
+    let pending = ["first", "second", "dependent", "healthy"].map(str::to_string);
+    let mut calls = Vec::new();
+    let error = collect_package_checks(
+        &fixture.packages,
+        &pending,
+        &PublishConfig::default(),
+        vec!["manifest issue".into()],
+        |closure| {
+            calls.push(closure.to_vec());
+            if closure.contains(&"first".to_string()) {
+                Err("zip ^6 is yanked".into())
+            } else if closure.contains(&"second".to_string()) {
+                Err("zip ^3 is yanked".into())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert_eq!(calls.len(), 4);
+    assert_eq!(calls[2], ["dependent", "first"]);
+    for expected in [
+        "manifest issue",
+        "zip ^6",
+        "zip ^3",
+        "potentially blocked by previously failed pending dependencies: first",
+        "Packaging validated: 1",
+        "not checked: 0",
+        "no packages uploaded",
+    ] {
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
+#[test]
+fn fail_fast_leaves_remaining_checks_explicitly_unchecked() {
+    let fixture = Fixture::new(&[("first", ""), ("second", "")]);
+    let mut calls = 0;
+    let error = collect_package_checks(
+        &fixture.packages,
+        &["first".into(), "second".into()],
+        &PublishConfig {
+            fail_fast: true,
+            ..PublishConfig::default()
+        },
+        Vec::new(),
+        |_| {
+            calls += 1;
+            Err("first failure".into())
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert_eq!(calls, 1);
+    assert!(error.contains("Stopped early (--fail-fast)"), "{error}");
+    assert!(error.contains("not checked: 1"), "{error}");
+}
+
+#[test]
+fn real_cargo_collects_two_distinct_yanked_dependency_failures() {
+    let fixture = Fixture::new(&[
+        (
+            "clippier-fixture-first",
+            "[dependencies]\nclippier-fixture-oldzip = \"6\"\n",
+        ),
+        (
+            "clippier-fixture-second",
+            "[dependencies]\nclippier-fixture-otherzip = \"3\"\n",
+        ),
+        ("clippier-fixture-healthy", ""),
+    ]);
+    let registry = Registry::new();
+    registry.add("clippier-fixture-oldzip", "6.0.0", None, true);
+    registry.add("clippier-fixture-otherzip", "3.0.0", None, true);
+    let pending = [
+        "clippier-fixture-first",
+        "clippier-fixture-second",
+        "clippier-fixture-healthy",
+    ]
+    .map(str::to_string);
+    let config = PublishConfig::default();
+    let error = collect_package_checks(
+        &fixture.packages,
+        &pending,
+        &config,
+        Vec::new(),
+        |closure| {
+            let staged = prepare_workspace(fixture.directory.path(), &fixture.packages, closure)?;
+            let mut command = package_command(&staged, &config);
+            registry.configure(&mut command);
+            let result = command.output()?;
+            if result.status.success() {
+                Ok(())
+            } else {
+                Err(String::from_utf8_lossy(&result.stderr).into_owned().into())
+            }
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    for expected in [
+        "clippier-fixture-oldzip",
+        "clippier-fixture-otherzip",
+        "6.0.0 is yanked",
+        "3.0.0 is yanked",
+        "Packaging validated: 1",
+        "not checked: 0",
+    ] {
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
+#[test]
 fn source_overrides_are_rejected_instead_of_producing_false_success() {
     let fixture = Fixture::new(&[("clippier-fixture-app", "")]);
     fs::create_dir(fixture.directory.path().join(".cargo")).unwrap();
