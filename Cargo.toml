@@ -618,7 +618,8 @@ ctrlc = "3.5.2"
 deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 dialoguer = "0.12.0"
-duckdb = { version = "1.10505.0", default-features = false }
+# 1.4.3+ currently require yanked zip 6; keep fresh registry resolution working.
+duckdb = { version = "=1.4.2", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
 egui = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
