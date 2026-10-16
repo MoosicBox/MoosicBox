@@ -265,7 +265,7 @@ enum ReleaseCommands {
         /// Features enabled only for registry baseline
         #[arg(long, value_delimiter = ',')]
         semver_baseline_features: Vec<String>,
-        /// Preview publication without uploading
+        /// Package and resolve pending crates without uploading (use --verify to compile)
         #[arg(long)]
         dry_run: bool,
         /// Run Cargo package verification
@@ -748,12 +748,11 @@ enum Commands {
         #[arg(short = 'p', long = "package", value_delimiter = ',')]
         packages: Option<Vec<String>>,
 
-        /// Validate publish manifests and print the plan without running `cargo publish`
-        /// (does not perform Cargo packaging or compilation verification)
+        /// Package and resolve all pending crates without uploading (use --verify to compile)
         #[arg(long)]
         dry_run: bool,
 
-        /// Run Cargo's local package verification before upload
+        /// Compile packaged contents during preflight and verify again before upload
         #[arg(long)]
         verify: bool,
 

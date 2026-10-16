@@ -22,6 +22,8 @@ use crate::{ColorMode, OutputType, cargo_workspace::normalize_workspace_root};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
+mod preflight;
+
 const CRATES_IO_API: &str = "https://crates.io/api/v1";
 
 /// Configuration for publishing a Cargo workspace.
@@ -31,10 +33,9 @@ pub struct PublishConfig {
     pub workspace_root: PathBuf,
     /// Specific packages to publish. Normal/build workspace dependencies are included automatically.
     pub packages: Option<Vec<String>>,
-    /// Validate publish manifests and print the plan without running `cargo publish`.
-    /// This does not perform Cargo packaging or compilation verification.
+    /// Package and resolve the pending queue without uploading. Compilation requires `verify`.
     pub dry_run: bool,
-    /// Run Cargo's local verification step.
+    /// Compile packaged contents during preflight and verify again before upload.
     pub verify: bool,
     /// Pass `--allow-dirty` to `cargo publish`.
     pub allow_dirty: bool,
@@ -72,7 +73,7 @@ pub enum PublishPackageStatus {
     PublishDisabled,
     /// The same package version already exists on crates.io.
     AlreadyPublished,
-    /// The package would be published, but `--dry-run` was used.
+    /// The package passed packaging/resolution preflight without being uploaded.
     DryRun,
     /// The package was published successfully.
     Published,
@@ -87,6 +88,12 @@ pub struct PublishPackageReport {
     pub version: String,
     /// Resulting status.
     pub status: PublishPackageStatus,
+    /// Whether Cargo packaging and fresh dependency resolution succeeded this run.
+    #[serde(default)]
+    pub packaging_validated: bool,
+    /// Whether packaged contents were compiled during preflight this run.
+    #[serde(default)]
+    pub compilation_verified: bool,
 }
 
 impl PublishPackageReport {
@@ -100,6 +107,8 @@ impl PublishPackageReport {
             name: name.into(),
             version: version.into(),
             status,
+            packaging_validated: false,
+            compilation_verified: false,
         }
     }
 }
@@ -128,6 +137,24 @@ impl PublishReport {
     #[must_use]
     fn to_raw_string(&self, color: ColorMode) -> String {
         let mut lines = Vec::new();
+        if self
+            .packages
+            .iter()
+            .any(|package| package.packaging_validated)
+        {
+            lines.push("Packaging and fresh dependency resolution: validated".to_string());
+            lines.push(
+                if self
+                    .packages
+                    .iter()
+                    .any(|package| package.compilation_verified)
+                {
+                    "Compilation verification: passed".to_string()
+                } else {
+                    "Compilation verification: not requested (use --verify)".to_string()
+                },
+            );
+        }
 
         if self.packages.is_empty() {
             lines.push("No workspace packages matched the publish request".to_string());
@@ -137,7 +164,7 @@ impl PublishReport {
                 let (code, label) = match package.status {
                     PublishPackageStatus::PublishDisabled => ("90", "skip publish=false"),
                     PublishPackageStatus::AlreadyPublished => ("33", "skip already published"),
-                    PublishPackageStatus::DryRun => ("35", "dry-run publish"),
+                    PublishPackageStatus::DryRun => ("35", "validated (not uploaded)"),
                     PublishPackageStatus::Published => ("32", "published"),
                 };
                 lines.push(format!(
@@ -422,6 +449,8 @@ fn visit_publish_package(
 /// * If a requested package does not exist
 /// * If a publishable package has an unpublished non-publishable workspace dependency
 /// * If crates.io cannot be queried
+/// * If Cargo packaging, fresh dependency resolution, or requested compilation fails
+/// * If Cargo source overrides prevent registry-faithful preflight validation
 /// * If `cargo publish` fails
 #[allow(clippy::too_many_lines)]
 pub async fn handle_publish_command(
@@ -520,6 +549,38 @@ pub async fn handle_publish_command(
     let final_plan = build_publish_plan(&packages_to_publish, None)?;
 
     let publish_order = final_plan.publish_order;
+    publish_pending_queue(
+        &workspace_root,
+        &packages,
+        &publish_order,
+        &config,
+        &client,
+        &mut reports,
+    )
+    .await?;
+
+    for report in &mut reports {
+        if publish_order.contains(&report.name) {
+            report.packaging_validated = true;
+            report.compilation_verified = config.verify;
+        }
+    }
+    let report = PublishReport::new(reports);
+    match output {
+        OutputType::Raw => Ok(report.to_raw_string(config.color)),
+        OutputType::Json => Ok(serde_json::to_string_pretty(&report)?),
+    }
+}
+
+async fn publish_pending_queue(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    publish_order: &[String],
+    config: &PublishConfig,
+    client: &reqwest::Client,
+    reports: &mut Vec<PublishPackageReport>,
+) -> Result<(), BoxError> {
+    preflight::validate(workspace_root, packages, publish_order, config)?;
     for (index, name) in publish_order.iter().enumerate() {
         let package = packages
             .get(name)
@@ -548,15 +609,15 @@ pub async fn handle_publish_command(
             &package.name,
             &package.version,
         );
-        let publish_attempt = match publish_package(&workspace_root, &packages, package, &config) {
+        let publish_attempt = match publish_package(workspace_root, packages, package, config) {
             Ok(attempt) => attempt,
             Err(error) => {
                 print_failure_summary(
                     config.color,
                     package,
                     &publish_order[index + 1..],
-                    &packages,
-                    &reports,
+                    packages,
+                    reports,
                 );
                 return Err(error);
             }
@@ -580,7 +641,7 @@ pub async fn handle_publish_command(
             }
             PublishAttempt::Published => {
                 if let Err(error) = wait_for_crate_version(
-                    &client,
+                    client,
                     &package.name,
                     &package.version,
                     config.publish_timeout,
@@ -592,8 +653,8 @@ pub async fn handle_publish_command(
                         config.color,
                         package,
                         &publish_order[index + 1..],
-                        &packages,
-                        &reports,
+                        packages,
+                        reports,
                     );
                     return Err(error);
                 }
@@ -614,11 +675,7 @@ pub async fn handle_publish_command(
         }
     }
 
-    let report = PublishReport::new(reports);
-    match output {
-        OutputType::Raw => Ok(report.to_raw_string(config.color)),
-        OutputType::Json => Ok(serde_json::to_string_pretty(&report)?),
-    }
+    Ok(())
 }
 
 fn print_failure_summary(
@@ -1022,6 +1079,8 @@ fn build_publish_command(
     let mut command = Command::new("cargo");
     command
         .arg("publish")
+        .arg("--registry")
+        .arg("crates-io")
         .arg("--manifest-path")
         .arg(manifest_path)
         .arg("--color")
@@ -1250,6 +1309,14 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), BoxError> {
         let source = entry.path();
         let destination = to.join(entry.file_name());
         let file_type = entry.file_type()?;
+        // Never inherit a lockfile that admits yanked versions or copy build/VCS state.
+        if entry.file_name() == "Cargo.lock"
+            || entry.file_name() == "target"
+            || entry.file_name() == ".git"
+            || entry.file_name() == ".cargo"
+        {
+            continue;
+        }
 
         if file_type.is_dir() {
             copy_dir(&source, &destination)?;
@@ -1307,8 +1374,16 @@ fn sanitized_manifest(
     sanitize_dependency_sections(&mut manifest, &workspace_toml, &package_versions)?;
     if let Some(table) = manifest.as_table_mut() {
         table.remove("workspace");
+        table.remove("patch");
+        table.remove("replace");
     }
 
+    if let Some(package) = manifest
+        .get_mut("package")
+        .and_then(toml::Value::as_table_mut)
+    {
+        package.remove("workspace");
+    }
     Ok(manifest)
 }
 

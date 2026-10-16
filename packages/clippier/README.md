@@ -750,7 +750,7 @@ Publish all crates in a Cargo workspace, skipping versions that already exist on
 # Publish from the current directory
 clippier publish
 
-# Preview what would be published
+# Validate packaging and fresh dependency resolution without uploading
 clippier publish --dry-run
 
 # Publish one package plus its normal/build workspace dependencies
@@ -760,7 +760,13 @@ clippier publish --package moosicbox_audio_output
 clippier publish /path/to/workspace
 ```
 
-`clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized workspace copy that preserves package-relative paths, removes workspace dev-dependencies, resolves workspace dependency inheritance, and uses a temp-local Cargo target dir. It defaults to `cargo publish --no-verify`; pass `--verify` to run Cargo's local verification step.
+`clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized workspace copy that preserves package-relative paths, removes workspace dev-dependencies, resolves workspace dependency inheritance, and uses a temp-local Cargo target dir.
+
+Before **any upload**, both publishing and `--dry-run` package the entire pending queue with Cargo and resolve dependencies without inherited lockfiles. Unpublished workspace dependencies are staged together using Cargo's native multi-package packaging; Cargo removes the versioned staging path links from packaged manifests. This catches missing or yanked transitive dependencies even when the source workspace lockfile still permits them. Source manifests and lockfiles are unchanged.
+
+Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to compile packaged contents. Without it, packaging/resolution still runs, but compilation is explicitly reported as not requested. JSON package reports include `packaging_validated` and `compilation_verified`. `clippier release publish --dry-run` uses the same preflight.
+
+Cargo source replacements, path source overrides, and crates.io index overrides are rejected rather than allowing a mirror or patch to conceal a broken publish graph. Registry state can still change after validation; preflight is not a reservation of versions or an atomic multi-crate upload.
 
 ### Bump Cargo Workspace Versions
 

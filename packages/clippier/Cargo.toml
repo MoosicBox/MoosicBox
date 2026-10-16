@@ -97,7 +97,10 @@ mlua = { workspace = true, optional = true, features = ["lua54", "serialize"] }
 
 [dev-dependencies]
 clippier_test_utilities = { workspace = true, features = ["git-diff"] }
+flate2                  = { workspace = true }
 insta                   = { workspace = true, features = ["json", "redactions", "yaml"] }
+sha2                    = { workspace = true }
+tar                     = { workspace = true }
 tempfile                = { workspace = true }
 test-log                = { workspace = true }
 

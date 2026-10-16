@@ -3387,6 +3387,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.11.0",
  "switchy_async",
  "switchy_fs",
  "switchy_random",
