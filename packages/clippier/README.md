@@ -54,7 +54,11 @@ emits live BMUX-styled progress: green `.` for complete/no findings, coral `!` f
 unused findings, amber `?` for uncertainty. Each mark represents a completed
 selected package, not a timer tick; the final report remains authoritative.
 Progress goes to stderr, is disabled for redirected output/JSON, and can be
-suppressed with `--no-progress`. Without colors the symbols remain distinct.
+suppressed with `--no-progress`. Progress uses the current terminal width (one
+column is reserved to avoid wrapping), reflows as dimensions change, and stays
+within the visible terminal height. Its entire temporary region is erased before
+the final report or error, rather than remaining in scrollback. Without colors
+the symbols remain distinct; `TERM=dumb` disables transient progress.
 
 Normal and build dependencies are checked by default;
 dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest

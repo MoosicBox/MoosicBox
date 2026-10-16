@@ -718,15 +718,14 @@ fn run_execution(cli: &MacheteCli, options: &MacheteOptions) -> Result<u8, BoxEr
     Ok(code)
 }
 
-// Progress is terminal-only stderr output, driven by actual engine events.
+// A transient, bounded inline region. No raw mode or alternate screen is needed.
 struct PackageProgress {
     enabled: bool,
     color: bool,
-    row: bmux_tui::text::Line,
-    drawn: bool,
-    completed: usize,
+    marks: Vec<bmux_tui::text::Span>,
+    discovered: Option<usize>,
     error: Option<io::Error>,
-    previous: Option<bmux_tui::buffer::Buffer>,
+    rows: usize,
 }
 
 impl PackageProgress {
@@ -735,22 +734,22 @@ impl PackageProgress {
             enabled: matches!(flags.output, Output::Text)
                 && !flags.no_progress
                 && io::stdout().is_terminal()
-                && io::stderr().is_terminal(),
+                && io::stderr().is_terminal()
+                && std::env::var_os("TERM").is_none_or(|term| term != "dumb"),
             color: use_color_on(flags.color, io::stderr().is_terminal()),
-            row: bmux_tui::text::Line::new(),
-            drawn: false,
-            completed: 0,
+            marks: Vec::new(),
+            discovered: None,
             error: None,
-            previous: None,
+            rows: 0,
         }
     }
 
     fn observe(&mut self, event: &clippier::machete::MacheteProgress) {
         if self.enabled
+            && self.error.is_none()
             && let Err(error) = self.update(event)
         {
             self.error = Some(error);
-            self.enabled = false;
         }
     }
 
@@ -760,32 +759,12 @@ impl PackageProgress {
             text::Span,
         };
         use clippier::machete::MacheteProgress;
-        let mut out = io::stderr().lock();
         match event {
-            MacheteProgress::Discovering => writeln!(out, "Discovering Cargo packages...")?,
-            MacheteProgress::Discovered { packages } => writeln!(
-                out,
-                "Analyzing {packages} discovered packages (. complete, ! unused, ? uncertain):"
-            )?,
+            MacheteProgress::Discovering => {}
+            MacheteProgress::Discovered { packages } => self.discovered = Some(*packages),
             MacheteProgress::PackageAnalyzed {
                 unused, complete, ..
             } => {
-                let width = bmux_tui::crossterm::terminal_size()
-                    .map_or(80, |size| size.width)
-                    .saturating_sub(1)
-                    .max(1);
-                let capacity = usize::from(width.saturating_sub(20).clamp(1, 40));
-                if self.row.spans.len() >= capacity
-                    || self
-                        .previous
-                        .as_ref()
-                        .is_some_and(|buffer| buffer.area().width != width)
-                {
-                    self.row.spans.clear();
-                    self.drawn = false;
-                    self.previous = None;
-                }
-                self.completed += 1;
                 let (symbol, color) = if *unused > 0 {
                     ("!", Color::Rgb(245, 125, 140))
                 } else if *complete {
@@ -793,51 +772,83 @@ impl PackageProgress {
                 } else {
                     ("?", Color::Rgb(240, 195, 105))
                 };
-                self.row
-                    .spans
+                self.marks
                     .push(Span::styled(symbol, Style::new().fg(color)));
-                if self.color {
-                    use bmux_tui::{ansi::write_ansi_inline_frame, buffer::Buffer, geometry::Rect};
-                    let mut line = self.row.clone();
-                    line.spans
-                        .push(Span::raw(format!("  {} analyzed", self.completed)));
-                    let area = Rect::new(0, 0, width, 1);
-                    let mut buffer = Buffer::empty(area);
-                    buffer.write_line(area, &line);
-                    if let Some(previous) = &self.previous {
-                        bmux_tui::ansi::write_ansi_inline_frame_diff(&mut out, previous, &buffer)?;
-                    } else {
-                        write_ansi_inline_frame(&mut out, &buffer)?;
-                    }
-                    self.previous = Some(buffer);
-                } else {
-                    // No ANSI/cursor controls in --color never or NO_COLOR mode.
-                    if self.row.spans.len() == 1 && self.completed > 1 {
-                        writeln!(out)?;
-                    }
-                    write!(out, "{symbol}")?;
-                }
-                self.drawn = true;
             }
+        }
+        let size =
+            bmux_tui::crossterm::terminal_size().unwrap_or(bmux_tui::geometry::Size::new(80, 24));
+        let lines = self.lines(size);
+        let mut out = io::stderr().lock();
+        self.clear(&mut out)?;
+        let width = size.width.saturating_sub(1).max(1);
+        for line in &lines {
+            if self.color {
+                use bmux_tui::{ansi::write_ansi_inline_frame, buffer::Buffer, geometry::Rect};
+                let area = Rect::new(0, 0, width, 1);
+                let mut buffer = Buffer::empty(area);
+                buffer.write_line(area, line);
+                write_ansi_inline_frame(&mut out, &buffer)?;
+            } else {
+                writeln!(out, "\r{}", line.plain_text())?;
+            }
+            self.rows += 1;
         }
         out.flush()
     }
 
-    fn finish(self) -> Result<(), BoxError> {
-        if let Some(error) = self.error {
-            return Err(error.into());
+    fn lines(&self, size: bmux_tui::geometry::Size) -> Vec<bmux_tui::text::Line> {
+        use bmux_tui::text::Line;
+        // Leave one column to avoid terminal auto-wrap and one row for the cursor.
+        let width = usize::from(size.width.saturating_sub(1).max(1));
+        let max_rows = usize::from(size.height.saturating_sub(2).max(1));
+        let header = self.discovered.map_or_else(|| "Discovering Cargo packages...".into(),
+            |packages| format!("Analyzing: {} done ({packages} discovered) | . complete  ! unused  ? uncertain", self.marks.len()));
+        let mut lines = vec![Line::raw(header.chars().take(width).collect::<String>())];
+        // On short terminals show the latest marks, rather than scrolling progress
+        // into history that cannot be removed when the final report arrives.
+        let capacity = width.saturating_mul(max_rows.saturating_sub(1));
+        let start = self.marks.len().saturating_sub(capacity);
+        for row in self.marks[start..].chunks(width) {
+            lines.push(Line::from_spans(row.to_vec()));
         }
-        if self.enabled {
-            let mut out = io::stderr().lock();
-            if self.drawn && !self.color {
-                writeln!(out)?;
+        lines
+    }
+
+    fn clear(&mut self, out: &mut impl Write) -> io::Result<()> {
+        if self.rows > 0 {
+            write!(out, "\r\x1b[{}A", self.rows)?;
+            for index in 0..self.rows {
+                write!(out, "\x1b[2K")?;
+                if index + 1 < self.rows {
+                    write!(out, "\x1b[1B\r")?;
+                }
             }
-            if self.completed > 0 {
-                writeln!(out, "{} packages analyzed.\n", self.completed)?;
+            if self.rows > 1 {
+                write!(out, "\x1b[{}A", self.rows - 1)?;
             }
-            out.flush()?;
+            write!(out, "\r")?;
+            self.rows = 0;
         }
         Ok(())
+    }
+
+    fn finish(mut self) -> Result<(), BoxError> {
+        let mut out = io::stderr().lock();
+        self.clear(&mut out)?;
+        out.flush()?;
+        if let Some(error) = self.error.take() {
+            return Err(error.into());
+        }
+        Ok(())
+    }
+}
+
+impl Drop for PackageProgress {
+    fn drop(&mut self) {
+        // Also remove the region when unwinding before normal finish.
+        let mut out = io::stderr().lock();
+        let _ = self.clear(&mut out).and_then(|()| out.flush());
     }
 }
 
@@ -988,4 +999,66 @@ pub fn run(cli: &MacheteCli) -> Result<u8, BoxError> {
     } else {
         2
     })
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::PackageProgress;
+    use bmux_tui::{geometry::Size, text::Span};
+
+    fn progress(count: usize) -> PackageProgress {
+        PackageProgress {
+            enabled: false,
+            color: true,
+            marks: (0..count).map(|_| Span::raw(".")).collect(),
+            discovered: Some(count),
+            error: None,
+            rows: 0,
+        }
+    }
+
+    #[test]
+    fn progress_uses_available_width_and_reflows_for_new_dimensions() {
+        let p = progress(300);
+        for width in [20, 80, 160, 240] {
+            let lines = p.lines(Size::new(width, 24));
+            let usable = usize::from(width - 1);
+            assert_eq!(lines[1].width(), usable);
+            assert_eq!(lines.len(), 1 + 300_usize.div_ceil(usable));
+            assert!(lines.iter().all(|line| line.width() <= usable));
+        }
+    }
+
+    #[test]
+    fn progress_stays_on_screen_even_on_tiny_terminals() {
+        let p = progress(1000);
+        for (width, height) in [(0, 0), (1, 1), (3, 3), (40, 6)] {
+            let lines = p.lines(Size::new(width, height));
+            assert!(lines.len() <= usize::from(height.saturating_sub(2).max(1)));
+            assert!(
+                lines
+                    .iter()
+                    .all(|line| line.width() <= usize::from(width.saturating_sub(1).max(1)))
+            );
+        }
+    }
+
+    #[test]
+    fn cleanup_erases_only_owned_rows_and_is_idempotent() {
+        let mut p = progress(300);
+        p.rows = 3;
+        let mut bytes = Vec::new();
+        p.clear(&mut bytes).unwrap();
+        assert_eq!(
+            String::from_utf8(bytes.clone()).unwrap(),
+            "\r\x1b[3A\x1b[2K\x1b[1B\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[2A\r"
+        );
+        assert_eq!(p.rows, 0);
+        p.clear(&mut bytes).unwrap();
+        assert_eq!(
+            bytes,
+            b"\r\x1b[3A\x1b[2K\x1b[1B\r\x1b[2K\x1b[1B\r\x1b[2K\x1b[2A\r"
+        );
+        assert!(!bytes.windows(3).any(|w| w == b"[2J"));
+    }
 }
