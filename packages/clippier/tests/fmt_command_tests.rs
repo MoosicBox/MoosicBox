@@ -380,7 +380,12 @@ fn representative_ecosystem_fixtures_complete_check_and_fmt_product_paths() {
         },
     ] {
         let temp = tempfile::tempdir().unwrap();
-        std::fs::write(temp.path().join(fixture.signal), "{}\n").unwrap();
+        let signal_contents = if fixture.signal.ends_with(".toml") {
+            "# Native TOML configuration fixture\n"
+        } else {
+            "{}\n"
+        };
+        std::fs::write(temp.path().join(fixture.signal), signal_contents).unwrap();
         std::fs::write(temp.path().join(fixture.source), "fixture\n").unwrap();
         let executable = write_successful_tool(temp.path(), fixture.tool);
         let tool_path = format!("{}={}", fixture.tool, executable.display());

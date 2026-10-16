@@ -1560,6 +1560,44 @@ Set `automatic-excludes = false` to disable every profile, or list individual
 profile names in `disable-profiles`. Tool-specific configuration lives under
 `[runner.tools.<tool-id>]` and can add narrower includes and exclusions.
 
+### Native file selection
+
+`fmt` and file-oriented `check` operations intersect native tool includes and
+excludes with Clippier's global and per-tool policies before binary probing or
+execution. Native rules remain tool- and operation-specific: a Prettier exclusion
+does not hide Taplo work, and a formatter exclusion does not automatically apply
+to linting. Native inclusions cannot override Clippier's global/VCS boundaries.
+Ignoring a file in its automatically selected formatter does not transfer it to
+a fallback formatter.
+
+| Integration         | Selection resolved by Clippier                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prettier            | Effective ignore files, gitignore patterns and negation; explicit `--ignore-path` replaces the native default ignore-file list.                                                 |
+| Taplo               | Invocation-relative top-level `include`/`exclude`; missing includes and `include = []` remain distinct. Rule selectors still belong to Taplo's formatting/schema configuration. |
+| Rustfmt             | Ancestor configuration and native `ignore` on a verified supporting nightly formatter. Stable/beta ignores remain inactive, with a diagnostic.                                  |
+| Biome               | Supported static `files.includes` and operation-specific includes. Unsupported pattern/configuration constructs are reported rather than approximated.                          |
+| Dprint              | Supported static includes/excludes; negated excludes, inheritance, and unsupported CLI selection overrides are explicitly delegated.                                            |
+| Ruff                | Static include/exclude/extend rules and distinct lint/format exclusions. Unsupported inheritance or ambiguous nested ownership fails explicitly.                                |
+| Black               | Static include/exclude/extend/force regex selection. Unsupported Python regex constructs fail explicitly.                                                                       |
+| Other catalog tools | Native selection remains delegated and is identified in scope diagnostics; this is not a claim of complete native selection support.                                            |
+
+For Ruff and Black, Clippier enforces recursive-selection intent even though it
+passes explicit files to the subprocess; native explicit-file commands can
+otherwise bypass discovery exclusions. Formatting settings remain native.
+Repository-wide Cargo/Clippy operations are not confined by these file selectors.
+
+Native configuration is shared across operation views and checked for changes
+before execution. JSON results expose support/provenance messages under
+`plan.inventory.native_scope`. Unsupported rules do not grant permission to
+silently skip files. Clippier retains its existing VCS inventory boundary, so a
+native re-inclusion cannot recover content outside that boundary.
+
+Traversal pruning is conservative: explicit tool inventories prune native-ignored
+directories only when every relevant consumer proves the subtree unnecessary.
+Automatic discovery retains tool/configuration evidence; unknown or nested-rule
+behavior prevents pruning. File filtering still avoids unnecessary binary reads
+and process arguments when pruning cannot safely be proved.
+
 When multiple automatic formatters support an extension, Clippier assigns one
 deterministic owner using evidence strength and catalog priority. Explicit
 `format-order` values instead create an ordered formatter pipeline and may

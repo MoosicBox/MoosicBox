@@ -36,6 +36,7 @@ mod discovery;
 #[cfg(feature = "format")]
 mod format_selection;
 pub mod init;
+mod native_scope;
 mod registry;
 mod runner;
 mod scope;
@@ -475,6 +476,19 @@ pub fn overlap_warnings_for_plan(
                 .intersection(&right.format_extensions)
                 .cloned()
                 .collect::<std::collections::BTreeSet<_>>();
+            let left_files = plan
+                .capability_files
+                .get(&discovery::native_key(&left.name, ToolCapability::Format))
+                .unwrap_or(&left.files);
+            let right_files = plan
+                .capability_files
+                .get(&discovery::native_key(&right.name, ToolCapability::Format))
+                .unwrap_or(&right.files);
+            let shared_extensions = left_files
+                .intersection(right_files)
+                .filter_map(|path| catalog::file_format(path).map(str::to_ascii_lowercase))
+                .collect::<std::collections::BTreeSet<_>>();
+            overlap_extensions.retain(|extension| shared_extensions.contains(extension));
             if overlap_extensions.is_empty() {
                 continue;
             }
@@ -1270,6 +1284,72 @@ format-order = 20
     }
 
     #[test]
+    fn format_overlap_does_not_use_shared_lint_only_assignments() {
+        use std::collections::{BTreeMap, BTreeSet};
+        use std::path::PathBuf;
+
+        let root = tempfile::tempdir().unwrap();
+        let binary = root.path().join("formatter");
+        std::fs::write(&binary, "").unwrap();
+        let mut config = ToolsConfig::default();
+        for name in ["taplo", "dprint"] {
+            config
+                .executables
+                .insert(name.into(), binary.to_string_lossy().into_owned());
+        }
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let mut plan = ToolPlan::default();
+        for (name, formatted) in [("taplo", "left.toml"), ("dprint", "right.toml")] {
+            assert!(
+                registry
+                    .get(name)
+                    .unwrap()
+                    .capabilities
+                    .contains(&ToolCapability::Lint)
+            );
+            let format_files = BTreeSet::from([PathBuf::from(formatted)]);
+            let lint_files = BTreeSet::from([PathBuf::from("shared.toml")]);
+            plan.tools.push(PlannedTool {
+                name: name.into(),
+                evidence: SelectionEvidence {
+                    kind: SelectionEvidenceKind::ClippierConfig,
+                    path: PathBuf::from("clippier.toml"),
+                },
+                files: format_files.union(&lint_files).cloned().collect(),
+                format_extensions: BTreeSet::from(["toml".into()]),
+                format_order: Some(10),
+            });
+            plan.capability_files.extend(BTreeMap::from([
+                (
+                    discovery::native_key(name, ToolCapability::Format),
+                    format_files,
+                ),
+                (
+                    discovery::native_key(name, ToolCapability::Lint),
+                    lint_files,
+                ),
+            ]));
+        }
+        assert_eq!(
+            overlap_warnings_for_plan(&registry, &plan, &[]),
+            Vec::<String>::new()
+        );
+        plan.capability_files
+            .get_mut("taplo:format")
+            .unwrap()
+            .insert(PathBuf::from("shared.toml"));
+        assert_eq!(
+            overlap_warnings_for_plan(&registry, &plan, &[]),
+            Vec::<String>::new()
+        );
+        plan.capability_files
+            .get_mut("dprint:format")
+            .unwrap()
+            .insert(PathBuf::from("shared.toml"));
+        assert_eq!(overlap_warnings_for_plan(&registry, &plan, &[]).len(), 2);
+    }
+
+    #[test]
     fn configured_pipeline_overlap_warns_without_changing_execution() {
         let dir = temp_dir("clippier-pipeline-overlap");
         let binary = dir.join("formatter");
@@ -1289,7 +1369,9 @@ format-order = 20
                         kind: SelectionEvidenceKind::ClippierConfig,
                         path: std::path::PathBuf::from("clippier.toml"),
                     },
-                    files: std::collections::BTreeSet::new(),
+                    files: std::collections::BTreeSet::from([std::path::PathBuf::from(
+                        "shared.md",
+                    )]),
                     format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
                     format_order: Some(10),
                 },
@@ -1299,7 +1381,9 @@ format-order = 20
                         kind: SelectionEvidenceKind::ClippierConfig,
                         path: std::path::PathBuf::from("clippier.toml"),
                     },
-                    files: std::collections::BTreeSet::new(),
+                    files: std::collections::BTreeSet::from([std::path::PathBuf::from(
+                        "shared.md",
+                    )]),
                     format_extensions: std::collections::BTreeSet::from(["md".to_string()]),
                     format_order: Some(20),
                 },
@@ -1308,6 +1392,7 @@ format-order = 20
             effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
+            ..ToolPlan::default()
         };
         let warnings = overlap_warnings_for_plan(&registry, &plan, &[]);
         assert_eq!(warnings.len(), 2);

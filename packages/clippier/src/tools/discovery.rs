@@ -111,6 +111,10 @@ pub type NativeConfigCacheHandle = Arc<Mutex<NativeConfigCache>>;
 /// Deterministic command-scoped inventory diagnostics.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InventoryDiagnostics {
+    /// Native selection diagnostics, including provenance and unsupported semantics.
+    pub native_scope: Vec<String>,
+    /// Native configurations parsed by the shared scope resolver.
+    pub native_scope_configs_parsed: usize,
     /// Unique execution candidates probed for binary content.
     pub binary_files_probed: usize,
     /// Bytes read by binary classification.
@@ -163,6 +167,7 @@ pub struct SelectionEvidence {
 /// Ignore-aware repository facts shared by check and format planning.
 #[derive(Debug, Clone, Default)]
 pub struct RepositoryDiscovery {
+    native_selection: Option<NativeSelection>,
     root: PathBuf,
     files: BTreeSet<PathBuf>,
     basenames: BTreeMap<String, BTreeSet<PathBuf>>,
@@ -229,11 +234,55 @@ impl RepositoryDiscovery {
         Self::discover_with_scope_excludes(root, root, excludes, None)
     }
 
+    /// Creates an explicit command inventory with unanimous native pruning.
+    /// Automatic discovery must retain all selection evidence and uses the
+    /// ordinary inventory constructor instead.
+    ///
+    /// # Errors
+    ///
+    /// * Returns native configuration, traversal, or policy errors.
+    pub fn explicit_inventory(
+        registry: &ToolRegistry,
+        capabilities: &[ToolCapability],
+        names: &[String],
+    ) -> std::io::Result<Self> {
+        let native = NativeSelection::resolve(registry, capabilities, names)?;
+        let config = registry.config().effective_scope();
+        let mut result = Self::discover_with_native(
+            registry.working_dir(),
+            registry
+                .config()
+                .scope_base
+                .as_deref()
+                .unwrap_or_else(|| registry.working_dir()),
+            &config.exclude,
+            Some(&config),
+            Some(native.clone()),
+        )?;
+        result.automatic_exclusions =
+            automatic_exclusion_patterns_from_files(&result.files, &config);
+        result.native_selection = Some(native);
+        Ok(result.with_command_context(
+            registry.diagnostics_handle(),
+            registry.native_config_cache(),
+        ))
+    }
+
     fn discover_with_scope_excludes(
         root: &Path,
         scope_base: &Path,
         excludes: &[String],
         scope_config: Option<&crate::tools::ScopeConfig>,
+    ) -> Result<Self, std::io::Error> {
+        Self::discover_with_native(root, scope_base, excludes, scope_config, None)
+    }
+
+    fn discover_with_native(
+        root: &Path,
+        scope_base: &Path,
+        excludes: &[String],
+        scope_config: Option<&crate::tools::ScopeConfig>,
+        native: Option<NativeSelection>,
     ) -> Result<Self, std::io::Error> {
         let root = root.canonicalize()?;
         let scope_base = scope_base.canonicalize()?;
@@ -281,6 +330,12 @@ impl RepositoryDiscovery {
                     || relative.as_os_str().is_empty()
                 {
                     return true;
+                }
+                if native
+                    .as_ref()
+                    .is_some_and(|native| native.can_prune(entry.path()))
+                {
+                    return false;
                 }
                 scope_config.as_ref().is_none_or(|config| {
                     !is_inventory_generated_directory(entry.path(), name, config, &package_profiles)
@@ -379,7 +434,8 @@ impl RepositoryDiscovery {
         capabilities: &[ToolCapability],
         discovery: &mut Self,
     ) -> Result<ToolPlan, std::io::Error> {
-        plan_inventory(registry, capabilities, discovery)
+        let plan = plan_inventory(registry, capabilities, discovery)?;
+        Ok(plan)
     }
 
     /// Builds a plan for explicitly selected tools from one command inventory.
@@ -440,7 +496,7 @@ impl RepositoryDiscovery {
         }
         let mut diagnostics = discovery.diagnostics();
         diagnostics.files_assigned = tools.iter().map(|tool| tool.files.len()).sum();
-        Ok(ToolPlan {
+        (ToolPlan {
             tools: tools.clone(),
             unavailable: Vec::new(),
             effective_extensions: tools
@@ -457,7 +513,9 @@ impl RepositoryDiscovery {
                 .collect(),
             automatic_exclusions: discovery.automatic_exclusions().to_vec(),
             diagnostics,
+            ..ToolPlan::default()
         })
+        .resolve_native(registry, capabilities, discovery)
     }
 
     fn parse_toml_cached(&mut self, path: &Path) -> Option<&toml::Value> {
@@ -623,9 +681,198 @@ pub struct PlannedTool {
     pub format_order: Option<i32>,
 }
 
+/// Native selection resolved once for a command. Clones share parsing and error identity.
+#[derive(Clone)]
+pub struct NativeSelection {
+    consumers: Arc<Vec<(String, ToolCapability)>>,
+    pruning_complete: bool,
+    inner: Arc<Mutex<BTreeMap<ToolCapability, super::native_scope::NativeScopeSet>>>,
+}
+
+impl std::fmt::Debug for NativeSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("NativeSelection(command-local)")
+    }
+}
+
+impl PartialEq for NativeSelection {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+impl Eq for NativeSelection {}
+
+impl NativeSelection {
+    pub(super) fn resolve(
+        registry: &ToolRegistry,
+        capabilities: &[ToolCapability],
+        names: &[String],
+    ) -> std::io::Result<Self> {
+        let mut consumers = Vec::new();
+        let mut pruning_complete = true;
+        let cache = super::native_scope::NativeScopeCache::default();
+        let mut views = BTreeMap::new();
+        for capability in capabilities {
+            let mut requests = Vec::new();
+            for name in names {
+                let Some(tool) = registry.get(name) else {
+                    continue;
+                };
+                if !super::tool_catalog_entry(name).is_some_and(native_file_consumer) {
+                    pruning_complete = false;
+                    continue;
+                }
+                {
+                    if !tool.capabilities.contains(capability) {
+                        continue;
+                    }
+                    let mut args = match capability {
+                        ToolCapability::Format => tool.format_args.clone(),
+                        ToolCapability::Lint => tool.check_args.clone(),
+                    };
+                    if name == "prettier"
+                        && !args
+                            .iter()
+                            .any(|arg| arg == "--ignore-path" || arg.starts_with("--ignore-path="))
+                        && let Some(path) = &tool.native_ignore_path
+                    {
+                        args.extend(["--ignore-path".into(), path.display().to_string()]);
+                    }
+                    consumers.push((name.clone(), *capability));
+                    requests.push((name.clone(), args));
+                }
+            }
+            let borrowed = requests
+                .iter()
+                .map(|(name, args)| (name.as_str(), args.as_slice()))
+                .collect::<Vec<_>>();
+            views.insert(
+                *capability,
+                super::native_scope::NativeScopeSet::resolve_with_cache(
+                    registry.working_dir(),
+                    &borrowed,
+                    cache.clone(),
+                )?,
+            );
+        }
+        Ok(Self {
+            consumers: Arc::new(consumers),
+            pruning_complete,
+            inner: Arc::new(Mutex::new(views)),
+        })
+    }
+
+    fn can_prune(&self, directory: &Path) -> bool {
+        if !self.pruning_complete || self.consumers.is_empty() {
+            return false;
+        }
+        self.inner.lock().is_ok_and(|views| {
+            self.consumers.iter().all(|(name, capability)| {
+                views
+                    .get(capability)
+                    .is_some_and(|scope| scope.can_prune(name, directory))
+            })
+        })
+    }
+
+    pub(super) fn validate_files(
+        &self,
+        name: &str,
+        capability: ToolCapability,
+        files: &[PathBuf],
+    ) -> std::io::Result<()> {
+        let mut views = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("native scope lock poisoned"))?;
+        let result = views
+            .get_mut(&capability)
+            .map_or(Ok(()), |view| view.validate_files(name, files));
+        drop(views);
+        result
+    }
+
+    pub(super) fn validate(&self) -> std::io::Result<()> {
+        let views = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("native scope lock poisoned"))?;
+        for view in views.values() {
+            view.validate_snapshot()?;
+        }
+        drop(views);
+        Ok(())
+    }
+
+    pub(super) fn filter(
+        &self,
+        name: &str,
+        capability: ToolCapability,
+        files: &BTreeSet<PathBuf>,
+    ) -> std::io::Result<BTreeSet<PathBuf>> {
+        let mut views = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("native scope lock poisoned"))?;
+        let Some(scope) = views.get_mut(&capability) else {
+            drop(views);
+            return Ok(files.clone());
+        };
+        let filtered = files
+            .iter()
+            .filter_map(|path| match scope.allows(name, path) {
+                Ok(true) => Some(Ok(path.clone())),
+                Ok(false) => None,
+                Err(error) => Some(Err(error)),
+            })
+            .collect();
+        drop(views);
+        filtered
+    }
+
+    pub(super) fn record(&self, diagnostics: &mut InventoryDiagnostics) -> std::io::Result<()> {
+        let scope = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::other("native scope lock poisoned"))?;
+        diagnostics.native_scope = scope
+            .values()
+            .flat_map(super::native_scope::NativeScopeSet::diagnostics)
+            .collect();
+        diagnostics.native_scope_configs_parsed = scope
+            .values()
+            .map(super::native_scope::NativeScopeSet::configs_parsed)
+            .max()
+            .unwrap_or(0);
+        drop(scope);
+        diagnostics.native_scope.push("Clippier inventory preserves its VCS ignore boundary; native tools (including dprint) cannot reinclude files outside that boundary. Repository-wide Cargo/Clippy selection is not native file filtering.".into());
+        diagnostics.native_scope.sort();
+        diagnostics.native_scope.dedup();
+        Ok(())
+    }
+}
+
+pub(super) fn native_file_consumer(entry: &super::ToolCatalogEntry) -> bool {
+    entry.uses_scoped_file_arguments() || entry.adapter() == super::ToolAdapter::Rustfmt
+}
+
+pub(super) fn native_key(name: &str, capability: ToolCapability) -> String {
+    format!(
+        "{name}:{}",
+        match capability {
+            ToolCapability::Format => "format",
+            ToolCapability::Lint => "lint",
+        }
+    )
+}
+
 /// Shared automatic plan consumed by `check` and `fmt`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ToolPlan {
+    /// Capability-specific eligible files. The legacy tool files remain their union.
+    pub capability_files: BTreeMap<String, BTreeSet<PathBuf>>,
+    /// Shared native scope retained through execution.
+    pub native_selection: Option<NativeSelection>,
     /// Selected, installed tools in deterministic order.
     pub tools: Vec<PlannedTool>,
     /// Relevant tools which are not installed.
@@ -639,6 +886,61 @@ pub struct ToolPlan {
 }
 
 impl ToolPlan {
+    fn resolve_native(
+        mut self,
+        registry: &ToolRegistry,
+        capabilities: &[ToolCapability],
+        discovery: &RepositoryDiscovery,
+    ) -> std::io::Result<Self> {
+        let selection = match discovery.native_selection.clone() {
+            Some(selection) => selection,
+            None => NativeSelection::resolve(registry, capabilities, &self.names())?,
+        };
+        for tool in &mut self.tools {
+            let Some(entry) = super::tool_catalog_entry(&tool.name) else {
+                continue;
+            };
+            if !native_file_consumer(entry) {
+                continue;
+            }
+            let mut union = BTreeSet::new();
+            for capability in capabilities {
+                if !entry.capabilities.contains(capability)
+                    || registry
+                        .config()
+                        .tool_policy(&tool.name)
+                        .is_some_and(|policy| !policy.enables(*capability))
+                {
+                    continue;
+                }
+                let extensions = if *capability == ToolCapability::Format {
+                    tool.format_extensions.clone()
+                } else {
+                    entry.extensions(*capability)
+                };
+                let candidates = tool
+                    .files
+                    .iter()
+                    .filter(|path| {
+                        super::catalog::file_format(path).is_some_and(|extension| {
+                            extensions.contains(&extension.to_ascii_lowercase())
+                        })
+                    })
+                    .cloned()
+                    .collect();
+                let files = selection.filter(&tool.name, *capability, &candidates)?;
+                union.extend(files.iter().cloned());
+                self.capability_files
+                    .insert(native_key(&tool.name, *capability), files);
+            }
+            tool.files = union;
+        }
+        selection.record(&mut self.diagnostics)?;
+        self.diagnostics.files_assigned = self.tools.iter().map(|tool| tool.files.len()).sum();
+        self.native_selection = Some(selection);
+        Ok(self)
+    }
+
     /// Returns selected tool names.
     #[must_use]
     pub fn names(&self) -> Vec<String> {
@@ -690,7 +992,8 @@ pub fn plan_tools(
         registry.diagnostics_handle(),
         registry.native_config_cache(),
     );
-    plan_inventory(registry, capabilities, &mut discovery)
+    let plan = plan_inventory(registry, capabilities, &mut discovery)?;
+    Ok(plan)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -807,17 +1110,6 @@ fn plan_inventory(
                 file_extensions.extend(entry.extensions(ToolCapability::Lint));
             }
             let mut files = global_scope.filter_relative_files(discovery.files(), &file_extensions);
-            if let Some(tool) = registry.get(entry.name)
-                && !tool.native_includes.is_empty()
-            {
-                let native_scope = crate::tools::scope::ScopeMatcher::with_patterns(
-                    registry.working_dir(),
-                    &tool.native_includes,
-                    &[],
-                )
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
-                files = native_scope.filter_relative_files(&files, &file_extensions);
-            }
             if let Some(policy) = policy
                 && (!policy.include.is_empty() || !policy.exclude.is_empty())
             {
@@ -848,7 +1140,7 @@ fn plan_inventory(
     unavailable.dedup();
     let mut diagnostics = discovery.diagnostics();
     diagnostics.files_assigned = tools.iter().map(|tool| tool.files.len()).sum();
-    Ok(ToolPlan {
+    (ToolPlan {
         tools: tools.clone(),
         unavailable,
         effective_extensions: tools
@@ -865,7 +1157,9 @@ fn plan_inventory(
             .collect(),
         automatic_exclusions: discovery.automatic_exclusions().to_vec(),
         diagnostics,
+        ..ToolPlan::default()
     })
+    .resolve_native(registry, capabilities, discovery)
 }
 
 fn configured_format_extensions(
@@ -1228,6 +1522,193 @@ mod tests {
 
         let discovery = RepositoryDiscovery::discover(root.path()).unwrap();
         assert!(discovery.matching_signal("rustfmt.toml").is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn native_plans_share_auto_explicit_eligibility_and_prune_only_unanimously() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("generated")).unwrap();
+        std::fs::write(root.path().join(".prettierignore"), "generated/\n").unwrap();
+        std::fs::write(root.path().join("keep.md"), "keep\n").unwrap();
+        std::fs::write(root.path().join("generated/secret.md"), b"\0binary").unwrap();
+        std::fs::write(root.path().join("generated/keep.toml"), "value = 1\n").unwrap();
+        let mut config = crate::tools::ToolsConfig::default();
+        for entry in TOOL_CATALOG {
+            config.tools.insert(
+                entry.name.into(),
+                crate::tools::ToolPolicy {
+                    mode: if ["prettier", "taplo"].contains(&entry.name) {
+                        crate::tools::ToolSelectionMode::Enabled
+                    } else {
+                        crate::tools::ToolSelectionMode::Disabled
+                    },
+                    executable: Some("/bin/true".into()),
+                    ..Default::default()
+                },
+            );
+        }
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let capabilities = [ToolCapability::Format];
+        let names = vec!["prettier".into()];
+        let mut inventory =
+            RepositoryDiscovery::explicit_inventory(&registry, &capabilities, &names).unwrap();
+        assert!(!inventory.files().contains(Path::new("generated/keep.toml")));
+        let explicit =
+            RepositoryDiscovery::explicit_plan(&registry, &capabilities, &names, &mut inventory)
+                .unwrap();
+        let automatic = plan_tools(&registry, &capabilities).unwrap();
+        assert_eq!(
+            explicit.planned_files()["prettier"],
+            automatic.planned_files()["prettier"]
+        );
+        assert!(!explicit.planned_files()["prettier"].contains(Path::new("generated/secret.md")));
+        let walks_before_mixed = registry
+            .diagnostics_handle()
+            .lock()
+            .unwrap()
+            .recursive_walks;
+        let mixed = RepositoryDiscovery::explicit_inventory(
+            &registry,
+            &capabilities,
+            &["prettier".into(), "taplo".into()],
+        )
+        .unwrap();
+        assert!(mixed.files().contains(Path::new("generated/keep.toml")));
+        assert_eq!(mixed.diagnostics().recursive_walks - walks_before_mixed, 1);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn native_capability_views_share_parsing_and_reject_config_changes() {
+        let root = tempfile::tempdir().unwrap();
+        let config_path = root.path().join(".taplo.toml");
+        std::fs::write(&config_path, "include = []\n").unwrap();
+        std::fs::write(root.path().join("file.toml"), "a = 1\n").unwrap();
+        let mut config = crate::tools::ToolsConfig::default();
+        config.tools.insert(
+            "taplo".into(),
+            crate::tools::ToolPolicy {
+                executable: Some("/bin/true".into()),
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let mut inventory =
+            RepositoryDiscovery::inventory(root.path(), &crate::tools::ScopeConfig::default())
+                .unwrap();
+        let plan = RepositoryDiscovery::explicit_plan(
+            &registry,
+            &[ToolCapability::Format, ToolCapability::Lint],
+            &["taplo".into()],
+            &mut inventory,
+        )
+        .unwrap();
+        assert!(plan.planned_files()["taplo"].is_empty());
+        assert!(plan.capability_files["taplo:format"].is_empty());
+        assert!(plan.capability_files["taplo:lint"].is_empty());
+        assert_eq!(plan.diagnostics.native_scope_configs_parsed, 1);
+        std::fs::write(config_path, "include = ['**/*.toml']\n").unwrap();
+        assert!(plan.native_selection.unwrap().validate().is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn rustfmt_native_adapter_is_resolved_despite_no_generic_file_arguments() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("source.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(
+            root.path().join("rustfmt.toml"),
+            "ignore = [\"source.rs\"]\n",
+        )
+        .unwrap();
+        let mut config = crate::tools::ToolsConfig::default();
+        config.tools.insert(
+            "rustfmt".into(),
+            crate::tools::ToolPolicy {
+                executable: Some("/bin/true".into()),
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let names = vec!["rustfmt".into()];
+        let mut inventory =
+            RepositoryDiscovery::explicit_inventory(&registry, &[ToolCapability::Format], &names)
+                .unwrap();
+        let plan = RepositoryDiscovery::explicit_plan(
+            &registry,
+            &[ToolCapability::Format],
+            &names,
+            &mut inventory,
+        )
+        .unwrap();
+        assert!(plan.capability_files["rustfmt:format"].contains(Path::new("source.rs")));
+        assert!(
+            plan.diagnostics
+                .native_scope
+                .iter()
+                .any(|message| message.contains("rustfmt"))
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn biome_format_scope_uses_the_executed_format_operation() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(
+            root.path().join("biome.json"),
+            r#"{"formatter":{"includes":[]},"linter":{"includes":["**/*.js"]}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.path().join("source.js"), "let value = 1;\n").unwrap();
+        let executable = root.path().join("fake-biome");
+        std::fs::write(&executable, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut config = crate::tools::ToolsConfig::default();
+        config.tools.insert(
+            "biome".into(),
+            crate::tools::ToolPolicy {
+                executable: Some(executable.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+        );
+        let registry = ToolRegistry::new(config, Some(root.path())).unwrap();
+        let tool = registry.get("biome").unwrap();
+        assert!(tool.check_args.iter().any(|arg| arg == "format"));
+        assert!(tool.format_args.iter().any(|arg| arg == "format"));
+        assert!(
+            tool.format_args
+                .iter()
+                .any(|arg| arg == "--files-ignore-unknown=true")
+        );
+        assert!(
+            tool.format_args
+                .iter()
+                .any(|arg| arg.starts_with("--vcs-root"))
+        );
+        assert!(
+            tool.format_args
+                .iter()
+                .any(|arg| arg == "--use-editorconfig=true")
+        );
+        let names = vec!["biome".into()];
+        let mut inventory = RepositoryDiscovery::explicit_inventory(
+            &registry,
+            &[ToolCapability::Format, ToolCapability::Lint],
+            &names,
+        )
+        .unwrap();
+        let plan = RepositoryDiscovery::explicit_plan(
+            &registry,
+            &[ToolCapability::Format, ToolCapability::Lint],
+            &names,
+            &mut inventory,
+        )
+        .unwrap();
+        assert!(plan.capability_files["biome:format"].is_empty());
+        assert!(!plan.capability_files.contains_key("biome:lint"));
     }
 
     #[test]

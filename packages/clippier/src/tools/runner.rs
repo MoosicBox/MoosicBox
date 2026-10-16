@@ -211,6 +211,9 @@ pub struct ToolRunner<'a> {
     format_order: BTreeMap<String, i32>,
     /// Actual repository-relative files planned per tool.
     planned_files: BTreeMap<String, BTreeSet<PathBuf>>,
+    capability_files: BTreeMap<String, BTreeSet<PathBuf>>,
+    native_selection: Option<super::discovery::NativeSelection>,
+    execution_capability: Option<crate::tools::ToolCapability>,
     /// Deterministic command-scoped inventory/planning diagnostics.
     inventory_diagnostics: crate::tools::InventoryDiagnostics,
     /// Effective automatic exclusion patterns.
@@ -272,6 +275,9 @@ impl<'a> ToolRunner<'a> {
             selection_evidence: BTreeMap::new(),
             format_order: BTreeMap::new(),
             planned_files: BTreeMap::new(),
+            capability_files: BTreeMap::new(),
+            native_selection: None,
+            execution_capability: None,
             inventory_diagnostics: crate::tools::InventoryDiagnostics::default(),
             automatic_exclusions: effective_scope.exclusions,
             unavailable_tools: Vec::new(),
@@ -334,6 +340,8 @@ impl<'a> ToolRunner<'a> {
             .iter()
             .map(|tool| (tool.name.clone(), tool.files.clone()))
             .collect();
+        self.capability_files.clone_from(&plan.capability_files);
+        self.native_selection.clone_from(&plan.native_selection);
         self.inventory_diagnostics = plan.diagnostics.clone();
         self.automatic_exclusions
             .clone_from(&plan.automatic_exclusions);
@@ -912,7 +920,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         Ok(self
-            .prepare_execution(&formatters)?
+            .prepare_execution_for(&formatters, crate::tools::ToolCapability::Format)?
             .run_tools(&formatters, paths, false))
     }
 
@@ -928,7 +936,7 @@ impl<'a> ToolRunner<'a> {
         }
 
         Ok(self
-            .prepare_execution(&linters)?
+            .prepare_execution_for(&linters, crate::tools::ToolCapability::Lint)?
             .run_tools(&linters, paths, true))
     }
 
@@ -944,24 +952,114 @@ impl<'a> ToolRunner<'a> {
         }
 
         Ok(self
-            .prepare_execution(&formatters)?
+            .prepare_execution_for(&formatters, crate::tools::ToolCapability::Format)?
             .run_tools(&formatters, paths, true))
     }
 
+    #[cfg(test)]
     fn prepare_execution(&self, tools: &[&Tool]) -> Result<Self, ToolError> {
+        self.prepare_execution_for(tools, crate::tools::ToolCapability::Format)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn prepare_execution_for(
+        &self,
+        tools: &[&Tool],
+        capability: crate::tools::ToolCapability,
+    ) -> Result<Self, ToolError> {
+        if tools.iter().any(|tool| {
+            super::tool_catalog_entry(&tool.name)
+                .is_some_and(super::discovery::native_file_consumer)
+                && !self.planned_files.contains_key(&tool.name)
+        }) {
+            let names = tools
+                .iter()
+                .map(|tool| tool.name.clone())
+                .collect::<Vec<_>>();
+            let capabilities = if capability == crate::tools::ToolCapability::Lint {
+                vec![crate::tools::ToolCapability::Format, capability]
+            } else {
+                vec![capability]
+            };
+            let mut inventory = super::RepositoryDiscovery::explicit_inventory(
+                self.registry,
+                &capabilities,
+                &names,
+            )
+            .map_err(|error| {
+                ToolError::DetectionFailed("native scope".into(), error.to_string())
+            })?;
+            let plan = super::RepositoryDiscovery::explicit_plan(
+                self.registry,
+                &capabilities,
+                &names,
+                &mut inventory,
+            )
+            .map_err(|error| {
+                ToolError::DetectionFailed("native scope".into(), error.to_string())
+            })?;
+            return self
+                .clone()
+                .with_tool_plan(&plan)
+                .prepare_execution_for(tools, capability);
+        }
         let mut prepared = self.clone();
+        prepared.execution_capability = Some(capability);
+        let native = self
+            .native_selection
+            .clone()
+            .map_or_else(
+                || {
+                    super::discovery::NativeSelection::resolve(
+                        self.registry,
+                        &[capability],
+                        &tools
+                            .iter()
+                            .map(|tool| tool.name.clone())
+                            .collect::<Vec<_>>(),
+                    )
+                },
+                Ok,
+            )
+            .map_err(|error| {
+                ToolError::DetectionFailed("native scope".into(), error.to_string())
+            })?;
         let mut candidates = BTreeSet::new();
         for tool in tools {
+            let capability = if tool.capabilities.contains(&capability) {
+                capability
+            } else {
+                crate::tools::ToolCapability::Format
+            };
             if let Some(files) = self.scoped_file_args(tool) {
                 let files = files
                     .into_iter()
                     .map(PathBuf::from)
                     .collect::<BTreeSet<_>>();
+                let files = self
+                    .capability_files
+                    .get(&super::discovery::native_key(&tool.name, capability))
+                    .map_or_else(
+                        || files.clone(),
+                        |eligible| eligible.intersection(&files).cloned().collect(),
+                    );
+                let files = native
+                    .filter(&tool.name, capability, &files)
+                    .map_err(|error| {
+                        ToolError::DetectionFailed("native scope".into(), error.to_string())
+                    })?;
                 candidates.extend(files.iter().cloned());
                 prepared.planned_files.insert(tool.name.clone(), files);
             }
         }
+        native
+            .record(&mut prepared.inventory_diagnostics)
+            .map_err(|error| {
+                ToolError::DetectionFailed("native scope".into(), error.to_string())
+            })?;
+        prepared.native_selection = Some(native);
         if !self.registry.config().scope.exclude_binary {
+            prepared.validate_native_batches(tools, capability)?;
             return Ok(prepared);
         }
         let start = Instant::now();
@@ -987,7 +1085,53 @@ impl<'a> ToolRunner<'a> {
         for files in prepared.planned_files.values_mut() {
             files.retain(|path| !excluded.contains(path));
         }
+        prepared.validate_native_batches(tools, capability)?;
         Ok(prepared)
+    }
+
+    fn validate_native_batches(
+        &self,
+        tools: &[&Tool],
+        capability: crate::tools::ToolCapability,
+    ) -> Result<(), ToolError> {
+        let Some(native) = &self.native_selection else {
+            return Ok(());
+        };
+        for tool in tools {
+            let capability = if tool.capabilities.contains(&capability) {
+                capability
+            } else {
+                crate::tools::ToolCapability::Format
+            };
+            if let Some(files) = self.planned_files.get(&tool.name) {
+                native
+                    .validate_files(
+                        &tool.name,
+                        capability,
+                        &files.iter().cloned().collect::<Vec<_>>(),
+                    )
+                    .map_err(|error| {
+                        ToolError::DetectionFailed("native scope".into(), error.to_string())
+                    })?;
+            }
+        }
+        native
+            .validate()
+            .map_err(|error| ToolError::DetectionFailed("native scope".into(), error.to_string()))
+    }
+
+    fn prepare_specific(&self, tools: &[&Tool], check_mode: bool) -> Result<Self, ToolError> {
+        let capability = if check_mode
+            && self
+                .capability_files
+                .keys()
+                .any(|key| key.ends_with(":lint"))
+        {
+            crate::tools::ToolCapability::Lint
+        } else {
+            crate::tools::ToolCapability::Format
+        };
+        self.prepare_execution_for(tools, capability)
     }
 
     /// Runs specific tools by name
@@ -1009,18 +1153,9 @@ impl<'a> ToolRunner<'a> {
         if tools.is_empty() {
             return Err(ToolError::NoToolsAvailable);
         }
-        if tools.iter().any(|tool| {
-            tool_catalog_entry(&tool.name).is_some_and(|entry| entry.uses_scoped_file_arguments())
-                && !self.planned_files.contains_key(&tool.name)
-        }) {
-            return Err(ToolError::DetectionFailed(
-                "inventory".to_string(),
-                "file-oriented tool execution requires a resolved repository plan".to_string(),
-            ));
-        }
 
         Ok(self
-            .prepare_execution(&tools)?
+            .prepare_specific(&tools, check_mode)?
             .run_tools(&tools, paths, check_mode))
     }
 
@@ -1043,27 +1178,18 @@ impl<'a> ToolRunner<'a> {
         if tools.is_empty() {
             return Err(ToolError::NoToolsAvailable);
         }
-        if tools.iter().any(|tool| {
-            tool_catalog_entry(&tool.name).is_some_and(|entry| entry.uses_scoped_file_arguments())
-                && !self.planned_files.contains_key(&tool.name)
-        }) {
-            return Err(ToolError::DetectionFailed(
-                "inventory".to_string(),
-                "file-oriented tool execution requires a resolved repository plan".to_string(),
-            ));
-        }
 
         #[cfg(feature = "tools-tui")]
         {
             Ok(self
-                .prepare_execution(&tools)?
+                .prepare_specific(&tools, check_mode)?
                 .run_tools_with_tui(&tools, paths, check_mode))
         }
 
         #[cfg(not(feature = "tools-tui"))]
         {
             Ok(self
-                .prepare_execution(&tools)?
+                .prepare_specific(&tools, check_mode)?
                 .run_tools(&tools, paths, check_mode))
         }
     }
@@ -1250,7 +1376,23 @@ impl<'a> ToolRunner<'a> {
         check_mode: bool,
         working_dir: Option<&Path>,
     ) -> Option<(String, Vec<String>, Vec<String>)> {
-        let args = if check_mode {
+        // Formatter verification must not turn into a different native operation.
+        // Ruff's catalog check_args are lint-only (`check`), whereas formatter
+        // verification is `format --check`, with formatter-specific selectors.
+        let format_check_args;
+        let args = if check_mode
+            && tool.name == "ruff"
+            && self.execution_capability == Some(crate::tools::ToolCapability::Format)
+        {
+            format_check_args = {
+                let mut args = tool.format_args.clone();
+                if !args.iter().any(|arg| arg == "--check") {
+                    args.push("--check".into());
+                }
+                args
+            };
+            &format_check_args
+        } else if check_mode {
             &tool.check_args
         } else {
             &tool.format_args
@@ -2490,7 +2632,8 @@ pub fn results_to_json(
                 "recursive_walks": results.inventory_diagnostics.recursive_walks,
                 "directories_visited": results.inventory_diagnostics.directories_visited,
                 "files_indexed": results.inventory_diagnostics.files_indexed,
-                "native_configs_parsed": results.inventory_diagnostics.native_configs_parsed,
+                "native_configs_parsed": results.inventory_diagnostics.native_configs_parsed + results.inventory_diagnostics.native_scope_configs_parsed,
+                "native_scope": results.inventory_diagnostics.native_scope,
                 "executables_resolved": results.inventory_diagnostics.executables_resolved,
                 "probes_executed": results.inventory_diagnostics.probes_executed,
                 "binary_files_probed": results.inventory_diagnostics.binary_files_probed,
@@ -2764,6 +2907,7 @@ mod tests {
             effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
+            ..ToolPlan::default()
         };
         let warnings = vec!["WARNING: configured formatter overlap".to_string()];
         let runner = ToolRunner::new(&registry)
@@ -3121,26 +3265,185 @@ mod tests {
     }
 
     #[test]
-    fn file_oriented_low_level_execution_requires_a_resolved_plan() {
-        let dir = temp_dir("clippier-runner-requires-plan");
-        let executable = dir.join("dprint");
-        std::fs::write(&executable, "").unwrap();
+    #[cfg(unix)]
+    fn black_validates_the_git_intersected_batch_before_invocation() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        let executable = write_argument_capture_tool(dir);
+        std::fs::create_dir(dir.join("nested")).unwrap();
+        std::fs::write(
+            dir.join("pyproject.toml"),
+            "[tool.black]\nline-length = 88\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("nested/pyproject.toml"),
+            "[tool.black]\nline-length = 100\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("root.py"), "value = 1\n").unwrap();
+        std::fs::write(dir.join("nested/selected.py"), "value = 2\n").unwrap();
+        let mut config = ToolsConfig::default();
+        config
+            .executables
+            .insert("black".into(), executable.to_string_lossy().into_owned());
+        let registry = ToolRegistry::new(config, Some(dir)).unwrap();
+        let names = vec!["black".into()];
+        let mut inventory = crate::tools::RepositoryDiscovery::explicit_inventory(
+            &registry,
+            &[ToolCapability::Format],
+            &names,
+        )
+        .unwrap();
+        let plan = crate::tools::RepositoryDiscovery::explicit_plan(
+            &registry,
+            &[ToolCapability::Format],
+            &names,
+            &mut inventory,
+        )
+        .unwrap();
+        let runner = ToolRunner::new(&registry).with_tool_plan(&plan);
+        // The complete planned batch shares the original root, but selecting
+        // only the nested file would make Black discover a different config.
+        let error = runner
+            .clone()
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                "nested/selected.py",
+            )])))
+            .run_specific(&["black"], &[], false)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("selected filename batch changes project root/config")
+        );
+        assert!(!dir.join("captured-args").exists());
+        let result = runner
+            .with_format_selection(FormatSelection::Files(BTreeSet::from([PathBuf::from(
+                "root.py",
+            )])))
+            .run_specific(&["black"], &[], false)
+            .unwrap();
+        assert!(result.all_success());
+        let args = std::fs::read_to_string(dir.join("captured-args")).unwrap();
+        assert!(args.lines().any(|arg| arg == "root.py"));
+        assert!(!args.contains("nested/selected.py"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn ruff_format_check_preserves_operation_and_capability_exclusions() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        let executable = write_argument_capture_tool(dir);
+        std::fs::write(
+            dir.join("ruff.toml"),
+            "[format]\nexclude = ['format_only.py']\n[lint]\nexclude = ['lint_only.py']\n",
+        )
+        .unwrap();
+        for file in ["keep.py", "format_only.py", "lint_only.py"] {
+            std::fs::write(dir.join(file), "value = 1\n").unwrap();
+        }
+        let mut config = ToolsConfig {
+            skip: crate::tools::TOOL_CATALOG
+                .iter()
+                .filter(|entry| entry.name != "ruff")
+                .map(|entry| entry.name.to_owned())
+                .collect(),
+            ..ToolsConfig::default()
+        };
+        config
+            .executables
+            .insert("ruff".into(), executable.to_string_lossy().into_owned());
+        let registry = ToolRegistry::new(config, Some(dir)).unwrap();
+        let names = vec!["ruff".into()];
+        let mut inventory = crate::tools::RepositoryDiscovery::explicit_inventory(
+            &registry,
+            &[ToolCapability::Format],
+            &names,
+        )
+        .unwrap();
+        let plan = crate::tools::RepositoryDiscovery::explicit_plan(
+            &registry,
+            &[ToolCapability::Format],
+            &names,
+            &mut inventory,
+        )
+        .unwrap();
+        assert!(plan.capability_files["ruff:format"].contains(Path::new("lint_only.py")));
+        assert!(!plan.capability_files["ruff:format"].contains(Path::new("format_only.py")));
+        let result = ToolRunner::new(&registry)
+            .with_tool_plan(&plan)
+            .run_specific(&["ruff"], &[], true)
+            .unwrap();
+        assert!(result.all_success());
+        let args = std::fs::read_to_string(dir.join("captured-args")).unwrap();
+        assert!(args.lines().any(|arg| arg == "format"));
+        assert!(args.lines().any(|arg| arg == "--check"));
+        assert!(!args.lines().any(|arg| arg == "check"));
+        assert!(args.lines().any(|arg| arg == "lint_only.py"));
+        assert!(!args.lines().any(|arg| arg == "format_only.py"));
+
+        let lint = ToolRunner::new(&registry).run_linters(&[]).unwrap();
+        assert!(lint.all_success());
+        let args = std::fs::read_to_string(dir.join("captured-args")).unwrap();
+        assert!(args.lines().any(|arg| arg == "check"));
+        assert!(!args.lines().any(|arg| arg == "format"));
+        assert!(args.lines().any(|arg| arg == "format_only.py"));
+        assert!(!args.lines().any(|arg| arg == "lint_only.py"));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn file_oriented_low_level_execution_resolves_a_safe_native_plan() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path();
+        let executable = write_argument_capture_tool(dir);
+        std::fs::write(
+            dir.join("dprint.json"),
+            r#"{"includes":["**/*.json"],"excludes":["private.json","dprint.json"]}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("source.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("private.json"), b"\0excluded binary").unwrap();
         let mut config = ToolsConfig::default();
         config.executables.insert(
             "dprint".to_string(),
             executable.to_string_lossy().to_string(),
         );
-        let registry = ToolRegistry::new(config, Some(&dir)).unwrap();
-        let error = ToolRunner::new(&registry)
-            .with_working_dir(&dir)
+        let registry = ToolRegistry::new(config, Some(dir)).unwrap();
+        let results = ToolRunner::new(&registry)
+            .with_working_dir(dir)
             .run_specific(&["dprint"], &[], false)
-            .unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("requires a resolved repository plan")
+            .unwrap();
+        assert!(results.all_success());
+        assert_eq!(results.planned_file_counts["dprint"], 1);
+        assert_eq!(results.inventory_diagnostics.recursive_walks, 1);
+        assert_eq!(results.inventory_diagnostics.binary_files_probed, 1);
+        assert_eq!(results.inventory_diagnostics.binary_files_excluded, 0);
+        let args = std::fs::read_to_string(dir.join("captured-args")).unwrap();
+        assert!(args.lines().any(|arg| arg == "source.json"));
+        assert!(!args.contains("private.json"));
+        assert!(!args.lines().any(|arg| arg == "."));
+
+        std::fs::remove_file(dir.join("captured-args")).unwrap();
+        std::fs::write(dir.join("dprint.json"), r#"{"includes":[]}"#).unwrap();
+        let probes_before_empty = registry
+            .diagnostics_handle()
+            .lock()
+            .unwrap()
+            .binary_files_probed;
+        let empty = ToolRunner::new(&registry)
+            .with_working_dir(dir)
+            .run_specific(&["dprint"], &[], false)
+            .unwrap();
+        assert!(empty.all_success());
+        assert_eq!(empty.planned_file_counts["dprint"], 0);
+        assert_eq!(
+            empty.inventory_diagnostics.binary_files_probed,
+            probes_before_empty
         );
-        std::fs::remove_dir_all(dir).unwrap();
+        assert!(!dir.join("captured-args").exists());
     }
 
     #[test]

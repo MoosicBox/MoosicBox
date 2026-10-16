@@ -772,39 +772,6 @@ impl ToolRegistry {
         }
     }
 
-    fn resolve_biome_native_includes(
-        tool: &mut Tool,
-        diagnostics: &crate::tools::InventoryDiagnosticsHandle,
-    ) {
-        if tool.name != "biome" {
-            return;
-        }
-        let config_path = tool
-            .check_args
-            .windows(2)
-            .find_map(|args| (args[0] == "--config-path").then(|| PathBuf::from(&args[1])));
-        let Some(config_path) = config_path else {
-            return;
-        };
-        let Ok(contents) = std::fs::read_to_string(&config_path) else {
-            return;
-        };
-        if let Ok(mut diagnostics) = diagnostics.lock() {
-            diagnostics.native_configs_parsed += 1;
-        }
-        let parsed = serde_json::from_str::<serde_json::Value>(&contents).ok();
-        tool.native_includes = parsed
-            .as_ref()
-            .and_then(|value| value.get("files"))
-            .and_then(|files| files.get("includes"))
-            .and_then(serde_json::Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(serde_json::Value::as_str)
-            .map(ToString::to_string)
-            .collect();
-    }
-
     /// Resolve an installed executable without runner fallback or capability probes.
     pub(crate) fn installed_path(
         name: &str,
@@ -899,7 +866,6 @@ impl ToolRegistry {
                         &self.config,
                         &self.working_dir,
                     );
-                    Self::resolve_biome_native_includes(&mut available_tool, &self.diagnostics);
                     self.available.insert(name.clone(), available_tool);
                     continue;
                 }
@@ -927,7 +893,6 @@ impl ToolRegistry {
                             &self.config,
                             &self.working_dir,
                         );
-                        Self::resolve_biome_native_includes(&mut detected_tool, &self.diagnostics);
                         detected_tool
                     }
                     ToolResolution::Runner {
@@ -947,7 +912,6 @@ impl ToolRegistry {
                             &self.config,
                             &self.working_dir,
                         );
-                        Self::resolve_biome_native_includes(&mut available_tool, &self.diagnostics);
                         available_tool
                     }
                 };
@@ -1876,6 +1840,7 @@ mod tests {
             effective_extensions: std::collections::BTreeMap::new(),
             automatic_exclusions: Vec::new(),
             diagnostics: crate::tools::InventoryDiagnostics::default(),
+            ..crate::tools::ToolPlan::default()
         };
 
         let info = registry.list_tools_with_plan(&plan);
