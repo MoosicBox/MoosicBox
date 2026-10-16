@@ -322,3 +322,42 @@ fn progress_is_absent_from_redirected_text_and_json_even_with_forced_colors() {
         assert!(!String::from_utf8_lossy(&output.stdout).contains("Discovering Cargo"));
     }
 }
+
+#[test]
+fn incomplete_check_requires_explicit_opt_in_and_never_enables_apply() {
+    let fixture = Fixture::new();
+    fs::write(
+        fixture.dir.path().join("src/lib.rs"),
+        "pub use used::Thing;\nunknown_macro!();\n",
+    )
+    .unwrap();
+    let (strict, strict_report) = fixture.json(&["check", "--output", "json"]);
+    assert_eq!(strict.status.code(), Some(2));
+    assert_eq!(strict_report["report"]["complete"], false);
+    let (allowed, allowed_report) =
+        fixture.json(&["check", "--allow-incomplete", "--output", "json"]);
+    assert!(
+        allowed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&allowed.stderr)
+    );
+    assert_eq!(allowed_report["report"]["complete"], false);
+    assert_eq!(allowed_report["outcome"], "INCOMPLETE");
+    let before = fs::read(fixture.dir.path().join("Cargo.toml")).unwrap();
+    let apply = fixture.run(&["apply", "--allow-incomplete", "--yes"]);
+    assert!(!apply.status.success());
+    assert_eq!(
+        fs::read(fixture.dir.path().join("Cargo.toml")).unwrap(),
+        before
+    );
+    // A complete report with a real unused finding must still fail.
+    fs::write(
+        fixture.dir.path().join("src/lib.rs"),
+        "pub use used::Thing;\n",
+    )
+    .unwrap();
+    assert_eq!(
+        fixture.run(&["check", "--allow-incomplete"]).status.code(),
+        Some(1)
+    );
+}

@@ -34,6 +34,9 @@ format:
     strategy: "combined"
 
 machete:
-    commands: cd "$GITHUB_WORKSPACE" && ~/.cargo/bin/clippier machete check --manifest-path "{{matrix.package.path}}/Cargo.toml"
+    # Native source analysis cannot yet prove every macro/namespace case. Keep
+    # those reports INCOMPLETE without failing CI solely for coverage limitations;
+    # confirmed unused dependencies and operational errors still fail this check.
+    commands: cd "$GITHUB_WORKSPACE" && ~/.cargo/bin/clippier machete check --allow-incomplete --manifest-path "{{matrix.package.path}}/Cargo.toml"
     label: "Clippier machete"
     strategy: "combined"

@@ -7,9 +7,10 @@ use std::{
 };
 
 use clap::{Args, Subcommand, ValueEnum};
+#[cfg(feature = "machete-verify")]
+use clippier::machete::analyze_machete;
 use clippier::machete::{
-    DependencyKind, DependencyStatus, MacheteOptions, MacheteReport, analyze_machete,
-    apply_machete_plan,
+    DependencyKind, DependencyStatus, MacheteOptions, MacheteReport, apply_machete_plan,
 };
 use serde::Serialize;
 
@@ -70,6 +71,9 @@ impl From<Kind> for DependencyKind {
 #[derive(Args)]
 #[allow(clippy::struct_excessive_bools)] // Independent CLI switches, not mutually exclusive state.
 struct Flags {
+    /// For check only: allow incomplete analysis, without treating unknowns as unused
+    #[arg(long, global = true)]
+    allow_incomplete: bool,
     /// Cargo.toml path or package/workspace directory
     #[arg(long, global = true)]
     manifest_path: Option<PathBuf>,
@@ -371,7 +375,7 @@ fn render_analysis(
         )?;
         writeln!(
             out,
-            "Apply is blocked for incomplete analysis; check exits with status 2."
+            "Apply is blocked for incomplete analysis; check exits with status 2 unless --allow-incomplete is explicitly selected."
         )?;
     }
     if report.applied {
@@ -584,6 +588,15 @@ fn confirm(flags: &Flags, plan: &clippier::machete::MachetePlan) -> Result<bool,
 }
 
 fn validate_flags(cli: &MacheteCli) -> Result<(bool, bool), BoxError> {
+    #[cfg(feature = "machete-verify")]
+    if cli.flags.allow_incomplete && cli.flags.allow_execution {
+        return Err("--allow-incomplete is only supported for read-only source checks".into());
+    }
+    if cli.flags.allow_incomplete && !matches!(cli.command, Some(Command::Check)) {
+        return Err(
+            "--allow-incomplete requires machete check; it never permits incomplete apply".into(),
+        );
+    }
     let applying = matches!(cli.command, Some(Command::Apply));
     let planning = applying || matches!(cli.command, Some(Command::Plan));
     if cli.flags.yes && !applying {
@@ -994,7 +1007,7 @@ pub fn run(cli: &MacheteCli) -> Result<u8, BoxError> {
             error: None,
         },
     )?;
-    Ok(if report.complete {
+    Ok(if report.complete || flags.allow_incomplete {
         u8::from(matches!(cli.command, Some(Command::Check)) && has_unused(&report))
     } else {
         2

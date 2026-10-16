@@ -26,7 +26,8 @@ analysis within Clippier. Builds using
 
 ```bash
 clippier machete                         # Analyze without changing files
-clippier machete check                   # Read-only CI check; fail on findings
+clippier machete check                   # Strict: fail on findings or incomplete analysis
+clippier machete check --allow-incomplete # Advisory coverage: still fail on known unused dependencies
 clippier machete plan --diff --output json # Preview proposed changes; read-only
 clippier machete apply --yes             # Explicitly apply reviewed changes
 ```
@@ -39,7 +40,11 @@ Review a plan before applying it.
 
 Default text output shows status counts, findings grouped by package, and a bounded
 summary of coverage diagnostics—not every ignored declaration or repeated warning.
-Incomplete analysis is explicitly distinguished from a clean result. Use
+Incomplete analysis is explicitly distinguished from a clean result. CI opts in to
+`check --allow-incomplete` while native analysis coverage matures: incomplete reports
+stay labeled INCOMPLETE, but do not alone fail the check. Known unused findings still
+fail. This option cannot be used for apply or execution-backed verification; strict
+checks remain the default. Use
 `--verbose` for all declarations and diagnostics, `--explain` for source evidence,
 or `--output json` for the complete unchanged structured report.
 

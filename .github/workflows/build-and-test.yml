@@ -212,7 +212,16 @@ jobs:
 
             - name: Build native Clippier machete
               shell: bash
-              run: cargo install --path packages/clippier --features git-diff,machete --force
+              run: |
+                  # Transferable tool binaries must not depend on Homebrew's OpenSSL ABI.
+                  cargo install --path packages/clippier --no-default-features --features git-diff,machete,git2/vendored-openssl,git2/vendored-libgit2 --locked --force
+                  ~/.cargo/bin/clippier --version
+                  if [[ "$RUNNER_OS" == "macOS" ]]; then
+                      if otool -L ~/.cargo/bin/clippier | grep -E '/(opt/homebrew|usr/local)/(opt|Cellar)/.*(ssl|crypto)'; then
+                          echo "Clippier must not link to Homebrew OpenSSL" >&2
+                          exit 1
+                      fi
+                  fi
 
             - uses: actions/upload-artifact@v6
               if: ${{ matrix.os == 'macos-latest' }}

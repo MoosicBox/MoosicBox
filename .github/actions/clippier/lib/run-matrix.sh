@@ -1045,9 +1045,12 @@ run_matrix_single_command_mode() {
             total_failed=$((total_failed + 1))
 
             # Read and store error output directly in JSON for artifact upload
-            local error_output=""
+            # Do not put logs in argv: a single argument is capped at ~128 KiB
+            # on Linux, well below the size of compiler/test failure output.
+            local error_output_file
+            error_output_file=$(mktemp)
             if [[ -f "$output_file" ]]; then
-                error_output=$(cat "$output_file" | strip_ansi_codes)
+                strip_ansi_codes < "$output_file" > "$error_output_file"
             fi
 
             # Create failure JSON with error output embedded
@@ -1060,7 +1063,7 @@ run_matrix_single_command_mode() {
                 --arg script_template "$script_template" \
                 --argjson exit_code "$exit_code" \
                 --arg output_file "$output_file" \
-                --arg error_output "$error_output" \
+                --rawfile error_output "$error_output_file" \
                 --arg duration "$duration" \
                 --argjson iteration "$iteration" \
                 '{
@@ -1077,6 +1080,7 @@ run_matrix_single_command_mode() {
                     iteration: $iteration
                 }')
 
+            rm -f "$error_output_file"
             ALL_FAILURES+=("$failure_json")
 
             # Show error details immediately

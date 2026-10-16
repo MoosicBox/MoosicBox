@@ -1462,8 +1462,11 @@ mod tests {
                 MatrixBackend::Sqlite => switchy_database_connection::init_sqlite_sqlx(None)
                     .await
                     .expect("Failed to create SQLite test database"),
-                MatrixBackend::DuckDb => switchy_database_connection::init_duckdb(None)
-                    .expect("Failed to create DuckDB test database"),
+                MatrixBackend::DuckDb => {
+                    prepare_duckdb_test_extensions();
+                    switchy_database_connection::init_duckdb(None)
+                        .expect("Failed to create DuckDB test database")
+                }
                 MatrixBackend::Turso => switchy_database_connection::init_turso_local(None)
                     .await
                     .expect("Failed to create Turso test database"),
@@ -1485,7 +1488,21 @@ mod tests {
             source
         }
 
+        // DuckDB auto-installs ICU for timestamp queries. Parallel first-use
+        // installs race over the same files; finish installation before any test
+        // opens a connection that can execute those queries.
+        fn prepare_duckdb_test_extensions() {
+            static PREPARED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+            PREPARED.get_or_init(|| {
+                let conn = duckdb::Connection::open_in_memory()
+                    .expect("Failed to open DuckDB extension setup connection");
+                conn.execute_batch("INSTALL icu; LOAD icu;")
+                    .expect("Failed to prepare DuckDB ICU extension for schema tests");
+            });
+        }
+
         fn init_duckdb_test_db() -> Box<dyn switchy_database::Database> {
+            prepare_duckdb_test_extensions();
             let conn = duckdb::Connection::open_in_memory()
                 .expect("Failed to open in-memory DuckDB connection");
             let shared = std::sync::Arc::new(switchy_async::sync::Mutex::new(conn));

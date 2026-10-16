@@ -1049,12 +1049,13 @@ fn execute(
         }
     }
     // Fixed infrastructure script: only the numeric process-group ID is passed
-    // as data. /bin/sh's builtin kill also works on Nix without /bin/kill.
+    // as data. Use POSIX `-s KILL --`: dash rejects `-KILL --`, while the
+    // builtin also works on Nix without /bin/kill.
     let cleanup = Command::new("/bin/sh")
         .env_clear()
         .args([
             "-c",
-            "kill -KILL -- \"$1\"",
+            "kill -s KILL -- \"$1\"",
             "clippier-process-cleanup",
             &format!("-{}", child.id()),
         ])
