@@ -65,6 +65,117 @@ These are example suppressions, not recommended defaults. Ancestor/root defaults
 and descendant configuration layers accumulate; ignored directories are relative
 to the directory declaring their `clippier.toml`.
 
+## Dependency evidence, profiles, and hygiene
+
+```bash
+clippier machete analyze --precision --explain
+clippier machete analyze --profile linux-minimal --explain
+clippier machete audit --precision --review-date 2026-10-16
+clippier machete analyze --generated-evidence captured-evidence.json
+```
+
+JSON reports include declaration-owned evidence with source file/line/column,
+reference origin, source-target role/name, conditions, uncertainty and coverage.
+`--explain` includes it in text output. `--precision` enables conservative local
+scope/import resolution and distinct development/build ownership. This is not
+compiler-complete name resolution; unsupported scopes remain explicit gaps.
+
+Named profiles belong in `clippier.toml`:
+
+```toml
+[machete.profiles.linux-minimal]
+default-features = false
+features = ["json"]
+target = "x86_64-unknown-linux-gnu"
+cfg = ['unix', 'target_os="linux"']
+
+[[machete.rules]]
+packages = ["my-package"]
+ignored = ["my-runtime"]
+reason = "Required by generated bindings"
+review-after = "2027-01-01"
+```
+
+Conditional evaluation is three-valued. Unknown custom/multivalued cfg facts are
+not assumed false. Local feature activation is expanded offline. A selected
+profile is finite coverage, **never global removal approval**: profile-specific
+unreferenced candidates stay protected from apply. No host cfg is inferred.
+
+`audit` is advisory and read-only. It reports unmatched/broad suppressions,
+positive source use hidden by ignores, missing rationale, review deadlines,
+excluded-directory uncertainty, development-only move candidates, redundant
+occurrences and conservative workspace consistency/consolidation opportunities.
+It inventories declarations before selectors; incomplete discovery cannot prove
+an ignore stale or a workspace entry unreferenced. Deadlines use only the
+explicit `--review-date`, not the system clock. Recommendations do not rewrite
+kinds, features or suppressions automatically.
+
+Supplied generated/expanded evidence is explicit JSON data, not configuration.
+Each `GeneratedSource` declares its root-relative owner manifest, target role,
+profile, output fingerprint and generation-time input fingerprints. Fingerprints
+contain exact bytes (`path`, `bytes`); all declared inputs, including the owner
+manifest and generated output, must still match. Symlinks and escaping paths are
+rejected. Evidence is additive positive usage only; no generated output proves
+global absence or complete producer-input coverage. Analysis never runs producers.
+The public `machete::generated` APIs support injectable collectors and fingerprint
+capture. `evidence-path` in the declaring `clippier.toml` can select captured data.
+
+## Explicit compiler verification and expansion
+
+Build with `--features machete-verify` to enable this additional, non-default
+execution capability. Configuration still belongs only in `clippier.toml`:
+
+```toml
+[machete.verification]
+cargo_path = "/absolute/path/to/installed/toolchain/bin/cargo"
+rustc_path = "/absolute/path/to/installed/toolchain/bin/rustc"
+combined = true
+individual = false
+timeout_ms = 120000
+max_output_bytes = 65536
+
+[[machete.verification.profiles]]
+name = "minimal-check"
+operation = "CHECK"
+no_default_features = true
+all_targets = true
+```
+
+```bash
+clippier machete verify --allow-execution --output json
+# Expansion requires exactly one configured library profile (all_targets=false):
+clippier machete expand --allow-execution --output json
+```
+
+`--yes` does not authorize execution. Verification compares unchanged baseline
+and removal candidates in separate temporary project copies, reports each finite
+profile and manifest/combined scope, bounds output and deadlines, and never edits
+the live manifests or lockfile. Baselines use locked compilation. When a candidate
+changes dependency declarations, its **temporary-copy-only** lockfile is explicitly
+regenerated offline before locked compilation; preparation is reported separately
+and a preparation failure prevents compilation. Individual mode means each manifest replacement,
+not each dependency separately. Only a passing baseline and candidate support a
+profile-specific validation observation; environmental failures are not proof.
+
+Execution uses deliberately selected absolute Cargo/rustc binaries, an empty
+isolated Cargo home and offline operations. Uncached registry dependencies cause
+baseline environment failures; local/path-only or otherwise self-contained
+projects work without host credential/cache inheritance. Project Cargo/toolchain
+configuration, symlinks and external local paths are refused rather than silently
+executing with different semantics. Temporary copies are **not a security
+sandbox**: build scripts and procedural macros execute with the caller's OS
+privileges. Execution-backed verification currently requires Unix process-group
+supervision.
+
+Expansion requests compiler-specific `-Zunpretty=expanded` for a library using the
+explicit installed toolchain. Stable rejection is reported, not bypassed: no
+nightly is selected/installed and no bootstrap environment is enabled. Results
+include bounded expanded text and input/toolchain provenance; truncation or
+command failure never yields usable expansion evidence. Captured output must be
+explicitly associated with its owner/profile before supplying it to analysis.
+Verification and expansion report evidence; they do not automatically apply a
+removal or turn finite coverage into global safety proof.
+
 ## Ecosystem coverage
 
 The catalog includes Oxfmt, Oxlint, isort, Pyright, Bandit, RuboCop,

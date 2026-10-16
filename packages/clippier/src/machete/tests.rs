@@ -618,3 +618,555 @@ fn explicit_configuration_and_unknown_keys() {
     write(dir.path(), "custom.toml", "[machete]\nunknown=true\n");
     assert!(analyze_machete(&options).is_err());
 }
+
+fn precise(root: &Path) -> MacheteOptions {
+    MacheteOptions {
+        precision: true,
+        ..options(root)
+    }
+}
+
+fn dependency_status(report: &MacheteReport, name: &str) -> DependencyStatus {
+    report
+        .dependencies
+        .iter()
+        .find(|dependency| dependency.dependency == name)
+        .unwrap()
+        .status
+}
+
+#[test]
+fn precision_local_modules_and_crate_import_aliases_have_lexical_scopes() {
+    let dir = fixture();
+    for source in [
+        "mod used { pub fn run() {} } fn run() { used::run(); }",
+        "fn run() { mod used { pub fn run() {} } used::run(); }",
+        "use other as used; fn run() { used::run(); }",
+    ] {
+        write(dir.path(), "src/lib.rs", source);
+        let report = analyze_machete(&precise(dir.path())).unwrap();
+        assert_eq!(
+            dependency_status(&report, "used"),
+            DependencyStatus::Unused,
+            "{source}"
+        );
+    }
+    for source in [
+        "fn run() { { mod used {} } used::run(); }",
+        "mod used {} mod nested { fn run() { used::run(); } }",
+        "mod used {} fn run() { ::used::run(); }",
+        "#[cfg(feature=\"special\")] mod used {} fn run() { used::run(); }",
+        "fn run(used: usize) { used::run(); let used = 1; used::run(); }",
+    ] {
+        write(dir.path(), "src/lib.rs", source);
+        let report = analyze_machete(&precise(dir.path())).unwrap();
+        assert_eq!(
+            dependency_status(&report, "used"),
+            DependencyStatus::Used,
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn precision_import_reexport_positions_and_alias_package_are_structured() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\nrenamed={package='real-package',version='1.0.0'}\n",
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "// no usage\npub use renamed::Thing as PublicThing;\n",
+    );
+    let report = analyze_machete(&precise(dir.path())).unwrap();
+    let evidence = report
+        .evidence
+        .iter()
+        .find(|entry| entry.alias == "renamed")
+        .unwrap();
+    assert_eq!(evidence.kind, EvidenceKind::Reexport);
+    assert_eq!(evidence.resolved_package, "real-package");
+    assert_eq!((evidence.line, evidence.column), (2, 9));
+    assert_eq!(evidence.source_target, DependencyKind::Normal);
+    assert!(serde_json::to_string(&report).unwrap().contains("REEXPORT"));
+}
+
+#[test]
+fn precision_unsupported_resolution_fails_closed_without_blanket_macro_gaps() {
+    let dir = fixture();
+    for source in ["use crate::local::*;", "fn run<T>() {}", "paste! { item };"] {
+        write(dir.path(), "src/lib.rs", source);
+        let report = analyze_machete(&precise(dir.path())).unwrap();
+        assert_eq!(
+            dependency_status(&report, "unused"),
+            DependencyStatus::Incomplete
+        );
+        assert_ne!(report.coverage.gaps.len(), 0);
+    }
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "fn run() { println!(\"hello\"); used::run(); }",
+    );
+    let report = analyze_machete(&precise(dir.path())).unwrap();
+    assert_eq!(
+        dependency_status(&report, "unused"),
+        DependencyStatus::Unused
+    );
+}
+
+#[test]
+fn profiles_expand_features_cfg_attr_and_never_plan_global_removal() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\nused='1.0.0'\nunused={version='1.0.0',optional=true}\n[features]\ndefault=['group']\ngroup=['dep:unused']\n",
+    );
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[machete.profiles.minimal]\ndefault-features=false\nfeatures=[]\n[machete.profiles.full]\nfeatures=['special']\n",
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "#[cfg_attr(feature=\"special\", cfg(feature=\"missing\"))]\nfn first(){ used::run(); }\n#[cfg(feature=\"special\")] fn second(){ unused::run(); }",
+    );
+    let mut options = precise(dir.path());
+    options.profile = Some("minimal".into());
+    let plan = plan_machete(&options).unwrap();
+    assert_eq!(
+        dependency_status(&plan.report, "used"),
+        DependencyStatus::Used
+    );
+    assert_eq!(
+        dependency_status(&plan.report, "unused"),
+        DependencyStatus::Incomplete
+    );
+    assert!(plan.changes.is_empty());
+    assert!(plan.report.coverage.profile_limited);
+    options.profile = Some("full".into());
+    let report = analyze_machete(&options).unwrap();
+    assert_eq!(
+        dependency_status(&report, "used"),
+        DependencyStatus::Incomplete
+    );
+    assert_eq!(dependency_status(&report, "unused"), DependencyStatus::Used);
+    assert!(
+        report
+            .evidence
+            .iter()
+            .any(|e| e.alias == "unused" && e.kind == EvidenceKind::Feature)
+    );
+}
+
+#[test]
+fn three_valued_cfg_does_not_infer_host_or_multivalued_negation() {
+    let profile = AnalysisProfile {
+        features: vec!["selected".into()],
+        cfg: vec![
+            "target_os=\"linux\"".into(),
+            "target_feature=\"sse\"".into(),
+        ],
+        ..Default::default()
+    };
+    assert_eq!(
+        evaluate_condition("all(feature=\"selected\", target_os=\"linux\")", &profile),
+        ConditionValue::True
+    );
+    assert_eq!(
+        evaluate_condition("any(feature=\"missing\", custom)", &profile),
+        ConditionValue::Unknown
+    );
+    assert_eq!(
+        evaluate_condition("target_os=\"windows\"", &profile),
+        ConditionValue::False
+    );
+    assert_eq!(
+        evaluate_condition("target_feature=\"avx\"", &profile),
+        ConditionValue::Unknown
+    );
+    assert_eq!(
+        evaluate_condition(
+            "target_has_atomic=\"64\"",
+            &AnalysisProfile {
+                cfg: vec!["target_has_atomic=\"8\"".into()],
+                ..Default::default()
+            }
+        ),
+        ConditionValue::Unknown
+    );
+    assert_eq!(
+        evaluate_condition("unix", &profile),
+        ConditionValue::Unknown
+    );
+}
+
+#[test]
+fn precision_dependency_kind_ownership_does_not_credit_production_to_dev() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\nused='1.0.0'\n[dev-dependencies]\nused='1.0.0'\nunused='1.0.0'\n",
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "used::run(); #[cfg(test)] mod tests { fn run(){ unused::run(); } }",
+    );
+    let mut options = precise(dir.path());
+    options.kinds = vec![DependencyKind::Normal, DependencyKind::Dev];
+    let report = analyze_machete(&options).unwrap();
+    assert_eq!(
+        report
+            .dependencies
+            .iter()
+            .find(|d| d.dependency == "used" && d.kind == DependencyKind::Dev)
+            .unwrap()
+            .status,
+        DependencyStatus::Unused
+    );
+    let development = report
+        .evidence
+        .iter()
+        .find(|e| e.alias == "unused")
+        .unwrap();
+    assert_eq!(development.source_target, DependencyKind::Dev);
+}
+
+#[test]
+fn generated_evidence_is_owner_scoped_and_all_fingerprints_seal_plan() {
+    use generated::{GeneratedEvidence, GeneratedSource, GeneratedTargetRole, InputFingerprint};
+    let dir = fixture();
+    write(dir.path(), "generated/output.rs", "unused::generated();");
+    let root = dir.path().canonicalize().unwrap();
+    let capture = |path: &str| InputFingerprint::capture(&root, Path::new(path)).unwrap();
+    let mut options = precise(dir.path());
+    options.generated = Some(GeneratedEvidence {
+        sources: vec![GeneratedSource {
+            owner_manifest: "Cargo.toml".into(),
+            target_role: GeneratedTargetRole::Library,
+            profile: "capture".into(),
+            output: capture("generated/output.rs"),
+            inputs: vec![capture("Cargo.toml")],
+        }],
+    });
+    let plan = plan_machete(&options).unwrap();
+    assert_eq!(
+        dependency_status(&plan.report, "unused"),
+        DependencyStatus::Used
+    );
+    assert!(
+        plan.report
+            .evidence
+            .iter()
+            .any(|e| e.kind == EvidenceKind::Generated && !e.uncertainty.is_empty())
+    );
+    write(dir.path(), "generated/output.rs", "changed bytes");
+    assert!(apply_machete_plan(&plan).is_err());
+    assert!(analyze_machete(&options).is_err());
+}
+
+#[test]
+fn audit_discovery_keeps_preselector_inventory_and_ignored_source_usage() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[machete]\nignored=['used']\n[[machete.rules]]\npackages=['fixture']\nignored=['unused']\nreason='reviewed requirement'\nreview-after='2099-01-01'\n",
+    );
+    let mut options = precise(dir.path());
+    options.dependencies = vec!["unused".into()];
+    let report = audit_machete(&options).unwrap();
+    assert!(
+        !report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == audit::AuditKind::UnmatchedIgnore)
+    );
+}
+
+#[test]
+fn precision_target_labels_use_custom_manifest_roles_not_directory_guesses() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[lib]\nname='custom_lib'\npath='custom/root.rs'\n[[example]]\nname='demo'\npath='custom/demo.rs'\n[dependencies]\nused='1.0.0'\n",
+    );
+    write(dir.path(), "custom/root.rs", "used::run();");
+    write(dir.path(), "custom/demo.rs", "used::run();");
+    let report = analyze_machete(&precise(dir.path())).unwrap();
+    assert!(
+        report
+            .evidence
+            .iter()
+            .any(|entry| entry.source_target_role == "LIBRARY"
+                && entry.source_target_name.as_deref() == Some("custom_lib"))
+    );
+    assert!(
+        report
+            .evidence
+            .iter()
+            .any(|entry| entry.source_target_role == "EXAMPLE"
+                && entry.source_target_name.as_deref() == Some("demo"))
+    );
+}
+
+#[test]
+fn precision_development_only_reference_reaches_hygiene_recommendation() {
+    let dir = fixture();
+    write(dir.path(), "src/lib.rs", "pub fn empty() {}");
+    write(dir.path(), "tests/check.rs", "used::run();");
+    let report = audit_machete(&precise(dir.path())).unwrap();
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == audit::AuditKind::NormalToDev)
+    );
+}
+
+#[test]
+fn audit_rule_dependency_intersection_is_occurrence_scoped() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[[machete.rules]]\ndependencies=['unused']\nignored=['used']\nreason='narrow rule'\n",
+    );
+    let report = audit_machete(&precise(dir.path())).unwrap();
+    assert!(report.diagnostics.iter().any(|diagnostic| diagnostic.kind
+        == audit::AuditKind::UnmatchedIgnore
+        && diagnostic.location.dependency.as_deref() == Some("used")));
+    assert!(
+        !report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == audit::AuditKind::IgnoredButUsed)
+    );
+}
+
+#[test]
+fn profile_inner_cfg_does_not_erase_following_outer_source() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[machete.profiles.minimal]\ndefault-features=false\n",
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "mod nested { #![cfg(feature=\"disabled\")] unused::run(); }\nused::run();",
+    );
+    let mut options = precise(dir.path());
+    options.profile = Some("minimal".into());
+    let report = analyze_machete(&options).unwrap();
+    assert_eq!(dependency_status(&report, "used"), DependencyStatus::Used);
+    assert_eq!(
+        dependency_status(&report, "unused"),
+        DependencyStatus::Incomplete
+    );
+}
+
+#[test]
+fn audit_review_date_is_explicit_and_rule_deadline_is_preserved() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[[machete.rules]]\nignored=['unused']\nreason='temporary retention'\nreview-after='2026-01-01'\n",
+    );
+    let mut options = precise(dir.path());
+    options.review_date = Some("2026-10-16".into());
+    let report = audit_machete(&options).unwrap();
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == audit::AuditKind::SuppressionReviewOverdue)
+    );
+}
+
+#[test]
+fn audit_inherited_feature_overrides_and_optional_normal_do_not_imply_redundancy() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[workspace]\nmembers=['member']\n[workspace.dependencies]\nused='1.0.0'\n",
+    );
+    write(
+        dir.path(),
+        "member/Cargo.toml",
+        "[package]\nname='member'\nversion='0.1.0'\n[dependencies]\nused={workspace=true,optional=true,features=['one']}\n[dev-dependencies]\nused={workspace=true,features=['two']}\n",
+    );
+    write(dir.path(), "member/src/lib.rs", "used::run();");
+    let mut options = precise(dir.path());
+    options.kinds = vec![DependencyKind::Normal, DependencyKind::Dev];
+    let report = audit_machete(&options).unwrap();
+    assert!(
+        !report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.kind == audit::AuditKind::RedundantOccurrence)
+    );
+}
+
+#[test]
+fn precision_conditional_shadow_and_macro_token_bindings_do_not_erase_usage() {
+    let dir = fixture();
+    for source in [
+        "macro_rules! tokens { () => { mod used {} } } used::run();",
+        "#[cfg(custom)] use other as used; used::run();",
+        "use crate::local::Thing as used; used::run();",
+    ] {
+        write(dir.path(), "src/lib.rs", source);
+        let report = analyze_machete(&precise(dir.path())).unwrap();
+        assert_ne!(
+            dependency_status(&report, "used"),
+            DependencyStatus::Unused,
+            "{source}"
+        );
+    }
+}
+
+fn save_generated_capture(root: &Path, json: &Path, dependency: &str) {
+    use generated::{GeneratedEvidence, GeneratedSource, GeneratedTargetRole, InputFingerprint};
+    write(
+        root,
+        "generated/captured.rs",
+        &format!("{dependency}::generated();"),
+    );
+    let capture = |path: &str| InputFingerprint::capture(root, Path::new(path)).unwrap();
+    let evidence = GeneratedEvidence {
+        sources: vec![GeneratedSource {
+            owner_manifest: "Cargo.toml".into(),
+            target_role: GeneratedTargetRole::Library,
+            profile: "capture".into(),
+            output: capture("generated/captured.rs"),
+            inputs: vec![capture("Cargo.toml")],
+        }],
+    };
+    fs::create_dir_all(json.parent().unwrap()).unwrap();
+    fs::write(json, serde_json::to_vec(&evidence).unwrap()).unwrap();
+}
+
+#[test]
+fn config_evidence_path_resolves_from_ancestor_and_json_bytes_seal_plan() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("project");
+    write(
+        &root,
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\nused='1.0.0'\nunused='1.0.0'\n",
+    );
+    write(&root, "src/lib.rs", "used::run();");
+    write(
+        parent.path(),
+        "clippier.toml",
+        "[machete]\nevidence-path='captures/evidence.json'\n",
+    );
+    let json = parent.path().join("captures/evidence.json");
+    save_generated_capture(&root, &json, "unused");
+    let plan = plan_machete(&precise(&root)).unwrap();
+    assert_eq!(
+        dependency_status(&plan.report, "unused"),
+        DependencyStatus::Used
+    );
+    assert!(plan.snapshots.contains_key(&json));
+    fs::write(&json, "{\"sources\":[]}").unwrap();
+    assert!(apply_machete_plan(&plan).is_err());
+}
+
+#[test]
+fn configured_capture_absence_is_snapshotted_and_arrival_invalidates_apply() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[machete]\nevidence-path='capture.json'\n",
+    );
+    let plan = plan_machete(&precise(dir.path())).unwrap();
+    assert_eq!(
+        plan.snapshots.get(&dir.path().join("capture.json")),
+        Some(&None)
+    );
+    write(dir.path(), "capture.json", "{\"sources\":[]}");
+    assert!(apply_machete_plan(&plan).is_err());
+}
+
+#[test]
+fn child_and_explicit_evidence_config_override_parent_and_options_override_all() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("project");
+    write(
+        &root,
+        "Cargo.toml",
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\nunused='1.0.0'\n",
+    );
+    write(&root, "src/lib.rs", "pub fn empty() {}");
+    write(
+        parent.path(),
+        "clippier.toml",
+        "[machete]\nevidence-path='bad.json'\n",
+    );
+    write(parent.path(), "bad.json", "not json");
+    write(
+        &root,
+        "clippier.toml",
+        "[machete]\nevidence-path='child.json'\n",
+    );
+    write(&root, "child.json", "{\"sources\":[]}");
+    let plan = plan_machete(&precise(&root)).unwrap();
+    assert!(!plan.snapshots.contains_key(&parent.path().join("bad.json")));
+    let config = parent.path().join("policy/explicit.toml");
+    write(
+        parent.path(),
+        "policy/explicit.toml",
+        "[machete]\nevidence-path='capture.json'\n",
+    );
+    save_generated_capture(&root, &parent.path().join("policy/capture.json"), "unused");
+    let mut options = precise(&root);
+    options.config_path = Some(config);
+    assert_eq!(
+        dependency_status(&analyze_machete(&options).unwrap(), "unused"),
+        DependencyStatus::Used
+    );
+    write(parent.path(), "policy/capture.json", "invalid json");
+    assert!(analyze_machete(&options).is_err());
+    options.generated = Some(generated::GeneratedEvidence::default());
+    let plan = plan_machete(&options).unwrap();
+    assert_eq!(
+        dependency_status(&plan.report, "unused"),
+        DependencyStatus::Unused
+    );
+    assert!(
+        !plan
+            .snapshots
+            .contains_key(&parent.path().join("policy/capture.json"))
+    );
+}
+
+#[test]
+fn configured_generated_capture_revalidates_source_fingerprints() {
+    let dir = fixture();
+    write(
+        dir.path(),
+        "clippier.toml",
+        "[machete]\nevidence-path='capture.json'\n",
+    );
+    save_generated_capture(dir.path(), &dir.path().join("capture.json"), "unused");
+    assert_eq!(
+        dependency_status(&analyze_machete(&precise(dir.path())).unwrap(), "unused"),
+        DependencyStatus::Used
+    );
+    write(dir.path(), "generated/captured.rs", "changed");
+    assert!(analyze_machete(&precise(dir.path())).is_err());
+}

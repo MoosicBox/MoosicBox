@@ -34,6 +34,31 @@ fn check(plan: &MachetePlan, completed: &[(PathBuf, String, String)]) -> Result<
     Ok(())
 }
 
+/// Revalidate an unmodified plan without publishing any files.
+///
+/// # Errors
+/// * Incomplete or altered plans, stale evidence, symlinks, or inventory I/O failures.
+pub(super) fn validate_plan(plan: &MachetePlan) -> Result<(), BoxError> {
+    if !plan.complete || !plan.report.complete {
+        return Err("cannot apply incomplete machete analysis".into());
+    }
+    let changes = plan
+        .changes
+        .iter()
+        .map(|change| {
+            (
+                change.path.clone(),
+                change.before.clone(),
+                change.after.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    if changes != plan.sealed_changes {
+        return Err("machete plan changes were modified; re-plan".into());
+    }
+    check(plan, &[])
+}
+
 // Create the replacement beside its destination and rename only after rechecking.
 // This is not a cross-process lock: callers must serialize concurrent apply calls.
 fn publish(path: &Path, expected: &str, replacement: &str) -> Result<(), BoxError> {
@@ -79,18 +104,12 @@ fn publish(path: &Path, expected: &str, replacement: &str) -> Result<(), BoxErro
 /// * Changed directory inventories, symlinks, I/O or publication failure.
 /// * Rollback failure, explicitly included alongside the original error.
 pub fn apply_machete_plan(plan: &MachetePlan) -> Result<MacheteReport, BoxError> {
-    if !plan.complete || !plan.report.complete {
-        return Err("cannot apply incomplete machete analysis".into());
-    }
+    validate_plan(plan)?;
     let changes = plan
         .changes
         .iter()
         .map(|c| (c.path.clone(), c.before.clone(), c.after.clone()))
         .collect::<Vec<_>>();
-    if changes != plan.sealed_changes {
-        return Err("machete plan changes were modified; re-plan".into());
-    }
-    check(plan, &[])?;
     let mut completed = Vec::new();
     let result = (|| -> Result<(), BoxError> {
         for (path, before, after) in &changes {

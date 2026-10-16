@@ -32,6 +32,14 @@ enum Command {
     Plan,
     /// Plan removals, then explicitly confirm before applying
     Apply,
+    /// Audit suppressions and report advisory dependency-hygiene recommendations
+    Audit,
+    /// Explicitly execute isolated baseline and candidate Cargo verification
+    #[cfg(feature = "machete-verify")]
+    Verify,
+    /// Explicitly request compiler-specific library macro expansion in an isolated copy
+    #[cfg(feature = "machete-verify")]
+    Expand,
 }
 
 #[derive(Clone, Copy, Default, ValueEnum)]
@@ -93,6 +101,25 @@ struct Flags {
     /// Accept the displayed removal plan without prompting (apply only)
     #[arg(long, global = true)]
     yes: bool,
+    /// Resolve local scopes and retain more precise source-target evidence
+    #[arg(long, global = true)]
+    precision: bool,
+    /// Named analysis profile from clippier.toml (scoped findings are not global removal proof)
+    #[arg(long = "profile", global = true)]
+    analysis_profile: Option<String>,
+    /// Show structured source evidence in text output (JSON always includes it)
+    #[arg(long, global = true)]
+    explain: bool,
+    /// Explicit YYYY-MM-DD review date for suppression deadlines; never reads the clock
+    #[arg(long, global = true)]
+    review_date: Option<String>,
+    /// Explicit JSON generated/expanded-source evidence with current-input fingerprints
+    #[arg(long, global = true)]
+    generated_evidence: Option<PathBuf>,
+    /// Authorize execution-backed verification (never implied by --yes)
+    #[cfg(feature = "machete-verify")]
+    #[arg(long, global = true)]
+    allow_execution: bool,
 }
 
 impl Flags {
@@ -105,6 +132,9 @@ impl Flags {
             exclude: self.exclude.clone(),
             kinds: self.kinds.iter().copied().map(Into::into).collect(),
             no_ignore: self.no_ignore.then_some(true),
+            precision: self.precision,
+            review_date: self.review_date.clone(),
+            profile: self.analysis_profile.clone(),
             ..MacheteOptions::default()
         }
     }
@@ -140,6 +170,16 @@ fn emit(flags: &Flags, result: &Envelope<'_>) -> Result<(), BoxError> {
                             "{} / {} ({:?}): {:?}: {}",
                             dep.package, dep.dependency, dep.kind, dep.status, dep.reason
                         )?;
+                    }
+                }
+                if flags.explain {
+                    writeln!(
+                        out,
+                        "Coverage: {}",
+                        serde_json::to_string(&report.coverage)?
+                    )?;
+                    for evidence in &report.evidence {
+                        writeln!(out, "Evidence: {}", serde_json::to_string(evidence)?)?;
                     }
                 }
                 for diagnostic in &report.diagnostics {
@@ -240,6 +280,18 @@ fn validate_flags(cli: &MacheteCli) -> Result<(bool, bool), BoxError> {
     Ok((applying, planning))
 }
 
+fn emit_extra<T: Serialize>(flags: &Flags, field: &str, report: &T) -> Result<(), BoxError> {
+    let value = serde_json::json!({"schema_version": 1, "outcome": "ANALYZED", field: report});
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    match flags.output {
+        Output::Json => serde_json::to_writer_pretty(&mut output, &value)?,
+        Output::Text => writeln!(output, "{}", serde_json::to_string_pretty(&value)?)?,
+    }
+    writeln!(output)?;
+    Ok(())
+}
+
 fn report_outcome(report: &MacheteReport, planning: bool) -> &'static str {
     if !report.complete {
         "INCOMPLETE"
@@ -284,22 +336,100 @@ fn collect_metadata(options: &mut MacheteOptions) -> Result<(), BoxError> {
     Ok(())
 }
 
-pub fn run(cli: &MacheteCli) -> Result<u8, BoxError> {
+fn run_special(cli: &MacheteCli, options: &MacheteOptions) -> Result<Option<u8>, BoxError> {
+    if matches!(cli.command, Some(Command::Audit)) {
+        emit_extra(
+            &cli.flags,
+            "audit",
+            &clippier::machete::audit_machete(options)?,
+        )?;
+        return Ok(Some(0));
+    }
+    #[cfg(feature = "machete-verify")]
+    if matches!(cli.command, Some(Command::Verify | Command::Expand)) {
+        return run_execution(cli, options).map(Some);
+    }
+    Ok(None)
+}
+
+#[cfg(feature = "machete-verify")]
+fn run_execution(cli: &MacheteCli, options: &MacheteOptions) -> Result<u8, BoxError> {
+    use clippier::machete::verify::{
+        ExpansionOptions, VerificationStatus, expand_machete_project, verify_machete_plan,
+    };
+    if !cli.flags.allow_execution {
+        return Err("verification/expansion requires --allow-execution; build scripts and procedural macros may execute".into());
+    }
+    let mut policy = clippier::machete::load_verification_options(options)?
+        .ok_or("execution requires [machete.verification] in clippier.toml")?;
+    policy.allow_execution = true;
+    if matches!(cli.command, Some(Command::Expand)) {
+        let profile = policy
+            .profiles
+            .first()
+            .cloned()
+            .ok_or("expansion requires one configured verification profile")?;
+        if policy.profiles.len() != 1 || options.packages.len() > 1 {
+            return Err(
+                "expansion requires one profile and at most one exact package selector".into(),
+            );
+        }
+        let report = analyze_machete(options)?;
+        let expansion = expand_machete_project(
+            &report.root,
+            &ExpansionOptions {
+                verification: policy,
+                profile,
+                package: options.packages.first().cloned(),
+            },
+        )?;
+        let code = u8::from(expansion.expanded_rust.is_none());
+        emit_extra(&cli.flags, "expansion", &expansion)?;
+        return Ok(code);
+    }
+    let plan = plan_machete(options)?;
+    let report = verify_machete_plan(&plan, &policy)?;
+    let code = u8::from(
+        report.profiles.is_empty()
+            || !report.profiles.iter().all(|profile| {
+                matches!(profile.baseline.status, VerificationStatus::Passed)
+                    && matches!(profile.candidate_result.status, VerificationStatus::Passed)
+            }),
+    );
+    emit_extra(&cli.flags, "verification", &report)?;
+    Ok(code)
+}
+
+type AnalysisResult = Result<(MacheteReport, Option<clippier::machete::MachetePlan>), u8>;
+
+fn prepare(cli: &MacheteCli, planning: bool) -> Result<AnalysisResult, BoxError> {
     let flags = &cli.flags;
-    let (applying, planning) = validate_flags(cli)?;
     let mut options = flags.options();
-    let result = (|| -> Result<_, BoxError> {
+    (|| -> Result<_, BoxError> {
+        if let Some(path) = &flags.generated_evidence {
+            options.generated = Some(serde_json::from_slice(&std::fs::read(path)?)?);
+        }
         if flags.with_metadata {
             collect_metadata(&mut options)?;
         }
-        if planning {
-            plan_machete(&options).map(|plan| (plan.report.clone(), Some(plan)))
-        } else {
-            analyze_machete(&options).map(|report| (report, None))
+        if let Some(code) = run_special(cli, &options)? {
+            return Ok(Err(code));
         }
-    })();
+        if planning {
+            plan_machete(&options).map(|plan| Ok((plan.report.clone(), Some(plan))))
+        } else {
+            analyze_machete(&options).map(|report| Ok((report, None)))
+        }
+    })()
+}
+
+pub fn run(cli: &MacheteCli) -> Result<u8, BoxError> {
+    let flags = &cli.flags;
+    let (applying, planning) = validate_flags(cli)?;
+    let result = prepare(cli, planning);
     let (report, plan) = match result {
-        Ok(value) => value,
+        Ok(Ok(value)) => value,
+        Ok(Err(code)) => return Ok(code),
         Err(error) => {
             emit(
                 flags,

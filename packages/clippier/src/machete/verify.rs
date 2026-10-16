@@ -1,0 +1,1234 @@
+//! Deliberately opt-in finite compiler checks in disposable complete project copies.
+//!
+//! Copies are not a security sandbox: opting in executes build scripts and proc
+//! macros with the caller's OS privileges. This lane refuses symlinks, project
+//! Cargo configuration, external local paths and automatic toolchain selection.
+//! It uses an empty Cargo home (offline cache misses are environment failures).
+use super::{BoxError, MachetePlan, apply::validate_plan};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
+
+/// Declared Cargo operations; no shell or caller-supplied command-line fragments.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerificationOperation {
+    /// Type check without linking.
+    #[default]
+    Check,
+    /// Compile selected targets without running tests.
+    TestNoRun,
+    /// Compile selected targets.
+    Build,
+}
+
+/// One finite compiler configuration. It is not universal dependency absence proof.
+#[allow(clippy::struct_excessive_bools)] // Independent Cargo command switches, not mutually exclusive states.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VerificationProfile {
+    /// Unique human-readable coverage label.
+    pub name: String,
+    /// Declared Cargo operation.
+    pub operation: VerificationOperation,
+    /// Exact Cargo package names; empty selects workspace defaults.
+    pub packages: Vec<String>,
+    /// Exact feature names.
+    pub features: Vec<String>,
+    /// Disable default features.
+    pub no_default_features: bool,
+    /// Enable all features (mutually exclusive with explicit features).
+    pub all_features: bool,
+    /// Include all Cargo target kinds.
+    pub all_targets: bool,
+    /// Explicit installed target triple, if any; never installs one.
+    pub target: Option<String>,
+    /// Use Cargo's release profile.
+    pub release: bool,
+}
+
+/// Execution policy. Default is non-executing and must be deliberately changed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VerificationOptions {
+    /// Acknowledge execution of untrusted project build scripts/proc macros.
+    pub allow_execution: bool,
+    /// Absolute real Cargo binary, not a rustup proxy or shell wrapper.
+    pub cargo_path: PathBuf,
+    /// Absolute real rustc binary from the same selected installed toolchain.
+    pub rustc_path: PathBuf,
+    /// Selected finite configurations; at least one is required.
+    pub profiles: Vec<VerificationProfile>,
+    /// Check the complete removal set.
+    pub combined: bool,
+    /// Also check each manifest change in isolation (not each dependency in a manifest).
+    pub individual: bool,
+    /// Per-command deadline in milliseconds.
+    pub timeout_ms: u64,
+    /// Retained bytes per output stream; excess bytes are drained and discarded.
+    pub max_output_bytes: usize,
+}
+impl Default for VerificationOptions {
+    fn default() -> Self {
+        Self {
+            allow_execution: false,
+            cargo_path: PathBuf::new(),
+            rustc_path: PathBuf::new(),
+            profiles: Vec::new(),
+            combined: true,
+            individual: false,
+            timeout_ms: 120_000,
+            max_output_bytes: 64 * 1024,
+        }
+    }
+}
+
+/// Outcome of a command, separate from the inference made from a baseline.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerificationStatus {
+    /// Cargo exited successfully.
+    Passed,
+    /// Cargo returned a nonzero exit code.
+    Failed,
+    /// A deadline expired; the process group was killed.
+    TimedOut,
+    /// Spawning, waiting or capturing failed.
+    EnvironmentFailure,
+    /// Candidate deliberately not executed because its baseline failed.
+    NotRun,
+}
+
+/// Bounded execution record.
+#[derive(Debug, Clone, Serialize)]
+pub struct VerificationCommandReport {
+    /// Exact argument vector (without a shell).
+    pub arguments: Vec<String>,
+    /// Command outcome.
+    pub status: VerificationStatus,
+    /// Exit status if available.
+    pub exit_code: Option<i32>,
+    /// Bounded stdout; invalid UTF-8 is replaced.
+    pub stdout: String,
+    /// Bounded stderr or environment error.
+    pub stderr: String,
+    /// True when either captured stream exceeded its bound.
+    pub output_truncated: bool,
+}
+
+/// Baseline and selected candidate for one profile.
+#[derive(Debug, Clone, Serialize)]
+pub struct VerificationProfileReport {
+    /// Exact finite configuration.
+    pub profile: VerificationProfile,
+    /// Candidate scope: combined or individual manifest path.
+    pub candidate: String,
+    /// Unmodified copied project.
+    pub baseline: VerificationCommandReport,
+    /// Scratch-only offline lockfile refresh after a successful locked baseline.
+    /// None means the baseline failed and candidate preparation was not attempted.
+    pub candidate_preparation: Option<VerificationCommandReport>,
+    /// Same selected locked compile command and environment after scratch preparation.
+    pub candidate_result: VerificationCommandReport,
+}
+
+/// Serializable finite verification results, never an instruction to apply a plan.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct VerificationReport {
+    /// Per-profile baseline/candidate observations.
+    pub profiles: Vec<VerificationProfileReport>,
+    /// Explicit coverage and environmental limitations.
+    pub diagnostics: Vec<String>,
+}
+
+/// Verify a sealed, current plan using isolated complete project copies.
+///
+/// Baseline and candidate get separate copies, empty Cargo homes and dedicated
+/// target directories; all compile commands use `--offline --locked`. Candidate
+/// preparation explicitly runs `generate-lockfile --offline` only in its disposable
+/// copy, and is reported separately; compilation is skipped if preparation fails.
+/// No user tree manifest or lockfile is changed. Copies are NOT an OS security sandbox.
+///
+/// # Errors
+/// * Missing deliberate execution consent, empty/invalid profiles, invalid tool paths.
+/// * Stale/incomplete/tampered plans, symlinks or filesystem errors.
+/// * Local paths outside the copied root, project Cargo config/toolchain ambiguity.
+/// * Unsupported process-group supervision platform (only Unix is supported).
+///
+/// Command failures are returned as observations, not successful verification.
+pub fn verify_machete_plan(
+    plan: &MachetePlan,
+    options: &VerificationOptions,
+) -> Result<VerificationReport, BoxError> {
+    validate_plan(plan)?;
+    validate_options(options)?;
+    let root = plan.report.root.canonicalize()?;
+    if root != plan.report.root {
+        return Err("verification root must be canonical".into());
+    }
+    // Inspect and copy once before any process exists; includes ignored/generated files.
+    let staging = tempfile::tempdir()?;
+    let pristine = staging.path().join("pristine");
+    copy_project(&root, &pristine, &root)?;
+    validate_plan(plan)?;
+    validate_copied_evidence(plan, &root, &pristine)?;
+    let mut scopes = Vec::new();
+    if options.combined {
+        scopes.push((
+            "combined".to_owned(),
+            (0..plan.changes.len()).collect::<Vec<_>>(),
+        ));
+    }
+    if options.individual {
+        for (index, change) in plan.changes.iter().enumerate() {
+            scopes.push((change.path.display().to_string(), vec![index]));
+        }
+    }
+    let mut report = VerificationReport { profiles: Vec::new(), diagnostics: vec![
+        "Finite profiles are not universal dependency-absence or compiler-name-resolution proof.".into(),
+        "Temporary copies are not a security sandbox: build scripts and proc macros run with caller privileges.".into(),
+        "Empty isolated Cargo home; offline missing dependencies/toolchains are baseline environment failures. Candidate lockfiles are explicitly refreshed offline only in the disposable copy before locked compilation; preparation failures are reported separately and prevent candidate compilation. Individual scope is a manifest replacement, not a single declaration.".into(),
+    ] };
+    for profile in &options.profiles {
+        for (scope, indices) in &scopes {
+            let baseline_dir = tempfile::tempdir()?;
+            let candidate_dir = tempfile::tempdir()?;
+            let baseline_project = baseline_dir.path().join("project");
+            let candidate_project = candidate_dir.path().join("project");
+            copy_project(&pristine, &baseline_project, &pristine)?;
+            copy_project(&pristine, &candidate_project, &pristine)?;
+            for &index in indices {
+                let change = &plan.changes[index];
+                fs::write(
+                    candidate_project.join(change.path.strip_prefix(&root)?),
+                    &change.after,
+                )?;
+            }
+            let args = arguments(profile);
+            validate_plan(plan)?;
+            let baseline = execute(&baseline_project, baseline_dir.path(), &args, options)?;
+            let (candidate_preparation, candidate_result) = candidate_commands(
+                plan,
+                &baseline,
+                &candidate_project,
+                candidate_dir.path(),
+                &args,
+                options,
+            )?;
+            report.profiles.push(VerificationProfileReport {
+                profile: profile.clone(),
+                candidate: scope.clone(),
+                baseline,
+                candidate_preparation,
+                candidate_result,
+            });
+        }
+    }
+    Ok(report)
+}
+
+/// The only unlocked Cargo operation in verification; always scratch-only.
+#[derive(Clone, Copy)]
+enum CandidatePreparation {
+    RefreshOfflineLockfile,
+}
+impl CandidatePreparation {
+    fn arguments(self) -> Vec<String> {
+        match self {
+            Self::RefreshOfflineLockfile => vec!["generate-lockfile".into(), "--offline".into()],
+        }
+    }
+}
+
+fn not_run(arguments: &[String], reason: &str) -> VerificationCommandReport {
+    VerificationCommandReport {
+        arguments: arguments.to_vec(),
+        status: VerificationStatus::NotRun,
+        exit_code: None,
+        stdout: String::new(),
+        stderr: reason.into(),
+        output_truncated: false,
+    }
+}
+
+fn candidate_commands(
+    plan: &MachetePlan,
+    baseline: &VerificationCommandReport,
+    project: &Path,
+    isolation: &Path,
+    arguments: &[String],
+    options: &VerificationOptions,
+) -> Result<(Option<VerificationCommandReport>, VerificationCommandReport), BoxError> {
+    if !matches!(baseline.status, VerificationStatus::Passed) {
+        return Ok((
+            None,
+            not_run(
+                arguments,
+                "baseline failed; candidate inference unavailable",
+            ),
+        ));
+    }
+    validate_plan(plan)?;
+    let preparation = execute(
+        project,
+        isolation,
+        &CandidatePreparation::RefreshOfflineLockfile.arguments(),
+        options,
+    )?;
+    if !matches!(preparation.status, VerificationStatus::Passed) {
+        return Ok((
+            Some(preparation),
+            not_run(
+                arguments,
+                "scratch offline lockfile preparation failed; candidate compilation not attempted",
+            ),
+        ));
+    }
+    validate_plan(plan)?;
+    let candidate = execute(project, isolation, arguments, options)?;
+    Ok((Some(preparation), candidate))
+}
+
+fn validate_copied_evidence(
+    plan: &MachetePlan,
+    root: &Path,
+    pristine: &Path,
+) -> Result<(), BoxError> {
+    for (path, expected) in &plan.snapshots {
+        if let Ok(relative) = path.strip_prefix(root) {
+            let current = match fs::read(pristine.join(relative)) {
+                Ok(bytes) => Some(bytes),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => return Err(error.into()),
+            };
+            if &current != expected {
+                return Err(format!(
+                    "copied evidence differs from sealed plan: {}",
+                    path.display()
+                )
+                .into());
+            }
+        }
+    }
+    for change in &plan.changes {
+        if fs::read(pristine.join(change.path.strip_prefix(root)?))? != change.before.as_bytes() {
+            return Err("copied manifest differs from sealed plan".into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_options(options: &VerificationOptions) -> Result<(), BoxError> {
+    if !options.allow_execution {
+        return Err("compiler verification requires explicit allow_execution (build scripts/proc macros may execute)".into());
+    }
+    if !cfg!(unix) {
+        return Err("verification process-group supervision requires Unix".into());
+    }
+    if options.profiles.is_empty()
+        || (!options.combined && !options.individual)
+        || options.timeout_ms == 0
+        || options.max_output_bytes == 0
+        || options.max_output_bytes > 16 * 1024 * 1024
+    {
+        return Err("verification requires profiles, a candidate scope, positive timeout and 1..=16 MiB output limit".into());
+    }
+    for (path, name) in [
+        (&options.cargo_path, "cargo"),
+        (&options.rustc_path, "rustc"),
+    ] {
+        if !path.is_absolute()
+            || !path.is_file()
+            || path.canonicalize()? != *path
+            || path.file_name().is_none_or(|file| file != name)
+        {
+            return Err(format!(
+                "select an absolute canonical installed {name} binary (not rustup proxy)"
+            )
+            .into());
+        }
+    }
+    if options.cargo_path.parent() != options.rustc_path.parent() {
+        return Err("Cargo and rustc must belong to the same installed toolchain directory".into());
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for profile in &options.profiles {
+        if profile.name.trim().is_empty()
+            || !names.insert(&profile.name)
+            || (profile.all_features && !profile.features.is_empty())
+        {
+            return Err(
+                "profile names must be nonempty/unique and feature selectors compatible".into(),
+            );
+        }
+        for value in profile
+            .packages
+            .iter()
+            .chain(&profile.features)
+            .chain(profile.target.iter())
+        {
+            if value.is_empty()
+                || !value
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"_-/.:".contains(&c))
+                || value.starts_with('-')
+            {
+                return Err("invalid Cargo selector".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Explicit selected-toolchain expansion request. No automatic nightly selection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpansionOptions {
+    /// Execution consent, installed toolchain binaries, timeout and output policy.
+    pub verification: VerificationOptions,
+    /// One library configuration (all-targets is not supported for expansion).
+    pub profile: VerificationProfile,
+    /// Exact package name, required for workspaces with multiple library packages.
+    pub package: Option<String>,
+}
+
+/// Bounded compiler-specific expansion transport and generation-time provenance.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpansionReport {
+    /// Exact configuration; finite and compiler-specific.
+    pub profile: VerificationProfile,
+    /// Caller-selected installed Cargo binary (never automatically replaced).
+    pub cargo_path: PathBuf,
+    /// Caller-selected installed rustc binary (never automatically replaced).
+    pub rustc_path: PathBuf,
+    /// Lowercase SHA-256 of the selected Cargo binary (streamed, at most 128 MiB).
+    pub cargo_identity: String,
+    /// Lowercase SHA-256 of the selected rustc binary (streamed, at most 128 MiB).
+    pub rustc_identity: String,
+    /// Root-relative project inputs snapshotted before execution.
+    pub inputs: Vec<super::generated::InputFingerprint>,
+    /// Command status and bounded output. Stable rejection is an explicit failure.
+    pub command: VerificationCommandReport,
+    /// Expanded Rust only on successful, untruncated output; no global absence proof.
+    pub expanded_rust: Option<String>,
+    /// Capability and trust limitations, including actionable unsupported diagnostics.
+    pub diagnostics: Vec<String>,
+}
+
+/// Expand one library using an explicitly selected installed nightly-capable compiler.
+///
+/// Executes `cargo rustc --offline --locked --lib ... -- -Zunpretty=expanded` in a
+/// disposable complete copy. It does not set `RUSTC_BOOTSTRAP`, install toolchains,
+/// choose nightly, run rustup, or mutate the source tree. Stable compilers reject
+/// the unstable flag and their diagnostic is preserved as an unsuccessful report.
+/// This is compiler-specific macro expansion, not name resolution or absence proof.
+///
+/// # Errors
+/// * Missing execution consent or invalid toolchain/profile/options.
+/// * Unsafe copies/configuration/paths, excessive input/output identity size or I/O errors.
+/// * Input bytes changed while preparing the copy.
+///
+/// Compiler/environment failures are retained in the returned command observation.
+pub fn expand_machete_project(
+    root: &Path,
+    options: &ExpansionOptions,
+) -> Result<ExpansionReport, BoxError> {
+    let mut policy = options.verification.clone();
+    policy.profiles = vec![options.profile.clone()];
+    validate_options(&policy)?;
+    if options.profile.all_targets
+        || !matches!(options.profile.operation, VerificationOperation::Check)
+    {
+        return Err(
+            "expansion selects one library with operation CHECK; all-targets is unsupported".into(),
+        );
+    }
+    let mut profile = options.profile.clone();
+    if let Some(package) = &options.package {
+        if !profile.packages.is_empty() && profile.packages != [package.clone()] {
+            return Err("conflicting expansion package selectors".into());
+        }
+        profile.packages = vec![package.clone()];
+        policy.profiles = vec![profile.clone()];
+        validate_options(&policy)?;
+    }
+    if profile.packages.len() > 1 {
+        return Err("expansion requires a single library package".into());
+    }
+    let root = root.canonicalize()?;
+    let isolation = tempfile::tempdir()?;
+    let project = isolation.path().join("project");
+    copy_project(&root, &project, &root)?;
+    let mut inputs = Vec::new();
+    fingerprint_copy(&project, &project, &mut inputs, &mut 0)?;
+    // Validate generation-time provenance against the source before executing.
+    for input in &inputs {
+        if fs::read(root.join(&input.path))? != input.bytes {
+            return Err("project changed during expansion capture".into());
+        }
+    }
+    let cargo_identity = bounded_identity(&policy.cargo_path)?;
+    let rustc_identity = bounded_identity(&policy.rustc_path)?;
+    let mut args = arguments(&profile);
+    args[0] = "rustc".into();
+    args.extend(["--lib".into(), "--".into(), "-Zunpretty=expanded".into()]);
+    let command = execute(&project, isolation.path(), &args, &policy)?;
+    let expanded_rust = if matches!(command.status, VerificationStatus::Passed)
+        && !command.output_truncated
+        && !command.stdout.trim().is_empty()
+    {
+        Some(command.stdout.clone())
+    } else {
+        None
+    };
+    let mut diagnostics = vec!["Expansion is compiler-specific positive evidence for one library/profile only. Generation snapshots cover copied files, not undeclared environment/system inputs. Temporary copies are not a security sandbox.".into()];
+    if expanded_rust.is_none() {
+        diagnostics.push("Expansion unavailable: explicitly select an already installed nightly-capable Cargo/rustc pair and a locally available offline dependency set; stable rustc does not support -Zunpretty=expanded. No toolchain was selected, installed or bootstrapped automatically. Check command status/output; raise the bounded output limit for truncated output.".into());
+    }
+    Ok(ExpansionReport {
+        profile,
+        cargo_path: policy.cargo_path,
+        rustc_path: policy.rustc_path,
+        cargo_identity,
+        rustc_identity,
+        inputs,
+        command,
+        expanded_rust,
+        diagnostics,
+    })
+}
+
+fn bounded_identity(path: &Path) -> Result<String, BoxError> {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+    const MAX_BYTES: u64 = 128 * 1024 * 1024;
+    let mut reader = fs::File::open(path)?.take(MAX_BYTES + 1);
+    let mut digest = Sha256::new();
+    let mut total = 0_u64;
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let count = reader.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        if total > MAX_BYTES {
+            return Err("toolchain executable exceeds identity size limit".into());
+        }
+        digest.update(&buffer[..count]);
+    }
+    let mut identity = String::with_capacity(64);
+    for byte in digest.finalize() {
+        write!(identity, "{byte:02x}")?;
+    }
+    Ok(identity)
+}
+
+fn fingerprint_copy(
+    root: &Path,
+    directory: &Path,
+    result: &mut Vec<super::generated::InputFingerprint>,
+    total: &mut usize,
+) -> Result<(), BoxError> {
+    let mut entries = fs::read_dir(directory)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()?;
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            fingerprint_copy(root, &path, result, total)?;
+        } else {
+            let size = usize::try_from(fs::metadata(&path)?.len())?;
+            if size > 16 * 1024 * 1024 || total.saturating_add(size) > 64 * 1024 * 1024 {
+                return Err("expansion provenance exceeds 16 MiB per input or 64 MiB total".into());
+            }
+            let bytes = fs::read(&path)?;
+            *total += bytes.len();
+            result.push(super::generated::InputFingerprint {
+                path: path.strip_prefix(root)?.to_owned(),
+                bytes,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn arguments(profile: &VerificationProfile) -> Vec<String> {
+    let mut args = vec![
+        match profile.operation {
+            VerificationOperation::Check => "check",
+            VerificationOperation::TestNoRun => "test",
+            VerificationOperation::Build => "build",
+        }
+        .into(),
+        "--offline".into(),
+        "--locked".into(),
+    ];
+    if matches!(profile.operation, VerificationOperation::TestNoRun) {
+        args.push("--no-run".into());
+    }
+    if profile.no_default_features {
+        args.push("--no-default-features".into());
+    }
+    if profile.all_features {
+        args.push("--all-features".into());
+    }
+    if profile.all_targets {
+        args.push("--all-targets".into());
+    }
+    if profile.release {
+        args.push("--release".into());
+    }
+    for package in &profile.packages {
+        args.extend(["--package".into(), package.clone()]);
+    }
+    for feature in &profile.features {
+        args.extend(["--features".into(), feature.clone()]);
+    }
+    if let Some(target) = &profile.target {
+        args.extend(["--target".into(), target.clone()]);
+    }
+    args
+}
+
+// Reject configuration rather than trying to partially interpret its ability to
+// redirect targets, runners, rustc wrappers, credential helpers or source caches.
+fn copy_project(source: &Path, destination: &Path, root: &Path) -> Result<(), BoxError> {
+    fs::create_dir(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(format!("verification rejects symlink {}", path.display()).into());
+        }
+        if name == ".git" {
+            continue;
+        }
+        if name == ".cargo" || name == "rust-toolchain" || name == "rust-toolchain.toml" {
+            return Err(format!(
+                "verification refuses ambiguous Cargo/toolchain configuration: {}",
+                path.display()
+            )
+            .into());
+        }
+        let output = destination.join(name);
+        if metadata.is_dir() {
+            copy_project(&path, &output, root)?;
+        } else if metadata.is_file() {
+            if path.file_name().is_some_and(|name| name == "Cargo.toml") {
+                validate_manifest(&path, root)?;
+            }
+            fs::copy(&path, output)?;
+        } else {
+            return Err("verification rejects non-regular files".into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_manifest(path: &Path, root: &Path) -> Result<(), BoxError> {
+    let value: toml::Value = toml::from_str(&fs::read_to_string(path)?)?;
+    inspect_paths(
+        &value,
+        path.parent().ok_or("manifest parent missing")?,
+        root,
+        None,
+    )
+}
+fn inspect_paths(
+    value: &toml::Value,
+    parent: &Path,
+    root: &Path,
+    key: Option<&str>,
+) -> Result<(), BoxError> {
+    match value {
+        toml::Value::Table(table) => {
+            for (key, value) in table {
+                inspect_paths(value, parent, root, Some(key))?;
+            }
+        }
+        toml::Value::Array(array) => {
+            for value in array {
+                inspect_paths(value, parent, root, key)?;
+            }
+        }
+        toml::Value::String(value)
+            if matches!(
+                key,
+                Some(
+                    "path"
+                        | "workspace"
+                        | "readme"
+                        | "license-file"
+                        | "build"
+                        | "members"
+                        | "exclude"
+                        | "default-members"
+                )
+            ) =>
+        {
+            let relative = Path::new(value);
+            if relative.is_absolute() {
+                return Err(format!("absolute manifest path is unsafe: {value}").into());
+            }
+            let mut resolved = parent.to_owned();
+            for component in relative.components() {
+                match component {
+                    std::path::Component::ParentDir => {
+                        resolved.pop();
+                    }
+                    std::path::Component::Normal(part) => resolved.push(part),
+                    std::path::Component::CurDir => (),
+                    _ => return Err("unsupported manifest path".into()),
+                }
+                if !resolved.starts_with(root) {
+                    return Err(format!("manifest path escapes copied project: {value}").into());
+                }
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn isolated_command(
+    project: &Path,
+    isolation: &Path,
+    args: &[String],
+    options: &VerificationOptions,
+) -> Result<Command, BoxError> {
+    use std::os::unix::process::CommandExt;
+    let tool_directory = options.rustc_path.parent().ok_or("rustc has no parent")?;
+    let mut command = Command::new(&options.cargo_path);
+    command
+        .args(args)
+        .current_dir(project)
+        .env_clear()
+        .env(
+            "PATH",
+            format!("{}:/usr/bin:/bin", tool_directory.display()),
+        )
+        .env("HOME", isolation.join("home"))
+        .env("CARGO_HOME", isolation.join("cargo-home"))
+        .env("CARGO_TARGET_DIR", isolation.join("target"))
+        .env("TMPDIR", isolation.join("tmp"))
+        .env("RUSTC", &options.rustc_path)
+        .env("CARGO_NET_OFFLINE", "true")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0);
+    Ok(command)
+}
+
+#[cfg(unix)]
+fn execute(
+    project: &Path,
+    isolation: &Path,
+    args: &[String],
+    options: &VerificationOptions,
+) -> Result<VerificationCommandReport, BoxError> {
+    reject_ancestor_configuration(project)?;
+    let home = isolation.join("home");
+    let cargo_home = isolation.join("cargo-home");
+    let target = isolation.join("target");
+    let tmp = isolation.join("tmp");
+    for path in [&home, &cargo_home, &target, &tmp] {
+        fs::create_dir_all(path)?;
+    }
+    let mut report = VerificationCommandReport {
+        arguments: args.to_vec(),
+        status: VerificationStatus::EnvironmentFailure,
+        exit_code: None,
+        stdout: String::new(),
+        stderr: String::new(),
+        output_truncated: false,
+    };
+    let mut command = isolated_command(project, isolation, args, options)?;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(options.timeout_ms))
+        .ok_or("verification deadline overflows monotonic clock")?;
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            report.stderr = error.to_string();
+            return Ok(report);
+        }
+    };
+    let stdout = child.stdout.take().ok_or("missing child stdout")?;
+    let stderr = child.stderr.take().ok_or("missing child stderr")?;
+    let out = capture(stdout, options.max_output_bytes);
+    let err = capture(stderr, options.max_output_bytes);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                report.exit_code = status.code();
+                report.status = if status.success() {
+                    VerificationStatus::Passed
+                } else {
+                    VerificationStatus::Failed
+                };
+                break;
+            }
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            Ok(None) => {
+                report.status = VerificationStatus::TimedOut;
+                break;
+            }
+            Err(error) => {
+                report.stderr = error.to_string();
+                break;
+            }
+        }
+    }
+    // Fixed infrastructure script: only the numeric process-group ID is passed
+    // as data. /bin/sh's builtin kill also works on Nix without /bin/kill.
+    let cleanup = Command::new("/bin/sh")
+        .env_clear()
+        .args([
+            "-c",
+            "kill -KILL -- \"$1\"",
+            "clippier-process-cleanup",
+            &format!("-{}", child.id()),
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    if cleanup.is_err() {
+        report.status = VerificationStatus::EnvironmentFailure;
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    for (receiver, destination) in [(out, &mut report.stdout), (err, &mut report.stderr)] {
+        match receiver.recv_timeout(Duration::from_secs(2)) {
+            Ok(Ok((bytes, truncated))) => {
+                *destination = String::from_utf8_lossy(&bytes).into_owned();
+                report.output_truncated |= truncated;
+            }
+            Ok(Err(error)) => {
+                *destination = error.to_string();
+                report.status = VerificationStatus::EnvironmentFailure;
+            }
+            Err(error) => {
+                *destination = format!("output capture failed: {error}");
+                report.status = VerificationStatus::EnvironmentFailure;
+            }
+        }
+    }
+    Ok(report)
+}
+
+fn reject_ancestor_configuration(project: &Path) -> Result<(), BoxError> {
+    for ancestor in project.ancestors().skip(1) {
+        if ancestor.join(".cargo").exists() || ancestor.join("Cargo.toml").exists() {
+            return Err(format!(
+                "temporary project has ambiguous ancestor Cargo configuration: {}",
+                ancestor.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn capture(
+    mut reader: impl Read + Send + 'static,
+    maximum: usize,
+) -> std::sync::mpsc::Receiver<std::io::Result<(Vec<u8>, bool)>> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let result = (|| {
+            let mut bytes = Vec::new();
+            let mut truncated = false;
+            let mut buffer = [0; 8192];
+            loop {
+                let count = reader.read(&mut buffer)?;
+                if count == 0 {
+                    break;
+                }
+                let retain = count.min(maximum.saturating_sub(bytes.len()));
+                bytes.extend_from_slice(&buffer[..retain]);
+                truncated |= retain < count;
+            }
+            Ok((bytes, truncated))
+        })();
+        let _ = sender.send(result);
+    });
+    receiver
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn toolchain(root: &Path, script: &str) -> VerificationOptions {
+        let bin = root.join("bin");
+        fs::create_dir(&bin).unwrap();
+        for (name, contents) in [("cargo", script), ("rustc", "#!/bin/sh\nexit 0\n")] {
+            let path = bin.join(name);
+            fs::write(&path, contents).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        VerificationOptions {
+            allow_execution: true,
+            cargo_path: bin.join("cargo"),
+            rustc_path: bin.join("rustc"),
+            profiles: vec![VerificationProfile {
+                name: "fixture".into(),
+                ..VerificationProfile::default()
+            }],
+            ..VerificationOptions::default()
+        }
+    }
+
+    #[test]
+    fn expansion_transport_is_typed_offline_locked_and_fingerprinted() {
+        let tool = tempfile::tempdir().unwrap();
+        let policy = toolchain(
+            tool.path(),
+            "#!/bin/sh\n[ \"$1\" = rustc ] && [ \"$2\" = --offline ] && [ \"$3\" = --locked ] && [ \"$4\" = --lib ] && [ \"$5\" = -- ] && [ \"$6\" = -Zunpretty=expanded ] || exit 9\n[ -z \"$RUSTC_BOOTSTRAP\" ] && [ -z \"$RUSTC_WRAPPER\" ] || exit 8\nprintf 'pub fn expanded() { alias::call(); }\\n'\n",
+        );
+        let source = tempfile::tempdir().unwrap();
+        fs::write(
+            source.path().join("Cargo.toml"),
+            "[package]\nname='expansion'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        let options = ExpansionOptions {
+            profile: policy.profiles[0].clone(),
+            verification: policy,
+            package: None,
+        };
+        let report = expand_machete_project(source.path(), &options).unwrap();
+        assert!(report.expanded_rust.unwrap().contains("alias::call"));
+        assert_eq!(report.inputs.len(), 1);
+        assert_eq!(report.inputs[0].path, Path::new("Cargo.toml"));
+        assert!(!source.path().join("target").exists());
+        for identity in [&report.cargo_identity, &report.rustc_identity] {
+            assert_eq!(identity.len(), 64);
+            assert!(
+                identity
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            );
+        }
+        assert_eq!(
+            report.cargo_identity,
+            bounded_identity(&options.verification.cargo_path).unwrap()
+        );
+        assert_eq!(
+            report.rustc_identity,
+            bounded_identity(&options.verification.rustc_path).unwrap()
+        );
+    }
+
+    #[test]
+    fn executable_identity_is_streamed_sha256_and_rejects_oversized_files() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("identity");
+        fs::write(&path, b"abc").unwrap();
+        assert_eq!(
+            bounded_identity(&path).unwrap(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(128 * 1024 * 1024 + 1).unwrap();
+        assert!(
+            bounded_identity(&path)
+                .unwrap_err()
+                .to_string()
+                .contains("identity size limit")
+        );
+    }
+
+    #[test]
+    fn deadline_and_output_limits_are_observations_not_proof() {
+        let tool = tempfile::tempdir().unwrap();
+        let mut options = toolchain(
+            tool.path(),
+            "#!/bin/sh\nprintf '0123456789'\nwhile :; do :; done\n",
+        );
+        options.timeout_ms = 30;
+        options.max_output_bytes = 3;
+        let isolation = tempfile::tempdir().unwrap();
+        let project = isolation.path().join("project");
+        fs::create_dir(&project).unwrap();
+        let report = execute(&project, isolation.path(), &[], &options).unwrap();
+        assert!(matches!(report.status, VerificationStatus::TimedOut));
+        assert_eq!(report.stdout, "012");
+        assert!(report.output_truncated);
+    }
+
+    fn plan_fixture() -> (tempfile::TempDir, MachetePlan) {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("src")).unwrap();
+        fs::write(root.path().join("Cargo.toml"), "[package]\nname='verification'\nversion='0.1.0'\nedition='2021'\n[dependencies]\nunused='1.0.0'\n").unwrap();
+        fs::write(root.path().join("src/lib.rs"), "pub fn library() {}\n").unwrap();
+        let plan = super::super::plan_machete(&super::super::MacheteOptions {
+            manifest_path: Some(root.path().join("Cargo.toml")),
+            ..super::super::MacheteOptions::default()
+        })
+        .unwrap();
+        assert_eq!(plan.changes.len(), 1);
+        (root, plan)
+    }
+
+    #[test]
+    fn baseline_candidate_success_failure_and_not_run_are_distinguished() {
+        for (script, expected_baseline, expected_candidate) in [
+            ("#!/bin/sh\nexit 0\n", "PASSED", "PASSED"),
+            (
+                "#!/bin/sh\n[ \"$1\" = generate-lockfile ] && exit 0\nfound=false\nwhile IFS= read -r line; do case \"$line\" in *unused*) found=true;; esac; done < Cargo.toml\n[ \"$found\" = true ] && exit 0\nexit 7\n",
+                "PASSED",
+                "FAILED",
+            ),
+            ("#!/bin/sh\nexit 6\n", "FAILED", "NOT_RUN"),
+        ] {
+            let tool = tempfile::tempdir().unwrap();
+            let options = toolchain(tool.path(), script);
+            let (root, plan) = plan_fixture();
+            let before = fs::read(root.path().join("Cargo.toml")).unwrap();
+            let report = verify_machete_plan(&plan, &options).unwrap();
+            assert_eq!(report.profiles.len(), 1);
+            let profile = &report.profiles[0];
+            assert_eq!(
+                serde_json::to_value(&profile.baseline.status).unwrap(),
+                expected_baseline
+            );
+            assert_eq!(
+                serde_json::to_value(&profile.candidate_result.status).unwrap(),
+                expected_candidate
+            );
+            assert_eq!(fs::read(root.path().join("Cargo.toml")).unwrap(), before);
+            assert!(!root.path().join("target").exists());
+            assert!(!root.path().join("Cargo.lock").exists());
+        }
+    }
+
+    #[test]
+    fn scratch_preparation_is_offline_shared_and_failures_skip_compile() {
+        for fail_preparation in [false, true] {
+            let tool = tempfile::tempdir().unwrap();
+            let options = toolchain(
+                tool.path(),
+                &format!(
+                    "#!/bin/sh\nif [ \"$1\" = generate-lockfile ]; then\n [ \"$2\" = --offline ] && [ \"$#\" = 2 ] || exit 8\n {}\n printf scratch-lock > Cargo.lock\n printf ready > \"$CARGO_HOME/prepared\"\n exit 0\nfi\n[ \"$1\" = check ] && [ \"$2\" = --offline ] && [ \"$3\" = --locked ] || exit 7\nfound=false\nwhile IFS= read -r line; do case \"$line\" in *unused*) found=true;; esac; done < Cargo.toml\nif [ \"$found\" = false ]; then [ -f \"$CARGO_HOME/prepared\" ] && [ -f Cargo.lock ] || exit 6; fi\nexit 0\n",
+                    if fail_preparation { "exit 5" } else { ":" }
+                ),
+            );
+            let (root, plan) = plan_fixture();
+            let report = verify_machete_plan(&plan, &options).unwrap();
+            let observed = &report.profiles[0];
+            assert!(matches!(
+                observed.baseline.status,
+                VerificationStatus::Passed
+            ));
+            let preparation = observed.candidate_preparation.as_ref().unwrap();
+            assert_eq!(preparation.arguments, ["generate-lockfile", "--offline"]);
+            if fail_preparation {
+                assert!(matches!(preparation.status, VerificationStatus::Failed));
+                assert!(matches!(
+                    observed.candidate_result.status,
+                    VerificationStatus::NotRun
+                ));
+            } else {
+                assert!(matches!(preparation.status, VerificationStatus::Passed));
+                assert!(matches!(
+                    observed.candidate_result.status,
+                    VerificationStatus::Passed
+                ));
+            }
+            assert!(!root.path().join("Cargo.lock").exists());
+        }
+    }
+
+    #[test]
+    fn execution_is_copied_and_environment_is_scrubbed() {
+        let tool = tempfile::tempdir().unwrap();
+        let options = toolchain(
+            tool.path(),
+            "#!/bin/sh\nif [ \"$1\" = generate-lockfile ]; then [ \"$2\" = --offline ] || exit 9; printf prepared > \"$CARGO_HOME/prepared\"; exit 0; fi\n[ \"$1\" = check ] && [ \"$2\" = --offline ] && [ \"$3\" = --locked ] || exit 9\n[ -z \"$RUSTC_WRAPPER\" ] && [ -z \"$RUSTFLAGS\" ] || exit 8\n[ -d \"$CARGO_HOME\" ] && [ -d \"$CARGO_TARGET_DIR\" ] && [ -d \"$HOME\" ] || exit 7\nprintf changed > Cargo.toml\nprintf lock > Cargo.lock\nprintf build > \"$CARGO_TARGET_DIR/artifact\"\n",
+        );
+        let (root, plan) = plan_fixture();
+        let before = fs::read(root.path().join("Cargo.toml")).unwrap();
+        let report = verify_machete_plan(&plan, &options).unwrap();
+        assert!(matches!(
+            report.profiles[0].baseline.status,
+            VerificationStatus::Passed
+        ));
+        assert!(matches!(
+            report.profiles[0].candidate_result.status,
+            VerificationStatus::Passed
+        ));
+        assert_eq!(fs::read(root.path().join("Cargo.toml")).unwrap(), before);
+        assert!(!root.path().join("Cargo.lock").exists());
+    }
+
+    #[test]
+    fn stale_and_tampered_plans_fail_before_any_command() {
+        let tool = tempfile::tempdir().unwrap();
+        let marker = tool.path().join("executed");
+        let options = toolchain(
+            tool.path(),
+            &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
+        let (root, mut plan) = plan_fixture();
+        plan.changes[0].after.push_str("# tampered\n");
+        assert!(verify_machete_plan(&plan, &options).is_err());
+        assert!(!marker.exists());
+        let (_, plan) = plan_fixture();
+        fs::write(root.path().join("src/lib.rs"), "changed").unwrap();
+        // The dropped fixture above is stale through deletion as well.
+        assert!(verify_machete_plan(&plan, &options).is_err());
+        let (root, plan) = plan_fixture();
+        fs::write(root.path().join("src/lib.rs"), "pub fn changed() {}\n").unwrap();
+        assert!(verify_machete_plan(&plan, &options).is_err());
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn project_configuration_and_symlinks_are_rejected_without_execution() {
+        let tool = tempfile::tempdir().unwrap();
+        let marker = tool.path().join("executed");
+        let options = toolchain(
+            tool.path(),
+            &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+        );
+        for name in [".cargo", "rust-toolchain", "rust-toolchain.toml", "linked"] {
+            let (root, _) = plan_fixture();
+            if name == ".cargo" {
+                fs::create_dir(root.path().join(name)).unwrap();
+            } else if name == "linked" {
+                std::os::unix::fs::symlink("src/lib.rs", root.path().join(name)).unwrap();
+            } else {
+                fs::write(root.path().join(name), "nightly").unwrap();
+            }
+            // Use expansion to inspect a full project without discovery rejecting the fixture first.
+            let expanded = expand_machete_project(
+                root.path(),
+                &ExpansionOptions {
+                    profile: options.profiles[0].clone(),
+                    verification: options.clone(),
+                    package: None,
+                },
+            );
+            assert!(expanded.is_err(), "{name}");
+            assert!(!marker.exists());
+        }
+    }
+
+    #[test]
+    fn selected_profile_arguments_are_declared_and_injection_is_rejected() {
+        let profile = VerificationProfile {
+            name: "coverage".into(),
+            operation: VerificationOperation::TestNoRun,
+            packages: vec!["fixture".into()],
+            features: vec!["optional".into()],
+            no_default_features: true,
+            all_targets: true,
+            release: true,
+            target: Some("x86_64-unknown-linux-gnu".into()),
+            ..VerificationProfile::default()
+        };
+        assert_eq!(
+            arguments(&profile),
+            [
+                "test",
+                "--offline",
+                "--locked",
+                "--no-run",
+                "--no-default-features",
+                "--all-targets",
+                "--release",
+                "--package",
+                "fixture",
+                "--features",
+                "optional",
+                "--target",
+                "x86_64-unknown-linux-gnu"
+            ]
+        );
+        let tool = tempfile::tempdir().unwrap();
+        let mut options = toolchain(tool.path(), "#!/bin/sh\nexit 0\n");
+        options.profiles[0].features = vec!["x;touch /tmp/injected".into()];
+        assert!(validate_options(&options).is_err());
+    }
+
+    #[test]
+    fn successful_parent_does_not_leave_background_processes_holding_pipes() {
+        let tool = tempfile::tempdir().unwrap();
+        let options = toolchain(
+            tool.path(),
+            "#!/bin/sh\n(while :; do :; done) &\nprintf complete\nexit 0\n",
+        );
+        let isolation = tempfile::tempdir().unwrap();
+        let project = isolation.path().join("project");
+        fs::create_dir(&project).unwrap();
+        let started = Instant::now();
+        let report = execute(&project, isolation.path(), &[], &options).unwrap();
+        assert!(matches!(report.status, VerificationStatus::Passed));
+        assert_eq!(report.stdout, "complete");
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn unsupported_stable_like_expansion_is_actionable_not_evidence() {
+        let tool = tempfile::tempdir().unwrap();
+        let options = toolchain(
+            tool.path(),
+            "#!/bin/sh\nprintf 'unstable option requires nightly' >&2\nexit 1\n",
+        );
+        let (root, _) = plan_fixture();
+        let report = expand_machete_project(
+            root.path(),
+            &ExpansionOptions {
+                profile: options.profiles[0].clone(),
+                verification: options,
+                package: None,
+            },
+        )
+        .unwrap();
+        assert!(report.expanded_rust.is_none());
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|text| text.contains("already installed nightly"))
+        );
+        assert!(report.command.stderr.contains("requires nightly"));
+    }
+
+    #[test]
+    fn external_workspace_and_dependency_paths_are_rejected() {
+        let root = tempfile::tempdir().unwrap();
+        for contents in [
+            "[dependencies]\nx={path='../outside'}",
+            "[workspace]\nmembers=['../outside']",
+            "[lib]\npath='/outside/lib.rs'",
+        ] {
+            let manifest = root.path().join("Cargo.toml");
+            fs::write(&manifest, contents).unwrap();
+            assert!(validate_manifest(&manifest, root.path()).is_err());
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn execute(
+    _: &Path,
+    _: &Path,
+    _: &[String],
+    _: &VerificationOptions,
+) -> Result<VerificationCommandReport, BoxError> {
+    Err("verification requires Unix process supervision".into())
+}

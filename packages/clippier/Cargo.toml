@@ -78,6 +78,7 @@ semver = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -120,7 +121,9 @@ default = [
 ]
 
 machete = ["dep:toml_edit"]
-md      = ["dep:clippier_md"]
+# Explicit execution-backed verification; ordinary analysis never enables this.
+machete-verify = ["dep:sha2", "dep:tempfile", "machete"]
+md             = ["dep:clippier_md"]
 
 fail-on-warnings = [
     "clippier_md?/fail-on-warnings",

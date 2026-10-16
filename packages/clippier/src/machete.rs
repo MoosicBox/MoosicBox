@@ -3,9 +3,18 @@
 //! Discovery, analysis and planning never invoke Cargo or access the network. A plan
 //! owns its evidence; apply rechecks that evidence and preserves the lockfile.
 mod apply;
+pub mod audit;
+mod conditions;
 mod discover;
+mod evidence;
+pub mod generated;
 mod metadata;
+mod resolution;
 mod source;
+#[cfg(feature = "machete-verify")]
+pub mod verify;
+pub use conditions::{AnalysisProfile, ConditionValue, evaluate_condition};
+pub use evidence::{AnalysisCoverage, DependencyEvidence, EvidenceKind};
 pub use metadata::MacheteMetadata;
 #[cfg(test)]
 mod tests;
@@ -14,7 +23,9 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
 pub use apply::apply_machete_plan;
-pub use discover::{analyze_machete, plan_machete};
+#[cfg(feature = "machete-verify")]
+pub use discover::load_verification_options;
+pub use discover::{analyze_machete, audit_machete, plan_machete};
 
 /// Error returned by discovery, planning and checked publication.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -49,6 +60,14 @@ pub struct MacheteOptions {
     pub config_path: Option<PathBuf>,
     /// Explicitly supplied Cargo metadata; never invokes Cargo in the engine.
     pub metadata: Option<MacheteMetadata>,
+    /// Explicitly captured generated source; never runs generators during analysis.
+    pub generated: Option<generated::GeneratedEvidence>,
+    /// Named finite profile from layered configuration.
+    pub profile: Option<String>,
+    /// Opt in to lexical scope and source-target ownership precision.
+    pub precision: bool,
+    /// Optional deterministic audit review date in YYYY-MM-DD format; no clock is read.
+    pub review_date: Option<String>,
     /// Override ignore-file traversal; config directory exclusions still apply.
     pub no_ignore: Option<bool>,
     /// Package-name patterns.
@@ -84,6 +103,15 @@ pub struct MacheteConfig {
     pub kinds: Vec<DependencyKind>,
     /// Additional scoped ignore rules.
     pub rules: Vec<MacheteRule>,
+    /// Named finite environments, selected explicitly with analysis options.
+    pub profiles: BTreeMap<String, AnalysisProfile>,
+    /// Generated evidence JSON, relative to the declaring config file's directory.
+    /// Explicit analysis evidence overrides this path; missing captures add no usage.
+    /// The capture and producer fingerprints are snapshotted without executing them.
+    pub evidence_path: Option<PathBuf>,
+    /// Optional explicit-execution verification policy, inherited by nearest layer.
+    #[cfg(feature = "machete-verify")]
+    pub verification: Option<verify::VerificationOptions>,
 }
 
 /// A rule applies when both nonempty selectors match; it only adds ignores.
@@ -98,6 +126,10 @@ pub struct MacheteRule {
     pub ignored: Vec<String>,
     /// Additional declaring-directory-relative ignored subtrees.
     pub ignored_dirs: Vec<String>,
+    /// Human-maintained justification for this scoped suppression.
+    pub reason: Option<String>,
+    /// Optional YYYY-MM-DD review deadline (auditing never consults the clock).
+    pub review_after: Option<String>,
 }
 
 /// Conservative classification; only `Unused` occurrences may be removed.
@@ -146,6 +178,10 @@ pub struct MacheteReport {
     pub root: PathBuf,
     /// Deterministically ordered declarations.
     pub dependencies: Vec<MacheteDependency>,
+    /// Structured observations, owned by individual dependency declarations.
+    pub evidence: Vec<DependencyEvidence>,
+    /// Scope and explicit limitations of this analysis.
+    pub coverage: AnalysisCoverage,
     /// Ordered diagnostics explaining incomplete evidence.
     pub diagnostics: Vec<String>,
     /// False for hard inventory failures or selected candidates with uncertain evidence.

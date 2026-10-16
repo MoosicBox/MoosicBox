@@ -17,11 +17,16 @@ struct Inventory {
     directories: BTreeMap<PathBuf, Vec<PathBuf>>,
     configs: BTreeMap<PathBuf, MacheteConfig>,
     explicit: Option<(PathBuf, MacheteConfig)>,
+    explicit_config_path: Option<PathBuf>,
     omitted_directories: bool,
     target_roots: BTreeSet<PathBuf>,
     ignore_matchers: BTreeMap<PathBuf, ignore::gitignore::Gitignore>,
     no_ignore: Option<bool>,
     diagnostics: BTreeSet<String>,
+    precision: bool,
+    profile: Option<super::AnalysisProfile>,
+    source_kind: Option<DependencyKind>,
+    observations: Vec<(PathBuf, DependencyKind, super::resolution::Observation)>,
 }
 
 pub(super) fn optional(path: &Path) -> Result<Option<Vec<u8>>, BoxError> {
@@ -414,7 +419,18 @@ fn layers<'a>(path: &Path, inventory: &'a Inventory) -> Vec<(&'a PathBuf, &'a Ma
 }
 fn effective(layers: &[(&PathBuf, &MacheteConfig)], options: &MacheteOptions) -> MacheteConfig {
     let mut out = MacheteConfig::default();
-    for (_, config) in layers {
+    for (base, config) in layers {
+        out.profiles.extend(config.profiles.clone());
+        #[cfg(feature = "machete-verify")]
+        if config.verification.is_some() {
+            out.verification.clone_from(&config.verification);
+        }
+        if config.evidence_path.is_some() {
+            out.evidence_path = config
+                .evidence_path
+                .as_ref()
+                .map(|path| normalize(&base.join(path)));
+        }
         out.ignored.extend(config.ignored.clone());
         out.exclude.extend(config.exclude.clone());
         if !config.packages.is_empty() {
@@ -483,7 +499,17 @@ fn add_source(
     };
     let source_text = std::str::from_utf8(&bytes)
         .map_err(|error| format!("invalid UTF-8 source {}: {error}", path.display()))?;
-    let evidence = source::inspect(source_text);
+    let evidence =
+        source::inspect_with(source_text, inventory.precision, inventory.profile.as_ref());
+    inventory
+        .observations
+        .extend(evidence.observations.iter().cloned().map(|observation| {
+            (
+                path.clone(),
+                inventory.source_kind.unwrap_or(DependencyKind::Normal),
+                observation,
+            )
+        }));
     names.extend(evidence.names);
     for reason in evidence.incomplete {
         diagnostics.insert(format!("{}: {reason}", path.display()));
@@ -500,25 +526,7 @@ fn add_source(
         ));
     }
     for module in evidence.modules {
-        let directory = path.parent().ok_or("source has no parent")?;
-        let target_directory = directory.file_name().is_some_and(|name| {
-            name == "tests"
-                || name == "examples"
-                || name == "benches"
-                || (name == "bin"
-                    && directory
-                        .parent()
-                        .is_some_and(|parent| parent.file_name().is_some_and(|name| name == "src")))
-        });
-        let module_base = if inventory.target_roots.contains(&path)
-            || target_directory
-            || path.file_name().is_some_and(|name| {
-                name == "lib.rs" || name == "main.rs" || name == "mod.rs" || name == "build.rs"
-            }) {
-            directory.to_owned()
-        } else {
-            directory.join(path.file_stem().ok_or("source stem missing")?)
-        };
+        let module_base = module_base(&path, inventory)?;
         let direct = module_base.join(format!("{module}.rs"));
         let nested = module_base.join(&module).join("mod.rs");
         let candidate = if direct.exists() { direct } else { nested };
@@ -560,78 +568,8 @@ fn package_evidence(
     root: &Path,
     inventory: &mut Inventory,
 ) -> Result<PackageEvidence, BoxError> {
-    let directory = path.parent().ok_or("manifest has no parent")?;
     let mut evidence = PackageEvidence::default();
-    let build = doc.get("package").and_then(|p| p.get("build"));
-    let build_path = match build.and_then(Item::as_str) {
-        Some(value) => Some(directory.join(value)),
-        None if build.and_then(Item::as_bool) == Some(false) => None,
-        None if directory.join("build.rs").exists() => Some(directory.join("build.rs")),
-        None => None,
-    };
-    let mut sources = BTreeMap::new();
-    for file in inventory
-        .files
-        .keys()
-        .filter(|p| p.extension().is_some_and(|s| s == "rs") && p.starts_with(directory))
-    {
-        if manifests.keys().any(|other| {
-            other != path
-                && other
-                    .parent()
-                    .is_some_and(|dir| dir.starts_with(directory) && file.starts_with(dir))
-        }) {
-            continue;
-        }
-        let relative = file.strip_prefix(directory)?;
-        if relative.starts_with("src") {
-            sources.insert(file.clone(), DependencyKind::Normal);
-        } else if ["tests", "examples", "benches"]
-            .iter()
-            .any(|dir| relative.starts_with(dir))
-        {
-            sources.insert(file.clone(), DependencyKind::Dev);
-        }
-    }
-    if let Some(build_path) = build_path {
-        inventory.target_roots.insert(build_path.clone());
-        sources.insert(build_path, DependencyKind::Build);
-    }
-    if let Some(lib) = doc.get("lib")
-        && let Some(value) = lib.get("path").and_then(Item::as_str)
-    {
-        let target_path = normalize(&directory.join(value));
-        inventory.target_roots.insert(target_path.clone());
-        sources.insert(target_path, DependencyKind::Normal);
-    }
-    for (section, kind, default_dir) in [
-        ("bin", DependencyKind::Normal, "src/bin"),
-        ("test", DependencyKind::Dev, "tests"),
-        ("example", DependencyKind::Dev, "examples"),
-        ("bench", DependencyKind::Dev, "benches"),
-    ] {
-        if let Some(targets) = doc.get(section).and_then(Item::as_array_of_tables) {
-            for target in targets {
-                if let Some(value) = target.get("path").and_then(Item::as_str) {
-                    let target_path = normalize(&directory.join(value));
-                    inventory.target_roots.insert(target_path.clone());
-                    sources.insert(target_path, kind);
-                } else if let Some(name) = target.get("name").and_then(Item::as_str) {
-                    let conventional = directory.join(default_dir).join(format!("{name}.rs"));
-                    let nested = directory.join(default_dir).join(name).join("main.rs");
-                    if !conventional.exists()
-                        && !nested.exists()
-                        && (section != "bin" || !directory.join("src/main.rs").exists())
-                    {
-                        evidence.diagnostics.insert(format!(
-                            "unresolved {section} target {name} in {}",
-                            path.display()
-                        ));
-                    }
-                }
-            }
-        }
-    }
+    let sources = package_sources(path, doc, manifests, inventory, &mut evidence.diagnostics)?;
     if sources.is_empty() {
         evidence
             .diagnostics
@@ -642,6 +580,7 @@ fn package_evidence(
         if ignored_directory(&source, inventory)? {
             continue;
         }
+        inventory.source_kind = Some(kind);
         let names = match kind {
             DependencyKind::Normal => &mut evidence.normal,
             DependencyKind::Dev => &mut evidence.dev,
@@ -655,6 +594,36 @@ fn package_evidence(
             &mut evidence.diagnostics,
             &mut BTreeSet::new(),
         )?;
+    }
+    if inventory.precision {
+        for (_, kind, observation) in &mut inventory.observations {
+            if *kind == DependencyKind::Normal
+                && observation
+                    .conditions
+                    .iter()
+                    .any(|condition| condition == "test")
+            {
+                *kind = DependencyKind::Dev;
+            }
+        }
+        // Rebuild source category sets from declaration-owned observations. Keep
+        // string crate overrides and implicit bare derive retention conservatively.
+        let observed = inventory
+            .observations
+            .iter()
+            .map(|(_, _, observation)| observation.name.clone())
+            .collect::<BTreeSet<_>>();
+        evidence.normal.retain(|name| !observed.contains(name));
+        evidence.dev.retain(|name| !observed.contains(name));
+        evidence.build.retain(|name| !observed.contains(name));
+        for (_, kind, observation) in &inventory.observations {
+            match kind {
+                DependencyKind::Normal => &mut evidence.normal,
+                DependencyKind::Dev => &mut evidence.dev,
+                DependencyKind::Build => &mut evidence.build,
+            }
+            .insert(observation.name.clone());
+        }
     }
     Ok(evidence)
 }
@@ -707,6 +676,14 @@ pub fn analyze_machete(options: &MacheteOptions) -> Result<MacheteReport, BoxErr
 /// * Invalid manifest dependency tables or formatting-preserving edit failures.
 #[allow(clippy::too_many_lines)] // A single read-only capture ties analysis evidence to its exact edits.
 pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
+    Ok(capture(options, false)?.0)
+}
+
+#[allow(clippy::too_many_lines)]
+fn capture(
+    options: &MacheteOptions,
+    audit_mode: bool,
+) -> Result<(MachetePlan, super::audit::AuditInput), BoxError> {
     for list in [&options.packages, &options.dependencies, &options.exclude] {
         patterns(list)?;
     }
@@ -760,6 +737,7 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                 patterns(list)?;
             }
         }
+        inventory.explicit_config_path = Some(config_path.clone());
         inventory.files.insert(config_path, Some(bytes));
         inventory.explicit = Some((base, config));
     }
@@ -802,6 +780,11 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
         }
     }
     let mut dependencies = Vec::new();
+    let mut structured = Vec::new();
+    let mut audit = super::audit::AuditInput {
+        review_date: options.review_date.clone(),
+        ..Default::default()
+    };
     for (path, doc) in &manifests {
         let mut owner_doc = root_doc.clone();
         let mut owner_directory = root.clone();
@@ -838,11 +821,64 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                     .map(move |rule| ((*base).clone(), rule.clone()))
             })
             .collect::<Vec<_>>();
-        let evidence = if package_selected {
+        let generated = if package_selected || audit_mode {
+            load_generated(options, &config, &root, &mut inventory)?
+        } else {
+            None
+        };
+        inventory.precision = options.precision;
+        inventory.profile = options
+            .profile
+            .as_ref()
+            .map(|name| {
+                config
+                    .profiles
+                    .get(name)
+                    .cloned()
+                    .ok_or_else(|| format!("unknown machete analysis profile: {name}"))
+            })
+            .transpose()?;
+        let activated = inventory
+            .profile
+            .as_ref()
+            .map(|profile| super::conditions::activate(profile, doc));
+        if let Some((profile, _)) = &activated {
+            inventory.profile = Some(profile.clone());
+        }
+        inventory.observations.clear();
+        let mut evidence = if package_selected || audit_mode {
             package_evidence(path, doc, &manifests, &root, &mut inventory)?
         } else {
             PackageEvidence::default()
         };
+        if let Some(generated) = &generated {
+            for supplied in &generated.sources {
+                if root.join(&supplied.owner_manifest) != *path
+                    || options
+                        .profile
+                        .as_ref()
+                        .is_some_and(|profile| profile != &supplied.profile)
+                {
+                    continue;
+                }
+                let kind = match supplied.target_role {
+                    super::generated::GeneratedTargetRole::Library
+                    | super::generated::GeneratedTargetRole::Binary(_) => DependencyKind::Normal,
+                    super::generated::GeneratedTargetRole::BuildScript => DependencyKind::Build,
+                    _ => DependencyKind::Dev,
+                };
+                let names = match kind {
+                    DependencyKind::Normal => &mut evidence.normal,
+                    DependencyKind::Dev => &mut evidence.dev,
+                    DependencyKind::Build => &mut evidence.build,
+                };
+                names.extend(supplied.names.clone());
+                evidence
+                    .diagnostics
+                    .extend(supplied.diagnostics.iter().cloned());
+                inventory.observations.extend(supplied.names.iter().map(|name| (root.join(&supplied.path), kind, super::resolution::Observation { name: name.clone(), line: 0, column: 0, kind: super::EvidenceKind::Generated, conditions: vec![format!("generated-profile={}", supplied.profile)], uncertainty: vec!["producer-declared fingerprints verified; producer input completeness is not proven".into()] })));
+            }
+        }
         inventory
             .diagnostics
             .extend(evidence.diagnostics.iter().cloned());
@@ -940,11 +976,18 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                     }))
                     || (key == "thiserror"
                         && (evidence.normal.contains("Error") || evidence.dev.contains("Error")));
-                let used = feature_reference(doc, key)
+                let feature_used = activated.as_ref().map_or_else(
+                    || feature_reference(doc, key),
+                    |(_, deps)| deps.contains(key),
+                );
+                let used = feature_used
                     || implicit_reference(key, doc)
                     || rule_excluded
                     || used_derives
                     || match kind {
+                        DependencyKind::Dev if options.precision => {
+                            evidence.dev.iter().any(|observed| observed == &name)
+                        }
                         DependencyKind::Normal | DependencyKind::Dev => evidence
                             .normal
                             .iter()
@@ -959,10 +1002,24 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                     (DependencyStatus::Skipped, "excluded by selector")
                 } else if ignored {
                     (DependencyStatus::Ignored, "ignored by clippier.toml")
+                } else if target.as_ref().zip(inventory.profile.as_ref()).is_some_and(
+                    |(target, profile)| {
+                        super::evaluate_condition(target, profile) == super::ConditionValue::False
+                    },
+                ) {
+                    (
+                        DependencyStatus::Incomplete,
+                        "declaration inactive within selected profile; not globally removable",
+                    )
                 } else if used {
                     (
                         DependencyStatus::Used,
                         "source, feature, implicit tool, or excluded-source reference",
+                    )
+                } else if options.profile.is_some() {
+                    (
+                        DependencyStatus::Incomplete,
+                        "unused only within a finite analysis profile; not globally removable",
                     )
                 } else if !evidence.diagnostics.is_empty() {
                     (DependencyStatus::Incomplete, "incomplete source inventory")
@@ -972,6 +1029,91 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                         "no lexical or structural reference found",
                     )
                 };
+                for (file, source_kind, observation) in &inventory.observations {
+                    let owns = match kind {
+                        DependencyKind::Build => *source_kind == DependencyKind::Build,
+                        DependencyKind::Dev => {
+                            !options.precision || *source_kind == DependencyKind::Dev
+                        }
+                        DependencyKind::Normal => *source_kind != DependencyKind::Build,
+                    };
+                    if owns && observation.name.eq_ignore_ascii_case(&name) {
+                        structured.push(super::DependencyEvidence {
+                            manifest_path: path.clone(),
+                            file: file.clone(),
+                            line: observation.line,
+                            column: observation.column,
+                            kind: observation.kind,
+                            source_target: *source_kind,
+                            source_target_role: source_target_label(file, path, doc, *source_kind)
+                                .0,
+                            source_target_name: source_target_label(file, path, doc, *source_kind)
+                                .1,
+                            dependency_kind: kind,
+                            target: target.clone(),
+                            alias: key.to_owned(),
+                            resolved_package: actual.to_owned(),
+                            conditions: observation.conditions.clone(),
+                            uncertainty: observation.uncertainty.clone(),
+                        });
+                    }
+                }
+                for (present, origin) in [
+                    (feature_used, super::EvidenceKind::Feature),
+                    (implicit_reference(key, doc), super::EvidenceKind::Implicit),
+                ] {
+                    if present {
+                        structured.push(super::DependencyEvidence {
+                            manifest_path: path.clone(),
+                            file: path.clone(),
+                            line: 0,
+                            column: 0,
+                            kind: origin,
+                            source_target: kind,
+                            source_target_role: "MANIFEST".into(),
+                            source_target_name: None,
+                            dependency_kind: kind,
+                            target: target.clone(),
+                            alias: key.to_owned(),
+                            resolved_package: actual.to_owned(),
+                            conditions: Vec::new(),
+                            uncertainty: Vec::new(),
+                        });
+                    }
+                }
+                if audit_mode {
+                    audit.declarations.push(super::audit::AuditDeclaration {
+                        location: super::audit::AuditLocation {
+                            path: path.clone(),
+                            package: Some(package.to_owned()),
+                            dependency: Some(key.to_owned()),
+                            kind: Some(kind),
+                            target: target.clone(),
+                        },
+                        dependency_package: actual.to_owned(),
+                        specification: if workspace
+                            && ["features", "default-features"]
+                                .iter()
+                                .any(|key| item.get(key).is_some())
+                        {
+                            None
+                        } else {
+                            audit_specification(owner)
+                        },
+                        optional: item
+                            .get("optional")
+                            .and_then(Item::as_bool)
+                            .unwrap_or(false),
+                        workspace,
+                        selected: is_selected,
+                        usage: super::audit::AuditUsage {
+                            targets_complete: options.precision
+                                && inventory.profile.is_none()
+                                && evidence.diagnostics.is_empty(),
+                            ..Default::default()
+                        },
+                    });
+                }
                 dependencies.push(MacheteDependency {
                     package: package.to_owned(),
                     manifest_path: path.clone(),
@@ -995,7 +1137,9 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
         ))
     });
     let mut edited = manifests.clone();
-    edited.entry(root_path.clone()).or_insert(root_doc);
+    edited
+        .entry(root_path.clone())
+        .or_insert_with(|| root_doc.clone());
     for dependency in dependencies
         .iter()
         .filter(|d| d.status == DependencyStatus::Unused)
@@ -1068,8 +1212,15 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
             .any(|dependency| dependency.status == DependencyStatus::Incomplete);
     let report = MacheteReport {
         root,
+        evidence: structured,
+        coverage: super::AnalysisCoverage {
+            profile: options.profile.clone(),
+            precision: options.precision,
+            profile_limited: options.profile.is_some(),
+            gaps: inventory.diagnostics.iter().cloned().collect(),
+        },
         dependencies,
-        diagnostics: inventory.diagnostics.into_iter().collect(),
+        diagnostics: inventory.diagnostics.iter().cloned().collect(),
         complete,
         applied: false,
         lockfile_preserved: true,
@@ -1078,12 +1229,504 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
         .iter()
         .map(|c| (c.path.clone(), c.before.clone(), c.after.clone()))
         .collect();
-    Ok(MachetePlan {
-        report,
-        changes,
-        snapshots: inventory.files,
-        directories: inventory.directories,
-        sealed_changes,
-        complete,
+    if audit_mode {
+        fill_audit_inventory(&mut audit, &inventory, &manifests, &root_path, &root_doc);
+        audit.add_report_evidence(&report);
+    }
+    Ok((
+        MachetePlan {
+            report,
+            changes,
+            snapshots: inventory.files,
+            directories: inventory.directories,
+            sealed_changes,
+            complete,
+        },
+        audit,
+    ))
+}
+
+/// Audit full discovered declarations before selectors, using unsuppressed evidence.
+///
+/// # Errors
+/// * Discovery/configuration errors documented by [`analyze_machete`].
+/// * Invalid suppression glob patterns or review date syntax.
+pub fn audit_machete(options: &MacheteOptions) -> Result<super::audit::AuditReport, BoxError> {
+    let (_, input) = capture(options, true)?;
+    super::audit::audit_machete_evidence(&input)
+}
+
+fn audit_specification(item: &Item) -> Option<super::audit::AuditSpecification> {
+    if ["path", "git", "workspace"]
+        .iter()
+        .any(|key| item.get(key).is_some())
+    {
+        return None;
+    }
+    let version = item
+        .as_str()
+        .or_else(|| item.get("version").and_then(Item::as_str))?;
+    Some(super::audit::AuditSpecification {
+        registry: item
+            .get("registry")
+            .and_then(Item::as_str)
+            .unwrap_or("crates.io")
+            .to_owned(),
+        version: version.to_owned(),
+        default_features: item
+            .get("default-features")
+            .and_then(Item::as_bool)
+            .unwrap_or(true),
+        features: strings(item.get("features")).into_iter().collect(),
     })
+}
+
+fn fill_audit_inventory(
+    input: &mut super::audit::AuditInput,
+    inventory: &Inventory,
+    manifests: &BTreeMap<PathBuf, DocumentMut>,
+    root_path: &Path,
+    root_doc: &DocumentMut,
+) {
+    use super::audit::{AuditLocation, AuditSuppression};
+    input.reference_inventory_complete = !inventory.omitted_directories
+        && inventory
+            .diagnostics
+            .iter()
+            .all(|message| message.starts_with("advisory:"));
+    for (base, config) in inventory.configs.iter().chain(
+        inventory
+            .explicit
+            .iter()
+            .map(|(base, config)| (base, config)),
+    ) {
+        let scope = manifests
+            .keys()
+            .filter(|path| {
+                path.starts_with(base)
+                    || inventory
+                        .explicit
+                        .as_ref()
+                        .is_some_and(|(explicit, _)| explicit == base)
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let config_path = inventory
+            .explicit_config_path
+            .as_ref()
+            .filter(|_| {
+                inventory
+                    .explicit
+                    .as_ref()
+                    .is_some_and(|(explicit, _)| explicit == base)
+            })
+            .cloned()
+            .unwrap_or_else(|| base.join("clippier.toml"));
+        for pattern in &config.ignored {
+            input.suppressions.push(AuditSuppression {
+                location: AuditLocation {
+                    path: config_path.clone(),
+                    package: None,
+                    dependency: Some(pattern.clone()),
+                    kind: None,
+                    target: None,
+                },
+                pattern: pattern.clone(),
+                manifests: scope.clone(),
+                occurrences: None,
+                scope_complete: input.reference_inventory_complete,
+                reason: None,
+                review_after: None,
+            });
+        }
+        fill_rule_suppressions(input, config, &scope, &config_path);
+        for ignored in &config.ignored_dirs {
+            input.excluded_directories.push(AuditLocation {
+                path: base.join(ignored),
+                package: None,
+                dependency: None,
+                kind: None,
+                target: None,
+            });
+        }
+    }
+    fill_workspace_inventory(input, root_path, root_doc);
+}
+
+/// Read verification policy with the same validated ancestor/explicit config layers.
+/// No Cargo process, source expansion, or network request is performed.
+///
+/// # Errors
+/// * Missing manifest/config files, invalid TOML or unsupported configuration keys.
+#[cfg(feature = "machete-verify")]
+pub fn load_verification_options(
+    options: &MacheteOptions,
+) -> Result<Option<super::verify::VerificationOptions>, BoxError> {
+    let requested = options
+        .manifest_path
+        .clone()
+        .unwrap_or(std::env::current_dir()?);
+    let requested = fs::canonicalize(if requested.is_dir() {
+        requested.join("Cargo.toml")
+    } else {
+        requested
+    })?;
+    let mut inventory = Inventory::default();
+    for ancestor in requested.parent().into_iter().flat_map(Path::ancestors) {
+        config_at(ancestor, &mut inventory)?;
+    }
+    if let Some(path) = &options.config_path {
+        let path = fs::canonicalize(path)?;
+        let content = fs::read_to_string(&path)?;
+        let value: toml::Value = toml::from_str(&content)?;
+        let config: MacheteConfig = value
+            .get("machete")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(toml::map::Map::default()))
+            .try_into()?;
+        for list in [
+            &config.ignored,
+            &config.ignored_dirs,
+            &config.packages,
+            &config.dependencies,
+            &config.exclude,
+        ] {
+            patterns(list)?;
+        }
+        for rule in &config.rules {
+            for list in [
+                &rule.packages,
+                &rule.dependencies,
+                &rule.ignored,
+                &rule.ignored_dirs,
+            ] {
+                patterns(list)?;
+            }
+        }
+        inventory.explicit = Some((
+            path.parent().ok_or("config has no parent")?.to_owned(),
+            config,
+        ));
+    }
+    Ok(effective(&layers(&requested, &inventory), options).verification)
+}
+
+fn module_base(path: &Path, inventory: &Inventory) -> Result<PathBuf, BoxError> {
+    let directory = path.parent().ok_or("source has no parent")?;
+    let target_directory = directory.file_name().is_some_and(|name| {
+        name == "tests"
+            || name == "examples"
+            || name == "benches"
+            || (name == "bin"
+                && directory
+                    .parent()
+                    .is_some_and(|parent| parent.file_name().is_some_and(|name| name == "src")))
+    });
+    let module_base = if inventory.target_roots.contains(path)
+        || target_directory
+        || path.file_name().is_some_and(|name| {
+            name == "lib.rs" || name == "main.rs" || name == "mod.rs" || name == "build.rs"
+        }) {
+        directory.to_owned()
+    } else {
+        directory.join(path.file_stem().ok_or("source stem missing")?)
+    };
+    Ok(module_base)
+}
+
+fn fill_workspace_inventory(
+    input: &mut super::audit::AuditInput,
+    root_path: &Path,
+    root_doc: &DocumentMut,
+) {
+    use super::audit::{AuditLocation, AuditWorkspaceDependency};
+    if let Some(table) = root_doc
+        .get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(Item::as_table_like)
+    {
+        for (alias, item) in table.iter() {
+            input.workspace_dependencies.push(AuditWorkspaceDependency {
+                location: AuditLocation {
+                    path: root_path.to_owned(),
+                    package: None,
+                    dependency: Some(alias.to_owned()),
+                    kind: None,
+                    target: None,
+                },
+                specification: audit_specification(item),
+                dependency_package: item
+                    .get("package")
+                    .and_then(Item::as_str)
+                    .unwrap_or(alias)
+                    .to_owned(),
+            });
+        }
+    }
+}
+
+fn package_sources(
+    path: &Path,
+    doc: &DocumentMut,
+    manifests: &BTreeMap<PathBuf, DocumentMut>,
+    inventory: &mut Inventory,
+    diagnostics: &mut BTreeSet<String>,
+) -> Result<BTreeMap<PathBuf, DependencyKind>, BoxError> {
+    let directory = path.parent().ok_or("manifest has no parent")?;
+    let build = doc.get("package").and_then(|p| p.get("build"));
+    let build_path = match build.and_then(Item::as_str) {
+        Some(value) => Some(directory.join(value)),
+        None if build.and_then(Item::as_bool) == Some(false) => None,
+        None if directory.join("build.rs").exists() => Some(directory.join("build.rs")),
+        None => None,
+    };
+    let mut sources = BTreeMap::new();
+    for file in inventory
+        .files
+        .keys()
+        .filter(|p| p.extension().is_some_and(|s| s == "rs") && p.starts_with(directory))
+    {
+        if manifests.keys().any(|other| {
+            other != path
+                && other
+                    .parent()
+                    .is_some_and(|dir| dir.starts_with(directory) && file.starts_with(dir))
+        }) {
+            continue;
+        }
+        let relative = file.strip_prefix(directory)?;
+        if relative.starts_with("src") {
+            sources.insert(file.clone(), DependencyKind::Normal);
+        } else if ["tests", "examples", "benches"]
+            .iter()
+            .any(|dir| relative.starts_with(dir))
+        {
+            sources.insert(file.clone(), DependencyKind::Dev);
+        }
+    }
+    if let Some(build_path) = build_path {
+        inventory.target_roots.insert(build_path.clone());
+        sources.insert(build_path, DependencyKind::Build);
+    }
+    if let Some(lib) = doc.get("lib")
+        && let Some(value) = lib.get("path").and_then(Item::as_str)
+    {
+        let target_path = normalize(&directory.join(value));
+        inventory.target_roots.insert(target_path.clone());
+        sources.insert(target_path, DependencyKind::Normal);
+    }
+    for (section, kind, default_dir) in [
+        ("bin", DependencyKind::Normal, "src/bin"),
+        ("test", DependencyKind::Dev, "tests"),
+        ("example", DependencyKind::Dev, "examples"),
+        ("bench", DependencyKind::Dev, "benches"),
+    ] {
+        if let Some(targets) = doc.get(section).and_then(Item::as_array_of_tables) {
+            for target in targets {
+                if let Some(value) = target.get("path").and_then(Item::as_str) {
+                    let target_path = normalize(&directory.join(value));
+                    inventory.target_roots.insert(target_path.clone());
+                    sources.insert(target_path, kind);
+                } else if let Some(name) = target.get("name").and_then(Item::as_str) {
+                    let conventional = directory.join(default_dir).join(format!("{name}.rs"));
+                    let nested = directory.join(default_dir).join(name).join("main.rs");
+                    if !conventional.exists()
+                        && !nested.exists()
+                        && (section != "bin" || !directory.join("src/main.rs").exists())
+                    {
+                        diagnostics.insert(format!(
+                            "unresolved {section} target {name} in {}",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(sources)
+}
+
+fn fill_rule_suppressions(
+    input: &mut super::audit::AuditInput,
+    config: &MacheteConfig,
+    scope: &BTreeSet<PathBuf>,
+    config_path: &Path,
+) {
+    use super::audit::{AuditLocation, AuditSuppression};
+    for rule in &config.rules {
+        let applicable = input
+            .declarations
+            .iter()
+            .filter(|declaration| scope.contains(&declaration.location.path))
+            .filter_map(|declaration| {
+                let package = declaration.location.package.as_deref().unwrap_or_default();
+                let alias = declaration
+                    .location
+                    .dependency
+                    .as_deref()
+                    .unwrap_or_default();
+                match (
+                    selected(&rule.packages, package),
+                    rule.dependencies.is_empty()
+                        || dependency_matches(
+                            &rule.dependencies,
+                            alias,
+                            &declaration.dependency_package,
+                        )
+                        .unwrap_or(false),
+                ) {
+                    (Ok(true), true) => Some(declaration.location.clone()),
+                    _ => None,
+                }
+            })
+            .collect::<BTreeSet<_>>();
+        for pattern in &rule.ignored {
+            input.suppressions.push(AuditSuppression {
+                location: AuditLocation {
+                    path: config_path.to_owned(),
+                    package: None,
+                    dependency: Some(pattern.clone()),
+                    kind: None,
+                    target: None,
+                },
+                pattern: pattern.clone(),
+                manifests: applicable
+                    .iter()
+                    .map(|location| location.path.clone())
+                    .collect(),
+                occurrences: Some(applicable.iter().cloned().collect()),
+                scope_complete: input.reference_inventory_complete,
+                reason: rule.reason.clone(),
+                review_after: rule.review_after.clone(),
+            });
+        }
+    }
+}
+
+fn source_target_label(
+    file: &Path,
+    manifest: &Path,
+    doc: &DocumentMut,
+    kind: DependencyKind,
+) -> (String, Option<String>) {
+    let directory = manifest.parent().unwrap_or(manifest);
+    let package = doc
+        .get("package")
+        .and_then(|package| package.get("name"))
+        .and_then(Item::as_str)
+        .unwrap_or_default();
+    if kind == DependencyKind::Build {
+        return ("BUILD_SCRIPT".into(), Some("build-script-build".into()));
+    }
+    if let Some(lib) = doc.get("lib") {
+        let entry = lib
+            .get("path")
+            .and_then(Item::as_str)
+            .unwrap_or("src/lib.rs");
+        if file == directory.join(entry) {
+            return (
+                "LIBRARY".into(),
+                Some(
+                    lib.get("name")
+                        .and_then(Item::as_str)
+                        .unwrap_or(package)
+                        .replace('-', "_"),
+                ),
+            );
+        }
+    } else if file == directory.join("src/lib.rs") {
+        return ("LIBRARY".into(), Some(package.replace('-', "_")));
+    }
+    for (section, role) in [
+        ("bin", "BINARY"),
+        ("test", "TEST"),
+        ("example", "EXAMPLE"),
+        ("bench", "BENCH"),
+    ] {
+        if let Some(targets) = doc.get(section).and_then(Item::as_array_of_tables) {
+            for target in targets {
+                if let Some(entry) = target.get("path").and_then(Item::as_str)
+                    && file == directory.join(entry)
+                {
+                    return (
+                        role.into(),
+                        target.get("name").and_then(Item::as_str).map(str::to_owned),
+                    );
+                }
+            }
+        }
+    }
+    if file == directory.join("src/main.rs") {
+        return ("BINARY".into(), Some(package.into()));
+    }
+    if let Ok(relative) = file.strip_prefix(directory) {
+        for (prefix, role) in [
+            ("src/bin", "BINARY"),
+            ("tests", "TEST"),
+            ("examples", "EXAMPLE"),
+            ("benches", "BENCH"),
+        ] {
+            if let Ok(relative) = relative.strip_prefix(prefix) {
+                if relative.components().count() == 1 {
+                    return (
+                        role.into(),
+                        relative
+                            .file_stem()
+                            .map(|name| name.to_string_lossy().into_owned()),
+                    );
+                }
+                if relative.file_name().is_some_and(|name| name == "main.rs")
+                    && relative.components().count() == 2
+                {
+                    return (
+                        role.into(),
+                        relative
+                            .parent()
+                            .and_then(Path::file_name)
+                            .map(|name| name.to_string_lossy().into_owned()),
+                    );
+                }
+            }
+        }
+    }
+    ("UNRESOLVED".into(), None)
+}
+
+// Configured captures are ordinary offline inputs. Snapshot absence as well as
+// bytes so a newly arriving capture invalidates the plan instead of being ignored.
+fn load_generated(
+    options: &MacheteOptions,
+    config: &MacheteConfig,
+    root: &Path,
+    inventory: &mut Inventory,
+) -> Result<Option<super::generated::GeneratedEvidenceReport>, BoxError> {
+    let captured;
+    let evidence = if let Some(evidence) = &options.generated {
+        evidence
+    } else if let Some(path) = &config.evidence_path {
+        let bytes = optional(path)?;
+        inventory.files.insert(path.clone(), bytes.clone());
+        let Some(bytes) = bytes else {
+            inventory.diagnostics.insert(format!(
+                "advisory: configured generated evidence absent: {}",
+                path.display()
+            ));
+            return Ok(None);
+        };
+        captured = serde_json::from_slice::<super::generated::GeneratedEvidence>(&bytes)
+            .map_err(|error| format!("invalid generated evidence {}: {error}", path.display()))?;
+        &captured
+    } else {
+        return Ok(None);
+    };
+    let validated = super::generated::validate_generated_evidence(root, evidence)?;
+    for source in &evidence.sources {
+        for fingerprint in source.inputs.iter().chain(std::iter::once(&source.output)) {
+            inventory.files.insert(
+                root.join(&fingerprint.path),
+                Some(fingerprint.bytes.clone()),
+            );
+        }
+    }
+    Ok(Some(validated))
 }

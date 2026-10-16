@@ -4,6 +4,8 @@ use std::collections::BTreeSet;
 #[derive(Default)]
 pub(super) struct Evidence {
     pub names: BTreeSet<String>,
+    pub observations: Vec<super::resolution::Observation>,
+    positions: Vec<usize>,
     pub incomplete: BTreeSet<String>,
     pub advisory: BTreeSet<String>,
     pub uncertain: BTreeSet<String>,
@@ -14,9 +16,29 @@ pub(super) struct Evidence {
 // Tokenization keeps strings separate from identifiers. Structural collection below
 // recognizes path roots; only unexpanded macro token trees retain arbitrary names.
 pub(super) fn inspect(text: &str) -> Evidence {
+    inspect_with(text, false, None)
+}
+
+pub(super) fn inspect_with(
+    text: &str,
+    precision: bool,
+    profile: Option<&super::AnalysisProfile>,
+) -> Evidence {
     let mut result = Evidence::default();
     let tokens = tokenize(text, &mut result);
+    let (tokens, positions, conditions) =
+        super::resolution::condition_tokens(tokens, &result.positions, profile);
     collect_names(&tokens, &mut result.names);
+    let (observations, gaps) =
+        super::resolution::resolve(text, &tokens, &positions, &conditions, precision);
+    if precision {
+        result.names = observations
+            .iter()
+            .map(|observation| observation.name.clone())
+            .collect();
+        result.incomplete.extend(gaps);
+    }
+    result.observations = observations;
     collect_inventory(&tokens, &mut result);
     result
 }
@@ -54,7 +76,11 @@ fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {
             }
             continue;
         }
+        let before_literal = tokens.len();
         if let Some(end) = literal_end(text, i, &mut tokens, result) {
+            if tokens.len() > before_literal {
+                result.positions.push(i);
+            }
             i = end;
             continue;
         }
@@ -73,10 +99,12 @@ fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {
                 i += 1;
             }
             let name = text[start..i].to_owned();
+            result.positions.push(start);
             tokens.push(name);
             continue;
         }
         if bytes[i..].starts_with(b"::") {
+            result.positions.push(i);
             tokens.push("::".to_owned());
             i += 2;
             continue;
@@ -99,6 +127,7 @@ fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {
             _ => {}
         }
         if !token.is_whitespace() {
+            result.positions.push(i);
             tokens.push(token.to_string());
         }
         i += 1;
