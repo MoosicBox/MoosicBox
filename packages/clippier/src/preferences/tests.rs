@@ -103,6 +103,7 @@ fn precedence_and_each_origin_are_preserved() {
         root.path(),
         PreferencesOverrides {
             purity: Some(PurityPolicy::Warn),
+            ..PreferencesOverrides::default()
         },
         &environment,
     )
@@ -152,6 +153,7 @@ fn user_path_obeys_absolute_xdg_and_home_fallback() {
             xdg_config_home: xdg,
             home: Some(home.clone().into_os_string()),
             purity: None,
+            preflight: None,
         };
         assert_eq!(
             environment.user_config_path().unwrap(),
@@ -162,6 +164,7 @@ fn user_path_obeys_absolute_xdg_and_home_fallback() {
         xdg_config_home: Some("/test/xdg".into()),
         home: Some(home.into_os_string()),
         purity: None,
+        preflight: None,
     };
     assert_eq!(
         environment.user_config_path().unwrap(),
@@ -190,6 +193,7 @@ fn absent_xdg_file_does_not_read_home_file() {
         xdg_config_home: Some(root.path().join("missing-xdg").into_os_string()),
         home: Some(home.into_os_string()),
         purity: None,
+        preflight: None,
     };
     assert_eq!(
         resolve(root.path(), &environment).publish.purity,
@@ -265,6 +269,7 @@ fn malformed_and_unreadable_files_include_path_even_when_overridden() {
             root.path(),
             PreferencesOverrides {
                 purity: Some(PurityPolicy::Warn),
+                ..PreferencesOverrides::default()
             },
             &EnvironmentInputs::default(),
         )
@@ -297,6 +302,7 @@ fn invalid_user_file_is_not_hidden_by_workspace_or_cli() {
         root.path(),
         PreferencesOverrides {
             purity: Some(PurityPolicy::Warn),
+            ..PreferencesOverrides::default()
         },
         &environment,
     )
@@ -316,6 +322,7 @@ fn invalid_environment_errors_even_with_explicit_override() {
         root.path(),
         PreferencesOverrides {
             purity: Some(PurityPolicy::Warn),
+            ..PreferencesOverrides::default()
         },
         &environment,
     )
@@ -471,5 +478,92 @@ fn nearest_nested_workspace_wins() {
             .publish
             .purity,
         PurityPolicy::Warn
+    );
+}
+
+#[test]
+fn preflight_defaults_off_and_respects_each_preference_layer() {
+    let root = fixture();
+    let xdg = tempfile::tempdir().unwrap();
+    let mut environment = EnvironmentInputs {
+        xdg_config_home: Some(xdg.path().into()),
+        ..EnvironmentInputs::default()
+    };
+    let initial = resolve(root.path(), &environment);
+    assert!(!initial.publish.preflight);
+    assert_eq!(
+        initial.provenance.publish.preflight,
+        PreferenceSource::BuiltIn
+    );
+    let user = xdg.path().join("clippier/clippier.toml");
+    write_config(&user, "[publish]\npreflight = true\n");
+    let effective = resolve(root.path(), &environment);
+    assert!(effective.publish.preflight);
+    assert_eq!(
+        effective.provenance.publish.preflight,
+        PreferenceSource::UserConfig { path: user }
+    );
+    let workspace = root.path().join("clippier.toml");
+    write_config(&workspace, "[publish]\npreflight = false\n");
+    let effective = resolve(root.path(), &environment);
+    assert!(!effective.publish.preflight);
+    assert_eq!(
+        effective.provenance.publish.preflight,
+        PreferenceSource::WorkspaceConfig { path: workspace }
+    );
+    environment.preflight = Some("true".into());
+    assert!(resolve(root.path(), &environment).publish.preflight);
+    let effective = resolve_with_inputs(
+        root.path(),
+        PreferencesOverrides {
+            preflight: Some(false),
+            ..PreferencesOverrides::default()
+        },
+        &environment,
+    )
+    .unwrap();
+    assert!(!effective.publish.preflight);
+    assert_eq!(
+        effective.provenance.publish.preflight,
+        PreferenceSource::Override
+    );
+    assert!(
+        effective
+            .to_raw_string()
+            .contains("publish.preflight = false (explicit override)")
+    );
+    assert_eq!(
+        serde_json::to_value(effective).unwrap()["publish"]["preflight"],
+        false
+    );
+}
+
+#[test]
+fn invalid_preflight_preferences_are_rejected() {
+    let root = fixture();
+    let environment = EnvironmentInputs::default();
+    for value in ["\"true\"", "1", "[]"] {
+        write_config(
+            &root.path().join("clippier.toml"),
+            &format!("[publish]\npreflight = {value}\n"),
+        );
+        assert!(
+            resolve_with_inputs(root.path(), PreferencesOverrides::default(), &environment)
+                .is_err()
+        );
+    }
+    write_config(
+        &root.path().join("clippier.toml"),
+        "[publish]\npreflight = true\n",
+    );
+    let environment = EnvironmentInputs {
+        preflight: Some("yes".into()),
+        ..EnvironmentInputs::default()
+    };
+    assert!(
+        resolve_with_inputs(root.path(), PreferencesOverrides::default(), &environment)
+            .unwrap_err()
+            .to_string()
+            .contains("CLIPPIER_PUBLISH_PREFLIGHT")
     );
 }

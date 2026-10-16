@@ -58,6 +58,8 @@ impl FromStr for PurityPolicy {
 pub struct PreferencesOverrides {
     /// Leave unset to inherit the next configured layer.
     pub purity: Option<PurityPolicy>,
+    /// Override whether real publishes validate the entire queue before uploading.
+    pub preflight: Option<bool>,
 }
 
 /// Resolved publishing preferences.
@@ -65,6 +67,8 @@ pub struct PreferencesOverrides {
 pub struct PublishPreferences {
     /// Effective publishing purity policy.
     pub purity: PurityPolicy,
+    /// Validate the entire queue before real uploads (dry runs always validate).
+    pub preflight: bool,
 }
 
 /// Origin of an effective setting; file origins retain their diagnostic path.
@@ -109,6 +113,8 @@ impl fmt::Display for PreferenceSource {
 pub struct PublishProvenance {
     /// Origin of `publish.purity`.
     pub purity: PreferenceSource,
+    /// Origin of `publish.preflight`.
+    pub preflight: PreferenceSource,
 }
 
 /// Per-namespace provenance for effective preferences.
@@ -132,8 +138,11 @@ impl EffectivePreferences {
     #[must_use]
     pub fn to_raw_string(&self) -> String {
         format!(
-            "publish.purity = {} ({})\n",
-            self.publish.purity, self.provenance.publish.purity
+            "publish.purity = {} ({})\npublish.preflight = {} ({})\n",
+            self.publish.purity,
+            self.provenance.publish.purity,
+            self.publish.preflight,
+            self.provenance.publish.preflight
         )
     }
 }
@@ -142,6 +151,7 @@ impl EffectivePreferences {
 #[serde(deny_unknown_fields)]
 struct PublishLayer {
     purity: Option<PurityPolicy>,
+    preflight: Option<bool>,
 }
 
 #[derive(Default)]
@@ -149,6 +159,7 @@ struct EnvironmentInputs {
     xdg_config_home: Option<OsString>,
     home: Option<OsString>,
     purity: Option<OsString>,
+    preflight: Option<OsString>,
 }
 
 impl EnvironmentInputs {
@@ -157,6 +168,7 @@ impl EnvironmentInputs {
             xdg_config_home: std::env::var_os("XDG_CONFIG_HOME"),
             home: std::env::var_os("HOME"),
             purity: std::env::var_os("CLIPPIER_PUBLISH_PURITY"),
+            preflight: std::env::var_os("CLIPPIER_PUBLISH_PREFLIGHT"),
         }
     }
 
@@ -311,10 +323,40 @@ fn resolve_with_inputs(
         purity = value;
         source = PreferenceSource::Override;
     }
+    let (mut preflight, mut preflight_source) = if let Some(path) = environment.user_config_path()
+        && let Some(value) = read_layer(&path)?.preflight
+    {
+        (value, PreferenceSource::UserConfig { path })
+    } else {
+        (false, PreferenceSource::BuiltIn)
+    };
+    let path = workspace_config_path(workspace_root)?;
+    if let Some(value) = read_layer(&path)?.preflight {
+        preflight = value;
+        preflight_source = PreferenceSource::WorkspaceConfig { path };
+    }
+    if let Some(value) = &environment.preflight {
+        preflight = value
+            .to_str()
+            .and_then(|value| value.parse::<bool>().ok())
+            .ok_or_else(|| {
+                std::io::Error::other("CLIPPIER_PUBLISH_PREFLIGHT must be true or false")
+            })?;
+        preflight_source = PreferenceSource::Environment {
+            variable: "CLIPPIER_PUBLISH_PREFLIGHT".to_owned(),
+        };
+    }
+    if let Some(value) = overrides.preflight {
+        preflight = value;
+        preflight_source = PreferenceSource::Override;
+    }
     Ok(EffectivePreferences {
-        publish: PublishPreferences { purity },
+        publish: PublishPreferences { purity, preflight },
         provenance: PreferencesProvenance {
-            publish: PublishProvenance { purity: source },
+            publish: PublishProvenance {
+                purity: source,
+                preflight: preflight_source,
+            },
         },
     })
 }

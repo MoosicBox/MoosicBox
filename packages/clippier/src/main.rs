@@ -952,6 +952,14 @@ enum ReleaseCommands {
         /// Stop publication preflight after its first failure
         #[arg(long)]
         fail_fast: bool,
+
+        /// Validate the whole pending queue before real uploads (always on for dry runs)
+        #[arg(long, conflicts_with = "no_preflight")]
+        preflight: bool,
+
+        /// Skip queue preflight for real uploads even when enabled in configuration
+        #[arg(long, conflicts_with = "preflight")]
+        no_preflight: bool,
         /// Run Cargo package verification
         #[arg(long)]
         verify: bool,
@@ -1457,6 +1465,14 @@ enum Commands {
         /// Stop publication preflight after its first failure
         #[arg(long)]
         fail_fast: bool,
+
+        /// Validate the whole pending queue before real uploads (always on for dry runs)
+        #[arg(long, conflicts_with = "no_preflight")]
+        preflight: bool,
+
+        /// Skip queue preflight for real uploads even when enabled in configuration
+        #[arg(long, conflicts_with = "preflight")]
+        no_preflight: bool,
 
         /// Compile packaged contents during preflight and verify again before upload
         #[arg(long)]
@@ -2121,6 +2137,8 @@ async fn run() -> Result<(), BoxError> {
                 semver_baseline_features,
                 dry_run,
                 fail_fast,
+                preflight,
+                no_preflight,
                 verify,
                 allow_dirty,
                 purity,
@@ -2147,6 +2165,9 @@ async fn run() -> Result<(), BoxError> {
                         },
                         dry_run,
                         fail_fast,
+                        preflight: preflight
+                            .then_some(true)
+                            .or_else(|| no_preflight.then_some(false)),
                         verify,
                         allow_dirty,
                         purity: purity
@@ -2228,6 +2249,8 @@ async fn run() -> Result<(), BoxError> {
             packages,
             dry_run,
             fail_fast,
+            preflight,
+            no_preflight,
             verify,
             allow_dirty,
             purity,
@@ -2243,6 +2266,9 @@ async fn run() -> Result<(), BoxError> {
                 packages,
                 dry_run,
                 fail_fast,
+                preflight: preflight
+                    .then_some(true)
+                    .or_else(|| no_preflight.then_some(false)),
                 verify,
                 allow_dirty,
                 purity: purity.or_else(|| require_pure.then_some(PurityPolicy::RequirePure)),
@@ -2411,6 +2437,50 @@ async fn run() -> Result<(), BoxError> {
 #[cfg(all(test, feature = "publish"))]
 mod publish_cli_tests {
     use super::*;
+
+    #[test]
+    fn preflight_switches_are_explicit_and_mutually_exclusive() {
+        for command in [
+            vec!["clippier", "publish"],
+            vec!["clippier", "release", "publish"],
+        ] {
+            // The release entry point is only compiled with its feature enabled.
+            if command.len() == 3 && !cfg!(feature = "release") {
+                continue;
+            }
+            for flags in [
+                vec![],
+                vec!["--preflight"],
+                vec!["--no-preflight"],
+                vec!["--dry-run", "--no-preflight"],
+            ] {
+                let mut args = command.clone();
+                args.extend(flags.iter().copied());
+                let (enabled, disabled) = match Args::try_parse_from(args).unwrap().cmd {
+                    Commands::Publish {
+                        preflight,
+                        no_preflight,
+                        ..
+                    } => (preflight, no_preflight),
+                    #[cfg(feature = "release")]
+                    Commands::Release {
+                        command:
+                            ReleaseCommands::Publish {
+                                preflight,
+                                no_preflight,
+                                ..
+                            },
+                    } => (preflight, no_preflight),
+                    _ => panic!("expected publish"),
+                };
+                assert_eq!(enabled, flags.contains(&"--preflight"));
+                assert_eq!(disabled, flags.contains(&"--no-preflight"));
+            }
+            let mut args = command;
+            args.extend(["--preflight", "--no-preflight"]);
+            assert!(Args::try_parse_from(args).is_err());
+        }
+    }
 
     fn publish_flags(arguments: &[&str]) -> (Option<PurityPolicy>, bool) {
         match Args::try_parse_from(arguments)

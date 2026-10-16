@@ -1066,14 +1066,25 @@ clippier publish /path/to/workspace
 
 `clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized workspace copy that preserves package-relative paths, removes workspace dev-dependencies, resolves workspace dependency inheritance, and uses a temp-local Cargo target dir.
 
-Before **any upload**, both publishing and `--dry-run` package the entire pending queue with Cargo and resolve dependencies without inherited lockfiles. Unpublished workspace dependencies are staged together using Cargo's native multi-package packaging; Cargo removes the versioned staging path links from packaged manifests. This catches missing or yanked transitive dependencies even when the source workspace lockfile still permits them. Source manifests and lockfiles are unchanged.
+Real publishes **skip queue-wide Cargo preflight by default** and go directly to per-package publication after manifest, category, dependency-availability, and purity checks. Cargo still packages each upload and honors `--verify`.
 
-By default, preflight continues across **every pending package**, collecting manifest, category,
+Use `clippier publish --preflight` (or `clippier release publish --preflight`) to opt in to queue-wide safety checks. Set `[publish] preflight = true` in workspace `clippier.toml` or `$XDG_CONFIG_HOME/clippier/clippier.toml` (fallback: `~/.config/clippier/clippier.toml`) to opt in persistently:
+
+```toml
+[publish]
+preflight = true # false by default
+```
+
+Precedence: CLI (`--preflight` / `--no-preflight`), `CLIPPIER_PUBLISH_PREFLIGHT=true|false`, workspace config, user config, built-in default. `clippier config show` reports the effective value and its origin. `--no-preflight` overrides configured opt-in for real uploads; **dry runs always preflight**, regardless of that setting.
+
+Dry runs and opted-in real publishes package the entire pending queue with Cargo and resolve dependencies without inherited lockfiles. Unpublished workspace dependencies are staged together using Cargo's native multi-package packaging; Cargo removes the versioned staging path links from packaged manifests. This catches missing or yanked transitive dependencies even when the source workspace lockfile still permits them. Source manifests and lockfiles are unchanged.
+
+When enabled, preflight continues across **every pending package**, collecting manifest, category,
 registry-availability, staging, and Cargo packaging failures before returning a nonzero exit status.
 Each package is checked in a separate temporary workspace with its pending dependency closure, so
 one broken package does not prevent independent packages from being checked. No uploads start if
 any preflight check fails. Use `--fail-fast` to stop after the first failure; this switch also works
-with `clippier release publish` and with ordinary (non-dry-run) publication preflight. Uploads
+with `clippier release publish` and with opted-in (non-dry-run) publication preflight. Uploads
 still stop on the first upload failure.
 
 ```bash
@@ -1147,7 +1158,7 @@ This retains normal Cargo cache semantics, not a clean rebuild of every dependen
 package: build scripts must correctly declare their inputs. Each new preflight starts with an
 empty build cache. Cargo may still rebuild when features, paths, toolchains or other inputs differ.
 
-Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to compile packaged contents. Without it, packaging/resolution still runs, but compilation is explicitly reported as not requested. JSON package reports include `packaging_validated` and `compilation_verified`. `clippier release publish --dry-run` uses the same preflight.
+Compilation verification is opt-in: pass `--verify` (also with `--dry-run`) to compile packaged contents. Without it, preflight (when enabled) still runs packaging/resolution, but compilation is explicitly reported as not requested. JSON package reports include `packaging_validated` and `compilation_verified`. `clippier release publish --dry-run` uses the same preflight.
 
 Cargo source replacements, path source overrides, and crates.io index overrides are rejected rather than allowing a mirror or patch to conceal a broken publish graph. Registry state can still change after validation; preflight is not a reservation of versions or an atomic multi-crate upload.
 

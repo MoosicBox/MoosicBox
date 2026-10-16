@@ -142,3 +142,20 @@ fn retry_budget_and_permanent_errors_stop_without_extra_attempts() {
         }
     }
 }
+
+#[test]
+fn real_publishes_require_preflight_opt_in_but_dry_runs_always_validate() {
+    for preflight in [None, Some(false), Some(true)] {
+        for dry_run in [false, true] {
+            let config = PublishConfig {
+                dry_run,
+                preflight,
+                ..PublishConfig::default()
+            };
+            assert_eq!(
+                should_run_preflight(&config),
+                dry_run || preflight == Some(true)
+            );
+        }
+    }
+}

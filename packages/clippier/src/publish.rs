@@ -47,6 +47,8 @@ pub struct PublishConfig {
     pub purity: Option<PurityPolicy>,
     /// Package and resolve the pending queue without uploading. Compilation requires `verify`.
     pub dry_run: bool,
+    /// Override queue preflight for real publishes; `None` inherits preferences.
+    pub preflight: Option<bool>,
     /// Stop publish preflight after its first failure instead of checking every package.
     pub fail_fast: bool,
     /// Compile packaged contents during preflight and verify again before upload.
@@ -70,6 +72,7 @@ impl Default for PublishConfig {
             packages: None,
             purity: None,
             dry_run: false,
+            preflight: None,
             fail_fast: false,
             verify: false,
             allow_dirty: false,
@@ -513,14 +516,15 @@ pub async fn handle_publish_command(
 ) -> Result<String, BoxError> {
     let workspace_root = normalize_workspace_root(&config.workspace_root);
     let mut config = config;
-    let purity_policy = resolve_preferences(
+    let preferences = resolve_preferences(
         &workspace_root,
         PreferencesOverrides {
             purity: config.purity,
+            preflight: config.preflight,
         },
-    )?
-    .publish
-    .purity;
+    )?;
+    let purity_policy = preferences.publish.purity;
+    config.preflight = Some(preferences.publish.preflight);
     config.purity = Some(purity_policy);
     eprintln!(
         "{} {}",
@@ -670,6 +674,13 @@ pub async fn handle_publish_command(
 
     let publish_order = final_plan.publish_order;
     if !preflight_failures.is_empty() {
+        if !should_run_preflight(&config) {
+            return Err(format!(
+                "Publish validation failed (no packages uploaded):\n  {}",
+                preflight_failures.join("\n  ")
+            )
+            .into());
+        }
         // Still run Cargo checks to discover independent packaging failures.
         return preflight::validate_with_failures(
             &workspace_root,
@@ -799,6 +810,10 @@ where
     Ok(())
 }
 
+fn should_run_preflight(config: &PublishConfig) -> bool {
+    config.dry_run || config.preflight.unwrap_or(false)
+}
+
 async fn publish_pending_queue(
     workspace_root: &Path,
     packages: &BTreeMap<String, PublishPackageInfo>,
@@ -814,7 +829,9 @@ async fn publish_pending_queue(
         .filter_map(|report| report.purity.clone())
         .collect::<Vec<_>>();
     purity::enforce(purity_policy, &assessments)?;
-    preflight::validate(workspace_root, packages, publish_order, config)?;
+    if should_run_preflight(config) {
+        preflight::validate(workspace_root, packages, publish_order, config)?;
+    }
     for (index, name) in publish_order.iter().enumerate() {
         let package = packages
             .get(name)

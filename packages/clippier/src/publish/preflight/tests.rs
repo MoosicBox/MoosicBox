@@ -385,6 +385,7 @@ fn entire_queue_is_validated_before_any_publish_attempt() {
         let mut reports = Vec::new();
         let config = PublishConfig {
             verify: true,
+            preflight: Some(true),
             dry_run,
             color: crate::ColorMode::Never,
             ..PublishConfig::default()
