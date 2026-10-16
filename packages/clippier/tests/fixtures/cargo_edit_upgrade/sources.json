@@ -1,0 +1,163 @@
+{
+  "upstream": {
+    "url": "https://github.com/killercup/cargo-edit",
+    "revision": "138d4e2948ddcbf249c31c584b02e1b161a86221"
+  },
+  "fork": {
+    "url": "https://github.com/BSteffaniak/cargo-edit",
+    "revision": "d6b8eb6990f8a70ffe0d318b3e025328ea59aa7d",
+    "branch": "add-skip-git-dependencies"
+  },
+  "cases": {
+    "alt_registry": [
+      "upstream",
+      "fork"
+    ],
+    "cli_rust_version": [
+      "upstream",
+      "fork"
+    ],
+    "dry_run": [
+      "upstream",
+      "fork"
+    ],
+    "exclude_dep": [
+      "upstream",
+      "fork"
+    ],
+    "exclude_renamed": [
+      "upstream",
+      "fork"
+    ],
+    "ignore_rust_version": [
+      "upstream",
+      "fork"
+    ],
+    "implicit_prerelease": [
+      "upstream",
+      "fork"
+    ],
+    "invalid_dep": [
+      "upstream",
+      "fork"
+    ],
+    "invalid_flag": [
+      "upstream",
+      "fork"
+    ],
+    "invalid_manifest": [
+      "upstream",
+      "fork"
+    ],
+    "invalid_workspace_root_manifest": [
+      "upstream",
+      "fork"
+    ],
+    "locked": [
+      "upstream",
+      "fork"
+    ],
+    "locked_dry_run": [
+      "upstream",
+      "fork"
+    ],
+    "lockfile": [
+      "upstream",
+      "fork"
+    ],
+    "optional_dep": [
+      "upstream",
+      "fork"
+    ],
+    "package_rust_version": [
+      "upstream",
+      "fork"
+    ],
+    "pinned": [
+      "upstream",
+      "fork"
+    ],
+    "preserve_op": [
+      "upstream",
+      "fork"
+    ],
+    "preserve_precision_major": [
+      "upstream",
+      "fork"
+    ],
+    "preserve_precision_minor": [
+      "upstream",
+      "fork"
+    ],
+    "preserve_precision_patch": [
+      "upstream",
+      "fork"
+    ],
+    "preserves_inline_table": [
+      "upstream",
+      "fork"
+    ],
+    "preserves_std_table": [
+      "upstream",
+      "fork"
+    ],
+    "single_dep": [
+      "upstream",
+      "fork"
+    ],
+    "skip_compatible": [
+      "upstream",
+      "fork"
+    ],
+    "specified": [
+      "upstream",
+      "fork"
+    ],
+    "to_version": [
+      "upstream",
+      "fork"
+    ],
+    "upgrade_all": [
+      "upstream",
+      "fork"
+    ],
+    "upgrade_everything": [
+      "upstream",
+      "fork"
+    ],
+    "upgrade_renamed": [
+      "upstream",
+      "fork"
+    ],
+    "upgrade_verbose": [
+      "upstream",
+      "fork"
+    ],
+    "upgrade_verbose_hint": [
+      "upstream"
+    ],
+    "upgrade_workspace": [
+      "upstream",
+      "fork"
+    ],
+    "virtual_manifest": [
+      "upstream",
+      "fork"
+    ],
+    "workspace_inheritance": [
+      "upstream",
+      "fork"
+    ],
+    "workspace_member_cwd": [
+      "upstream",
+      "fork"
+    ],
+    "workspace_member_manifest_path": [
+      "upstream",
+      "fork"
+    ],
+    "patched": [
+      "fork"
+    ]
+  }
+}

@@ -73,7 +73,7 @@ pub struct UpgradeOptions {
     pub kinds: Vec<DependencyKind>,
     /// Compatibility override.
     pub policy: Option<UpgradePolicy>,
-    /// Exact-pin override.
+    /// Pin-policy override (exact, wildcard and single upper-bound requirements).
     pub pinned: Option<PinnedPolicy>,
     /// Prerelease override.
     pub prerelease: Option<PrereleasePolicy>,
@@ -112,7 +112,7 @@ pub struct RegistryOverrides {
 pub struct UpgradeConfig {
     /// Compatibility policy.
     pub policy: UpgradePolicy,
-    /// Exact pins are preserved unless explicitly opted in.
+    /// Exact, wildcard and single upper-bound pins are preserved unless opted in.
     pub pinned: PinnedPolicy,
     /// Prereleases are not introduced unless explicitly opted in.
     pub prerelease: PrereleasePolicy,

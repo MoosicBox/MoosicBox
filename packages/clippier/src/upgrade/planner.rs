@@ -190,6 +190,15 @@ fn occurrences(input: &UpgradeInput) -> Result<Vec<Occurrence>, BoxError> {
         });
     }
     result.sort_by(|a, b| (&a.consumer, &a.raw.key).cmp(&(&b.consumer, &b.raw.key)));
+    for selector in &input.config.dependencies {
+        let pattern = patterns(std::slice::from_ref(selector))?;
+        if !result.iter().any(|occurrence| {
+            pattern.is_match(&occurrence.raw.alias)
+                || pattern.is_match(registry_key(occurrence).name)
+        }) {
+            return Err(format!("dependency selector '{selector}' matches no dependency").into());
+        }
+    }
     Ok(result)
 }
 
@@ -218,8 +227,18 @@ fn skip_reason(config: &UpgradeConfig, declaration: &Item) -> Option<&'static st
     let Some(text) = requirement(declaration) else {
         return Some("no registry version requirement");
     };
-    if text.trim_start().starts_with('=') && config.pinned == PinnedPolicy::Preserve {
-        return Some("exact pin preserved");
+    if config.pinned == PinnedPolicy::Preserve {
+        let req = VersionReq::parse(text).ok()?;
+        if req.comparators.len() == 1
+            && req.comparators.iter().any(|comparator| {
+                matches!(
+                    comparator.op,
+                    Op::Exact | Op::Wildcard | Op::Less | Op::LessEq
+                )
+            })
+        {
+            return Some("pin preserved");
+        }
     }
     None
 }
@@ -704,6 +723,13 @@ fn minimum(req: &VersionReq) -> Option<Version> {
 
 #[allow(clippy::option_if_let_else)] // Preserve the visible wildcard/precision/semver cases.
 fn rewrite_requirement(old: &str, version: &Version) -> Result<String, BoxError> {
+    // Cargo ignores build metadata in requirements; registry versions may carry
+    // it, but writing it into Cargo.toml produces warnings and loses precision.
+    let version = Version {
+        build: semver::BuildMetadata::EMPTY,
+        ..version.clone()
+    };
+    let version = &version;
     let trimmed = old.trim();
     let req = VersionReq::parse(trimmed)?;
     if req.matches(version)

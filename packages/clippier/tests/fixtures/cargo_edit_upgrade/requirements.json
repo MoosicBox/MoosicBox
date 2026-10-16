@@ -1,0 +1,262 @@
+[
+  {
+    "version": "1.0.0",
+    "requirement": "*",
+    "expected": "*"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "1.*",
+    "expected": "1.*"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "1.*",
+    "expected": "1.*"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "1.*",
+    "expected": "2.*"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "1.0.*",
+    "expected": "1.0.*"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "1.0.*",
+    "expected": "1.1.*"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "1.0.*",
+    "expected": "1.1.*"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "1.0.*",
+    "expected": "2.0.*"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "1",
+    "expected": "1"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "^1",
+    "expected": "^1"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "1",
+    "expected": "1"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "^1",
+    "expected": "^1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "1",
+    "expected": "2"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "^1",
+    "expected": "^2"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "1.0",
+    "expected": "1.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "^1.0",
+    "expected": "^1.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "1.0",
+    "expected": "1.1"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "^1.0",
+    "expected": "^1.1"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "1.0",
+    "expected": "1.1"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "^1.0",
+    "expected": "^1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "1.0",
+    "expected": "2.0"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "^1.0",
+    "expected": "^2.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "1.0.0",
+    "expected": "1.0.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "^1.0.0",
+    "expected": "^1.0.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "1.0.0",
+    "expected": "1.1.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "^1.0.0",
+    "expected": "^1.1.0"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "1.0.0",
+    "expected": "1.1.1"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "^1.0.0",
+    "expected": "^1.1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "1.0.0",
+    "expected": "2.0.0"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "^1.0.0",
+    "expected": "^2.0.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "~1",
+    "expected": "~1"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "~1",
+    "expected": "~1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "~1",
+    "expected": "~2"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "~1.0",
+    "expected": "~1.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "~1.0",
+    "expected": "~1.1"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "~1.0",
+    "expected": "~1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "~1.0",
+    "expected": "~2.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "~1.0.0",
+    "expected": "~1.0.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "~1.0.0",
+    "expected": "~1.1.0"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "~1.0.0",
+    "expected": "~1.1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "~1.0.0",
+    "expected": "~2.0.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "=1",
+    "expected": "=1"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "=1",
+    "expected": "=1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "=1",
+    "expected": "=2"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "=1.0",
+    "expected": "=1.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "=1.0",
+    "expected": "=1.1"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "=1.0",
+    "expected": "=1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "=1.0",
+    "expected": "=2.0"
+  },
+  {
+    "version": "1.0.0",
+    "requirement": "=1.0.0",
+    "expected": "=1.0.0"
+  },
+  {
+    "version": "1.1.0",
+    "requirement": "=1.0.0",
+    "expected": "=1.1.0"
+  },
+  {
+    "version": "1.1.1",
+    "requirement": "=1.0.0",
+    "expected": "=1.1.1"
+  },
+  {
+    "version": "2.0.0",
+    "requirement": "=1.0.0",
+    "expected": "=2.0.0"
+  }
+]
