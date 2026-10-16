@@ -4,12 +4,12 @@ expression: parsed
 ---
 {
   "dependencies": [
-    "cargo install cargo-machete || true",
+    "cargo install cargo-deny || true",
     "cargo install taplo-cli || true",
     "sudo apt-get install libssl-dev"
   ],
   "toolchains": [
-    "cargo-machete",
+    "cargo-deny",
     "taplo"
   ],
   "ci_steps": [

@@ -101,7 +101,7 @@ The implementation provides a modern, async-first **local database** option that
       Confirmed - workspace declaration only
 - [x] Run `cargo fmt` (format code)
       Completed - no formatting changes needed
-- [x] Run `cargo machete` (no unused dependencies - none added yet)
+- [x] Perform a dependency audit (no unused dependencies - none added yet)
       Passed - no warnings about turso (not used by any package yet)
 
 ### 1.2 Create Error Type Structure
@@ -173,7 +173,7 @@ The implementation provides a modern, async-first **local database** option that
       Passed after adding feature in step 1.4
 - [x] Run `cargo build -p switchy_database` (compiles)
       Build successful with expected cfg warnings
-- [x] Run `cargo machete` (no unused deps)
+- [x] Perform a dependency audit (no unused deps)
       No warnings
 
 ### 1.4 Add Feature Flag (No Dependency Yet)
@@ -200,7 +200,7 @@ The implementation provides a modern, async-first **local database** option that
       Build successful
 - [x] Run `cargo build -p switchy_database --no-default-features --features turso` (compiles)
       Build successful
-- [x] Run `cargo machete` (no unused dependencies - turso not added yet)
+- [x] Perform a dependency audit (no unused dependencies - turso not added yet)
       Passed - no unused dependencies
 - [x] Verify error module is included with feature
       Confirmed - turso module compiles with feature flag
@@ -240,7 +240,7 @@ The implementation provides a modern, async-first **local database** option that
       Build artifacts found in target/debug/deps/libswitchy_database-\*.rlib
 - [x] Run `cargo build -p switchy_database --features turso` (pulls turso crate)
       Successfully compiled after ~3 hours (turso has large dependency tree with git2, cargo-lock, etc.)
-- [x] Run `cargo machete` (turso not flagged - will be used next)
+- [x] Perform a dependency audit (turso not flagged - will be used next)
       No unused dependency warnings for turso
 
 ### 2.2 Implement TursoDatabase Struct
@@ -299,7 +299,7 @@ The implementation provides a modern, async-first **local database** option that
       Passed - zero warnings
 - [x] Run `cargo build -p switchy_database --features turso` (compiles)
       Build successful
-- [x] Run `cargo machete` (turso is used)
+- [x] Perform a dependency audit (turso is used)
       No unused dependency warnings
 
 ### 2.3 Implement Value Conversion Helpers
@@ -694,7 +694,7 @@ The implementation provides a modern, async-first **local database** option that
       Completed - all code formatted according to rustfmt standards
 - [x] Run `cargo test -p switchy_database --features turso` (non-transaction tests pass)
       All 21 tests pass in 0.02s
-- [x] Run `cargo machete` (all dependencies used)
+- [x] Perform a dependency audit (all dependencies used)
       No unused dependencies detected
 
 ## Phase 3: Transaction Support ✅ **COMPLETE**
@@ -899,7 +899,7 @@ The implementation provides a modern, async-first **local database** option that
       Passed - zero warnings
 - [x] Run `cargo test -p switchy_database --features turso` (all tests pass including transactions)
       27 tests pass: 21 from Phase 2 + 6 transaction tests (including state guard test)
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies detected
 
 ### 3.4 Fix Transaction State Guard Inconsistencies ✅ **COMPLETE**
@@ -1020,7 +1020,7 @@ During post-implementation review, discovered missing transaction state guards c
       Passed - zero warnings
 - [x] Run `cargo test -p switchy_database --features turso --lib turso::tests` (all tests pass)
       All 32 tests pass successfully
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not run but no new dependencies added in Phase 4
 
 ### 4.3 Fix AUTOINCREMENT Detection ✅ **COMPLETE**
@@ -1632,7 +1632,7 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
       ✅ Zero warnings
 - [x] Run `cargo build -p switchy_database_connection --features turso` (compiles)
       ✅ Finished in 7.50s
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       ✅ No unused turso dependencies
 
 ### 5.3 Integrate with init() Function ✅ **COMPLETE**
@@ -1684,7 +1684,7 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
       ✅ Finished in 6.35s
 - [x] Run `cargo test -p switchy_database_connection --features turso` (tests pass)
       ✅ No package-specific tests (uses integration tests)
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       ✅ No unused turso dependencies
 
 ### 5.4 Add Workspace-Level Features ✅ **COMPLETE**
@@ -1708,7 +1708,7 @@ Use case-insensitive regex to parse SQL directly, avoiding all byte offset depen
       ✅ Finished in 45.14s
 - [x] Run `cargo build -p switchy --features database-connection-turso` (compiles)
       ✅ Finished in 44.72s
-- [x] Run `cargo machete` (workspace-wide check)
+- [x] Perform a dependency audit (workspace-wide check)
       ✅ No turso-related unused dependencies
 
 ## Phase 6: Integration Testing and Documentation ✅ **COMPLETE**

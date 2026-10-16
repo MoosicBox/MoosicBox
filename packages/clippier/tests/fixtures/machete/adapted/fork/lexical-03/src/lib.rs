@@ -1,0 +1,1 @@
+use log_once;

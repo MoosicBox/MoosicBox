@@ -1,0 +1,13 @@
+[package]
+name = "multi-key-dep"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4.14"
+
+[target.'cfg(unix)'.dependencies]
+
+[dev-dependencies]
+
+[build-dependencies]

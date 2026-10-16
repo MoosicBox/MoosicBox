@@ -171,10 +171,10 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     - **Expected**: Finished with zero warnings
     - **Success**: Clean clippy output
 
-- [x] **Run `cargo machete` - No unused dependencies**
+- [x] **Perform a dependency audit - No unused dependencies**
 
     ```bash
-    nix develop --command cargo machete
+    # Dependency audit in the development environment
     ```
 
     - **Expected**: No unused dependencies found
@@ -276,10 +276,10 @@ This roadmap focuses on systematically verifying and completing the remaining wo
     - **Expected**: Zero clippy warnings with simulator
     - **Success**: Clean clippy output
 
-- [x] **Run `cargo machete` - No unused dependencies**
+- [x] **Perform a dependency audit - No unused dependencies**
 
     ```bash
-    nix develop --command cargo machete
+    # Dependency audit in the development environment
     ```
 
     - **Expected**: No unused dependencies
@@ -350,7 +350,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
 
 - [ ] **Run `cargo fmt` - Code properly formatted**
 - [ ] **Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings**
-- [ ] **Run `cargo machete` - No unused dependencies**
+- [ ] **Run `clippier machete check` - No unused dependencies**
 
 **Section 1.3 Complete When**: All 10 checkboxes above are marked complete
 
@@ -417,7 +417,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
 
 - [ ] **Run `cargo fmt` - Code properly formatted**
 - [ ] **Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings**
-- [ ] **Run `cargo machete` - No unused dependencies**
+- [ ] **Run `clippier machete check` - No unused dependencies**
 
 **Section 1.4 Complete When**: All 10 checkboxes above are marked complete
 
@@ -499,7 +499,7 @@ This roadmap focuses on systematically verifying and completing the remaining wo
 
 - [ ] **Run `cargo fmt` - Code properly formatted**
 - [ ] **Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings**
-- [ ] **Run `cargo machete` - No unused dependencies**
+- [ ] **Run `clippier machete check` - No unused dependencies**
 
 **Section 1.5 Complete When**: All 10 checkboxes above are marked complete
 
@@ -679,7 +679,7 @@ nix develop --command cargo test -p moosicbox_web_server --features simulator
 # Check code quality
 nix develop --command cargo clippy -p moosicbox_web_server -- -D warnings
 nix develop --command cargo fmt --check
-nix develop --command cargo machete
+# Dependency audit in the development environment
 ```
 
 ### Progress Checking

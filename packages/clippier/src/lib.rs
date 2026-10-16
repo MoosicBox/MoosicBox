@@ -5229,7 +5229,7 @@ pub async fn handle_packages_command(
 pub struct WorkspaceToolchains {
     /// System dependencies to install (commands to run)
     pub dependencies: Vec<String>,
-    /// Toolchain identifiers (e.g., "cargo-machete", "taplo", "node")
+    /// Toolchain identifiers (e.g., "cargo-deny", "taplo", "node")
     pub toolchains: Vec<String>,
     /// CI steps commands to run
     pub ci_steps: Vec<String>,

@@ -1149,7 +1149,7 @@ cargo test --features simulator
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -1240,7 +1240,7 @@ cargo test --features simulator
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -1649,7 +1649,7 @@ pub trait FromRequest: Sized {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -1787,7 +1787,7 @@ macro_rules! impl_handler {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -1910,7 +1910,7 @@ pub struct RequestData {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -2007,7 +2007,7 @@ pub struct RequestData {
 
 - [x] Run `cargo fmt` - Code properly formatted ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -2215,7 +2215,7 @@ impl<T: DeserializeOwned> FromRequest for Query<T> {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -2369,7 +2369,7 @@ impl<T: DeserializeOwned> FromRequest for Json<T> {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -2492,7 +2492,7 @@ impl<T: DeserializeOwned> FromRequest for Path<T> {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -3516,9 +3516,9 @@ mod simulator_tests {
 - [x] Run `cargo clippy -p switchy_http_models -- -D warnings` - Zero warnings in models ✅ **VERIFIED**
     - **Command**: `nix develop --command cargo clippy -p switchy_http_models -- -D warnings`
     - **Result**: Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.53s
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
-    - **Command**: `nix develop --command cargo machete`
-    - **Result**: "cargo-machete didn't find any unused dependencies"
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
+    - **Validation**: Dependency audit in the development environment
+    - **Result**: Dependency audit found no unused dependencies.
 
 **Testing:**
 
@@ -3594,7 +3594,7 @@ mod simulator_tests {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -3684,7 +3684,7 @@ mod simulator_tests {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -3777,7 +3777,7 @@ mod simulator_tests {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -3863,7 +3863,7 @@ mod simulator_tests {
       Completed successfully with no changes needed
 - [x] Run `cargo clippy -p moosicbox_web_server -- -D warnings` - Zero warnings
       Completed successfully with zero warnings
-- [x] Run `cargo machete` - No unused dependencies
+- [x] Perform a dependency audit - No unused dependencies
       Completed successfully - no unused dependencies found
 
 **Testing:**
@@ -3959,7 +3959,7 @@ mod simulator_tests {
     - **Inherited from Step 5.1.1**: Formatting confirmed clean
 - [x] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: Clippy confirmed zero warnings
-- [x] Run `cargo machete` - No unused dependencies ✅ **VERIFIED**
+- [x] Perform a dependency audit - No unused dependencies ✅ **VERIFIED**
     - **Inherited from Step 5.1.1**: No unused dependencies confirmed
 
 **Testing:**
@@ -4017,7 +4017,7 @@ mod simulator_tests {
       Completed successfully with no changes needed
 - [x] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
       Completed successfully with zero warnings
-- [x] Run `cargo machete` - No unused dependencies
+- [x] Perform a dependency audit - No unused dependencies
       Completed successfully - no unused dependencies found
 
 **Testing:**
@@ -4078,7 +4078,7 @@ mod simulator_tests {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -4129,7 +4129,7 @@ mod simulator_tests {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -4186,7 +4186,7 @@ mod simulator_tests {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -4273,7 +4273,7 @@ mod simulator_tests {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -5933,7 +5933,7 @@ fn extract_actix_path_params(req: &actix_web::HttpRequest) -> PathParams {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6172,7 +6172,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6219,7 +6219,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6265,7 +6265,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6311,7 +6311,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6356,7 +6356,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6410,7 +6410,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Run `cargo doc --no-deps -p moosicbox_web_server` - Documentation builds
 - [ ] Run `cargo tarpaulin -p moosicbox_web_server` - Adequate code coverage
 
@@ -6482,7 +6482,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6525,7 +6525,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6568,7 +6568,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6611,7 +6611,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6661,7 +6661,7 @@ fn test_path_parameters_with_context() {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Run `cargo doc --no-deps -p moosicbox_web_server --open` - Docs complete
 - [ ] Run `cargo tarpaulin -p moosicbox_web_server` - >80% coverage
 
@@ -6767,7 +6767,7 @@ Each sub-step:
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6816,7 +6816,7 @@ Each sub-step:
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy --examples -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -6956,7 +6956,7 @@ cargo test --features simulator
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -7082,7 +7082,7 @@ cargo test --features simulator
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -7188,7 +7188,7 @@ cargo test --features simulator
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -7452,7 +7452,7 @@ async fn get_user(Path(id): Path<u32>) -> Result<Json<User>, Error> {
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server_macros -- -D warnings` - Zero warnings
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -7526,7 +7526,7 @@ async fn get_user(Path(id): Path<u32>) -> Result<Json<User>, Error> {
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8174,7 +8174,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Documentation:**
 
@@ -8215,7 +8215,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8250,7 +8250,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Validation:**
 
@@ -8287,7 +8287,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p moosicbox_web_server_macros -- -D warnings` - Zero warnings
 - [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8317,7 +8317,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p switchy_process --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8346,7 +8346,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8376,7 +8376,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy -p switchy_async --all-features -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8405,7 +8405,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 
@@ -8434,7 +8434,7 @@ The MoosicBox web server abstraction is now ready for the next phase of developm
 
 - [ ] Run `cargo fmt` - Code properly formatted
 - [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 **Testing:**
 

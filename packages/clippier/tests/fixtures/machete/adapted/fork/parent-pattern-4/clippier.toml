@@ -1,0 +1,2 @@
+[machete]
+ignored-dirs = ["test-*"]

@@ -128,6 +128,42 @@ fn configuration_and_global_selectors_work_after_subcommands() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn ordinary_operations_never_launch_cargo() {
+    use std::os::unix::fs::PermissionsExt;
+
+    for args in [
+        vec!["analyze"],
+        vec!["check"],
+        vec!["plan", "--diff"],
+        vec!["apply", "--yes"],
+    ] {
+        let f = Fixture::new();
+        let bin = f.dir.path().join("bin");
+        fs::create_dir(&bin).unwrap();
+        let sentinel = bin.join("cargo");
+        fs::write(
+            &sentinel,
+            "#!/bin/sh\nprintf invoked > cargo-was-invoked\nexit 99\n",
+        )
+        .unwrap();
+        fs::set_permissions(&sentinel, fs::Permissions::from_mode(0o755)).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+            .current_dir(f.dir.path())
+            .env("PATH", &bin)
+            .arg("machete")
+            .args(&args)
+            .args(["--output", "json"])
+            .output()
+            .unwrap();
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_ne!(value["outcome"], "FAILED", "{args:?}: {value}");
+        assert!(!f.dir.path().join("cargo-was-invoked").exists(), "{args:?}");
+        assert!(!f.dir.path().join("target").exists());
+    }
+}
+
 #[test]
 fn failures_emit_structured_json_and_do_not_mutate() {
     let f = Fixture::new();

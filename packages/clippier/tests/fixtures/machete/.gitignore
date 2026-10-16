@@ -1,0 +1,5 @@
+# Retain intentional output-directory fixture inputs.
+!original/*/integration-tests/with-target/target/
+!original/*/integration-tests/with-target/target/**
+!adapted/*/with-target/target/
+!adapted/*/with-target/target/**

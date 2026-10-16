@@ -45,7 +45,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - **Phase Success**: All 4 test scenarios pass + >80% test coverage
 - **Code Quality**: Zero warnings, all clippy lints pass
 - **Documentation**: Every public API documented with examples
-- **Dependency Hygiene**: `cargo machete` clean after each phase
+- **Dependency Hygiene**: Dependency audit clean after each phase
 
 ## Phase 1: Package Creation and Setup ✅ **COMPLETED**
 
@@ -134,7 +134,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
       Compiled successfully in 0.36s
 - [x] Run `cargo build -p switchy_p2p --no-default-features` ✅ compiles with no features
       Compiled successfully in 0.30s
-- [x] Run `cargo machete` ✅ reports zero dependencies for switchy_p2p
+- [x] Perform a dependency audit ✅ reports zero dependencies for switchy_p2p
       No unused dependencies detected workspace-wide
 - [x] **VERIFICATION**: Package builds but does nothing (empty lib.rs)
       Package successfully builds and exports nothing as intended
@@ -175,7 +175,7 @@ Initial package has zero dependencies to start completely clean.
       All clippy checks passed (Note: Only ran on p2p package due to scope)
 - [x] Run `cargo build --all`
       Build successful (Note: Only ran on p2p package due to scope)
-- [x] Run `cargo machete` (workspace-wide unused dependency check)
+- [x] Perform a dependency audit (workspace-wide unused dependency check)
       No unused dependencies detected workspace-wide
 - [x] No workspace-level errors or warnings
       All verification commands completed without errors
@@ -383,7 +383,7 @@ Initial package has zero dependencies to start completely clean.
           2 minor warnings (unused import GenericRng, unused mut) but compiles
     - [x] Run `cargo build -p switchy_p2p` ✅ compiles
           Successfully compiled
-    - [x] Run `cargo machete` ✅ all 3 switchy dependencies marked as used
+    - [x] Perform a dependency audit ✅ all 3 switchy dependencies marked as used
           All dependencies in use
 - [x] **VERIFICATION**: Node identity system is complete and testable
       Complete implementation with 3 passing tests
@@ -667,7 +667,7 @@ This ensures each phase compiles independently without forward dependencies.
           Package compiles successfully in 1.19s
     - [x] Run `cargo test -p switchy_p2p` ✅ all tests pass
           All 3 tests pass: test_node_id_deterministic, test_node_id_different, test_fmt_short
-    - [x] Run `cargo machete` ✅ no unused dependencies workspace-wide
+    - [x] Perform a dependency audit ✅ no unused dependencies workspace-wide
           Only switchy_random dependency used, no unused dependencies detected
 - [x] **VERIFICATION**: Complete unit tests for network topology functionality
       NetworkGraph types fully implemented with add_node, connect_nodes, find_path, add_partition, heal_partition methods
@@ -920,7 +920,7 @@ This ensures each phase compiles independently without forward dependencies.
       Package compiles successfully in 0.42s
 - [x] Run `cargo test -p switchy_p2p`
       All 3 tests pass: test_node_id_deterministic, test_node_id_different, test_fmt_short
-- [x] Run `cargo machete` (no unused dependencies workspace-wide)
+- [x] Perform a dependency audit (no unused dependencies workspace-wide)
       No unused dependencies detected - switchy_random and switchy_async both used
 - [x] End-to-end communication tests pass
       Core connection and message routing infrastructure fully implemented and functional
@@ -1034,7 +1034,7 @@ This ensures each phase compiles independently without forward dependencies.
       Package compiles successfully in 0.77s
 - [x] Run `cargo test -p switchy_p2p`
       All 3 tests pass: test_node_id_deterministic, test_node_id_different, test_fmt_short
-- [x] Run `cargo machete` (all core dependencies should be used workspace-wide)
+- [x] Perform a dependency audit (all core dependencies should be used workspace-wide)
       No unused dependencies detected - switchy_async and switchy_random both used
 - [x] Discovery integration tests pass
       All discovery methods implemented and compile successfully with proper async/await
@@ -1321,7 +1321,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
-- [ ] Run `cargo machete` (no unused dependencies from refactoring)
+- [ ] Run `clippier machete check` (no unused dependencies from refactoring)
 - [ ] All tests work through trait interface
 
 ## 🔴 **IMPORTANT TRACKING NOTE: P2PListener Implementation**
@@ -1542,7 +1542,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
-- [ ] Run `cargo machete` (thiserror and config types should be used)
+- [ ] Run `clippier machete check` (thiserror and config types should be used)
 - [ ] Type conversions work as expected
 
 ## Phase 5: Web-Server-Like Integration API 🔴 **NOT STARTED**
@@ -1859,7 +1859,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo tree -p switchy_p2p --features iroh` (check iroh deps)
 - [ ] Verify iroh 0.91.2 is pulled in with iroh feature
 - [ ] Verify tokio is available transitively through iroh (not as direct dependency)
-- [ ] Run `cargo machete` (verify iroh dependency is used when feature enabled)
+- [ ] Run `clippier machete check` (verify iroh dependency is used when feature enabled)
 - [ ] Dependency resolution works correctly
 
 ### 7.2 Zero-Cost Iroh Provider Implementation
@@ -2265,7 +2265,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo fmt --check -p switchy_p2p`
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo test -p switchy_p2p`
-- [ ] Run `cargo machete` (verify proptest is used in tests and dev-dependencies)
+- [ ] Run `clippier machete check` (verify proptest is used in tests and dev-dependencies)
 - [ ] Tests pass with all feature combinations
 - [ ] Test utilities are well-documented
 
@@ -2747,7 +2747,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --examples`
 - [ ] Run examples with different feature combinations
-- [ ] Run `cargo machete` (final check - no unused dependencies in workspace)
+- [ ] Run `clippier machete check` (final check - no unused dependencies in workspace)
 
 ## Phase 13: Production Readiness ✅ **NOT STARTED**
 

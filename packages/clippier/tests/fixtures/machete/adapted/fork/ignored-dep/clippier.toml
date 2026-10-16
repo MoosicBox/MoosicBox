@@ -1,0 +1,2 @@
+[machete]
+ignored = ["log", "rand_core"]

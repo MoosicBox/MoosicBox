@@ -89,7 +89,7 @@
 - [ ] Run `cargo clippy --all-targets -p [package-name] -- -D warnings` (zero warnings)
 - [ ] Run `cargo build -p [package-name]` (compiles with default features)
 - [ ] Run `cargo build -p [package-name] --no-default-features` (compiles with no features)
-- [ ] Run `cargo machete` (zero unused dependencies)
+- [ ] Run `clippier machete check` (zero unused dependencies)
 
 ### 1.2 Workspace Integration
 
@@ -106,7 +106,7 @@
 - [ ] Run `cargo fmt` (workspace-wide formatting)
 - [ ] Run `cargo clippy --all-targets --all-features -- -D warnings` (if scoped to package, adjust)
 - [ ] Run `cargo build --all` (if scoped to package, adjust)
-- [ ] Run `cargo machete` (workspace-wide unused dependency check)
+- [ ] Run `clippier machete check` (workspace-wide unused dependency check)
 - [ ] No workspace-level errors or warnings
 
 ## Phase 2: Core Implementation 🔴 **NOT STARTED**
@@ -176,7 +176,7 @@
 - [ ] Run `cargo clippy --all-targets -p [package-name] -- -D warnings` (zero warnings)
 - [ ] Run `cargo build -p [package-name]` (compiles)
 - [ ] Run `cargo test -p [package-name]` (all tests pass)
-- [ ] Run `cargo machete` (all dependencies used)
+- [ ] Run `clippier machete check` (all dependencies used)
 
 ## Phase 3: [Next Major Phase] 🔴 **NOT STARTED**
 
@@ -197,7 +197,7 @@
 - [ ] Run `cargo clippy --all-targets -p [package-name] -- -D warnings` (zero warnings)
 - [ ] Run `cargo build -p [package-name]` (compiles)
 - [ ] Run `cargo test -p [package-name]` (all tests pass)
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 
 ## Success Criteria
 

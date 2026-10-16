@@ -1,0 +1,8 @@
+[workspace]
+members = ["inner"]
+
+[workspace.dependencies]
+rustls-webpki = "0.102.8"
+bytes = "1.10.0"
+flagset = "0.4.6"
+

@@ -945,10 +945,15 @@ pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
                     || rule_excluded
                     || used_derives
                     || match kind {
-                        DependencyKind::Normal | DependencyKind::Dev => {
-                            evidence.normal.contains(&name) || evidence.dev.contains(&name)
-                        }
-                        DependencyKind::Build => evidence.build.contains(&name),
+                        DependencyKind::Normal | DependencyKind::Dev => evidence
+                            .normal
+                            .iter()
+                            .chain(&evidence.dev)
+                            .any(|observed| observed.eq_ignore_ascii_case(&name)),
+                        DependencyKind::Build => evidence
+                            .build
+                            .iter()
+                            .any(|observed| observed.eq_ignore_ascii_case(&name)),
                     };
                 let (status, reason) = if !is_selected {
                     (DependencyStatus::Skipped, "excluded by selector")

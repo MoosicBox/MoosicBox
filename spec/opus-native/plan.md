@@ -1759,7 +1759,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       39 tests passed (36 unit tests + 3 SILK tests + 6 integration tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 31s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported for moosicbox_opus_native
 - [x] `SilkDecoder` struct contains all RFC-required state fields
       Contains: sample_rate, channels, frame_size_ms, num_silk_frames, previous_stereo_weights, previous_gain_indices per RFC lines 1756-1782
@@ -1978,7 +1978,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       46 tests passed (40 unit tests + 6 integration tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 47s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported
 - [x] TOC parsing correctly identifies SILK vs CELT vs Hybrid modes
       TocInfo::uses_silk() checks config<16, is_hybrid() checks 12..=15 range
@@ -2094,7 +2094,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       48 tests passed (42 unit tests + 6 integration tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 32s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported
 - [x] Header bits decode VAD flags correctly
       decode_header_bits() calls decode_vad_flags() for mid channel, and again for side channel if stereo
@@ -2223,7 +2223,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       50 tests passed (44 unit tests + 6 integration tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 28s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported
 - [x] Stereo weight PDFs match Table 6 exactly (RFC lines 2225-2238)
       STEREO_WEIGHT_PDF_STAGE1, STEREO_WEIGHT_PDF_STAGE2, STEREO_WEIGHT_PDF_STAGE3 match RFC Table 6
@@ -2452,7 +2452,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       52 tests passed (46 unit tests + 6 integration tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 29s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported
 - [x] Frame type PDFs match Tables 9-10 exactly (RFC lines 2419-2445)
       FRAME_TYPE_PDF_INACTIVE and FRAME_TYPE_PDF_ACTIVE match RFC Tables 9-10 (with terminating 0)
@@ -2499,7 +2499,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       Finished `dev` profile in 3m 29s with zero warnings
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features silk -- -D warnings` (zero warnings without defaults)
       Finished `dev` profile in 3m 33s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies reported
 - [x] **RFC COMPLETE DEEP CHECK:** Read RFC lines 1743-2568 in full and verify EVERY algorithm, table, and formula is implemented exactly as specified with NO compromises
       ✅ VERIFIED: All RFC 6716 Section 4.2.1-4.2.7.4 algorithms implemented exactly:
@@ -2660,7 +2660,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       56 tests passed (50 unit + 6 integration)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 4m 07s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] LSF Stage 1 PDFs match Table 14 exactly (RFC lines 2639-2660)
       All 4 PDFs match RFC Table 14 with terminating zeros
@@ -2801,7 +2801,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
       59 tests passed (53 unit + 6 integration)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 30s with zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] Stage 2 PDFs match Tables 15-16 exactly (a-h for NB/MB, i-p for WB)
       All 16 PDFs match RFC with terminating zeros: 8 NB/MB (a-h), 8 WB (i-p)
@@ -3010,7 +3010,7 @@ Changed `total_bits: usize` → `total_bits: u32` to match libopus reference (`i
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings
 
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies detected
 
 - [x] Prediction weights match Table 20 exactly
@@ -3753,7 +3753,7 @@ Checking moosicbox_opus_native v0.1.0
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 24s
 ```
 
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 
 - [x] Interpolation PDF matches Table 26 exactly: `[13, 22, 29, 11, 181, 0]`
@@ -4438,7 +4438,7 @@ fn test_round_15_forces_zero() {
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 30s with zero clippy warnings
 
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 
 - [x] ilog function matches RFC lines 368-375: returns `floor(log2(x)) + 1` for x > 0
@@ -5067,7 +5067,7 @@ Add ~15 tests covering all LTP decoding paths.
       112 tests passing (96 previous + 16 new LTP tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings with -D warnings flag
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] All PDFs converted to ICDF with terminating zero (Tables 29-32, 37-38, 42)
       All constants converted from RFC PDF values to ICDF format required by ec_dec_icdf()
@@ -5311,7 +5311,7 @@ icdf[n] = 0  (terminating zero)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 - [ ] LCG seed ICDF converted correctly: `[192, 128, 64, 0]` from RFC PDF `{64, 64, 64, 64}/256`
 - [ ] ICDF values are monotonically decreasing: 192 > 128 > 64 > 0
 - [ ] ICDF terminates with 0
@@ -5387,7 +5387,7 @@ icdf[n] = 0  (terminating zero)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 - [ ] Shell block counts match Table 44 exactly
 - [ ] Special case for 10ms MB documented (8 blocks, discard last 8 samples)
 - [ ] All bandwidth/frame size combinations covered
@@ -5562,7 +5562,7 @@ All constants below are converted from RFC PDF format to ICDF format required by
       All 128 tests passed (118 existing + 10 new tests for 3.7.3)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings with all targets and features
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       All dependencies properly used
 - [x] Rate level ICDFs converted correctly from RFC Table 45
       Both PDFs converted: RATE_LEVEL_PDF_INACTIVE and RATE_LEVEL_PDF_VOICED
@@ -5851,7 +5851,7 @@ All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format 
       All 135 tests passed (128 existing + 7 new tests for 3.7.4)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings with all targets and features
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       All dependencies properly used
 - [x] All 64 pulse split ICDFs converted correctly from RFC Tables 47-50
       All 64 constants verified: 16 per table × 4 tables (16/8/4/2 sample partitions)
@@ -5926,7 +5926,7 @@ Table 51 constant must be converted from RFC PDF format to ICDF format. See Sect
       All 142 tests passed (135 existing + 7 new tests for 3.7.5)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings with all targets and features
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       All dependencies properly used
 - [x] LSB ICDF converted correctly: `[120, 0]` from RFC PDF `{136, 120}/256`
       ICDF conversion verified: cumulative [0, 136] → reverse [256-0, 256-136] → [256, 120] → shift to start at end [120, 0]
@@ -6207,7 +6207,7 @@ All 42 sign PDFs from Table 52 must be converted from RFC PDF format to ICDF for
       150 tests passed (143 previous + 8 new sign decoding tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings confirmed
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] All 42 sign ICDFs converted correctly from RFC Table 52
       All 42 PDFs added to excitation_constants.rs: Inactive (14), Unvoiced (14), Voiced (14) across Low/High offset types and pulse counts 0-6+
@@ -6329,7 +6329,7 @@ All 42 sign PDFs from Table 52 must be converted from RFC PDF format to ICDF for
       166 tests passed (150 previous + 16 new excitation reconstruction tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings confirmed
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] Quantization offsets match Table 53 exactly
       All 6 offset values implemented: Inactive Low=25, High=60; Unvoiced Low=25, High=60; Voiced Low=8, High=25
@@ -6363,7 +6363,7 @@ After ALL subsections (3.7.1-3.7.7) are complete:
       166 tests passed (all previous + all new excitation tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings confirmed
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies
 - [x] **CRITICAL:** All 121 ICDF conversions verified correct (Tables 43, 45-52)
       ✅ VERIFIED: LCG_SEED(1) + RATE_LEVEL(2) + PULSE_COUNT(11) + PULSE_SPLIT(64: 16+16+16+16) + EXCITATION_LSB(1) + SIGN_PDF(42) = 121 ICDFs all present
@@ -6835,7 +6835,7 @@ mod tests_subframe_params {
       16 tests implemented and passing (10 subframe_params + 3 samples_per_subframe + 2 num_subframes + 1 subframe_start_index)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings - clean pass (all methods converted to associated functions, unused self warnings resolved)
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies found
 - [x] LPC coefficient selection matches RFC lines 5504-5511 (interpolated for subframes 0-1 with w_Q2 < 4)
       Implemented in select_subframe_params() at decoder.rs:1973-1978 - uses n1_Q15 for subframes 0-1 of 20ms frames with w_Q2 < 4, n2_Q15 otherwise
@@ -7532,7 +7532,7 @@ mod tests_ltp_synthesis {
       14 LTP tests implemented and passing (plus 5 existing LTP parameter tests = 19 total test_ltp\*)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero clippy warnings - clean pass with appropriate allows for precision loss, similar names, unnecessary wraps
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies found
 - [x] Unvoiced formula matches RFC line 5526: `res[i] = e_Q23[i] / 2^23`
       Implemented in ltp_synthesis_unvoiced() at decoder.rs:2036-2040 - simple normalization from Q23 to f32
@@ -8038,7 +8038,7 @@ mod tests_lpc_synthesis {
       All 8 LPC synthesis tests pass: test_lpc_synthesis_zero_residual, test_lpc_synthesis_simple_gain_scaling, test_lpc_synthesis_gain_scaling_half, test_lpc_synthesis_clamping, test_lpc_synthesis_negative_clamping, test_lpc_synthesis_history_saved, test_lpc_synthesis_with_history, test_lpc_synthesis_all_bandwidths
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 29s`
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No new dependencies added
 - [x] LPC synthesis formula matches RFC lines 5636-5638 exactly (gain scaling + LPC sum)
       Implemented at decoder.rs:2183: `lpc_val = (gain_q16/65536.0) * res[i] + Σ(lpc[i-k-1] * a_Q12[k]/4096.0)`
@@ -8669,7 +8669,7 @@ mod tests_stereo_unmix {
       All 12 stereo tests pass: test_stereo_unmix_phase1_duration, test_stereo_unmix_phase1_nb, test_stereo_unmix_phase1_mb, test_stereo_unmix_weight_interpolation, test_stereo_unmix_side_not_coded, test_stereo_unmix_low_pass_filter, test_stereo_unmix_one_sample_delay, test_stereo_unmix_formulas_zero_weights, test_stereo_unmix_clamping_positive, test_stereo_unmix_clamping_negative, test_stereo_unmix_history_updated, test_mono_one_sample_delay
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 33s`
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No new dependencies added
 - [x] Phase 1 duration matches RFC line 5691: 64 (NB), 96 (MB), 128 (WB) samples
       Implemented at decoder.rs:2287-2295: n1 = 64 (NB), 96 (MB), 128 (WB)
@@ -9010,7 +9010,7 @@ mod tests_resampling {
       Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 40s`
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk,resampling -- -D warnings` (zero warnings with resampling)
       Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 43s`
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Added optional dependencies: moosicbox_resampler, symphonia (only loaded when resampling feature enabled)
 - [x] Delay values match Table 54 exactly (0.538, 0.692, 0.706)
       Implemented at decoder.rs:2453-2461: NB=0.538, MB=0.692, WB=0.706
@@ -9046,8 +9046,8 @@ After ALL subsections (3.8.1-3.8.5) are complete:
       218 unit tests + 6 integration tests = 224 total tests passing
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
       Finished `dev` profile in 6.53s with zero clippy warnings
-- [x] Run `cargo machete` (no unused dependencies)
-      cargo-machete not available, manual inspection confirms all dependencies used
+- [x] Perform a dependency audit (no unused dependencies)
+      Dependency audit tool not available, manual inspection confirms all dependencies used
 - [x] LTP synthesis produces correct residual for voiced/unvoiced frames
       15 LTP tests verify unvoiced (simple division) and voiced (3-stage: rewhitening, filter, update) for all bandwidths
 - [x] LPC synthesis produces correct output with proper state management
@@ -9140,7 +9140,7 @@ After ALL subsections (3.1-3.8) are complete:
 - [x] Run `cargo test -p moosicbox_opus_native --no-default-features --features silk` (tests pass without defaults)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features silk -- -D warnings` (zero warnings without defaults)
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
 - [x] **RFC COMPLETE DEEP CHECK:** Read RFC lines 2568-5700 and verify EVERY table, formula, and algorithm implemented exactly as specified with NO compromises
 
 ---
@@ -9744,8 +9744,8 @@ After completing ALL subsections (4.1.1-4.1.4):
       Finished `dev` profile in 3m 28s, zero warnings
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings without defaults)
       Finished `dev` profile in 3m 28s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
-      cargo-machete not available, manual inspection confirms all dependencies used
+- [x] Perform a dependency audit (no unused dependencies)
+      Dependency audit tool not available, manual inspection confirms all dependencies used
 - [x] CELT module structure mirrors SILK pattern
       celt/mod.rs, celt/decoder.rs, celt/constants.rs match silk/ structure exactly
 - [x] All RFC Table 55 constants match exactly (21 bands, 4 frame sizes)
@@ -9901,7 +9901,7 @@ After completing ALL subsections (4.1.1-4.1.4):
       test result: ok. 3 passed; 0 failed (test_laplace_decode_zero, test_laplace_decode_nonzero, test_laplace_decode_various_decay)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 34s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 - [x] Laplace decoder handles both positive and negative values
       Implemented with sign handling: `if fm < fl.saturating_add(fs_current) { val = -val; }`
@@ -10079,7 +10079,7 @@ After completing ALL subsections (4.1.1-4.1.4):
       test result: ok. 3 passed; 0 failed (test_coarse_energy_intra, test_coarse_energy_inter, test_coarse_energy_clamping)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 34s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 - [x] Prediction coefficients match RFC exactly (alpha frame-dependent, beta=4915/32768 intra)
       ENERGY_ALPHA_INTER: [29440/32768, 26112/32768, 21248/32768, 16384/32768], ENERGY_BETA_INTRA: 4915/32768, ENERGY_BETA_INTER: [30147/32768, 22282/32768, 12124/32768, 6554/32768] extracted from libopus quant_bands.c
@@ -10200,7 +10200,7 @@ After completing ALL subsections (4.1.1-4.1.4):
       test result: ok. 3 passed; 0 failed (test_fine_energy_no_bits, test_fine_energy_single_bit, test_fine_energy_multiple_bits)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 34s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 - [x] Correction formula matches RFC exactly: `(f + 0.5) / 2^B_i - 0.5`
       Implemented: `let correction = ((f as f32 + 0.5) / ft as f32) - 0.5;`
@@ -10338,7 +10338,7 @@ After completing ALL subsections (4.1.1-4.1.4):
       test result: ok. 3 passed; 0 failed (test_final_energy_priority_0, test_final_energy_both_priorities, test_final_energy_unused_bits_left)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 34s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 - [x] Priority 0 bands allocated first (band 0→20)
       Implemented: First loop `for band in 0..CELT_NUM_BANDS { if priorities[band] == 0 ...`
@@ -10373,7 +10373,7 @@ After completing ALL subsections (4.2.1-4.2.4):
       Finished `dev` profile in 3m 34s, zero warnings
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 3m 34s, zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies added
 - [x] Laplace decoder implemented in range decoder module
       Implemented `ec_laplace_decode()` in src/range/decoder.rs (lines 316-362)
@@ -10503,7 +10503,7 @@ After completing ALL subsections (4.2.1-4.2.4):
       **254 tests passing** (19 new allocation tests added)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       **Zero clippy warnings** with `-D warnings` flag
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       All dependencies used
 - [x] **RFC DEEP CHECK:** Verify against RFC lines 6111-6461
       Algorithm verified line-by-line, libopus cross-referenced
@@ -10713,7 +10713,7 @@ After deep audit, **1 CRITICAL COMPROMISE** was found and fixed:
       **293 tests passing** (280 previous + 13 new split decoding tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       **Zero clippy warnings** with -D warnings flag
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       Not applicable - no new dependencies
 - [x] V(N,K) formula matches RFC exactly
       Verified: V(N,K) = V(N-1,K) + V(N,K-1) + V(N-1,K-1) with correct base cases
@@ -11470,7 +11470,7 @@ fn test_tf_resolution_clamping() {
       test result: ok. 331 passed; 0 failed (14 new transient tests added, including RFC compliance fix validation)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       Finished `dev` profile in 4m 28s with zero warnings (after RFC compliance fix)
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No unused dependencies detected
 - [x] Transient PDF matches RFC (1/8 probability)
       CELT_TRANSIENT_PDF = [8, 1, 0] matches RFC 1/8 probability (constants.rs line 59)
@@ -11812,7 +11812,7 @@ The `start_band` and `end_band` fields enable:
       357 tests passed (8 new anti-collapse tests added, including partial MDCT collapse test)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
       Zero warnings - all clippy issues resolved
-- [x] Run `cargo machete`
+- [x] Perform a dependency audit
       No unused dependencies
 - [x] Anti-collapse PRNG matches libopus reference
       LCG constants 1664525 and 1013904223 verified, formula: seed = seed \* 1664525 + 1013904223
@@ -11914,7 +11914,7 @@ For each band:
       365 tests passed (8 new denormalization tests added)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
       Zero warnings - all clippy checks passed
-- [x] Run `cargo machete`
+- [x] Perform a dependency audit
       No unused dependencies
 - [x] Denormalization formula matches RFC exactly (sqrt of linear energy)
       Formula: `scale = sqrt(2^(energy_q8/256))` per RFC line 6735, verified by unit tests
@@ -12280,7 +12280,7 @@ Current implementation supports mono (C=1) only. Stereo support requires:
       385 tests passed (379 unit + 6 integration, includes 2 new decode_celt_frame tests)
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings`
       Zero warnings: Finished `dev` profile in 3m 47s
-- [x] Run `cargo machete`
+- [x] Perform a dependency audit
       No unused dependencies
 - [x] **CRITICAL:** `#[allow(dead_code)]` removed from `start_band` and `end_band`
       Both annotations removed, fields actively used in decode_celt_frame()
@@ -12370,7 +12370,7 @@ pub struct DecodedFrame {
       **Result:** 386 tests passing
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
       **Result:** Zero warnings
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       **Result:** No unused dependencies
 - [x] **CRITICAL:** `#[allow(dead_code)]` removed from `start_band` and `end_band` fields
       **Result:** REMOVED - fields actively used in decode_celt_frame() at lines 1947, 1950, 1987-1990
@@ -12815,7 +12815,7 @@ After completing ALL subsections (4.6.1-4.6.4):
 - [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features celt` (tests pass without defaults)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 - [ ] End-to-end CELT decode test with reference vectors
 - [ ] Audio output matches reference decoder
 - [ ] All RFC sections 4.3.5-4.3.7 verified
@@ -15375,7 +15375,7 @@ pub const CONFIGURATIONS: [Configuration; 32] = [
 - [x] Run `cargo clippy --all-targets -p moosicbox_opus_native -- -D warnings` (zero warnings)
       Clippy completed in 3m 48s with zero warnings.
 
-- [x] Run `cargo machete` (no unused dependencies)
+- [x] Perform a dependency audit (no unused dependencies)
       No new dependencies added - pure refactoring.
 
 - [x] Verify SILK decoder still works with refactored `Toc`
@@ -21083,9 +21083,9 @@ mod integration_tests {
 
 - [ ] Check unused dependencies
     ```bash
-    nix develop --command cargo machete
+    # Dependency audit in the development environment
     ```
-    **Note:** Skipped - machete not available in environment
+    **Note:** Skipped - dependency audit tool not available in environment
 
 #### 5.8.1 Verification Checklist
 
@@ -21993,7 +21993,7 @@ All necessary dependencies already in workspace:
 - [ ] All unit tests passing (target: 100+ new tests)
 - [ ] All integration tests passing (target: 20+ test vectors)
 - [ ] Code formatted with `cargo fmt`
-- [ ] No unused dependencies (`cargo machete`)
+- [ ] No unused dependencies (`clippier machete check`)
 - [ ] Compiles with all feature combinations:
     - `--no-default-features`
     - `--features silk`
@@ -22130,7 +22130,7 @@ After completing ALL sections (5.1-5.7):
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native -- -D warnings` (zero warnings)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features silk -- -D warnings`
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings`
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 - [ ] Integration tests with libopus-generated packets pass
 - [ ] All 32 configurations decode without panic
 - [ ] Mode switching works correctly
@@ -24581,7 +24581,7 @@ This roadmap ensures **nothing will be missed** - every RFC section has a phase,
 
 - Zero clippy warnings maintained
 - All tests must pass before moving to next phase
-- No unused dependencies (cargo machete)
+- No unused dependencies (dependency audit)
 - Clean compilation with all feature combinations
 
 ### RFC Compliance

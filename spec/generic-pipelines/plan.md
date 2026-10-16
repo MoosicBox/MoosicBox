@@ -216,7 +216,7 @@ These items need further investigation or decision during implementation:
     - Proof: Clean build with all clippy lints enabled
 - [x] Run `cargo fmt` - Code formatted
     - Proof: All workspace files properly formatted
-- [x] Run `cargo machete` - No unused dependencies
+- [x] Perform a dependency audit - No unused dependencies
     - Proof: Only serde and serde_yaml used, both required
 - [x] Create example workflow files in spec/generic-pipelines/examples/
     - Proof: spec/generic-pipelines/examples/ contains 5 comprehensive example workflows
@@ -560,7 +560,7 @@ These items need further investigation or decision during implementation:
 
 - [ ] Run `cargo build -p gpipe_parser` - Package compiles
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 ### 2.5 Runner Package Setup
 
@@ -578,7 +578,7 @@ These items need further investigation or decision during implementation:
 
 - [ ] Run `cargo build -p gpipe_runner` - Package compiles
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 ### 2.6 Translator Package Setup
 
@@ -596,7 +596,7 @@ These items need further investigation or decision during implementation:
 
 - [ ] Run `cargo build -p gpipe_translator` - Package compiles
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 
 ## Phase 3: Workflow Parsers 🔴
 
@@ -621,7 +621,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_parser` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test parsing MoosicBox workflows successfully
 
 ### 3.2 Backend Conditional Parser
@@ -646,7 +646,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_parser` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test parsing of complex backend expressions
 - [ ] Verify error messages for invalid syntax
 
@@ -671,7 +671,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_parser` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test expression evaluation matches GitHub Actions behavior
 
 ### 3.4 Workflow Validation
@@ -687,7 +687,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_parser` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test validation provides clear error messages
 
 ## Phase 4: Local Runner Implementation 🔴
@@ -727,7 +727,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_runner` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test basic workflow execution works locally
 
 ### 4.2 Output Management
@@ -755,7 +755,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_runner` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test multi-line output handling
 - [ ] Verify outputs persist across steps
 - [ ] Test cleanup of temp files
@@ -781,7 +781,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_runner` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test step skipping based on backend
 - [ ] Verify complex expressions work correctly
 - [ ] Test with different --backend values
@@ -800,7 +800,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_runner` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test environment isolation between jobs
 
 ## Phase 5: Action Translation System 🔴
@@ -889,7 +889,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test backend trait implementations work
 
 ### 6.2 Backend Translation Rules
@@ -918,7 +918,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test conditional simplification produces valid YAML
 - [ ] Verify output variables translate correctly
 - [ ] Test with complex real-world workflows
@@ -950,7 +950,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test all trigger types for each backend
 - [ ] Verify configuration options translate
 - [ ] Test with MoosicBox workflows
@@ -963,7 +963,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test GitHub Actions YAML generation works
 
 ### 6.5 GitLab CI Backend
@@ -974,7 +974,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test GitLab CI YAML generation works
 
 ### 6.6 Jenkins Backend
@@ -985,7 +985,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo test -p gpipe_translator` - All tests pass
 - [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt` - Code formatted
-- [ ] Run `cargo machete` - No unused dependencies
+- [ ] Run `clippier machete check` - No unused dependencies
 - [ ] Test Jenkins pipeline generation works
 
 ## Phase 7: CLI Interface 🟡

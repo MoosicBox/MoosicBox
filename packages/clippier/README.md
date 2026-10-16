@@ -20,8 +20,8 @@ Clippier is a command-line utility designed to analyze monorepo workspaces and a
 
 ## Native unused-dependency analysis
 
-The default-enabled `machete` feature provides native dependency analysis; no
-`cargo-machete` executable or fork is needed. Builds using
+The default-enabled `machete` feature provides independent, native dependency
+analysis within Clippier. Builds using
 `--no-default-features` must opt in with `--features machete`.
 
 ```bash
@@ -37,7 +37,7 @@ asks for confirmation; `apply --yes` explicitly accepts it non-interactively.
 Cargo.lock is preserved. Incomplete or stale evidence prevents application.
 Review a plan before applying it.
 
-Normal and build dependencies are checked by default, matching cargo-machete;
+Normal and build dependencies are checked by default;
 dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest
 selects that member by default; use a workspace root to scan the workspace.
 `.gitignore` and `.ignore` are respected; `--no-ignore` includes those files
@@ -50,7 +50,8 @@ it requires a current lockfile and cached dependencies. This is opt-in, not part
 of ordinary read-only planning. It does not run builds or expand macros.
 
 `clippier check --tools clippier-machete` uses the same native analyzer once per
-selected scope, without finding, installing, or spawning cargo-machete.
+selected scope, entirely within Clippier without installing or spawning an
+external dependency analyzer.
 
 Configuration belongs only in `clippier.toml`, not Cargo metadata:
 
@@ -60,13 +61,9 @@ ignored = ["tokio"]
 ignored-dirs = ["test-resources"]
 ```
 
-These are example suppressions, not recommended defaults. Preserve existing
-accepted false-positive suppressions when migrating. Ancestor/root defaults and
-descendant configuration layers accumulate; ignored directories are relative to
-the directory declaring their `clippier.toml`. Move each Cargo metadata
-`ignored`/`ignored-dirs` list into `[machete]` in the same directory's
-`clippier.toml`, then remove the old metadata table. Native analysis does not read
-legacy `cargo-machete` metadata.
+These are example suppressions, not recommended defaults. Ancestor/root defaults
+and descendant configuration layers accumulate; ignored directories are relative
+to the directory declaring their `clippier.toml`.
 
 ## Ecosystem coverage
 
@@ -1948,7 +1945,7 @@ This command scans all packages in the workspace and collects their toolchains, 
 ```json
 {
     "dependencies": ["sudo apt-get install -y libssl-dev"],
-    "toolchains": ["cargo-machete", "taplo"],
+    "toolchains": ["cargo-deny", "taplo"],
     "ci_steps": ["cargo fmt --check"],
     "env": { "RUST_BACKTRACE": "1" },
     "nightly_packages": ["experimental_package"],

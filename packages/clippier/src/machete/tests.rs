@@ -143,6 +143,38 @@ fn features_workspace_aliases_targets_and_build_scripts() {
     );
 }
 #[test]
+fn structural_roots_drive_checked_removal_without_hiding_unknowns() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='roots'\nversion='0.1.0'\n[dependencies]\nfutures='1.0.0'\nnot_futures='1.0.0'\nlogging='1.0.0'\nmacro_input='1.0.0'\n",
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "use {not_futures::futures::{Thing as futures}, Logging as renamed};\nfn f(){ quoted!(macro_input); }\n/// futures::run();\nconst TEXT:&str=\"futures::run();\";\n",
+    );
+    let plan = plan_machete(&options(dir.path())).unwrap();
+    assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
+    for dependency in &plan.report.dependencies {
+        assert_eq!(
+            dependency.status,
+            if dependency.dependency == "futures" {
+                DependencyStatus::Unused
+            } else {
+                DependencyStatus::Used
+            },
+            "{}",
+            dependency.dependency,
+        );
+    }
+    assert_eq!(plan.changes.len(), 1);
+    assert!(!plan.changes[0].after.contains("\nfutures="));
+    assert!(apply_machete_plan(&plan).unwrap().applied);
+}
+
+#[test]
 fn generated_includes_and_missing_modules_refuse_apply() {
     let dir = fixture();
     write(

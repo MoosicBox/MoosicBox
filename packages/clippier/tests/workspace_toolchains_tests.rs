@@ -25,8 +25,8 @@ async fn test_workspace_toolchains_aggregates_all_packages() {
         .expect("toolchains should be array");
     let toolchain_strs: Vec<&str> = toolchains.iter().map(|v| v.as_str().unwrap()).collect();
     assert!(
-        toolchain_strs.contains(&"cargo-machete"),
-        "Should contain cargo-machete toolchain"
+        toolchain_strs.contains(&"cargo-deny"),
+        "Should contain cargo-deny toolchain"
     );
     assert!(
         toolchain_strs.contains(&"taplo"),

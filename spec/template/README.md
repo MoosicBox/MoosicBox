@@ -94,7 +94,7 @@ Every verification checklist in plan.md **MUST** include these commands. They ar
 - `--no-default-features`: Check without default features
 - `--features feature-name`: Check with specific features
 
-### 3. `cargo machete`
+### 3. Dependency audit
 
 **What it does:** Detects unused dependencies in Cargo.toml files
 
@@ -108,7 +108,7 @@ Every verification checklist in plan.md **MUST** include these commands. They ar
 **Usage in verification:**
 
 ```
-- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Run `clippier machete check` (no unused dependencies)
 ```
 
 **When to run:**
@@ -296,7 +296,7 @@ Each phase should:
 **Correct:** `{ workspace = true }`
 **Wrong:** `"1.0.5"`
 
-### 5. ❌ Skipping `cargo machete`
+### 5. ❌ Skipping dependency audits
 
 **Always run** after adding/removing dependencies
 

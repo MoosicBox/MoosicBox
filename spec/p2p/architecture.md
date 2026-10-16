@@ -666,7 +666,7 @@ All design decisions are finalized and documented in [`clarifications.md`](./cla
 - **Phase 7.1**: Add `iroh` when implementing real P2P
 - **Phase 8.1**: Add `proptest` when implementing property tests
 
-**Verify with tooling**: Run `cargo machete` after each phase
+**Verify with tooling**: Perform a dependency audit after each phase
 **Document reasoning**: Explain why each dependency is needed in commit messages
 
 ### Code Organization Principles

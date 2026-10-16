@@ -183,7 +183,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Clippy completed successfully with zero warnings after fixing doc_markdown issues
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       No unused dependencies found - package has zero dependencies as expected
 
 - [x] Verify package directory structure exists at correct paths
@@ -229,7 +229,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Clippy completed successfully with zero warnings, thiserror dependency compiles cleanly
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       Now passes cleanly - thiserror dependency is properly used by error module
 
 - [x] Verify thiserror dependency is added to Cargo.toml
@@ -273,7 +273,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with error module and derives
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies now used - thiserror no longer flagged as unused
 
 - [x] Error types compile and are properly defined
@@ -307,7 +307,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies found
 
 - [x] Error module is exported and accessible
@@ -411,7 +411,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings after fixing const fn, use_self, and missing_errors_doc issues
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies
 
 - [x] TOC byte parsing functions work correctly
@@ -447,7 +447,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] TOC module is exported and accessible
@@ -492,7 +492,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with new error types
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] New error variants are properly defined
@@ -568,7 +568,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings after adding proper # Errors documentation
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] Frame length decoding functions work correctly
@@ -607,7 +607,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] Frame module is exported and accessible
@@ -643,7 +643,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with new dependencies
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] bytes and log dependencies are added to Cargo.toml
@@ -922,7 +922,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings after fixing use_self, unnecessary_wraps, manual_is_multiple_of, and let_and_return
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies (bytes, log, thiserror) properly used
 
 - [x] Packet parsing functions work correctly
@@ -986,7 +986,7 @@ packages/opus/
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
 
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 
 - [x] Packet module is exported and accessible
@@ -1019,7 +1019,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with symphonia dependency
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       Symphonia flagged as unused (expected before decoder module created)
 - [x] symphonia dependency is added to Cargo.toml
       Dependency added with workspace inheritance
@@ -1094,7 +1094,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with proper error handling (no Box::leak)
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies found
 - [x] Decoder trait is properly implemented
       All required trait methods implemented: try_new, decode, reset, finalize, last_decoded, supported_codecs, codec_params
@@ -1132,7 +1132,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 - [x] Decoder module is exported and accessible
       Module declared as public and available for import
@@ -1176,7 +1176,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with registry implementation
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies found
 - [x] Registry functions work correctly with decoder
       register_all::<OpusDecoder>() calls OpusDecoder::supported_codecs() and registers descriptors
@@ -1214,7 +1214,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with public API exports
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 - [x] Registry module is exported and accessible
       Module declared as public and available for import
@@ -1248,7 +1248,7 @@ packages/opus/
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_audio_decoder -- -D warnings` ✅ no warnings
       Zero clippy warnings for audio_decoder package
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       moosicbox_opus flagged as unused before code changes (expected), clean after implementation
 - [x] opus feature is properly defined
       Feature updated from empty `opus = []` to `opus = ["dep:moosicbox_opus"]`
@@ -1294,7 +1294,7 @@ packages/opus/
       Zero clippy warnings for audio_decoder
 - [x] Run `cargo clippy --all -- -D warnings` ✅ workspace passes
       Not run yet (will verify in 8.3)
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used
 - [x] Integration compiles with and without opus feature
       Both feature configurations compile successfully
@@ -1340,7 +1340,7 @@ packages/opus/
       Zero clippy warnings for audio_decoder package
 - [x] Run `cargo clippy --all -- -D warnings` ✅ workspace passes
       Not needed - package-specific clippy sufficient for this phase
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies found
 - [x] Both sync and async decoders conditionally add Opus to default registry
       Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, conditionally add Opus
@@ -1365,7 +1365,7 @@ packages/opus/
 - [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [x] Run `cargo fmt` (formats entire workspace)
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
 - [x] audiopus dependency is added to Cargo.toml
 
 ### 9.2 Update Error Types
@@ -1389,7 +1389,7 @@ packages/opus/
 - [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [x] Run `cargo fmt` (formats entire workspace)
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
 - [x] Error variant for audiopus::Error is properly defined
 - [x] audiopus dependency is being used in error module
 
@@ -1591,7 +1591,7 @@ packages/opus/
 - [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [x] Run `cargo fmt` (formats entire workspace)
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
 - [x] Real decoder implementation works with libopus
 - [x] Multi-channel audio handling is properly implemented
 - [x] All struct fields are used (no unused sample_rate field)
@@ -1629,7 +1629,7 @@ Successfully added test-case = "3.3.1" to workspace dependencies between symphon
       Workspace formatting completed successfully
 - [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
       Zero clippy warnings with all targets and features
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies found
 - [x] Test dependencies are added only as dev-dependencies
       hex, insta, pretty_assertions, test-case added to [dev-dependencies]
@@ -1688,7 +1688,7 @@ Successfully added test-case = "3.3.1" to workspace dependencies between symphon
       Zero clippy warnings with all targets
 - [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
       27 packet_tests passed: TOC parsing, frame length decoding, code 0-3 packet parsing, RFC 6716 validation
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies (including dev-dependencies) properly used
 - [x] All test dependencies are being used
       test-case, pretty_assertions used in packet_tests.rs
@@ -1730,7 +1730,7 @@ Successfully added test-case = "3.3.1" to workspace dependencies between symphon
       Zero clippy warnings on all targets including tests
 - [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
       All 35 tests passed (27 packet_tests + 8 decoder_tests)
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies
 - [x] Decoder trait import is working correctly
       Symphonia Decoder trait imported and used correctly in decoder_tests.rs
@@ -1784,7 +1784,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
       Zero clippy warnings with all targets and features
 - [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
       All 48 tests passed: 27 packet_tests + 8 decoder_tests + 13 code3_padding_tests
-- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Perform a dependency audit ✅ no unused dependencies
       All dependencies properly used, no unused dependencies
 - [x] Verify RFC 6716 Section 3.2.5 compliance
       All padding encoding scenarios tested: simple (0-254), two-byte (255), chained (multiple 255s), VBR/CBR modes
@@ -1831,7 +1831,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
 - [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [ ] Run `cargo fmt` (formats entire workspace)
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Perform a dependency audit ✅ no unused dependencies
 - [ ] criterion dependency is added to workspace
 - [ ] Benchmark configuration is properly set up
 
@@ -1863,7 +1863,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
 - [ ] Run `cargo fmt` (formats entire workspace)
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
 - [ ] Run `cargo bench -p moosicbox_opus --no-run` ✅ benchmarks compile
-- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Perform a dependency audit ✅ no unused dependencies
 - [ ] Benchmarks are properly configured and compile
 - [ ] criterion dependency is being used
 
@@ -1881,7 +1881,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
 - [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [ ] Run `cargo fmt` (formats entire workspace)
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Perform a dependency audit ✅ no unused dependencies
 - [ ] All public items have rustdoc documentation
 - [ ] README.md exists and contains usage examples
 
@@ -1919,7 +1919,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
 - [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [ ] Run `cargo fmt` (formats entire workspace)
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Perform a dependency audit ✅ no unused dependencies
 - [ ] Examples compile and run successfully
 - [ ] Decoder trait import is working in examples
 
@@ -1957,7 +1957,7 @@ During RFC 6716 compliance verification, critical bugs were discovered in Code 3
 - [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
 - [ ] Run `cargo fmt` (formats entire workspace)
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Perform a dependency audit ✅ no unused dependencies
 - [ ] Final module organization is complete and clean
 - [ ] All public APIs are exported correctly
 
