@@ -16,8 +16,4 @@ command  = "sudo apt-get update && sudo apt-get install liblua5.4-dev"
 features = ["transforms-system"]
 
 [machete]
-ignored-dirs = [
-    "test-resources",
-    "tests/fixtures/machete",
-    "tests/transforms/fixtures",
-]
+ignored-dirs = ["test-resources", "tests/fixtures", "tests/transforms/fixtures"]
