@@ -1312,7 +1312,13 @@ fn native_batch_failure_falls_back_without_hiding_independent_errors() {
     assert!(error.contains("clippier-fixture-first"), "{error}");
     assert!(error.contains("clippier-fixture-second"), "{error}");
     assert!(
-        error.contains("Packaging validated: 1; failed/blocked: 2; not checked: 0"),
+        [
+            "Packaging validated: 1",
+            "failed/blocked: 2",
+            "not checked: 0"
+        ]
+        .iter()
+        .all(|text| error.contains(text)),
         "{error}"
     );
 }
@@ -1335,7 +1341,13 @@ fn successful_batch_does_not_hide_prior_preflight_failures() {
     .to_string();
     assert!(error.contains("prior manifest failure"), "{error}");
     assert!(
-        error.contains("Packaging validated: 2; failed/blocked: 0; not checked: 0"),
+        [
+            "Packaging validated: 2",
+            "failed/blocked: 0",
+            "not checked: 0"
+        ]
+        .iter()
+        .all(|text| error.contains(text)),
         "{error}"
     );
 }
@@ -1374,7 +1386,13 @@ fn successful_packaging_batch_does_not_replace_independent_verification() {
         "{error}"
     );
     assert!(
-        error.contains("Packaging validated: 1; failed/blocked: 1; not checked: 0"),
+        [
+            "Packaging validated: 1",
+            "failed/blocked: 1",
+            "not checked: 0"
+        ]
+        .iter()
+        .all(|text| error.contains(text)),
         "{error}"
     );
 }
@@ -1424,6 +1442,66 @@ fn fail_fast_verification_stops_before_later_packaging_error() {
 }
 
 #[test]
+fn failure_summary_uses_publish_styles_and_honors_color_mode() {
+    let pending = ["failed", "validated", "pending"].map(str::to_string);
+    let packages = pending
+        .iter()
+        .map(|name| {
+            (
+                name.clone(),
+                PublishPackageInfo::new(name, "0.1.0", true, BTreeSet::new()),
+            )
+        })
+        .collect();
+    let passed = BTreeSet::from(["validated".to_string()]);
+    let failed = BTreeSet::from(["failed".to_string()]);
+    let render = |color| {
+        failure_summary(
+            &packages,
+            &pending,
+            &PublishConfig {
+                color,
+                fail_fast: true,
+                ..PublishConfig::default()
+            },
+            &passed,
+            &failed,
+            1,
+        )
+    };
+    let plain = render(super::super::ColorMode::Never);
+    assert!(!plain.contains('\u{1b}'));
+    for line in [
+        "  failed/blocked: failed@0.1.0",
+        "  validated (not uploaded): validated@0.1.0",
+        "  not checked: pending@0.1.0",
+        "  Packaging validated: 1",
+        "  failed/blocked: 1",
+        "  not checked: 1",
+        "Stopped early (--fail-fast).",
+    ] {
+        assert!(plain.contains(line), "{plain}");
+    }
+    let colored = render(super::super::ColorMode::Always);
+    for styled in [
+        "\x1b[31;1mPublish preflight summary (no packages uploaded)\x1b[0m",
+        "\x1b[31mfailed/blocked\x1b[0m",
+        "\x1b[35mvalidated (not uploaded)\x1b[0m",
+        "\x1b[90mnot checked\x1b[0m",
+        "\x1b[36;1mfailed@0.1.0\x1b[0m",
+        "\x1b[1mSummary:\x1b[0m",
+        "\x1b[90mFull-package checks are authoritative;",
+    ] {
+        assert!(colored.contains(styled), "{colored}");
+    }
+    let stripped = regex::Regex::new(r"\x1b\[[0-9;]*m")
+        .unwrap()
+        .replace_all(&colored, "");
+    assert_eq!(plain, stripped);
+    assert_eq!(colored, render(super::super::ColorMode::Auto));
+}
+
+#[test]
 fn failure_summary_is_last_even_after_large_supplemental_output() {
     let packages = BTreeMap::from([(
         "app".into(),
@@ -1436,8 +1514,16 @@ fn failure_summary_is_last_even_after_large_supplemental_output() {
         error.find("END_OF_DIAGNOSTICS").unwrap()
             < error.find("Publish preflight summary").unwrap()
     );
-    assert!(error.contains("Packaging validated: 0; failed/blocked: 1; not checked: 0"));
+    assert!(
+        [
+            "Packaging validated: 0",
+            "failed/blocked: 1",
+            "not checked: 0"
+        ]
+        .iter()
+        .all(|text| error.contains(text))
+    );
     assert!(error.contains("Additional validation failures: 1"));
-    assert!(error.contains("Failed/blocked packages: app"));
-    assert!(error.ends_with("Result: FAILED (no packages uploaded)."));
+    assert!(error.contains("\x1b[31mfailed/blocked\x1b[0m: \x1b[36;1mapp@0.1.0\x1b[0m"));
+    assert!(error.ends_with("Result: FAILED (no packages uploaded).\x1b[0m"));
 }

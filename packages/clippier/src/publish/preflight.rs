@@ -10,7 +10,7 @@ use std::{
 
 use super::{
     BoxError, PublishConfig, PublishPackageInfo, SanitizedPackage, cargo_color_arg, copy_dir,
-    read_toml, run_streaming_command, sanitize_manifest,
+    format_package_name, paint, read_toml, run_streaming_command, sanitize_manifest,
 };
 
 mod batch;
@@ -308,7 +308,7 @@ fn collect_package_checks(
 ) -> Result<(), BoxError> {
     let pending_set = pending.iter().cloned().collect::<BTreeSet<_>>();
     let mut failed = BTreeSet::new();
-    let mut passed = 0;
+    let mut passed = BTreeSet::new();
     for (index, name) in pending.iter().enumerate() {
         let mut closure = BTreeSet::new();
         pending_dependencies(name, packages, &pending_set, &mut closure);
@@ -328,7 +328,9 @@ fn collect_package_checks(
         // can stage their unpublished versions natively, without registry patches.
         let result = check(&closure.into_iter().collect::<Vec<_>>());
         match result {
-            Ok(()) => passed += 1,
+            Ok(()) => {
+                passed.insert(name.clone());
+            }
             Err(error) => {
                 let context = if blocked_by.is_empty() {
                     "failed".to_string()
@@ -352,25 +354,77 @@ fn collect_package_checks(
     if failures.is_empty() {
         return Ok(());
     }
-    let completion = if config.fail_fast {
-        "Stopped early (--fail-fast)."
-    } else {
-        "Checked every pending package."
-    };
-    let failed_packages = failed.iter().cloned().collect::<Vec<_>>().join(", ");
-    Err(format!(
-        "Publish preflight failed (no packages uploaded):\n\n{}\n\n\
-         Publish preflight summary (no packages uploaded)\n\
-         {completion}\n\
-         Packaging validated: {passed}; failed/blocked: {}; not checked: {}.\n\
-         Failed/blocked packages: {failed_packages}\n\
-         Additional validation failures: {}.\n\
-         Full-package checks are authoritative; dependency probes are supplemental diagnostics.\n\
-         Cargo can report only the first resolver error in each dependency graph; blocked checks may expose further issues after their dependencies are fixed.\n\
-         Result: FAILED (no packages uploaded).",
-        failures.join("\n\n"), failed.len(), pending.len() - passed - failed.len(),
+    let summary = failure_summary(
+        packages,
+        pending,
+        config,
+        &passed,
+        &failed,
         failures.len() - failed.len(),
-    ).into())
+    );
+    Err(format!(
+        "Publish preflight failed (no packages uploaded):\n\n{}\n\n{summary}",
+        failures.join("\n\n"),
+    )
+    .into())
+}
+
+fn failure_summary(
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    pending: &[String],
+    config: &PublishConfig,
+    passed: &BTreeSet<String>,
+    failed: &BTreeSet<String>,
+    additional_failures: usize,
+) -> String {
+    let color = config.color;
+    let not_checked = pending.len() - passed.len() - failed.len();
+    let mut lines = vec![
+        paint(
+            color,
+            "31;1",
+            "Publish preflight summary (no packages uploaded)",
+        ),
+        paint(
+            color,
+            "90",
+            if not_checked > 0 {
+                "Stopped early (--fail-fast)."
+            } else {
+                "Checked every pending package."
+            },
+        ),
+        String::new(),
+        paint(color, "1", "Preflight results:"),
+    ];
+    for name in pending {
+        let package = &packages[name];
+        let (code, label) = if failed.contains(name) {
+            ("31", "failed/blocked")
+        } else if passed.contains(name) {
+            ("35", "validated (not uploaded)")
+        } else {
+            ("90", "not checked")
+        };
+        lines.push(format!(
+            "  {}: {}",
+            paint(color, code, label),
+            format_package_name(color, name, &package.version),
+        ));
+    }
+    lines.extend([
+        String::new(),
+        paint(color, "1", "Summary:"),
+        format!("  {}", paint(color, "35", &format!("Packaging validated: {}", passed.len()))),
+        format!("  {}", paint(color, "31", &format!("failed/blocked: {}", failed.len()))),
+        format!("  {}", paint(color, "90", &format!("not checked: {not_checked}"))),
+        format!("  {}", paint(color, "31", &format!("Additional validation failures: {additional_failures}"))),
+        String::new(),
+        paint(color, "90", "Full-package checks are authoritative; dependency probes are supplemental diagnostics."),
+        paint(color, "90", "Cargo can report only the first resolver error in each dependency graph; blocked checks may expose further issues after their dependencies are fixed."),
+        paint(color, "31;1", "Result: FAILED (no packages uploaded)."),
+    ]);
+    lines.join("\n")
 }
 
 fn pending_dependencies(
