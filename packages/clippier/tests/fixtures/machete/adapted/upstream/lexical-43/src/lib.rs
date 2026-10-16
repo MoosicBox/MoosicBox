@@ -1,6 +1,0 @@
-
-use { log
-    as
-        logging
-};
-

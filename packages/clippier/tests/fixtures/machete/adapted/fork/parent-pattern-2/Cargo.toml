@@ -1,7 +1,0 @@
-[package]
-name = "patterns"
-version = "0.1.0"
-[workspace]
-members = ["test-resources/workspaces/basic"]
-[dependencies]
-marker = "1.0.0"

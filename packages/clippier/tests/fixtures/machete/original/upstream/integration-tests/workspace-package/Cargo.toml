@@ -1,9 +1,0 @@
-[workspace]
-members = ["./program"]
-
-[workspace.package]
-version = "0.1.0"
-description = "Wonderful program"
-
-[workspace.dependencies]
-log = "0.4.14"

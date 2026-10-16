@@ -44,13 +44,14 @@ fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     visit(root, root, &mut result);
     result
 }
-fn copy(input: &Path, output: &Path) {
-    for (relative, bytes) in files(input) {
+fn copy(input: &str, output: &Path) {
+    for (relative, stored) in inventory()["trees"][input].as_object().unwrap() {
         let target = output.join(relative);
         fs::create_dir_all(target.parent().unwrap()).unwrap();
-        fs::write(target, bytes).unwrap();
+        fs::copy(root().join(stored.as_str().unwrap()), target).unwrap();
     }
 }
+
 fn names(value: &toml::Value) -> Vec<(String, String)> {
     let mut result = Vec::new();
     for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
@@ -154,7 +155,7 @@ fn normalize_rows(
     rows.sort_by_key(Value::to_string);
     rows
 }
-fn assert_used_ignores(base: &Path, case: &Value) {
+fn assert_used_ignores(case: &Value) {
     // Independently recover the used subset of ignored declarations; an ignored
     // status alone does not establish the original used-ignore assertion.
     let ignored_keys = case["used_ignore_scope"]
@@ -165,7 +166,7 @@ fn assert_used_ignores(base: &Path, case: &Value) {
         .collect::<BTreeSet<_>>();
     if !ignored_keys.is_empty() {
         let probe = tempfile::tempdir().unwrap();
-        copy(base, probe.path());
+        copy(case["input"].as_str().unwrap(), probe.path());
         for relative in files(probe.path())
             .keys()
             .filter(|p| p.file_name().is_some_and(|n| n == "clippier.toml"))
@@ -220,7 +221,7 @@ fn assert_used_ignores(base: &Path, case: &Value) {
 fn run_case(case: &Value) {
     let temp = tempfile::tempdir().unwrap();
     let base = fs::canonicalize(temp.path()).unwrap();
-    copy(&root().join(case["input"].as_str().unwrap()), &base);
+    copy(case["input"].as_str().unwrap(), &base);
     let manifest = base.join(case["manifest"].as_str().unwrap());
     let (metadata, _resolved_packages) = metadata(
         &base,
@@ -268,7 +269,7 @@ fn run_case(case: &Value) {
         "planning mutated input: {}",
         case["id"]
     );
-    assert_used_ignores(&base, case);
+    assert_used_ignores(case);
     let mut expected = case["expected"].as_array().unwrap().clone();
     expected.sort_by_key(Value::to_string);
     let actual = normalize_rows(&report, &base, Some(&manifest));
@@ -339,35 +340,93 @@ fn directory_patterns_match_ancestors_not_basename() {
 }
 #[test]
 fn target_directory_is_always_pruned() {
-    for source in ["upstream", "fork"] {
-        for no_ignore in [None, Some(false), Some(true)] {
-            let temp = tempfile::tempdir().unwrap();
-            fs::create_dir_all(temp.path().join("src")).unwrap();
-            fs::write(temp.path().join("src/lib.rs"), "").unwrap();
-            copy(
-                &root().join("adapted").join(source).join("with-target"),
-                temp.path(),
-            );
-            // A real root adapts discovery-only input to the manifest API.
-            fs::write(
-                temp.path().join("Cargo.toml"),
-                "[package]\nname = \"pruning-probe\"\nversion = \"0.1.0\"\n[workspace]\nmembers = []\n",
-            )
-            .unwrap();
-            let before = files(temp.path());
-            let options = MacheteOptions {
-                manifest_path: Some(temp.path().to_owned()),
-                no_ignore,
-                ..Default::default()
-            };
-            let report = analyze_machete(&options).unwrap();
-            assert!(report.dependencies.is_empty(), "{source}: {no_ignore:?}");
-            let plan = plan_machete(&options).unwrap();
-            assert!(plan.changes.is_empty());
-            assert_eq!(files(temp.path()), before);
+    for no_ignore in [None, Some(false), Some(true)] {
+        let temp = tempfile::tempdir().unwrap();
+        copy(
+            inventory()["special_inputs"]["target"].as_str().unwrap(),
+            temp.path(),
+        );
+        fs::write(
+            temp.path().join("Cargo.toml"),
+            "[package]\nname='probe'\nversion='0.1.0'\n[workspace]\nmembers=[]\n",
+        )
+        .unwrap();
+        fs::create_dir_all(temp.path().join("src")).unwrap();
+        fs::write(temp.path().join("src/lib.rs"), "").unwrap();
+        let before = files(temp.path());
+        let options = MacheteOptions {
+            manifest_path: Some(temp.path().to_owned()),
+            no_ignore,
+            ..Default::default()
+        };
+        let report = analyze_machete(&options).unwrap();
+        assert!(report.dependencies.is_empty(), "{no_ignore:?}");
+        let plan = plan_machete(&options).unwrap();
+        assert!(plan.changes.is_empty());
+        assert_eq!(files(temp.path()), before);
+    }
+}
+
+#[test]
+fn corpus_payloads_trees_and_executable_cases_are_unique() {
+    let data = inventory();
+    let mut payloads = BTreeMap::new();
+    payloads.insert(
+        fs::read(root().join("LICENSE")).unwrap(),
+        PathBuf::from("LICENSE"),
+    );
+    for (relative, bytes) in files(&root().join("files")) {
+        assert!(
+            payloads.insert(bytes, relative.clone()).is_none(),
+            "duplicate payload: {relative:?}"
+        );
+    }
+    let mut trees = BTreeSet::new();
+    for tree in data["trees"].as_object().unwrap().values() {
+        assert!(trees.insert(tree.to_string()), "duplicate input tree");
+        for stored in tree.as_object().unwrap().values() {
+            assert!(root().join(stored.as_str().unwrap()).is_file());
+        }
+    }
+    let mut cases = BTreeSet::new();
+    let mut origins = BTreeSet::new();
+    for case in data["cases"].as_array().unwrap() {
+        let mut behavior = case.as_object().unwrap().clone();
+        behavior.remove("id");
+        behavior.remove("source_ids");
+        assert!(
+            cases.insert(serde_json::to_string(&behavior).unwrap()),
+            "duplicate executable case"
+        );
+        assert!(data["trees"].get(case["input"].as_str().unwrap()).is_some());
+        origins.insert(case["id"].as_str().unwrap());
+    }
+    assert_eq!(data["case_origins"].as_object().unwrap().len(), 187);
+    for canonical in data["case_origins"].as_object().unwrap().values() {
+        assert!(origins.contains(canonical.as_str().unwrap()));
+    }
+    for test in data["tests"].as_array().unwrap() {
+        for assertion in test["assertions"].as_array().unwrap() {
+            for id in assertion["case_ids"].as_array().unwrap() {
+                if let Some(case) = data["cases"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|case| case["id"] == *id)
+                {
+                    assert!(
+                        case["source_ids"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|source| source == &assertion["id"] || source == &test["id"])
+                    );
+                }
+            }
         }
     }
 }
+
 #[test]
 fn corpus_files_have_exact_digests_and_inventory() {
     use sha2::{Digest, Sha256};
@@ -439,12 +498,8 @@ fn corpus_files_have_exact_digests_and_inventory() {
     }
     for source in data["sources"].as_array().unwrap() {
         for file in source["files"].as_array().unwrap() {
-            let key = format!(
-                "original/{}/{}",
-                source["id"].as_str().unwrap(),
-                file["file"].as_str().unwrap()
-            );
-            assert_eq!(hashes.get(&key).unwrap(), file["sha256"].as_str().unwrap());
+            let key = file["stored"].as_str().unwrap();
+            assert_eq!(hashes.get(key).unwrap(), file["sha256"].as_str().unwrap());
         }
     }
 }

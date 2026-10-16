@@ -14,22 +14,32 @@ these pins:
 | upstream | https://github.com/bnjbvr/cargo-machete | main | `135555c9cd9f3b4723dee2766f0cacb99aac092b` | 18 |
 | fork | https://github.com/BSteffaniak/cargo-machete | ignored-dirs | `87dd88aa744c5950fe155666ced33766ad62a338` | 25 |
 
-`original/{upstream,fork}/src/{main,search_unused}.rs` are complete, unmodified
-source evidence. All files in each `integration-tests` tree, original READMEs,
-and original MIT `LICENSE.md` are retained. `LICENSE` is a convenience copy of
-the original license. `sources.json` records exact blob URLs and SHA-256 for
-every retained original file, all 43 named test functions and 183 assertion
-sites, line numbers and original assertion text, executable harness function
-names and case IDs. No source assertion is marked ignored or deferred.
-`sha256.json` inventories every file here except itself, including adaptations,
-licenses, provenance, this document, and the regeneration script. Integrity
-checks require complete coverage, not just a subset of matching digests.
+Original source files, integration fixtures, READMEs and MIT license bytes are
+retained once per unique content in `files/` (or `LICENSE`). Each source file's
+`sources.json` entry records its original path, exact blob URL, SHA-256 and
+`stored` path. Shared files point to the same stored bytes; the source paths can
+be reconstructed exactly without keeping duplicate trees.
+
+The ledger retains all 43 named test functions and 183 assertion sites, original
+line numbers/text and executable mappings. `case_origins` maps all 187 source
+case variants onto 110 unique executable cases. No assertion is ignored or
+deferred. `sha256.json` covers every retained file except itself.
 
 ## Corpus and shared variations
 
-The union is 21 fixture directories (15 shared plus 6 fork-only directory
-exclusion cases). Both versions of every shared fixture are executed, including
-identical versions. `shared_variations` names every changed shared file.
+The original union is 21 fixture directories (15 shared plus 6 fork-only).
+`trees` maps each unique input tree's relative paths to stored payloads; the
+harness materializes these into temporary directories. The 159 source input
+trees become 92 unique trees. Equivalent executable cases merge their source
+IDs and run only once. Distinct input bytes, options and expected findings
+remain separate. `special_inputs` selects unique target/removal inputs and
+removal oracles. `shared_variations` preserves every changed shared file.
+
+`python3 rebuild.py` reconstructs the original evidence into a temporary tree,
+regenerates adaptations and assertion mappings, and deterministically compacts
+the result. No network or installed external analyzer is required. Payload,
+tree and executable-case uniqueness are regression-tested.
+
 The newer upstream inputs update rand from 0.8.5 to 0.9.3, bytes from 1.10.0
 to 1.11.1, and rustls-webpki from 0.102.8 to 0.103.13, with associated lockfile
 changes. Both sets are retained and exercised; library-name adaptation is not
@@ -68,7 +78,7 @@ fetch, execute Cargo, or create packages in the repository workspace.
   names, dependency kinds, target predicates, inherited ownership and statuses.
   No expected finding is represented only as a count. Package names inside
   imported fixtures are data, not new harness test names.
-* All 114 lexical inputs preserve the original assertion text as source input,
+* All 114 source lexical inputs map to shared executable inputs that preserve the original assertion text as source input,
   including invalid/incomplete Rust, mixed casing, the `:log` negative, extern
   crates, macro invocations, absolute roots, compound imports and nested negative
   paths. Every case checks analysis AND plan reports without input mutation.
@@ -140,12 +150,12 @@ Every mismatch remains an ordinary failing assertion, never `#[ignore]`.
   log-once declarations USED. Build dependencies and target occurrences must
   keep their original kinds and target predicate.
 
-## Validation status
+## Validation
 
-Source-ready: originals downloaded at verified branch pins; regeneration and
-static provenance/inventory checks run; scoped rustfmt run on both harnesses.
-Runtime parity is deliberately not claimed before coordinator integration tests.
-Suggested coordinator invocation (offline, using its selected Cargo environment):
+The harness verifies byte hashes, source-file references, complete assertion
+mappings and uniqueness of payloads, input trees and executable cases. Native
+analysis and removal tests run offline; originals are evidence, not executable
+external implementations.
 
 ```
 cargo test -p clippier --offline --no-default-features --features machete \

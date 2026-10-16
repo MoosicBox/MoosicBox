@@ -1,7 +1,109 @@
 """Rebuild the offline corpus and its assertion ledger from retained evidence."""
 from pathlib import Path
-import re, json, hashlib, shutil, tomllib
-ROOT = Path(__file__).resolve().parent
+import re, json, hashlib, shutil, tomllib, tempfile
+def compact(archive, workspace):
+    """Store bytes and input trees once; merge equivalent executable cases."""
+    data = json.loads((workspace / 'sources.json').read_text())
+    payloads = {hashlib.sha256((archive / 'LICENSE').read_bytes()).hexdigest(): 'LICENSE'}
+    published = {'LICENSE', 'README.md', 'rebuild.py', '.gitignore', 'sources.json', 'sha256.json'}
+
+    def store(path):
+        content = path.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        if digest not in payloads:
+            relative = 'files/' + path.relative_to(workspace).as_posix()
+            destination = archive / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(content)
+            payloads[digest] = relative
+        published.add(payloads[digest])
+        return payloads[digest]
+
+    for source in data['sources']:
+        for file in source['files']:
+            path = workspace / 'original' / source['id'] / file['file']
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == file['sha256']
+            file['stored'] = store(path)
+
+    trees = {}
+    signatures = {}
+    inputs = {}
+    for label in ['upstream', 'fork']:
+        for directory in sorted((workspace / 'adapted' / label).iterdir()):
+            tree = {p.relative_to(directory).as_posix(): store(p)
+                    for p in sorted(directory.rglob('*')) if p.is_file()}
+            signature = json.dumps(tree, sort_keys=True)
+            if signature not in signatures:
+                key = 'fixtures/' + directory.name
+                if key in trees:
+                    key = 'variants/' + label + '/' + directory.name
+                trees[key] = tree
+                signatures[signature] = key
+            inputs[directory.relative_to(workspace).as_posix()] = signatures[signature]
+    data['trees'] = trees
+    data['special_inputs'] = {'target': inputs['adapted/upstream/with-target'],
+                              'removal': []}
+    for label in ['upstream', 'fork']:
+        data['special_inputs']['removal'].append({
+            'input': inputs[f'adapted/{label}/multi-key-dep'],
+            'expected': store(workspace / 'removal' / label / 'expected.toml'),
+            'source_ids': [f'{label}:src/main.rs:test_remove_dependencies'],
+        })
+
+    cases = []
+    equivalent = {}
+    aliases = {}
+    for case in data['cases']:
+        case['input'] = inputs[case['input']]
+        # Array order in these sets is not part of analysis behavior.
+        case['expected'].sort(key=lambda row: json.dumps(row, sort_keys=True))
+        for field in ['ignored_used', 'used_ignore_scope']:
+            case[field].sort()
+        signature = json.dumps({k: v for k, v in case.items()
+                                if k not in ['id', 'source_ids']}, sort_keys=True)
+        if signature not in equivalent:
+            equivalent[signature] = case
+            cases.append(case)
+        canonical = equivalent[signature]
+        canonical['source_ids'] = sorted(set(canonical['source_ids'] + case['source_ids']))
+        aliases[case['id']] = canonical['id']
+    # Give lexical assertions their precise case rather than the whole test group.
+    for test in data['tests']:
+        for assertion in test['assertions']:
+            precise = [case['id'] for case in cases if assertion['id'] in case['source_ids']]
+            if precise:
+                assertion['case_ids'] = precise
+    data['cases'] = cases
+    data['case_origins'] = aliases
+    for test in data['tests']:
+        for item in [test, *test['assertions']]:
+            item['case_ids'] = sorted({aliases.get(key, key) for key in item['case_ids']})
+    (archive / 'sources.json').write_text(json.dumps(data, indent=2) + '\n')
+    # Delete only obsolete fixture files after all new references are published.
+    for path in sorted(archive.rglob('*'), reverse=True):
+        if path.is_file() and path.relative_to(archive).as_posix() not in published:
+            path.unlink()
+        elif path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
+    hashes = {p.relative_to(archive).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(archive.rglob('*')) if p.is_file() and p.name != 'sha256.json'}
+    (archive / 'sha256.json').write_text(json.dumps(hashes, indent=2) + '\n')
+    print(f'{len(aliases)} source case variants -> {len(cases)} unique executable cases; '
+          f'{len(inputs)} source inputs -> {len(trees)} unique input trees; '
+          f'{len(payloads)} unique payloads')
+
+ARCHIVE = Path(__file__).resolve().parent
+_temporary = tempfile.TemporaryDirectory(prefix="dependency-corpus-")
+ROOT = Path(_temporary.name)
+retained = json.loads((ARCHIVE / 'sources.json').read_text())
+for source in retained['sources']:
+    for file in source['files']:
+        content = (ARCHIVE / file['stored']).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == file['sha256']
+        destination = ROOT / 'original' / source['id'] / file['file']
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
+
 SOURCES = [('upstream', 'bnjbvr/cargo-machete', 'main', '135555c9cd9f3b4723dee2766f0cacb99aac092b'), ('fork', 'BSteffaniak/cargo-machete', 'ignored-dirs', '87dd88aa744c5950fe155666ced33766ad62a338')]
 
 def write(path, text):
@@ -195,6 +297,4 @@ for label,repo,branch,revision in SOURCES:
 assert [s['named_tests'] for s in sources]==[18,25]
 assert len(set(variants['upstream'])|set(variants['fork']))==21
 write(ROOT/'sources.json',json.dumps(dict(sources=sources,fixture_union=sorted(set(variants['upstream'])|set(variants['fork'])),shared_variations=comparisons,tests=ledger,cases=cases),indent=2)+'\n')
-hashes={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(ROOT.rglob('*')) if p.is_file() and p.name!='sha256.json'}
-write(ROOT/'sha256.json',json.dumps(hashes,indent=2)+'\n')
-print(f'{len(ledger)} named tests, {sum(len(e["assertions"]) for e in ledger)} assertions, {len(cases)} executable cases, {len(hashes)} hashed files')
+compact(ARCHIVE, ROOT)

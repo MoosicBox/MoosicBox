@@ -1,5 +1,0 @@
-[package]
-name = "lexical"
-version = "0.1.0"
-[dependencies]
-static_assertions = "1.0.0"

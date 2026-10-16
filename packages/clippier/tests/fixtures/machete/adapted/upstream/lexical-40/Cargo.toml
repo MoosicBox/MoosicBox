@@ -1,5 +1,0 @@
-[package]
-name = "lexical"
-version = "0.1.0"
-[dependencies]
-lol = "1.0.0"
