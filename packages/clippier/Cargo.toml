@@ -109,7 +109,7 @@ default = [
     "check",
     "format",
     "git-diff",
-    "machete",
+    "machete-verify",
     "md",
     "node-workspace",
     "publish",

@@ -52,7 +52,7 @@ impl DependencyKind {
 }
 
 /// Read-only selectors. Empty lists select all; strings are glob patterns.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MacheteOptions {
     /// Cargo.toml or its directory; defaults to the current directory.
     pub manifest_path: Option<PathBuf>,
@@ -64,7 +64,7 @@ pub struct MacheteOptions {
     pub generated: Option<generated::GeneratedEvidence>,
     /// Named finite profile from layered configuration.
     pub profile: Option<String>,
-    /// Opt in to lexical scope and source-target ownership precision.
+    /// Structural scope analysis; enabled by default. Disabling it cannot authorize removal.
     pub precision: bool,
     /// Optional deterministic audit review date in YYYY-MM-DD format; no clock is read.
     pub review_date: Option<String>,
@@ -78,6 +78,25 @@ pub struct MacheteOptions {
     pub exclude: Vec<String>,
     /// Dependency kinds to inspect; empty defaults to NORMAL and BUILD.
     pub kinds: Vec<DependencyKind>,
+}
+
+impl Default for MacheteOptions {
+    fn default() -> Self {
+        Self {
+            manifest_path: None,
+            config_path: None,
+            metadata: None,
+            generated: None,
+            profile: None,
+            precision: true,
+            review_date: None,
+            no_ignore: None,
+            packages: Vec::new(),
+            dependencies: Vec::new(),
+            exclude: Vec::new(),
+            kinds: Vec::new(),
+        }
+    }
 }
 
 /// Configuration read exclusively from the `machete` table in clippier.toml.

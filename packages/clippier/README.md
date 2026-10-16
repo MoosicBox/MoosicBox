@@ -67,18 +67,30 @@ to the directory declaring their `clippier.toml`.
 
 ## What ordinary `clippier machete` enables
 
-The bare command performs non-executing analysis. It collects structured evidence,
-retains references across unselected cfg branches, protects incomplete/generated
-source inventories, and consumes fresh configured `evidence-path` captures.
-It does **not** automatically enable `--precision`, choose a named `--profile`,
-run hygiene audits, execute compiler verification, or expand procedural macros.
+The bare command enables structural scope/target analysis, collects evidence,
+retains conditional references, and consumes fresh configured generated captures.
+`--precision` is now a compatibility no-op: correctness does not require it.
 
-A procedural macro can introduce a dependency name absent from handwritten Rust.
-Without captured expansion evidence, ordinary scanning can still flag that needed
-dependency as unused. Use explicit verification to challenge such findings against
-a passing baseline; verification reports do not automatically change scanner
-classifications or gate a subsequent `apply`. A successful finite build is not
-universal absence proof. Review findings before removal.
+Unexpanded function-like macros, derives and unknown attributes can introduce
+external crate paths absent from handwritten source. Unreferenced declarations
+in affected packages are **INCOMPLETE**, not UNUSED; they produce no removal edits.
+`check` and `apply` return an incomplete outcome rather than silently succeeding.
+Even fresh captured expansion is positive usage evidence, not proof of global
+absence. Disabling precision through the library also cannot authorize removals.
+
+Compiler observations can be requested directly in the ordinary flow:
+
+```bash
+clippier machete --allow-execution --output json
+clippier machete check --allow-execution --output json
+```
+
+Execution still needs explicit consent and `[machete.verification]` configuration.
+The combined response preserves source-analysis uncertainty and shows finite
+compiler outcomes separately: CANDIDATE_COMPILED, CANDIDATE_FAILED, or UNKNOWN.
+A compiler failure is not automatically attributed to one dependency. Incomplete
+analysis remains non-applicable, even after successful finite compiler checks;
+no flag silently upgrades scoped observations to global removal approval.
 
 ## Dependency evidence, profiles, and hygiene
 
@@ -91,8 +103,8 @@ clippier machete analyze --generated-evidence captured-evidence.json
 
 JSON reports include declaration-owned evidence with source file/line/column,
 reference origin, source-target role/name, conditions, uncertainty and coverage.
-`--explain` includes it in text output. `--precision` enables conservative local
-scope/import resolution and distinct development/build ownership. This is not
+`--explain` includes it in text output. Conservative local
+scope/import resolution and distinct development/build ownership are enabled by default. This is not
 compiler-complete name resolution; unsupported scopes remain explicit gaps.
 
 Named profiles belong in `clippier.toml`:
@@ -137,8 +149,8 @@ capture. `evidence-path` in the declaring `clippier.toml` can select captured da
 
 ## Explicit compiler verification and expansion
 
-Build with `--features machete-verify` to enable this additional, non-default
-execution capability. Configuration still belongs only in `clippier.toml`:
+The default feature set includes `machete-verify`; minimal builds may enable it
+explicitly with `--features machete-verify`. This makes execution available, not authorized. Configuration still belongs only in `clippier.toml`:
 
 ```toml
 [machete.verification]
@@ -164,7 +176,7 @@ clippier machete verify --allow-execution --output json
 clippier machete expand --allow-execution --output json
 ```
 
-`--yes` does not authorize execution. Verification compares unchanged baseline
+`--yes` does not authorize execution. Verification checks one unchanged baseline per profile
 and removal candidates in separate temporary project copies, reports each finite
 profile and manifest/combined scope, bounds output and deadlines, and never edits
 the live manifests or lockfile. Baselines use locked compilation. When a candidate
@@ -173,6 +185,11 @@ regenerated offline before locked compilation; preparation is reported separatel
 and a preparation failure prevents compilation. Individual mode means each manifest replacement,
 not each dependency separately. Only a passing baseline and candidate support a
 profile-specific validation observation; environmental failures are not proof.
+
+Existing target build directories are pruned before copying; evidence under a
+pruned directory is rejected rather than silently lost. Baseline compilation is
+reused across candidate scopes within each profile; no persistent build cache is
+assumed. Candidate builds still use isolated target directories.
 
 Execution uses deliberately selected absolute Cargo/rustc binaries, an empty
 isolated Cargo home and offline operations. Uncached registry dependencies cause

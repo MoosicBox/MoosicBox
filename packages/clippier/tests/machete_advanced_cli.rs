@@ -58,7 +58,7 @@ fn default_command_retains_conditional_and_renamed_references_without_execution(
     assert_eq!(declaration_status(&value, "renamed"), "USED");
     assert_eq!(declaration_status(&value, "conditional"), "USED");
     assert_eq!(declaration_status(&value, "unused"), "UNUSED");
-    assert_eq!(value["report"]["coverage"]["precision"], false);
+    assert_eq!(value["report"]["coverage"]["precision"], true);
     assert_eq!(value["report"]["coverage"]["profile_limited"], false);
     assert!(!dir.path().join("target").exists());
     assert!(!dir.path().join("Cargo.lock").exists());
@@ -83,7 +83,57 @@ fn default_command_protects_dynamic_generated_includes_instead_of_claiming_absen
 }
 
 #[test]
-fn precision_is_opt_in_and_does_not_confuse_a_local_module_with_an_external_crate() {
+fn default_macro_only_and_attribute_dependencies_are_unverified_and_never_removed() {
+    for source in [
+        "used::emit!();",
+        "#[used::generate] pub struct Thing;",
+        "#[doc::generate] pub struct Thing;",
+        "#[allow::generate] pub struct Thing;",
+        "#[derive(used::Generate)] pub struct Thing;",
+        "#[cfg_attr(feature=\"x\", used::generate)] pub struct Thing;",
+        "macro_rules! emit {()=>{hidden::go()}} emit!();",
+    ] {
+        let dir = fixture();
+        fs::write(dir.path().join("src/lib.rs"), source).unwrap();
+        let before = fs::read(dir.path().join("Cargo.toml")).unwrap();
+        for args in [
+            vec!["--output", "json"],
+            vec!["check", "--output", "json"],
+            vec!["apply", "--yes", "--output", "json"],
+        ] {
+            let output = run(&dir, &args);
+            assert_eq!(
+                output.status.code(),
+                Some(2),
+                "{source}: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+            let value = json(&output);
+            assert_eq!(
+                declaration_status(&value, "unused"),
+                "INCOMPLETE",
+                "{source}"
+            );
+            assert_eq!(value["report"]["applied"], false);
+            assert_eq!(fs::read(dir.path().join("Cargo.toml")).unwrap(), before);
+            assert!(!dir.path().join("target").exists());
+        }
+    }
+}
+
+#[test]
+fn ordinary_strings_comments_and_builtin_attributes_do_not_invent_expansion_gaps() {
+    let dir = fixture();
+    fs::write(dir.path().join("src/lib.rs"),"// emit!();\n#[doc=\"#[derive(Generate)] used::emit!()\"]\npub fn value()->&'static str{\"used::emit!()\"}\n").unwrap();
+    let output = run(&dir, &["--output", "json"]);
+    assert!(output.status.success());
+    let value = json(&output);
+    assert_eq!(declaration_status(&value, "unused"), "UNUSED");
+    assert_eq!(value["report"]["complete"], true);
+}
+
+#[test]
+fn default_precision_does_not_confuse_a_local_module_with_an_external_crate() {
     let dir = fixture();
     fs::write(
         dir.path().join("src/lib.rs"),
@@ -91,7 +141,7 @@ fn precision_is_opt_in_and_does_not_confuse_a_local_module_with_an_external_crat
     )
     .unwrap();
     let baseline = json(&run(&dir, &["--output", "json"]));
-    assert_eq!(declaration_status(&baseline, "used"), "USED");
+    assert_eq!(declaration_status(&baseline, "used"), "UNUSED");
     let precise = json(&run(&dir, &["--precision", "--output", "json"]));
     assert_eq!(declaration_status(&precise, "used"), "UNUSED");
 }

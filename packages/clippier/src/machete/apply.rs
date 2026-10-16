@@ -42,6 +42,11 @@ pub(super) fn validate_plan(plan: &MachetePlan) -> Result<(), BoxError> {
     if !plan.complete || !plan.report.complete {
         return Err("cannot apply incomplete machete analysis".into());
     }
+    validate_evidence(plan)
+}
+
+/// Validate a sealed snapshot without granting publication authority.
+pub(super) fn validate_evidence(plan: &MachetePlan) -> Result<(), BoxError> {
     let changes = plan
         .changes
         .iter()

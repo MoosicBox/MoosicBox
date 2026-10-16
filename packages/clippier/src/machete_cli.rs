@@ -101,7 +101,7 @@ struct Flags {
     /// Accept the displayed removal plan without prompting (apply only)
     #[arg(long, global = true)]
     yes: bool,
-    /// Resolve local scopes and retain more precise source-target evidence
+    /// Compatibility flag: structural scope analysis is always enabled
     #[arg(long, global = true)]
     precision: bool,
     /// Named analysis profile from clippier.toml (scoped findings are not global removal proof)
@@ -132,7 +132,7 @@ impl Flags {
             exclude: self.exclude.clone(),
             kinds: self.kinds.iter().copied().map(Into::into).collect(),
             no_ignore: self.no_ignore.then_some(true),
-            precision: self.precision,
+            precision: true,
             review_date: self.review_date.clone(),
             profile: self.analysis_profile.clone(),
             ..MacheteOptions::default()
@@ -277,6 +277,10 @@ fn validate_flags(cli: &MacheteCli) -> Result<(bool, bool), BoxError> {
     if cli.flags.diff && !planning {
         return Err("--diff requires machete plan or apply".into());
     }
+    #[cfg(feature = "machete-verify")]
+    if cli.flags.allow_execution && (planning || matches!(cli.command, Some(Command::Audit))) {
+        return Err("--allow-execution is supported for analyze/check/verify/expand; incomplete plans cannot be applied, even after finite compiler checks".into());
+    }
     Ok((applying, planning))
 }
 
@@ -355,7 +359,7 @@ fn run_special(cli: &MacheteCli, options: &MacheteOptions) -> Result<Option<u8>,
 #[cfg(feature = "machete-verify")]
 fn run_execution(cli: &MacheteCli, options: &MacheteOptions) -> Result<u8, BoxError> {
     use clippier::machete::verify::{
-        ExpansionOptions, VerificationStatus, expand_machete_project, verify_machete_plan,
+        ExpansionOptions, VerificationStatus, expand_machete_project, verify_machete,
     };
     if !cli.flags.allow_execution {
         return Err("verification/expansion requires --allow-execution; build scripts and procedural macros may execute".into());
@@ -387,8 +391,7 @@ fn run_execution(cli: &MacheteCli, options: &MacheteOptions) -> Result<u8, BoxEr
         emit_extra(&cli.flags, "expansion", &expansion)?;
         return Ok(code);
     }
-    let plan = plan_machete(options)?;
-    let report = verify_machete_plan(&plan, &policy)?;
+    let report = verify_machete(options, &policy)?;
     let code = u8::from(
         report.profiles.is_empty()
             || !report.profiles.iter().all(|profile| {
@@ -413,6 +416,36 @@ fn prepare(cli: &MacheteCli, planning: bool) -> Result<AnalysisResult, BoxError>
             collect_metadata(&mut options)?;
         }
         if let Some(code) = run_special(cli, &options)? {
+            return Ok(Err(code));
+        }
+        #[cfg(feature = "machete-verify")]
+        if flags.allow_execution {
+            // Compiler observations supplement, never promote, global source findings.
+            let mut policy = clippier::machete::load_verification_options(&options)?
+                .ok_or("--allow-execution requires [machete.verification] in clippier.toml")?;
+            policy.allow_execution = true;
+            let analysis = analyze_machete(&options)?;
+            let verification = clippier::machete::verify::verify_machete(&options, &policy)?;
+            emit_extra(
+                flags,
+                "analysis",
+                &serde_json::json!({
+                    "report": analysis, "verification": verification,
+                    "publication_authorized": false,
+                    "note": "Finite compiler results do not resolve global uncertainty; apply remains blocked for incomplete reports."
+                }),
+            )?;
+            let compiler_complete = verification.profiles.iter().all(|profile| {
+                matches!(
+                    profile.outcome,
+                    clippier::machete::verify::VerificationOutcome::CandidateCompiled
+                )
+            });
+            let code = if analysis.complete && compiler_complete {
+                u8::from(matches!(cli.command, Some(Command::Check)) && has_unused(&analysis))
+            } else {
+                2
+            };
             return Ok(Err(code));
         }
         if planning {

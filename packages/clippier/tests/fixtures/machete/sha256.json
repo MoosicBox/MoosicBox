@@ -1,7 +1,7 @@
 {
   ".gitignore": "6743c0493f0de64c32557d2230f5a3c520b8fc72cfb61e2cf1dd423fb61b3483",
   "LICENSE": "ad3e20ec34bdea16d997bb9a32f667d04f32010e333652b332fc19d14b14998f",
-  "README.md": "e7b2910f40e61ab50e1c8cb306a61ff93ab90fa1d32c0b961709f35b8627daa4",
+  "README.md": "5ceb008d94bd8f31bb9144cca58f6227bd0044584a3bcc486f296a207a3690cf",
   "files/adapted/fork/ignored-dep/Cargo.toml": "a8c5c3c3ab0242b601dd29327996d16b5396ab0c44cfa7b6bc0d24324b575544",
   "files/adapted/fork/ignored-dep-workspace/inner/Cargo.toml": "ac2a8e26b7fe0cb49d74ef280f0e350de9e5eb9582a80a34cd94efc399bee4f1",
   "files/adapted/fork/ignored-dirs/Cargo.toml": "1fa653de5fac5af18a967166fec61c52aaa9d38ae383419de559447a4af0a969",
@@ -197,6 +197,7 @@
   "files/original/upstream/src/main.rs": "9931807a9b483496d6d75ee9be2c33b0c0c5273c7eaee41248a026a023bf3778",
   "files/original/upstream/src/search_unused.rs": "d3981d0f1fa5f45823db1fa6c0aacd73caaa2140e4755f977ef7c63bd44e616a",
   "files/removal/upstream/expected.toml": "f0aee783d3d99bd19ff44915af931e2fa128abd5030e5a313f1517a5bc5ca225",
-  "rebuild.py": "b8f6b153e269c5b79f9b6d1360c56cc82f45ae45d91aeb2271fc1c88ef1437e3",
-  "sources.json": "04612659fa3b9ffe14c9f7a60fec16aae2fa1e011266c026d89f29e3072fa947"
+  "rebuild.py": "05d2699cc799890366e53617aa2f00e09377320c8cb19842f73660d0bde0a864",
+  "sources.json": "04612659fa3b9ffe14c9f7a60fec16aae2fa1e011266c026d89f29e3072fa947",
+  "native_expectations.json": "457ee68d123de192d3502c9fae5ed0583b4b62f3fa378088875500e40c88ae5f"
 }

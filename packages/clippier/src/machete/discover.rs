@@ -676,13 +676,14 @@ pub fn analyze_machete(options: &MacheteOptions) -> Result<MacheteReport, BoxErr
 /// * Invalid manifest dependency tables or formatting-preserving edit failures.
 #[allow(clippy::too_many_lines)] // A single read-only capture ties analysis evidence to its exact edits.
 pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
-    Ok(capture(options, false)?.0)
+    Ok(capture(options, false, false)?.0)
 }
 
 #[allow(clippy::too_many_lines)]
 fn capture(
     options: &MacheteOptions,
     audit_mode: bool,
+    proposals: bool,
 ) -> Result<(MachetePlan, super::audit::AuditInput), BoxError> {
     for list in [&options.packages, &options.dependencies, &options.exclude] {
         patterns(list)?;
@@ -1021,8 +1022,24 @@ fn capture(
                         DependencyStatus::Incomplete,
                         "unused only within a finite analysis profile; not globally removable",
                     )
+                } else if !options.precision {
+                    (
+                        DependencyStatus::Incomplete,
+                        "structural scope analysis disabled; absence unverified",
+                    )
                 } else if !evidence.diagnostics.is_empty() {
-                    (DependencyStatus::Incomplete, "incomplete source inventory")
+                    (
+                        DependencyStatus::Incomplete,
+                        if evidence
+                            .diagnostics
+                            .iter()
+                            .all(|reason| reason.contains("unexpanded Rust macro"))
+                        {
+                            "unverified macro expansion; no global absence proof"
+                        } else {
+                            "incomplete source inventory"
+                        },
+                    )
                 } else {
                     (
                         DependencyStatus::Unused,
@@ -1140,10 +1157,12 @@ fn capture(
     edited
         .entry(root_path.clone())
         .or_insert_with(|| root_doc.clone());
-    for dependency in dependencies
-        .iter()
-        .filter(|d| d.status == DependencyStatus::Unused)
-    {
+    for dependency in dependencies.iter().filter(|d| {
+        d.status == DependencyStatus::Unused
+            || (proposals
+                && d.status == DependencyStatus::Incomplete
+                && d.reason == "unverified macro expansion; no global absence proof")
+    }) {
         let doc = edited
             .get_mut(&dependency.manifest_path)
             .ok_or("missing editable manifest")?;
@@ -1246,13 +1265,22 @@ fn capture(
     ))
 }
 
+/// Capture disposable compiler proposals, never an applicable removal plan.
+#[cfg(feature = "machete-verify")]
+pub(super) fn plan_machete_candidates(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
+    let mut plan = capture(options, false, true)?.0;
+    // Proposal state cannot pass apply, including if the public report is edited.
+    plan.complete = false;
+    Ok(plan)
+}
+
 /// Audit full discovered declarations before selectors, using unsuppressed evidence.
 ///
 /// # Errors
 /// * Discovery/configuration errors documented by [`analyze_machete`].
 /// * Invalid suppression glob patterns or review date syntax.
 pub fn audit_machete(options: &MacheteOptions) -> Result<super::audit::AuditReport, BoxError> {
-    let (_, input) = capture(options, true)?;
+    let (_, input) = capture(options, true, false)?;
     super::audit::audit_machete_evidence(&input)
 }
 

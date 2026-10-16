@@ -5,7 +5,7 @@ def compact(archive, workspace):
     """Store bytes and input trees once; merge equivalent executable cases."""
     data = json.loads((workspace / 'sources.json').read_text())
     payloads = {hashlib.sha256((archive / 'LICENSE').read_bytes()).hexdigest(): 'LICENSE'}
-    published = {'LICENSE', 'README.md', 'rebuild.py', '.gitignore', 'sources.json', 'sha256.json'}
+    published = {'LICENSE', 'README.md', 'rebuild.py', '.gitignore', 'sources.json', 'sha256.json', 'native_expectations.json'}
 
     def store(path):
         content = path.read_bytes()

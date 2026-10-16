@@ -7,7 +7,7 @@ use clippier::machete::{
     MacheteOptions, plan_machete,
     verify::{
         ExpansionOptions, VerificationOptions, VerificationProfile, expand_machete_project,
-        verify_machete_plan,
+        verify_machete, verify_machete_plan,
     },
 };
 use std::fs;
@@ -182,17 +182,19 @@ fn real_procedural_macro_hidden_dependency_is_caught_and_captured_evidence_retai
         ..Default::default()
     };
     let plan = plan_machete(&options).unwrap();
-    // Document the default scanner's remaining blind spot instead of claiming
-    // that optional verification automatically changes ordinary analysis.
+    // Opaque macro expansion is uncertain by default, never removable globally.
     assert!(
         plan.report
             .dependencies
             .iter()
-            .any(|dep| dep.dependency == "hidden" && dep.status == DependencyStatus::Unused)
+            .any(|dep| dep.dependency == "hidden" && dep.status == DependencyStatus::Incomplete)
     );
-    assert_eq!(plan.changes.len(), 1);
-    let verification = verify_machete_plan(
-        &plan,
+    assert!(!plan.report.complete);
+    assert!(plan.changes.is_empty());
+    assert!(apply_machete_plan(&plan).is_err());
+    assert!(verify_machete_plan(&plan, &VerificationOptions::default()).is_err());
+    let verification = verify_machete(
+        &options,
         &VerificationOptions {
             allow_execution: true,
             cargo_path: std::env::var_os("CLIPPIER_TEST_CARGO")
@@ -230,6 +232,12 @@ fn real_procedural_macro_hidden_dependency_is_caught_and_captured_evidence_retai
         observed.candidate_result
     );
     assert!(observed.candidate_result.stderr.contains("hidden"));
+    assert!(matches!(
+        observed.outcome,
+        clippier::machete::verify::VerificationOutcome::CandidateFailed
+    ));
+    assert_eq!(observed.manifests, [root.path().join("Cargo.toml")]);
+    assert!(!plan_machete(&options).unwrap().report.complete);
     assert_eq!(
         fs::read_to_string(root.path().join("Cargo.toml")).unwrap(),
         manifest
@@ -263,6 +271,99 @@ fn real_procedural_macro_hidden_dependency_is_caught_and_captured_evidence_retai
         fs::read_to_string(root.path().join("Cargo.toml")).unwrap(),
         manifest
     );
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "explicit real CLI/compiler execution; coordinator supplies installed toolchain paths"]
+fn real_cli_default_and_check_keep_macro_uncertainty_and_never_authorize_apply() {
+    use std::process::Command;
+    let root = macro_fixture();
+    let tool = |name| std::env::var(name).unwrap_or_else(|_| panic!("select {name} explicitly"));
+    let policy = VerificationOptions {
+        cargo_path: tool("CLIPPIER_TEST_CARGO").into(),
+        rustc_path: tool("CLIPPIER_TEST_RUSTC").into(),
+        linker_path: Some(tool("CLIPPIER_TEST_LINKER").into()),
+        profiles: vec![VerificationProfile {
+            name: "macro-check".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    // Serialize the exact policy rather than interpolate/escape toolchain paths.
+    // Consent is deliberately false in config and granted only by CLI flags.
+    let mut machete = toml::Table::new();
+    machete.insert(
+        "verification".into(),
+        toml::Value::try_from(policy).unwrap(),
+    );
+    let mut config = toml::Table::new();
+    config.insert("machete".into(), toml::Value::Table(machete));
+    fs::write(
+        root.path().join("clippier.toml"),
+        toml::to_string(&config).unwrap(),
+    )
+    .unwrap();
+    let paths = [
+        "Cargo.toml",
+        "hidden/Cargo.toml",
+        "emitter/Cargo.toml",
+        "Cargo.lock",
+    ];
+    let before: Vec<_> = paths
+        .iter()
+        .map(|path| fs::read(root.path().join(path)).unwrap())
+        .collect();
+    for args in [
+        vec!["--allow-execution", "--output", "json"],
+        vec!["check", "--allow-execution", "--output", "json"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+            .current_dir(root.path())
+            .arg("machete")
+            .args(args)
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "stdout={}; stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let analysis = &value["analysis"];
+        assert_eq!(analysis["publication_authorized"], false);
+        assert_eq!(analysis["report"]["complete"], false);
+        let hidden = analysis["report"]["dependencies"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|dep| dep["dependency"] == "hidden")
+            .unwrap();
+        assert_eq!(hidden["status"], "INCOMPLETE");
+        let comparisons = analysis["verification"]["profiles"].as_array().unwrap();
+        assert_eq!(comparisons.len(), 1);
+        assert_eq!(comparisons[0]["baseline"]["status"], "PASSED");
+        assert_eq!(comparisons[0]["candidate_result"]["status"], "FAILED");
+        assert_eq!(comparisons[0]["outcome"], "CANDIDATE_FAILED");
+        for (path, original) in paths.iter().zip(&before) {
+            assert_eq!(&fs::read(root.path().join(path)).unwrap(), original);
+        }
+        assert!(!root.path().join("target").exists());
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_clippier"))
+        .current_dir(root.path())
+        .args(["machete", "apply", "--yes", "--output", "json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["report"]["applied"], false);
+    for (path, original) in paths.iter().zip(&before) {
+        assert_eq!(&fs::read(root.path().join(path)).unwrap(), original);
+    }
+    assert!(!root.path().join("target").exists());
 }
 
 #[test]

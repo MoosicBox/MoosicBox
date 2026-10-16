@@ -40,7 +40,81 @@ pub(super) fn inspect_with(
     }
     result.observations = observations;
     collect_inventory(&tokens, &mut result);
+    collect_expansion_gaps(&tokens, &mut result);
+    if tokens
+        .windows(2)
+        .any(|pair| pair[0] == "use" && pair[1] == ":")
+    {
+        result.names.clear();
+        result.observations.clear();
+        result
+            .incomplete
+            .insert("malformed use path; single colon cannot establish a crate reference".into());
+    }
     result
+}
+
+// An arbitrary macro can manufacture an external crate path absent from its tokens.
+// Even local macro definitions are not a substitute for expansion/name resolution.
+fn collect_expansion_gaps(tokens: &[String], result: &mut Evidence) {
+    for (index, token) in tokens.iter().enumerate() {
+        if token == "!"
+            && tokens
+                .get(index.wrapping_sub(1))
+                .is_some_and(|name| identifier(name))
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| matches!(next.as_str(), "(" | "[" | "{"))
+        {
+            result.uncertain.insert(
+                "unexpanded Rust macro; generated dependency references are unknown".into(),
+            );
+        }
+        if token != "#" {
+            continue;
+        }
+        let bracket = index + 1 + usize::from(at(tokens, index + 1, "!"));
+        if !at(tokens, bracket, "[") {
+            continue;
+        }
+        let Some(name) = tokens.get(bracket + 1) else {
+            continue;
+        };
+        // Only attributes with no user-defined expansion semantics are trusted.
+        // cfg_attr/derive may contain procedural attributes/derives; retain uncertainty.
+        if at(tokens, bracket + 2, "::")
+            || !matches!(
+                name.as_str(),
+                "cfg"
+                    | "allow"
+                    | "warn"
+                    | "deny"
+                    | "forbid"
+                    | "expect"
+                    | "doc"
+                    | "path"
+                    | "inline"
+                    | "cold"
+                    | "must_use"
+                    | "repr"
+                    | "test"
+                    | "ignore"
+                    | "should_panic"
+                    | "no_std"
+                    | "no_main"
+                    | "non_exhaustive"
+                    | "deprecated"
+                    | "track_caller"
+                    | "automatically_derived"
+                    | "recursion_limit"
+                    | "type_length_limit"
+                    | "feature"
+                    | "no_implicit_prelude"
+            )
+        {
+            result.uncertain.insert(format!("unexpanded Rust macro attribute `{name}`; generated dependency references are unknown"));
+        }
+    }
 }
 
 fn tokenize(text: &str, result: &mut Evidence) -> Vec<String> {

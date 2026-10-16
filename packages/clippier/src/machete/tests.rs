@@ -143,6 +143,55 @@ fn features_workspace_aliases_targets_and_build_scripts() {
     );
 }
 #[test]
+fn disabling_structural_analysis_cannot_restore_unsafe_removal_authority() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='conservative'\nversion='0.1.0'\n[dependencies]\nunreferenced='1.0.0'\n",
+    );
+    write(dir.path(), "src/lib.rs", "pub fn value(){}\n");
+    let mut input = options(dir.path());
+    input.precision = false;
+    let mut plan = plan_machete(&input).unwrap();
+    assert_eq!(
+        plan.report.dependencies[0].status,
+        DependencyStatus::Incomplete
+    );
+    assert_eq!(plan.changes.len(), 0);
+    // Public report flags cannot override the privately captured completeness.
+    plan.report.complete = true;
+    assert!(apply_machete_plan(&plan).is_err());
+}
+
+#[test]
+fn macro_definition_and_attribute_names_do_not_bypass_default_uncertainty() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "Cargo.toml",
+        "[package]\nname='conservative'\nversion='0.1.0'\n[dependencies]\nhidden='1.0.0'\n",
+    );
+    for text in [
+        "emitter::emit!();",
+        "#[doc::emit] pub struct Item;",
+        "macro_rules! local {()=>{}} local!();",
+        "#[derive(Clone)] pub struct Item;",
+    ] {
+        write(dir.path(), "src/lib.rs", text);
+        let mut plan = plan_machete(&options(dir.path())).unwrap();
+        assert_eq!(
+            plan.report.dependencies[0].status,
+            DependencyStatus::Incomplete,
+            "{text}"
+        );
+        assert_eq!(plan.changes.len(), 0);
+        plan.report.complete = true;
+        assert!(apply_machete_plan(&plan).is_err());
+    }
+}
+
+#[test]
 fn structural_roots_drive_checked_removal_without_hiding_unknowns() {
     let dir = tempfile::tempdir().unwrap();
     write(
@@ -156,12 +205,12 @@ fn structural_roots_drive_checked_removal_without_hiding_unknowns() {
         "use {not_futures::futures::{Thing as futures}, Logging as renamed};\nfn f(){ quoted!(macro_input); }\n/// futures::run();\nconst TEXT:&str=\"futures::run();\";\n",
     );
     let plan = plan_machete(&options(dir.path())).unwrap();
-    assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
+    assert!(!plan.report.complete, "{:?}", plan.report.diagnostics);
     for dependency in &plan.report.dependencies {
         assert_eq!(
             dependency.status,
             if dependency.dependency == "futures" {
-                DependencyStatus::Unused
+                DependencyStatus::Incomplete
             } else {
                 DependencyStatus::Used
             },
@@ -169,9 +218,8 @@ fn structural_roots_drive_checked_removal_without_hiding_unknowns() {
             dependency.dependency,
         );
     }
-    assert_eq!(plan.changes.len(), 1);
-    assert!(!plan.changes[0].after.contains("\nfutures="));
-    assert!(apply_machete_plan(&plan).unwrap().applied);
+    assert_eq!(plan.changes.len(), 0);
+    assert!(apply_machete_plan(&plan).is_err());
 }
 
 #[test]
@@ -240,7 +288,7 @@ fn directory_paths_are_not_invented_from_unrelated_assignments() {
         "pub fn run() { let path = \"\"; let _ = path; used::run(); }\n#[route(path = \"/\")] fn endpoint() {}\n",
     );
     let plan = plan_machete(&options(dir.path())).unwrap();
-    assert!(plan.report.complete, "{:?}", plan.report.diagnostics);
+    assert!(!plan.report.complete, "{:?}", plan.report.diagnostics);
     write(dir.path(), "src/lib.rs", "#[path = \".\"] mod invalid;");
     let plan = plan_machete(&options(dir.path())).unwrap();
     assert!(!plan.report.complete);
@@ -695,7 +743,7 @@ fn precision_import_reexport_positions_and_alias_package_are_structured() {
 }
 
 #[test]
-fn precision_unsupported_resolution_fails_closed_without_blanket_macro_gaps() {
+fn unsupported_resolution_and_unexpanded_macros_fail_closed_by_default() {
     let dir = fixture();
     for source in ["use crate::local::*;", "fn run<T>() {}", "paste! { item };"] {
         write(dir.path(), "src/lib.rs", source);
@@ -714,7 +762,7 @@ fn precision_unsupported_resolution_fails_closed_without_blanket_macro_gaps() {
     let report = analyze_machete(&precise(dir.path())).unwrap();
     assert_eq!(
         dependency_status(&report, "unused"),
-        DependencyStatus::Unused
+        DependencyStatus::Incomplete
     );
 }
 

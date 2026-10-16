@@ -1,0 +1,552 @@
+{
+  "description": "Explicit native safety differences from preserved behavioral source oracles; original expectations remain unchanged.",
+  "cases": {
+    "upstream:test_just_unused:57": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_just_unused:58": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_just_unused_with_manifest:59": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "program/Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_just_unused_with_manifest:60": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "program/Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:lexical-08:7": {
+      "reason": "Malformed single-colon use syntax is incomplete evidence, not proof of either usage or absence.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_unused_transitive:65": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "lib1",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_unused_transitive:66": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "lib1",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_false_positive_macro_use:67": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_false_positive_macro_use:68": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_crate_renaming_works:74": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "xml-rs",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_ignore_deps_works:78": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_ignore_deps_works:79": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_ignore_deps_workspace_works:80": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_ignore_deps_workspace_works:81": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_workspace_from_relative_path:82": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "program/Cargo.toml",
+          "dependency": "log",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "upstream:test_multi_key_dep:83": {
+      "reason": "Production-target references do not establish development-declaration usage; unresolved macros still protect absence.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "cc",
+          "kind": "NORMAL",
+          "target": "cfg(unix)",
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log-once",
+          "kind": "DEV",
+          "target": null,
+          "from": "USED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "BUILD",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_workspace_nested_works:84": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "grep",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_workspace_nested_deep_works:85": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "grep",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_deps_works:164": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_deps_works:165": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_deps_workspace_works:166": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_deps_workspace_works:167": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_multi_key_dep:169": {
+      "reason": "Production-target references do not establish development-declaration usage; unresolved macros still protect absence.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "cc",
+          "kind": "NORMAL",
+          "target": "cfg(unix)",
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log-once",
+          "kind": "DEV",
+          "target": null,
+          "from": "USED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "BUILD",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_works:170": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log-once",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand_core",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_works:171": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "log-once",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand_core",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_workspace_works:172": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand_core",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_workspace_works:173": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "inner/Cargo.toml",
+          "dependency": "rand_core",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_nested_works:174": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "regex",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "tokio",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "uuid",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_nested_works:175": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "rand",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "regex",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "tokio",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "uuid",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_glob_patterns:176": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "regex",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "serde",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "uuid",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    },
+    "fork:test_ignore_dirs_glob_patterns:177": {
+      "reason": "Unexpanded macros/attributes cannot establish global dependency absence; unreferenced declarations remain protected.",
+      "changes": [
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "regex",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "serde",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        },
+        {
+          "manifest": "Cargo.toml",
+          "dependency": "uuid",
+          "kind": "NORMAL",
+          "target": null,
+          "from": "UNUSED",
+          "to": "INCOMPLETE"
+        }
+      ]
+    }
+  }
+}

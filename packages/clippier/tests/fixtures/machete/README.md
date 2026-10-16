@@ -37,8 +37,14 @@ removal oracles. `shared_variations` preserves every changed shared file.
 
 `python3 rebuild.py` reconstructs the original evidence into a temporary tree,
 regenerates adaptations and assertion mappings, and deterministically compacts
-the result. No network or installed external analyzer is required. Payload,
-tree and executable-case uniqueness are regression-tested.
+the result. No network or installed external analyzer is required. Payload, tree and executable-case uniqueness are regression-tested.
+
+`native_expectations.json` records explicit native safety differences without
+rewriting the retained source oracles: unexpanded macros/attributes leave absence
+unverified, malformed imports cannot prove use or absence, and production usage
+does not prove a separate development declaration is used. Each override names
+an exact case/declaration, original status, replacement status and rationale;
+the integration harness validates the original status before applying it.
 
 The newer upstream inputs update rand from 0.8.5 to 0.9.3, bytes from 1.10.0
 to 1.11.1, and rustls-webpki from 0.102.8 to 0.103.13, with associated lockfile

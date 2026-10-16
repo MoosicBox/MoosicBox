@@ -4,7 +4,11 @@
 //! macros with the caller's OS privileges. This lane refuses symlinks, project
 //! Cargo configuration, external local paths and automatic toolchain selection.
 //! It uses an empty Cargo home (offline cache misses are environment failures).
-use super::{BoxError, MachetePlan, apply::validate_plan};
+use super::{
+    BoxError, MacheteOptions, MachetePlan,
+    apply::{validate_evidence, validate_plan},
+    discover::plan_machete_candidates,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -125,6 +129,19 @@ pub struct VerificationCommandReport {
     pub output_truncated: bool,
 }
 
+/// Finite scoped inference, never source usage or permission to apply.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum VerificationOutcome {
+    /// Baseline passed and the selected manifest replacements compiled.
+    CandidateCompiled,
+    /// Baseline passed and the selected candidate compiler command failed.
+    /// This is not proof that a dependency is used.
+    CandidateFailed,
+    /// Baseline/preparation/environment prevented a compiler comparison.
+    Unknown,
+}
+
 /// Baseline and selected candidate for one profile.
 #[derive(Debug, Clone, Serialize)]
 pub struct VerificationProfileReport {
@@ -132,6 +149,11 @@ pub struct VerificationProfileReport {
     pub profile: VerificationProfile,
     /// Candidate scope: combined or individual manifest path.
     pub candidate: String,
+    /// Exact absolute manifests replaced by this scope; individual means manifest,
+    /// not one dependency declaration.
+    pub manifests: Vec<PathBuf>,
+    /// Scoped compiler comparison; never global removal authorization.
+    pub outcome: VerificationOutcome,
     /// Unmodified copied project.
     pub baseline: VerificationCommandReport,
     /// Scratch-only offline lockfile refresh after a successful locked baseline.
@@ -170,19 +192,54 @@ pub fn verify_machete_plan(
     options: &VerificationOptions,
 ) -> Result<VerificationReport, BoxError> {
     validate_plan(plan)?;
+    verify_candidates(plan, options)
+}
+
+/// Verify privately sealed removal proposals, including uncertain source candidates.
+///
+/// Results describe only the declared finite profiles and manifest scopes. Neither
+/// successful compilation nor failure upgrades source evidence or permits global apply.
+/// No candidate plan is exposed to callers.
+///
+/// # Errors
+/// * Invalid analysis inputs, stale/tampered snapshots or unsafe project copies.
+/// * Missing execution consent or invalid verification policy/toolchain paths.
+pub fn verify_machete(
+    options: &MacheteOptions,
+    policy: &VerificationOptions,
+) -> Result<VerificationReport, BoxError> {
+    validate_options(policy)?;
+    let plan = plan_machete_candidates(options)?;
+    verify_candidates(&plan, policy)
+}
+
+fn verify_candidates(
+    plan: &MachetePlan,
+    options: &VerificationOptions,
+) -> Result<VerificationReport, BoxError> {
+    validate_evidence(plan)?;
     validate_options(options)?;
+    if plan.changes.is_empty() {
+        return Ok(VerificationReport {
+            profiles: Vec::new(),
+            diagnostics: vec![
+                "No removal proposals; no comparisons, project copies or compiler baselines were performed. No publication is authorized.".into(),
+            ],
+        });
+    }
     let root = plan.report.root.canonicalize()?;
     if root != plan.report.root {
         return Err("verification root must be canonical".into());
     }
-    // Inspect and copy once before any process exists; includes ignored/generated files.
+    // Retain ignored/generated inputs except explicit artifact/VCS directories.
+    validate_pruned_inputs(plan, &root)?;
     let staging = tempfile::tempdir()?;
     let pristine = staging.path().join("pristine");
     copy_project(&root, &pristine, &root)?;
-    validate_plan(plan)?;
+    validate_evidence(plan)?;
     validate_copied_evidence(plan, &root, &pristine)?;
     let mut scopes = Vec::new();
-    if options.combined {
+    if options.combined && !plan.changes.is_empty() {
         scopes.push((
             "combined".to_owned(),
             (0..plan.changes.len()).collect::<Vec<_>>(),
@@ -194,17 +251,24 @@ pub fn verify_machete_plan(
         }
     }
     let mut report = VerificationReport { profiles: Vec::new(), diagnostics: vec![
-        "Finite profiles are not universal dependency-absence or compiler-name-resolution proof.".into(),
+        "Finite profiles are not universal dependency-absence or compiler-name-resolution proof. Candidate compilation failure is not usage proof; no verification outcome authorizes global apply.".into(),
+        "Copies prune target/.git before traversal and reject sealed inputs under those directories; other ignored/generated inputs are retained.".into(),
         "Temporary copies are not a security sandbox: build scripts and proc macros run with caller privileges.".into(),
         "Empty isolated Cargo home; offline missing dependencies/toolchains are baseline environment failures. Candidate lockfiles are explicitly refreshed offline only in the disposable copy before locked compilation; preparation failures are reported separately and prevent candidate compilation. Individual scope is a manifest replacement, not a single declaration.".into(),
     ] };
     for profile in &options.profiles {
+        if scopes.is_empty() {
+            break;
+        }
+        let baseline_dir = tempfile::tempdir()?;
+        let baseline_project = baseline_dir.path().join("project");
+        copy_project(&pristine, &baseline_project, &pristine)?;
+        let args = arguments(profile);
+        validate_evidence(plan)?;
+        let baseline = execute(&baseline_project, baseline_dir.path(), &args, options)?;
         for (scope, indices) in &scopes {
-            let baseline_dir = tempfile::tempdir()?;
             let candidate_dir = tempfile::tempdir()?;
-            let baseline_project = baseline_dir.path().join("project");
             let candidate_project = candidate_dir.path().join("project");
-            copy_project(&pristine, &baseline_project, &pristine)?;
             copy_project(&pristine, &candidate_project, &pristine)?;
             for &index in indices {
                 let change = &plan.changes[index];
@@ -213,9 +277,7 @@ pub fn verify_machete_plan(
                     &change.after,
                 )?;
             }
-            let args = arguments(profile);
-            validate_plan(plan)?;
-            let baseline = execute(&baseline_project, baseline_dir.path(), &args, options)?;
+            validate_evidence(plan)?;
             let (candidate_preparation, candidate_result) = candidate_commands(
                 plan,
                 &baseline,
@@ -227,12 +289,26 @@ pub fn verify_machete_plan(
             report.profiles.push(VerificationProfileReport {
                 profile: profile.clone(),
                 candidate: scope.clone(),
-                baseline,
+                manifests: indices
+                    .iter()
+                    .map(|&index| plan.changes[index].path.clone())
+                    .collect(),
+                outcome: match (&baseline.status, &candidate_result.status) {
+                    (VerificationStatus::Passed, VerificationStatus::Passed) => {
+                        VerificationOutcome::CandidateCompiled
+                    }
+                    (VerificationStatus::Passed, VerificationStatus::Failed) => {
+                        VerificationOutcome::CandidateFailed
+                    }
+                    _ => VerificationOutcome::Unknown,
+                },
+                baseline: baseline.clone(),
                 candidate_preparation,
                 candidate_result,
             });
         }
     }
+    validate_evidence(plan)?;
     Ok(report)
 }
 
@@ -277,7 +353,7 @@ fn candidate_commands(
             ),
         ));
     }
-    validate_plan(plan)?;
+    validate_evidence(plan)?;
     let preparation = execute(
         project,
         isolation,
@@ -293,9 +369,32 @@ fn candidate_commands(
             ),
         ));
     }
-    validate_plan(plan)?;
+    validate_evidence(plan)?;
     let candidate = execute(project, isolation, arguments, options)?;
+    validate_evidence(plan)?;
     Ok((Some(preparation), candidate))
+}
+
+// A skipped artifact directory must never silently erase sealed source or generated
+// evidence. Refuse even negative snapshots: absence inside a pruned tree is not
+// represented faithfully by a copy which omits that entire tree.
+fn validate_pruned_inputs(plan: &MachetePlan, root: &Path) -> Result<(), BoxError> {
+    for path in plan.snapshots.keys().chain(plan.directories.keys()) {
+        let Ok(relative) = path.strip_prefix(root) else {
+            continue;
+        };
+        if relative.components().any(|part| {
+            let name = part.as_os_str();
+            name == "target" || name == ".git"
+        }) {
+            return Err(format!(
+                "verification refuses required input under pruned target/.git directory: {}",
+                path.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
 }
 
 fn validate_copied_evidence(
@@ -619,12 +718,14 @@ fn copy_project(source: &Path, destination: &Path, root: &Path) -> Result<(), Bo
         let entry = entry?;
         let path = entry.path();
         let name = entry.file_name();
+        // Prune before metadata/traversal: artifacts can contain huge trees,
+        // stale symlinks, sockets, and unreadable files irrelevant to this copy.
+        if name == "target" || name == ".git" {
+            continue;
+        }
         let metadata = fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() {
             return Err(format!("verification rejects symlink {}", path.display()).into());
-        }
-        if name == ".git" {
-            continue;
         }
         if name == ".cargo" || name == "rust-toolchain" || name == "rust-toolchain.toml" {
             return Err(format!(
@@ -1005,6 +1106,162 @@ mod tests {
     }
 
     #[test]
+    fn no_proposals_skip_project_copy_and_all_compiler_commands() {
+        let tool = tempfile::tempdir().unwrap();
+        let marker = tool.path().join("executed");
+        let policy = toolchain(
+            tool.path(),
+            &format!("#!/bin/sh\ntouch '{}'\nexit 0\n", marker.display()),
+        );
+        let (root, _) = plan_fixture();
+        fs::write(root.path().join("src/lib.rs"), "pub use unused::Thing;\n").unwrap();
+        // Copying would reject this directory, so success also proves no copy.
+        fs::create_dir(root.path().join(".cargo")).unwrap();
+        let options = MacheteOptions {
+            manifest_path: Some(root.path().to_owned()),
+            ..Default::default()
+        };
+        let plan = super::super::plan_machete(&options).unwrap();
+        assert!(plan.changes.is_empty());
+        for report in [
+            verify_machete_plan(&plan, &policy).unwrap(),
+            verify_machete(&options, &policy).unwrap(),
+        ] {
+            assert!(report.profiles.is_empty());
+            assert!(
+                report
+                    .diagnostics
+                    .iter()
+                    .any(|message| message.contains("no comparisons"))
+            );
+        }
+        assert!(!marker.exists());
+        assert!(!root.path().join("target").exists());
+    }
+
+    #[test]
+    fn uncertain_candidates_are_verified_without_global_apply_authority() {
+        let tool = tempfile::tempdir().unwrap();
+        let policy = toolchain(tool.path(), "#!/bin/sh\nexit 0\n");
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("src")).unwrap();
+        fs::write(root.path().join("Cargo.toml"), "[package]\nname='verification'\nversion='0.1.0'\nedition='2021'\n[dependencies]\nunused='1.0.0'\n").unwrap();
+        fs::write(root.path().join("src/lib.rs"), "opaque!();\n").unwrap();
+        let options = MacheteOptions {
+            manifest_path: Some(root.path().to_owned()),
+            ..Default::default()
+        };
+        let public_plan = super::super::plan_machete(&options).unwrap();
+        assert!(!public_plan.report.complete);
+        assert!(public_plan.changes.is_empty());
+        assert!(verify_machete_plan(&public_plan, &policy).is_err());
+        assert!(super::super::apply_machete_plan(&public_plan).is_err());
+        let private_plan = plan_machete_candidates(&options).unwrap();
+        assert!(!private_plan.complete);
+        assert_eq!(private_plan.changes.len(), 1);
+        assert!(super::super::apply_machete_plan(&private_plan).is_err());
+        let before = fs::read(root.path().join("Cargo.toml")).unwrap();
+        let report = verify_machete(&options, &policy).unwrap();
+        assert!(matches!(
+            report.profiles[0].outcome,
+            VerificationOutcome::CandidateCompiled
+        ));
+        assert_eq!(fs::read(root.path().join("Cargo.toml")).unwrap(), before);
+        assert!(
+            !super::super::plan_machete(&options)
+                .unwrap()
+                .report
+                .complete
+        );
+    }
+
+    #[test]
+    fn baselines_are_reused_per_profile_but_not_between_calls() {
+        let tool = tempfile::tempdir().unwrap();
+        let log = tool.path().join("commands");
+        let mut options = toolchain(
+            tool.path(),
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$1\" >> '{}'\nexit 0\n",
+                log.display()
+            ),
+        );
+        options.individual = true;
+        options.profiles.push(VerificationProfile {
+            name: "second".into(),
+            ..Default::default()
+        });
+        let (_root, plan) = plan_fixture();
+        for expected in [10, 20] {
+            let report = verify_machete_plan(&plan, &options).unwrap();
+            assert_eq!(report.profiles.len(), 4);
+            // Two profiles each run one baseline, two preparations, two candidates.
+            assert_eq!(fs::read_to_string(&log).unwrap().lines().count(), expected);
+            assert!(
+                report.profiles.iter().all(|profile| matches!(
+                    profile.outcome,
+                    VerificationOutcome::CandidateCompiled
+                ))
+            );
+            assert!(
+                report
+                    .profiles
+                    .iter()
+                    .all(|profile| profile.manifests == [plan.changes[0].path.clone()])
+            );
+        }
+    }
+
+    #[test]
+    fn artifact_trees_are_pruned_without_traversing_but_generated_inputs_survive() {
+        let root = tempfile::tempdir().unwrap();
+        let output = tempfile::tempdir().unwrap();
+        for directory in ["target/debug", ".git/objects", "generated"] {
+            fs::create_dir_all(root.path().join(directory)).unwrap();
+        }
+        for directory in ["target/debug", ".git/objects"] {
+            std::os::unix::fs::symlink("/missing", root.path().join(directory).join("unreadable"))
+                .unwrap();
+        }
+        fs::write(
+            root.path().join("generated/source.rs"),
+            "pub fn generated() {}\n",
+        )
+        .unwrap();
+        let copy = output.path().join("project");
+        copy_project(root.path(), &copy, root.path()).unwrap();
+        assert!(!copy.join("target").exists());
+        assert!(!copy.join(".git").exists());
+        assert_eq!(
+            fs::read(copy.join("generated/source.rs")).unwrap(),
+            fs::read(root.path().join("generated/source.rs")).unwrap()
+        );
+    }
+
+    #[test]
+    fn required_pruned_inputs_fail_instead_of_silently_disappearing() {
+        let (root, mut plan) = plan_fixture();
+        for directory in ["target", ".git"] {
+            let path = root.path().join(directory).join("generated.rs");
+            plan.snapshots
+                .insert(path.clone(), Some(b"generated".to_vec()));
+            assert!(
+                validate_pruned_inputs(&plan, root.path())
+                    .unwrap_err()
+                    .to_string()
+                    .contains("required input")
+            );
+            plan.snapshots.remove(&path);
+            plan.snapshots.insert(path.clone(), None);
+            assert!(validate_pruned_inputs(&plan, root.path()).is_err());
+            plan.snapshots.remove(&path);
+        }
+        let path = root.path().join("generated.rs");
+        plan.snapshots.insert(path, Some(b"generated".to_vec()));
+        assert!(validate_pruned_inputs(&plan, root.path()).is_ok());
+    }
+
+    #[test]
     fn baseline_candidate_success_failure_and_not_run_are_distinguished() {
         for (script, expected_baseline, expected_candidate) in [
             ("#!/bin/sh\nexit 0\n", "PASSED", "PASSED"),
@@ -1029,6 +1286,14 @@ mod tests {
             assert_eq!(
                 serde_json::to_value(&profile.candidate_result.status).unwrap(),
                 expected_candidate
+            );
+            assert_eq!(
+                serde_json::to_value(profile.outcome).unwrap(),
+                match expected_candidate {
+                    "PASSED" => "CANDIDATE_COMPILED",
+                    "FAILED" => "CANDIDATE_FAILED",
+                    _ => "UNKNOWN",
+                }
             );
             assert_eq!(fs::read(root.path().join("Cargo.toml")).unwrap(), before);
             assert!(!root.path().join("target").exists());

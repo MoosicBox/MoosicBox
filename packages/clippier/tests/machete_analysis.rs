@@ -218,6 +218,28 @@ fn assert_used_ignores(case: &Value) {
         );
     }
 }
+fn apply_native_expectations(case: &Value, expected: &mut [Value]) {
+    let native: Value =
+        serde_json::from_slice(&fs::read(root().join("native_expectations.json")).unwrap())
+            .unwrap();
+    if let Some(adjustment) = native["cases"].get(case["id"].as_str().unwrap()) {
+        assert_ne!(adjustment["reason"].as_str().unwrap().len(), 0);
+        for change in adjustment["changes"].as_array().unwrap() {
+            let row = expected
+                .iter_mut()
+                .find(|row| {
+                    row["manifest"] == change["manifest"]
+                        && row["dependency"] == change["dependency"]
+                        && row["kind"] == change["kind"]
+                        && row["target"] == change["target"]
+                })
+                .unwrap();
+            assert_eq!(row["status"], change["from"]);
+            row["status"] = change["to"].clone();
+        }
+    }
+}
+
 fn run_case(case: &Value) {
     let temp = tempfile::tempdir().unwrap();
     let base = fs::canonicalize(temp.path()).unwrap();
@@ -271,6 +293,7 @@ fn run_case(case: &Value) {
     );
     assert_used_ignores(case);
     let mut expected = case["expected"].as_array().unwrap().clone();
+    apply_native_expectations(case, &mut expected);
     expected.sort_by_key(Value::to_string);
     let actual = normalize_rows(&report, &base, Some(&manifest));
     assert_eq!(

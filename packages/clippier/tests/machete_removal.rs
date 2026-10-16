@@ -67,7 +67,7 @@ fn removes_every_dependency_section_without_reformatting() {
         // first, not the safety check. The byte-exact output oracle is unchanged.
         fs::write(
             temp.path().join("src/main.rs"),
-            "fn main() { log::info!(\"retained\"); }\n",
+            "fn main() { log::logger(); }\n",
         )
         .unwrap();
         let options = options(temp.path());
@@ -162,17 +162,18 @@ fn used_dependencies_cannot_be_forced_out() {
                     Some("cfg(unix)"),
                     DependencyStatus::Used
                 ),
-                (DependencyKind::Dev, None, DependencyStatus::Used),
+                (DependencyKind::Dev, None, DependencyStatus::Incomplete),
             ]
         );
-        let unused = plan
-            .report
-            .dependencies
-            .iter()
-            .filter(|d| d.status == DependencyStatus::Unused)
-            .map(|d| d.dependency.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(unused, vec!["cc", "rand"]);
+        assert!(
+            !plan
+                .report
+                .dependencies
+                .iter()
+                .any(|d| d.status == DependencyStatus::Unused)
+        );
+        assert!(!plan.report.complete);
+        assert!(apply_machete_plan(&plan).is_err());
         assert!(
             plan.changes
                 .iter()
@@ -188,6 +189,11 @@ fn changed_source_or_lockfile_rejects_apply_without_partial_writes() {
                 .as_str()
                 .unwrap(),
         );
+        fs::write(
+            temp.path().join("src/main.rs"),
+            "fn main(){log::logger();}\n",
+        )
+        .unwrap();
         let options = options(temp.path());
         let plan = plan_machete(&options).unwrap();
         assert!(!plan.changes.is_empty());
@@ -207,6 +213,11 @@ fn changed_plan_rejects_apply_without_writes() {
             .as_str()
             .unwrap(),
     );
+    fs::write(
+        temp.path().join("src/main.rs"),
+        "fn main(){log::logger();}\n",
+    )
+    .unwrap();
     let mut plan = plan_machete(&options(temp.path())).unwrap();
     assert!(!plan.changes.is_empty());
     plan.changes[0].after.push_str("\n# unsealed change\n");
