@@ -306,3 +306,19 @@ fn bmux_report_colors_are_explicit_and_never_leak_into_json_or_plain_output() {
         assert_eq!(output.stdout.contains(&0x1b), expected);
     }
 }
+
+#[test]
+fn progress_is_absent_from_redirected_text_and_json_even_with_forced_colors() {
+    let f = Fixture::new();
+    for args in [
+        vec![],
+        vec!["--color", "always"],
+        vec!["--no-progress"],
+        vec!["--output", "json"],
+    ] {
+        let output = f.run(&args);
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty(), "{:?}", output.stderr);
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("Discovering Cargo"));
+    }
+}

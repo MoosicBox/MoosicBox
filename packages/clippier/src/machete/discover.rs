@@ -676,7 +676,21 @@ pub fn analyze_machete(options: &MacheteOptions) -> Result<MacheteReport, BoxErr
 /// * Invalid manifest dependency tables or formatting-preserving edit failures.
 #[allow(clippy::too_many_lines)] // A single read-only capture ties analysis evidence to its exact edits.
 pub fn plan_machete(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
-    Ok(capture(options, false, false)?.0)
+    Ok(capture(options, false, false, &mut |_| {})?.0)
+}
+
+/// Capture a removal plan while observing real discovery/package milestones.
+///
+/// The callback runs synchronously and does not change analysis or publication
+/// authority. Package completion is provisional until the whole plan is captured.
+///
+/// # Errors
+/// * All discovery, configuration and edit errors documented by [`plan_machete`].
+pub fn plan_machete_with_progress(
+    options: &MacheteOptions,
+    progress: &mut impl FnMut(super::MacheteProgress),
+) -> Result<MachetePlan, BoxError> {
+    Ok(capture(options, false, false, progress)?.0)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -684,7 +698,9 @@ fn capture(
     options: &MacheteOptions,
     audit_mode: bool,
     proposals: bool,
+    progress: &mut dyn FnMut(super::MacheteProgress),
 ) -> Result<(MachetePlan, super::audit::AuditInput), BoxError> {
+    progress(super::MacheteProgress::Discovering);
     for list in [&options.packages, &options.dependencies, &options.exclude] {
         patterns(list)?;
     }
@@ -780,6 +796,9 @@ fn capture(
                 .insert(path.clone(), Some(contents.as_bytes().to_vec()));
         }
     }
+    progress(super::MacheteProgress::Discovered {
+        packages: manifests.len(),
+    });
     let mut dependencies = Vec::new();
     let mut structured = Vec::new();
     let mut audit = super::audit::AuditInput {
@@ -787,6 +806,7 @@ fn capture(
         ..Default::default()
     };
     for (path, doc) in &manifests {
+        let dependency_start = dependencies.len();
         let mut owner_doc = root_doc.clone();
         let mut owner_directory = root.clone();
         for ancestor in path.parent().into_iter().flat_map(Path::ancestors) {
@@ -1144,6 +1164,23 @@ fn capture(
                 });
             }
         }
+        if package_selected {
+            let selected = &dependencies[dependency_start..];
+            progress(super::MacheteProgress::PackageAnalyzed {
+                package: package.to_owned(),
+                unused: selected
+                    .iter()
+                    .filter(|d| d.status == DependencyStatus::Unused)
+                    .count(),
+                complete: evidence
+                    .diagnostics
+                    .iter()
+                    .all(|d| d.starts_with("advisory:"))
+                    && !selected
+                        .iter()
+                        .any(|d| d.status == DependencyStatus::Incomplete),
+            });
+        }
     }
     dependencies.sort_by(|a, b| {
         (&a.manifest_path, a.kind, &a.target, &a.dependency).cmp(&(
@@ -1268,7 +1305,7 @@ fn capture(
 /// Capture disposable compiler proposals, never an applicable removal plan.
 #[cfg(feature = "machete-verify")]
 pub(super) fn plan_machete_candidates(options: &MacheteOptions) -> Result<MachetePlan, BoxError> {
-    let mut plan = capture(options, false, true)?.0;
+    let mut plan = capture(options, false, true, &mut |_| {})?.0;
     // Proposal state cannot pass apply, including if the public report is edited.
     plan.complete = false;
     Ok(plan)
@@ -1280,7 +1317,7 @@ pub(super) fn plan_machete_candidates(options: &MacheteOptions) -> Result<Machet
 /// * Discovery/configuration errors documented by [`analyze_machete`].
 /// * Invalid suppression glob patterns or review date syntax.
 pub fn audit_machete(options: &MacheteOptions) -> Result<super::audit::AuditReport, BoxError> {
-    let (_, input) = capture(options, true, false)?;
+    let (_, input) = capture(options, true, false, &mut |_| {})?;
     super::audit::audit_machete_evidence(&input)
 }
 

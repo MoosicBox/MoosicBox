@@ -49,6 +49,13 @@ automatic on terminals; redirected output stays plain. `NO_COLOR` and `TERM=dumb
 disable automatic colors. Override with `--color always` or `--color never`.
 JSON never contains styling. Reports do not enter raw mode or use an alternate screen.
 
+On interactive terminals, discovery is announced immediately and package analysis
+emits live BMUX-styled progress: green `.` for complete/no findings, coral `!` for
+unused findings, amber `?` for uncertainty. Each mark represents a completed
+selected package, not a timer tick; the final report remains authoritative.
+Progress goes to stderr, is disabled for redirected output/JSON, and can be
+suppressed with `--no-progress`. Without colors the symbols remain distinct.
+
 Normal and build dependencies are checked by default;
 dev dependencies are opt-in with `--kinds normal,build,dev`. A member manifest
 selects that member by default; use a workspace root to scan the workspace.

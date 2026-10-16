@@ -25,7 +25,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 pub use apply::apply_machete_plan;
 #[cfg(feature = "machete-verify")]
 pub use discover::load_verification_options;
-pub use discover::{analyze_machete, audit_machete, plan_machete};
+pub use discover::{analyze_machete, audit_machete, plan_machete, plan_machete_with_progress};
 
 /// Error returned by discovery, planning and checked publication.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -49,6 +49,27 @@ impl DependencyKind {
             Self::Build => "build-dependencies",
         }
     }
+}
+
+/// Read-only analysis milestones, emitted synchronously as actual work completes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MacheteProgress {
+    /// Directory and manifest discovery is starting.
+    Discovering,
+    /// Discovery completed; count includes packages later excluded by selectors.
+    Discovered {
+        /// Number of discovered package manifests.
+        packages: usize,
+    },
+    /// A selected package has finished analysis, before global plan validation.
+    PackageAnalyzed {
+        /// Cargo package name.
+        package: String,
+        /// Number of selected declarations classified unused.
+        unused: usize,
+        /// Whether this package has no unresolved analysis limitations.
+        complete: bool,
+    },
 }
 
 /// Read-only selectors. Empty lists select all; strings are glob patterns.

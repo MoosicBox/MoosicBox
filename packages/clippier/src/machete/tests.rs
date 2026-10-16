@@ -1218,3 +1218,57 @@ fn configured_generated_capture_revalidates_source_fingerprints() {
     write(dir.path(), "generated/captured.rs", "changed");
     assert!(analyze_machete(&precise(dir.path())).is_err());
 }
+
+#[test]
+fn progress_reports_actual_package_results_without_changing_the_plan() {
+    let dir = fixture();
+    let input = options(dir.path());
+    let mut events = Vec::new();
+    let plan = plan_machete_with_progress(&input, &mut |event| events.push(event)).unwrap();
+    assert_eq!(
+        events,
+        vec![
+            MacheteProgress::Discovering,
+            MacheteProgress::Discovered { packages: 1 },
+            MacheteProgress::PackageAnalyzed {
+                package: "fixture".into(),
+                unused: 1,
+                complete: true
+            }
+        ]
+    );
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap(),
+        serde_json::to_value(plan_machete(&input).unwrap()).unwrap()
+    );
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "pub fn run(){used::run(); unused::run();}",
+    );
+    events.clear();
+    plan_machete_with_progress(&input, &mut |event| events.push(event)).unwrap();
+    assert!(matches!(
+        events.last(),
+        Some(MacheteProgress::PackageAnalyzed {
+            unused: 0,
+            complete: true,
+            ..
+        })
+    ));
+    write(dir.path(), "src/lib.rs", "emit!();");
+    events.clear();
+    plan_machete_with_progress(&input, &mut |event| events.push(event)).unwrap();
+    assert!(matches!(
+        events.last(),
+        Some(MacheteProgress::PackageAnalyzed {
+            unused: 0,
+            complete: false,
+            ..
+        })
+    ));
+    events.clear();
+    write(dir.path(), "Cargo.toml", "not valid TOML");
+    assert!(plan_machete_with_progress(&input, &mut |event| events.push(event)).is_err());
+    assert_eq!(events, vec![MacheteProgress::Discovering]);
+}

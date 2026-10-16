@@ -9,7 +9,7 @@ use std::{
 use clap::{Args, Subcommand, ValueEnum};
 use clippier::machete::{
     DependencyKind, DependencyStatus, MacheteOptions, MacheteReport, analyze_machete,
-    apply_machete_plan, plan_machete,
+    apply_machete_plan,
 };
 use serde::Serialize;
 
@@ -93,6 +93,9 @@ struct Flags {
     /// Include exact manifest differences in plan/apply output
     #[arg(long, global = true)]
     diff: bool,
+    /// Disable live package progress on interactive terminals
+    #[arg(long, global = true)]
+    no_progress: bool,
     /// Color output automatically, always, or never (JSON is always unstyled)
     #[arg(long, global = true, value_enum, default_value_t = clippier::ColorMode::Auto)]
     color: clippier::ColorMode,
@@ -190,11 +193,15 @@ fn emit(flags: &Flags, result: &Envelope<'_>) -> Result<(), BoxError> {
 }
 
 fn use_color(mode: clippier::ColorMode) -> bool {
+    use_color_on(mode, io::stdout().is_terminal())
+}
+
+fn use_color_on(mode: clippier::ColorMode, terminal: bool) -> bool {
     match mode {
         clippier::ColorMode::Always => true,
         clippier::ColorMode::Never => false,
         clippier::ColorMode::Auto => {
-            io::stdout().is_terminal()
+            terminal
                 && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
                 && std::env::var_os("TERM").is_none_or(|term| term != "dumb")
         }
@@ -711,6 +718,129 @@ fn run_execution(cli: &MacheteCli, options: &MacheteOptions) -> Result<u8, BoxEr
     Ok(code)
 }
 
+// Progress is terminal-only stderr output, driven by actual engine events.
+struct PackageProgress {
+    enabled: bool,
+    color: bool,
+    row: bmux_tui::text::Line,
+    drawn: bool,
+    completed: usize,
+    error: Option<io::Error>,
+    previous: Option<bmux_tui::buffer::Buffer>,
+}
+
+impl PackageProgress {
+    fn new(flags: &Flags) -> Self {
+        Self {
+            enabled: matches!(flags.output, Output::Text)
+                && !flags.no_progress
+                && io::stdout().is_terminal()
+                && io::stderr().is_terminal(),
+            color: use_color_on(flags.color, io::stderr().is_terminal()),
+            row: bmux_tui::text::Line::new(),
+            drawn: false,
+            completed: 0,
+            error: None,
+            previous: None,
+        }
+    }
+
+    fn observe(&mut self, event: &clippier::machete::MacheteProgress) {
+        if self.enabled
+            && let Err(error) = self.update(event)
+        {
+            self.error = Some(error);
+            self.enabled = false;
+        }
+    }
+
+    fn update(&mut self, event: &clippier::machete::MacheteProgress) -> io::Result<()> {
+        use bmux_tui::{
+            style::{Color, Style},
+            text::Span,
+        };
+        use clippier::machete::MacheteProgress;
+        let mut out = io::stderr().lock();
+        match event {
+            MacheteProgress::Discovering => writeln!(out, "Discovering Cargo packages...")?,
+            MacheteProgress::Discovered { packages } => writeln!(
+                out,
+                "Analyzing {packages} discovered packages (. complete, ! unused, ? uncertain):"
+            )?,
+            MacheteProgress::PackageAnalyzed {
+                unused, complete, ..
+            } => {
+                let width = bmux_tui::crossterm::terminal_size()
+                    .map_or(80, |size| size.width)
+                    .saturating_sub(1)
+                    .max(1);
+                let capacity = usize::from(width.saturating_sub(20).clamp(1, 40));
+                if self.row.spans.len() >= capacity
+                    || self
+                        .previous
+                        .as_ref()
+                        .is_some_and(|buffer| buffer.area().width != width)
+                {
+                    self.row.spans.clear();
+                    self.drawn = false;
+                    self.previous = None;
+                }
+                self.completed += 1;
+                let (symbol, color) = if *unused > 0 {
+                    ("!", Color::Rgb(245, 125, 140))
+                } else if *complete {
+                    (".", Color::Rgb(120, 210, 155))
+                } else {
+                    ("?", Color::Rgb(240, 195, 105))
+                };
+                self.row
+                    .spans
+                    .push(Span::styled(symbol, Style::new().fg(color)));
+                if self.color {
+                    use bmux_tui::{ansi::write_ansi_inline_frame, buffer::Buffer, geometry::Rect};
+                    let mut line = self.row.clone();
+                    line.spans
+                        .push(Span::raw(format!("  {} analyzed", self.completed)));
+                    let area = Rect::new(0, 0, width, 1);
+                    let mut buffer = Buffer::empty(area);
+                    buffer.write_line(area, &line);
+                    if let Some(previous) = &self.previous {
+                        bmux_tui::ansi::write_ansi_inline_frame_diff(&mut out, previous, &buffer)?;
+                    } else {
+                        write_ansi_inline_frame(&mut out, &buffer)?;
+                    }
+                    self.previous = Some(buffer);
+                } else {
+                    // No ANSI/cursor controls in --color never or NO_COLOR mode.
+                    if self.row.spans.len() == 1 && self.completed > 1 {
+                        writeln!(out)?;
+                    }
+                    write!(out, "{symbol}")?;
+                }
+                self.drawn = true;
+            }
+        }
+        out.flush()
+    }
+
+    fn finish(self) -> Result<(), BoxError> {
+        if let Some(error) = self.error {
+            return Err(error.into());
+        }
+        if self.enabled {
+            let mut out = io::stderr().lock();
+            if self.drawn && !self.color {
+                writeln!(out)?;
+            }
+            if self.completed > 0 {
+                writeln!(out, "{} packages analyzed.\n", self.completed)?;
+            }
+            out.flush()?;
+        }
+        Ok(())
+    }
+}
+
 type AnalysisResult = Result<(MacheteReport, Option<clippier::machete::MachetePlan>), u8>;
 
 fn prepare(cli: &MacheteCli, planning: bool) -> Result<AnalysisResult, BoxError> {
@@ -756,11 +886,14 @@ fn prepare(cli: &MacheteCli, planning: bool) -> Result<AnalysisResult, BoxError>
             };
             return Ok(Err(code));
         }
-        if planning {
-            plan_machete(&options).map(|plan| Ok((plan.report.clone(), Some(plan))))
-        } else {
-            analyze_machete(&options).map(|report| Ok((report, None)))
-        }
+        let mut progress = PackageProgress::new(flags);
+        let plan = clippier::machete::plan_machete_with_progress(&options, &mut |event| {
+            progress.observe(&event);
+        });
+        progress.finish()?;
+        let plan = plan?;
+        let report = plan.report.clone();
+        Ok(Ok((report, planning.then_some(plan))))
     })()
 }
 
