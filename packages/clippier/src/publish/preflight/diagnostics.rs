@@ -8,7 +8,8 @@ use std::{
     fs,
     path::Path,
     process::Command,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::atomic::{AtomicUsize, Ordering},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use cargo_metadata::semver::VersionReq;
@@ -201,6 +202,47 @@ fn audit_requirement(
     }))
 }
 
+// Bound subprocesses, filesystem staging and network requests without multiplying
+// Cargo homes/downloads. Cargo may still serialize on its shared registry locks.
+const PROBE_WORKERS: usize = 4;
+
+/// Dynamically schedule bounded work; merge results in input order, never completion order.
+fn parallel_ordered<T: Sync, R: Send>(
+    jobs: &[T],
+    workers: usize,
+    run: impl Fn(&T) -> R + Sync,
+) -> Result<Vec<R>, BoxError> {
+    let next = AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        let handles = (0..workers.max(1).min(jobs.len()))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut results = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(job) = jobs.get(index) else { break };
+                        results.push((index, run(job)));
+                    }
+                    results
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut results = Vec::with_capacity(jobs.len());
+        let mut panicked = false;
+        for handle in handles {
+            match handle.join() {
+                Ok(batch) => results.extend(batch),
+                Err(_) => panicked = true,
+            }
+        }
+        if panicked {
+            return Err("Dependency diagnostic worker panicked".into());
+        }
+        results.sort_unstable_by_key(|(index, _)| *index);
+        Ok(results.into_iter().map(|(_, result)| result).collect())
+    })
+}
+
 #[derive(Default)]
 pub(super) struct Diagnostics {
     probes: BTreeMap<String, Result<(), String>>,
@@ -251,39 +293,74 @@ impl Diagnostics {
             .ok_or("Missing package path")?
             .join("Cargo.toml");
         let manifest = sanitized_manifest(workspace_root, packages, &path)?;
-        let mut findings = Vec::new();
+        let started = Instant::now();
+        let pending_set = pending.iter().cloned().collect::<BTreeSet<_>>();
+        let mut jobs = Vec::new();
+        let mut scheduled = BTreeSet::new();
+        let mut entries = Vec::new();
+        let mut cache_hits = 0;
         for dependency in dependencies(&manifest) {
             let probe = probe_manifest(&manifest, &dependency);
             let mut needed = BTreeSet::new();
-            if dependency.crates_io() && pending.iter().any(|name| name == dependency.name()) {
+            if dependency.crates_io() && pending_set.contains(dependency.name()) {
                 let requirement = dependency
                     .requirement()
                     .ok_or("Missing version requirement")?;
                 if VersionReq::parse(requirement)?.matches(&cargo_metadata::semver::Version::parse(
                     &packages[dependency.name()].version,
                 )?) {
-                    pending_dependencies(
-                        dependency.name(),
-                        packages,
-                        &pending.iter().cloned().collect(),
-                        &mut needed,
-                    );
+                    pending_dependencies(dependency.name(), packages, &pending_set, &mut needed);
                 }
             }
-            let staged_pending = !needed.is_empty();
             let key = format!("{}\n{:?}", toml::to_string(&probe)?, needed);
-            let result = self.probes.entry(key.clone()).or_insert_with(|| {
-                eprintln!("  Dependency probe: {name} -> {}", dependency.label());
-                run_probe(
-                    workspace_root,
-                    packages,
-                    &needed.into_iter().collect::<Vec<_>>(),
-                    &dependency,
+            if !self.probes.contains_key(&key) && scheduled.insert(key.clone()) {
+                eprintln!(
+                    "  Dependency probe queued: {name} -> {}",
+                    dependency.label()
+                );
+                jobs.push((
+                    key.clone(),
+                    dependency.clone(),
                     probe,
-                    config,
-                )
-                .map_err(|error| error.to_string())
-            });
+                    needed.iter().cloned().collect::<Vec<_>>(),
+                ));
+            } else {
+                cache_hits += 1;
+            }
+            entries.push((key, dependency, !needed.is_empty()));
+        }
+        let results = parallel_ordered(&jobs, PROBE_WORKERS, |(_, dependency, probe, needed)| {
+            run_probe(
+                workspace_root,
+                packages,
+                needed,
+                dependency,
+                probe.clone(),
+                config,
+            )
+            .map_err(|error| error.to_string())
+        })?;
+        for ((key, _, _, _), result) in jobs.iter().zip(results) {
+            self.probes.insert(key.clone(), result);
+        }
+        let index_fetches = self.prefetch_indexes(&entries)?;
+        eprintln!(
+            "  Dependency diagnostics: {} probes, {cache_hits} cache hits, {} index fetches; up to {PROBE_WORKERS} workers; {:.2}s",
+            jobs.len(),
+            index_fetches,
+            started.elapsed().as_secs_f64()
+        );
+        Ok(self.collect_findings(name, entries))
+    }
+
+    fn collect_findings(
+        &mut self,
+        name: &str,
+        entries: Vec<(String, Dependency, bool)>,
+    ) -> Vec<String> {
+        let mut findings = Vec::new();
+        for (key, dependency, staged_pending) in entries {
+            let result = &self.probes[&key];
             let probe_failed = result.is_err();
             if let Err(error) = result
                 && self.emitted.insert(key)
@@ -321,41 +398,76 @@ impl Diagnostics {
                 }
             }
         }
-        Ok(findings)
+        findings
     }
 
-    fn audit(&mut self, name: &str, requirement: &str) -> Result<Option<String>, BoxError> {
-        if !self.indexes.contains_key(name) {
-            let result = Self::fetch_index(name).map_err(|error| error.to_string());
-            self.indexes.insert(name.into(), result);
+    fn prefetch_indexes(
+        &mut self,
+        entries: &[(String, Dependency, bool)],
+    ) -> Result<usize, BoxError> {
+        // Fetch only failed direct crates.io requirements. Deduplicate by crate, not
+        // requirement: one immutable index response serves every requirement this run.
+        let index_names = entries
+            .iter()
+            .filter(|(key, dependency, staged_pending)| {
+                self.probes[key].is_err()
+                    && !staged_pending
+                    && dependency.crates_io()
+                    && dependency.requirement().is_some()
+                    && !self.indexes.contains_key(dependency.name())
+            })
+            .map(|(_, dependency, _)| dependency.name().to_string())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        if !index_names.is_empty() {
+            // Construct AND drop the blocking client off the caller's async runtime.
+            let indexes = std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        let client = reqwest::blocking::Client::builder()
+                            .timeout(Duration::from_secs(15))
+                            .user_agent(concat!("clippier/", env!("CARGO_PKG_VERSION")))
+                            .build()
+                            .map_err(|error| error.to_string());
+                        parallel_ordered(&index_names, PROBE_WORKERS, |name| match &client {
+                            Ok(client) => {
+                                Self::fetch_index(client, name).map_err(|error| error.to_string())
+                            }
+                            Err(error) => Err(error.clone()),
+                        })
+                    })
+                    .join()
+                    .map_err(|_| "Registry-index diagnostic thread panicked")?
+            })?;
+            self.indexes
+                .extend(index_names.iter().cloned().zip(indexes));
         }
+        Ok(index_names.len())
+    }
+
+    fn audit(&self, name: &str, requirement: &str) -> Result<Option<String>, BoxError> {
         match &self.indexes[name] {
             Ok(versions) => audit_requirement(requirement, versions),
             Err(error) => Err(error.clone().into()),
         }
     }
 
-    fn fetch_index(name: &str) -> Result<Vec<IndexVersion>, BoxError> {
-        let name = name.to_string();
-        std::thread::spawn(move || {
-            let client = reqwest::blocking::Client::builder()
-                .timeout(Duration::from_secs(15))
-                .user_agent(concat!("clippier/", env!("CARGO_PKG_VERSION")))
-                .build()?;
-            let response = client
-                .get(format!("https://index.crates.io/{}", index_path(&name)?))
-                .send()?;
-            if response.status() == reqwest::StatusCode::NOT_FOUND {
-                return Ok(Vec::new());
-            }
-            let text = response.error_for_status()?.text()?;
-            text.lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| serde_json::from_str(line).map_err(Into::into))
-                .collect()
-        })
-        .join()
-        .map_err(|_| "Registry-index diagnostic thread panicked")?
+    fn fetch_index(
+        client: &reqwest::blocking::Client,
+        name: &str,
+    ) -> Result<Vec<IndexVersion>, BoxError> {
+        let response = client
+            .get(format!("https://index.crates.io/{}", index_path(name)?))
+            .send()?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(Vec::new());
+        }
+        let text = response.error_for_status()?.text()?;
+        text.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).map_err(Into::into))
+            .collect()
     }
 }
 

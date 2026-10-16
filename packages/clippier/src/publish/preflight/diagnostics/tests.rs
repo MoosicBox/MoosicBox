@@ -252,3 +252,127 @@ fn unpublished_pending_dependencies_resolve_without_registry_publication() {
     )
     .unwrap();
 }
+
+#[test]
+fn workers_overlap_but_preserve_input_order_and_bound_concurrency() {
+    use std::sync::{
+        Barrier,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let barrier = Barrier::new(4);
+    let active = AtomicUsize::new(0);
+    let peak = AtomicUsize::new(0);
+    let visits = (0..12).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+    let results = parallel_ordered(&(0..12).collect::<Vec<_>>(), 4, |&index| {
+        visits[index].fetch_add(1, Ordering::SeqCst);
+        let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(count, Ordering::SeqCst);
+        if index < 4 {
+            barrier.wait();
+        }
+        std::thread::sleep(Duration::from_millis(if index == 0 { 20 } else { 1 }));
+        active.fetch_sub(1, Ordering::SeqCst);
+        index
+    })
+    .unwrap();
+    assert_eq!(results, (0..12).collect::<Vec<_>>());
+    assert_eq!(peak.load(Ordering::SeqCst), 4);
+    assert!(visits.iter().all(|count| count.load(Ordering::SeqCst) == 1));
+    assert_eq!(
+        parallel_ordered::<u8, u8>(&[], 4, |&n| n).unwrap(),
+        [] as [u8; 0]
+    );
+    assert_eq!(parallel_ordered(&[1, 2], 1, |&n| n).unwrap(), [1, 2]);
+}
+
+#[test]
+fn worker_panic_is_an_unresolved_error_not_a_partial_success() {
+    let result = parallel_ordered(&[0, 1, 2], 2, |&n| {
+        assert_ne!(n, 1, "injected panic");
+        n
+    });
+    assert!(result.unwrap_err().to_string().contains("worker panicked"));
+}
+
+#[test]
+fn repeated_failures_are_emitted_once_in_input_order() {
+    let fixture = Fixture::new(&[(
+        "app",
+        "[dependencies]\nmissing = { version = \"1\", registry = \"unconfigured-fixture\" }\n",
+    )]);
+    let manifest = read_toml(
+        &fixture.packages["app"]
+            .package_path
+            .as_ref()
+            .unwrap()
+            .join("Cargo.toml"),
+    )
+    .unwrap();
+    let mut diagnostics = Diagnostics::default();
+    let entries = dependencies(&manifest);
+    let dep = entries[0].clone();
+    let key = format!(
+        "{}\n{:?}",
+        toml::to_string(&probe_manifest(&manifest, &dep)).unwrap(),
+        BTreeSet::<String>::new()
+    );
+    diagnostics
+        .probes
+        .insert(key.clone(), Err("cached failure".into()));
+    let findings = diagnostics.collect_findings(
+        "app",
+        vec![(key.clone(), dep.clone(), false), (key, dep, false)],
+    );
+    assert_eq!(findings.len(), 1);
+}
+
+#[test]
+#[ignore = "manual Cargo contention benchmark"]
+fn benchmark_serial_and_parallel_cargo_probes() {
+    let fixture = Fixture::new(&[(
+        "app",
+        "[dependencies]\none = { package = \"clippier-fixture-one\", version = \"1\" }\ntwo = { package = \"clippier-fixture-two\", version = \"1\" }\nthree = { package = \"clippier-fixture-three\", version = \"1\" }\nfour = { package = \"clippier-fixture-four\", version = \"1\" }\n",
+    )]);
+    let registry = Registry::new();
+    for name in ["one", "two", "three", "four"] {
+        registry.add(
+            &format!("clippier-fixture-{name}"),
+            "1.0.0",
+            Some(("clippier-fixture-yanked", "6")),
+            false,
+        );
+    }
+    registry.add("clippier-fixture-yanked", "6.0.0", None, true);
+    let manifest = read_toml(
+        &fixture.packages["app"]
+            .package_path
+            .as_ref()
+            .unwrap()
+            .join("Cargo.toml"),
+    )
+    .unwrap();
+    let dependencies = dependencies(&manifest);
+    for workers in [1, 4, 4, 1] {
+        let started = Instant::now();
+        let results = parallel_ordered(&dependencies, workers, |dependency| {
+            run_probe_with(
+                fixture.directory.path(),
+                &fixture.packages,
+                &[],
+                dependency,
+                probe_manifest(&manifest, dependency),
+                &PublishConfig::default(),
+                |command| registry.configure(command),
+            )
+            .map_err(|error| error.to_string())
+        })
+        .unwrap();
+        for result in results {
+            assert!(result.unwrap_err().contains("6.0.0 is yanked"));
+        }
+        eprintln!(
+            "Cargo probe benchmark: {workers} workers: {:?}",
+            started.elapsed()
+        );
+    }
+}

@@ -923,7 +923,13 @@ After a package fails, Clippier also runs **supplemental dependency diagnostics*
 optional and target-specific entries, and preserves aliases, source settings, explicit features,
 and relevant default-feature forwarding. Pending workspace dependencies use the same native
 staging mechanism. Identical probes are cached across packages for the current invocation;
-repeated findings are reported once at their first occurrence.
+repeated findings are reported once at their first occurrence. Uncached probes are deduplicated
+before dispatch and run on at most four workers with independent temporary workspaces. Workers
+share Cargo's existing cache (no duplicated Cargo homes or downloads), so registry locks can still
+limit speedup. Registry-index fetches are also bounded to four workers, use a shared HTTP client,
+and are cached by crate name. Queued-probe messages and findings retain manifest order regardless
+of completion order. A per-package summary reports probe/cache/index counts and elapsed time.
+Full-package checks remain sequential and `--fail-fast` still skips supplemental diagnostics.
 
 Failed crates.io dependency probes are supplemented by registry-index checks for requirements
 with no published matches or only yanked matches. Network/index failures are labeled unresolved,
