@@ -1103,6 +1103,15 @@ and `Retry-After` date/seconds headers are honored with a five-second safety mar
 retry instruction is available, Clippier waits one minute before retrying. Other failures are not
 silently retried; exhausting the budget still reports a publication failure.
 
+Clippier's own registry reads use a separate, paced transport (at most one request per second).
+Version existence checks use the sparse registry index rather than the crates.io web API, and
+purity downloads use `static.crates.io` directly. Positive version lookups and category results
+are cached for the run; missing versions are not cached so post-upload polling stays fresh.
+HTTP 429 responses on these reads honor actual `Retry-After` headers or server-message deadlines,
+with the same safety margin and one-minute fallback. `--rate-limit-retries` also bounds these
+retries. Exhaustion closes the request gate for the run instead of issuing another burst of
+requests for the remaining packages.
+
 Preflight first attempts one native `cargo package --workspace --no-verify` operation over the
 pending queue. This stages the queue once and packages shared pending dependencies once, rather
 than repeating every dependency closure. Cargo generates a separate lockfile for each archive;

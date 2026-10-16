@@ -92,9 +92,9 @@ impl Drop for HttpArtifact {
     }
 }
 
-fn client() -> reqwest::Client {
+fn client() -> crate::publish::RegistryClient {
     // Do not let ambient proxy configuration route loopback tests externally.
-    reqwest::Client::builder().no_proxy().build().unwrap()
+    crate::publish::RegistryClient::for_test(0)
 }
 
 #[switchy_async::test]

@@ -221,7 +221,7 @@ pub(super) async fn artifact_comparison(
     packages: &BTreeMap<String, PublishPackageInfo>,
     package: &PublishPackageInfo,
     config: &PublishConfig,
-    client: &reqwest::Client,
+    client: &super::RegistryClient,
     download_url: &str,
 ) -> Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, Vec<u8>>), BoxError> {
     super::preflight::audit_cargo_configuration(workspace_root)?;
@@ -267,17 +267,12 @@ pub(super) async fn artifact_comparison(
 /// Stream with both declared and observed length bounds. Keep the bound injectable
 /// so tests exercise the production checks without large allocations.
 async fn download_artifact(
-    client: &reqwest::Client,
+    client: &super::RegistryClient,
     download_url: &str,
     destination: &Path,
     max_download: u64,
 ) -> Result<(), BoxError> {
-    let mut response = client
-        .get(download_url)
-        .timeout(std::time::Duration::from_secs(60))
-        .send()
-        .await?
-        .error_for_status()?;
+    let mut response = client.get(download_url).await?.error_for_status()?;
     if response
         .content_length()
         .is_some_and(|length| length > max_download)
@@ -304,14 +299,12 @@ pub(super) async fn assess(
     package: &PublishPackageInfo,
     pending: &BTreeSet<String>,
     config: &PublishConfig,
-    client: &reqwest::Client,
+    client: &super::RegistryClient,
 ) -> PurityAssessment {
     let consumers = consumers(packages, pending, &package.name);
     let url = format!(
-        "{}/crates/{}/{}/download",
-        super::CRATES_IO_API,
-        package.name,
-        package.version
+        "https://static.crates.io/crates/{0}/{0}-{1}.crate",
+        package.name, package.version
     );
     match artifact_comparison(workspace_root, packages, package, config, client, &url).await {
         Ok((local, published)) => compare(package, &local, &published, consumers),

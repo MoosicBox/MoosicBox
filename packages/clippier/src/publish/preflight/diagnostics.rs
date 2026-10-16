@@ -164,22 +164,7 @@ struct IndexVersion {
     yanked: bool,
 }
 
-fn index_path(name: &str) -> Result<String, BoxError> {
-    if name.is_empty()
-        || !name
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
-    {
-        return Err("Invalid registry crate name".into());
-    }
-    let name = name.to_ascii_lowercase();
-    Ok(match name.len() {
-        1 => format!("1/{name}"),
-        2 => format!("2/{name}"),
-        3 => format!("3/{}/{name}", &name[..1]),
-        _ => format!("{}/{}/{name}", &name[..2], &name[2..4]),
-    })
-}
+use super::super::registry::index_path;
 
 fn audit_requirement(
     requirement: &str,

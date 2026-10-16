@@ -395,7 +395,7 @@ fn entire_queue_is_validated_before_any_publish_attempt() {
             &fixture.packages,
             &pending,
             &config,
-            &reqwest::Client::new(),
+            &crate::publish::RegistryClient::new(0).unwrap(),
             &mut reports,
         ))
         .unwrap_err()
@@ -418,7 +418,7 @@ fn successful_dry_run_stops_before_upload() {
             dry_run: true,
             ..PublishConfig::default()
         },
-        &reqwest::Client::new(),
+        &crate::publish::RegistryClient::new(0).unwrap(),
         &mut reports,
     ))
     .unwrap();
@@ -863,7 +863,7 @@ fn resumed_impure_or_unknown_dependency_blocks_entire_queue_before_cargo_or_uplo
                     purity: Some(PurityPolicy::RequirePure),
                     ..PublishConfig::default()
                 },
-                &reqwest::Client::new(),
+                &crate::publish::RegistryClient::new(0).unwrap(),
                 &mut reports,
             ))
             .unwrap_err();
@@ -980,7 +980,7 @@ fn disabled_published_dependency_is_assessed_transitively_and_gates_uploads() {
             &fixture.packages,
             &order,
             &config,
-            &reqwest::Client::new(),
+            &crate::publish::RegistryClient::new(0).unwrap(),
             &mut reports,
         ));
         if policy == PurityPolicy::RequirePure {
@@ -1036,7 +1036,7 @@ fn published_packages_without_pending_consumers_skip_purity_checks() {
             &fixture.packages["a"],
             &remaining,
             &config,
-            &reqwest::Client::new(),
+            &crate::publish::RegistryClient::new(0).unwrap(),
         ))
         .unwrap();
         assert!(report.purity.is_none());
@@ -1164,7 +1164,7 @@ fn resumed_warn_dependency_continues_packaging_but_never_uploads_in_dry_run() {
                 purity: Some(PurityPolicy::Warn),
                 ..PublishConfig::default()
             },
-            &reqwest::Client::new(),
+            &crate::publish::RegistryClient::new(0).unwrap(),
             &mut reports,
         ))
         .unwrap();

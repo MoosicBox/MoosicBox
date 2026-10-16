@@ -27,6 +27,8 @@ use crate::{
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
 mod preflight;
+mod registry;
+use registry::RegistryClient;
 pub(crate) mod purity;
 #[cfg(test)]
 mod retry_tests;
@@ -532,7 +534,7 @@ pub async fn handle_publish_command(
         paint(config.color, "36;1", &workspace_root.display().to_string())
     );
     let (workspace_root, packages) = load_publish_packages(&workspace_root)?;
-    let client = crates_io_client()?;
+    let client = RegistryClient::new(config.rate_limit_retries)?;
 
     let initial_plan = build_publish_plan(&packages, config.packages.as_deref())?;
     eprintln!(
@@ -586,7 +588,7 @@ pub async fn handle_publish_command(
         );
         let exists = match crate_version_exists(&client, &package.name, &package.version).await {
             Ok(exists) => exists,
-            Err(error) if !config.fail_fast => {
+            Err(error) if !config.fail_fast && !error.is::<registry::RateLimitExhausted>() => {
                 preflight_failures.push(format!(
                     "{name}: registry availability could not be checked: {error}"
                 ));
@@ -650,7 +652,7 @@ pub async fn handle_publish_command(
         let selected = BTreeSet::from([name.clone()]);
         let mut record = |result: Result<(), BoxError>| -> Result<(), BoxError> {
             if let Err(error) = result {
-                if config.fail_fast {
+                if config.fail_fast || error.is::<registry::RateLimitExhausted>() {
                     return Err(error);
                 }
                 preflight_failures.push(format!("{name}: {error}"));
@@ -819,7 +821,7 @@ async fn publish_pending_queue(
     packages: &BTreeMap<String, PublishPackageInfo>,
     publish_order: &[String],
     config: &PublishConfig,
-    client: &reqwest::Client,
+    client: &RegistryClient,
     reports: &mut Vec<PublishPackageReport>,
 ) -> Result<(), BoxError> {
     let purity_policy = config.purity.unwrap_or_default();
@@ -934,7 +936,7 @@ async fn assess_publish_race(
     package: &PublishPackageInfo,
     remaining: &[String],
     config: &PublishConfig,
-    client: &reqwest::Client,
+    client: &RegistryClient,
 ) -> Result<PublishPackageReport, BoxError> {
     let pending = remaining.iter().cloned().collect();
     let mut report = PublishPackageReport::new(
@@ -1109,7 +1111,7 @@ fn filter_packages_to_publish(
 }
 
 async fn validate_publish_dependencies_available(
-    client: &reqwest::Client,
+    client: &RegistryClient,
     packages: &BTreeMap<String, PublishPackageInfo>,
     needs_publish: &BTreeSet<String>,
     already_published: &BTreeSet<String>,
@@ -1137,6 +1139,7 @@ async fn validate_publish_dependencies_available(
             .await
             {
                 Ok(true) => continue,
+                Err(error) if error.is::<registry::RateLimitExhausted>() => return Err(error),
                 Err(error) => {
                     failures.push(format!("{name}: cannot check {dependency}: {error}"));
                     continue;
@@ -1156,41 +1159,16 @@ async fn validate_publish_dependencies_available(
     }
 }
 
-fn crates_io_client() -> Result<reqwest::Client, BoxError> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!(
-            "clippier/",
-            env!("CARGO_PKG_VERSION"),
-            " (https://github.com/MoosicBox/MoosicBox)"
-        ))
-        .build()?)
-}
-
 async fn crate_version_exists(
-    client: &reqwest::Client,
+    client: &RegistryClient,
     name: &str,
     version: &str,
 ) -> Result<bool, BoxError> {
-    let response = client
-        .get(format!("{CRATES_IO_API}/crates/{name}/{version}"))
-        .send()
-        .await?;
-
-    if response.status().is_success() {
-        Ok(true)
-    } else if response.status() == reqwest::StatusCode::NOT_FOUND {
-        Ok(false)
-    } else {
-        Err(format!(
-            "Failed to query crates.io for {name}@{version}: HTTP {}",
-            response.status()
-        )
-        .into())
-    }
+    client.version_exists(name, version).await
 }
 
 async fn validate_package_categories_available(
-    client: &reqwest::Client,
+    client: &RegistryClient,
     packages: &BTreeMap<String, PublishPackageInfo>,
     package_names: &BTreeSet<String>,
 ) -> Result<(), BoxError> {
@@ -1213,25 +1191,12 @@ async fn validate_package_categories_available(
 }
 
 async fn crates_io_category_exists(
-    client: &reqwest::Client,
+    client: &RegistryClient,
     category: &str,
 ) -> Result<bool, BoxError> {
-    let response = client
-        .get(format!("{CRATES_IO_API}/categories/{category}"))
-        .send()
-        .await?;
-
-    if response.status().is_success() {
-        Ok(true)
-    } else if response.status() == reqwest::StatusCode::NOT_FOUND {
-        Ok(false)
-    } else {
-        Err(format!(
-            "Failed to query crates.io category '{category}': HTTP {}",
-            response.status()
-        )
-        .into())
-    }
+    client
+        .exists(&format!("{CRATES_IO_API}/categories/{category}"), true)
+        .await
 }
 
 fn validate_package_categories(
@@ -1482,10 +1447,18 @@ fn parse_rate_limit_at(stderr: &str, now: DateTime<Utc>) -> Option<RateLimit> {
         .filter_map(|line| line.trim().split_once(':'))
         .find(|(name, _)| name.eq_ignore_ascii_case("retry-after"))
         .map(|(_, value)| value.trim());
+    Some(retry_timing(parse_retry_after(stderr), header, now))
+}
+
+fn retry_timing(
+    body_date: Option<DateTime<Utc>>,
+    header: Option<&str>,
+    now: DateTime<Utc>,
+) -> RateLimit {
     let header_date = header
         .and_then(|value| DateTime::parse_from_rfc2822(value).ok())
         .map(|date| date.with_timezone(&Utc));
-    let retry_at = match (parse_retry_after(stderr), header_date) {
+    let retry_at = match (body_date, header_date) {
         (Some(body), Some(header)) => Some(body.max(header)),
         (body, header) => body.or(header),
     };
@@ -1502,7 +1475,7 @@ fn parse_rate_limit_at(stderr: &str, now: DateTime<Utc>) -> Option<RateLimit> {
         (Some(date), Some(seconds)) => date.max(seconds),
         (date, seconds) => date.or(seconds).unwrap_or(Duration::from_mins(1)),
     };
-    Some(RateLimit { retry_at, wait })
+    RateLimit { retry_at, wait }
 }
 
 fn parse_retry_after(stderr: &str) -> Option<DateTime<Utc>> {
@@ -2113,7 +2086,7 @@ fn is_workspace_inherited(value: Option<&toml::Value>) -> bool {
 }
 
 async fn wait_for_crate_version(
-    client: &reqwest::Client,
+    client: &RegistryClient,
     name: &str,
     version: &str,
     timeout: Duration,
