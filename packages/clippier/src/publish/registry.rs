@@ -42,6 +42,16 @@ impl RegistryClient {
         }
     }
 
+    #[cfg(test)]
+    pub(super) async fn cache_test_version(&self, name: &str, version: &str, exists: bool) {
+        let url = format!("https://index.crates.io/{}", index_path(name).unwrap());
+        self.state
+            .lock()
+            .await
+            .exists
+            .insert(format!("{url}@{version}"), exists);
+    }
+
     pub(super) fn new(retries: u16) -> Result<Self, BoxError> {
         Ok(Self {
             http: reqwest::Client::builder()

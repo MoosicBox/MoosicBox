@@ -573,6 +573,23 @@ pub async fn handle_publish_command(
         }
     }
 
+    if !should_run_preflight(&config) {
+        publish_pending_queue(
+            &workspace_root,
+            &packages,
+            &initial_plan.publish_order,
+            &config,
+            &client,
+            &mut reports,
+        )
+        .await?;
+        let report = PublishReport::new(reports);
+        return match output {
+            OutputType::Raw => Ok(report.to_raw_string(config.color)),
+            OutputType::Json => Ok(serde_json::to_string_pretty(&report)?),
+        };
+    }
+
     for name in &initial_plan.publish_order {
         let package = packages
             .get(name)
@@ -855,16 +872,18 @@ async fn publish_pending_queue(
             continue;
         }
 
-        log_publish_event(
-            config.color,
-            "35;1",
-            "Publishing",
-            &package.name,
-            &package.version,
-        );
-        let publish_attempt = match publish_package(workspace_root, packages, package, config) {
-            Ok(attempt) => attempt,
-            Err(error) => {
+        if !should_run_preflight(config) {
+            let preparation = prepare_next_upload(
+                workspace_root,
+                packages,
+                package,
+                &publish_order[index + 1..],
+                config,
+                client,
+                reports,
+            )
+            .await
+            .inspect_err(|_| {
                 print_failure_summary(
                     config.color,
                     package,
@@ -872,9 +891,28 @@ async fn publish_pending_queue(
                     packages,
                     reports,
                 );
-                return Err(error);
+            })?;
+            if let Some(report) = preparation {
+                reports.push(report);
+                continue;
             }
-        };
+        }
+
+        log_publish_event(
+            config.color,
+            "35;1",
+            "Publishing",
+            &package.name,
+            &package.version,
+        );
+        let publish_attempt = attempt_next_upload(
+            workspace_root,
+            packages,
+            package,
+            &publish_order[index + 1..],
+            config,
+            reports,
+        )?;
 
         match publish_attempt {
             PublishAttempt::AlreadyPublished => {
@@ -891,42 +929,116 @@ async fn publish_pending_queue(
                 );
             }
             PublishAttempt::Published => {
-                if let Err(error) = wait_for_crate_version(
-                    client,
-                    &package.name,
-                    &package.version,
-                    config.publish_timeout,
-                    config.publish_poll_interval,
-                )
-                .await
-                {
-                    print_failure_summary(
-                        config.color,
-                        package,
-                        &publish_order[index + 1..],
-                        packages,
-                        reports,
-                    );
-                    return Err(error);
-                }
-
-                log_publish_event(
-                    config.color,
-                    "32;1",
-                    "Published",
-                    &package.name,
-                    &package.version,
-                );
-                reports.push(PublishPackageReport::new(
-                    &package.name,
-                    &package.version,
-                    PublishPackageStatus::Published,
-                ));
+                record_published(package, config, client, reports)
+                    .await
+                    .inspect_err(|_| {
+                        print_failure_summary(
+                            config.color,
+                            package,
+                            &publish_order[index + 1..],
+                            packages,
+                            reports,
+                        );
+                    })?;
             }
         }
     }
 
     Ok(())
+}
+
+fn attempt_next_upload(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package: &PublishPackageInfo,
+    remaining: &[String],
+    config: &PublishConfig,
+    reports: &[PublishPackageReport],
+) -> Result<PublishAttempt, BoxError> {
+    publish_package(workspace_root, packages, package, config).inspect_err(|_| {
+        print_failure_summary(config.color, package, remaining, packages, reports);
+    })
+}
+
+async fn record_published(
+    package: &PublishPackageInfo,
+    config: &PublishConfig,
+    client: &RegistryClient,
+    reports: &mut Vec<PublishPackageReport>,
+) -> Result<(), BoxError> {
+    wait_for_crate_version(
+        client,
+        &package.name,
+        &package.version,
+        config.publish_timeout,
+        config.publish_poll_interval,
+    )
+    .await?;
+    log_publish_event(
+        config.color,
+        "32;1",
+        "Published",
+        &package.name,
+        &package.version,
+    );
+    reports.push(PublishPackageReport::new(
+        &package.name,
+        &package.version,
+        PublishPackageStatus::Published,
+    ));
+    Ok(())
+}
+
+async fn prepare_next_upload(
+    workspace_root: &Path,
+    packages: &BTreeMap<String, PublishPackageInfo>,
+    package: &PublishPackageInfo,
+    remaining: &[String],
+    config: &PublishConfig,
+    client: &RegistryClient,
+    reports: &mut Vec<PublishPackageReport>,
+) -> Result<Option<PublishPackageReport>, BoxError> {
+    if crate_version_exists(client, &package.name, &package.version).await? {
+        return Ok(Some(
+            assess_publish_race(workspace_root, packages, package, remaining, config, client)
+                .await?,
+        ));
+    }
+    let pending = remaining
+        .iter()
+        .cloned()
+        .chain(std::iter::once(package.name.clone()))
+        .collect();
+    assess_remaining_dependencies(packages, &pending, config, reports, |dependency| {
+        let pending = &pending;
+        async move {
+            if !crate_version_exists(client, &dependency.name, &dependency.version).await? {
+                return Ok(None);
+            }
+            Ok(Some(
+                purity::assess(
+                    workspace_root,
+                    packages,
+                    &dependency,
+                    pending,
+                    config,
+                    client,
+                )
+                .await,
+            ))
+        }
+    })
+    .await?;
+    let assessments = reports
+        .iter()
+        .filter_map(|report| report.purity.clone())
+        .collect::<Vec<_>>();
+    purity::enforce(config.purity.unwrap_or_default(), &assessments)?;
+    let selected = BTreeSet::from([package.name.clone()]);
+    validate_publish_manifests(workspace_root, packages, &selected)?;
+    validate_publish_dependencies_available(client, packages, &selected, &pending).await?;
+    validate_package_categories_available(client, packages, &selected).await?;
+    Ok(None)
 }
 
 // A version may appear after preflight. Check its artifact before any subsequent upload.
@@ -1310,6 +1422,7 @@ fn publish_with_retry(
     mut sleep: impl FnMut(Duration),
 ) -> Result<PublishAttempt, BoxError> {
     let mut attempts = 0;
+    let mut network_attempts = 0;
     loop {
         let output = publish()?;
         if output.status.success() {
@@ -1332,6 +1445,24 @@ fn publish_with_retry(
                 config.rate_limit_retries,
             );
             sleep(rate_limit.wait);
+            continue;
+        }
+
+        // Registry configuration/index failures occur before Cargo uploads. Only
+        // retry this unambiguous phase; never blindly replay an uncertain upload.
+        if preflight::output::transient_network(&output.stderr)
+            && output.stderr.contains("download of config.json failed")
+            && network_attempts < 3
+        {
+            let wait = Duration::from_secs(1 << network_attempts);
+            network_attempts += 1;
+            eprintln!(
+                "Network error before upload for {}@{}; retrying in {}s ({network_attempts}/3)",
+                package.name,
+                package.version,
+                wait.as_secs()
+            );
+            sleep(wait);
             continue;
         }
 

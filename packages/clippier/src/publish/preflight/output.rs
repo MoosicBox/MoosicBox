@@ -31,13 +31,14 @@ impl std::fmt::Display for NetworkError {
 
 impl std::error::Error for NetworkError {}
 
-fn transient_network(stderr: &str) -> bool {
+pub(in crate::publish) fn transient_network(stderr: &str) -> bool {
     // Require Cargo's source/download context as well as a transport cause.
     // A compiler diagnostic mentioning a connection is not a registry failure.
     let source = [
         "failed to get `",
         "failed to download",
         "unable to update",
+        "failed to update registry",
         "failed to fetch",
     ]
     .iter()

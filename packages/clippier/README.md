@@ -1090,7 +1090,11 @@ clippier publish /path/to/workspace
 
 `clippier publish` ignores dev-dependencies when computing publish order so dev-dependency cycles do not block publication. It publishes from a temporary sanitized workspace copy that preserves package-relative paths, removes workspace dev-dependencies, resolves workspace dependency inheritance, and uses a temp-local Cargo target dir.
 
-Real publishes **skip queue-wide Cargo preflight by default** and go directly to per-package publication after manifest, category, dependency-availability, and purity checks. Cargo still packages each upload and honors `--verify`.
+Real publishes **skip queue-wide Cargo preflight by default**. Each package's exact version is checked immediately before its upload; already-published versions are skipped without scanning the whole queue first. Manifest, category, dependency-availability, and purity checks run for the current pending upload. Cargo still packages each upload and honors `--verify`.
+
+Transient registry `config.json` connection failures before uploading retry up to three
+times (1s, 2s, 4s). Ambiguous transport failures during an upload are not blindly
+replayed; rerunning publication checks for the already-published version first.
 
 Use `clippier publish --preflight` (or `clippier release publish --preflight`) to opt in to queue-wide safety checks. Set `[publish] preflight = true` in workspace `clippier.toml` or `$XDG_CONFIG_HOME/clippier/clippier.toml` (fallback: `~/.config/clippier/clippier.toml`) to opt in persistently:
 

@@ -15,7 +15,7 @@ use super::{
 
 mod batch;
 mod diagnostics;
-mod output;
+pub(super) mod output;
 
 #[cfg(test)]
 mod reuse_tests;

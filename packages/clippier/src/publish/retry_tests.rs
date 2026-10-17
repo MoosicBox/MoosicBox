@@ -2,6 +2,89 @@
 
 use super::*;
 
+#[cfg(unix)]
+#[test]
+fn pre_upload_transport_failure_retries_but_uncertain_upload_does_not() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    let network = "error: failed to update registry `crates-io`\ndownload of config.json failed\n[7] Could not connect to server";
+    for recover in [true, false] {
+        let mut calls = 0;
+        let mut waits = Vec::new();
+        let result = publish_with_retry(
+            &package,
+            &PublishConfig::default(),
+            || {
+                calls += 1;
+                Ok(response(recover && calls == 3, network))
+            },
+            |delay| waits.push(delay.as_secs()),
+        );
+        assert_eq!(result.is_ok(), recover);
+        assert_eq!(calls, if recover { 3 } else { 4 });
+        assert_eq!(waits, if recover { vec![1, 2] } else { vec![1, 2, 4] });
+    }
+    let mut calls = 0;
+    assert!(
+        publish_with_retry(
+            &package,
+            &PublishConfig::default(),
+            || {
+                calls += 1;
+                Ok(response(
+                    false,
+                    "failed to publish: [7] Could not connect to server",
+                ))
+            },
+            |_| panic!("uncertain upload must not be blindly replayed")
+        )
+        .is_err()
+    );
+    assert_eq!(calls, 1);
+}
+
+#[switchy_async::test]
+async fn production_skips_existing_version_before_validating_its_manifest() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    let packages = BTreeMap::from([("fixture".into(), package)]);
+    let client = RegistryClient::for_test(0);
+    client.cache_test_version("fixture", "0.1.0", true).await;
+    let mut reports = Vec::new();
+    publish_pending_queue(
+        Path::new("/nonexistent"),
+        &packages,
+        &["fixture".into()],
+        &PublishConfig::default(),
+        &client,
+        &mut reports,
+    )
+    .await
+    .unwrap();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].status, PublishPackageStatus::AlreadyPublished);
+}
+
+#[switchy_async::test]
+async fn production_stops_at_current_invalid_package_without_looking_up_later_queue() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    let packages = BTreeMap::from([("fixture".into(), package)]);
+    let client = RegistryClient::for_test(0);
+    client.cache_test_version("fixture", "0.1.0", false).await;
+    let mut reports = Vec::new();
+    let error = publish_pending_queue(
+        Path::new("/nonexistent"),
+        &packages,
+        &["fixture".into(), "later-unavailable".into()],
+        &PublishConfig::default(),
+        &client,
+        &mut reports,
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(!error.contains("later-unavailable"), "{error}");
+    assert_eq!(reports.len(), 0);
+}
+
 const BARE_429: &str = "error: failed to publish\nCaused by:\n  failed to get a 200 OK response, got 429\n  headers:\n        date: Fri, 16 Oct 2026 19:09:13 GMT\n        content-length: 0\n  body:\n";
 
 #[test]
