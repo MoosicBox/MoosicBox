@@ -1928,8 +1928,69 @@ fn sanitize_manifest(
     packages: &BTreeMap<String, PublishPackageInfo>,
     manifest_path: &Path,
 ) -> Result<(), BoxError> {
-    let manifest = sanitized_manifest(workspace_root, packages, manifest_path)?;
+    let original = read_toml(manifest_path)?;
+    let mut manifest = sanitized_manifest(workspace_root, packages, manifest_path)?;
+    stage_inherited_package_files(workspace_root, manifest_path, &original, &mut manifest)?;
     fs::write(manifest_path, toml::to_string_pretty(&manifest)?)?;
+    Ok(())
+}
+
+// Cargo resolves inherited README/license-file paths relative to the workspace,
+// not the member. Keep staged packages self-contained without overwriting a
+// member's own files (which can have the same basename but different contents).
+fn stage_inherited_package_files(
+    workspace_root: &Path,
+    manifest_path: &Path,
+    original: &toml::Value,
+    manifest: &mut toml::Value,
+) -> Result<(), BoxError> {
+    for field in ["readme", "license-file"] {
+        if !is_workspace_inherited(original.get("package").and_then(|p| p.get(field))) {
+            continue;
+        }
+        let Some(value) = manifest["package"].get(field).cloned() else {
+            continue;
+        };
+        let source = if let Some(path) = value.as_str() {
+            workspace_root.join(path)
+        } else if field == "readme" && value.as_bool() == Some(true) {
+            let Some(path) = ["README.md", "README.txt", "README"]
+                .iter()
+                .map(|name| workspace_root.join(name))
+                .find(|path| path.is_file())
+            else {
+                continue;
+            };
+            path
+        } else {
+            continue;
+        };
+        let relative = PathBuf::from("clippier-workspace-assets").join(field).join(
+            source
+                .file_name()
+                .ok_or("Missing workspace package file name")?,
+        );
+        let destination = manifest_path
+            .parent()
+            .ok_or("Missing manifest directory")?
+            .join(&relative);
+        // A pre-existing reserved path must not be silently replaced.
+        if destination.exists() {
+            return Err(format!(
+                "Workspace package file staging collision: {}",
+                destination.display()
+            )
+            .into());
+        }
+        fs::create_dir_all(destination.parent().ok_or("Missing asset directory")?)?;
+        fs::copy(&source, &destination).map_err(|error| {
+            format!(
+                "Failed to stage inherited {field} {}: {error}",
+                source.display()
+            )
+        })?;
+        manifest["package"][field] = toml::Value::String(relative.to_string_lossy().into_owned());
+    }
     Ok(())
 }
 

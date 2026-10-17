@@ -6,6 +6,139 @@ use std::fmt::Write as _;
 use super::*;
 use sha2::{Digest as _, Sha256};
 
+#[test]
+fn inherited_package_files_are_staged_and_packaged_without_changing_sources() {
+    let fixture = Fixture::new(&[("clippier-fixture-assets", "")]);
+    let root = fixture.directory.path();
+    let package = &fixture.packages["clippier-fixture-assets"];
+    let source = package.package_path.as_ref().unwrap();
+    fs::write(root.join("README.md"), "workspace readme").unwrap();
+    fs::write(root.join("LICENSE"), "workspace license").unwrap();
+    fs::write(source.join("README.md"), "member readme").unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nreadme = 'README.md'\nlicense-file = 'LICENSE'\n",
+    )
+    .unwrap();
+    let path = source.join("Cargo.toml");
+    let original = fs::read_to_string(&path).unwrap().replace(
+        "license = \"MIT\"",
+        "readme = { workspace = true }\nlicense-file = { workspace = true }",
+    );
+    fs::write(&path, &original).unwrap();
+    // Both real publication staging and queue preflight must resolve root paths.
+    let single = SanitizedPackage::prepare(root, &fixture.packages, package).unwrap();
+    let queue = fixture.stage();
+    for staged_path in [
+        single.package_path.clone(),
+        queue.root.join("source/clippier-fixture-assets"),
+    ] {
+        let manifest = read_toml(&staged_path.join("Cargo.toml")).unwrap();
+        for (field, expected) in [
+            ("readme", "workspace readme"),
+            ("license-file", "workspace license"),
+        ] {
+            let relative = manifest["package"][field].as_str().unwrap();
+            assert!(!Path::new(relative).is_absolute());
+            assert_eq!(
+                fs::read_to_string(staged_path.join(relative)).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(staged_path.join("README.md")).unwrap(),
+            "member readme"
+        );
+    }
+    let mut command = package_command(&queue, &PublishConfig::default());
+    command.arg("--offline");
+    output(&mut command);
+    let archive = queue
+        .target_dir()
+        .join("package/clippier-fixture-assets-0.1.0.crate");
+    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(
+        fs::File::open(archive).unwrap(),
+    ));
+    let mut files = BTreeMap::new();
+    for entry in archive.entries().unwrap() {
+        let mut entry = entry.unwrap();
+        let path = entry.path().unwrap().into_owned();
+        let mut contents = String::new();
+        std::io::Read::read_to_string(&mut entry, &mut contents).unwrap();
+        files.insert(path, contents);
+    }
+    assert!(files.values().any(|text| text == "workspace readme"));
+    assert!(files.values().any(|text| text == "workspace license"));
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+    assert!(!source.join("clippier-workspace-assets").exists());
+}
+
+#[test]
+fn readme_boolean_and_explicit_member_paths_keep_their_meaning() {
+    let fixture = Fixture::new(&[("clippier-fixture-assets", "")]);
+    let root = fixture.directory.path();
+    let source = fixture.packages["clippier-fixture-assets"]
+        .package_path
+        .as_ref()
+        .unwrap();
+    let path = source.join("Cargo.toml");
+    let original = fs::read_to_string(&path).unwrap();
+    fs::write(root.join("README.txt"), "workspace readme").unwrap();
+    for value in ["true", "false"] {
+        fs::write(
+            root.join("Cargo.toml"),
+            format!("[workspace]\n[workspace.package]\nreadme = {value}\n"),
+        )
+        .unwrap();
+        fs::write(
+            &path,
+            original.replace("[package]", "[package]\nreadme = { workspace = true }"),
+        )
+        .unwrap();
+        let staged = fixture.stage();
+        let manifest = read_toml(
+            &staged
+                .root
+                .join("source/clippier-fixture-assets/Cargo.toml"),
+        )
+        .unwrap();
+        if value == "false" {
+            assert_eq!(manifest["package"]["readme"].as_bool(), Some(false));
+        } else {
+            let relative = manifest["package"]["readme"].as_str().unwrap();
+            assert_eq!(
+                fs::read_to_string(
+                    staged
+                        .root
+                        .join("source/clippier-fixture-assets")
+                        .join(relative)
+                )
+                .unwrap(),
+                "workspace readme"
+            );
+        }
+    }
+    fs::write(
+        &path,
+        original.replace("[package]", "[package]\nreadme = 'missing.md'"),
+    )
+    .unwrap();
+    let staged = fixture.stage();
+    let manifest = read_toml(
+        &staged
+            .root
+            .join("source/clippier-fixture-assets/Cargo.toml"),
+    )
+    .unwrap();
+    assert_eq!(manifest["package"]["readme"].as_str(), Some("missing.md"));
+    let result = package_command(&staged, &PublishConfig::default())
+        .arg("--offline")
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("missing.md"));
+}
+
 static CARGO_PACKAGING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub(super) struct Fixture {

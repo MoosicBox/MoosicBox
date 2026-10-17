@@ -23,6 +23,25 @@ mod reuse_tests;
 #[cfg(test)]
 mod tests;
 
+// Parallel probes must never share a staging directory, even if the wall clock
+// has coarse resolution or moves backwards. Claim each candidate atomically.
+fn create_preflight_root() -> Result<PathBuf, BoxError> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    loop {
+        let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "clippier-preflight-{}-{}-{id}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        ));
+        match fs::create_dir(&root) {
+            Ok(()) => return Ok(root),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
 /// Stage the pending queue together so Cargo can package unpublished dependencies.
 /// Versioned path links are staging-only: Cargo removes them from published manifests.
 fn prepare_workspace(
@@ -32,12 +51,7 @@ fn prepare_workspace(
 ) -> Result<SanitizedPackage, BoxError> {
     let workspace_root = fs::canonicalize(workspace_root)?;
     audit_cargo_configuration(&workspace_root)?;
-    let root = std::env::temp_dir().join(format!(
-        "clippier-preflight-{}-{}",
-        std::process::id(),
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
-    ));
-    fs::create_dir_all(&root)?;
+    let root = create_preflight_root()?;
     // Install the cleanup guard before copying or sanitizing can fail.
     let staged = SanitizedPackage {
         package_path: root.clone(),

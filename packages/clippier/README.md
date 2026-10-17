@@ -1112,6 +1112,10 @@ preflight = true # false by default
 
 Precedence: CLI (`--preflight` / `--no-preflight`), `CLIPPIER_PUBLISH_PREFLIGHT=true|false`, workspace config, user config, built-in default. `clippier config show` reports the effective value and its origin. `--no-preflight` overrides configured opt-in for real uploads; **dry runs always preflight**, regardless of that setting.
 
+Inherited workspace `readme` and `license-file` assets are copied into each staged
+package with corrected paths; explicit member-local paths keep their original meaning.
+Parallel dependency probes use atomically claimed, independent staging directories.
+
 Dry runs and opted-in real publishes package the entire pending queue with Cargo and resolve dependencies without inherited lockfiles. Unpublished workspace dependencies are staged together using Cargo's native multi-package packaging; Cargo removes the versioned staging path links from packaged manifests. This catches missing or yanked transitive dependencies even when the source workspace lockfile still permits them. Source manifests and lockfiles are unchanged.
 
 When enabled, preflight continues across **every pending package**, collecting manifest, category,

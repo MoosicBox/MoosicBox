@@ -5,6 +5,57 @@ use super::super::tests::{Fixture, Registry};
 use super::*;
 
 #[test]
+fn concurrent_pending_probes_have_independent_staging_and_cleanup() {
+    let fixture = Fixture::new(&[("clippier-fixture-core", "")]);
+    let root = fixture.directory.path();
+    fs::write(root.join("README.md"), "workspace readme").unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nreadme = 'README.md'\nedition = '2021'\n",
+    )
+    .unwrap();
+    let path = fixture.packages["clippier-fixture-core"]
+        .package_path
+        .as_ref()
+        .unwrap()
+        .join("Cargo.toml");
+    let original = fs::read_to_string(&path).unwrap().replace(
+        "edition = \"2021\"",
+        "edition = { workspace = true }\nreadme = { workspace = true }",
+    );
+    fs::write(&path, &original).unwrap();
+    let manifest: toml::Value = toml::from_str("[package]\nname = 'app'\nversion = '0.1.0'\n[dependencies]\nclippier-fixture-core = '0.1.0'\n").unwrap();
+    let dependency = &dependencies(&manifest)[0];
+    let paths = std::sync::Mutex::new(Vec::new());
+    let results = parallel_ordered(&(0..16).collect::<Vec<_>>(), 4, |_| {
+        run_probe_with(
+            root,
+            &fixture.packages,
+            &["clippier-fixture-core".into()],
+            dependency,
+            probe_manifest(&manifest, dependency),
+            &PublishConfig::default(),
+            |command| {
+                paths
+                    .lock()
+                    .unwrap()
+                    .push(command.get_current_dir().unwrap().to_path_buf());
+                command.arg("--offline");
+            },
+        )
+        .map_err(|error| error.to_string())
+    })
+    .unwrap();
+    for result in results {
+        result.unwrap();
+    }
+    let paths = paths.into_inner().unwrap();
+    assert_eq!(paths.iter().collect::<BTreeSet<_>>().len(), 16);
+    assert!(paths.iter().all(|path| !path.exists()));
+    assert_eq!(fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
 fn index_checks_require_all_matching_versions_to_be_yanked() {
     let versions = vec![
         IndexVersion {

@@ -9,7 +9,7 @@ use std::{
     path::Path,
     process::Command,
     sync::atomic::{AtomicUsize, Ordering},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use cargo_metadata::semver::VersionReq;
@@ -583,12 +583,7 @@ fn run_probe_with(
     configure: impl FnOnce(&mut Command),
 ) -> Result<(), BoxError> {
     let staged = if needed.is_empty() {
-        let root = std::env::temp_dir().join(format!(
-            "clippier-dependency-probe-{}-{}",
-            std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
-        ));
-        fs::create_dir(&root)?;
+        let root = super::create_preflight_root()?;
         let staged = SanitizedPackage {
             package_path: root.clone(),
             root,
