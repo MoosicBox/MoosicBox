@@ -49,6 +49,7 @@ default-members = [
     "packages/hyperchad/js_bundler",
     "packages/hyperchad/markdown",
     "packages/hyperchad/renderer",
+    "packages/hyperchad/renderer/bmux",
     "packages/hyperchad/renderer/egui",
     "packages/hyperchad/renderer/fltk",
     "packages/hyperchad/renderer/html",
@@ -225,6 +226,7 @@ members = [
     "packages/hyperchad/js_bundler",
     "packages/hyperchad/markdown",
     "packages/hyperchad/renderer",
+    "packages/hyperchad/renderer/bmux",
     "packages/hyperchad/renderer/egui",
     "packages/hyperchad/renderer/fltk",
     "packages/hyperchad/renderer/html",
@@ -514,6 +516,7 @@ hyperchad_docs_site                = { version = "0.5.0", default-features = fal
 hyperchad_js_bundler               = { version = "0.5.0", default-features = false, path = "packages/hyperchad/js_bundler" }
 hyperchad_markdown                 = { version = "0.5.0", default-features = false, path = "packages/hyperchad/markdown" }
 hyperchad_renderer                 = { version = "0.5.0", default-features = false, path = "packages/hyperchad/renderer" }
+hyperchad_renderer_bmux            = { version = "0.5.0", default-features = false, path = "packages/hyperchad/renderer/bmux" }
 hyperchad_renderer_egui            = { version = "0.5.0", default-features = false, path = "packages/hyperchad/renderer/egui" }
 hyperchad_renderer_fltk            = { version = "0.5.0", default-features = false, path = "packages/hyperchad/renderer/fltk" }
 hyperchad_renderer_html            = { version = "0.5.0", default-features = false, path = "packages/hyperchad/renderer/html" }
@@ -581,10 +584,12 @@ aws-sdk-apigatewaymanagement = "1.106.0"
 aws-sdk-ssm = "1.118.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.2", default-features = false }
-bmux_keyboard = { version = "0.0.1-alpha.2", default-features = false }
-bmux_tui = { version = "0.0.1-alpha.3", default-features = false }
-bmux_tui_components = { version = "0.0.1-alpha.2", default-features = false }
-bmux_tui_runtime = { version = "0.0.1-alpha.2", default-features = false }
+bmux_image = { version = "0.0.1-alpha.4", default-features = false }
+bmux_keyboard = { version = "0.0.1-alpha.4", default-features = false }
+bmux_text_edit = { version = "0.0.1-alpha.4", default-features = false }
+bmux_tui = { version = "0.0.1-alpha.4", default-features = false }
+bmux_tui_components = { version = "0.0.1-alpha.4", default-features = false }
+bmux_tui_runtime = { version = "0.0.1-alpha.4", default-features = false }
 btparse = "0.2.0"
 bumpalo = "3.20.3"
 bytes = "1.12.1"
@@ -816,21 +821,23 @@ trybuild = "1.0.118"
 # Keep Turso allocator-neutral by default. switchy_database exposes an explicit
 # turso-mimalloc opt-in for applications that intend whole-artifact allocation.
 # Independent mimalloc copies in native plugins can collide on macOS TLS slots.
-turso             = { version = "0.6.1", default-features = false }
-uaparser          = "0.6.4"
-url               = "2.5.8"
-urlencoding       = "2.1.3"
-utoipa            = { version = "5.5.0", features = ["actix_extras"] }
-utoipa-rapidoc    = { version = "6.0.0", features = ["actix-web"] }
-utoipa-redoc      = { version = "6.0.0", features = ["actix-web"] }
-utoipa-scalar     = { version = "0.3.0", features = ["actix-web"] }
-utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid              = { version = "1.24.0", features = ["v4"] }
-walkdir           = "2.5.0"
-webp              = "0.3.1"
-which             = { version = "8.0.5", default-features = false }
-whoami            = "2.1.2"
-xml               = "1.3.0"
+turso                = { version = "0.6.1", default-features = false }
+uaparser             = "0.6.4"
+unicode-segmentation = { version = "1.13.3", default-features = false }
+unicode-width        = { version = "0.2.2", default-features = false }
+url                  = "2.5.8"
+urlencoding          = "2.1.3"
+utoipa               = { version = "5.5.0", features = ["actix_extras"] }
+utoipa-rapidoc       = { version = "6.0.0", features = ["actix-web"] }
+utoipa-redoc         = { version = "6.0.0", features = ["actix-web"] }
+utoipa-scalar        = { version = "0.3.0", features = ["actix-web"] }
+utoipa-swagger-ui    = { version = "9.0.2", features = ["actix-web"] }
+uuid                 = { version = "1.24.0", features = ["v4"] }
+walkdir              = "2.5.0"
+webp                 = "0.3.1"
+which                = { version = "8.0.5", default-features = false }
+whoami               = "2.1.2"
+xml                  = "1.3.0"
 
 # Benchmarking
 criterion = { version = "0.8.2", default-features = false, features = [

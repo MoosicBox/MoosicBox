@@ -132,7 +132,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .with_size(width, height);
 
-    #[cfg(any(feature = "egui", feature = "fltk"))]
+    #[cfg(any(feature = "egui", feature = "fltk", feature = "bmux"))]
     app.initial_route("/");
 
     #[cfg(feature = "_canvas")]

@@ -2482,28 +2482,70 @@ dependencies = [
 ]
 
 [[package]]
-name = "bmux_codec"
-version = "0.0.1-alpha.2"
+name = "bmux_attach_image_protocol"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4e73deccffba43c64f9e8b5e77da709e50757575987cb4978abc73e2be4748f"
+checksum = "f2f435c1dc0d77ff387100df393c36dcc4bedc00744a37cb59b2937d27ad1f97"
+dependencies = [
+ "bmux_codec",
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "bmux_codec"
+version = "0.0.1-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7872c7af27675b6a157885eafba6c662755623fad6afe4533481d1a8fcf9d02"
 dependencies = [
  "serde",
 ]
 
 [[package]]
-name = "bmux_keyboard"
-version = "0.0.1-alpha.3"
+name = "bmux_image"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4661ea5b4cf35c5b35267589ab1850f348c96591b6758d5e80194ba72faeb108"
+checksum = "43947f055d3b67b130f1e4ef00e2eba2265b4f8e272657eac2be78b621d3cc11"
+dependencies = [
+ "bmux_attach_image_protocol",
+ "bmux_ipc",
+ "bmux_tui",
+ "image",
+ "serde",
+ "uuid",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "bmux_ipc"
+version = "0.0.1-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "787e837183acdd392b776a7c4448c53fa1e679dcf94345d01198c04d6ca6f5bc"
+dependencies = [
+ "bmux_attach_image_protocol",
+ "bmux_codec",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "bmux_keyboard"
+version = "0.0.1-alpha.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de93f20dbcadcb72deb6688259b3900cf907066d67ab0b8fa341e6013716b070"
 dependencies = [
  "crossterm",
 ]
 
 [[package]]
 name = "bmux_text_edit"
-version = "0.0.1-alpha.3"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f42e280f55b45b82e92df82cb89357a536f97a73b7b017fba0729e3b246c90d"
+checksum = "c1b53ade18940ad85e2fa8fa81d171703d441026df17f76657567c3d92525794"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2512,9 +2554,9 @@ dependencies = [
 
 [[package]]
 name = "bmux_tui"
-version = "0.0.1-alpha.3"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2cd9f464fb6fe9098cbd8499533f4dfa31002b77bac0b1ec17b7fcbc2087663"
+checksum = "9bd7f18126d87279922558c039d109f19924b158683c4324281932f56992fdd5"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2529,20 +2571,24 @@ dependencies = [
 
 [[package]]
 name = "bmux_tui_components"
-version = "0.0.1-alpha.2"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "760bc3abf88b1eaa1c4d0fd3f4953c72ddbbeb405764ec87979dc33244bb22ef"
+checksum = "bb7e7c19517dcad0bf6c0cafdc579f8b7058a51900413b1e5fbc065e147d6136"
 dependencies = [
  "bmux_keyboard",
+ "bmux_text_edit",
  "bmux_tui",
+ "unicode-segmentation",
+ "unicode-width 0.2.2",
 ]
 
 [[package]]
 name = "bmux_tui_runtime"
-version = "0.0.1-alpha.2"
+version = "0.0.1-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1414ba944de88547eb31c8577c64b5baa3bf099c32af9cae20f31e340538bf52"
+checksum = "c086ddb1d2189a3d1caf726ab11f7616462b1c3b6d28ab7aaf3d41e13d383449"
 dependencies = [
+ "bmux_image",
  "bmux_keyboard",
  "bmux_tui",
  "futures-util",
@@ -7751,6 +7797,7 @@ dependencies = [
  "hyperchad_js_bundler",
  "hyperchad_markdown",
  "hyperchad_renderer",
+ "hyperchad_renderer_bmux",
  "hyperchad_renderer_egui",
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
@@ -7799,6 +7846,7 @@ dependencies = [
  "flume 0.12.0",
  "hyperchad_actions",
  "hyperchad_renderer",
+ "hyperchad_renderer_bmux",
  "hyperchad_renderer_egui",
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
@@ -7945,6 +7993,36 @@ dependencies = [
  "tempfile",
  "test-log",
  "thiserror 2.0.19",
+ "url 2.5.8",
+]
+
+[[package]]
+name = "hyperchad_renderer_bmux"
+version = "0.5.0"
+dependencies = [
+ "async-trait",
+ "bmux_image",
+ "bmux_keyboard",
+ "bmux_text_edit",
+ "bmux_tui",
+ "bmux_tui_components",
+ "bmux_tui_runtime",
+ "crossterm",
+ "flume 0.12.0",
+ "hyperchad_actions",
+ "hyperchad_color",
+ "hyperchad_renderer",
+ "hyperchad_router",
+ "hyperchad_transformer",
+ "hyperchad_transformer_models",
+ "image",
+ "log 0.4.33",
+ "serde_json",
+ "switchy_async",
+ "thiserror 2.0.19",
+ "tokio",
+ "unicode-segmentation",
+ "unicode-width 0.2.2",
  "url 2.5.8",
 ]
 

@@ -20,18 +20,22 @@
 
 use crate::AppBuilder;
 
+/// Terminal renderer selected explicitly by the `bmux` feature.
+#[cfg(feature = "bmux")]
+pub type DefaultRenderer = hyperchad_renderer_bmux::BmuxRenderer;
+
 /// The default renderer type based on enabled features.
 ///
 /// This type alias resolves to the appropriate renderer implementation depending on which
 /// features are enabled (see module documentation for priority order).
-#[cfg(feature = "egui")]
+#[cfg(all(feature = "egui", not(feature = "bmux")))]
 pub type DefaultRenderer = egui::EguiRenderer;
 
 /// The default renderer type based on enabled features.
 ///
 /// This type alias resolves to the appropriate renderer implementation depending on which
 /// features are enabled (see module documentation for priority order).
-#[cfg(all(feature = "fltk", not(feature = "egui")))]
+#[cfg(all(feature = "fltk", not(any(feature = "bmux", feature = "egui"))))]
 pub type DefaultRenderer = fltk::FltkRenderer;
 
 /// The default renderer type based on enabled features.
@@ -41,7 +45,7 @@ pub type DefaultRenderer = fltk::FltkRenderer;
 #[cfg(all(
     feature = "actix",
     feature = "vanilla-js",
-    not(any(feature = "egui", feature = "fltk"))
+    not(any(feature = "bmux", feature = "egui", feature = "fltk"))
 ))]
 pub type DefaultRenderer = html::actix::vanilla_js::HtmlVanillaJsActixRenderer;
 
@@ -52,7 +56,12 @@ pub type DefaultRenderer = html::actix::vanilla_js::HtmlVanillaJsActixRenderer;
 #[cfg(all(
     feature = "lambda",
     feature = "vanilla-js",
-    not(any(feature = "egui", feature = "fltk", feature = "actix"))
+    not(any(
+        feature = "bmux",
+        feature = "egui",
+        feature = "fltk",
+        feature = "actix"
+    ))
 ))]
 pub type DefaultRenderer = html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer;
 
@@ -64,6 +73,7 @@ pub type DefaultRenderer = html::lambda::vanilla_js::HtmlVanillaJsLambdaRenderer
     feature = "actix",
     feature = "html",
     not(any(
+        feature = "bmux",
         feature = "egui",
         feature = "fltk",
         feature = "lambda",
@@ -80,6 +90,7 @@ pub type DefaultRenderer = html::actix::HtmlActixRenderer;
     feature = "lambda",
     feature = "html",
     not(any(
+        feature = "bmux",
         feature = "egui",
         feature = "fltk",
         feature = "vanilla-js",
@@ -96,6 +107,7 @@ pub type DefaultRenderer = html::lambda::HtmlLambdaRenderer;
     feature = "html",
     feature = "vanilla-js",
     not(any(
+        feature = "bmux",
         feature = "egui",
         feature = "fltk",
         feature = "actix",
@@ -111,6 +123,7 @@ pub type DefaultRenderer = html::vanilla_js::HtmlVanillaJsRenderer;
 #[cfg(all(
     feature = "html",
     not(any(
+        feature = "bmux",
         feature = "egui",
         feature = "fltk",
         feature = "lambda",
@@ -125,12 +138,91 @@ pub type DefaultRenderer = html::HtmlStubRenderer;
 /// This type alias resolves to the appropriate renderer implementation depending on which
 /// features are enabled (see module documentation for priority order).
 #[cfg(not(any(
+    feature = "bmux",
     feature = "html",
     feature = "egui",
     feature = "fltk",
     feature = "vanilla-js"
 )))]
 pub type DefaultRenderer = stub::StubRenderer;
+
+#[cfg(feature = "bmux")]
+#[path = "renderer/bmux_host.rs"]
+mod bmux_host;
+
+/// Terminal renderer integration and builder helpers.
+#[cfg(feature = "bmux")]
+pub mod bmux {
+    use async_trait::async_trait;
+    use hyperchad_renderer_bmux::{BmuxRenderer, renderer::BmuxConfig};
+    use hyperchad_router::Router;
+
+    use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
+
+    #[async_trait]
+    impl Generator for BmuxRenderer {
+        async fn generate(&self, _router: &Router, _output: Option<String>) -> Result<(), Error> {
+            Err(Error::IO(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "terminal rendering does not generate static output",
+            )))
+        }
+    }
+
+    #[async_trait]
+    impl Cleaner for BmuxRenderer {
+        async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    impl AppBuilder {
+        /// Builds an application with an explicitly configured terminal renderer.
+        ///
+        /// # Errors
+        /// * Returns a builder error if a router or runtime cannot be initialized.
+        pub fn build_bmux(self, renderer: BmuxRenderer) -> Result<App<BmuxRenderer>, BuilderError> {
+            self.build(renderer)
+        }
+
+        /// Builds a terminal application using default resource and terminal policy.
+        ///
+        /// # Errors
+        /// * Returns a builder error if the router or runtime is unavailable.
+        pub fn build_default_bmux(self) -> Result<App<BmuxRenderer>, BuilderError> {
+            self.build_bmux_with_config(BmuxConfig::default())
+        }
+
+        /// Builds a terminal application with explicit host and resource policy.
+        ///
+        /// # Errors
+        /// * Returns a builder error if the router or runtime is unavailable.
+        pub fn build_bmux_with_config(
+            self,
+            config: BmuxConfig,
+        ) -> Result<App<BmuxRenderer>, BuilderError> {
+            let action_tx = self.listen_actions(self.action_handlers.clone());
+            let resize_tx = self.listen_resize(self.resize_listeners.clone());
+            let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
+            #[cfg(feature = "assets")]
+            let config = super::bmux_host::attach_assets(config, self.static_asset_routes.clone());
+            let config = super::bmux_host::attach(config, router.clone());
+            let renderer = BmuxRenderer::new(config, action_tx, resize_tx);
+            let mut app = self.build(renderer.clone())?;
+            app.runtime_handle()
+                .map_err(|_| BuilderError::MissingRuntime)?
+                .spawn(async move {
+                    while let Some(url) = renderer.wait_for_navigation().await {
+                        if let Err(error) = router.navigate(url).await {
+                            log::error!("terminal navigation failed: {error:?}");
+                        }
+                    }
+                    Ok::<_, Error>(())
+                });
+            Ok(app)
+        }
+    }
+}
 
 #[cfg(feature = "egui")]
 mod egui {
@@ -1855,12 +1947,21 @@ pub mod stub {
 }
 
 impl AppBuilder {
+    /// Builds the explicitly selected terminal backend.
+    ///
+    /// # Errors
+    /// * Returns a builder error if a router or runtime is unavailable.
+    #[cfg(feature = "bmux")]
+    pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
+        self.build_default_bmux()
+    }
+
     /// Builds an `App` with the default renderer based on enabled features.
     ///
     /// # Errors
     ///
     /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
-    #[cfg(feature = "egui")]
+    #[cfg(all(feature = "egui", not(feature = "bmux")))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_egui()
     }
@@ -1870,7 +1971,7 @@ impl AppBuilder {
     /// # Errors
     ///
     /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
-    #[cfg(all(feature = "fltk", not(feature = "egui")))]
+    #[cfg(all(feature = "fltk", not(any(feature = "bmux", feature = "egui"))))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_fltk()
     }
@@ -1883,7 +1984,7 @@ impl AppBuilder {
     #[cfg(all(
         feature = "actix",
         feature = "vanilla-js",
-        not(any(feature = "egui", feature = "fltk"))
+        not(any(feature = "bmux", feature = "egui", feature = "fltk"))
     ))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_vanilla_js_actix()
@@ -1897,7 +1998,12 @@ impl AppBuilder {
     #[cfg(all(
         feature = "lambda",
         feature = "vanilla-js",
-        not(any(feature = "egui", feature = "fltk", feature = "actix"))
+        not(any(
+            feature = "bmux",
+            feature = "egui",
+            feature = "fltk",
+            feature = "actix"
+        ))
     ))]
     pub fn build_default(self) -> Result<crate::App<DefaultRenderer>, crate::BuilderError> {
         self.build_default_html_vanilla_js_lambda()
@@ -1912,6 +2018,7 @@ impl AppBuilder {
         feature = "actix",
         feature = "html",
         not(any(
+            feature = "bmux",
             feature = "egui",
             feature = "fltk",
             feature = "lambda",
@@ -1931,6 +2038,7 @@ impl AppBuilder {
         feature = "lambda",
         feature = "html",
         not(any(
+            feature = "bmux",
             feature = "egui",
             feature = "fltk",
             feature = "vanilla-js",
@@ -1950,6 +2058,7 @@ impl AppBuilder {
         feature = "html",
         feature = "vanilla-js",
         not(any(
+            feature = "bmux",
             feature = "egui",
             feature = "fltk",
             feature = "actix",
@@ -1968,6 +2077,7 @@ impl AppBuilder {
     #[cfg(all(
         feature = "html",
         not(any(
+            feature = "bmux",
             feature = "egui",
             feature = "fltk",
             feature = "vanilla-js",
@@ -1985,6 +2095,7 @@ impl AppBuilder {
     ///
     /// * [`crate::BuilderError::MissingRouter`] if the `AppBuilder` is missing a router
     #[cfg(not(any(
+        feature = "bmux",
         feature = "html",
         feature = "egui",
         feature = "fltk",

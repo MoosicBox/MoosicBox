@@ -1,0 +1,66 @@
+[package]
+authors     = { workspace = true }
+categories  = ["command-line-interface", "gui"]
+description = "Terminal-native HyperChad renderer using bmux TUI"
+edition     = { workspace = true }
+keywords    = ["hyperchad", "renderer", "terminal", "tui"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_bmux"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+async-trait = { workspace = true }
+bmux_image = { workspace = true, optional = true }
+bmux_keyboard = { workspace = true }
+bmux_text_edit = { workspace = true }
+bmux_tui = { workspace = true, features = ["crossterm"] }
+bmux_tui_components = { workspace = true, features = [
+    "data-display",
+    "forms",
+    "navigation",
+    "overlays",
+    "scroll-view",
+    "text-editing",
+] }
+bmux_tui_runtime = { workspace = true, features = ["crossterm"] }
+crossterm = { workspace = true }
+flume = { workspace = true }
+hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
+hyperchad_color = { workspace = true }
+hyperchad_renderer = { workspace = true, features = ["canvas", "logic"] }
+hyperchad_router = { workspace = true }
+hyperchad_transformer = { workspace = true, features = [
+    "html",
+    "layout",
+    "layout-offset",
+    "logic",
+] }
+hyperchad_transformer_models = { workspace = true }
+image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
+log = { workspace = true }
+serde_json = { workspace = true }
+switchy_async = { workspace = true, features = ["tokio"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+url = { workspace = true }
+
+[features]
+all-protocols    = ["image-iterm2", "image-kitty", "image-sixel"]
+default          = ["all-protocols"]
+fail-on-warnings = []
+image-iterm2     = ["bmux_image/iterm2", "bmux_tui_runtime/image-iterm2", "images"]
+image-kitty      = ["bmux_image/kitty", "bmux_tui_runtime/image-kitty", "images"]
+image-sixel      = ["bmux_image/sixel", "bmux_tui_runtime/image-sixel", "images"]
+images           = ["bmux_tui_runtime/images", "dep:bmux_image"]

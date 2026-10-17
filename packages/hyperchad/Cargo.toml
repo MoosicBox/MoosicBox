@@ -23,6 +23,7 @@ hyperchad_color                    = { workspace = true, optional = true }
 hyperchad_js_bundler               = { workspace = true, optional = true }
 hyperchad_markdown                 = { workspace = true, optional = true }
 hyperchad_renderer                 = { workspace = true, optional = true }
+hyperchad_renderer_bmux            = { workspace = true, optional = true }
 hyperchad_renderer_egui            = { workspace = true, optional = true }
 hyperchad_renderer_fltk            = { workspace = true, optional = true }
 hyperchad_renderer_html            = { workspace = true, optional = true }
@@ -182,6 +183,12 @@ renderer-assets = [
     "hyperchad_renderer_html_http?/assets",
 ]
 renderer-benchmark = ["hyperchad_renderer/benchmark"]
+renderer-bmux = ["dep:hyperchad_renderer_bmux", "hyperchad_app?/bmux"]
+renderer-bmux-images = [
+    "hyperchad_app?/bmux-images",
+    "hyperchad_renderer_bmux/all-protocols",
+    "renderer-bmux",
+]
 renderer-canvas = ["hyperchad_renderer/canvas"]
 renderer-json = ["hyperchad_app?/json", "hyperchad_renderer/json"]
 renderer-logic = ["hyperchad_app?/logic", "hyperchad_renderer/logic"]

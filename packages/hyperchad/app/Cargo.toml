@@ -19,6 +19,7 @@ group = "hyperchad"
 [dependencies]
 hyperchad_actions = { workspace = true }
 hyperchad_renderer = { workspace = true }
+hyperchad_renderer_bmux = { workspace = true, optional = true }
 hyperchad_renderer_egui = { workspace = true, optional = true }
 hyperchad_renderer_fltk = { workspace = true, optional = true }
 hyperchad_renderer_html = { workspace = true, optional = true }
@@ -84,6 +85,8 @@ fail-on-warnings = [
     "switchy_env/fail-on-warnings",
 ]
 
+bmux = ["dep:hyperchad_renderer_bmux", "logic"]
+bmux-images = ["bmux", "hyperchad_renderer_bmux/all-protocols"]
 egui = ["dep:hyperchad_renderer_egui", "logic"]
 egui-glow = ["egui", "hyperchad_renderer_egui/glow"]
 egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]

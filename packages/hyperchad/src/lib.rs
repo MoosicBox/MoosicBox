@@ -112,6 +112,9 @@ pub use hyperchad_markdown as markdown;
 #[cfg(feature = "renderer")]
 pub use hyperchad_renderer as renderer;
 /// Egui desktop renderer APIs.
+#[cfg(feature = "renderer-bmux")]
+pub use hyperchad_renderer_bmux as renderer_bmux;
+
 #[cfg(feature = "renderer-egui")]
 pub use hyperchad_renderer_egui as renderer_egui;
 /// FLTK desktop renderer APIs.
