@@ -844,6 +844,7 @@ fn resumed_impure_or_unknown_dependency_blocks_entire_queue_before_cargo_or_uplo
                 added: Vec::new(),
                 removed: Vec::new(),
                 changed: vec!["src/lib.rs".into()],
+                lockfile_changed: false,
                 diagnostics: vec!["fixture diagnostic".into()],
             };
             let mut report =
@@ -951,6 +952,7 @@ fn disabled_published_dependency_is_assessed_transitively_and_gates_uploads() {
                     added: Vec::new(),
                     removed: Vec::new(),
                     changed: vec!["src/lib.rs".into()],
+                    lockfile_changed: false,
                     diagnostics: Vec::new(),
                 })))
             },
@@ -1079,6 +1081,7 @@ fn published_dependency_of_pending_consumer_still_checks_purity() {
                 added: Vec::new(),
                 removed: Vec::new(),
                 changed: vec!["src/lib.rs".into()],
+                lockfile_changed: false,
                 diagnostics: Vec::new(),
             })))
         },
@@ -1152,6 +1155,7 @@ fn resumed_warn_dependency_continues_packaging_but_never_uploads_in_dry_run() {
             added: Vec::new(),
             removed: Vec::new(),
             changed: vec!["src/lib.rs".into()],
+            lockfile_changed: false,
             diagnostics: Vec::new(),
         });
         let mut reports = vec![report];

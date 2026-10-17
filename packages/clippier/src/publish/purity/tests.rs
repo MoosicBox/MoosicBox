@@ -98,10 +98,7 @@ fn normalized_contents_include_lock_build_docs_and_detect_all_change_kinds() {
         vec!["b".into()],
     );
     assert_eq!(assessment.status, PurityStatus::Impure);
-    assert_eq!(
-        assessment.changed,
-        ["Cargo.lock", "README.md", "src/lib.rs"]
-    );
+    assert_eq!(assessment.changed, ["README.md", "src/lib.rs"]);
     assert_eq!(assessment.added, ["new.txt"]);
     assert_eq!(assessment.removed, ["build.rs"]);
 }
@@ -149,6 +146,88 @@ fn unsafe_ambiguous_and_oversized_archives_are_unknown_not_equal() {
 }
 
 #[test]
+fn archive_normalization_retains_lockfiles_but_purity_reports_them_separately() {
+    let local = archive(&[
+        (
+            "a-0.5.0/Cargo.toml",
+            b"[package]\nname='a'\nversion='0.5.0'\n",
+        ),
+        ("a-0.5.0/Cargo.lock", b"version = 4\n"),
+    ]);
+    let published = archive(&[
+        (
+            "a-0.5.0/Cargo.toml",
+            b"[package]\nname='a'\nversion='0.5.0'\n",
+        ),
+        ("a-0.5.0/Cargo.lock", b"version = 3\n"),
+    ]);
+    let local = normalized_archive_entries(local.path(), ManifestVersionPolicy::Preserve).unwrap();
+    let published =
+        normalized_archive_entries(published.path(), ManifestVersionPolicy::Preserve).unwrap();
+    assert_ne!(local, published); // Other archive consumers still see lockfile changes.
+    let assessment = compare(
+        &PublishPackageInfo::new("a", "0.5.0", true, BTreeSet::new()),
+        &local,
+        &published,
+        Vec::new(),
+    );
+    assert_eq!(assessment.status, PurityStatus::Pure);
+    assert!(assessment.lockfile_changed);
+    assert!(enforce(PurityPolicy::RequirePure, &[assessment]).is_ok());
+}
+
+#[test]
+fn root_lockfile_changes_are_separate_and_do_not_block_source_purity() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    for (local_lock, published_lock) in [
+        (Some("new"), Some("old")),
+        (Some("new"), None),
+        (None, Some("old")),
+        (None, None),
+        (Some("same"), Some("same")),
+    ] {
+        let mut local = BTreeMap::from([("src/lib.rs".into(), b"same source".to_vec())]);
+        let mut published = local.clone();
+        if let Some(lock) = local_lock {
+            local.insert("Cargo.lock".into(), lock.as_bytes().to_vec());
+        }
+        if let Some(lock) = published_lock {
+            published.insert("Cargo.lock".into(), lock.as_bytes().to_vec());
+        }
+        let assessment = compare(&package, &local, &published, vec!["consumer".into()]);
+        assert_eq!(assessment.status, PurityStatus::Pure);
+        assert_eq!(assessment.lockfile_changed, local_lock != published_lock);
+        assert!(enforce(PurityPolicy::RequirePure, std::slice::from_ref(&assessment)).is_ok());
+        let text = diagnostic(
+            PurityPolicy::RequirePure,
+            &assessment,
+            crate::ColorMode::Never,
+        );
+        assert!(!text.contains("local changes"));
+        assert!(!text.contains("blocked"));
+        if assessment.lockfile_changed {
+            assert!(text.contains("cargo install --locked"));
+            assert!(summary(&assessment).contains("Cargo.lock differs"));
+        }
+        let json = serde_json::to_string(&assessment).unwrap();
+        assert_eq!(
+            serde_json::from_str::<PurityAssessment>(&json).unwrap(),
+            assessment
+        );
+        local.insert("src/lib.rs".into(), b"changed source".to_vec());
+        let impure = compare(&package, &local, &published, Vec::new());
+        assert_eq!(impure.status, PurityStatus::Impure);
+        assert!(enforce(PurityPolicy::RequirePure, &[impure]).is_err());
+    }
+    // Only the root generated lockfile is special, not arbitrary nested files.
+    let local = BTreeMap::from([("fixtures/Cargo.lock".into(), b"fixture".to_vec())]);
+    assert_eq!(
+        compare(&package, &local, &BTreeMap::new(), Vec::new()).status,
+        PurityStatus::Impure
+    );
+}
+
+#[test]
 fn strict_assessments_preserve_details_and_warnings_are_bounded() {
     let assessment = PurityAssessment {
         name: "a".into(),
@@ -158,6 +237,7 @@ fn strict_assessments_preserve_details_and_warnings_are_bounded() {
         added: (0..100).map(|index| format!("file-{index}")).collect(),
         removed: Vec::new(),
         changed: Vec::new(),
+        lockfile_changed: false,
         diagnostics: vec!["unsafe\narchive".into()],
     };
     assert!(enforce(PurityPolicy::Warn, std::slice::from_ref(&assessment)).is_ok());

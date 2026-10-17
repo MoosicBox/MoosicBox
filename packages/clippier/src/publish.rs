@@ -800,6 +800,7 @@ where
                 added: Vec::new(),
                 removed: Vec::new(),
                 changed: Vec::new(),
+                lockfile_changed: false,
                 diagnostics: vec![format!(
                     "Registry availability could not be checked: {error}"
                 )],

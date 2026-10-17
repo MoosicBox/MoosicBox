@@ -26,7 +26,7 @@ const MAX_ENTRIES: usize = 20_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PurityStatus {
-    /// All meaningful packaged files match.
+    /// All meaningful packaged files other than the root Cargo.lock match.
     Pure,
     /// Packaged files were added, removed, or changed.
     Impure,
@@ -45,12 +45,17 @@ pub struct PurityAssessment {
     pub status: PurityStatus,
     /// Pending selected packages transitively consuming this package.
     pub affected_pending_consumers: Vec<String>,
-    /// Files present only locally.
+    /// Files present only locally, excluding the root Cargo.lock.
     pub added: Vec<String>,
-    /// Files absent locally.
+    /// Files absent locally, excluding the root Cargo.lock.
     pub removed: Vec<String>,
-    /// Files with different normalized contents.
+    /// Files with different normalized contents, excluding the root Cargo.lock.
     pub changed: Vec<String>,
+    /// Whether the root packaged Cargo.lock differs (including presence/absence).
+    /// Reported separately: it does not determine dependency source purity, but
+    /// can affect binary installation with `cargo install --locked`.
+    #[serde(default)]
+    pub lockfile_changed: bool,
     /// Failure details when comparison is unknown.
     pub diagnostics: Vec<String>,
 }
@@ -160,17 +165,19 @@ pub(super) fn compare(
 ) -> PurityAssessment {
     let added = local
         .keys()
-        .filter(|key| !published.contains_key(*key))
+        .filter(|key| key.as_str() != "Cargo.lock" && !published.contains_key(*key))
         .cloned()
         .collect::<Vec<_>>();
     let removed = published
         .keys()
-        .filter(|key| !local.contains_key(*key))
+        .filter(|key| key.as_str() != "Cargo.lock" && !local.contains_key(*key))
         .cloned()
         .collect::<Vec<_>>();
     let changed = local
         .iter()
-        .filter(|(key, value)| published.get(*key).is_some_and(|old| old != *value))
+        .filter(|(key, value)| {
+            key.as_str() != "Cargo.lock" && published.get(*key).is_some_and(|old| old != *value)
+        })
         .map(|(key, _)| key.clone())
         .collect::<Vec<_>>();
     PurityAssessment {
@@ -185,6 +192,7 @@ pub(super) fn compare(
         added,
         removed,
         changed,
+        lockfile_changed: local.get("Cargo.lock") != published.get("Cargo.lock"),
         diagnostics: Vec::new(),
     }
 }
@@ -316,6 +324,7 @@ pub(super) async fn assess(
             added: Vec::new(),
             removed: Vec::new(),
             changed: Vec::new(),
+            lockfile_changed: false,
             diagnostics: vec![error.to_string()],
         },
     }
@@ -399,6 +408,9 @@ pub(super) fn summary(assessment: &PurityAssessment) -> String {
         bounded_text(&assessment.version)
     );
     match assessment.status {
+        PurityStatus::Pure if assessment.lockfile_changed => format!(
+            "{package}: source/manifest matches crates.io; packaged Cargo.lock differs (relevant to cargo install --locked)"
+        ),
         PurityStatus::Pure => format!("{package}: matches crates.io"),
         PurityStatus::Impure => format!(
             "{package}: differs from crates.io ({})",
@@ -442,6 +454,12 @@ fn diagnostic(
     let explanation = match assessment.status {
         PurityStatus::Impure => "local contents differ from the published version",
         PurityStatus::Unknown => "could not verify the published contents",
+        PurityStatus::Pure if assessment.lockfile_changed => {
+            return format!(
+                "{}: {package} source/manifest matches crates.io; packaged Cargo.lock differs.\n  Dependency consumers resolve with their own lockfile; cargo install --locked uses the published lockfile.",
+                paint(color, "34", "note")
+            );
+        }
         PurityStatus::Pure => return String::new(),
     };
     let mut lines = vec![format!(
@@ -469,6 +487,9 @@ fn diagnostic(
             "  Resolve the comparison failure and retry; this package has not been confirmed pure."
                 .into(),
         );
+    }
+    if assessment.lockfile_changed {
+        lines.push("  Packaged Cargo.lock also differs (reported separately; relevant to cargo install --locked).".into());
     }
     if !assessment.affected_pending_consumers.is_empty() {
         lines.push(format!(
