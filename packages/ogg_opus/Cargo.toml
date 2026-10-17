@@ -1,0 +1,17 @@
+[package]
+authors     = { workspace = true }
+categories  = ["encoding", "multimedia::audio"]
+description = "Standalone streaming Ogg Opus container reader and writer"
+edition     = { workspace = true }
+keywords    = ["audio", "ogg", "opus", "streaming"]
+license     = { workspace = true }
+name        = "moosicbox_ogg_opus"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[features]
+default          = []
+fail-on-warnings = []
+
+[dependencies]

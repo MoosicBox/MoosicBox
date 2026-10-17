@@ -42,6 +42,9 @@
     clippy::multiple_crate_versions
 )]
 
+pub mod qualification;
+pub mod reference;
+
 use std::ffi::c_int;
 
 /// Success return code from libopus functions.
@@ -155,6 +158,7 @@ pub enum ReferenceMode {
 
 unsafe extern "C" {
     fn opus_encoder_ctl(st: *mut OpusEncoder, request: c_int, ...) -> c_int;
+    fn opus_decoder_ctl(st: *mut OpusDecoder, request: c_int, ...) -> c_int;
 }
 
 pub mod safe {
@@ -285,6 +289,37 @@ pub mod safe {
             Ok(())
         }
 
+        /// Applies a whitelisted reference encoder control.
+        ///
+        /// # Errors
+        /// * Returns `ControlFailed` for unsupported requests or rejected values.
+        pub fn reference_control(&mut self, request: c_int, value: c_int) -> Result<(), OpusError> {
+            if ![
+                4002, 4004, 4006, 4008, 4010, 4012, 4014, 4016, 4020, 4022, 11002,
+            ]
+            .contains(&request)
+            {
+                return Err(OpusError::ControlFailed(request, -1));
+            }
+            let result = unsafe { super::opus_encoder_ctl(self.ptr, request, value) };
+            if result != OPUS_OK {
+                return Err(OpusError::ControlFailed(request, result));
+            }
+            Ok(())
+        }
+
+        /// Resets encoder state while retaining settings.
+        ///
+        /// # Errors
+        /// * Returns `ControlFailed` when the public reset request fails.
+        pub fn reset(&mut self) -> Result<(), OpusError> {
+            let result = unsafe { super::opus_encoder_ctl(self.ptr, 4028) };
+            if result != OPUS_OK {
+                return Err(OpusError::ControlFailed(4028, result));
+            }
+            Ok(())
+        }
+
         /// Encodes PCM audio data to Opus format.
         ///
         /// Returns the number of bytes written to the output buffer.
@@ -398,6 +433,18 @@ pub mod safe {
             })
         }
 
+        /// Resets decoder state using the public reference API.
+        ///
+        /// # Errors
+        /// * Returns `ControlFailed` when the reset request fails.
+        pub fn reset(&mut self) -> Result<(), OpusError> {
+            let result = unsafe { super::opus_decoder_ctl(self.ptr, 4028) };
+            if result != OPUS_OK {
+                return Err(OpusError::ControlFailed(4028, result));
+            }
+            Ok(())
+        }
+
         /// Decodes Opus-encoded audio data to PCM format.
         ///
         /// Returns the number of samples decoded per channel.
@@ -442,7 +489,11 @@ pub mod safe {
             let result = unsafe {
                 opus_decode(
                     self.ptr,
-                    data.as_ptr(),
+                    if data.is_empty() {
+                        std::ptr::null()
+                    } else {
+                        data.as_ptr()
+                    },
                     data.len() as c_int,
                     output.as_mut_ptr(),
                     frame_size as c_int,

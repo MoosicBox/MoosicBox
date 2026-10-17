@@ -1,19 +1,19 @@
 # moosicbox_opus_native
 
-Pure Rust implementation of the Opus audio decoder (RFC 6716).
+Pure Rust integer-core Opus audio encoding and decoding (RFC 6716), with explicit supported configuration limits.
 
 ## Installation
 
 ```toml
 [dependencies]
-moosicbox_opus_native = "0.1.0"
+moosicbox_opus_native = "0.5.0"
 ```
 
 Enable `resampling` only if you need SILK sample-rate conversion:
 
 ```toml
 [dependencies]
-moosicbox_opus_native = { version = "0.1.0", features = ["resampling"] }
+moosicbox_opus_native = { version = "0.5.0", features = ["resampling"] }
 ```
 
 ## Usage
@@ -31,7 +31,8 @@ let samples = decoder.decode(Some(&packet), &mut output, false)?;
 
 Critical public API notes:
 
-- Packet loss (`None`) and `fec=true` currently return `Error::Unsupported` before changing decoder state or output; native PLC/FEC synthesis is not implemented.
+- `decode_loss(output, samples_per_channel)` explicitly selects loss duration. CELT, SILK and hybrid concealment, burst recovery and reset have qualified fixed-point C coverage. `decode(None, ...)` uses the previous packet duration; explicit fresh-state loss produces silence.
+- `fec=true` supports verified complete-channel 20-ms SILK LBRR and verified missing-LBRR PLC fallback. Partial-channel LBRR, 40/60-ms SILK FEC, cross-mode FEC and some channel migrations remain explicitly unsupported.
 - SILK delay reporting: `decoder.algorithmic_delay_samples()` reports the integer resampler's included delay (4/9/12 input-rate samples, converted to the output rate), not wrapper history or container pre-skip.
 - `decode_float` converts integer PCM output; `reset_state` reconstructs fresh decoder state.
 
@@ -61,16 +62,15 @@ Passing unit tests do not establish end-to-end waveform correctness.
 * The frozen reference corpus passes exact raw PCM comparisons for all 43 cases
   (19 SILK, 15 CELT, 9 hybrid), including persistent nonzero sequences. These
   bounded results do not establish correctness for arbitrary Opus streams.
-* Independent persistent SILK checks cover 24 rate/channel/duration streams
-  (192 packets) without alignment shifts or sample tolerances.
-* FEC and packet loss (`None`) return `Error::Unsupported`; reference PLC/FEC
-  synthesis is not implemented. Unverified hybrid mode/channel transitions and
-  redundant transition synthesis also return explicit `Unsupported`. Redundancy
-  rejection occurs after SILK state advancement; reset before retrying a stream.
+* Persistent SILK bandwidth/channel/duration changes, cooperative codec-mode transitions, abrupt nonredundant transitions, and loss/recovery have additional exact public-C tests. These bounded matrices are not universal conformance proof.
+* Remaining guards include partial-channel LBRR, 40/60-ms SILK FEC, cross-mode FEC, FEC stereo-to-mono resampler migration, and CELT/hybrid coded-channel changes. Unsupported loss-duration combinations are rejected explicitly.
 * `reset_state` reconstructs fresh decoder state; `decode_float` converts integer
   decoder output rather than introducing floating-point codec synthesis.
-* Integer range encoding is implemented in `range::RangeEncoder`; a native audio
-  encoder is not yet available.
+* Native audio encoding is available through `Encoder::new` (CELT), `new_silk` and `new_hybrid`, with integer analysis/quantization and explicit constructor limits. No automatic mode adaptation is implied.
+  * CELT: 8/12/16/24/48 kHz, mono/stereo, 2.5/5/10/20 ms; minimum 128/64/32/32 kbit/s respectively, maximum 256 kbit/s.
+  * SILK: 8/12/16 kHz, mono/stereo, 10/20 ms; 48–128 kbit/s mono or 96–128 kbit/s stereo.
+  * Hybrid: 48 kHz, mono/stereo, 10/20 ms; 128–256 kbit/s.
+  * Query `lookahead()` and consume every packet returned by `finish()`. Low-bitrate SILK noise shaping, voiced/LTP optimization and automatic adaptation remain unfinished; synthetic-signal quality checks do not establish general speech/music quality.
 * `moosicbox_opus` offers an explicit native backend, with libopus retained as its
   default. Native selection never silently falls back to the C implementation.
 

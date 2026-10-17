@@ -358,7 +358,7 @@ pub enum GetSilenceBytesError {
 /// # Panics
 ///
 /// * If an encoder feature is not enabled for the `AudioFormat`
-#[allow(unused_assignments)]
+#[allow(unused_assignments, clippy::too_many_lines)]
 pub fn get_silence_bytes(
     format: AudioFormat,
     duration: u64,
@@ -428,8 +428,23 @@ pub fn get_silence_bytes(
                                 .open(spec.clone(), duration.into()),
                         )
                     }
-                    #[cfg(not(feature = "encoder-opus"))]
-                    panic!("No encoder-opus feature");
+                    #[cfg(all(not(feature = "encoder-opus"), feature = "encoder-opus-native"))]
+                    {
+                        use moosicbox_audio_output::encoder::opus::{
+                            OpusEncodeBackend, OpusEncodeConfig, SelectedOpusEncoder,
+                        };
+                        Box::new(SelectedOpusEncoder::with_writer(
+                            writer,
+                            OpusEncodeConfig {
+                                backend: OpusEncodeBackend::Native,
+                                channels: u8::try_from(spec.channels().count())
+                                    .map_err(|_| GetSilenceBytesError::InvalidSource)?,
+                                ..OpusEncodeConfig::default()
+                            },
+                        )?)
+                    }
+                    #[cfg(not(any(feature = "encoder-opus", feature = "encoder-opus-native")))]
+                    panic!("No Opus encoder feature");
                 }
                 AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
             };
@@ -492,7 +507,18 @@ pub async fn get_audio_bytes(
 ) -> Result<TrackBytes, GetTrackBytesError> {
     let mut options = DecodeOptions::default();
     options.decoder.verify = true;
-    get_audio_bytes_impl(source, format, size, start, end, options, true).await
+    get_audio_bytes_impl(
+        source,
+        format,
+        size,
+        start,
+        end,
+        options,
+        true,
+        #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+        None,
+    )
+    .await
 }
 
 /// Fetch local or remote audio with explicit decoding options.
@@ -510,7 +536,45 @@ pub async fn get_audio_bytes_with_options(
     end: Option<u64>,
     options: DecodeOptions,
 ) -> Result<TrackBytes, GetTrackBytesError> {
-    get_audio_bytes_impl(source, format, size, start, end, options, false).await
+    get_audio_bytes_impl(
+        source,
+        format,
+        size,
+        start,
+        end,
+        options,
+        false,
+        #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+        None,
+    )
+    .await
+}
+
+/// Transcode explicitly to Ogg Opus with the selected backend and coding mode.
+///
+/// Unlike passthrough APIs, this always re-encodes, including Opus input, and
+/// bypasses the shared byte cache. Decoder selection is independent of encoding.
+///
+/// # Errors
+/// * Returns source/transport errors from [`get_audio_bytes`]; codec, unsupported
+///   mode/configuration, and output failures surface as terminal stream errors.
+#[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+pub async fn get_audio_bytes_with_opus_encoder(
+    source: TrackSource,
+    options: DecodeOptions,
+    config: moosicbox_audio_output::encoder::opus::OpusEncodeConfig,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    get_audio_bytes_impl(
+        source,
+        AudioFormat::Opus,
+        None,
+        None,
+        None,
+        options,
+        false,
+        Some(config),
+    )
+    .await
 }
 
 // Preserve encoded bytes, then expose decoder completion as a terminal stream error.
@@ -531,7 +595,11 @@ fn decoded_byte_stream(
     )
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::match_wildcard_for_single_variants
+)]
 async fn get_audio_bytes_impl(
     source: TrackSource,
     format: AudioFormat,
@@ -540,6 +608,9 @@ async fn get_audio_bytes_impl(
     end: Option<u64>,
     options: DecodeOptions,
     cache: bool,
+    #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))] opus_config: Option<
+        moosicbox_audio_output::encoder::opus::OpusEncodeConfig,
+    >,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
 
@@ -555,6 +626,8 @@ async fn get_audio_bytes_impl(
                 #[allow(unused)]
                 let stream = decoded_byte_stream(writer.stream(), receiver);
                 let same_format = format == AudioFormat::Source || source.format() == format;
+                #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+                let same_format = same_format && opus_config.is_none();
 
                 let track_bytes = if same_format {
                     match source {
@@ -627,6 +700,17 @@ async fn get_audio_bytes_impl(
                             }
                             #[cfg(feature = "format-opus")]
                             AudioFormat::Opus => {
+                                #[cfg(any(
+                                    feature = "encoder-opus",
+                                    feature = "encoder-opus-native"
+                                ))]
+                                if let Some(config) = opus_config {
+                                    return Ok(moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(Box::new(move |_, _| {
+                                        let encoder = moosicbox_audio_output::encoder::opus::SelectedOpusEncoder::with_writer(writer.clone(), config)
+                                            .map_err(|error| moosicbox_audio_decoder::AudioDecodeError::Other(Box::new(error)))?;
+                                        Ok(Box::new(encoder))
+                                    })));
+                                }
                                 #[cfg(feature = "encoder-opus")]
                                 {
                                     moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
@@ -638,8 +722,22 @@ async fn get_audio_bytes_impl(
                                         }),
                                     )
                                 }
-                                #[cfg(not(feature = "encoder-opus"))]
-                                panic!("No encoder-opus feature");
+                                #[cfg(all(
+                                    not(feature = "encoder-opus"),
+                                    feature = "encoder-opus-native"
+                                ))]
+                                {
+                                    moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(Box::new(move |spec, _| {
+                                        use moosicbox_audio_output::encoder::opus::{SelectedOpusEncoder, OpusEncodeConfig, OpusEncodeBackend};
+                                        let channels = u8::try_from(spec.channels().count()).map_err(|_| moosicbox_audio_decoder::AudioDecodeError::OpenStream)?;
+                                        Ok(Box::new(SelectedOpusEncoder::with_writer(writer.clone(), OpusEncodeConfig { backend: OpusEncodeBackend::Native, channels, ..OpusEncodeConfig::default() }).map_err(|error| moosicbox_audio_decoder::AudioDecodeError::Other(Box::new(error)))?))
+                                    }))
+                                }
+                                #[cfg(not(any(
+                                    feature = "encoder-opus",
+                                    feature = "encoder-opus-native"
+                                )))]
+                                panic!("No Opus encoder feature");
                             }
                             AudioFormat::Source => {
                                 return Err(moosicbox_audio_decoder::DecodeError::InvalidSource);
@@ -1276,6 +1374,67 @@ pub async fn get_or_init_track_size(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "encoder-opus-native")]
+    #[switchy_async::test]
+    #[allow(clippy::default_trait_access)]
+    async fn explicit_opus_modes_transcode_opus_source_instead_of_passthrough() {
+        use moosicbox_audio_output::encoder::opus::{
+            OpusEncodeBackend, OpusEncodeConfig, OpusEncodeMode,
+        };
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Opus,
+            path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/silk.ogg").to_owned(),
+            track_id: None,
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        for (mode, rate) in [
+            (OpusEncodeMode::Celt, 48000),
+            (OpusEncodeMode::Silk, 16000),
+            (OpusEncodeMode::Hybrid, 48000),
+        ] {
+            let result = get_audio_bytes_with_opus_encoder(
+                source.clone(),
+                DecodeOptions {
+                    opus_backend: moosicbox_audio_decoder::OpusDecodeBackend::Native,
+                    ..Default::default()
+                },
+                OpusEncodeConfig {
+                    backend: OpusEncodeBackend::Native,
+                    mode,
+                    sample_rate: rate,
+                    channels: 1,
+                    frame_size: rate as usize / 50,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+            let mut bytes = Vec::new();
+            for item in result.stream.collect::<Vec<_>>().await {
+                bytes.extend_from_slice(&item.unwrap().unwrap());
+            }
+            let mut format = moosicbox_audio_decoder::create_format_probe()
+                .probe(
+                    &symphonia::core::formats::probe::Hint::new(),
+                    symphonia::core::io::MediaSourceStream::new(
+                        Box::new(std::io::Cursor::new(bytes)),
+                        Default::default(),
+                    ),
+                    Default::default(),
+                    Default::default(),
+                )
+                .unwrap();
+            let packet = format.next_packet().unwrap().unwrap();
+            let toc = packet.data[0] >> 3;
+            match mode {
+                OpusEncodeMode::Celt => assert!(toc >= 16),
+                OpusEncodeMode::Silk => assert!(toc < 12),
+                OpusEncodeMode::Hybrid => assert!((12..16).contains(&toc)),
+                OpusEncodeMode::Default => unreachable!(),
+            }
+        }
+    }
     #[cfg(all(
         feature = "encoder-flac",
         feature = "decoder-opus-native",

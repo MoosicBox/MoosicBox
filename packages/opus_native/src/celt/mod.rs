@@ -12,11 +12,12 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-mod constants;
+pub(crate) mod constants;
 mod decoder;
 /// Fixed-point arithmetic utilities for CELT decoding
 pub mod fixed_point;
 mod pvq;
 
 pub use constants::CELT_NUM_BANDS;
-pub use decoder::CeltDecoder;
+pub(crate) use decoder::residual::{CACHE_BITS50, CACHE_INDEX50};
+pub use decoder::{CeltDecoder, transition::smooth_transition};

@@ -48,8 +48,11 @@ symphonia = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+moosicbox_opus = { workspace = true, default-features = false, features = [
+    "native",
+] }
 switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
-test-log      = { workspace = true }
+test-log = { workspace = true }
 
 [features]
 default = ["api", "default-windows", "openapi"]
@@ -98,4 +101,9 @@ opus = [
     "dep:opus",
     "moosicbox_audio_decoder/opus",
     "moosicbox_audio_encoder?/opus",
+]
+opus-native = [
+    "dep:moosicbox_audio_encoder",
+    "moosicbox_audio_decoder/opus-native",
+    "moosicbox_audio_encoder/opus-native",
 ]

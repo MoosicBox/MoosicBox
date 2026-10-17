@@ -48,6 +48,21 @@ use symphonia::core::packet::Packet;
 use symphonia::core::units::{Duration, Time, Timestamp};
 use thiserror::Error;
 
+/// Create the product format probe, preferring the standalone Opus container when enabled.
+#[must_use]
+pub fn create_format_probe() -> symphonia::core::formats::probe::Probe {
+    #[cfg(feature = "opus-base")]
+    {
+        moosicbox_opus::create_opus_probe()
+    }
+    #[cfg(not(feature = "opus-base"))]
+    {
+        let mut probe = symphonia::core::formats::probe::Probe::new();
+        symphonia::default::register_enabled_formats(&mut probe);
+        probe
+    }
+}
+
 pub use options::{DecodeOptions, OpusDecodeBackend};
 mod options;
 
@@ -615,12 +630,7 @@ pub fn decode_media_source_with_options(
     let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().probe(
-        hint,
-        media_source_stream,
-        format_opts,
-        metadata_opts,
-    ) {
+    match create_format_probe().probe(hint, media_source_stream, format_opts, metadata_opts) {
         Ok(probed) => {
             // If present, parse the seek argument.
             let seek_time = seek;

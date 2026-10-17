@@ -4,6 +4,8 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_audio_decoder::{AudioDecode, AudioDecodeError, AudioDecodeHandler};
+#[cfg(feature = "encoder-opus-native")]
+use moosicbox_audio_output::encoder::opus::{OpusEncodeBackend, OpusEncodeConfig};
 use moosicbox_player::{DecodeOptions, OpusDecodeBackend};
 use std::{
     io::{Cursor, Read as _},
@@ -172,6 +174,181 @@ fn exercise(backend: OpusDecodeBackend) {
         assert_eq!(pcm, expected(gain));
     }
 }
+#[test_log::test]
+fn native_player_normal_gapless_preskip_tail_gain_and_seek() {
+    for gain in [0, 1536] {
+        for seek in [None, Some(0.025)] {
+            let mut bytes = stream(gain, 312);
+            // Last page contains the fourth packet; truncate its audible tail by 111.
+            let last = bytes.windows(4).rposition(|w| w == b"OggS").unwrap();
+            bytes[last + 6..last + 14].copy_from_slice(&3729_u64.to_le_bytes());
+            bytes[last + 22..last + 26].fill(0);
+            let mut crc = 0_u32;
+            for byte in &bytes[last..] {
+                crc ^= u32::from(*byte) << 24;
+                for _ in 0..8 {
+                    crc = if crc & 0x8000_0000 != 0 {
+                        (crc << 1) ^ 0x04c1_1db7
+                    } else {
+                        crc << 1
+                    };
+                }
+            }
+            bytes[last + 22..last + 26].copy_from_slice(&crc.to_le_bytes());
+            let capture = Arc::new(Mutex::new(Capture::default()));
+            let sink = capture.clone();
+            let mut handler = AudioDecodeHandler::new()
+                .with_output(Box::new(move |_, _| Ok(Box::new(Sink(sink.clone())))));
+            let options = DecodeOptions {
+                opus_backend: OpusDecodeBackend::Native,
+                ..DecodeOptions::default()
+            };
+            moosicbox_player::symphonia::play_media_source_with_options(
+                MediaSourceStream::new(
+                    Box::new(Cursor::new(bytes.clone())),
+                    MediaSourceStreamOptions::default(),
+                ),
+                &Hint::new(),
+                &mut handler,
+                options,
+                None,
+                seek,
+            )
+            .unwrap();
+            let reference = expected(gain);
+            let start = 312 + if seek.is_some() { 1200 } else { 0 };
+            let reference = &reference[start..3729];
+            let captured = capture.lock().unwrap();
+            assert_eq!(captured.pcm, reference);
+            assert_eq!(captured.flushes, 1);
+            drop(captured);
+            let rx = moosicbox_player::symphonia_unsync::play_media_source_with_options_result(
+                MediaSourceStream::new(
+                    Box::new(Cursor::new(bytes)),
+                    MediaSourceStreamOptions::default(),
+                ),
+                &Hint::new(),
+                options,
+                None,
+                seek,
+            )
+            .unwrap();
+            let mut actual = Vec::new();
+            while let Ok(result) = rx.recv_timeout(std::time::Duration::from_secs(2)) {
+                actual.extend_from_slice(result.unwrap().plane(0).unwrap());
+            }
+            assert_eq!(actual, reference);
+        }
+    }
+}
+
+#[test_log::test]
+fn native_nonzero_granule_origin_normalizes_player_seek() {
+    let mut bytes = stream(0, 312);
+    let pages: Vec<_> = bytes
+        .windows(4)
+        .enumerate()
+        .filter_map(|(i, w)| (w == b"OggS").then_some(i))
+        .collect();
+    for (index, start) in pages.iter().copied().enumerate().skip(2) {
+        let end = pages.get(index + 1).copied().unwrap_or(bytes.len());
+        let granule = u64::from_le_bytes(bytes[start + 6..start + 14].try_into().unwrap()) + 10_000;
+        bytes[start + 6..start + 14].copy_from_slice(&granule.to_le_bytes());
+        bytes[start + 22..start + 26].fill(0);
+        let mut crc = 0_u32;
+        for byte in &bytes[start..end] {
+            crc ^= u32::from(*byte) << 24;
+            for _ in 0..8 {
+                crc = if crc & 0x8000_0000 != 0 {
+                    (crc << 1) ^ 0x04c1_1db7
+                } else {
+                    crc << 1
+                };
+            }
+        }
+        bytes[start + 22..start + 26].copy_from_slice(&crc.to_le_bytes());
+    }
+    let mut reader = moosicbox_audio_decoder::create_format_probe()
+        .probe(
+            &Hint::new(),
+            MediaSourceStream::new(
+                Box::new(Cursor::new(bytes.clone())),
+                MediaSourceStreamOptions::default(),
+            ),
+            symphonia::core::formats::FormatOptions::default(),
+            symphonia::core::meta::MetadataOptions::default(),
+        )
+        .unwrap();
+    assert_eq!(reader.next_packet().unwrap().unwrap().pts.get(), -312);
+    for seek in [None, Some(0.025)] {
+        let rx = moosicbox_player::symphonia_unsync::play_media_source_with_options_result(
+            MediaSourceStream::new(
+                Box::new(Cursor::new(bytes.clone())),
+                MediaSourceStreamOptions::default(),
+            ),
+            &Hint::new(),
+            DecodeOptions {
+                opus_backend: OpusDecodeBackend::Native,
+                ..Default::default()
+            },
+            None,
+            seek,
+        )
+        .unwrap();
+        let mut actual = Vec::new();
+        while let Ok(result) = rx.recv_timeout(std::time::Duration::from_secs(2)) {
+            actual.extend_from_slice(result.unwrap().plane(0).unwrap());
+        }
+        assert_eq!(
+            actual,
+            expected(0)[312 + if seek.is_some() { 1200 } else { 0 }..]
+        );
+    }
+}
+
+#[cfg(feature = "encoder-opus-native")]
+#[test_log::test]
+fn real_native_transcode_reenters_gapless_player() {
+    let options = DecodeOptions {
+        opus_backend: OpusDecodeBackend::Native,
+        ..Default::default()
+    };
+    let mut processor = moosicbox_player::signal_chain::SignalChainStep::new()
+        .with_decode_options(options)
+        .with_opus_encoder(OpusEncodeConfig {
+            backend: OpusEncodeBackend::Native,
+            channels: 1,
+            ..Default::default()
+        })
+        .unwrap()
+        .process(Box::new(Cursor::new(stream(0, 312))))
+        .unwrap();
+    let mut ogg = Vec::new();
+    processor.read_to_end(&mut ogg).unwrap();
+    assert_eq!(processor.read(&mut [0; 1]).unwrap(), 0);
+    let capture = Arc::new(Mutex::new(Capture::default()));
+    let sink = capture.clone();
+    let mut handler = AudioDecodeHandler::new()
+        .with_output(Box::new(move |_, _| Ok(Box::new(Sink(sink.clone())))));
+    moosicbox_player::symphonia::play_media_source_with_options(
+        MediaSourceStream::new(
+            Box::new(Cursor::new(ogg)),
+            MediaSourceStreamOptions::default(),
+        ),
+        &Hint::new(),
+        &mut handler,
+        options,
+        None,
+        None,
+    )
+    .unwrap();
+    let captured = capture.lock().unwrap();
+    assert_eq!(captured.pcm.len(), 3840 - 312);
+    assert_eq!(captured.flushes, 1);
+    assert!(captured.pcm.iter().any(|x| x.abs() > 0.001));
+    drop(captured);
+}
+
 #[test_log::test]
 fn native_player_pcm_matches_frozen_stateful_reference() {
     exercise(OpusDecodeBackend::Native);

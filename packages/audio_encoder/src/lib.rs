@@ -43,6 +43,9 @@ pub mod flac;
 #[cfg(feature = "mp3")]
 pub mod mp3;
 
+#[cfg(any(feature = "opus", feature = "opus-native"))]
+pub mod opus_stream;
+
 #[cfg(feature = "opus")]
 pub mod opus;
 

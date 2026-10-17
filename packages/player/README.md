@@ -2,6 +2,71 @@
 
 A high-performance audio playback engine with support for multiple audio formats and session-based playback management.
 
+## Explicit Live Opus Reference Test
+
+Normal native mode tests do not build or invoke the C reference runner. The
+20-combination exact public-C PCM comparison is separately ignored and requires
+an explicitly qualified executable. Build the portable Cargo example following
+[`opus_native/libopus/README.md`](../opus_native/libopus/README.md), then run:
+
+```sh
+MOOSICBOX_OPUS_REFERENCE_ORACLE=/absolute/path/to/reference_oracle \
+CARGO_BUILD_JOBS=2 cargo test -p moosicbox_player --no-default-features \
+  --features encoder-opus-native --test opus_encode_modes \
+  selected_modes_match_qualified_public_c_pcm --locked --offline -- --include-ignored
+```
+
+Missing or invalid runner paths fail requested live runs, rather than silently
+skipping. The test loads the shared `libopus/src/oracle.py` client by its exact
+source path; it never selects a cache archive, system library, or source `.libs`.
+Normal mode tests retain nonzero PCM, FFmpeg validity/counts, gain, seek, partial
+tail, constructor-boundary, and signal-chain assertions without the C runner.
+
+## Native Selection and Feedback Loop
+
+Enable `decoder-opus-native` / `encoder-opus-native` with default features disabled
+for the Rust codec path. Set `DecodeOptions::opus_backend` to `Native` explicitly;
+legacy defaults may request Libopus and never silently fall back when unavailable.
+Pass `OpusEncodeConfig { backend: Native, mode, .. }` through
+`SignalChainStep::with_opus_encoder` (types are re-exported by
+`moosicbox_audio_output::encoder::opus`). Native `Default` is CELT, not adaptive
+mode switching; explicit `Celt`, `Silk`, and `Hybrid` select their constructors.
+
+Current encoder limits: mono/stereo CELT at 8/12/16/24/48 kHz, 2.5/5/10/20 ms,
+minimum 128/64/32/32 kbps respectively and maximum 256 kbps; SILK at 8/12/16 kHz,
+10/20 ms, mono 48–128 kbps or stereo 96–128 kbps; hybrid at 48 kHz, 10/20 ms,
+128–256 kbps. Unsupported combinations fail construction before container output.
+SILK encoding is currently unvoiced predictive coding, not a full adaptive encoder.
+Lookahead comes from the codec getter; normal playback applies pre-skip, EOS trim,
+and mandatory header gain exactly once. Finite seek preroll provides the requested
+sample cutoff, not identical prediction history to linear playback.
+
+Run the normal feedback loop without a C reference prerequisite:
+
+```sh
+CARGO_BUILD_JOBS=2 cargo test -p moosicbox_player --no-default-features \
+  --features encoder-opus-native --test opus_encode_modes --test opus_backend_tests \
+  --locked --offline
+```
+
+FFmpeg must be installed for independent valid-file/sample-count checks. These
+sink-based tests do not claim hardware playback validation. The separately ignored
+`changing_mode_ogg_file_matches_public_c_and_player_seek` test generates actual
+42-packet SILK/hybrid/CELT transitions with a persistent qualified C encoder,
+frames them with the standalone Ogg writer, then checks exact native-player PCM,
+gain, final trim, seek presentation, and propagated truncation errors. Its valid
+zero-pre-skip header intentionally retains codec delay; a second nonzero-pre-skip
+case verifies explicit trimming. Neither assumes the encoder's lookahead value.
+
+To run **both** live reference tests after building the qualified runner:
+
+```sh
+MOOSICBOX_OPUS_REFERENCE_ORACLE=/absolute/path/to/reference_oracle \
+CARGO_BUILD_JOBS=2 cargo test -p moosicbox_player --no-default-features \
+  --features encoder-opus-native --test opus_encode_modes --locked --offline \
+  -- --include-ignored
+```
+
 ## Overview
 
 The MoosicBox Player is the core audio playback component that provides:
@@ -530,6 +595,10 @@ let options = DecodeOptions {
 ```
 
 The selection is honored even when both backends are compiled. An unavailable
-backend returns an error; it never falls back. Native hybrid packets remain
-unsupported. Gapless options do not repair the known Symphonia Ogg pre-skip defect.
-Opus encoder features still explicitly depend on C libraries.
+backend returns an error; it never falls back. Native decoding supports SILK,
+CELT, and hybrid packets, including persistent mode changes. The standalone-backed
+Ogg Opus reader supplies pre-skip and final trimming to normal gapless playback;
+header gain is applied once by the codec adapter. `encoder-opus-native` selects
+the pure-Rust encoder capability without linking C; legacy `encoder-opus` retains
+the C libopus encoder. Explicit backend/mode selection and current native encoder
+limits are described above.

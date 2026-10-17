@@ -244,6 +244,19 @@ impl SignalChainStep {
         self
     }
 
+    /// Select an Opus encoder without deferring initialization errors to playback.
+    ///
+    /// # Errors
+    /// * Returns unavailable-backend, configuration, and codec initialization errors.
+    #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+    pub fn with_opus_encoder(
+        self,
+        config: moosicbox_audio_output::encoder::opus::OpusEncodeConfig,
+    ) -> Result<Self, moosicbox_audio_output::AudioOutputError> {
+        let encoder = moosicbox_audio_output::encoder::opus::SelectedOpusEncoder::new(config)?;
+        Ok(self.with_encoder(move || Box::new(encoder)))
+    }
+
     /// Sets the resampler for this step.
     ///
     /// The resampler converts audio to a different sample rate.

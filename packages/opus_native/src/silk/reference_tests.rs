@@ -1,5 +1,252 @@
 use super::*;
 
+#[test]
+fn silk_reset_restores_gain_scaling_and_entropy_voicing_banks() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+    decoder.prev_gain_q16 = [123_456, 987_654];
+    decoder.previous_frame_voiced = [true; 2];
+    decoder.previous_pitch_lag = [Some(70), Some(90)];
+    decoder.reset_decoder_state();
+    assert_eq!(decoder.prev_gain_q16, [65536; 2]);
+    assert_eq!(decoder.previous_frame_voiced, [false; 2]);
+    assert_eq!(decoder.previous_pitch_lag, [None; 2]);
+}
+
+#[test]
+fn duration_reconfiguration_preserves_prediction_and_rejects_invalid_input() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+    decoder.previous_gain_indices = [Some(17), Some(23)];
+    decoder.previous_pitch_lag = [Some(91), Some(123)];
+    decoder.prev_gain_q16 = [123_456, 234_567];
+    decoder.packet_frames = [2, 1];
+    decoder.mono_history = 1234;
+    decoder.ltp_state[0].lpc_history_q14[0] = 4321;
+    decoder.stereo_state.as_mut().unwrap().s_mid = [12, 34];
+    for ms in [10, 20, 10, 20] {
+        decoder.set_frame_duration(ms).unwrap();
+        assert_eq!(decoder.frame_size_ms, ms);
+        assert_eq!(decoder.num_silk_frames, 1);
+        assert_eq!(decoder.previous_gain_indices, [Some(17), Some(23)]);
+        assert_eq!(decoder.previous_pitch_lag, [Some(91), Some(123)]);
+        assert_eq!(decoder.prev_gain_q16, [123_456, 234_567]);
+        assert_eq!(decoder.packet_frames, [2, 1]);
+        assert_eq!(decoder.mono_history, 1234);
+        assert_eq!(decoder.ltp_state[0].lpc_history_q14[0], 4321);
+        assert_eq!(decoder.stereo_state.as_ref().unwrap().s_mid, [12, 34]);
+    }
+    for ms in [0, 5, 40, 60, 255] {
+        assert!(decoder.set_frame_duration(ms).is_err());
+        assert_eq!(decoder.frame_size_ms, 20);
+        assert_eq!(decoder.previous_gain_indices, [Some(17), Some(23)]);
+        assert_eq!(decoder.ltp_state[0].lpc_history_q14[0], 4321);
+    }
+}
+
+#[test]
+#[ignore = "private SILK component oracle; runner extension pending"]
+fn comfort_noise_estimate_matches_pinned_cng_state() {
+    let oracle = std::process::Command::new("python3")
+        .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/silk/cng_oracle.py"))
+        .output()
+        .unwrap();
+    assert!(
+        oracle.status.success(),
+        "{}",
+        String::from_utf8_lossy(&oracle.stderr)
+    );
+    let text = String::from_utf8(oracle.stdout).unwrap();
+    let mut cng = super::super::cng::ComfortNoise::default();
+    let mut lines = text.lines();
+    for (frame, rate) in [8000, 8000, 12000, 12000, 16000, 16000]
+        .into_iter()
+        .enumerate()
+    {
+        let line = lines.next().unwrap();
+        let order = if rate == 16000 { 16 } else { 10 };
+        let subframes = if frame % 2 == 0 { 4 } else { 2 };
+        let nlsf = (0..order)
+            .map(|index| {
+                i16::try_from((index + 1) * 32767 / (order + 1) + ((index % 3) - 1) * 33).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let gains = (0..subframes)
+            .map(|index| 65536 * (index + 2 + i32::try_from(frame).unwrap()))
+            .collect::<Vec<_>>();
+        let excitation = (0..i32::try_from(rate / 200).unwrap() * subframes)
+            .map(|index| (index * 31 - 1000) * 16)
+            .collect::<Vec<_>>();
+        cng.update(rate, frame % 3 != 1, &nlsf, &gains, &excitation);
+        let expected = line
+            .split_whitespace()
+            .map(|value| value.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(cng.gain_q16, expected[0], "gain frame {frame}");
+        assert_eq!(
+            cng.nlsf_q15.map(i32::from),
+            expected[1..17],
+            "NLSF frame {frame}"
+        );
+        assert_eq!(
+            cng.excitation_q14,
+            expected[17..],
+            "excitation frame {frame}"
+        );
+        let mut actual = vec![0; excitation.len()];
+        cng.synthesize(
+            &mut actual,
+            match rate {
+                8000 => Bandwidth::Narrowband,
+                12000 => Bandwidth::Mediumband,
+                _ => Bandwidth::Wideband,
+            },
+            200,
+            65536,
+        )
+        .unwrap();
+        let expected = lines
+            .next()
+            .unwrap()
+            .strip_prefix("PCM ")
+            .unwrap()
+            .split_whitespace()
+            .map(|x| x.parse::<i16>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "CNG PCM frame={frame}");
+    }
+}
+
+#[test]
+#[ignore = "private SILK component oracle; runner extension pending"]
+fn recovery_glue_matches_pinned_c_loss_burst_and_recovery() {
+    let oracle = std::process::Command::new("python3")
+        .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/silk/recovery_oracle.py"))
+        .output()
+        .unwrap();
+    assert!(
+        oracle.status.success(),
+        "{}",
+        String::from_utf8_lossy(&oracle.stderr)
+    );
+    let text = String::from_utf8(oracle.stdout).unwrap();
+    let mut lines = text.lines();
+    for n in [80, 160, 320] {
+        let mut recovery = super::super::recovery::Recovery::default();
+        for frame in 0..8 {
+            let gain = if frame == 0 {
+                0
+            } else if frame < 3 {
+                17
+            } else if frame == 3 {
+                101
+            } else {
+                37
+            };
+            let mut actual = (0..n)
+                .map(|index| i16::try_from(((index * 13) % 71 - 35) * gain).unwrap())
+                .collect::<Vec<_>>();
+            recovery.process(&mut actual, frame < 3 || frame == 5);
+            let expected = lines
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .map(|value| value.parse::<i16>().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "length={n} frame={frame}");
+        }
+    }
+    assert!(lines.next().is_none());
+}
+
+#[test]
+#[ignore = "private SILK component oracle; runner extension pending"]
+fn concealment_parameter_update_matches_pinned_c() {
+    let oracle = std::process::Command::new("python3")
+        .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/silk/plc_oracle.py"))
+        .output()
+        .unwrap();
+    assert!(
+        oracle.status.success(),
+        "{}",
+        String::from_utf8_lossy(&oracle.stderr)
+    );
+    let text = String::from_utf8(oracle.stdout).unwrap();
+    let mut plc = super::super::plc::Concealment::default();
+    let mut lines = text.lines();
+    let mut saved_excitation = [0_i32; 320];
+    for (frame, rate) in [8000, 8000, 12000, 12000, 16000, 16000]
+        .into_iter()
+        .enumerate()
+    {
+        let line = lines.next().unwrap();
+        let order = if rate == 16000 { 16 } else { 10 };
+        let n = if frame % 2 == 0 { 4 } else { 2 };
+        let f = i32::try_from(frame).unwrap();
+        let lags = (0..n)
+            .map(|index| i16::try_from(rate / 1000 * (7 + index)).unwrap())
+            .collect::<Vec<_>>();
+        let taps = (0..n)
+            .map(|index| {
+                std::array::from_fn(|j| {
+                    i8::try_from(if j == 2 {
+                        60 + f * 12
+                    } else {
+                        3 + i32::try_from(index).unwrap()
+                    })
+                    .unwrap()
+                })
+            })
+            .collect::<Vec<_>>();
+        let lpc = (0..order)
+            .map(|index| (if index % 2 == 1 { 1 } else { -1 }) * (index + 1) * 11)
+            .collect::<Vec<_>>();
+        let gains = (0..n)
+            .map(|index| 65536 * (i32::try_from(index).unwrap() + 2 + f))
+            .collect::<Vec<_>>();
+        plc.update((rate, frame % 3 != 1), &lags, &taps, &lpc, &gains, 12288);
+        let mut actual = vec![plc.pitch_q8];
+        actual.extend(plc.taps_q14.map(i32::from));
+        actual.extend(plc.lpc_q12.map(i32::from));
+        actual.extend(plc.gains_q16);
+        actual.extend([
+            i32::from(plc.ltp_scale_q14),
+            i32::try_from(plc.subframe).unwrap(),
+            i32::try_from(plc.subframes).unwrap(),
+        ]);
+        let expected = line
+            .split_whitespace()
+            .map(|x| x.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "frame={frame}");
+        let excitation = (0..rate / 200 * n)
+            .map(|i| (i32::try_from(i).unwrap() * 71 - 1000) * 16)
+            .collect::<Vec<_>>();
+        saved_excitation[..excitation.len()].copy_from_slice(&excitation);
+        let mut history = (0..rate / 50)
+            .map(|i| i16::try_from((i * 13) % 1000).unwrap() - 500)
+            .collect::<Vec<_>>();
+        let mut lpc_history = (0..16).map(|i| (i - 8) * 1234).collect::<Vec<_>>();
+        for loss in 0..3 {
+            let actual = plc.synthesize(
+                &saved_excitation,
+                &history,
+                &mut lpc_history,
+                (rate / 200, n),
+            );
+            let expected = lines
+                .next()
+                .unwrap()
+                .strip_prefix("PCM ")
+                .unwrap()
+                .split_whitespace()
+                .map(|x| x.parse::<i16>().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(actual, expected, "PLC PCM frame={frame} loss={loss}");
+            history.extend(actual);
+            history.drain(..history.len() - rate / 50);
+        }
+    }
+}
+
 fn pcm(bytes: &[u8]) -> Vec<i16> {
     bytes
         .as_chunks::<2>()

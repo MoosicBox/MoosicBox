@@ -84,6 +84,38 @@ fn comb(x: &mut [i32], offset: usize, n: usize, old: Params, new: Params) {
     }
 }
 impl Postfilter {
+    pub(super) fn conceal_tail(&self, memory: &[i32]) -> Vec<i32> {
+        let source = memory;
+        let p = self.current;
+        let t = taps(Params { gain: -p.gain, ..p });
+        let period = p.period.max(15);
+        let work: Vec<_> = (0..120)
+            .map(|i| {
+                let pos = 2048 + i;
+                let value = source[pos]
+                    + mul(t[0], source[pos - period])
+                    + mul(t[1], source[pos - period - 1] + source[pos - period + 1])
+                    + mul(t[2], source[pos - period - 2] + source[pos - period + 2]);
+                if p.gain == 0 {
+                    value
+                } else {
+                    (value - 1).clamp(-536_870_911, 536_870_911)
+                }
+            })
+            .collect();
+        (0..60)
+            .map(|i| {
+                mul(i32::from(transform::window(i)), work[119 - i])
+                    + mul(i32::from(transform::window(119 - i)), work[i])
+            })
+            .collect()
+    }
+    pub(super) fn remember_concealed(&mut self, channels: &[Vec<i32>]) {
+        self.history = channels
+            .iter()
+            .map(|x| x[2048 - 1026..2048].to_vec())
+            .collect();
+    }
     pub(super) fn apply(
         &mut self,
         channels: &mut [Vec<i32>],

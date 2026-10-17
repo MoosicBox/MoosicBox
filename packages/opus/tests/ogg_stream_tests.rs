@@ -80,7 +80,7 @@ fn open(bytes: Vec<u8>) -> Box<dyn FormatReader> {
     let source = MediaSourceStream::new(Box::new(Cursor::new(bytes)), Default::default());
     let mut hint = Hint::new();
     hint.with_extension("opus");
-    symphonia::default::get_probe()
+    moosicbox_opus::create_opus_probe()
         .probe(
             &hint,
             source,
@@ -197,6 +197,56 @@ fn exercise_stream(backend: OpusBackend) {
 }
 
 #[test]
+fn generic_ogg_vorbis_retains_builtin_reader() {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+    let mut child = Command::new("ffmpeg")
+        .args([
+            "-v",
+            "error",
+            "-f",
+            "f32le",
+            "-ar",
+            "48000",
+            "-ac",
+            "1",
+            "-i",
+            "pipe:0",
+            "-c:a",
+            "libvorbis",
+            "-f",
+            "ogg",
+            "pipe:1",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("independent FFmpeg required");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&vec![0; 4800 * 4])
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let reader = open(output.stdout);
+    assert_eq!(reader.format_info().short_name, "ogg");
+    assert!(
+        reader
+            .default_track(symphonia::core::formats::TrackType::Audio)
+            .is_some()
+    );
+}
+
+#[test]
 fn independent_ffmpeg_checks_generated_ogg_duration() {
     use std::{
         io::Write,
@@ -299,13 +349,14 @@ fn ogg_output_gain_matches_independent_reference() {
         let mut decoder = create_opus_registry()
             .make_audio_decoder(&params, &AudioDecoderOptions::default())
             .unwrap();
-        // Compare the complete packet PCM using the reader's actual trimming.
-        // The independent duration tests above retain the stricter OpusHead
-        // pre-skip requirement and expose Symphonia 0.6.1's missing start trim.
+        // Compare independent decoder PCM with the RFC-required container trims.
         let (actual, trims) = decode_remaining(&mut *format, &mut *decoder);
-        assert_eq!(trims, [(0, 0), (0, 0), (0, u64::from(END_TRIM))]);
+        assert_eq!(
+            trims,
+            [(u64::from(PRE_SKIP), 0), (0, 0), (0, u64::from(END_TRIM))]
+        );
         let factor = 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0));
-        let expected: Vec<_> = expected[..expected.len() - END_TRIM as usize]
+        let expected: Vec<_> = expected[PRE_SKIP as usize..expected.len() - END_TRIM as usize]
             .iter()
             .map(|sample| (f32::from(*sample) / 32768.0) * factor)
             .collect();

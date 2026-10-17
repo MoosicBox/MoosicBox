@@ -270,6 +270,7 @@ members = [
     "packages/music_api/api",
     "packages/music_api/helpers",
     "packages/music_api/models",
+    "packages/ogg_opus",
     "packages/openport",
     "packages/opus",
     "packages/opus_native",
@@ -447,6 +448,7 @@ moosicbox_music_api_api            = { version = "0.5.0", default-features = fal
 moosicbox_music_api_helpers        = { version = "0.5.0", default-features = false, path = "packages/music_api/helpers" }
 moosicbox_music_api_models         = { version = "0.5.0", default-features = false, path = "packages/music_api/models" }
 moosicbox_music_models             = { version = "0.5.0", default-features = false, path = "packages/music/models" }
+moosicbox_ogg_opus                 = { version = "0.1.0", default-features = false, path = "packages/ogg_opus" }
 moosicbox_opus                     = { version = "0.5.0", default-features = false, path = "packages/opus" }
 moosicbox_opus_native              = { version = "0.5.0", default-features = false, path = "packages/opus_native" }
 moosicbox_opus_native_libopus      = { version = "0.5.0", default-features = false, path = "packages/opus_native/libopus" }

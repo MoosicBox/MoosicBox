@@ -20,6 +20,10 @@ fdk-aac = { workspace = true, optional = true }
 # Flac dependencies
 flacenc = { workspace = true, optional = true }
 
+moosicbox_ogg_opus = { workspace = true, optional = true }
+moosicbox_opus_native = { workspace = true, optional = true, features = [
+    "hybrid",
+] }
 # Opus dependencies
 audiopus   = { workspace = true, optional = true }
 ogg        = { workspace = true, optional = true }
@@ -42,7 +46,14 @@ default = ["aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = ["switchy_fs?/fail-on-warnings"]
 
-aac  = ["dep:fdk-aac"]
+aac = ["dep:fdk-aac"]
 flac = ["dep:flacenc"]
-mp3  = ["dep:mp3lame-encoder"]
-opus = ["dep:audiopus", "dep:ogg", "dep:opus", "dep:switchy_fs"]
+mp3 = ["dep:mp3lame-encoder"]
+opus = [
+    "dep:audiopus",
+    "dep:moosicbox_ogg_opus",
+    "dep:ogg",
+    "dep:opus",
+    "dep:switchy_fs",
+]
+opus-native = ["dep:moosicbox_ogg_opus", "dep:moosicbox_opus_native"]

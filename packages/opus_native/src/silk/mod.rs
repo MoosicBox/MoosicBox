@@ -8,13 +8,15 @@
 //! * SILK-only mode (configurations 0-11 in RFC 6716)
 //! * Low-frequency component in Hybrid mode (configurations 12-15)
 
+mod cng;
 mod decoder;
-mod excitation_constants;
+pub(crate) mod excitation_constants;
 mod frame;
-mod lsf_constants;
+pub(crate) mod lsf_constants;
 mod ltp_constants;
 
 pub use decoder::SilkDecoder;
+pub(crate) mod constants;
 pub use excitation_constants::*;
 pub use frame::SilkFrame;
 pub use lsf_constants::*;
@@ -23,4 +25,6 @@ pub use ltp_constants::*;
 /// Reference-compatible integer output conversion.
 pub mod resampler;
 
+mod plc;
+mod recovery;
 mod voiced;

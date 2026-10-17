@@ -12,7 +12,18 @@ use std::{
     process::{Command, Stdio},
 };
 
+fn oracle_command() -> Command {
+    let executable = std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE")
+        .expect("live oracle requires MOOSICBOX_OPUS_REFERENCE_ORACLE; see libopus/README.md");
+    let mut command = Command::new("python3");
+    command
+        .arg("-B")
+        .env("MOOSICBOX_OPUS_REFERENCE_ORACLE", executable);
+    command
+}
+
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn pinned_reference_deemphasis_matches_all_rates_channels_and_shapes() {
     for channels in [1, 2] {
         for rate in [8000, 12000, 16000, 24000, 48000] {
@@ -42,7 +53,7 @@ fn pinned_reference_deemphasis_matches_all_rates_channels_and_shapes() {
                         }
                     })
                     .collect::<Vec<_>>();
-                let mut child = Command::new("python3")
+                let mut child = oracle_command()
                     .arg(concat!(
                         env!("CARGO_MANIFEST_DIR"),
                         "/tests/output_oracle.py"
@@ -216,7 +227,7 @@ fn mono_packet_output_oracle(rate_filter: u32) {
         let mut actual_by_channels = Vec::new();
         let mut mismatches = Vec::new();
         for channels in [Channels::Mono, Channels::Stereo] {
-            let mut child = Command::new("python3")
+            let mut child = oracle_command()
                 .arg(root.join("tests/output_oracle.py"))
                 .args([
                     "--decode".into(),
@@ -287,18 +298,21 @@ fn mono_packet_output_oracle(rate_filter: u32) {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn silk_mono_to_stereo_exact_public_api() {
     mono_packet_output_oracle(8000);
 }
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn celt_mono_to_stereo_exact_public_api() {
     mono_packet_output_oracle(48000);
 }
 
 #[cfg(feature = "silk")]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn silk_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
     use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -308,7 +322,7 @@ fn silk_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
         assert_ne!(packet[0] & 4, 0, "oracle must be stereo coded");
         for rate in [8000, 12000, 16000, 24000, 48000] {
             for channels in [Channels::Mono, Channels::Stereo] {
-                let mut child = Command::new("python3")
+                let mut child = oracle_command()
                     .arg(root.join("tests/output_oracle.py"))
                     .args([
                         "--decode".into(),
@@ -375,6 +389,7 @@ fn silk_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(feature = "celt")]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn celt_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
     use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -386,7 +401,7 @@ fn celt_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
     let mut failures = Vec::new();
     for rate in [8000, 12000, 16000, 24000, 48000] {
         for channels in [Channels::Mono, Channels::Stereo] {
-            let mut child = Command::new("python3")
+            let mut child = oracle_command()
                 .arg(root.join("tests/output_oracle.py"))
                 .args([
                     "--decode".into(),
@@ -453,14 +468,19 @@ fn celt_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(feature = "silk")]
 #[test]
-fn unsupported_fec_and_plc_preserve_output_and_decoder_state() {
+fn unsupported_long_silk_fec_preserves_output_and_decoder_state() {
     use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
     let packet = include_bytes!("../src/silk/reference/nb_sine_mono.packet");
     let mut decoder = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
     let mut control = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
     decoder.decode(Some(packet), &mut [0; 160], false).unwrap();
     control.decode(Some(packet), &mut [0; 160], false).unwrap();
-    for (input, fec) in [(Some(packet.as_slice()), true), (None, false), (None, true)] {
+    // Long (40/60-ms) SILK FEC remains unsupported; missing 20-ms LBRR
+    // now legitimately falls back to concealment.
+    for configuration in [2_u8, 3] {
+        let mut long_packet = packet.to_vec();
+        long_packet[0] = (long_packet[0] & 7) | (configuration << 3);
+        let (input, fec) = (Some(long_packet.as_slice()), true);
         let mut output = [123; 160];
         assert!(matches!(
             decoder.decode(input, &mut output, fec),
@@ -485,6 +505,74 @@ fn unsupported_fec_and_plc_preserve_output_and_decoder_state() {
     assert_eq!(actual, expected);
 }
 
+#[cfg(feature = "celt")]
+#[test]
+fn celt_plc_is_nonzero_and_invalid_requests_preserve_state() {
+    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+    let packet = include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin");
+    let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    let mut control = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    decoder.decode(Some(packet), &mut [0; 960], false).unwrap();
+    control.decode(Some(packet), &mut [0; 960], false).unwrap();
+    for duration in [0, 1, 119, 121, 5880] {
+        let mut output = [123; 960];
+        assert!(matches!(
+            decoder.decode_loss(&mut output, duration),
+            Err(Error::InvalidPacket(_))
+        ));
+        assert_eq!(output, [123; 960]);
+    }
+    let mut short = [123; 959];
+    assert!(decoder.decode_loss(&mut short, 960).is_err());
+    assert_eq!(short, [123; 959]);
+    let mut actual = [0; 960];
+    let mut expected = [0; 960];
+    assert_eq!(decoder.decode_loss(&mut actual, 960).unwrap(), 960);
+    assert_eq!(control.decode(None, &mut expected, false).unwrap(), 960);
+    assert!(actual.iter().any(|&value| value != 0));
+    assert_eq!(actual, expected);
+    decoder.decode(Some(packet), &mut actual, false).unwrap();
+    control.decode(Some(packet), &mut expected, false).unwrap();
+    assert_eq!(
+        actual, expected,
+        "invalid loss requests must not mutate recovery state"
+    );
+}
+
+#[cfg(all(feature = "silk", feature = "celt"))]
+#[test]
+fn unsupported_hybrid_fec_preserves_output_and_decoder_state() {
+    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+    let packet = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin");
+    let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    let mut control = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    decoder.decode(Some(packet), &mut [0; 960], false).unwrap();
+    control.decode(Some(packet), &mut [0; 960], false).unwrap();
+    for (input, fec) in [(Some(packet.as_slice()), true), (None, true)] {
+        let mut output = [123; 960];
+        assert!(matches!(
+            decoder.decode(input, &mut output, fec),
+            Err(Error::Unsupported(_))
+        ));
+        assert_eq!(output, [123; 960]);
+        let mut float = [0.25; 960];
+        assert!(matches!(
+            decoder.decode_float(input, &mut float, fec),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(
+            float
+                .iter()
+                .all(|value| value.to_bits() == 0.25_f32.to_bits())
+        );
+    }
+    let mut actual = [0; 960];
+    let mut expected = [0; 960];
+    decoder.decode(Some(packet), &mut actual, false).unwrap();
+    control.decode(Some(packet), &mut expected, false).unwrap();
+    assert_eq!(actual, expected);
+}
+
 #[test]
 fn non_res24_reference_rounding_boundary_is_preserved() {
     let mut output = [0; 1];
@@ -495,10 +583,11 @@ fn non_res24_reference_rounding_boundary_is_preserved() {
 }
 
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn storage_shrink_matches_upstream_shared_entropy_exactly() {
     use moosicbox_opus_native::range::RangeDecoder;
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let reference = Command::new("python3")
+    let reference = oracle_command()
         .arg(root.join("tests/output_oracle.py"))
         .arg("--shrink")
         .output()
@@ -542,6 +631,7 @@ fn storage_shrink_matches_upstream_shared_entropy_exactly() {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn hybrid_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
     use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -553,7 +643,7 @@ fn hybrid_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
     let mut failures = Vec::new();
     for rate in [8000, 12000, 16000, 24000, 48000] {
         for channels in [Channels::Mono, Channels::Stereo] {
-            let mut child = Command::new("python3")
+            let mut child = oracle_command()
                 .arg(root.join("tests/output_oracle.py"))
                 .args([
                     "--decode".into(),
@@ -620,6 +710,7 @@ fn hybrid_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
+#[ignore = "live C oracle: set MOOSICBOX_OPUS_REFERENCE_ORACLE and run with --include-ignored"]
 fn hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
     use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -631,7 +722,7 @@ fn hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
     let mut failures = Vec::new();
     for rate in [8000, 12000, 16000, 24000, 48000] {
         for channels in [Channels::Mono, Channels::Stereo] {
-            let mut child = Command::new("python3")
+            let mut child = oracle_command()
                 .arg(root.join("tests/output_oracle.py"))
                 .args([
                     "--decode".into(),
@@ -698,28 +789,51 @@ fn hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
-fn hybrid_unverified_transitions_are_explicit_and_preserve_output() {
+fn hybrid_transitions_and_unsupported_channel_mapping_preserve_contracts() {
     use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
     let mono = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin");
     let stereo =
         include_bytes!("../test_vectors/frozen/corpus/sequences/hybrid_swb_stereo/packet.bin");
     let celt = include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin");
+    let frozen_pcm = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/expected.pcm")
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|bytes| i16::from_le_bytes(*bytes))
+        .collect::<Vec<_>>();
     let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-    decoder.decode(Some(mono), &mut [0; 960], false).unwrap();
-    for packet in [stereo.as_slice(), celt.as_slice()] {
-        let mut output = [123; 960];
-        assert!(matches!(
-            decoder.decode(Some(packet), &mut output, false),
-            Err(Error::Unsupported(_))
-        ));
-        assert_eq!(output, [123; 960]);
+    let mut control = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    for state in [&mut decoder, &mut control] {
+        let mut output = [0; 960];
+        assert_eq!(state.decode(Some(mono), &mut output, false).unwrap(), 960);
+        assert_eq!(output.as_slice(), frozen_pcm);
     }
-    decoder.reset_state().unwrap();
-    decoder.decode(Some(celt), &mut [0; 960], false).unwrap();
     let mut output = [123; 960];
     assert!(matches!(
-        decoder.decode(Some(mono), &mut output, false),
+        decoder.decode(Some(stereo), &mut output, false),
         Err(Error::Unsupported(_))
     ));
     assert_eq!(output, [123; 960]);
+    // The unsupported coded-channel request must not affect the next supported transition.
+    let mut expected = [0; 960];
+    for packet in [celt.as_slice(), mono.as_slice()] {
+        assert_eq!(
+            decoder.decode(Some(packet), &mut output, false).unwrap(),
+            960
+        );
+        assert_eq!(
+            control.decode(Some(packet), &mut expected, false).unwrap(),
+            960
+        );
+        assert_eq!(output, expected);
+        assert!(output.iter().any(|&sample| sample != 0));
+    }
+    // Hybrid PLC is now supported: test duration and nonzero signal, not blanket rejection.
+    assert_eq!(decoder.decode(None, &mut output, false).unwrap(), 960);
+    assert_eq!(control.decode_loss(&mut expected, 960).unwrap(), 960);
+    assert_eq!(output, expected);
+    assert!(output.iter().any(|&sample| sample != 0));
+    decoder.reset_state().unwrap();
+    assert_eq!(decoder.decode(Some(mono), &mut output, false).unwrap(), 960);
+    assert_eq!(output.as_slice(), frozen_pcm);
 }

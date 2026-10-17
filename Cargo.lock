@@ -10708,6 +10708,8 @@ dependencies = [
  "fdk-aac",
  "flacenc",
  "log 0.4.33",
+ "moosicbox_ogg_opus",
+ "moosicbox_opus_native",
  "mp3lame-encoder",
  "ogg",
  "opus",
@@ -10732,6 +10734,7 @@ dependencies = [
  "moosicbox_audio_decoder",
  "moosicbox_audio_encoder",
  "moosicbox_env_utils",
+ "moosicbox_opus",
  "moosicbox_paging",
  "moosicbox_resampler",
  "moosicbox_stream_utils",
@@ -11335,12 +11338,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_ogg_opus"
+version = "0.1.0"
+
+[[package]]
 name = "moosicbox_opus"
 version = "0.5.0"
 dependencies = [
  "audiopus",
  "bytes",
  "log 0.4.33",
+ "moosicbox_ogg_opus",
  "moosicbox_opus_native",
  "pretty_assertions",
  "symphonia",
@@ -11366,6 +11374,8 @@ name = "moosicbox_opus_native_libopus"
 version = "0.5.0"
 dependencies = [
  "cmake",
+ "serde_json",
+ "sha2 0.11.0",
  "thiserror 2.0.19",
 ]
 
@@ -11430,6 +11440,7 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
+ "moosicbox_ogg_opus",
  "moosicbox_profiles",
  "moosicbox_resampler",
  "moosicbox_session",

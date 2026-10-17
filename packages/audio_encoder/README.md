@@ -25,6 +25,54 @@ The MoosicBox Audio Encoder package provides:
 - **`mp3`**: MPEG Layer III encoder module
 - **`opus`**: Opus codec encoder module
 
+## Explicit Native Ogg Opus Encoding
+
+Enable `opus-native` with default features disabled for a pure-Rust encoder and
+standalone Ogg framing. `opus_stream::OpusEncodeConfig` separates backend from
+`OpusEncodeMode`: `Default` preserves native CELT or libopus automatic selection;
+`Celt`, `Silk`, and `Hybrid` force the native constructor and reject a Libopus
+backend. There is no hidden fallback or automatic native mode adaptation.
+
+```rust,ignore
+use moosicbox_audio_encoder::opus_stream::{
+    OpusEncodeBackend, OpusEncodeConfig, OpusEncodeMode, OpusStreamEncoder,
+};
+let config = OpusEncodeConfig {
+    backend: OpusEncodeBackend::Native,
+    mode: OpusEncodeMode::Silk,
+    sample_rate: 16_000,
+    channels: 2,
+    bitrate: 128_000,
+    frame_size: 320,
+};
+let mut encoder = OpusStreamEncoder::new(Vec::new(), config)?;
+encoder.write(&interleaved_pcm)?;
+let ogg_bytes = encoder.finish()?.expect("first finish returns the sink");
+```
+
+Supported native construction boundaries (not a claim of full Opus encoder parity):
+
+| Mode   | Input rates       | Frame durations | Bitrate                                                  |
+| ------ | ----------------- | --------------- | -------------------------------------------------------- |
+| CELT   | 8/12/16/24/48 kHz | 2.5/5/10/20 ms  | Minimum 128/64/32/32 kbps respectively; maximum 256 kbps |
+| SILK   | 8/12/16 kHz       | 10/20 ms        | Mono 48–128 kbps; stereo 96–128 kbps                     |
+| Hybrid | 48 kHz            | 10/20 ms        | 128–256 kbps                                             |
+
+Mono and stereo are supported. Lower-bitrate quantization is not currently
+supported: rejected configurations fail before writing Ogg headers. Encoder
+lookahead comes from the selected codec getter, scales to the Ogg 48-kHz clock,
+and is removed along with partial-frame padding using the actual input length.
+SILK currently uses unvoiced predictive coding; explicit selection does not imply
+adaptive mode or voiced-analysis support.
+
+The same configuration is accepted by the audio-output `SelectedOpusEncoder`,
+player `SignalChainStep::with_opus_encoder`, and files
+`get_audio_bytes_with_opus_encoder`. The explicit files API always re-encodes
+(including Opus sources) and bypasses shared encoded-byte caching. Codec and I/O
+errors are propagated; repeated successful finalization emits no additional EOS.
+Finite seek preroll guarantees the requested sample cutoff, not identical
+prediction history to decoding from stream origin.
+
 ## Installation
 
 ### Cargo Dependencies

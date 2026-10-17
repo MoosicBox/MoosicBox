@@ -69,59 +69,11 @@ use symphonia::core::audio::{AudioBuffer, AudioMut, AudioSpec};
 // documented in comments for reference.
 // ============================================================================
 
-// RFC 6716 Table 6: Stereo weight PDFs (lines 2225-2238)
-// RFC shows PDF Stage 1: {7, 2, 1, 1, 1, 10, 24, 8, 1, 1, 3, 23, 92, 23, 3, 1, 1, 8, 24, 10, 1, 1, 1, 2, 7}/256
-// Converted to ICDF for ec_dec_icdf()
-const STEREO_WEIGHT_PDF_STAGE1: &[u8] = &[
-    249, 247, 246, 245, 244, 234, 210, 202, 201, 200, 197, 174, 82, 59, 56, 55, 54, 46, 22, 12, 11,
-    10, 9, 7, 0,
-];
-
-// RFC shows PDF Stage 2: {85, 86, 85}/256
-// Converted to ICDF for ec_dec_icdf()
-const STEREO_WEIGHT_PDF_STAGE2: &[u8] = &[171, 85, 0];
-
-// RFC shows PDF Stage 3: {51, 51, 52, 51, 51}/256
-// Converted to ICDF for ec_dec_icdf()
-const STEREO_WEIGHT_PDF_STAGE3: &[u8] = &[205, 154, 102, 51, 0];
-
-const STEREO_WEIGHT_TABLE_Q13: &[i16] = &[
-    -13732, -10050, -8266, -7526, -6500, -5000, -2950, -820, 820, 2950, 5000, 6500, 7526, 8266,
-    10050, 13732,
-];
-
-// RFC 6716 Tables 11-13: Gain PDFs (lines 2485-2545)
-// RFC shows PDF INACTIVE: {32, 112, 68, 29, 12, 1, 1, 1}/256
-// Converted to ICDF for ec_dec_icdf()
-const GAIN_PDF_INACTIVE: &[u8] = &[224, 112, 44, 15, 3, 2, 1, 0];
-
-// RFC shows PDF UNVOICED: {2, 17, 45, 60, 62, 47, 19, 4}/256
-// Converted to ICDF for ec_dec_icdf()
-const GAIN_PDF_UNVOICED: &[u8] = &[254, 237, 192, 132, 70, 23, 4, 0];
-
-// RFC shows PDF VOICED: {1, 3, 26, 71, 94, 50, 9, 2}/256
-// Converted to ICDF for ec_dec_icdf()
-const GAIN_PDF_VOICED: &[u8] = &[255, 252, 226, 155, 61, 11, 2, 0];
-
-// RFC shows PDF LSB: {32, 32, 32, 32, 32, 32, 32, 32}/256
-// Converted to ICDF for ec_dec_icdf()
-const GAIN_PDF_LSB: &[u8] = &[224, 192, 160, 128, 96, 64, 32, 0];
-
-// RFC shows PDF DELTA: {6, 5, 11, 31, 132, 21, 8, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
-// Converted to ICDF for ec_dec_icdf()
-const GAIN_PDF_DELTA: &[u8] = &[
-    250, 245, 234, 203, 71, 50, 42, 38, 35, 33, 31, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18,
-    17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-];
-
-// RFC 6716 Tables 9-10: Frame type PDFs (lines 2419-2445)
-// RFC shows PDF INACTIVE: {26, 230}/256 (only 2 frame types for inactive)
-// Converted to ICDF for ec_dec_icdf()
-const FRAME_TYPE_PDF_INACTIVE: &[u8] = &[230, 0];
-
-// RFC shows PDF ACTIVE: {24, 74, 148, 10}/256 (4 frame types for active)
-// Converted to ICDF for ec_dec_icdf()
-const FRAME_TYPE_PDF_ACTIVE: &[u8] = &[232, 158, 10, 0];
+use super::constants::{
+    FRAME_TYPE_PDF_ACTIVE, FRAME_TYPE_PDF_INACTIVE, GAIN_PDF_DELTA, GAIN_PDF_INACTIVE,
+    GAIN_PDF_LSB, GAIN_PDF_UNVOICED, GAIN_PDF_VOICED, STEREO_WEIGHT_PDF_STAGE1,
+    STEREO_WEIGHT_PDF_STAGE2, STEREO_WEIGHT_PDF_STAGE3, STEREO_WEIGHT_TABLE_Q13,
+};
 
 /// SILK header bits decoded from frame header
 ///
@@ -244,6 +196,7 @@ impl LtpState {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Clone)]
 #[allow(clippy::struct_excessive_bools)] // Reference per-channel reset flags plus stereo coding state.
 pub struct SilkDecoder {
     #[allow(dead_code)]
@@ -277,6 +230,7 @@ pub struct SilkDecoder {
     // Index 0: mid channel, Index 1: side channel
     #[allow(dead_code)]
     previous_pitch_lag: [Option<i16>; 2],
+    previous_frame_voiced: [bool; 2],
     // TODO(Section 3.7.7): Remove dead_code when used in noise injection
     #[allow(dead_code)]
     lcg_seed: u32,
@@ -288,6 +242,10 @@ pub struct SilkDecoder {
     mono_history: i16,
     packet_frames: [usize; 2],
     prev_gain_q16: [i32; 2], // Per-channel previous gain
+    comfort_noise: [super::cng::ComfortNoise; 2],
+    recovery: [super::recovery::Recovery; 2],
+    concealment: [super::plc::Concealment; 2],
+    saved_excitation: [[i32; 320]; 2],
 }
 
 impl SilkDecoder {
@@ -337,6 +295,7 @@ impl SilkDecoder {
             decoder_reset: true,
             uncoded_side_channel: false,
             previous_pitch_lag: [None, None],
+            previous_frame_voiced: [false; 2],
             lcg_seed: 0,
             ltp_state: [ltp_state_0, ltp_state_1],
             stereo_state,
@@ -344,7 +303,239 @@ impl SilkDecoder {
             mono_history: 0,
             packet_frames: [0; 2],
             prev_gain_q16: [65536, 65536],
+            comfort_noise: std::array::from_fn(|_| super::cng::ComfortNoise::default()),
+            recovery: std::array::from_fn(|_| super::recovery::Recovery::default()),
+            concealment: std::array::from_fn(|_| super::plc::Concealment::default()),
+            saved_excitation: [[0; 320]; 2],
         })
+    }
+
+    /// Changes coded channels while preserving the mid-channel prediction history.
+    ///
+    /// Mono-to-stereo initializes the side decoder and stereo predictor, as in
+    /// the reference `silk_Decode`. Output resampler channel migration is the
+    /// caller's responsibility.
+    pub fn set_coded_channels(&mut self, channels: Channels) {
+        if channels == self.channels {
+            return;
+        }
+        if channels == Channels::Stereo {
+            self.side_lsf_nb = None;
+            self.side_lsf_wb = None;
+            self.side_decoder_reset = true;
+            self.previous_pitch_lag[1] = None;
+            self.previous_frame_voiced[1] = false;
+            self.previous_gain_indices[1] = None;
+            self.prev_gain_q16[1] = 65536;
+            self.comfort_noise[1] = super::cng::ComfortNoise::default();
+            self.recovery[1] = super::recovery::Recovery::default();
+            self.concealment[1] = super::plc::Concealment::default();
+            self.ltp_state[1].reset();
+            self.voiced_history[1] = super::voiced::VoicedHistory::default();
+            self.prev_decode_only_middle = false;
+            let state = self.stereo_state.get_or_insert_with(StereoState::new);
+            state.pred_prev_q13 = [0; 2];
+            state.s_side = [0; 2];
+        } else if let Some(state) = &self.stereo_state {
+            self.mono_history = state.s_mid[1];
+        }
+        self.channels = channels;
+    }
+
+    /// Changes the SILK internal sampling rate while retaining stereo delay state.
+    ///
+    /// Follows the rate-change reset in the reference `silk_decoder_set_fs`:
+    /// LPC/LTP sample memories are cleared and the next NLSF interpolation is
+    /// disabled. Gain scaling and the two-sample stereo output window survive.
+    /// The caller must separately reinitialize its output resamplers.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`Error::SilkDecoder`] for rates other than 8, 12, or 16 kHz,
+    ///   without changing state.
+    pub fn set_internal_sample_rate(&mut self, sample_rate: SampleRate) -> Result<()> {
+        if !matches!(
+            sample_rate,
+            SampleRate::Hz8000 | SampleRate::Hz12000 | SampleRate::Hz16000
+        ) {
+            return Err(Error::SilkDecoder(
+                "invalid SILK internal sample rate".into(),
+            ));
+        }
+        if sample_rate != self.sample_rate {
+            self.sample_rate = sample_rate;
+            self.decoder_reset = true;
+            self.side_decoder_reset = true;
+            self.previous_pitch_lag = [Some(100); 2];
+            self.previous_gain_indices = [Some(10); 2];
+            for state in &mut self.ltp_state {
+                state.reset();
+            }
+            for history in &mut self.voiced_history {
+                history.reset_pcm();
+            }
+        }
+        Ok(())
+    }
+
+    /// Changes the constituent SILK frame duration without resetting prediction state.
+    ///
+    /// Like the reference `silk_decoder_set_fs`, a duration-only change preserves
+    /// gain, NLSF, LPC, LTP, stereo, and output-delay history. Call this before
+    /// decoding the next independently coded packet, then call [`Self::begin_packet`].
+    /// Packet durations of 40/60 ms consist of multiple 20-ms frames and must be
+    /// split by the caller; this method configures one constituent frame only.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`Error::SilkDecoder`] unless `frame_size_ms` is 10 or 20.
+    ///   Invalid durations leave all decoder state unchanged.
+    pub fn set_frame_duration(&mut self, frame_size_ms: u8) -> Result<()> {
+        if !matches!(frame_size_ms, 10 | 20) {
+            return Err(Error::SilkDecoder(format!(
+                "invalid constituent SILK frame duration: {frame_size_ms} ms (must be 10 or 20)"
+            )));
+        }
+        self.frame_size_ms = frame_size_ms;
+        self.num_silk_frames = 1;
+        Ok(())
+    }
+
+    fn conceal_channel(&mut self, channel: usize, duration_ms: u8) -> Result<Vec<i16>> {
+        let subframe = self.sample_rate as usize / 200;
+        let count = usize::from(duration_ms) / 5;
+        self.ltp_state[channel].lpc_history_q14.resize(16, 0);
+        let mut pcm = self.concealment[channel].synthesize(
+            &self.saved_excitation[channel],
+            self.voiced_history[channel].pcm(),
+            &mut self.ltp_state[channel].lpc_history_q14,
+            (subframe, count),
+        );
+        self.voiced_history[channel].append(&pcm, self.sample_rate as usize / 50);
+        let bandwidth = match self.sample_rate {
+            SampleRate::Hz8000 => Bandwidth::Narrowband,
+            SampleRate::Hz12000 => Bandwidth::Mediumband,
+            _ => Bandwidth::Wideband,
+        };
+        self.comfort_noise[channel].synthesize(
+            &mut pcm,
+            bandwidth,
+            self.concealment[channel].random_q14,
+            self.concealment[channel].gains_q16[1],
+        )?;
+        self.recovery[channel].process(&mut pcm, true);
+        self.previous_gain_indices[channel] = Some(10);
+        Ok(pcm)
+    }
+
+    /// Synthesizes a lost 10/20-ms constituent with persistent PLC/CNG state.
+    ///
+    /// # Errors
+    /// * Rejects durations other than 10/20 ms before changing decoder state.
+    ///   Fresh predictor state produces silence while retaining loss history.
+    pub(crate) fn conceal(&mut self, duration_ms: u8, mono_output: bool) -> Result<Vec<i16>> {
+        if !matches!(duration_ms, 10 | 20) {
+            return Err(Error::Unsupported(
+                "SILK concealment requires 10/20 ms".into(),
+            ));
+        }
+        if self.decoder_reset && self.concealment[0].losses == 0 {
+            for channel in 0..self.channels as usize {
+                self.concealment[channel].initialize(
+                    self.sample_rate as usize,
+                    self.sample_rate as usize * usize::from(duration_ms) / 1000,
+                );
+            }
+        }
+        let mut mid = self.conceal_channel(0, duration_ms)?;
+        let n = mid.len();
+        if self.channels == Channels::Mono {
+            let last = mid[n - 1];
+            self.stereo_state
+                .get_or_insert_with(StereoState::new)
+                .s_mid
+                .copy_from_slice(&mid[n - 2..]);
+            mid.rotate_right(1);
+            mid[0] = self.mono_history;
+            self.mono_history = last;
+            return Ok(mid);
+        }
+        let side = if self.prev_decode_only_middle {
+            vec![0; n]
+        } else {
+            self.conceal_channel(1, duration_ms)?
+        };
+        let mut x1 = vec![0; n + 2];
+        x1[2..].copy_from_slice(&mid);
+        let mut x2 = vec![0; n + 2];
+        x2[2..].copy_from_slice(&side);
+        if mono_output {
+            let state = self.stereo_state.as_mut().expect("stereo state");
+            x1[..2].copy_from_slice(&state.s_mid);
+            state.s_mid.copy_from_slice(&x1[n..n + 2]);
+            return Ok(x1[1..=n].to_vec());
+        }
+        let prediction = self
+            .stereo_state
+            .as_ref()
+            .expect("stereo state")
+            .pred_prev_q13;
+        self.stereo_ms_to_lr(
+            &mut x1,
+            &mut x2,
+            prediction,
+            i32::try_from(self.sample_rate as usize / 1000).unwrap(),
+            n,
+        )?;
+        Ok((0..n).flat_map(|i| [x1[i + 1], x2[i + 1]]).collect())
+    }
+
+    /// Parses LBRR entropy without updating the primary synthesis state.
+    ///
+    /// The flags are channel-major, each containing one entry per constituent
+    /// frame. Redundant frames are frame-major in the range-coded payload.
+    ///
+    /// # Errors
+    ///
+    /// * Returns codec/range errors for malformed redundancy data or flag shape.
+    pub(crate) fn skip_lbrr(
+        &self,
+        range: &mut RangeDecoder,
+        flags: &[Vec<bool>],
+        frame_count: usize,
+    ) -> Result<()> {
+        if flags.len() != self.channels as usize
+            || flags
+                .iter()
+                .any(|f| !f.is_empty() && f.len() != frame_count)
+        {
+            return Err(Error::SilkDecoder("invalid LBRR flag shape".into()));
+        }
+        let mut redundant = self.clone();
+        redundant.begin_packet();
+        for frame in 0..frame_count {
+            for channel in 0..self.channels as usize {
+                if !flags[channel].get(frame).copied().unwrap_or(false) {
+                    redundant.packet_frames[channel] = 0;
+                    continue;
+                }
+                if channel == 0 && self.channels == Channels::Stereo {
+                    redundant.decode_stereo_weights(range)?;
+                    if !flags[1].get(frame).copied().unwrap_or(false) {
+                        redundant.decode_mid_only_flag(range)?;
+                    }
+                }
+                if channel == 1 {
+                    redundant.swap_side_lsf_state();
+                }
+                let result = redundant.decode_silk_channel(range, true, &mut [], channel, true);
+                if channel == 1 {
+                    redundant.swap_side_lsf_state();
+                }
+                result?;
+            }
+        }
+        Ok(())
     }
 
     /// Begins independently coded packet data without resetting synthesis/filter history.
@@ -388,6 +579,10 @@ impl SilkDecoder {
             // Reference dec_API.c buffers sMid and resamples from temporary index 1,
             // while decoded samples start at index 2: one persistent sample of history.
             let last = decoded[count - 1];
+            self.stereo_state
+                .get_or_insert_with(StereoState::new)
+                .s_mid
+                .copy_from_slice(&decoded[count - 2..count]);
             decoded[..count].rotate_right(1);
             decoded[0] = self.mono_history;
             self.mono_history = last;
@@ -441,7 +636,7 @@ impl SilkDecoder {
         if channel_idx == 1 {
             self.swap_side_lsf_state();
         }
-        let result = self.decode_silk_channel(range_decoder, vad_flag, output, channel_idx);
+        let result = self.decode_silk_channel(range_decoder, vad_flag, output, channel_idx, false);
         if channel_idx == 1 {
             self.swap_side_lsf_state();
         }
@@ -465,6 +660,7 @@ impl SilkDecoder {
         vad_flag: bool,
         output: &mut [i16],
         channel_idx: usize,
+        entropy_only: bool,
     ) -> Result<usize> {
         // Phase 5 Section 5.3.1: Full SILK frame decode pipeline
         //
@@ -576,7 +772,7 @@ impl SilkDecoder {
 
         // RFC lines 3593-3626: LSF Interpolation for 20ms frames
         // For 20ms frames with w_Q2 < 4, interpolate LSF for first half
-        let (lpc_coeffs_first_half, lpc_coeffs_second_half) = if self.frame_size_ms == 20
+        let (mut lpc_coeffs_first_half, mut lpc_coeffs_second_half) = if self.frame_size_ms == 20
             && lsf_interp_weight < 4
         {
             // Get previous LSF based on bandwidth
@@ -622,6 +818,18 @@ impl SilkDecoder {
             (lpc_i32.clone(), lpc_i32)
         };
 
+        if self.concealment[channel_idx].losses > 0 {
+            for coefficients in [&mut lpc_coeffs_first_half, &mut lpc_coeffs_second_half] {
+                let mut chirp = 63570_i32;
+                for coefficient in coefficients {
+                    let product = chirp * *coefficient;
+                    *coefficient = ((product >> 15) + 1) >> 1;
+                    let product = chirp * (63570 - 65536);
+                    chirp += ((product >> 15) + 1) >> 1;
+                }
+            }
+        }
+
         // Store current LSF for next frame
         match bandwidth {
             Bandwidth::Narrowband | Bandwidth::Mediumband if nlsf_q15.len() == 10 => {
@@ -649,7 +857,9 @@ impl SilkDecoder {
             // - First SILK frame for this channel in current Opus frame
             // - Previous frame for this channel was not coded
             // - Previous frame was coded but not voiced
-            let use_absolute = independent || self.previous_pitch_lag[channel_idx].is_none();
+            let use_absolute = independent
+                || !self.previous_frame_voiced[channel_idx]
+                || self.previous_pitch_lag[channel_idx].is_none();
             let primary_lag =
                 self.decode_primary_pitch_lag(range_decoder, bandwidth, use_absolute, channel_idx)?;
 
@@ -769,6 +979,12 @@ impl SilkDecoder {
             excitation_blocks.push(e_q23);
         }
 
+        if entropy_only {
+            self.previous_frame_voiced[channel_idx] = matches!(frame_type, FrameType::Voiced);
+            self.packet_frames[channel_idx] += 1;
+            return Ok(total_samples);
+        }
+
         // Flatten excitation blocks into continuous signal
         let mut full_excitation = Vec::with_capacity(num_shell_blocks * 16);
         for block in &excitation_blocks {
@@ -777,7 +993,7 @@ impl SilkDecoder {
 
         // Clear LPC history on first subframe after decoder reset
         // This ensures the first LPC synthesis starts with zero history
-        if self.decoder_reset {
+        if self.decoder_reset && self.concealment[channel_idx].losses == 0 {
             self.ltp_state[channel_idx].lpc_history_q14.clear();
         }
 
@@ -893,6 +1109,8 @@ impl SilkDecoder {
             all_samples.extend(samples);
         }
 
+        self.recovery[channel_idx].process(&mut all_samples, false);
+
         // Write samples directly to output (already in i16 format)
         for (i, &sample) in all_samples.iter().enumerate() {
             if i < output.len() {
@@ -900,8 +1118,34 @@ impl SilkDecoder {
             }
         }
 
+        let gains = gain_indices
+            .iter()
+            .map(|&index| Self::dequantize_gain(i32::from(index)))
+            .collect::<Vec<_>>();
+        self.saved_excitation[channel_idx][..total_samples]
+            .copy_from_slice(&full_excitation[..total_samples]);
+        self.concealment[channel_idx].update(
+            (
+                self.sample_rate as usize,
+                matches!(frame_type, FrameType::Voiced),
+            ),
+            &pitch_lags,
+            &ltp_filters,
+            &lpc_coeffs_second_half,
+            &gains,
+            i16::try_from(ltp_scale).expect("SILK LTP scale"),
+        );
+        self.comfort_noise[channel_idx].update(
+            self.sample_rate as usize,
+            matches!(frame_type, FrameType::Inactive),
+            &nlsf_q15,
+            &gains,
+            &full_excitation[..total_samples],
+        );
+
         // Update state
         self.decoder_reset = false;
+        self.previous_frame_voiced[channel_idx] = matches!(frame_type, FrameType::Voiced);
         self.packet_frames[channel_idx] += 1;
 
         Ok(total_samples)
@@ -1011,6 +1255,7 @@ impl SilkDecoder {
             self.voiced_history[1].reset_pcm();
             self.ltp_state[1].lpc_history_q14.clear();
             self.previous_pitch_lag[1] = None;
+            self.previous_frame_voiced[1] = false;
             self.previous_gain_indices[1] = Some(10);
             self.side_decoder_reset = true;
         }
@@ -1453,7 +1698,7 @@ impl SilkDecoder {
         Ok(indices)
     }
 
-    fn get_lsf_stage2_pdf(codebook: u8, bandwidth: Bandwidth) -> Result<&'static [u8]> {
+    pub(crate) fn get_lsf_stage2_pdf(codebook: u8, bandwidth: Bandwidth) -> Result<&'static [u8]> {
         use super::lsf_constants::{
             LSF_STAGE2_PDF_NB_A, LSF_STAGE2_PDF_NB_B, LSF_STAGE2_PDF_NB_C, LSF_STAGE2_PDF_NB_D,
             LSF_STAGE2_PDF_NB_E, LSF_STAGE2_PDF_NB_F, LSF_STAGE2_PDF_NB_G, LSF_STAGE2_PDF_NB_H,
@@ -1600,7 +1845,7 @@ impl SilkDecoder {
     /// * Returns error if bandwidth is invalid
     /// * Returns error if computation fails
     #[allow(dead_code, clippy::cast_sign_loss)]
-    fn reconstruct_lsf(
+    pub(crate) fn reconstruct_lsf(
         stage1_index: u8,
         stage2_indices: &[i8],
         bandwidth: Bandwidth,
@@ -1860,6 +2105,11 @@ impl SilkDecoder {
         self.voiced_history = std::array::from_fn(|_| super::voiced::VoicedHistory::default());
         self.mono_history = 0;
         self.packet_frames = [0; 2];
+        self.prev_gain_q16 = [65536; 2];
+        self.comfort_noise = std::array::from_fn(|_| super::cng::ComfortNoise::default());
+        self.recovery = std::array::from_fn(|_| super::recovery::Recovery::default());
+        self.concealment = std::array::from_fn(|_| super::plc::Concealment::default());
+        self.saved_excitation = [[0; 320]; 2];
         self.decoder_reset = true;
         self.previous_lsf_nb = None;
         self.previous_lsf_wb = None;
@@ -1876,6 +2126,7 @@ impl SilkDecoder {
 
         self.previous_gain_indices = [None, None];
         self.previous_pitch_lag = [None, None];
+        self.previous_frame_voiced = [false; 2];
         self.lcg_seed = 0;
         self.uncoded_side_channel = false;
     }
@@ -3796,7 +4047,7 @@ impl SilkDecoder {
     /// * Delta coding: `log_gain` = 0-63 (clamped computed value)
     #[must_use]
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    fn dequantize_gain(log_gain: i32) -> i32 {
+    pub(crate) fn dequantize_gain(log_gain: i32) -> i32 {
         let scaled = (0x001D_1C71_i64 * i64::from(log_gain)) >> 16;
         #[allow(clippy::cast_possible_truncation)]
         let in_log_q7 = (scaled as i32) + 2090;

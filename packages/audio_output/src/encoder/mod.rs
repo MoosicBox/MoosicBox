@@ -20,7 +20,7 @@ pub mod flac;
 #[cfg(feature = "mp3")]
 /// MP3 audio encoder implementation.
 pub mod mp3;
-#[cfg(feature = "opus")]
+#[cfg(any(feature = "opus", feature = "opus-native"))]
 /// Opus audio encoder implementation.
 pub mod opus;
 

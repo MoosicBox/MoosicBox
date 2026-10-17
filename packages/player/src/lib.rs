@@ -1714,8 +1714,24 @@ async fn track_to_playable_file(
                             .add_encoder_step(|| Box::new(OpusEncoder::new()))
                             .with_hint(hint);
                     }
-                    #[cfg(not(feature = "encoder-opus"))]
-                    panic!("No encoder-opus feature");
+                    #[cfg(all(not(feature = "encoder-opus"), feature = "encoder-opus-native"))]
+                    {
+                        use moosicbox_audio_output::encoder::opus::{
+                            OpusEncodeBackend, OpusEncodeConfig, SelectedOpusEncoder,
+                        };
+                        let encoder = SelectedOpusEncoder::new(OpusEncodeConfig {
+                            backend: OpusEncodeBackend::Native,
+                            ..OpusEncodeConfig::default()
+                        })
+                        .map_err(std::io::Error::other)?;
+                        let mut hint = Hint::new();
+                        hint.with_extension("opus");
+                        signal_chain = signal_chain
+                            .add_encoder_step(move || Box::new(encoder))
+                            .with_hint(hint);
+                    }
+                    #[cfg(not(any(feature = "encoder-opus", feature = "encoder-opus-native")))]
+                    panic!("No Opus encoder feature");
                 }
                 #[allow(unreachable_patterns)]
                 _ => {

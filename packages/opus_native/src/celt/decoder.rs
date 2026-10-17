@@ -146,14 +146,14 @@ pub struct PostFilterParams {
 /// Anti-collapse state (RFC Section 4.3.5)
 #[derive(Debug, Clone)]
 pub struct AntiCollapseState {
-    /// Seed for random number generator (LCG: 1664525, 1013904223)
+    /// Seed for random number generator (LCG: `1_664_525`, `1_013_904_223`)
     pub seed: u32,
 }
 
 impl AntiCollapseState {
     /// Linear congruential generator matching libopus celt/celt.c
     ///
-    /// Formula: seed = (seed * 1664525) + 1013904223
+    /// Formula: `seed = (seed * 1_664_525) + 1_013_904_223`
     ///
     /// # RFC Reference
     ///
@@ -295,6 +295,7 @@ pub struct CeltDecoder {
     /// Deemphasis filter memory (per channel)
     preemph_memd: Vec<f32>,
     postfilter: postfilter::Postfilter,
+    loss: plc::LossState,
 }
 
 impl CeltDecoder {
@@ -328,6 +329,7 @@ impl CeltDecoder {
             downsample: 1,
             preemph_memd: vec![0.0; num_channels],
             postfilter: postfilter::Postfilter::default(),
+            loss: plc::LossState::new(),
         })
     }
 
@@ -417,6 +419,7 @@ impl CeltDecoder {
         self.state.reset();
         self.energy_q24 = energy::EnergyHistory::new();
         self.postfilter = postfilter::Postfilter::default();
+        self.loss = plc::LossState::new();
         let num_channels = match self.channels {
             Channels::Mono => 1,
             Channels::Stereo => 2,
@@ -2555,22 +2558,6 @@ impl CeltDecoder {
         self.overlap_add_indexed(mdct_output, 0)
     }
 
-    /// Generate a silence frame (for silence flag = 1)
-    ///
-    /// Returns a frame filled with zeros.
-    #[must_use]
-    fn generate_silence_frame(&self) -> DecodedFrame {
-        let num_channels = match self.synthesis_channels {
-            Channels::Mono => 1,
-            Channels::Stereo => 2,
-        };
-        DecodedFrame {
-            samples: vec![0; self.frame_size * num_channels],
-            sample_rate: self.sample_rate,
-            channels: self.synthesis_channels,
-        }
-    }
-
     /// Decode complete CELT frame
     ///
     /// RFC 6716 Section 4.3 (complete decode flow) - Table 56 (lines 5943-5989)
@@ -2621,22 +2608,16 @@ impl CeltDecoder {
         range_decoder: &mut RangeDecoder,
         frame_bytes: usize,
     ) -> Result<DecodedFrame> {
+        if self.channels == Channels::Mono {
+            for b in 0..CELT_NUM_BANDS {
+                self.energy_q24.band[b] =
+                    self.energy_q24.band[b].max(self.energy_q24.band[CELT_NUM_BANDS + b]);
+            }
+        }
         // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
         if silence {
-            let channels = if self.channels == Channels::Stereo {
-                2
-            } else {
-                1
-            };
-            self.energy_q24.update(
-                vec![-28 * (1 << 24); channels * CELT_NUM_BANDS],
-                channels,
-                false,
-                self.start_band,
-                self.end_band,
-            );
-            return Ok(self.generate_silence_frame());
+            return Ok(self.synthesize_silence(range_decoder));
         }
 
         // 2. post-filter + params (RFC Table 56 lines 5948-5956)
@@ -2668,6 +2649,29 @@ impl CeltDecoder {
         } else {
             1
         };
+        if !intra && self.loss.duration != 0 {
+            let lm = self.compute_lm();
+            let missing = (self.loss.duration >> lm).min(10) as i32;
+            let safety = match lm {
+                0 => 3 << 23,
+                1 => 1 << 23,
+                _ => 0,
+            };
+            for c in 0..channels {
+                for b in self.start_band..self.end_band {
+                    let i = c * CELT_NUM_BANDS + b;
+                    let e0 = self.energy_q24.band[i];
+                    let e1 = self.energy_q24.log[i];
+                    let e2 = self.energy_q24.log2[i];
+                    self.energy_q24.band[i] = if e0 < e1.max(e2) {
+                        let slope = (e1 - e0).max((e2 - e0) >> 1).min(2 << 24);
+                        (e0 - ((1 + missing) * slope).max(0)).max(-20 * (1 << 24))
+                    } else {
+                        e0.min(e1).min(e2)
+                    } - safety;
+                }
+            }
+        }
         let mut energy = self.energy_q24.band[..channels * CELT_NUM_BANDS].to_vec();
         self.decode_coarse_energy_q24(range_decoder, intra, frame_bytes, &mut energy)?;
 
@@ -2798,6 +2802,14 @@ impl CeltDecoder {
         } else if channels == 1 && output_channels == 2 {
             frequency_channels.push(frequency_channels[0].clone());
         }
+        if self.loss.fold {
+            self.state.overlap_buffers = self
+                .loss
+                .memory
+                .iter()
+                .map(|x| self.postfilter.conceal_tail(x))
+                .collect();
+        }
         // One persistent TDAC tail per channel, shared across consecutive short blocks.
         let mut channel_samples = Vec::with_capacity(output_channels);
         for (channel, frequency) in frequency_channels.iter().enumerate() {
@@ -2818,6 +2830,8 @@ impl CeltDecoder {
                 all_samples.push(samples[sample]);
             }
         }
+        self.loss
+            .good(&channel_samples, &self.state.overlap_buffers, &energy, lm);
         self.energy_q24.update(
             energy,
             channels,
@@ -2831,6 +2845,98 @@ impl CeltDecoder {
         Ok(DecodedFrame {
             samples: all_samples,
             sample_rate: self.sample_rate,
+            channels: self.synthesis_channels,
+        })
+    }
+
+    /// Conceal a missing CELT frame at the internal 48-kHz synthesis rate.
+    /// Returns Q12 interleaved samples, before output deemphasis and decimation.
+    ///
+    /// # Errors
+    /// * Rejects frame sizes other than 120, 240, 480, or 960 samples.
+    pub fn conceal(&mut self, frame_size: usize) -> Result<DecodedFrame> {
+        Self::validate_frame_size(SampleRate::Hz48000, frame_size)?;
+        self.frame_size = frame_size;
+        let channels = if self.synthesis_channels == Channels::Stereo {
+            2
+        } else {
+            1
+        };
+        self.loss.resize(channels);
+        let noise = self.loss.duration >= 40 || self.start_band != 0 || self.loss.skip;
+        let samples = if noise {
+            if self.loss.fold {
+                self.state.overlap_buffers = self
+                    .loss
+                    .memory
+                    .iter()
+                    .map(|x| self.postfilter.conceal_tail(x))
+                    .collect();
+            }
+            let decay = if self.loss.duration == 0 {
+                3 << 23
+            } else {
+                1 << 23
+            };
+            let mut pcm = Vec::new();
+            let lm = (frame_size / 120).ilog2();
+            let mut seed = self.state.anti_collapse_state.seed;
+            for c in 0..channels {
+                let mut spectrum = vec![0_i16; frame_size];
+                for band in self.start_band..self.end_band {
+                    let index = c * CELT_NUM_BANDS + band;
+                    self.energy_q24.band[index] =
+                        self.loss.background[index].max(self.energy_q24.band[index] - decay);
+                    let start = CELT_BINS_2_5MS[..band]
+                        .iter()
+                        .map(|&x| usize::from(x))
+                        .sum::<usize>()
+                        << lm;
+                    let end = start + (usize::from(CELT_BINS_2_5MS[band]) << lm);
+                    for x in &mut spectrum[start..end] {
+                        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                        *x = ((seed as i32) >> 20) as i16;
+                    }
+                    plc::normalize(&mut spectrum[start..end]);
+                }
+                let freq = self.denormalize_bands_q24(
+                    &spectrum,
+                    &self.energy_q24.band[c * CELT_NUM_BANDS..(c + 1) * CELT_NUM_BANDS],
+                    false,
+                )?;
+                while self.state.overlap_buffers.len() <= c {
+                    self.state.overlap_buffers.push(Vec::new());
+                }
+                pcm.push(transform::synthesize(
+                    &freq,
+                    false,
+                    &mut self.state.overlap_buffers[c],
+                ));
+            }
+            self.state.anti_collapse_state.seed = seed;
+            for (c, x) in pcm.iter().enumerate() {
+                self.loss.memory[c].copy_within(frame_size..plc::HISTORY, 0);
+                self.loss.memory[c][plc::HISTORY - frame_size..plc::HISTORY].copy_from_slice(x);
+                self.loss.memory[c][plc::HISTORY..plc::HISTORY + 60]
+                    .copy_from_slice(&self.state.overlap_buffers[c]);
+            }
+            self.loss.skip = true;
+            self.loss.fold = false;
+            pcm
+        } else {
+            self.loss.pitch_conceal(frame_size)
+        };
+        self.postfilter.remember_concealed(&self.loss.memory);
+        self.loss.duration = (self.loss.duration + frame_size / 120).min(10000);
+        let mut interleaved = Vec::with_capacity(frame_size * channels);
+        for i in 0..frame_size {
+            for pcm in &samples {
+                interleaved.push(pcm[i]);
+            }
+        }
+        Ok(DecodedFrame {
+            samples: interleaved,
+            sample_rate: SampleRate::Hz48000,
             channels: self.synthesis_channels,
         })
     }
@@ -3860,11 +3966,11 @@ mod tests {
 
         let mut state = AntiCollapseState { seed: 0 };
 
-        // First iteration: 0 * 1664525 + 1013904223 = 1013904223
+        // First iteration: 0 * 1_664_525 + 1_013_904_223 = 1_013_904_223
         let r1 = state.next_random();
         assert_eq!(r1, 1_013_904_223);
 
-        // Second iteration: 1013904223 * 1664525 + 1013904223 = ...
+        // Second iteration: 1_013_904_223 * 1_664_525 + 1_013_904_223 = ...
         let r2 = state.next_random();
         assert_eq!(
             r2,
@@ -3936,7 +4042,7 @@ mod tests {
         use super::AntiCollapseState;
 
         // Verify LCG constants match libopus exactly
-        // From libopus celt/celt.c: seed = seed * 1664525 + 1013904223
+        // From libopus celt/celt.c: seed = seed * 1_664_525 + 1_013_904_223
         let mut state = AntiCollapseState { seed: 1 };
 
         let r = state.next_random();
@@ -4899,7 +5005,7 @@ mod coarse_energy_tests;
 mod energy;
 
 #[path = "residual.rs"]
-mod residual;
+pub(super) mod residual;
 
 #[path = "allocation.rs"]
 mod allocation;
@@ -4910,6 +5016,8 @@ mod mono;
 #[path = "transform.rs"]
 mod transform;
 
+#[path = "plc.rs"]
+mod plc;
 #[path = "postfilter.rs"]
 mod postfilter;
 
@@ -4918,3 +5026,6 @@ mod stereo;
 
 #[path = "hybrid.rs"]
 mod hybrid;
+
+#[path = "transition.rs"]
+pub mod transition;

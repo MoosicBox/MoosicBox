@@ -17,6 +17,7 @@ examples = false
 audiopus = { workspace = true, optional = true }
 bytes = { workspace = true }
 log = { workspace = true }
+moosicbox_ogg_opus = { workspace = true }
 moosicbox_opus_native = { workspace = true, optional = true, features = [
     "celt",
     "hybrid",

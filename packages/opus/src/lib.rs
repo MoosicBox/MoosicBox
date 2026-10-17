@@ -10,6 +10,7 @@
 
 pub mod decoder;
 pub mod error;
+pub mod format;
 pub mod frame;
 pub mod packet;
 pub mod registry;
@@ -19,5 +20,7 @@ pub use decoder::{OpusBackend, OpusDecoder};
 pub use error::{Error, Result};
 pub use frame::{FramePacking, OpusFrame, decode_frame_length};
 pub use packet::OpusPacket;
-pub use registry::{create_opus_registry, register_opus_codec};
+pub use registry::{
+    create_opus_probe, create_opus_registry, register_opus_codec, register_opus_format,
+};
 pub use toc::{Bandwidth, OpusMode, TocByte};

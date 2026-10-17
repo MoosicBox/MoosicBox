@@ -89,6 +89,81 @@ let _decoded_samples = decoder.decode(&packet[..packet_len], &mut output_pcm, 96
 # }
 ```
 
+## Portable live reference oracle
+
+This unpublished test-only package is **not a production dependency** of the native
+codec. Normal native contract tests must not invoke/build the C oracle. Consumers
+must opt in explicitly (for example ignored live tests plus an explicit executable
+path); missing prerequisites in a requested live run are errors, never silent skips.
+Frozen test vectors and their manifest/hash verification are unchanged.
+
+Initialize the pinned `opus` submodule before building. Requires Git, a C compiler,
+CMake and a Makefiles or Ninja generator (`compile_commands.json` is mandatory).
+The runner uses Cargo static linking, not Linux-only `dlopen` or whole-archive tricks.
+Visual Studio/Xcode generators are not currently qualified; use Ninja on those hosts.
+
+```sh
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/opus-oracle-portable-example \
+  cargo build -p moosicbox_opus_native_libopus --locked --offline --example reference_oracle
+/tmp/opus-oracle-portable-example/debug/examples/reference_oracle provenance
+python3 -B packages/opus_native/libopus/src/oracle_tests.py \
+  /tmp/opus-oracle-portable-example/debug/examples/reference_oracle
+```
+
+Use a fresh target directory for clean reproduction; never delete an active cache.
+For cross-target/profile builds obtain the example executable from Cargo's
+`--message-format=json` compiler-artifact record, or specify the known target/profile
+path explicitly. No archive glob, newest-file selection or source `.libs` is used.
+
+### Qualification and provenance
+
+`provenance` emits JSON schema `moosicbox.opus.reference.v1`. It includes source
+revision/cleanliness, exact Cargo archive/build paths, target/host/profile, compiler
+identity/configuration, full compile commands/cache, and run-specific SHA-256 hashes.
+The required source revision is `34bba701ae97c913de719b1f7c10686f62cddb15`.
+Every compile command is checked for fixed-point, disabled float API, no RES24/QEXT
+or architecture-specific intrinsics definitions, alongside generated config and
+CMake settings. CMake places important defines on compiler command lines, not
+necessarily in `config.h`. Unsupported undefines fail qualification.
+
+Archive/config hashes are **this build's evidence**, not a universal machine-binary
+identity. The runner rechecks tracked source cleanliness/revision and exact artifact
+hashes at startup; keep the Cargo build artifacts and source available. This is
+local build provenance, not signed supply-chain attestation. Rust callers can use
+`reference::reference_build()` and `reference::verify_reference_build()`.
+
+### Persistent JSON-lines protocol (v1)
+
+Without arguments the executable accepts one JSON object per line, returns one
+JSON object per line, and flushes immediately. State persists until replaced or
+reset. Any invalid command/C error terminates nonzero (diagnostic on stderr).
+Maximum request size is 1 MiB; PCM is bounded to 11,520 i16 values, packets to
+65,535 bytes, decode frame size to 5,760 samples/channel. Encode output is at most
+4,000 bytes. No files or fixtures are written.
+
+| `op`        | Request fields                                                             | Response                                          |
+| ----------- | -------------------------------------------------------------------------- | ------------------------------------------------- |
+| `encoder`   | `rate`, `channels`, optional `application` (default 2049)                  | `{"ok":true}`                                     |
+| `decoder`   | `rate`, `channels`                                                         | `{"ok":true}`                                     |
+| `configure` | `controls`: up to 32 `[request,value]` pairs                               | `{"ok":true}`                                     |
+| `encode`    | `frame_size`, interleaved `pcm` i16 array                                  | `{"packet":[u8,...]}`                             |
+| `decode`    | `frame_size`, `packet` u8 array or `null` for loss, optional `fec` boolean | `{"samples":samples_per_channel,"pcm":[i16,...]}` |
+| `reset`     | `state`: `encoder` or `decoder`                                            | `{"ok":true}`                                     |
+
+Rates: 8000/12000/16000/24000/48000; channels: 1/2. Encoder controls are limited to
+4002 bitrate, 4004 maximum bandwidth, 4006 VBR, 4008 bandwidth, 4010 complexity,
+4012 in-band FEC, 4014 loss percentage, 4016 DTX, 4020 constrained VBR,
+4022 forced channels and the **pinned-reference-only private** force-mode request
+11002 (1000 SILK, 1001 hybrid, 1002 CELT). Public encode/decode do the actual work;
+private mode selection must not be described as a portable public libopus CTL.
+
+For Python, load `src/oracle.py` and use `with Oracle(explicit_executable) as oracle`;
+`oracle.manifest` holds qualified metadata and `oracle.request(op, **fields)` sends
+commands. Use `python3 -B` to avoid source-tree bytecode artifacts. The helper does
+not auto-build, find caches, substitute system libopus, or skip missing references.
+Pure native tests remain enabled normally; consumer owners must separately migrate
+live comparisons to this explicitly requested facility.
+
 ## License
 
 Licensed under MPL-2.0.

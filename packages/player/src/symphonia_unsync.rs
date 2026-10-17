@@ -79,7 +79,7 @@ pub fn play_media_source_with_options(
     let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().probe(
+    match moosicbox_audio_decoder::create_format_probe().probe(
         hint,
         media_source_stream,
         format_opts,
@@ -118,7 +118,7 @@ pub fn play_media_source_with_options_result(
     let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().probe(
+    match moosicbox_audio_decoder::create_format_probe().probe(
         hint,
         media_source_stream,
         format_opts,

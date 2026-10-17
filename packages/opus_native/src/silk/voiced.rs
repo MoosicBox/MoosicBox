@@ -15,7 +15,7 @@ fn wb(a: i32, b: i32) -> i32 {
 fn ww(a: i32, b: i32) -> i32 {
     ((i64::from(a) * i64::from(b)) >> 16) as i32
 }
-fn inverse(gain: i32) -> i32 {
+pub(super) fn inverse_q(gain: i32, q: u32) -> i32 {
     let head = gain.leading_zeros() - 1;
     let normalized = gain << head;
     let reciprocal = (i32::MAX >> 2) / (normalized >> 16);
@@ -23,7 +23,14 @@ fn inverse(gain: i32) -> i32 {
     let result = reciprocal
         .wrapping_shl(16)
         .wrapping_add(ww(error, reciprocal));
-    result >> (61 - head - 47)
+    let shift = 61 - head.cast_signed() - q.cast_signed();
+    if shift <= 0 {
+        (i64::from(result) << (-shift)).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+    } else if shift < 32 {
+        result >> shift
+    } else {
+        0
+    }
 }
 pub(super) fn gain_ratio(a: i32, b: i32) -> i32 {
     let ah = a.leading_zeros() - 1;
@@ -42,6 +49,10 @@ pub(super) fn gain_ratio(a: i32, b: i32) -> i32 {
     }
 }
 impl VoicedHistory {
+    pub(super) fn pcm(&self) -> &[i16] {
+        &self.pcm
+    }
+
     pub(super) fn reset_pcm(&mut self) {
         self.pcm.fill(0);
     }
@@ -73,7 +84,7 @@ impl VoicedHistory {
             let mut pcm = vec![0; memory];
             let count = self.pcm.len().min(memory);
             pcm[memory - count..].copy_from_slice(&self.pcm[self.pcm.len() - count..]);
-            let mut inv = inverse(params.gain_q16);
+            let mut inv = inverse_q(params.gain_q16, 47);
             if subframe == 0 {
                 inv = wb(inv, i32::from(params.ltp_scale_q14)).wrapping_shl(2);
             }
