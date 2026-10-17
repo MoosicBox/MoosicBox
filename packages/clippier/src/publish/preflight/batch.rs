@@ -3,8 +3,8 @@
 use std::{collections::BTreeSet, fs, io::Read as _, path::Path, time::Instant};
 
 use super::{
-    BTreeMap, BoxError, PublishConfig, PublishPackageInfo, SanitizedPackage,
-    package_command_with_cache, pending_dependencies, prepare_workspace, run_streaming_command,
+    BTreeMap, BoxError, PublishConfig, PublishPackageInfo, SanitizedPackage, output,
+    package_command_with_cache, pending_dependencies, prepare_workspace,
 };
 
 /// A batch is only credited after every archive has a complete lockfile and none
@@ -22,8 +22,11 @@ pub(super) fn validate(
     let packaging = Instant::now();
     let mut packaging_config = config.clone();
     packaging_config.verify = false;
-    let output =
-        run_streaming_command(package_command_with_cache(&staged, &packaging_config, None))?;
+    let output = output::run(
+        package_command_with_cache(&staged, &packaging_config, None),
+        config.color,
+        "packaging batch (fallback to independent checks on failure)",
+    )?;
     if !output.status.success() {
         return Err(format!(
             "Native batch packaging failed ({}); independent checks required",

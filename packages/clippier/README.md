@@ -1105,6 +1105,12 @@ Dry runs and opted-in real publishes package the entire pending queue with Cargo
 
 When enabled, preflight continues across **every pending package**, collecting manifest, category,
 registry-availability, staging, and Cargo packaging failures before returning a nonzero exit status.
+
+On interactive terminals, Cargo output is shown in a bounded live region using BMUX.
+Successful compilation/packaging chatter is cleared; failed checks retain their complete
+stdout and stderr above the final summary. Redirected output and `TERM=dumb` keep
+ordinary live streaming without cursor manipulation. Resizing may retain the old live
+region rather than risk erasing earlier failures. No raw mode or alternate screen is used.
 Each package is checked in a separate temporary workspace with its pending dependency closure, so
 one broken package does not prevent independent packages from being checked. No uploads start if
 any preflight check fails. Use `--fail-fast` to stop after the first failure; this switch also works

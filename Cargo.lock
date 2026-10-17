@@ -2492,18 +2492,18 @@ dependencies = [
 
 [[package]]
 name = "bmux_keyboard"
-version = "0.0.1-alpha.2"
+version = "0.0.1-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b61a9c70d350c0830e42b63b6bb4f1e82233adbaedfd494b16ed6e59eba70709"
+checksum = "4661ea5b4cf35c5b35267589ab1850f348c96591b6758d5e80194ba72faeb108"
 dependencies = [
  "crossterm",
 ]
 
 [[package]]
 name = "bmux_text_edit"
-version = "0.0.1-alpha.2"
+version = "0.0.1-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14b257a76839f57bf8bac58906d88dec3ae1978555df1f8a3f6d1ab675cb4297"
+checksum = "5f42e280f55b45b82e92df82cb89357a536f97a73b7b017fba0729e3b246c90d"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2512,9 +2512,9 @@ dependencies = [
 
 [[package]]
 name = "bmux_tui"
-version = "0.0.1-alpha.2"
+version = "0.0.1-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "708f7590b18c8d9a2ed0d86ad647bb01f9aeb82f38833acdb2c7b5ecba9d466d"
+checksum = "f2cd9f464fb6fe9098cbd8499533f4dfa31002b77bac0b1ec17b7fcbc2087663"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",

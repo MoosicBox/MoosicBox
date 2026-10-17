@@ -10,11 +10,12 @@ use std::{
 
 use super::{
     BoxError, PublishConfig, PublishPackageInfo, SanitizedPackage, cargo_color_arg, copy_dir,
-    format_package_name, paint, read_toml, run_streaming_command, sanitize_manifest,
+    format_package_name, paint, read_toml, sanitize_manifest,
 };
 
 mod batch;
 mod diagnostics;
+mod output;
 
 #[cfg(test)]
 mod reuse_tests;
@@ -330,6 +331,11 @@ fn collect_package_checks(
         match result {
             Ok(()) => {
                 passed.insert(name.clone());
+                eprintln!(
+                    "  {}: {}",
+                    paint(config.color, "35", "validated (not uploaded)"),
+                    format_package_name(config.color, name, &packages[name].version),
+                );
             }
             Err(error) => {
                 let context = if blocked_by.is_empty() {
@@ -469,7 +475,7 @@ fn validate_package(
     let staged = prepare_workspace(workspace_root, packages, pending)?;
     let staged_in = started.elapsed();
     let command = package_command_with_cache(&staged, config, verification_cache);
-    let output = run_streaming_command(command)?;
+    let output = output::run(command, config.color, &pending.join(", "))?;
     eprintln!(
         "Preflight independent check: {} package attempts; staging {:.2}s, Cargo {:.2}s; compilation {}",
         pending.len(),

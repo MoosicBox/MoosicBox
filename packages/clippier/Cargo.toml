@@ -157,10 +157,12 @@ _workspace = []
 cargo-workspace = ["_workspace"]
 node-workspace = ["_workspace", "dep:serde_yaml"]
 publish = [
+    "dep:bmux_tui",
     "dep:cargo_metadata",
     "dep:flate2",
     "dep:reqwest",
     "dep:tar",
+    "dep:tokio",
     "switchy_async/net",
     "switchy_async/time",
 ]

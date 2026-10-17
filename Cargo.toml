@@ -580,7 +580,7 @@ aws-sdk-ssm = "1.118.0"
 base64 = "0.22.1"
 bmux_codec = { version = "0.0.1-alpha.2", default-features = false }
 bmux_keyboard = { version = "0.0.1-alpha.2", default-features = false }
-bmux_tui = { version = "0.0.1-alpha.2", default-features = false }
+bmux_tui = { version = "0.0.1-alpha.3", default-features = false }
 bmux_tui_components = { version = "0.0.1-alpha.2", default-features = false }
 bmux_tui_runtime = { version = "0.0.1-alpha.2", default-features = false }
 btparse = "0.2.0"
