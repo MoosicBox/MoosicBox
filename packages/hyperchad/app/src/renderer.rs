@@ -212,10 +212,21 @@ pub mod bmux {
             app.runtime_handle()
                 .map_err(|_| BuilderError::MissingRuntime)?
                 .spawn(async move {
-                    while let Some(url) = renderer.wait_for_navigation().await {
-                        if let Err(error) = router.navigate_send(url).await {
-                            log::error!("terminal navigation failed: {error:?}");
-                        }
+                    let mut next = renderer.wait_for_navigation().await;
+                    while let Some(url) = next {
+                        // A newer navigation supersedes a stalled route GET. Never
+                        // make Settings or Home wait for an unreachable server.
+                        let navigation = router.navigate_send(url);
+                        let mut navigation = Box::pin(navigation);
+                        next = switchy::unsync::select! {
+                            result = &mut navigation => {
+                                if let Err(error) = result {
+                                    log::error!("terminal navigation failed: {error:?}");
+                                }
+                                renderer.wait_for_navigation().await
+                            }
+                            next = renderer.wait_for_navigation() => next,
+                        };
                     }
                     Ok::<_, Error>(())
                 });

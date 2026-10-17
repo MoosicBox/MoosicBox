@@ -217,7 +217,7 @@ impl<'a> TryFrom<&'a str> for Action {
 #[must_use]
 pub fn sidebar_navigation() -> Containers {
     container! {
-        aside width=calc(max(240, min(280, 15%))) background=(DARK_BACKGROUND) {
+        aside width=calc(max(240, min(280, 15%))) height=100% background=(DARK_BACKGROUND) {
             div .navigation-bar padding=20 {
                 @let size = 36;
                 div .navigation-bar-header direction=row align-items=center height=(size) {

@@ -67,6 +67,32 @@ fn settings_navigation_and_connection_fragments_keep_opaque_backgrounds() {
 
 fn assert_opaque(program: &mut BmuxProgram) {
     program.prepare().unwrap();
+    // A sidebar's background must cover the full main-content region, not
+    // merely its navigation labels, even on a sparse disconnected Home page.
+    let options = hyperchad::renderer_bmux::layout::LayoutOptions::default();
+    let tree = hyperchad::renderer_bmux::layout::layout(
+        program.state.root(),
+        &options,
+        &program.controls.measurer(program.state.root()),
+    )
+    .unwrap();
+    let aside = tree
+        .nodes
+        .iter()
+        .find(|node| {
+            let mut source = program.state.root();
+            for index in &node.path {
+                source = &source.children[*index];
+            }
+            matches!(source.element, Element::Aside)
+        })
+        .unwrap();
+    assert_eq!(aside.bounds.y, 0);
+    assert_eq!(
+        aside.bounds.height,
+        u64::from(options.viewport.height.saturating_sub(9))
+    );
+    assert!(aside.bounds.height > 10);
     let mut buffer = bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
     let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
     program.paint(&mut bmux_tui::paint::PaintCx::new(&mut frame));

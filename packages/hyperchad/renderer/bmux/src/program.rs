@@ -36,6 +36,8 @@ pub enum Message {
     Responsive(String, ResponsiveTrigger),
     Background(Option<Color>),
     Shutdown,
+    /// Immediate user quit, independent of network work.
+    Quit,
     /// Cancel a correlated active or queued HTTP request.
     AbortRequest(String),
     /// Retry an image after an authorization, fetch, or decode failure.
@@ -78,6 +80,8 @@ enum Work {
 }
 
 /// Sole owner of mutable renderer state. Presentation candidates are not input authority.
+// Scheduler lane occupancy, lifecycle and terminal capability are independent flags.
+#[allow(clippy::struct_excessive_bools)]
 pub struct BmuxProgram {
     shared: Arc<Shared>,
     pub state: ViewState,
@@ -90,6 +94,8 @@ pub struct BmuxProgram {
     committed: Option<(u64, LayoutTree)>,
     pending: VecDeque<Work>,
     active: bool,
+    resource_active: bool,
+    quitting: bool,
     stopping: bool,
     active_abort: Option<(Option<String>, tokio::sync::watch::Sender<bool>)>,
     resources: BTreeMap<String, String>,
@@ -144,6 +150,8 @@ impl BmuxProgram {
             committed: None,
             pending: VecDeque::new(),
             active: false,
+            resource_active: false,
+            quitting: false,
             stopping: false,
             active_abort: None,
             resources: BTreeMap::new(),
@@ -456,6 +464,7 @@ impl BmuxProgram {
         self.schedule_resources()
     }
 
+    #[cfg(test)]
     fn next_work(&mut self) -> Option<Work> {
         // Ordered semantic effects must not wait behind decorative asset loads.
         // Preserve FIFO within both classes and never preempt in-flight work.
@@ -468,6 +477,10 @@ impl BmuxProgram {
     }
 
     fn drive(&mut self, mut update: Update<Message>) -> Update<Message> {
+        if self.quitting {
+            update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
+            return update;
+        }
         let resource_key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-resource-context");
         if self.stopping || self.shared.config.resource_context.is_none() {
             if let Some(registered) = self.resource_observer.take() {
@@ -510,7 +523,7 @@ impl BmuxProgram {
         } else {
             update.cancelled_subscriptions.push(timer_key);
         }
-        if self.stopping && !self.active && self.pending.is_empty() {
+        if self.stopping && !self.active && !self.resource_active && self.pending.is_empty() {
             update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
         }
         // Navigation hands intent to the application's independent router. Do not
@@ -539,21 +552,41 @@ impl BmuxProgram {
                 Some(Message::Advance)
             }));
         }
+        if !self.resource_active
+            && let Some(index) = self
+                .pending
+                .iter()
+                .position(|work| matches!(work, Work::Resource { .. }))
+            && let Some(work) = self.pending.remove(index)
+        {
+            update.commands.push(self.start_work(work));
+        }
         if self.active {
             return update;
         }
-        let Some(work) = self.next_work() else {
+        let Some(index) = self
+            .pending
+            .iter()
+            .position(|work| !matches!(work, Work::Resource { .. }))
+        else {
             return update;
+        };
+        let Some(work) = self.pending.remove(index) else {
+            unreachable!()
         };
         update.commands.push(self.start_work(work));
         update
     }
 
     fn start_work(&mut self, work: Work) -> Command<Message> {
-        self.active = true;
+        let resource = matches!(&work, Work::Resource { .. });
+        if resource {
+            self.resource_active = true;
+        } else {
+            self.active = true;
+        }
         let host = self.shared.config.host.clone();
         let custom = self.shared.request_action.clone();
-        let navigation = self.shared.navigation_tx.clone();
         let max_bytes = self.shared.config.graphics.max_encoded_bytes;
         let current_generation = self.state.generation();
         let timeout = self.shared.config.effect_timeout;
@@ -568,7 +601,9 @@ impl BmuxProgram {
             Completion::Request(request) => request.request_id.clone(),
             _ => None,
         };
-        self.active_abort = Some((request_id, abort_tx));
+        if !resource {
+            self.active_abort = Some((request_id, abort_tx));
+        }
         Command::concurrent(async move {
             let operation = async move {
                 let (generation, completion, result) = match work {
@@ -619,17 +654,9 @@ impl BmuxProgram {
                                 std::io::Error::other("application action bridge closed").into()
                             }),
                     ),
-                    Work::Navigate(url) => (
-                        current_generation,
-                        Completion::Other,
-                        navigation
-                            .send_async(url)
-                            .await
-                            .map(|()| HostResponse::Complete)
-                            .map_err(|_| -> Error {
-                                std::io::Error::other("application navigation bridge closed").into()
-                            }),
-                    ),
+                    Work::Navigate(_) => {
+                        unreachable!("navigation uses the independent router lane")
+                    }
                 };
                 Message::Completed {
                     generation,
@@ -639,7 +666,7 @@ impl BmuxProgram {
             };
             let failure = tokio::select! {
                 result = tokio::time::timeout(timeout, operation) => match result { Ok(message) => return Some(message), Err(_) => std::io::Error::new(std::io::ErrorKind::TimedOut, "bmux effect deadline exceeded") },
-                _ = abort_rx.changed() => std::io::Error::new(std::io::ErrorKind::Interrupted, "bmux request aborted"),
+                _ = abort_rx.changed(), if !resource => std::io::Error::new(std::io::ErrorKind::Interrupted, "bmux request aborted"),
             };
             Some(Message::Completed {
                 generation: timeout_generation,
@@ -1204,8 +1231,12 @@ impl BmuxProgram {
         work: Completion,
         mut result: Result<HostResponse, Error>,
     ) -> Result<(), Error> {
-        self.active = false;
-        self.active_abort = None;
+        if matches!(&work, Completion::Resource { .. }) {
+            self.resource_active = false;
+        } else {
+            self.active = false;
+            self.active_abort = None;
+        }
         self.revalidate_resource_context()?;
         let current = match &work {
             Completion::Resource { key, source } => {
@@ -1427,6 +1458,14 @@ impl BmuxProgram {
             }
             Message::ResourceContextChanged => {}
             Message::Shutdown => self.stopping = true,
+            Message::Quit => {
+                self.stopping = true;
+                self.quitting = true;
+                self.pending.clear();
+                if let Some((_, cancel)) = &self.active_abort {
+                    let _ = cancel.send(true);
+                }
+            }
             Message::InputFailed(error) => return Err(std::io::Error::other(error).into()),
             Message::View(view, target) => self.apply_view(view, target.as_deref())?,
             Message::Canvas(update) => {
@@ -1862,6 +1901,52 @@ mod runtime_regressions {
             "navigation must not release the ordered effect lane"
         );
         assert!(program.pending.is_empty());
+    }
+
+    #[test]
+    fn user_quit_exits_without_draining_stalled_work() {
+        let mut program = program();
+        program.active = true;
+        program.resource_active = true;
+        let (cancel, receiver) = tokio::sync::watch::channel(false);
+        program.active_abort = Some((None, cancel));
+        program
+            .pending
+            .push_back(Work::Navigate("/downloads".into()));
+        let update = program
+            .update(RuntimeEvent::Message(Message::Quit))
+            .unwrap();
+        assert_eq!(update.lifecycle, bmux_tui_runtime::Lifecycle::Exit);
+        assert!(*receiver.borrow());
+        assert!(program.pending.is_empty());
+        assert!(update.commands.is_empty());
+    }
+
+    #[test]
+    fn image_loads_do_not_wait_for_stalled_http_or_release_its_lane() {
+        let mut program = program();
+        program.active = true;
+        program.pending.push_back(Work::Resource {
+            key: "logo".into(),
+            source: "/logo".into(),
+            generation: 1,
+        });
+        let update = program.drive(Update::none());
+        assert_eq!(update.commands.len(), 1);
+        assert!(program.resource_active);
+        assert!(program.active);
+        program
+            .complete(
+                1,
+                Completion::Resource {
+                    key: "logo".into(),
+                    source: "/logo".into(),
+                },
+                Err(std::io::Error::other("denied").into()),
+            )
+            .unwrap();
+        assert!(!program.resource_active);
+        assert!(program.active);
     }
 
     #[test]

@@ -134,7 +134,7 @@ async fn run_terminal(
                     };
                     if is_quit_event(&event) {
                         shared.stopping.store(true, std::sync::atomic::Ordering::Release);
-                        let _ = handle.send(Message::Shutdown).await;
+                        let _ = handle.send(Message::Quit).await;
                         break;
                     }
                     // Keep all input ordered: coalescing resize past a click changes meaning.
