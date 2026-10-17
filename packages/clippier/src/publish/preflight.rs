@@ -290,7 +290,7 @@ fn validate_independent(
             verification_cache.as_ref().map(SanitizedPackage::root),
         ) {
             Ok(()) => Ok(()),
-            Err(error) if !config.fail_fast => {
+            Err(error) if !config.fail_fast && !error.is::<output::NetworkError>() => {
                 let findings =
                     diagnostics.investigate(workspace_root, packages, pending, closure, config);
                 Err(format!("Full-package check: {error}\n{}", findings.join("\n\n")).into())
@@ -309,6 +309,7 @@ fn collect_package_checks(
 ) -> Result<(), BoxError> {
     let pending_set = pending.iter().cloned().collect::<BTreeSet<_>>();
     let mut failed = BTreeSet::new();
+    let mut incomplete = BTreeSet::new();
     let mut passed = BTreeSet::new();
     for (index, name) in pending.iter().enumerate() {
         let mut closure = BTreeSet::new();
@@ -338,7 +339,10 @@ fn collect_package_checks(
                 );
             }
             Err(error) => {
-                let context = if blocked_by.is_empty() {
+                let network = error.is::<output::NetworkError>();
+                let context = if network {
+                    "not validated—network error".to_string()
+                } else if blocked_by.is_empty() {
                     "failed".to_string()
                 } else {
                     format!(
@@ -350,7 +354,11 @@ fn collect_package_checks(
                     "{name}@{} ({context}):\n{error}",
                     packages[name].version
                 ));
-                failed.insert(name.clone());
+                if network {
+                    incomplete.insert(name.clone());
+                } else {
+                    failed.insert(name.clone());
+                }
                 if config.fail_fast {
                     break;
                 }
@@ -366,7 +374,8 @@ fn collect_package_checks(
         config,
         &passed,
         &failed,
-        failures.len() - failed.len(),
+        &incomplete,
+        failures.len() - failed.len() - incomplete.len(),
     );
     Err(format!(
         "Publish preflight failed (no packages uploaded):\n\n{}\n\n{summary}",
@@ -381,10 +390,11 @@ fn failure_summary(
     config: &PublishConfig,
     passed: &BTreeSet<String>,
     failed: &BTreeSet<String>,
+    incomplete: &BTreeSet<String>,
     additional_failures: usize,
 ) -> String {
     let color = config.color;
-    let not_checked = pending.len() - passed.len() - failed.len();
+    let not_checked = pending.len() - passed.len() - failed.len() - incomplete.len();
     let mut lines = vec![
         paint(
             color,
@@ -407,6 +417,8 @@ fn failure_summary(
         let package = &packages[name];
         let (code, label) = if failed.contains(name) {
             ("31", "failed/blocked")
+        } else if incomplete.contains(name) {
+            ("33", "not validated—network error")
         } else if passed.contains(name) {
             ("35", "validated (not uploaded)")
         } else {
@@ -423,6 +435,7 @@ fn failure_summary(
         paint(color, "1", "Summary:"),
         format!("  {}", paint(color, "35", &format!("Packaging validated: {}", passed.len()))),
         format!("  {}", paint(color, "31", &format!("failed/blocked: {}", failed.len()))),
+        format!("  {}", paint(color, "33", &format!("not validated—network error: {}", incomplete.len()))),
         format!("  {}", paint(color, "90", &format!("not checked: {not_checked}"))),
         format!("  {}", paint(color, "31", &format!("Additional validation failures: {additional_failures}"))),
         String::new(),
@@ -475,7 +488,7 @@ fn validate_package(
     let staged = prepare_workspace(workspace_root, packages, pending)?;
     let staged_in = started.elapsed();
     let command = package_command_with_cache(&staged, config, verification_cache);
-    let output = output::run(command, config.color, &pending.join(", "))?;
+    let output = output::run(&command, config.color, &pending.join(", "))?;
     eprintln!(
         "Preflight independent check: {} package attempts; staging {:.2}s, Cargo {:.2}s; compilation {}",
         pending.len(),

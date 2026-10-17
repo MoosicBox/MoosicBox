@@ -1466,6 +1466,7 @@ fn failure_summary_uses_publish_styles_and_honors_color_mode() {
             },
             &passed,
             &failed,
+            &BTreeSet::new(),
             1,
         )
     };
@@ -1499,6 +1500,54 @@ fn failure_summary_uses_publish_styles_and_honors_color_mode() {
         .replace_all(&colored, "");
     assert_eq!(plain, stripped);
     assert_eq!(colored, render(super::super::ColorMode::Auto));
+}
+
+#[test]
+fn network_incomplete_is_separate_from_package_failures_and_unchecked() {
+    let packages = ["network", "broken", "healthy"]
+        .into_iter()
+        .map(|name| {
+            (
+                name.to_string(),
+                PublishPackageInfo::new(name, "0.1.0", true, BTreeSet::new()),
+            )
+        })
+        .collect();
+    let error = collect_package_checks(
+        &packages,
+        &["network".into(), "broken".into(), "healthy".into()],
+        &PublishConfig {
+            color: super::super::ColorMode::Never,
+            ..PublishConfig::default()
+        },
+        Vec::new(),
+        |closure| {
+            if closure.contains(&"network".into()) {
+                Err(Box::new(output::NetworkError(
+                    "registry unavailable".into(),
+                )))
+            } else if closure.contains(&"broken".into()) {
+                Err("manifest invalid".into())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        error.contains("not validated—network error: network@0.1.0"),
+        "{error}"
+    );
+    assert!(error.contains("not validated—network error: 1"), "{error}");
+    assert!(error.contains("failed/blocked: 1"), "{error}");
+    assert!(error.contains("Packaging validated: 1"), "{error}");
+    assert!(error.contains("not checked: 0"), "{error}");
+    assert!(
+        error.contains("Additional validation failures: 0"),
+        "{error}"
+    );
+    assert!(error.contains("Result: FAILED (no packages uploaded)."));
 }
 
 #[test]

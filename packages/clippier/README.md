@@ -1111,6 +1111,10 @@ Successful compilation/packaging chatter is cleared; failed checks retain their 
 stdout and stderr above the final summary. Redirected output and `TERM=dumb` keep
 ordinary live streaming without cursor manipulation. Resizing may retain the old live
 region rather than risk erasing earlier failures. No raw mode or alternate screen is used.
+Recognized transient Cargo transport failures are retried up to three times with
+1s, 2s, and 4s backoff. Exhausted network checks are reported separately as
+**not validated—network error**, not package failures. They still block uploads;
+supplemental dependency probes are skipped because validation never completed.
 Each package is checked in a separate temporary workspace with its pending dependency closure, so
 one broken package does not prevent independent packages from being checked. No uploads start if
 any preflight check fails. Use `--fail-fast` to stop after the first failure; this switch also works

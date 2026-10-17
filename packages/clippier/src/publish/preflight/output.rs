@@ -20,6 +20,82 @@ use super::super::{BoxError, CommandOutput, run_streaming_command};
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(33);
 
+#[derive(Debug)]
+pub(super) struct NetworkError(pub String);
+
+impl std::fmt::Display for NetworkError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "not validated—network error: {}", self.0)
+    }
+}
+
+impl std::error::Error for NetworkError {}
+
+fn transient_network(stderr: &str) -> bool {
+    // Require Cargo's source/download context as well as a transport cause.
+    // A compiler diagnostic mentioning a connection is not a registry failure.
+    let source = [
+        "failed to get `",
+        "failed to download",
+        "unable to update",
+        "failed to fetch",
+    ]
+    .iter()
+    .any(|marker| stderr.contains(marker));
+    source
+        && [
+            "Could not connect to server",
+            "Could not resolve host",
+            "Connection timed out",
+            "Timeout was reached",
+            "Connection reset by peer",
+            "Error in the HTTP2 framing layer",
+            "unexpected EOF",
+            "[28]",
+            "[7]",
+            "[6]",
+        ]
+        .iter()
+        .any(|marker| stderr.contains(marker))
+}
+
+fn copy_command(command: &Command) -> Command {
+    let mut copy = Command::new(command.get_program());
+    copy.args(command.get_args());
+    if let Some(dir) = command.get_current_dir() {
+        copy.current_dir(dir);
+    }
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            copy.env(key, value);
+        } else {
+            copy.env_remove(key);
+        }
+    }
+    copy
+}
+
+fn retry_network<T>(
+    mut attempt: impl FnMut() -> Result<T, BoxError>,
+    mut wait: impl FnMut(Duration),
+) -> Result<T, BoxError> {
+    for retry in 0..=3 {
+        match attempt() {
+            Err(error) if error.is::<NetworkError>() && retry < 3 => {
+                let delay = Duration::from_secs(1 << retry);
+                eprintln!(
+                    "Preflight network error; retrying in {}s ({}/3)",
+                    delay.as_secs(),
+                    retry + 1
+                );
+                wait(delay);
+            }
+            result => return result,
+        }
+    }
+    unreachable!("bounded retry loop returns on final attempt")
+}
+
 fn interactive() -> bool {
     io::stdout().is_terminal()
         && io::stderr().is_terminal()
@@ -32,15 +108,29 @@ fn size() -> Size {
 
 /// Keep successes transient and commit failed transcripts exactly once.
 pub(super) fn run(
-    command: Command,
+    command: &Command,
     color: ColorMode,
     label: &str,
 ) -> Result<CommandOutput, BoxError> {
-    if !interactive() {
-        return run_streaming_command(command);
+    let inline = interactive();
+    if inline {
+        eprintln!("Cargo preflight: {label}");
     }
-    eprintln!("Cargo preflight: {label}");
-    run_inline(command, color, io::stderr(), size)
+    retry_network(
+        || {
+            let command = copy_command(command);
+            if inline {
+                run_inline(command, color, io::stderr(), size)
+            } else {
+                let output = run_streaming_command(command)?;
+                if !output.status.success() && transient_network(&output.stderr) {
+                    return Err(Box::new(NetworkError(output.stderr)) as BoxError);
+                }
+                Ok(output)
+            }
+        },
+        thread::sleep,
+    )
 }
 
 fn run_inline(
@@ -118,6 +208,17 @@ fn run_inline(
         return Err(format!("Preflight output rendering failed: {error}").into());
     }
     display.clear(size())?;
+    if !status.success() {
+        let stderr = transcript
+            .iter()
+            .filter(|(stderr, _)| *stderr)
+            .flat_map(|(_, bytes)| bytes.iter().copied())
+            .collect::<Vec<_>>();
+        let stderr = String::from_utf8_lossy(&stderr).into_owned();
+        if transient_network(&stderr) {
+            return Err(Box::new(NetworkError(stderr)));
+        }
+    }
     if !status.success() || read_error.is_some() {
         let lines = failure_lines(&transcript, color);
         display.commit(&lines, size())?;
@@ -183,6 +284,91 @@ fn spawn_reader(
 #[cfg(unix)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transport_retry_recovers_with_bounded_backoff() {
+        let mut calls = 0;
+        let mut waits = Vec::new();
+        let result = retry_network(
+            || {
+                calls += 1;
+                if calls < 3 {
+                    Err(Box::new(NetworkError("connection refused".into())) as BoxError)
+                } else {
+                    Ok(42)
+                }
+            },
+            |delay| waits.push(delay.as_secs()),
+        )
+        .unwrap();
+        assert_eq!(result, 42);
+        assert_eq!(calls, 3);
+        assert_eq!(waits, [1, 2]);
+    }
+
+    #[test]
+    fn transport_retry_exhausts_and_preserves_typed_cause() {
+        let mut calls = 0;
+        let mut waits = Vec::new();
+        let error = retry_network::<()>(
+            || {
+                calls += 1;
+                Err(Box::new(NetworkError("Could not connect to server".into())))
+            },
+            |delay| waits.push(delay.as_secs()),
+        )
+        .unwrap_err();
+        assert!(error.is::<NetworkError>());
+        assert_eq!(calls, 4);
+        assert_eq!(waits, [1, 2, 4]);
+        let mut calls = 0;
+        let _ = retry_network::<()>(
+            || {
+                calls += 1;
+                Err("manifest invalid".into())
+            },
+            |_| panic!("must not retry"),
+        );
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn network_detection_requires_transport_and_source_context() {
+        assert!(transient_network(
+            "failed to get `lz4_flex`\nunable to update registry `crates-io`\ndownload of config.json failed\n[7] Could not connect to server"
+        ));
+        assert!(transient_network(
+            "failed to download crate: [28] Timeout was reached"
+        ));
+        for error in [
+            "failed to select a version for lz4_flex",
+            "error: Connection timed out",
+            "failed to download crate: certificate verify failed",
+            "failed to get `foo`: HTTP 403 Forbidden",
+        ] {
+            assert!(!transient_network(error), "{error}");
+        }
+    }
+
+    #[test]
+    fn inline_network_failure_is_not_committed_as_package_failure() {
+        let mut bytes = Vec::new();
+        let error = run_inline(
+            command(
+                "printf 'failed to get `lz4_flex`: [7] Could not connect to server\\n' >&2; exit 1",
+            ),
+            ColorMode::Never,
+            &mut bytes,
+            || Size::new(80, 24),
+        )
+        .unwrap_err();
+        assert!(error.is::<NetworkError>());
+        assert!(
+            !String::from_utf8(bytes)
+                .unwrap()
+                .contains("Cargo preflight failed")
+        );
+    }
 
     fn command(script: &str) -> Command {
         let mut command = Command::new("sh");

@@ -23,7 +23,7 @@ pub(super) fn validate(
     let mut packaging_config = config.clone();
     packaging_config.verify = false;
     let output = output::run(
-        package_command_with_cache(&staged, &packaging_config, None),
+        &package_command_with_cache(&staged, &packaging_config, None),
         config.color,
         "packaging batch (fallback to independent checks on failure)",
     )?;
