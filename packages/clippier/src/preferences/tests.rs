@@ -1,5 +1,71 @@
 use super::*;
 
+#[test]
+fn lockfile_preferences_follow_all_layers_and_report_provenance() {
+    let root = fixture();
+    let defaults = resolve(root.path(), &EnvironmentInputs::default());
+    assert!(defaults.publish.use_lockfile);
+    assert!(!defaults.publish.require_lockfile_match);
+    let xdg = root.path().join("xdg");
+    write_config(
+        &xdg.join("clippier/clippier.toml"),
+        "[publish]\nuse_lockfile=false\nrequire_lockfile_match=true\n",
+    );
+    let mut environment = EnvironmentInputs {
+        xdg_config_home: Some(xdg.into_os_string()),
+        ..EnvironmentInputs::default()
+    };
+    let user = resolve(root.path(), &environment);
+    assert!(!user.publish.use_lockfile);
+    assert!(user.publish.require_lockfile_match);
+    assert!(matches!(
+        user.provenance.publish.use_lockfile,
+        PreferenceSource::UserConfig { .. }
+    ));
+    write_config(
+        &root.path().join("clippier.toml"),
+        "[publish]\nuse_lockfile=true\nrequire_lockfile_match=false\n",
+    );
+    let workspace = resolve(root.path(), &environment);
+    assert!(workspace.publish.use_lockfile);
+    assert!(!workspace.publish.require_lockfile_match);
+    environment.use_lockfile = Some("false".into());
+    environment.require_lockfile_match = Some("true".into());
+    let env = resolve(root.path(), &environment);
+    assert!(!env.publish.use_lockfile);
+    assert!(env.publish.require_lockfile_match);
+    let explicit = resolve_with_inputs(
+        root.path(),
+        PreferencesOverrides {
+            use_lockfile: Some(true),
+            require_lockfile_match: Some(false),
+            ..PreferencesOverrides::default()
+        },
+        &environment,
+    )
+    .unwrap();
+    assert!(explicit.publish.use_lockfile);
+    assert!(!explicit.publish.require_lockfile_match);
+    assert_eq!(
+        explicit.provenance.publish.use_lockfile,
+        PreferenceSource::Override
+    );
+    assert!(
+        explicit
+            .to_raw_string()
+            .contains("publish.use_lockfile = true")
+    );
+    environment.use_lockfile = Some("invalid".into());
+    assert!(
+        resolve_with_inputs(root.path(), PreferencesOverrides::default(), &environment).is_err()
+    );
+    environment.use_lockfile = None;
+    environment.require_lockfile_match = Some("invalid".into());
+    assert!(
+        resolve_with_inputs(root.path(), PreferencesOverrides::default(), &environment).is_err()
+    );
+}
+
 fn fixture() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
     fs::write(
@@ -154,6 +220,7 @@ fn user_path_obeys_absolute_xdg_and_home_fallback() {
             home: Some(home.clone().into_os_string()),
             purity: None,
             preflight: None,
+            ..EnvironmentInputs::default()
         };
         assert_eq!(
             environment.user_config_path().unwrap(),
@@ -165,6 +232,7 @@ fn user_path_obeys_absolute_xdg_and_home_fallback() {
         home: Some(home.into_os_string()),
         purity: None,
         preflight: None,
+        ..EnvironmentInputs::default()
     };
     assert_eq!(
         environment.user_config_path().unwrap(),
@@ -194,6 +262,7 @@ fn absent_xdg_file_does_not_read_home_file() {
         home: Some(home.into_os_string()),
         purity: None,
         preflight: None,
+        ..EnvironmentInputs::default()
     };
     assert_eq!(
         resolve(root.path(), &environment).publish.purity,

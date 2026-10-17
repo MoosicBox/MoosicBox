@@ -1253,6 +1253,40 @@ Purity compares normalized Cargo package contents, not Git revisions or compress
 
 To resolve an impure release, publish a new version of the changed dependency and update consumers' requirements, or restore its local contents to the published version. Publishing the same version again cannot replace its registry artifact.
 
+### Publish lockfile preferences
+
+Publishing and purity comparison seed temporary staging from the workspace's local
+`Cargo.lock` by default when it exists. Cargo may prune/rewrite it for the packaged
+manifest; this is resolution input, **not** `--locked` and not a pin for downstream
+library consumers. The source lockfile is never modified. Queue-wide preflight still
+uses fresh resolution to detect missing/yanked requirements independently of locks.
+
+```bash
+clippier publish --use-lockfile false
+clippier publish --require-lockfile-match true
+clippier release publish --use-lockfile true --require-lockfile-match false
+```
+
+Both options accept explicit `true` or `false`, allowing inherited policies to be
+overridden in either direction. Precedence is CLI/API > environment > workspace
+`clippier.toml` > `$XDG_CONFIG_HOME/clippier/clippier.toml` (or
+`~/.config/clippier/clippier.toml`) > defaults. Environment variables:
+`CLIPPIER_PUBLISH_USE_LOCKFILE` and `CLIPPIER_PUBLISH_REQUIRE_LOCKFILE_MATCH`.
+`clippier config show` reports effective values and their origins.
+
+```toml
+[publish]
+use_lockfile = true
+require_lockfile_match = false
+```
+
+Lockfile comparison ignores comments, formatting, package/dependency entry ordering,
+and lockfile encoding version. Versions, sources, checksums, dependency edges, and
+other fields remain significant. Missing versus present lockfiles differ; malformed
+content falls back to exact comparison. `require_lockfile_match = true` independently
+blocks differences or unknown comparisons, including skipped published packages,
+without treating them as source impurity. Default behavior remains informational.
+
 ### Bump Cargo Workspace Versions
 
 Bump or set workspace package versions and internal path dependency requirements together:

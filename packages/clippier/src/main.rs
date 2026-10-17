@@ -960,6 +960,12 @@ enum ReleaseCommands {
         /// Skip queue preflight for real uploads even when enabled in configuration
         #[arg(long, conflicts_with = "preflight")]
         no_preflight: bool,
+        /// Use the local Cargo.lock as resolution input (default true).
+        #[arg(long, action = clap::ArgAction::Set)]
+        use_lockfile: Option<bool>,
+        /// Block on meaningful packaged lockfile differences (default false).
+        #[arg(long, action = clap::ArgAction::Set)]
+        require_lockfile_match: Option<bool>,
         /// Run Cargo package verification
         #[arg(long)]
         verify: bool,
@@ -1473,6 +1479,13 @@ enum Commands {
         /// Skip queue preflight for real uploads even when enabled in configuration
         #[arg(long, conflicts_with = "preflight")]
         no_preflight: bool,
+
+        /// Use the local Cargo.lock as resolution input (default true).
+        #[arg(long, action = clap::ArgAction::Set)]
+        use_lockfile: Option<bool>,
+        /// Block on meaningful packaged lockfile differences (default false).
+        #[arg(long, action = clap::ArgAction::Set)]
+        require_lockfile_match: Option<bool>,
 
         /// Compile packaged contents during preflight and verify again before upload
         #[arg(long)]
@@ -2139,6 +2152,8 @@ async fn run() -> Result<(), BoxError> {
                 fail_fast,
                 preflight,
                 no_preflight,
+                use_lockfile,
+                require_lockfile_match,
                 verify,
                 allow_dirty,
                 purity,
@@ -2164,6 +2179,8 @@ async fn run() -> Result<(), BoxError> {
                             semver_baseline_features,
                         },
                         dry_run,
+                        use_lockfile,
+                        require_lockfile_match,
                         fail_fast,
                         preflight: preflight
                             .then_some(true)
@@ -2251,6 +2268,8 @@ async fn run() -> Result<(), BoxError> {
             fail_fast,
             preflight,
             no_preflight,
+            use_lockfile,
+            require_lockfile_match,
             verify,
             allow_dirty,
             purity,
@@ -2264,6 +2283,8 @@ async fn run() -> Result<(), BoxError> {
             let config = PublishConfig {
                 workspace_root,
                 packages,
+                use_lockfile,
+                require_lockfile_match,
                 dry_run,
                 fail_fast,
                 preflight: preflight
@@ -2432,6 +2453,48 @@ async fn run() -> Result<(), BoxError> {
     }
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "publish"))]
+mod lockfile_cli_tests {
+    use super::*;
+
+    #[test]
+    fn lockfile_flags_accept_explicit_true_and_false_on_both_commands() {
+        let mut commands = vec![vec!["clippier", "publish"]];
+        if cfg!(feature = "release") {
+            commands.push(vec!["clippier", "release", "publish"]);
+        }
+        for command in commands {
+            for value in ["true", "false"] {
+                let mut args = command.clone();
+                args.extend(["--use-lockfile", value, "--require-lockfile-match", value]);
+                let parsed = Args::try_parse_from(args).unwrap();
+                let (use_lockfile, require_lockfile_match) = match parsed.cmd {
+                    Commands::Publish {
+                        use_lockfile,
+                        require_lockfile_match,
+                        ..
+                    } => (use_lockfile, require_lockfile_match),
+                    #[cfg(feature = "release")]
+                    Commands::Release {
+                        command:
+                            ReleaseCommands::Publish {
+                                use_lockfile,
+                                require_lockfile_match,
+                                ..
+                            },
+                    } => (use_lockfile, require_lockfile_match),
+                    _ => panic!("expected publish"),
+                };
+                assert_eq!(use_lockfile, Some(value == "true"));
+                assert_eq!(require_lockfile_match, Some(value == "true"));
+            }
+            let mut args = command;
+            args.extend(["--use-lockfile", "invalid"]);
+            assert!(Args::try_parse_from(args).is_err());
+        }
+    }
 }
 
 #[cfg(all(test, feature = "publish"))]

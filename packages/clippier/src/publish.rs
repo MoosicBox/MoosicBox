@@ -51,6 +51,10 @@ pub struct PublishConfig {
     pub dry_run: bool,
     /// Override queue preflight for real publishes; `None` inherits preferences.
     pub preflight: Option<bool>,
+    /// Seed staging from the local workspace lockfile; defaults to true.
+    pub use_lockfile: Option<bool>,
+    /// Block on meaningful published lockfile differences; defaults to false.
+    pub require_lockfile_match: Option<bool>,
     /// Stop publish preflight after its first failure instead of checking every package.
     pub fail_fast: bool,
     /// Compile packaged contents during preflight and verify again before upload.
@@ -75,6 +79,8 @@ impl Default for PublishConfig {
             purity: None,
             dry_run: false,
             preflight: None,
+            use_lockfile: None,
+            require_lockfile_match: None,
             fail_fast: false,
             verify: false,
             allow_dirty: false,
@@ -523,10 +529,14 @@ pub async fn handle_publish_command(
         PreferencesOverrides {
             purity: config.purity,
             preflight: config.preflight,
+            use_lockfile: config.use_lockfile,
+            require_lockfile_match: config.require_lockfile_match,
         },
     )?;
     let purity_policy = preferences.publish.purity;
     config.preflight = Some(preferences.publish.preflight);
+    config.use_lockfile = Some(preferences.publish.use_lockfile);
+    config.require_lockfile_match = Some(preferences.publish.require_lockfile_match);
     config.purity = Some(purity_policy);
     eprintln!(
         "{} {}",
@@ -616,6 +626,32 @@ pub async fn handle_publish_command(
             Err(error) => return Err(error),
         };
         if exists {
+            if config.require_lockfile_match.unwrap_or(false) {
+                let pending = initial_plan
+                    .publish_order
+                    .iter()
+                    .filter(|name| *name != &package.name)
+                    .cloned()
+                    .collect();
+                let assessment = purity::assess(
+                    &workspace_root,
+                    &packages,
+                    package,
+                    &pending,
+                    &config,
+                    &client,
+                )
+                .await;
+                purity::enforce_config(&config, std::slice::from_ref(&assessment))?;
+                let mut report = PublishPackageReport::new(
+                    &package.name,
+                    &package.version,
+                    PublishPackageStatus::AlreadyPublished,
+                );
+                report.purity = Some(assessment);
+                reports.push(report);
+                continue;
+            }
             log_publish_event_with_detail(
                 config.color,
                 "33",
@@ -663,7 +699,7 @@ pub async fn handle_publish_command(
         .filter_map(|report| report.purity.clone())
         .collect::<Vec<_>>();
     // Check every relevant dependency before uploading any pending package.
-    purity::enforce(purity_policy, &assessments)?;
+    purity::enforce_config(&config, &assessments)?;
 
     for name in &needs_publish {
         let selected = BTreeSet::from([name.clone()]);
@@ -824,7 +860,7 @@ where
                 .iter()
                 .filter_map(|report| report.purity.clone())
                 .collect::<Vec<_>>();
-            purity::enforce(policy, &assessments)?;
+            purity::enforce_config(config, &assessments)?;
         }
     }
     Ok(())
@@ -842,13 +878,12 @@ async fn publish_pending_queue(
     client: &RegistryClient,
     reports: &mut Vec<PublishPackageReport>,
 ) -> Result<(), BoxError> {
-    let purity_policy = config.purity.unwrap_or_default();
     // Repeat the gate at the upload seam so direct queue tests cannot bypass it.
     let assessments = reports
         .iter()
         .filter_map(|report| report.purity.clone())
         .collect::<Vec<_>>();
-    purity::enforce(purity_policy, &assessments)?;
+    purity::enforce_config(config, &assessments)?;
     if should_run_preflight(config) {
         preflight::validate(workspace_root, packages, publish_order, config)?;
     }
@@ -1034,7 +1069,7 @@ async fn prepare_next_upload(
         .iter()
         .filter_map(|report| report.purity.clone())
         .collect::<Vec<_>>();
-    purity::enforce(config.purity.unwrap_or_default(), &assessments)?;
+    purity::enforce_config(config, &assessments)?;
     let selected = BTreeSet::from([package.name.clone()]);
     validate_publish_manifests(workspace_root, packages, &selected)?;
     validate_publish_dependencies_available(client, packages, &selected, &pending).await?;
@@ -1057,12 +1092,14 @@ async fn assess_publish_race(
         &package.version,
         PublishPackageStatus::AlreadyPublished,
     );
-    if pending_consumer_closure(packages, &pending).contains_key(&package.name) {
+    if config.require_lockfile_match.unwrap_or(false)
+        || pending_consumer_closure(packages, &pending).contains_key(&package.name)
+    {
         let assessment =
             purity::assess(workspace_root, packages, package, &pending, config, client).await;
         let policy = config.purity.unwrap_or_default();
         purity::warn(policy, &assessment, config.color);
-        purity::enforce(policy, std::slice::from_ref(&assessment))?;
+        purity::enforce_config(config, std::slice::from_ref(&assessment))?;
         report.purity = Some(assessment);
     }
     log_publish_event_with_detail(
@@ -1398,6 +1435,7 @@ fn publish_package(
     config: &PublishConfig,
 ) -> Result<PublishAttempt, BoxError> {
     let sanitized = SanitizedPackage::prepare(workspace_root, packages, package)?;
+    seed_publish_lockfile(workspace_root, &sanitized, config)?;
 
     publish_with_retry(
         package,
@@ -1679,6 +1717,20 @@ fn stream_output(mut reader: impl std::io::Read, stderr: bool) -> Result<String,
     }
 
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn seed_publish_lockfile(
+    workspace_root: &Path,
+    staged: &SanitizedPackage,
+    config: &PublishConfig,
+) -> Result<(), BoxError> {
+    if config.use_lockfile.unwrap_or(true) && workspace_root.join("Cargo.lock").is_file() {
+        fs::copy(
+            workspace_root.join("Cargo.lock"),
+            staged.package_path.join("Cargo.lock"),
+        )?;
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -2304,6 +2356,38 @@ mod tests {
         assert!(!packages["vectors"].publishable);
         let plan = build_publish_plan(&packages, None).unwrap();
         assert_eq!(plan.publish_order, ["decoder"]);
+    }
+
+    #[test]
+    fn publish_lockfile_input_is_default_opt_out_and_non_mutating() {
+        let root = tempfile::tempdir().unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        let staged = SanitizedPackage {
+            root: staging.path().into(),
+            package_path: staging.path().into(),
+        };
+        seed_publish_lockfile(root.path(), &staged, &PublishConfig::default()).unwrap();
+        assert!(!staged.manifest_path().with_file_name("Cargo.lock").exists());
+        fs::write(root.path().join("Cargo.lock"), "version = 4\n").unwrap();
+        seed_publish_lockfile(
+            root.path(),
+            &staged,
+            &PublishConfig {
+                use_lockfile: Some(false),
+                ..PublishConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(!staging.path().join("Cargo.lock").exists());
+        seed_publish_lockfile(root.path(), &staged, &PublishConfig::default()).unwrap();
+        assert_eq!(
+            fs::read_to_string(staging.path().join("Cargo.lock")).unwrap(),
+            "version = 4\n"
+        );
+        assert_eq!(
+            fs::read_to_string(root.path().join("Cargo.lock")).unwrap(),
+            "version = 4\n"
+        );
     }
 
     #[test]

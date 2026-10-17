@@ -1234,6 +1234,10 @@ pub struct ReleasePublishConfig {
     pub fail_fast: bool,
     /// Override queue preflight for real publishes, or inherit configured preferences.
     pub preflight: Option<bool>,
+    /// Seed publish staging from the local lockfile.
+    pub use_lockfile: Option<bool>,
+    /// Block on packaged lockfile differences.
+    pub require_lockfile_match: Option<bool>,
     /// Run Cargo's local package verification before upload.
     pub verify: bool,
     /// Permit unrelated dirty workspace files during publishing.
@@ -1313,6 +1317,8 @@ pub async fn handle_release_publish_command(
             dry_run: config.dry_run,
             fail_fast: config.fail_fast,
             preflight: config.preflight,
+            use_lockfile: config.use_lockfile,
+            require_lockfile_match: config.require_lockfile_match,
             verify: config.verify,
             allow_dirty: config.allow_dirty,
             purity: config.purity,

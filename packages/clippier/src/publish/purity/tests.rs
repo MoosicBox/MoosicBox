@@ -152,14 +152,20 @@ fn archive_normalization_retains_lockfiles_but_purity_reports_them_separately() 
             "a-0.5.0/Cargo.toml",
             b"[package]\nname='a'\nversion='0.5.0'\n",
         ),
-        ("a-0.5.0/Cargo.lock", b"version = 4\n"),
+        (
+            "a-0.5.0/Cargo.lock",
+            b"version = 4\n[[package]]\nname='a'\nversion='0.5.0'\n",
+        ),
     ]);
     let published = archive(&[
         (
             "a-0.5.0/Cargo.toml",
             b"[package]\nname='a'\nversion='0.5.0'\n",
         ),
-        ("a-0.5.0/Cargo.lock", b"version = 3\n"),
+        (
+            "a-0.5.0/Cargo.lock",
+            b"version = 3\n[[package]]\nname='a'\nversion='0.4.0'\n",
+        ),
     ]);
     let local = normalized_archive_entries(local.path(), ManifestVersionPolicy::Preserve).unwrap();
     let published =
@@ -174,6 +180,43 @@ fn archive_normalization_retains_lockfiles_but_purity_reports_them_separately() 
     assert_eq!(assessment.status, PurityStatus::Pure);
     assert!(assessment.lockfile_changed);
     assert!(enforce(PurityPolicy::RequirePure, &[assessment]).is_ok());
+}
+
+#[test]
+fn lockfile_comparison_is_semantic_and_policy_is_independent() {
+    let a = b"version = 3\n[[package]]\nname='a'\nversion='1.0.0'\ndependencies=['c', 'b']\n[[package]]\nname='b'\nversion='1.0.0'\n".to_vec();
+    let b = b"# regenerated\nversion = 4\n[[package]]\nversion='1.0.0'\nname='b'\n[[package]]\nversion='1.0.0'\nname='a'\ndependencies=['b','c']\n".to_vec();
+    assert!(lockfiles_equal(Some(&a), Some(&b)));
+    for replacement in [
+        "version='1.0.1'",
+        "source='registry+other'\nversion='1.0.0'",
+        "checksum='abc'\nversion='1.0.0'",
+        "version='1.0.0'\ndependencies=['other']",
+    ] {
+        let changed = format!("[[package]]\nname='a'\n{replacement}\n").into_bytes();
+        assert!(!lockfiles_equal(Some(&a), Some(&changed)));
+    }
+    assert!(!lockfiles_equal(
+        Some(&b"invalid".to_vec()),
+        Some(&b"different invalid".to_vec())
+    ));
+    let package = PublishPackageInfo::new("a", "1.0.0", true, BTreeSet::new());
+    let assessment = compare(
+        &package,
+        &BTreeMap::from([("Cargo.lock".into(), a)]),
+        &BTreeMap::new(),
+        Vec::new(),
+    );
+    assert!(enforce_config(&PublishConfig::default(), std::slice::from_ref(&assessment)).is_ok());
+    let config = PublishConfig {
+        require_lockfile_match: Some(true),
+        ..PublishConfig::default()
+    };
+    assert!(enforce_config(&config, std::slice::from_ref(&assessment)).is_err());
+    let mut unknown = assessment;
+    unknown.lockfile_changed = false;
+    unknown.status = PurityStatus::Unknown;
+    assert!(enforce_config(&config, &[unknown]).is_err());
 }
 
 #[test]

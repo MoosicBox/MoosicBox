@@ -192,7 +192,7 @@ pub(super) fn compare(
         added,
         removed,
         changed,
-        lockfile_changed: local.get("Cargo.lock") != published.get("Cargo.lock"),
+        lockfile_changed: !lockfiles_equal(local.get("Cargo.lock"), published.get("Cargo.lock")),
         diagnostics: Vec::new(),
     }
 }
@@ -234,13 +234,7 @@ pub(super) async fn artifact_comparison(
 ) -> Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, Vec<u8>>), BoxError> {
     super::preflight::audit_cargo_configuration(workspace_root)?;
     let staged = SanitizedPackage::prepare(workspace_root, packages, package)?;
-    // Cargo includes the workspace lockfile in package artifacts when applicable.
-    if workspace_root.join("Cargo.lock").is_file() {
-        fs::copy(
-            workspace_root.join("Cargo.lock"),
-            staged.package_path.join("Cargo.lock"),
-        )?;
-    }
+    super::seed_publish_lockfile(workspace_root, &staged, config)?;
     let output = Command::new("cargo")
         .arg("package")
         .arg("--no-verify")
@@ -328,6 +322,58 @@ pub(super) async fn assess(
             diagnostics: vec![error.to_string()],
         },
     }
+}
+
+// TOML formatting, comments, and array ordering do not change a resolution.
+// Retain every field (including source/checksum/dependency edges); malformed
+// lockfiles are compared byte-for-byte, never silently treated as equivalent.
+fn lockfiles_equal(local: Option<&Vec<u8>>, published: Option<&Vec<u8>>) -> bool {
+    fn normalize(bytes: &[u8]) -> Option<serde_json::Value> {
+        fn sort(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Array(values) => {
+                    for value in values.iter_mut() {
+                        sort(value);
+                    }
+                    values.sort_by_cached_key(serde_json::Value::to_string);
+                }
+                serde_json::Value::Object(values) => {
+                    for value in values.values_mut() {
+                        sort(value);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let doc: toml::Value = toml::from_str(std::str::from_utf8(bytes).ok()?).ok()?;
+        let mut doc = serde_json::to_value(doc).ok()?;
+        // Lockfile encoding version is not a dependency resolution change.
+        doc.as_object_mut()?.remove("version");
+        sort(&mut doc);
+        Some(doc)
+    }
+    match (local, published) {
+        (Some(a), Some(b)) if a != b => match (normalize(a), normalize(b)) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        },
+        _ => local == published,
+    }
+}
+
+pub(super) fn enforce_config(
+    config: &PublishConfig,
+    assessments: &[PurityAssessment],
+) -> Result<(), BoxError> {
+    enforce(config.purity.unwrap_or_default(), assessments)?;
+    if config.require_lockfile_match.unwrap_or(false)
+        && assessments
+            .iter()
+            .any(|a| a.lockfile_changed || a.status == PurityStatus::Unknown)
+    {
+        return Err(format!("Publishing blocked: require-lockfile-match is enabled; packaged Cargo.lock differs or could not be compared for: {}", assessments.iter().filter(|a| a.lockfile_changed || a.status == PurityStatus::Unknown).map(|a| format!("{}@{}", a.name, a.version)).collect::<Vec<_>>().join(", ")).into());
+    }
+    Ok(())
 }
 
 pub(super) fn enforce(

@@ -60,6 +60,10 @@ pub struct PreferencesOverrides {
     pub purity: Option<PurityPolicy>,
     /// Override whether real publishes validate the entire queue before uploading.
     pub preflight: Option<bool>,
+    /// Seed publish staging from the local workspace lockfile (default true).
+    pub use_lockfile: Option<bool>,
+    /// Block publication when packaged lockfile resolution differs (default false).
+    pub require_lockfile_match: Option<bool>,
 }
 
 /// Resolved publishing preferences.
@@ -69,6 +73,10 @@ pub struct PublishPreferences {
     pub purity: PurityPolicy,
     /// Validate the entire queue before real uploads (dry runs always validate).
     pub preflight: bool,
+    /// Seed publish staging from the local workspace lockfile.
+    pub use_lockfile: bool,
+    /// Independently enforce matching packaged dependency resolution.
+    pub require_lockfile_match: bool,
 }
 
 /// Origin of an effective setting; file origins retain their diagnostic path.
@@ -115,6 +123,10 @@ pub struct PublishProvenance {
     pub purity: PreferenceSource,
     /// Origin of `publish.preflight`.
     pub preflight: PreferenceSource,
+    /// Origin of `publish.use_lockfile`.
+    pub use_lockfile: PreferenceSource,
+    /// Origin of `publish.require_lockfile_match`.
+    pub require_lockfile_match: PreferenceSource,
 }
 
 /// Per-namespace provenance for effective preferences.
@@ -138,11 +150,15 @@ impl EffectivePreferences {
     #[must_use]
     pub fn to_raw_string(&self) -> String {
         format!(
-            "publish.purity = {} ({})\npublish.preflight = {} ({})\n",
+            "publish.purity = {} ({})\npublish.preflight = {} ({})\npublish.use_lockfile = {} ({})\npublish.require_lockfile_match = {} ({})\n",
             self.publish.purity,
             self.provenance.publish.purity,
             self.publish.preflight,
-            self.provenance.publish.preflight
+            self.provenance.publish.preflight,
+            self.publish.use_lockfile,
+            self.provenance.publish.use_lockfile,
+            self.publish.require_lockfile_match,
+            self.provenance.publish.require_lockfile_match
         )
     }
 }
@@ -152,6 +168,8 @@ impl EffectivePreferences {
 struct PublishLayer {
     purity: Option<PurityPolicy>,
     preflight: Option<bool>,
+    use_lockfile: Option<bool>,
+    require_lockfile_match: Option<bool>,
 }
 
 #[derive(Default)]
@@ -160,6 +178,8 @@ struct EnvironmentInputs {
     home: Option<OsString>,
     purity: Option<OsString>,
     preflight: Option<OsString>,
+    use_lockfile: Option<OsString>,
+    require_lockfile_match: Option<OsString>,
 }
 
 impl EnvironmentInputs {
@@ -169,6 +189,8 @@ impl EnvironmentInputs {
             home: std::env::var_os("HOME"),
             purity: std::env::var_os("CLIPPIER_PUBLISH_PURITY"),
             preflight: std::env::var_os("CLIPPIER_PUBLISH_PREFLIGHT"),
+            use_lockfile: std::env::var_os("CLIPPIER_PUBLISH_USE_LOCKFILE"),
+            require_lockfile_match: std::env::var_os("CLIPPIER_PUBLISH_REQUIRE_LOCKFILE_MATCH"),
         }
     }
 
@@ -350,15 +372,78 @@ fn resolve_with_inputs(
         preflight = value;
         preflight_source = PreferenceSource::Override;
     }
+    let (use_lockfile, use_lockfile_source) = resolve_lock_bool(
+        workspace_root,
+        environment,
+        "CLIPPIER_PUBLISH_USE_LOCKFILE",
+        true,
+        overrides.use_lockfile,
+        |layer| layer.use_lockfile,
+        environment.use_lockfile.as_ref(),
+    )?;
+    let (require_lockfile_match, require_lockfile_match_source) = resolve_lock_bool(
+        workspace_root,
+        environment,
+        "CLIPPIER_PUBLISH_REQUIRE_LOCKFILE_MATCH",
+        false,
+        overrides.require_lockfile_match,
+        |layer| layer.require_lockfile_match,
+        environment.require_lockfile_match.as_ref(),
+    )?;
     Ok(EffectivePreferences {
-        publish: PublishPreferences { purity, preflight },
+        publish: PublishPreferences {
+            purity,
+            preflight,
+            use_lockfile,
+            require_lockfile_match,
+        },
         provenance: PreferencesProvenance {
             publish: PublishProvenance {
                 purity: source,
                 preflight: preflight_source,
+                use_lockfile: use_lockfile_source,
+                require_lockfile_match: require_lockfile_match_source,
             },
         },
     })
+}
+
+fn resolve_lock_bool(
+    root: &Path,
+    environment: &EnvironmentInputs,
+    variable: &str,
+    default: bool,
+    explicit: Option<bool>,
+    select: impl Fn(&PublishLayer) -> Option<bool>,
+    env: Option<&OsString>,
+) -> Result<(bool, PreferenceSource), BoxError> {
+    let mut result = if let Some(path) = environment.user_config_path()
+        && let Some(value) = select(&read_layer(&path)?)
+    {
+        (value, PreferenceSource::UserConfig { path })
+    } else {
+        (default, PreferenceSource::BuiltIn)
+    };
+    let path = workspace_config_path(root)?;
+    if let Some(value) = select(&read_layer(&path)?) {
+        result = (value, PreferenceSource::WorkspaceConfig { path });
+    }
+    if let Some(value) = env {
+        let value = value
+            .to_str()
+            .and_then(|value| value.parse::<bool>().ok())
+            .ok_or_else(|| std::io::Error::other(format!("{variable} must be true or false")))?;
+        result = (
+            value,
+            PreferenceSource::Environment {
+                variable: variable.into(),
+            },
+        );
+    }
+    if let Some(value) = explicit {
+        result = (value, PreferenceSource::Override);
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
