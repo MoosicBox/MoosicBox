@@ -1098,8 +1098,9 @@ The same progress is repeated before rate-limit/network retry sleeps; retries do
 not advance the queue. The denominator is the upload queue after any enabled
 preflight filtering, and excludes `publish = false` packages.
 
-Transient registry `config.json` connection failures before uploading retry up to three
-times (1s, 2s, 4s). Ambiguous transport failures during an upload are not blindly
+Transient registry `config.json` connection failures and dependency-download transport
+failures explicitly reported by Cargo as failing to prepare the package for upload
+retry up to three times (1s, 2s, 4s). Ambiguous transport failures during an upload are not blindly
 replayed; rerunning publication checks for the already-published version first.
 
 Use `clippier publish --preflight` (or `clippier release publish --preflight`) to opt in to queue-wide safety checks. Set `[publish] preflight = true` in workspace `clippier.toml` or `$XDG_CONFIG_HOME/clippier/clippier.toml` (fallback: `~/.config/clippier/clippier.toml`) to opt in persistently:

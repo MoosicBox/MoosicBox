@@ -75,6 +75,89 @@ fn pre_upload_transport_failure_retries_but_uncertain_upload_does_not() {
     assert_eq!(calls, 1);
 }
 
+#[cfg(unix)]
+const PREPARE_HTTP2_FAILURE: &str = "error: failed to prepare local package for uploading
+
+Caused by:
+  failed to get `bmux_plugin_schema_macros` as a dependency of package `bmux_attach_layout_protocol v0.0.1-alpha.4`
+  failed to load source for dependency `bmux_plugin_schema_macros`
+  unable to update registry `crates-io`
+  download of bm/ux/bmux_plugin_schema_macros failed
+  curl failed
+  [16] Error in the HTTP2 framing layer";
+
+#[cfg(unix)]
+#[test]
+fn rate_limit_then_prepare_download_failure_recovers() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    let mut calls = 0;
+    let mut waits = Vec::new();
+    let result = publish_with_retry(
+        &package,
+        &PublishConfig::default(),
+        || {
+            calls += 1;
+            Ok(match calls {
+                1 => response(false, "status 429 Too Many Requests\nRetry-After: 52"),
+                2 => response(false, PREPARE_HTTP2_FAILURE),
+                _ => response(true, ""),
+            })
+        },
+        |wait| waits.push(wait.as_secs()),
+    );
+    assert!(matches!(result.unwrap(), PublishAttempt::Published));
+    assert_eq!(calls, 3);
+    // Retry-After includes the production five-second safety margin.
+    assert_eq!(waits, [57, 1]);
+}
+
+#[cfg(unix)]
+#[test]
+fn prepare_download_retries_are_bounded_and_require_transport_failure() {
+    let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());
+    for (stderr, expected_calls) in [
+        (PREPARE_HTTP2_FAILURE.to_string(), 4),
+        (
+            PREPARE_HTTP2_FAILURE.replace(
+                "[16] Error in the HTTP2 framing layer",
+                "no matching package found",
+            ),
+            1,
+        ),
+        (
+            PREPARE_HTTP2_FAILURE.replace(
+                "failed to prepare local package for uploading",
+                "failed to publish package",
+            ),
+            1,
+        ),
+    ] {
+        let mut calls = 0;
+        let mut waits = Vec::new();
+        assert!(
+            publish_with_retry(
+                &package,
+                &PublishConfig::default(),
+                || {
+                    calls += 1;
+                    Ok(response(false, &stderr))
+                },
+                |wait| waits.push(wait.as_secs()),
+            )
+            .is_err()
+        );
+        assert_eq!(calls, expected_calls);
+        assert_eq!(
+            waits,
+            if expected_calls == 4 {
+                vec![1, 2, 4]
+            } else {
+                vec![]
+            }
+        );
+    }
+}
+
 #[switchy_async::test]
 async fn production_skips_existing_version_before_validating_its_manifest() {
     let package = PublishPackageInfo::new("fixture", "0.1.0", true, BTreeSet::new());

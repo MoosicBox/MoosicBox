@@ -1531,10 +1531,14 @@ fn publish_with_retry(
             continue;
         }
 
-        // Registry configuration/index failures occur before Cargo uploads. Only
-        // retry this unambiguous phase; never blindly replay an uncertain upload.
+        // Require both source/download context with a transient transport cause
+        // and evidence that upload has not started. Preparation failures alone
+        // can be invalid packages; never blindly replay an uncertain upload.
         if preflight::output::transient_network(&output.stderr)
-            && output.stderr.contains("download of config.json failed")
+            && (output.stderr.contains("download of config.json failed")
+                || output
+                    .stderr
+                    .contains("failed to prepare local package for uploading"))
             && network_attempts < 3
         {
             let wait = Duration::from_secs(1 << network_attempts);
