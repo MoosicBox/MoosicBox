@@ -179,7 +179,9 @@ impl From<GetSilenceBytesError> for actix_web::Error {
     fn from(err: GetSilenceBytesError) -> Self {
         match err {
             GetSilenceBytesError::AudioOutput(_) => ErrorInternalServerError(err),
-            GetSilenceBytesError::InvalidSource => ErrorBadRequest(err),
+            GetSilenceBytesError::InvalidSource | GetSilenceBytesError::DurationTooLarge => {
+                ErrorBadRequest(err)
+            }
         }
     }
 }

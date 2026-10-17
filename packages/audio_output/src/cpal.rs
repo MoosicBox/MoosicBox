@@ -9,11 +9,8 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Host, SampleFormat, SizedSample, StreamConfig};
 use rb::{RB, RbConsumer, RbProducer, SpscRb};
-use symphonia::core::audio::{
-    AudioBuffer, Channels, Layout, RawSample, SampleBuffer, Signal as _, SignalSpec,
-};
-use symphonia::core::conv::{ConvertibleSample, IntoSample};
-use symphonia::core::units::Duration;
+use symphonia::core::audio::conv::{ConvertibleSample, IntoSample};
+use symphonia::core::audio::{Audio as _, AudioBuffer, AudioSpec};
 
 use crate::{
     AudioOutputError, AudioOutputFactory, AudioWrite, ProgressTracker,
@@ -80,7 +77,7 @@ impl AudioWrite for CpalAudioOutput {
         self.write.set_shared_volume(shared_volume);
     }
 
-    fn get_output_spec(&self) -> Option<SignalSpec> {
+    fn get_output_spec(&self) -> Option<AudioSpec> {
         self.write.get_output_spec()
     }
 
@@ -97,13 +94,7 @@ impl AudioWrite for CpalAudioOutput {
 }
 
 trait AudioOutputSample:
-    cpal::Sample
-    + ConvertibleSample
-    + SizedSample
-    + IntoSample<f32>
-    + RawSample
-    + std::marker::Send
-    + 'static
+    cpal::Sample + ConvertibleSample + SizedSample + IntoSample<f32> + std::marker::Send + 'static
 {
 }
 
@@ -182,10 +173,10 @@ impl TryFrom<Device> for AudioOutputFactory {
         let config = device
             .default_output_config()
             .map_err(|_e| AudioOutputError::NoOutputs)?;
-        let spec = SignalSpec {
-            rate: config.sample_rate(),
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
-        };
+        let spec = AudioSpec::new(
+            config.sample_rate(),
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
 
         let id = format!("cpal:{name}");
 
@@ -197,9 +188,9 @@ impl TryFrom<Device> for AudioOutputFactory {
 }
 
 struct CpalAudioOutputImpl<T: AudioOutputSample> {
-    spec: SignalSpec,
+    spec: AudioSpec,
     ring_buf_producer: rb::Producer<T>,
-    sample_buf: Option<SampleBuffer<T>>,
+    sample_buf: Option<Vec<T>>,
     initial_buffering: bool,
     buffered_samples: usize,
     buffering_threshold: usize,
@@ -243,14 +234,14 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             }
         };
 
-        let spec = SignalSpec {
-            rate: config.sample_rate,
-            channels: if num_channels >= 2 {
-                Layout::Stereo.into_channels()
+        let spec = AudioSpec::new(
+            config.sample_rate,
+            if num_channels >= 2 {
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO
             } else {
-                Layout::Mono.into_channels()
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO
             },
-        };
+        );
 
         // Create a ring buffer with a capacity for up-to 30 seconds of audio (larger buffer to prevent underruns).
         let ring_len = (30 * config.sample_rate as usize) * num_channels;
@@ -306,23 +297,23 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             "🔍 CPAL CONFIG: actual_sample_rate={}, actual_channels={}, expected_spec_rate={}, expected_spec_channels={}",
             config.sample_rate,
             num_channels,
-            spec.rate,
-            spec.channels.count()
+            spec.rate(),
+            spec.channels().count()
         );
 
         // Check for potential sample rate mismatch that could cause progress calculation issues
         moosicbox_assert::assert!(
-            config.sample_rate == spec.rate,
+            config.sample_rate == spec.rate(),
             "🚨 SAMPLE RATE MISMATCH: CPAL config sample rate ({}) != expected spec rate ({}) - this will cause progress calculation errors!",
             config.sample_rate,
-            spec.rate
+            spec.rate()
         );
 
         moosicbox_assert::assert!(
-            num_channels == spec.channels.count(),
+            num_channels == spec.channels().count(),
             "🚨 CHANNEL COUNT MISMATCH: CPAL config channels ({}) != expected spec channels ({}) - this will cause progress calculation errors!",
             num_channels,
-            spec.channels.count()
+            spec.channels().count()
         );
 
         // Create the stream daemon - this solves the !Send issue on macOS
@@ -370,7 +361,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
                                     // Apply the volume-adjusted sample
                                     *data =
-                                        <T as symphonia::core::conv::FromSample<f32>>::from_sample(
+                                        <T as symphonia::core::audio::conv::FromSample<f32>>::from_sample(
                                             adjusted_sample,
                                         );
                                 }
@@ -488,15 +479,6 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         Ok(instance)
     }
-
-    fn init_sample_buf(&mut self, duration: Duration) -> &mut SampleBuffer<T> {
-        if self.sample_buf.is_none() {
-            let spec = self.spec;
-            let sample_buf = SampleBuffer::<T>::new(duration, spec);
-            self.sample_buf = Some(sample_buf);
-        }
-        self.sample_buf.as_mut().unwrap()
-    }
 }
 
 impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
@@ -509,21 +491,20 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
             return Ok(0);
         }
 
-        self.init_sample_buf(decoded.capacity() as Duration);
-        let sample_buf = self.sample_buf.as_mut().unwrap();
+        let sample_buf = self.sample_buf.get_or_insert_with(Vec::new);
 
         // Resampling is not required. Interleave the sample for cpal using a sample buffer.
-        sample_buf.copy_interleaved_typed(&decoded);
+        decoded.copy_to_vec_interleaved(sample_buf);
 
-        let mut samples = sample_buf.samples();
+        let mut samples = sample_buf.as_slice();
 
         let bytes = samples.len();
 
         // Debug sample buffer details for progress calculation troubleshooting
         log::trace!(
-            "🔍 Sample buffer: decoded.frames()={}, decoded.spec.channels={}, samples.len()={}, bytes={}",
+            "🔍 Sample buffer: decoded.frames()={}, decoded.spec.channels()={}, samples.len()={}, bytes={}",
             decoded.frames(),
-            decoded.spec().channels.count(),
+            decoded.spec().channels().count(),
             samples.len(),
             bytes
         );
@@ -543,7 +524,7 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                         self.buffered_samples += written;
                         #[allow(clippy::cast_precision_loss)]
                         let buffered_seconds = self.buffered_samples as f32
-                            / (self.spec.rate as f32 * self.spec.channels.count() as f32);
+                            / (self.spec.rate() as f32 * self.spec.channels().count() as f32);
 
                         // Start stream once we have 10 seconds buffered OR when flush is called
                         // (which indicates we have all the available audio data)
@@ -596,7 +577,7 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         if self.initial_buffering {
             #[allow(clippy::cast_precision_loss)]
             let buffered_seconds = self.buffered_samples as f32
-                / (self.spec.rate as f32 * self.spec.channels.count() as f32);
+                / (self.spec.rate() as f32 * self.spec.channels().count() as f32);
 
             log::debug!(
                 "🔊 FLUSH: Stream still in initial buffering with {buffered_seconds:.2}s - forcing stream start for short audio content"
@@ -735,7 +716,7 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         }
     }
 
-    fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
+    fn get_output_spec(&self) -> Option<symphonia::core::audio::AudioSpec> {
         Some(self.get_output_audio_spec())
     }
 
@@ -774,22 +755,19 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
     /// Get the actual output audio specification.
     #[must_use]
-    pub fn get_output_audio_spec(&self) -> symphonia::core::audio::SignalSpec {
+    pub fn get_output_audio_spec(&self) -> symphonia::core::audio::AudioSpec {
         let rate = self.get_output_sample_rate();
         let channels = self.get_output_channels();
 
         // Create channels based on channel count
         let symphonia_channels = match channels {
-            1 => symphonia::core::audio::Layout::Mono.into_channels(),
-            2 => symphonia::core::audio::Layout::Stereo.into_channels(),
+            1 => symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO,
+            2 => symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             // For other channel counts, use the spec field channels as fallback
-            _ => self.spec.channels,
+            _ => self.spec.channels().clone(),
         };
 
-        symphonia::core::audio::SignalSpec {
-            rate,
-            channels: symphonia_channels,
-        }
+        AudioSpec::new(rate, symphonia_channels)
     }
 
     fn start_command_processor(&mut self) {

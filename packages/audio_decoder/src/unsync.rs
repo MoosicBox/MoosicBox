@@ -6,20 +6,18 @@
 
 use flume::Receiver;
 use symphonia::core::audio::AudioBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecRegistry, DecoderOptions};
+use symphonia::core::codecs::CodecParameters;
+use symphonia::core::codecs::audio::{AudioDecoderOptions, CODEC_ID_NULL_AUDIO};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
-use symphonia::core::units::Time;
+use symphonia::core::units::{Time, Timestamp};
 
-#[cfg(feature = "opus")]
-use moosicbox_opus::register_opus_codec;
-
-use crate::{AudioDecodeError, DecodeError};
+use crate::{AudioDecodeError, DecodeError, DecodeOptions};
 
 #[derive(Copy, Clone)]
 struct PlayTrackOptions {
     track_id: u32,
-    seek_ts: u64,
+    seek_ts: Option<Timestamp>,
 }
 
 /// Decodes audio from a format reader, returning a channel receiver for decoded buffers.
@@ -42,11 +40,65 @@ struct PlayTrackOptions {
 /// * Panics if the reader requires reset but no supported track is available
 #[cfg_attr(feature = "profiling", profiling::function)]
 pub fn decode(
+    reader: Box<dyn FormatReader>,
+    track_num: Option<usize>,
+    seek_time: Option<f64>,
+    decode_opts: AudioDecoderOptions,
+) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
+    decode_with_options(
+        reader,
+        track_num,
+        seek_time,
+        DecodeOptions {
+            decoder: decode_opts,
+            ..DecodeOptions::default()
+        },
+    )
+}
+
+/// Decode using an explicit backend and decoder options.
+///
+/// # Errors
+/// * Returns decoding/seek errors and an error if the selected backend is unavailable.
+///
+/// # Panics
+/// * Panics if a reset reader no longer contains a supported track.
+pub fn decode_with_options(
+    reader: Box<dyn FormatReader>,
+    track_num: Option<usize>,
+    seek_time: Option<f64>,
+    options: DecodeOptions,
+) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
+    decode_with_options_impl(reader, track_num, seek_time, options, Result::ok)
+}
+
+/// Decode audio with terminal worker failures delivered after any successful PCM buffers.
+///
+/// The outer result reports initialization/seek failures. The receiver emits `Ok` PCM
+/// buffers followed by at most one terminal `Err`; successful completion closes it.
+/// Recoverable corrupt-packet errors retain the existing log-and-continue policy.
+///
+/// # Errors
+/// * Returns track selection, seeking, or decoder initialization errors before spawning.
+///
+/// # Panics
+/// * Panics if a reset reader no longer contains a supported track.
+pub fn decode_with_options_result(
+    reader: Box<dyn FormatReader>,
+    track_num: Option<usize>,
+    seek_time: Option<f64>,
+    options: DecodeOptions,
+) -> Result<Receiver<Result<AudioBuffer<f32>, DecodeError>>, DecodeError> {
+    decode_with_options_impl(reader, track_num, seek_time, options, Some)
+}
+
+fn decode_with_options_impl<T: Send + 'static>(
     mut reader: Box<dyn FormatReader>,
     track_num: Option<usize>,
     seek_time: Option<f64>,
-    decode_opts: DecoderOptions,
-) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
+    options: DecodeOptions,
+    map: fn(Result<AudioBuffer<f32>, DecodeError>) -> Option<T>,
+) -> Result<Receiver<T>, DecodeError> {
     // If the user provided a track number, select that track if it exists, otherwise, select the
     // first track with a known codec.
     let track = track_num
@@ -60,37 +112,35 @@ pub fn decode(
 
     log::debug!("Playing track_id={track_id}");
 
-    // If there is a seek time, seek the reader to the time specified and get the timestamp of the
-    // seeked position. All packets with a timestamp < the seeked position will not be played.
-    //
-    // Note: This is a half-baked approach to seeking! After seeking the reader, packets should be
-    // decoded and *samples* discarded up-to the exact *sample* indicated by required_ts. The
-    // current approach will discard excess samples if seeking to a sample within a packet.
-    let seek_ts = seek_time.map_or(0, |time| {
+    // An explicit seek trims decoded frames, not whole packets. Without a seek,
+    // retain valid decoder output even when encoder delay makes packet PTS negative.
+    let seek_ts = if let Some(time) = seek_time {
         let seek_to = SeekTo::Time {
-            time: Time::from(time),
+            time: Time::try_from_secs_f64(time).ok_or(DecodeError::InvalidSource)?,
             track_id: Some(track_id),
         };
 
-        // Attempt the seek. If the seek fails, ignore the error and return a seek timestamp of 0 so
+        // Attempt the seek. If the seek fails, ignore the error and return no seek target so
         // that no samples are trimmed.
         match reader.seek(SeekMode::Accurate, seek_to) {
-            Ok(seeked_to) => seeked_to.required_ts,
+            Ok(seeked_to) => Some(seeked_to.required_ts),
             Err(Error::ResetRequired) => {
                 track_id = first_supported_track(reader.tracks()).unwrap().id;
-                0
+                None
             }
             Err(err) => {
                 // Don't give-up on a seek error.
                 log::warn!("seek error: {err}");
-                0
+                None
             }
         }
-    });
+    } else {
+        None
+    };
 
     let track_info = PlayTrackOptions { track_id, seek_ts };
 
-    decode_track(reader, track_info, decode_opts)
+    decode_track(reader, track_info, options, map)
 }
 
 /// Decodes a track and returns a channel receiver for decoded audio buffers.
@@ -104,12 +154,14 @@ pub fn decode(
 /// * Returns [`DecodeError::Symphonia`] if creating the codec fails
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::similar_names)]
-fn decode_track(
+fn decode_track<T: Send + 'static>(
     mut reader: Box<dyn FormatReader>,
     play_opts: PlayTrackOptions,
-    decode_opts: DecoderOptions,
-) -> Result<Receiver<AudioBuffer<f32>>, DecodeError> {
-    let (sender, receiver) = flume::unbounded::<AudioBuffer<f32>>();
+    options: DecodeOptions,
+    map: fn(Result<AudioBuffer<f32>, DecodeError>) -> Option<T>,
+) -> Result<Receiver<T>, DecodeError> {
+    let decode_opts = options.decoder;
+    let (sender, receiver) = flume::unbounded::<T>();
 
     // Get the selected track using the track ID.
     let track = reader
@@ -119,18 +171,7 @@ fn decode_track(
         .ok_or(DecodeError::AudioDecode(AudioDecodeError::StreamEnd))?
         .clone();
 
-    // Create a decoder for the track.
-    let codec_registry = {
-        let mut registry = CodecRegistry::new();
-        symphonia::default::register_enabled_codecs(&mut registry);
-
-        #[cfg(feature = "opus")]
-        register_opus_codec(&mut registry);
-
-        registry
-    };
-
-    let mut decoder = codec_registry.make(&track.codec_params, &decode_opts)?;
+    let mut decoder = crate::options::make_decoder(&track, options)?;
 
     log::trace!("Spawning decoder loop");
 
@@ -139,12 +180,13 @@ fn decode_track(
         let result = loop {
             // Get the next packet from the format reader.
             let packet = match reader.next_packet() {
-                Ok(packet) => packet,
+                Ok(None) => break Ok(()),
+                Ok(Some(packet)) => packet,
                 Err(err) => break Err(DecodeError::Symphonia(err)),
             };
 
             // If the packet does not belong to the selected track, skip it.
-            if packet.track_id() != play_opts.track_id {
+            if packet.track_id != play_opts.track_id {
                 continue;
             }
 
@@ -154,16 +196,27 @@ fn decode_track(
                 Ok(decoded) => {
                     log::trace!("Decoded packet");
 
-                    let ts = packet.ts();
+                    let skip = crate::seek_frames(
+                        &packet,
+                        &track,
+                        play_opts.seek_ts,
+                        decoded.spec().rate(),
+                        decoded.frames(),
+                        decode_opts.gapless,
+                    );
 
                     // Write the decoded audio samples to the audio output if the presentation timestamp
                     // for the packet is >= the seeked position (0 if not seeking).
-                    if ts >= play_opts.seek_ts {
+                    if skip < decoded.frames() {
                         log::debug!("Writing {} frames", decoded.frames());
-                        let mut buf = decoded.make_equivalent();
-                        decoded.convert(&mut buf);
-                        if let Err(err) = sender.send(buf) {
-                            log::error!("Receiver dropped: {err:?}");
+                        let mut buf = AudioBuffer::new(decoded.spec().clone(), decoded.capacity());
+                        buf.resize_uninit(decoded.frames());
+                        decoded.copy_to(&mut buf);
+                        buf.trim(skip, 0);
+                        if let Some(item) = map(Ok(buf))
+                            && sender.send(item).is_err()
+                        {
+                            log::debug!("Receiver dropped");
                             break Ok(());
                         }
 
@@ -188,7 +241,12 @@ fn decode_track(
             log::debug!("verification: failed");
         }
 
-        ignore_end_of_stream_error(result)
+        if let Err(error) = ignore_end_of_stream_error(result) {
+            log::error!("Decode worker failed: {error}");
+            if let Some(item) = map(Err(error)) {
+                let _ = sender.send(item);
+            }
+        }
     });
 
     log::trace!("Returning AudioBuffer stream");
@@ -200,9 +258,12 @@ fn decode_track(
 ///
 /// Returns the first track that doesn't have a null codec type.
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
-    tracks
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+    tracks.iter().find(|t| {
+        t.codec_params
+            .as_ref()
+            .and_then(CodecParameters::audio)
+            .is_some_and(|params| params.codec != CODEC_ID_NULL_AUDIO)
+    })
 }
 
 /// Converts expected end-of-stream errors into success.
@@ -225,9 +286,14 @@ fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), Dec
 
 #[cfg(test)]
 mod tests {
+    use symphonia::core::audio::Audio;
+    use symphonia::core::formats::{FormatOptions, probe::Hint};
+    use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
+    use symphonia::core::meta::MetadataOptions;
+
     use super::*;
     use pretty_assertions::assert_eq;
-    use symphonia::core::codecs::{CODEC_TYPE_FLAC, CodecParameters};
+    use symphonia::core::codecs::audio::{AudioCodecParameters, well_known::CODEC_ID_FLAC};
 
     #[test_log::test]
     fn test_first_supported_track_empty() {
@@ -238,8 +304,20 @@ mod tests {
     #[test_log::test]
     fn test_first_supported_track_all_null() {
         let tracks = vec![
-            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
-            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(0)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new()
+                        .for_codec(CODEC_ID_NULL_AUDIO)
+                        .clone(),
+                ))
+                .clone(),
+            Track::new(1)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new()
+                        .for_codec(CODEC_ID_NULL_AUDIO)
+                        .clone(),
+                ))
+                .clone(),
         ];
         assert!(first_supported_track(&tracks).is_none());
     }
@@ -247,9 +325,23 @@ mod tests {
     #[test_log::test]
     fn test_first_supported_track_finds_supported() {
         let tracks = vec![
-            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
-            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
-            Track::new(2, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
+            Track::new(0)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new()
+                        .for_codec(CODEC_ID_NULL_AUDIO)
+                        .clone(),
+                ))
+                .clone(),
+            Track::new(1)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new().for_codec(CODEC_ID_FLAC).clone(),
+                ))
+                .clone(),
+            Track::new(2)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new().for_codec(CODEC_ID_FLAC).clone(),
+                ))
+                .clone(),
         ];
         let result = first_supported_track(&tracks);
         assert!(result.is_some());
@@ -315,10 +407,61 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_decode_pcm_preserves_samples_and_handles_end_of_stream() {
+        // Two signed PCM samples in a mono 16-bit WAV stream.
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&40_u32.to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&8000_u32.to_le_bytes());
+        wav.extend_from_slice(&16000_u32.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&4_u32.to_le_bytes());
+        wav.extend_from_slice(&16384_i16.to_le_bytes());
+        wav.extend_from_slice(&(-16384_i16).to_le_bytes());
+        let stream = MediaSourceStream::new(
+            Box::new(std::io::Cursor::new(wav)),
+            MediaSourceStreamOptions::default(),
+        );
+        let reader = symphonia::default::get_probe()
+            .probe(
+                &Hint::new(),
+                stream,
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .unwrap();
+        let receiver = decode(reader, None, None, AudioDecoderOptions::default()).unwrap();
+        let samples: Vec<f32> = receiver
+            .iter()
+            .flat_map(|buffer| {
+                assert_eq!(buffer.spec().rate(), 8000);
+                buffer.plane(0).unwrap().to_vec()
+            })
+            .collect();
+        assert_eq!(samples, [0.5, -0.5]);
+    }
+
+    #[test_log::test]
     fn test_first_supported_track_first_track_is_supported() {
         let tracks = vec![
-            Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_FLAC).clone()),
-            Track::new(1, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone()),
+            Track::new(0)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new().for_codec(CODEC_ID_FLAC).clone(),
+                ))
+                .clone(),
+            Track::new(1)
+                .with_codec_params(CodecParameters::Audio(
+                    AudioCodecParameters::new()
+                        .for_codec(CODEC_ID_NULL_AUDIO)
+                        .clone(),
+                ))
+                .clone(),
         ];
         let result = first_supported_track(&tracks);
         assert!(result.is_some());

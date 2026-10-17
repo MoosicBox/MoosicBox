@@ -347,3 +347,36 @@ For advanced features like custom resampling, format conversion, or metadata ext
 - [Symphonia](https://github.com/pdeljanov/Symphonia) - The underlying media framework
 - [MoosicBox Stream Utils](../stream_utils/README.md) - Streaming utilities
 - [MoosicBox Player](../player/README.md) - Audio playback engine
+
+## Explicit Opus backend selection
+
+`opus` remains the compatibility alias for `opus-libopus`. `opus-base` enables
+adapter integration only; `opus-native` independently enables the native decoder
+without enabling libopus. Choose a backend at runtime even in a native-only build:
+
+```rust
+use moosicbox_audio_decoder::{DecodeOptions, OpusDecodeBackend};
+let mut options = DecodeOptions {
+    opus_backend: OpusDecodeBackend::Native,
+    ..DecodeOptions::default()
+};
+options.decoder.gapless = false; // raw reference PCM, including decoder delay
+options.decoder.verify = true;
+```
+
+Pass options to `decode_with_options`, `unsync::decode_with_options`, or the
+`decode_file_path_str_with_options`, `decode_file_path_str_async_with_options`,
+and `decode_media_source_async_with_options` entry points. Existing entry points
+retain Libopus selection and their existing gapless/verify arguments. An
+unavailable selected backend returns an error; enabling both does not override
+runtime selection. Native parity remains limited to tested codec configurations.
+
+`tests/opus_backend_tests.rs` sends real nonzero stateful SILK Ogg through public
+media-source and channel APIs and compares against pinned C reference PCM. Raw
+(gapless-disabled) tests do not certify Ogg pre-skip correctness in Symphonia.
+
+For error-aware pull playback, use `unsync::decode_with_options_result`: it
+returns `Result<Receiver<Result<AudioBuffer<f32>, DecodeError>>, DecodeError>`.
+Initialization failures use the outer result; terminal worker failures arrive
+after any successful PCM buffers as one final `Err`. Normal EOF closes the
+channel. PCM-only compatibility APIs retain their historical behavior.

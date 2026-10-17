@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Hybrid stage oracle on the unchanged frozen corpus and verified CMake archive.
+No source modification or injected entropy state: prefixes are recorded public
+entropy operations from upstream SILK and redundancy processing on real packets.
+"""
+import hashlib
+import json
+import os
+import pathlib
+import re
+import subprocess
+import tempfile
+
+here = pathlib.Path(__file__).resolve().parent
+root = here.parents[3]
+corpus = pathlib.Path(
+    json.loads((here / "c6_before.jsonl").read_text().splitlines()[0])["root"]
+)
+build = (
+    root / "target/debug/build/moosicbox_opus_native_libopus-149a3fe3b4ebb7e6/out/build"
+)
+archive = build / "libopus.a"
+assert (
+    hashlib.sha256(archive.read_bytes()).hexdigest()
+    == "82615f069ae57976e8ed283dc8c11c8860ca8978385386a938adbc7ce45d581c"
+)
+source = root / "packages/opus_native/libopus/opus"
+config = (build / "config.h").read_text()
+assert "OPUS_FIXED_POINT:BOOL=ON" in (build / "CMakeCache.txt").read_text()
+assert "#define ENABLE_RES24 1" not in config
+cases = []
+with tempfile.TemporaryDirectory(prefix="c7-oracle-") as temp:
+    exe = pathlib.Path(temp) / "oracle"
+    symbols = [
+        "silk_Decode",
+        "celt_decode_with_ec_dred",
+        "quant_all_bands",
+        "comb_filter",
+        "ec_dec_bit_logp",
+        "ec_dec_icdf",
+        "ec_dec_uint",
+        "ec_dec_bits",
+    ]
+    subprocess.run(
+        [
+            "cc",
+            "-O1",
+            "-DUSE_ALLOCA",
+            "-DFIXED_POINT=1",
+            "-DHAVE_CONFIG_H",
+            *[
+                f"-I{x}"
+                for x in [build, source / "include", source / "silk", source / "celt"]
+            ],
+            str(here / "hybrid_oracle.c"),
+            str(archive),
+            "-lm",
+            *[f"-Wl,--wrap={s}" for s in symbols],
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
+    ids = [
+        "hybrid/fb/sine_mono",
+        "hybrid/fb/mixed_mono",
+        "hybrid/fb/sine_stereo",
+        "hybrid/swb/sine_mono",
+        "hybrid/swb/sine_stereo",
+        "sequences/hybrid_fb_mono",
+        "sequences/hybrid_swb_stereo",
+    ]
+    for rate in [48000, 24000, 16000, 12000, 8000]:
+        for case_id in ids:
+            path = corpus / case_id
+            channels = 2 if "stereo" in case_id else 1
+            folders = (
+                json.loads((path / "sequence.json").read_text())["packets"]
+                if case_id.startswith("sequences")
+                else ["."]
+            )
+            packets = [path / folder / "packet.bin" for folder in folders]
+            records = [
+                json.loads(line)
+                for line in subprocess.check_output(
+                    [str(exe), str(channels), *map(str, packets)],
+                    text=True,
+                    env={**os.environ, "C8_OUTPUT_RATE": str(rate)},
+                ).splitlines()
+                if line.startswith("{")
+            ]
+            groups = []
+            for r in records:
+                if r["stage"] == "packet":
+                    groups.append([])
+                groups[-1].append(r)
+            for i, records in enumerate(groups):
+                get = lambda stage: next(r for r in records if r["stage"] == stage)
+                entry = get("entry")
+                assert (
+                    entry["bytes"] == len(packets[i].read_bytes()) - 1
+                ), "redundancy must be explicitly handled"
+                chunks = [r["values"] for r in records if r["stage"] == "synthesis"]
+                n = entry["n"] * 48000 // rate
+                assert all(
+                    len(chunks[j]) == 120 and len(chunks[j + 1]) == n - 120
+                    for j in range(0, len(chunks), 2)
+                )
+                channels_synthesis = [
+                    chunks[j] + chunks[j + 1] for j in range(0, len(chunks), 2)
+                ]
+                synthesis = [
+                    channels_synthesis[ch][t]
+                    for t in range(n)
+                    for ch in range(channels)
+                ]
+                end = 19 if "swb" in case_id else 21
+                case = dict(
+                    id=case_id,
+                    index=i,
+                    rate=rate,
+                    packet=list(packets[i].read_bytes()),
+                    channels=channels,
+                    end=end,
+                    n=n,
+                    prefix=[r for r in records if r["stage"] == "op"],
+                    entry=get("entry_entropy"),
+                    entropy=get("residual_entropy"),
+                    residual=get("residual")["values"],
+                    synthesis=synthesis,
+                    final=get("final_entropy"),
+                )
+                cases.append(case)
+                print(rate, case_id, i, "entry", case["entry"], "final", case["final"])
+(here / "hybrid_oracle.json").write_text(json.dumps(cases))
+out = "// Actual frozen hybrid packets; generated by hybrid_oracle.py.\n"
+out += "struct HybridCase {rate:u32,packet:&'static [u8],channels:usize,end:usize,n:usize,reset:bool,prefix:&'static [(u8,&'static [u32],u32)],entry:(u32,u32,u32),entropy:(u32,u32,u32),final_entropy:(u32,u32,u32),residual:&'static [i16],synthesis:&'static [i32]}\nconst HYBRID_CASES:&[HybridCase]=&[\n"
+for case in cases:
+    entropy = lambda key: str(tuple(case[key][f] for f in ["range", "value", "tell"]))
+    prefix = ",".join(
+        "(" + str(op["kind"]) + ",&" + str(op["args"]) + "," + str(op["value"]) + ")"
+        for op in case["prefix"]
+    )
+    out += (
+        "HybridCase{rate:"
+        + str(case["rate"])
+        + ",packet:&"
+        + str(case["packet"])
+        + ",channels:"
+        + str(case["channels"])
+        + ",end:"
+        + str(case["end"])
+        + ",n:"
+        + str(case["n"])
+        + ",reset:"
+        + str(case["index"] == 0).lower()
+        + ",prefix:&["
+        + prefix
+        + "],entry:"
+        + entropy("entry")
+        + ",entropy:"
+        + entropy("entropy")
+        + ",final_entropy:"
+        + entropy("final")
+        + ",residual:&"
+        + str(case["residual"])
+        + ",synthesis:&"
+        + str(case["synthesis"])
+        + "},\n"
+    )
+out += "];\n"
+out = re.sub(r"\b\d{5,}\b", lambda m: format(int(m[0]), "_d"), out)
+(here / "hybrid_expectations.rs").write_text(out)

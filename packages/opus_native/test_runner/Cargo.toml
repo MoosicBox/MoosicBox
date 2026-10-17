@@ -11,9 +11,11 @@ version     = { workspace = true }
 [package.metadata]
 examples = false
 
-[dev-dependencies]
+[dependencies]
 moosicbox_opus_native              = { workspace = true }
 moosicbox_opus_native_test_vectors = { workspace = true }
+serde_json                         = { workspace = true }
+sha2                               = { workspace = true }
 
 [features]
 default = ["celt", "hybrid", "silk"]

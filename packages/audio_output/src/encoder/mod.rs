@@ -7,7 +7,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use bytes::Bytes;
-use symphonia::core::audio::{AudioBuffer, SignalSpec};
+use symphonia::core::audio::{AudioBuffer, AudioSpec};
 
 use crate::AudioOutputError;
 
@@ -36,9 +36,18 @@ pub trait AudioEncoder: Send + Sync {
     /// * If the audio fails to encode
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError>;
 
+    /// Drain buffered resampler and encoder samples at end of input.
+    ///
+    /// # Errors
+    ///
+    /// * If buffered audio cannot be encoded.
+    fn finish(&mut self) -> Result<Bytes, AudioOutputError> {
+        Ok(Bytes::new())
+    }
+
     /// Returns the audio signal specification for this encoder.
     ///
-    /// The returned `SignalSpec` describes the output format of encoded audio.
+    /// The returned `AudioSpec` describes the output format of encoded audio.
     #[must_use]
-    fn spec(&self) -> SignalSpec;
+    fn spec(&self) -> AudioSpec;
 }

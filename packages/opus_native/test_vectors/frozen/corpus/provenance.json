@@ -1,0 +1,6 @@
+{
+      "format_version":1,"reference_revision":"34bba701ae97c913de719b1f7c10686f62cddb15",
+      "generator":"moosicbox_opus_native_test_vectors/build.rs:v2",
+      "fixed_point":true,"intrinsics":false,"float_api":false,
+      "pcm_semantics":"raw_decoder_output","checksum_algorithm":"fnv1a64"
+    }

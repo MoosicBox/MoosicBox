@@ -3,7 +3,7 @@
 //! This module provides convenience functions to register [`OpusDecoder`]
 //! with Symphonia codec registries.
 
-use symphonia::core::codecs::CodecRegistry;
+use symphonia::core::codecs::registry::CodecRegistry;
 
 use crate::decoder::OpusDecoder;
 
@@ -15,14 +15,14 @@ use crate::decoder::OpusDecoder;
 /// # Examples
 ///
 /// ```rust
-/// use symphonia::core::codecs::CodecRegistry;
+/// use symphonia::core::codecs::registry::CodecRegistry;
 /// use moosicbox_opus::register_opus_codec;
 ///
 /// let mut registry = CodecRegistry::new();
 /// register_opus_codec(&mut registry);
 /// ```
 pub fn register_opus_codec(registry: &mut CodecRegistry) {
-    registry.register_all::<OpusDecoder>();
+    registry.register_audio_decoder::<OpusDecoder>();
 }
 
 /// Create a codec registry with Opus support.

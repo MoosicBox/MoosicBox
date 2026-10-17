@@ -141,6 +141,22 @@ unsafe extern "C" {
     pub fn opus_decoder_destroy(st: *mut OpusDecoder);
 }
 
+/// Mode selection for the pinned reference encoder's private test CTL.
+#[derive(Debug, Clone, Copy)]
+#[repr(i32)]
+pub enum ReferenceMode {
+    /// SILK only (NB, MB, or WB).
+    Silk = 1000,
+    /// SILK plus CELT (SWB or FB).
+    Hybrid = 1001,
+    /// CELT only.
+    Celt = 1002,
+}
+
+unsafe extern "C" {
+    fn opus_encoder_ctl(st: *mut OpusEncoder, request: c_int, ...) -> c_int;
+}
+
 pub mod safe {
     //! Safe Rust wrapper around the libopus FFI.
     //!
@@ -178,6 +194,12 @@ pub mod safe {
         /// Channel count not 1 or 2.
         #[error("Channel count not 1 or 2")]
         InvalidChannels,
+        /// Reference encoder control failed (request and libopus error).
+        #[error("Encoder control {0} failed: {1}")]
+        ControlFailed(c_int, c_int),
+        /// Buffer length or frame size is unsafe for the reference FFI.
+        #[error("Invalid PCM buffer or frame size")]
+        InvalidBuffer,
     }
 
     /// Safe wrapper around an Opus encoder.
@@ -185,6 +207,7 @@ pub mod safe {
     /// Automatically manages the lifecycle of the underlying libopus encoder.
     pub struct Encoder {
         ptr: *mut OpusEncoder,
+        channels: usize,
     }
 
     impl Encoder {
@@ -228,7 +251,38 @@ pub mod safe {
                 return Err(OpusError::EncoderCreateFailed(error));
             }
 
-            Ok(Self { ptr })
+            Ok(Self {
+                ptr,
+                channels: usize::from(channels),
+            })
+        }
+
+        /// Pins mode, bandwidth (1101..=1105), bitrate, CBR and complexity for fixtures.
+        /// Uses private force-mode CTL 11002 from the pinned vendored reference only.
+        ///
+        /// # Errors
+        /// * Returns `ControlFailed` if libopus rejects any setting.
+        pub fn configure_reference(
+            &mut self,
+            mode: super::ReferenceMode,
+            bandwidth: i32,
+            bitrate: i32,
+        ) -> Result<(), OpusError> {
+            for (request, value) in [
+                (11002, mode as i32),
+                (4022, self.channels as i32),
+                (4004, bandwidth),
+                (4008, bandwidth),
+                (4002, bitrate),
+                (4006, 0),
+                (4010, 10),
+            ] {
+                let result = unsafe { super::opus_encoder_ctl(self.ptr, request, value) };
+                if result != OPUS_OK {
+                    return Err(OpusError::ControlFailed(request, result));
+                }
+            }
+            Ok(())
         }
 
         /// Encodes PCM audio data to Opus format.
@@ -259,6 +313,13 @@ pub mod safe {
             frame_size: usize,
             output: &mut [u8],
         ) -> Result<usize, OpusError> {
+            if frame_size == 0
+                || frame_size > c_int::MAX as usize
+                || pcm.len() < frame_size.saturating_mul(self.channels)
+                || output.len() > c_int::MAX as usize
+            {
+                return Err(OpusError::InvalidBuffer);
+            }
             let result = unsafe {
                 opus_encode(
                     self.ptr,
@@ -292,6 +353,7 @@ pub mod safe {
     /// Automatically manages the lifecycle of the underlying libopus decoder.
     pub struct Decoder {
         ptr: *mut OpusDecoder,
+        channels: usize,
     }
 
     impl Decoder {
@@ -330,7 +392,10 @@ pub mod safe {
                 return Err(OpusError::DecoderCreateFailed(error));
             }
 
-            Ok(Self { ptr })
+            Ok(Self {
+                ptr,
+                channels: usize::from(channels),
+            })
         }
 
         /// Decodes Opus-encoded audio data to PCM format.
@@ -367,6 +432,13 @@ pub mod safe {
             frame_size: usize,
             decode_fec: bool,
         ) -> Result<usize, OpusError> {
+            if frame_size == 0
+                || frame_size > c_int::MAX as usize
+                || output.len() < frame_size.saturating_mul(self.channels)
+                || data.len() > c_int::MAX as usize
+            {
+                return Err(OpusError::InvalidBuffer);
+            }
             let result = unsafe {
                 opus_decode(
                     self.ptr,

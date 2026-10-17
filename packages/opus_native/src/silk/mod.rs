@@ -19,3 +19,8 @@ pub use excitation_constants::*;
 pub use frame::SilkFrame;
 pub use lsf_constants::*;
 pub use ltp_constants::*;
+
+/// Reference-compatible integer output conversion.
+pub mod resampler;
+
+mod voiced;

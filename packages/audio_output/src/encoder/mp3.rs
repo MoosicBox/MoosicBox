@@ -12,8 +12,9 @@ use moosicbox_audio_encoder::mp3::encoder_mp3;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use switchy_async::task::JoinHandle;
 use symphonia::core::{
-    audio::{AudioBuffer, Channels, Signal, SignalSpec},
-    formats::{Packet, Track},
+    audio::{Audio, AudioBuffer, AudioSpec},
+    formats::Track,
+    packet::Packet,
     units::Duration,
 };
 
@@ -29,6 +30,7 @@ use super::AudioEncoder;
 pub struct Mp3Encoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
+    finished: bool,
     resample_rate: Option<u32>,
     output_rate: usize,
     duration: Option<Duration>,
@@ -49,6 +51,7 @@ impl Mp3Encoder {
         Self {
             resampler: None,
             input_rate: None,
+            finished: false,
             resample_rate: None,
             output_rate: 44100,
             duration: None,
@@ -70,6 +73,7 @@ impl Mp3Encoder {
         Self {
             resampler: None,
             input_rate: None,
+            finished: false,
             resample_rate: None,
             output_rate: 44100,
             duration: None,
@@ -83,22 +87,22 @@ impl Mp3Encoder {
     /// # Arguments
     /// * `spec` - Input audio signal specification
     /// * `duration` - Audio duration in samples
-    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if self.resample_rate.is_none_or(|r| r != spec.rate)
-            && self.output_rate != spec.rate as usize
+    pub fn init_resampler(&mut self, spec: &AudioSpec, duration: Duration) -> &Self {
+        if self.resample_rate.is_none_or(|r| r != spec.rate())
+            && self.output_rate != spec.rate() as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
-                spec.rate,
+                spec.rate(),
                 duration,
             );
-            self.input_rate.replace(spec.rate);
+            self.input_rate.replace(spec.rate());
             self.duration.replace(duration);
-            self.resample_rate.replace(spec.rate);
+            self.resample_rate.replace(spec.rate());
             self.resampler.replace(RwLock::new(Resampler::new(
-                *spec,
+                spec.clone(),
                 self.output_rate,
-                duration,
+                duration.get(),
             )));
         }
         self
@@ -112,46 +116,36 @@ impl Mp3Encoder {
     /// * `spec` - Audio signal specification
     /// * `duration` - Audio duration in samples
     #[must_use]
-    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
-        self.init_resampler(&spec, duration);
+    pub fn open(mut self, spec: impl std::borrow::Borrow<AudioSpec>, duration: Duration) -> Self {
+        self.init_resampler(spec.borrow(), duration);
         self
     }
 
     fn encode_output(&mut self, buf: &[i16]) -> Bytes {
-        let mut read = 0;
-        let mut written = vec![];
-        loop {
-            let end = std::cmp::min(read + 1024, buf.len());
-            log::trace!("Encoding {} bytes {read}..{end}", end - read);
-            match moosicbox_audio_encoder::mp3::encode_mp3(&mut self.encoder, &buf[read..end]) {
-                Ok((output, info)) => {
-                    log::trace!(
-                        "input_consumed={} output_size={} (output len={})",
-                        info.input_consumed,
-                        info.output_size,
-                        output.len()
-                    );
-                    written.extend_from_slice(&output);
-                    read += info.input_consumed;
-
-                    if read >= buf.len() {
-                        break;
-                    }
-                }
-                Err(err) => {
-                    panic!("Failed to convert: {err:?}");
-                }
-            }
+        if buf.is_empty() {
+            return Bytes::new();
         }
-        written.into()
+        let mut output = Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(buf.len()));
+        self.encoder
+            .encode_to_vec(mp3lame_encoder::InterleavedPcm(buf), &mut output)
+            .expect("Failed to encode MP3");
+        output.into()
     }
 
     fn resample_if_needed(
         &mut self,
         decoded: &AudioBuffer<f32>,
     ) -> Result<Vec<i16>, AudioOutputError> {
+        if self.finished {
+            return Err(AudioOutputError::StreamEnd);
+        }
         let spec = decoded.spec();
-        let duration = decoded.capacity() as u64;
+        if spec.channels() != self.spec().channels() {
+            return Err(AudioOutputError::UnsupportedChannels(
+                spec.channels().count(),
+            ));
+        }
+        let duration = Duration::from(decoded.capacity() as u64);
 
         self.init_resampler(spec, duration);
 
@@ -167,15 +161,14 @@ impl Mp3Encoder {
                 .write()
                 .unwrap()
                 .resample(decoded)
-                .ok_or(AudioOutputError::StreamEnd)?
-                .to_vec())
+                .map_or_else(Vec::new, <[_]>::to_vec))
         } else {
             log::debug!(
-                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                "Passing through audio frames={} duration={duration} rate={} channels={:?} channels_count={}",
                 decoded.frames(),
-                spec.rate,
-                spec.channels,
-                spec.channels.count(),
+                spec.rate(),
+                spec.channels(),
+                spec.channels().count(),
             );
             Ok(to_samples(decoded))
         }
@@ -194,14 +187,39 @@ impl AudioEncoder for Mp3Encoder {
 
         let decoded = self.resample_if_needed(&decoded)?;
 
+        if decoded.is_empty() {
+            return Ok(Bytes::new());
+        }
         Ok(self.encode_output(&decoded))
     }
 
-    fn spec(&self) -> SignalSpec {
-        SignalSpec {
-            rate: u32::try_from(self.output_rate).unwrap(),
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+    fn finish(&mut self) -> Result<Bytes, AudioOutputError> {
+        if self.finished {
+            return Ok(Bytes::new());
         }
+        self.finished = true;
+        let mut tail = Vec::new();
+        if let Some(resampler) = &self.resampler {
+            let mut resampler = resampler.write().map_err(|_| AudioOutputError::Interrupt)?;
+            while let Some(samples) = resampler.flush() {
+                tail.extend_from_slice(samples);
+            }
+        }
+        let mut output = self.encode_output(&tail).to_vec();
+        // Normal EOF must emit the encoder delay and final partial frame. No-gap
+        // flushing is only for consecutive tracks in a continuous encoded stream.
+        output.reserve(7200);
+        self.encoder
+            .flush_to_vec::<mp3lame_encoder::FlushGap>(&mut output)
+            .map_err(|error| AudioOutputError::IO(std::io::Error::other(format!("{error:?}"))))?;
+        Ok(output.into())
+    }
+
+    fn spec(&self) -> AudioSpec {
+        AudioSpec::new(
+            u32::try_from(self.output_rate).unwrap(),
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        )
     }
 }
 
@@ -238,6 +256,9 @@ impl AudioDecode for Mp3Encoder {
 
         Ok(())
     }
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        AudioWrite::flush(self).map_err(|error| AudioDecodeError::Other(Box::new(error)))
+    }
 }
 
 impl AudioWrite for Mp3Encoder {
@@ -268,6 +289,11 @@ impl AudioWrite for Mp3Encoder {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
+        let bytes = self.finish()?;
+        if let Some(writer) = &mut self.writer {
+            writer.write_all(&bytes)?;
+            writer.flush()?;
+        }
         Ok(())
     }
 
@@ -322,7 +348,7 @@ pub fn encode_mp3<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str,
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
             Ok(Box::new(
-                Mp3Encoder::with_writer(writer.clone()).open(spec, duration),
+                Mp3Encoder::with_writer(writer.clone()).open(&spec, duration),
             ))
         }));
 

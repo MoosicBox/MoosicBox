@@ -15,8 +15,9 @@ use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
 use switchy_async::task::JoinHandle;
 use symphonia::core::{
-    audio::{AudioBuffer, Channels, Signal, SignalSpec},
-    formats::{Packet, Track},
+    audio::{Audio, AudioBuffer, AudioSpec},
+    formats::Track,
+    packet::Packet,
     units::Duration,
 };
 
@@ -42,6 +43,7 @@ pub struct OpusEncoder<'a> {
     bytes_read: usize,
     resampler: Option<RwLock<Resampler<f32>>>,
     input_rate: Option<u32>,
+    finished: bool,
     resample_rate: Option<u32>,
     output_rate: usize,
     duration: Option<Duration>,
@@ -72,6 +74,7 @@ impl OpusEncoder<'_> {
             bytes_read: 0,
             resampler: None,
             input_rate: None,
+            finished: false,
             resample_rate: None,
             output_rate: 48000,
             duration: None,
@@ -100,22 +103,22 @@ impl OpusEncoder<'_> {
     /// # Arguments
     /// * `spec` - Input audio signal specification
     /// * `duration` - Audio duration in samples
-    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        if self.resample_rate.is_none_or(|r| r != spec.rate)
-            && self.output_rate != spec.rate as usize
+    pub fn init_resampler(&mut self, spec: &AudioSpec, duration: Duration) -> &Self {
+        if self.resample_rate.is_none_or(|r| r != spec.rate())
+            && self.output_rate != spec.rate() as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
-                spec.rate,
+                spec.rate(),
                 duration,
             );
-            self.input_rate.replace(spec.rate);
+            self.input_rate.replace(spec.rate());
             self.duration.replace(duration);
-            self.resample_rate.replace(spec.rate);
+            self.resample_rate.replace(spec.rate());
             self.resampler.replace(RwLock::new(Resampler::new(
-                *spec,
+                spec.clone(),
                 self.output_rate,
-                duration,
+                duration.get(),
             )));
         }
         self
@@ -129,8 +132,8 @@ impl OpusEncoder<'_> {
     /// * `spec` - Audio signal specification
     /// * `duration` - Audio duration in samples
     #[must_use]
-    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
-        self.init_resampler(&spec, duration);
+    pub fn open(mut self, spec: impl std::borrow::Borrow<AudioSpec>, duration: Duration) -> Self {
+        self.init_resampler(spec.borrow(), duration);
         self
     }
 
@@ -190,8 +193,8 @@ impl OpusEncoder<'_> {
                 .write_packet(
                     section.to_vec(),
                     self.serial,
-                    PacketWriteEndInfo::NormalPacket,
-                    self.absgp,
+                    PacketWriteEndInfo::EndPage,
+                    self.absgp + (info.input_consumed / 2) as u64,
                 )
                 .expect("Failed to write packet");
 
@@ -273,8 +276,16 @@ impl OpusEncoder<'_> {
         &mut self,
         decoded: &AudioBuffer<f32>,
     ) -> Result<Vec<f32>, AudioOutputError> {
+        if self.finished {
+            return Err(AudioOutputError::StreamEnd);
+        }
         let spec = decoded.spec();
-        let duration = decoded.capacity() as u64;
+        if spec.channels() != self.spec().channels() {
+            return Err(AudioOutputError::UnsupportedChannels(
+                spec.channels().count(),
+            ));
+        }
+        let duration = Duration::from(decoded.capacity() as u64);
 
         self.init_resampler(spec, duration);
 
@@ -290,15 +301,14 @@ impl OpusEncoder<'_> {
                 .write()
                 .unwrap()
                 .resample(decoded)
-                .ok_or(AudioOutputError::StreamEnd)?
-                .to_vec())
+                .map_or_else(Vec::new, <[_]>::to_vec))
         } else {
             log::debug!(
-                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                "Passing through audio frames={} duration={duration} rate={} channels={:?} channels_count={}",
                 decoded.frames(),
-                spec.rate,
-                spec.channels,
-                spec.channels.count(),
+                spec.rate(),
+                spec.channels(),
+                spec.channels().count(),
             );
             Ok(to_samples(decoded))
         }
@@ -320,11 +330,33 @@ impl AudioEncoder for OpusEncoder<'_> {
         Ok(self.write_samples(decoded))
     }
 
-    fn spec(&self) -> SignalSpec {
-        SignalSpec {
-            rate: u32::try_from(self.output_rate).unwrap(),
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+    fn finish(&mut self) -> Result<Bytes, AudioOutputError> {
+        if self.finished {
+            return Ok(Bytes::new());
         }
+        self.finished = true;
+        let mut tail = Vec::new();
+        if let Some(resampler) = &self.resampler {
+            let mut resampler = resampler.write().map_err(|_| AudioOutputError::Interrupt)?;
+            while let Some(samples) = resampler.flush() {
+                tail.extend_from_slice(samples);
+            }
+        }
+        let mut bytes = self.write_samples(tail).to_vec();
+        if self.buf_len > 0 {
+            let mut frame = vec![0.0; STEREO_20MS];
+            frame[..self.buf_len].copy_from_slice(&self.buf[..self.buf_len]);
+            self.buf_len = 0;
+            bytes.extend_from_slice(&self.write_samples(frame));
+        }
+        Ok(bytes.into())
+    }
+
+    fn spec(&self) -> AudioSpec {
+        AudioSpec::new(
+            u32::try_from(self.output_rate).unwrap(),
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        )
     }
 }
 
@@ -361,6 +393,9 @@ impl AudioDecode for OpusEncoder<'_> {
 
         Ok(())
     }
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        AudioWrite::flush(self).map_err(|error| AudioDecodeError::Other(Box::new(error)))
+    }
 }
 
 impl AudioWrite for OpusEncoder<'_> {
@@ -391,6 +426,11 @@ impl AudioWrite for OpusEncoder<'_> {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
+        let bytes = self.finish()?;
+        if let Some(writer) = &mut self.writer {
+            writer.write_all(&bytes)?;
+            writer.flush()?;
+        }
         Ok(())
     }
 
@@ -445,12 +485,37 @@ pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
             Ok(Box::new(
-                OpusEncoder::with_writer(writer.clone()).open(spec, duration),
+                OpusEncoder::with_writer(writer.clone()).open(&spec, duration),
             ))
         }));
 
     if let Err(err) = decode_file_path_str(path, &mut audio_decode_handler, true, true, None, None)
     {
         log::error!("Failed to encode to opus: {err:?}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use symphonia::core::audio::AudioMut as _;
+
+    #[test_log::test]
+    fn finish_emits_partial_frame_once() {
+        let spec = AudioSpec::new(
+            48_000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
+        let mut audio = AudioBuffer::<f32>::new(spec, 100);
+        audio.render_silence(Some(100));
+        for plane in audio.iter_planes_mut() {
+            plane.fill(0.25);
+        }
+        let mut encoder = OpusEncoder::new();
+        assert!(encoder.encode(audio).unwrap().is_empty());
+        assert_eq!(encoder.buf_len, 200);
+        assert!(!encoder.finish().unwrap().is_empty());
+        assert_eq!(encoder.buf_len, 0);
+        assert!(encoder.finish().unwrap().is_empty());
     }
 }

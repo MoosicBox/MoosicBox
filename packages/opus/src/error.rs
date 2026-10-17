@@ -38,6 +38,7 @@ pub enum Error {
     /// Error from the underlying libopus decoder.
     ///
     /// Wraps errors returned by the audiopus library during decoder operations.
+    #[cfg(feature = "libopus")]
     #[error("Opus decoder error: {0}")]
     DecoderError(#[from] audiopus::Error),
 }

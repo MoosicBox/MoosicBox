@@ -31,9 +31,9 @@ let samples = decoder.decode(Some(&packet), &mut output, false)?;
 
 Critical public API notes:
 
-- Packet loss concealment entry point: pass `None` as input (`decoder.decode(None, &mut output, false)`) to decode a lost packet.
-- SILK delay reporting: call `decoder.algorithmic_delay_samples()` to get the current SILK algorithmic delay included in output.
-- `decode_float` and `reset_state` are public but not implemented yet (Phase 6) and currently panic if called.
+- Packet loss (`None`) and `fec=true` currently return `Error::Unsupported` before changing decoder state or output; native PLC/FEC synthesis is not implemented.
+- SILK delay reporting: `decoder.algorithmic_delay_samples()` reports the integer resampler's included delay (4/9/12 input-rate samples, converted to the output rate), not wrapper history or container pre-skip.
+- `decode_float` converts integer PCM output; `reset_state` reconstructs fresh decoder state.
 
 ## Features
 
@@ -55,14 +55,34 @@ All algorithms are independently implemented based on the RFC 6716 specification
 
 ## Implementation Status
 
-- [x] **Phase 1**: Range Decoder (RFC Section 4.1)
-- [x] **Phase 2**: SILK Decoder - Basic Framework (RFC Section 4.2)
-- [x] **Phase 3**: SILK Decoder - LSF/LTP/Excitation (RFC Section 4.2)
-- [x] **Phase 4**: CELT Decoder (RFC Section 4.3)
-- [x] **Phase 5**: Mode Integration & Hybrid
-- [ ] **Phase 6-10**: PLC, Backend Integration, Testing, Optimization, Documentation
+This is an experimental decoder, not a production-complete native Opus codec.
+Passing unit tests do not establish end-to-end waveform correctness.
 
-See `../../spec/opus-native/plan.md` for detailed implementation roadmap.
+* The frozen reference corpus passes exact raw PCM comparisons for all 43 cases
+  (19 SILK, 15 CELT, 9 hybrid), including persistent nonzero sequences. These
+  bounded results do not establish correctness for arbitrary Opus streams.
+* Independent persistent SILK checks cover 24 rate/channel/duration streams
+  (192 packets) without alignment shifts or sample tolerances.
+* FEC and packet loss (`None`) return `Error::Unsupported`; reference PLC/FEC
+  synthesis is not implemented. Unverified hybrid mode/channel transitions and
+  redundant transition synthesis also return explicit `Unsupported`. Redundancy
+  rejection occurs after SILK state advancement; reset before retrying a stream.
+* `reset_state` reconstructs fresh decoder state; `decode_float` converts integer
+  decoder output rather than introducing floating-point codec synthesis.
+* Integer range encoding is implemented in `range::RangeEncoder`; a native audio
+  encoder is not yet available.
+* `moosicbox_opus` offers an explicit native backend, with libopus retained as its
+  default. Native selection never silently falls back to the C implementation.
+
+Use the [unpublished feedback runner](test_runner/README.md) for the current
+mode-validated corpus, exact raw PCM comparisons, persistent sequences, and
+reproducible failures. Its strict command returns nonzero while parity gaps
+remain. Diagnostic collection success is not codec acceptance.
+
+The documents under `spec/opus-native/` and `spec/opus/` are historical research.
+Their phase-completion and production-readiness claims are not current evidence
+or required architecture. Correctness is established by reproducible tests,
+independent reference comparisons, and actual MoosicBox integration behavior.
 
 ## Acknowledgments
 

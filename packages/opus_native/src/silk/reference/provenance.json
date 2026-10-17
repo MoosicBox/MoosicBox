@@ -1,0 +1,61 @@
+{
+  "command": [
+    "python3",
+    "packages/opus_native/src/silk/stage_oracle.py",
+    "--build",
+    "target/debug/build/moosicbox_opus_native_libopus-f3d2ff998a04d366/out/build",
+    "--rate",
+    "12000",
+    "--channels",
+    "2",
+    "packages/opus_native/src/silk/reference/mb_mixed_stereo.packet"
+  ],
+  "oracle_records": [
+    {
+      "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+      "archive_sha256": "52790c7a566fca71ad236ce073856a7a44f346167816a8e0e26a7ffd8247d8c1",
+      "oracle_sha256": "646e97b079698ee264745907ccbce4b3457513a30088e6b6f5014850247245b5"
+    },
+    {
+      "stage": "stereo_prediction",
+      "weights": [
+        -1033,
+        1033
+      ],
+      "tell": 15
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 1,
+      "quant_offset": 0,
+      "gain_indices": [
+        34,
+        14,
+        10,
+        5
+      ],
+      "seed": 2,
+      "tell": 132
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 1,
+      "quant_offset": 0,
+      "gain_indices": [
+        6,
+        3,
+        27,
+        10
+      ],
+      "seed": 2,
+      "tell": 294
+    }
+  ],
+  "files": {
+    "mb_mixed_stereo.api.pcm": "483847f8ab88bf885859b55beee0ea72755d9acf6049034902c20f79713fdb0f",
+    "mb_mixed_stereo.lr.pcm": "ac855291350d6e185489d6f21146db6151d0b4d9411ba246df6aac4fa65256b5",
+    "mb_mixed_stereo.mid.pcm": "79f5ea84deeb6b298c65de42bad74cc1eb281b03c27cdc20a56d9803cea3235d",
+    "mb_mixed_stereo.packet": "6573d3ae5d5a118ed8ce999c293e3375d2ad410f27e0162333d53e951415e53c",
+    "mb_mixed_stereo.side.pcm": "9606f14bb5c5b3757c2adc7dec1daf88f1d22bd0692852ffddaea3c102a27414"
+  }
+}

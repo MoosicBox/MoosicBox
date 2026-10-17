@@ -38,6 +38,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+mod format;
+pub use format::{REFERENCE_CONFIG, REFERENCE_REVISION, checksum, validate_toc};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -102,6 +105,72 @@ impl TestVector {
             u32::try_from(meta["sample_rate"].as_u64().ok_or("Missing sample_rate")?)?;
         let channels = u8::try_from(meta["channels"].as_u64().ok_or("Missing channels")?)?;
 
+        if pcm_bytes.len() % 2 != 0 {
+            return Err("Odd PCM byte length".into());
+        }
+        if !meta["format_version"].is_null() && meta["format_version"] != 2 {
+            return Err("Unsupported packet format version".into());
+        }
+        if meta["format_version"] == 2 {
+            let frame_samples = usize::try_from(
+                meta["frame_samples"]
+                    .as_u64()
+                    .ok_or("Missing frame_samples")?,
+            )?;
+            let expected_bytes = frame_samples
+                .checked_mul(usize::from(channels))
+                .and_then(|n| n.checked_mul(2))
+                .ok_or("PCM size overflow")?;
+            if expected_bytes == 0 || pcm_bytes.len() != expected_bytes {
+                return Err("PCM length mismatch".into());
+            }
+            let duration = meta["frame_size_ms"]
+                .as_u64()
+                .ok_or("Missing frame_size_ms")?;
+            if u64::try_from(frame_samples)?
+                .checked_mul(1000)
+                .ok_or("Duration overflow")?
+                != u64::from(sample_rate)
+                    .checked_mul(duration)
+                    .ok_or("Duration overflow")?
+            {
+                return Err("Contradictory frame duration".into());
+            }
+            let mode = meta["mode"].as_str().ok_or("Missing mode")?;
+            let bitrate = match mode {
+                "silk" => 16000,
+                "hybrid" => 32000,
+                "celt" => 64000,
+                _ => return Err("Invalid mode".into()),
+            };
+            if meta["reference_revision"] != REFERENCE_REVISION
+                || meta["reference_config"] != REFERENCE_CONFIG
+                || meta["bitrate"] != bitrate
+            {
+                return Err("Reference provenance mismatch".into());
+            }
+            let index = meta["packet_index"]
+                .as_u64()
+                .ok_or("Missing packet_index")?;
+            if meta["decoder_state"] != if index == 0 { "reset" } else { "continued" } {
+                return Err("Packet state/index mismatch".into());
+            }
+            validate_toc(
+                &packet,
+                mode,
+                meta["bandwidth"].as_str().ok_or("Missing bandwidth")?,
+                sample_rate,
+                channels,
+                frame_samples,
+            )?;
+            if meta["pcm_semantics"] != "raw_decoder_output"
+                || meta["packet_fnv1a64"] != checksum(&packet)
+                || meta["pcm_fnv1a64"] != checksum(&pcm_bytes)
+            {
+                return Err("Fixture checksum or PCM semantics mismatch".into());
+            }
+        }
+
         let expected_pcm = pcm_bytes
             .as_chunks::<2>()
             .0
@@ -153,6 +222,76 @@ impl TestVector {
         }
 
         Ok(vectors)
+    }
+}
+
+/// Ordered reference packets, decoded with one persistent decoder.
+#[derive(Debug, Clone)]
+pub struct TestSequence {
+    /// Directory name identifying this sequence.
+    pub name: String,
+    /// Packets in decode order; PCM includes the reference decoder's raw delay.
+    pub packets: Vec<TestVector>,
+}
+
+impl TestSequence {
+    /// Loads an explicit `sequence.json` v1 manifest and validates every packet.
+    ///
+    /// # Errors
+    /// * Returns an error for missing files, invalid JSON, unsupported semantics,
+    ///   unsafe paths, noncontiguous packet indices, invalid TOCs or checksums.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = path.as_ref();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(path.join("sequence.json"))?)?;
+        if manifest["format_version"] != 1
+            || manifest["decoder_state"] != "persistent"
+            || manifest["pcm_semantics"] != "raw_decoder_output"
+        {
+            return Err("Unsupported sequence format".into());
+        }
+        let entries = manifest["packets"]
+            .as_array()
+            .ok_or("Missing sequence packets")?;
+        if entries.is_empty() {
+            return Err("Empty sequence".into());
+        }
+        let mut packets = Vec::new();
+        for (index, entry) in entries.iter().enumerate() {
+            let expected = if index == 0 {
+                ".".to_owned()
+            } else {
+                format!("packet_{index:03}")
+            };
+            if entry.as_str() != Some(expected.as_str()) {
+                return Err("Noncanonical sequence packet path".into());
+            }
+            let dir = path.join(expected);
+            let meta: serde_json::Value =
+                serde_json::from_slice(&fs::read(dir.join("meta.json"))?)?;
+            if meta["format_version"] != 2
+                || meta["packet_index"].as_u64() != Some(u64::try_from(index)?)
+                || meta["decoder_state"] != if index == 0 { "reset" } else { "continued" }
+            {
+                return Err("Sequence state/index mismatch".into());
+            }
+            let vector = TestVector::load(dir)?;
+            if let Some(first) = packets.first() {
+                let first: &TestVector = first;
+                if first.sample_rate != vector.sample_rate || first.channels != vector.channels {
+                    return Err("Sequence output configuration changed".into());
+                }
+            }
+            packets.push(vector);
+        }
+        Ok(Self {
+            name: path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or("Invalid sequence name")?
+                .to_owned(),
+            packets,
+        })
     }
 }
 
@@ -225,8 +364,49 @@ pub fn vectors_available() -> bool {
 }
 
 #[cfg(test)]
+mod mutation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_mislabeled_tocs() {
+        assert!(validate_toc(&[0x08], "celt", "nb", 8000, 1, 160).is_err());
+        assert!(validate_toc(&[0xf8], "hybrid", "fb", 48000, 1, 960).is_err());
+        assert!(validate_toc(&[0xf8], "celt", "swb", 48000, 1, 960).is_err());
+        assert!(validate_toc(&[0xf8], "celt", "fb", 48000, 2, 960).is_err());
+        assert!(validate_toc(&[0xf8], "celt", "fb", 48000, 1, 480).is_err());
+        assert!(validate_toc(&[], "celt", "fb", 48000, 1, 960).is_err());
+        assert!(validate_toc(&[0xf8], "celt", "fb", 48000, 1, 960).is_ok());
+        assert_eq!(checksum(b"hello"), "a430d84680aabd0b");
+    }
+
+    #[test]
+    fn inventory_loads_every_case() {
+        let root = test_vectors_dir();
+        let inventory: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join("inventory.json")).unwrap()).unwrap();
+        let mut singles = 0;
+        let mut sequences = 0;
+        for case in inventory["cases"].as_array().unwrap() {
+            let path = root.join(case["path"].as_str().unwrap());
+            if case["kind"] == "sequence" {
+                let sequence = TestSequence::load(&path).unwrap();
+                assert_eq!(sequence.packets.len(), 4);
+                assert_eq!(
+                    TestVector::load(&path).unwrap().packet,
+                    sequence.packets[0].packet
+                );
+                sequences += 1;
+            } else {
+                TestVector::load(path).unwrap();
+                singles += 1;
+            }
+        }
+        assert_eq!(singles, 38);
+        assert_eq!(sequences, 5);
+    }
 
     #[test]
     fn test_snr_identical_signals() {
@@ -251,3 +431,6 @@ mod tests {
         assert!(snr > 40.0);
     }
 }
+
+/// Complete mandatory corpus identity verification.
+pub mod frozen;

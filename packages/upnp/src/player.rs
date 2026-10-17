@@ -18,9 +18,7 @@ use std::{
 use async_trait::async_trait;
 use flume::{Receiver, Sender, unbounded};
 use moosicbox_async_service::CancellationToken;
-use moosicbox_audio_output::{
-    AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
-};
+use moosicbox_audio_output::{AudioOutputError, AudioOutputFactory, AudioSpec, AudioWrite};
 use moosicbox_music_api::{SourceToMusicApi, models::TrackAudioQuality};
 use moosicbox_session::models::UpdateSession;
 use rupnp::{Device, Service};
@@ -655,10 +653,10 @@ impl TryFrom<UpnpPlayer> for AudioOutputFactory {
     fn try_from(player: UpnpPlayer) -> Result<Self, Self::Error> {
         let name = player.device.friendly_name().to_string();
         let udn = player.device.udn();
-        let spec = SignalSpec {
-            rate: 384_000,
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
-        };
+        let spec = AudioSpec::new(
+            384_000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
 
         let id = format!("upnp:{udn}");
 
@@ -697,10 +695,10 @@ impl TryFrom<UpnpAvTransportService> for AudioOutputFactory {
     fn try_from(player: UpnpAvTransportService) -> Result<Self, Self::Error> {
         let name = player.device.friendly_name().to_string();
         let udn = player.device.udn();
-        let spec = SignalSpec {
-            rate: 384_000,
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
-        };
+        let spec = AudioSpec::new(
+            384_000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
 
         let id = format!("upnp:{udn}");
 

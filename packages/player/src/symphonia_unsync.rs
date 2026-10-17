@@ -5,10 +5,10 @@
 //! or when blocking playback is acceptable.
 
 use flume::Receiver;
-use moosicbox_audio_decoder::{DecodeError, unsync::decode};
+use moosicbox_audio_decoder::{DecodeError, DecodeOptions, unsync::decode_with_options};
 use symphonia::core::{
-    audio::AudioBuffer, codecs::DecoderOptions, formats::FormatOptions, io::MediaSourceStream,
-    meta::MetadataOptions, probe::Hint,
+    audio::AudioBuffer, codecs::audio::AudioDecoderOptions, formats::FormatOptions,
+    formats::probe::Hint, io::MediaSourceStream, meta::MetadataOptions,
 };
 use thiserror::Error;
 
@@ -40,38 +40,99 @@ pub enum PlaybackError {
 /// * If failed to probe for the media metadata format
 #[allow(clippy::too_many_arguments)]
 pub fn play_media_source(
-    media_source_stream: MediaSourceStream,
+    media_source_stream: MediaSourceStream<'static>,
     hint: &Hint,
     enable_gapless: bool,
     verify: bool,
     track_num: Option<usize>,
     seek: Option<f64>,
 ) -> Result<Receiver<AudioBuffer<f32>>, PlaybackError> {
+    play_media_source_with_options(
+        media_source_stream,
+        hint,
+        DecodeOptions {
+            decoder: AudioDecoderOptions::default()
+                .gapless(enable_gapless)
+                .verify(verify),
+            ..DecodeOptions::default()
+        },
+        track_num,
+        seek,
+    )
+}
+
+/// Decode with explicit backend selection into a PCM receiver.
+///
+/// # Errors
+/// * Returns source, decoding, or unavailable-backend errors.
+pub fn play_media_source_with_options(
+    media_source_stream: MediaSourceStream<'static>,
+    hint: &Hint,
+    options: DecodeOptions,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<Receiver<AudioBuffer<f32>>, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
-    let format_opts = FormatOptions {
-        enable_gapless,
-        ..Default::default()
-    };
+    let format_opts = FormatOptions::default();
 
     // Use the default options for metadata readers.
     let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().format(
+    match symphonia::default::get_probe().probe(
         hint,
         media_source_stream,
-        &format_opts,
-        &metadata_opts,
+        format_opts,
+        metadata_opts,
     ) {
         Ok(probed) => {
             // If present, parse the seek argument.
             let seek_time = seek;
 
             // Set the decoder options.
-            let decode_opts = DecoderOptions { verify };
-
             // Play it!
-            Ok(decode(probed.format, track_num, seek_time, decode_opts)?)
+            Ok(decode_with_options(probed, track_num, seek_time, options)?)
+        }
+        Err(err) => {
+            // The input was not supported by any format reader.
+            log::info!("the input is not supported: {err:?}");
+            Err(PlaybackError::Symphonia(err))
+        }
+    }
+}
+/// Decode to an ordered stream preserving fatal worker errors.
+///
+/// # Errors
+/// * Returns source, initialization, or unavailable-backend errors.
+pub fn play_media_source_with_options_result(
+    media_source_stream: MediaSourceStream<'static>,
+    hint: &Hint,
+    options: DecodeOptions,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<Receiver<Result<AudioBuffer<f32>, DecodeError>>, PlaybackError> {
+    // Use the default options for format readers other than for gapless playback.
+    let format_opts = FormatOptions::default();
+
+    // Use the default options for metadata readers.
+    let metadata_opts = MetadataOptions::default();
+
+    // Probe the media source stream for metadata and get the format reader.
+    match symphonia::default::get_probe().probe(
+        hint,
+        media_source_stream,
+        format_opts,
+        metadata_opts,
+    ) {
+        Ok(probed) => {
+            // If present, parse the seek argument.
+            let seek_time = seek;
+
+            // Set the decoder options.
+            // Play it!
+            Ok(moosicbox_audio_decoder::unsync::decode_with_options_result(
+                probed, track_num, seek_time, options,
+            )?)
         }
         Err(err) => {
             // The input was not supported by any format reader.

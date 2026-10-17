@@ -523,7 +523,7 @@ pub fn decode_pvq_vector(range_decoder: &mut RangeDecoder, n: u32, k: u32) -> Re
             0
         };
         let v2 = compute_pvq_size(n_remaining, k_remaining);
-        let mut p = (v1.saturating_add(v2)) / 2;
+        let mut p = v1.midpoint(v2);
 
         // Step 2: Decode sign
         let sgn = if i < p { 1 } else { -1 };
@@ -920,7 +920,7 @@ pub fn apply_spreading(vec: &mut [f32], spread: u8, k: u32, nb_blocks: usize) ->
     clippy::cast_possible_wrap,
     dead_code
 )]
-fn bitexact_cos(x: i32) -> i32 {
+pub(super) fn bitexact_cos(x: i32) -> i32 {
     // Clamp to valid range [0, 16384] and convert to i16
     let x_clamped = x.clamp(0, 16384);
 
@@ -970,7 +970,7 @@ fn bitexact_cos(x: i32) -> i32 {
     clippy::cast_sign_loss,
     dead_code
 )]
-fn bitexact_log2tan(isin: i32, icos: i32) -> i32 {
+pub(super) fn bitexact_log2tan(isin: i32, icos: i32) -> i32 {
     // Handle edge cases
     if icos <= 0 || isin <= 0 {
         return if isin <= 0 { -32768 } else { 32767 };

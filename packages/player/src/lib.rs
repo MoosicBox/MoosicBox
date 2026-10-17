@@ -76,7 +76,10 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use ::symphonia::core::{io::MediaSource, probe::Hint};
+/// Explicit per-playback decoder options and Opus implementation selection.
+pub use moosicbox_audio_decoder::{DecodeOptions, OpusDecodeBackend};
+
+use ::symphonia::core::{formats::probe::Hint, io::MediaSource};
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
 use flume::SendError;

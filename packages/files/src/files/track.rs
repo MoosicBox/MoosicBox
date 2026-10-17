@@ -16,10 +16,11 @@ use flume::RecvError;
 use futures::prelude::*;
 use futures_core::Stream;
 use moosicbox_audio_decoder::{
-    DecodeError, decode_file_path_str_async, decode_media_source_async,
+    DecodeError, DecodeOptions, decode_file_path_str_async_with_options, decode_media_source_async,
+    decode_media_source_async_with_options,
     media_sources::remote_bytestream::RemoteByteStreamMediaSource,
 };
-use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
+use moosicbox_audio_output::{AudioOutputError, AudioSpec, AudioWrite};
 use moosicbox_music_api::{
     MusicApi, MusicApis, SourceToMusicApi as _,
     models::{TrackAudioQuality, TrackSource},
@@ -33,11 +34,9 @@ use moosicbox_stream_utils::{
 use serde::{Deserialize, Serialize};
 use switchy_async::util::CancellationToken;
 use symphonia::core::{
-    audio::{AudioBuffer, Signal},
-    conv::IntoSample,
+    audio::{Audio, AudioBuffer, conv::IntoSample, sample::Sample},
+    formats::probe::Hint,
     io::{MediaSourceStream, MediaSourceStreamOptions},
-    probe::Hint,
-    sample::Sample,
     util::clamp::clamp_i16,
 };
 use thiserror::Error;
@@ -334,6 +333,9 @@ pub async fn get_track_bytes(
 /// Errors that can occur when generating silent audio bytes.
 #[derive(Debug, Error)]
 pub enum GetSilenceBytesError {
+    /// The requested silence cannot fit in an audio buffer on this platform.
+    #[error("Silence duration exceeds buffer capacity")]
+    DurationTooLarge,
     /// Invalid or unsupported audio source
     #[error("Invalid source")]
     InvalidSource,
@@ -349,6 +351,7 @@ pub enum GetSilenceBytesError {
 ///
 /// # Errors
 ///
+/// * `GetSilenceBytesError::DurationTooLarge` - If the silence cannot fit in a buffer on this platform
 /// * `GetSilenceBytesError::AudioOutput` - If failed to encode the audio bytes
 /// * `GetSilenceBytesError::InvalidSource` - If the `AudioFormat` is `Source` (invalid for generated audio)
 ///
@@ -367,12 +370,12 @@ pub fn get_silence_bytes(
     let stream = writer.stream();
 
     #[allow(unused)]
-    let spec = SignalSpec {
-        rate: 44_100,
-        channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
-    };
+    let spec = AudioSpec::new(
+        44_100,
+        symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+    );
     #[allow(unused)]
-    let duration: u64 = u64::from(spec.rate) * duration;
+    let duration: u64 = u64::from(spec.rate()) * duration;
 
     #[allow(unreachable_code)]
     switchy_async::runtime::Handle::current().spawn_blocking_with_name(
@@ -386,7 +389,7 @@ pub fn get_silence_bytes(
                     {
                         Box::new(
                             moosicbox_audio_output::encoder::aac::AacEncoder::with_writer(writer)
-                                .open(spec, duration),
+                                .open(spec.clone(), duration.into()),
                         )
                     }
                     #[cfg(not(feature = "encoder-aac"))]
@@ -398,7 +401,7 @@ pub fn get_silence_bytes(
                     {
                         Box::new(
                             moosicbox_audio_output::encoder::flac::FlacEncoder::with_writer(writer)
-                                .open(spec, duration),
+                                .open(spec.clone(), duration.into()),
                         )
                     }
                     #[cfg(not(feature = "encoder-flac"))]
@@ -410,7 +413,7 @@ pub fn get_silence_bytes(
                     {
                         Box::new(
                             moosicbox_audio_output::encoder::mp3::Mp3Encoder::with_writer(writer)
-                                .open(spec, duration),
+                                .open(spec.clone(), duration.into()),
                         )
                     }
                     #[cfg(not(feature = "encoder-mp3"))]
@@ -422,7 +425,7 @@ pub fn get_silence_bytes(
                     {
                         Box::new(
                             moosicbox_audio_output::encoder::opus::OpusEncoder::with_writer(writer)
-                                .open(spec, duration),
+                                .open(spec.clone(), duration.into()),
                         )
                     }
                     #[cfg(not(feature = "encoder-opus"))]
@@ -438,7 +441,11 @@ pub fn get_silence_bytes(
                 feature = "format-opus"
             ))]
             {
-                let mut buffer = AudioBuffer::<f32>::new(duration, spec);
+                let mut buffer = AudioBuffer::<f32>::new(
+                    spec,
+                    usize::try_from(duration)
+                        .map_err(|_| GetSilenceBytesError::DurationTooLarge)?,
+                );
                 buffer.render_silence(None);
                 encoder.write(buffer)?;
                 encoder.flush()?;
@@ -483,9 +490,60 @@ pub async fn get_audio_bytes(
     start: Option<u64>,
     end: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
+    let mut options = DecodeOptions::default();
+    options.decoder.verify = true;
+    get_audio_bytes_impl(source, format, size, start, end, options, true).await
+}
+
+/// Fetch local or remote audio with explicit decoding options.
+///
+/// Explicit options bypass the legacy shared encoded-byte cache so backend/configuration
+/// selection cannot be satisfied by bytes encoded using a different decoder.
+///
+/// # Errors
+/// * Returns the source, streaming, and encoding errors described by [`get_audio_bytes`].
+pub async fn get_audio_bytes_with_options(
+    source: TrackSource,
+    format: AudioFormat,
+    size: Option<u64>,
+    start: Option<u64>,
+    end: Option<u64>,
+    options: DecodeOptions,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    get_audio_bytes_impl(source, format, size, start, end, options, false).await
+}
+
+// Preserve encoded bytes, then expose decoder completion as a terminal stream error.
+// ByteWriter itself cannot carry errors; this channel also detects a dropped worker.
+fn decoded_byte_stream(
+    stream: impl Stream<Item = BytesStreamItem>,
+    completion: flume::Receiver<Result<(), std::io::Error>>,
+) -> impl Stream<Item = BytesStreamItem> {
+    stream.chain(
+        futures::stream::once(async move {
+            match completion.recv_async().await {
+                Ok(Ok(())) => None,
+                Ok(Err(error)) => Some(Err(error)),
+                Err(error) => Some(Err(std::io::Error::other(error))),
+            }
+        })
+        .filter_map(futures::future::ready),
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+async fn get_audio_bytes_impl(
+    source: TrackSource,
+    format: AudioFormat,
+    size: Option<u64>,
+    start: Option<u64>,
+    end: Option<u64>,
+    options: DecodeOptions,
+    cache: bool,
+) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
 
-    get_or_fetch_track(&source, format, size, start, end, {
+    let fetch: super::track_pool::FetchTrackBytesFunc = Box::new({
         let source = source.clone();
         move |start, end, size| {
             let source = source.clone();
@@ -493,8 +551,9 @@ pub async fn get_audio_bytes(
                 log::debug!("get_audio_bytes: cache miss; eagerly fetching audio bytes");
                 let writer = ByteWriter::default();
                 let writer_id = writer.id;
+                let (completion, receiver) = flume::bounded(1);
                 #[allow(unused)]
-                let stream = writer.stream();
+                let stream = decoded_byte_stream(writer.stream(), receiver);
                 let same_format = format == AudioFormat::Source || source.format() == format;
 
                 let track_bytes = if same_format {
@@ -503,7 +562,15 @@ pub async fn get_audio_bytes(
                             request_audio_bytes_from_file(path, format, size, start, end).await?
                         }
                         TrackSource::RemoteUrl { url, headers, .. } => {
-                            request_track_bytes_from_url(&url, headers.as_deref(), start, end, format, size).await?
+                            request_track_bytes_from_url(
+                                &url,
+                                headers.as_deref(),
+                                start,
+                                end,
+                                format,
+                                size,
+                            )
+                            .await?
                         }
                     }
                 } else {
@@ -575,61 +642,53 @@ pub async fn get_audio_bytes(
                                 panic!("No encoder-opus feature");
                             }
                             AudioFormat::Source => {
-                                return Err(moosicbox_audio_decoder::DecodeError::InvalidSource)
+                                return Err(moosicbox_audio_decoder::DecodeError::InvalidSource);
                             }
                         })
                     };
 
-                    match &source {
+                    let result = match &source {
                         TrackSource::LocalFilePath { path, .. } => {
-                            if let Err(err) = decode_file_path_str_async(
+                            decode_file_path_str_async_with_options(
                                 path,
                                 get_handler,
-                                true,
-                                true,
+                                options,
                                 None,
                                 None,
                             )
                             .await
-                            {
-                                log::error!(
-                                    "Failed to encode to {format} (source={}): {err:?}",
-                                    source.format()
-                                );
-                            }
                         }
                         TrackSource::RemoteUrl { url, .. } => {
-                            let source_format = source.format();
                             let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
                                 url.clone(),
                                 size,
                                 true,
-                                size.is_some(), // HTTP range requests work for any format when size is known
+                                size.is_some(),
                                 CancellationToken::new(),
                             )
                             .into();
-                            if let Err(err) = decode_media_source_async(
+                            decode_media_source_async_with_options(
                                 MediaSourceStream::new(
                                     Box::new(source),
                                     MediaSourceStreamOptions::default(),
                                 ),
                                 &Hint::new(),
                                 get_handler,
-                                true,
-                                true,
+                                options,
                                 None,
                                 None,
                             )
                             .await
-                            {
-                                log::error!(
-                                    "Failed to encode to {format} (source={source_format}): {err:?}",
-                                );
-                            }
                         }
+                    };
+                    if let Err(err) = &result {
+                        log::error!(
+                            "Failed to encode to {format} (source={}): {err:?}",
+                            source.format()
+                        );
                     }
+                    let _ = completion.send(result.map(|_| ()).map_err(std::io::Error::other));
 
-                    #[allow(clippy::match_wildcard_for_single_variants)]
                     match source {
                         TrackSource::LocalFilePath { path, .. } => match format {
                             AudioFormat::Source => {
@@ -648,7 +707,15 @@ pub async fn get_audio_bytes(
                         },
                         TrackSource::RemoteUrl { url, headers, .. } => match format {
                             AudioFormat::Source => {
-                                request_track_bytes_from_url(&url, headers.as_deref(), start, end, format, size).await?
+                                request_track_bytes_from_url(
+                                    &url,
+                                    headers.as_deref(),
+                                    start,
+                                    end,
+                                    format,
+                                    size,
+                                )
+                                .await?
                             }
                             #[allow(unreachable_patterns)]
                             _ => TrackBytes {
@@ -666,8 +733,14 @@ pub async fn get_audio_bytes(
                 Ok(track_bytes)
             })
         }
-    })
-    .await
+    });
+    // The legacy byte pool logs upstream errors and cannot replay them to readers.
+    // Keep it for passthrough only; transcoding must preserve terminal decode errors.
+    if cache && (format == AudioFormat::Source || source.format() == format) {
+        get_or_fetch_track(&source, format, size, start, end, fetch).await
+    } else {
+        fetch(start, end, size).await
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1014,12 +1087,17 @@ pub fn visualize<S>(input: &AudioBuffer<S>) -> Vec<u8>
 where
     S: Sample + IntoSample<i16>,
 {
-    let channels = input.spec().channels.count();
+    let channels = input.spec().channels().count();
 
     let mut values = vec![0; input.capacity()];
 
     for c in 0..channels {
-        for (i, x) in input.chan(c).iter().enumerate() {
+        for (i, x) in input
+            .plane(c)
+            .expect("valid audio channel")
+            .iter()
+            .enumerate()
+        {
             let value = u16::try_from(clamp_i16(i32::from((*x).into_sample()).abs())).unwrap();
             values[i] += (value / DIV) as u8;
         }
@@ -1198,6 +1276,92 @@ pub async fn get_or_init_track_size(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(
+        feature = "encoder-flac",
+        feature = "decoder-opus-native",
+        not(feature = "decoder-opus")
+    ))]
+    #[switchy_async::test]
+    async fn public_file_transcode_reports_unavailable_backend_in_stream() {
+        use moosicbox_music_models::{ApiSource, TrackApiSource};
+        let source = TrackSource::LocalFilePath {
+            format: AudioFormat::Opus,
+            path: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/silk.ogg").to_owned(),
+            track_id: None,
+            source: TrackApiSource::Api(ApiSource::library()),
+        };
+        // Compatibility defaults request Libopus, unavailable in this native-only build.
+        // This exercises the legacy API as well as explicit options (neither may hide errors).
+        let bytes = get_audio_bytes(source.clone(), AudioFormat::Flac, None, None, None)
+            .await
+            .unwrap();
+        let items: Vec<_> = bytes.stream.collect().await;
+        assert_eq!(items.len(), 1);
+        assert!(
+            items[0]
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap_err()
+                .to_string()
+                .contains("backend is not enabled")
+        );
+        let bytes = get_audio_bytes_with_options(
+            source,
+            AudioFormat::Flac,
+            None,
+            None,
+            None,
+            DecodeOptions::default(),
+        )
+        .await
+        .unwrap();
+        let items: Vec<_> = bytes.stream.collect().await;
+        assert_eq!(items.len(), 1);
+        assert!(items[0].as_ref().unwrap().is_err());
+    }
+
+    #[switchy_async::test]
+    async fn decoded_bytes_surface_worker_failure_after_partial_output() {
+        let mut writer = ByteWriter::default();
+        let (sender, receiver) = flume::bounded(1);
+        let stream = decoded_byte_stream(writer.stream(), receiver);
+        std::io::Write::write_all(&mut writer, b"partial").unwrap();
+        drop(writer);
+        sender
+            .send(Err(std::io::Error::other(
+                "native configuration unsupported",
+            )))
+            .unwrap();
+        let items: Vec<_> = stream.collect().await;
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].as_ref().unwrap().as_ref(), b"partial");
+        assert_eq!(
+            items[1].as_ref().unwrap_err().to_string(),
+            "native configuration unsupported"
+        );
+    }
+    #[switchy_async::test]
+    async fn decoded_bytes_success_and_dropped_worker_are_distinct() {
+        for success in [true, false] {
+            let writer = ByteWriter::default();
+            let (sender, receiver) = flume::bounded(1);
+            let stream = decoded_byte_stream(writer.stream(), receiver);
+            drop(writer);
+            if success {
+                sender.send(Ok(())).unwrap();
+            }
+            drop(sender);
+            let items: Vec<_> = stream.collect().await;
+            if success {
+                assert!(items.is_empty());
+            } else {
+                assert_eq!(items.len(), 1);
+                assert!(items[0].is_err());
+            }
+        }
+    }
+
     use super::*;
 
     #[cfg(feature = "format-aac")]
@@ -1246,12 +1410,11 @@ mod tests {
         {
             use symphonia::core::audio::AudioBuffer;
 
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let buffer = AudioBuffer::<i16>::new(0, spec);
+            let buffer = AudioBuffer::<i16>::new(spec, 0);
             let result = visualize(&buffer);
             assert_eq!(result.len(), 0);
         }
@@ -1260,18 +1423,17 @@ mod tests {
     #[test_log::test]
     fn test_visualize_with_data() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let mut buffer = AudioBuffer::<i16>::new(100, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 100);
 
             // Fill with some test data
-            for ch in 0..buffer.spec().channels.count() {
-                let chan = buffer.chan_mut(ch);
+            for ch in 0..buffer.spec().channels().count() {
+                let chan = buffer.plane_mut(ch).expect("valid audio channel");
                 for (i, sample) in chan.iter_mut().enumerate() {
                     #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
                     {
@@ -1290,20 +1452,22 @@ mod tests {
     #[test_log::test]
     fn test_visualize_mono_audio() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
             // Test with mono (single channel) audio
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT,
+                symphonia::core::audio::Channels::from(
+                    symphonia::core::audio::Position::FRONT_LEFT,
+                ),
             );
-            let mut buffer = AudioBuffer::<i16>::new(50, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 50);
 
             // Render silence first to materialize samples in the buffer
             buffer.render_silence(None);
 
             // Now modify the samples
-            let chan = buffer.chan_mut(0);
+            let chan = buffer.plane_mut(0).expect("valid audio channel");
             for (i, sample) in chan.iter_mut().enumerate() {
                 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
                 {
@@ -1325,27 +1489,26 @@ mod tests {
     #[test_log::test]
     fn test_visualize_negative_values() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
             // Test that negative values are correctly converted to positive via abs()
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let mut buffer = AudioBuffer::<i16>::new(10, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 10);
 
             // Render silence first to materialize samples in the buffer
             buffer.render_silence(None);
 
             // Fill channel 0 with negative values
-            let chan0 = buffer.chan_mut(0);
+            let chan0 = buffer.plane_mut(0).expect("valid audio channel");
             for sample in chan0.iter_mut() {
                 *sample = -1000; // Negative value
             }
 
             // Fill channel 1 with same positive values
-            let chan1 = buffer.chan_mut(1);
+            let chan1 = buffer.plane_mut(1).expect("valid audio channel");
             for sample in chan1.iter_mut() {
                 *sample = 1000; // Positive value
             }
@@ -1364,27 +1527,26 @@ mod tests {
     #[test_log::test]
     fn test_visualize_asymmetric_channels() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
             // Test averaging with different values per channel
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let mut buffer = AudioBuffer::<i16>::new(5, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 5);
 
             // Render silence first to materialize samples in the buffer
             buffer.render_silence(None);
 
             // Channel 0: high amplitude
-            let chan0 = buffer.chan_mut(0);
+            let chan0 = buffer.plane_mut(0).expect("valid audio channel");
             for sample in chan0.iter_mut() {
                 *sample = 2570; // 2570 / DIV = 10
             }
 
             // Channel 1: low amplitude
-            let chan1 = buffer.chan_mut(1);
+            let chan1 = buffer.plane_mut(1).expect("valid audio channel");
             for sample in chan1.iter_mut() {
                 *sample = 0;
             }
@@ -1402,21 +1564,20 @@ mod tests {
     #[test_log::test]
     fn test_visualize_maximum_amplitude() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
             // Test with maximum positive amplitude (i16::MAX = 32767)
             // Verifies no overflow when handling maximum sample values
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let mut buffer = AudioBuffer::<i16>::new(5, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 5);
             buffer.render_silence(None);
 
             // Fill both channels with maximum amplitude
             for ch in 0..2 {
-                let chan = buffer.chan_mut(ch);
+                let chan = buffer.plane_mut(ch).expect("valid audio channel");
                 for sample in chan.iter_mut() {
                     *sample = i16::MAX; // 32767
                 }
@@ -1435,21 +1596,20 @@ mod tests {
     #[test_log::test]
     fn test_visualize_minimum_amplitude() {
         {
-            use symphonia::core::audio::Signal as _;
+            use symphonia::core::audio::AudioMut as _;
 
             // Test with minimum negative amplitude (i16::MIN = -32768)
             // Verifies the clamping behavior for values that would overflow when negated
-            let spec = symphonia::core::audio::SignalSpec::new(
+            let spec = symphonia::core::audio::AudioSpec::new(
                 44100,
-                symphonia::core::audio::Channels::FRONT_LEFT
-                    | symphonia::core::audio::Channels::FRONT_RIGHT,
+                symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
             );
-            let mut buffer = AudioBuffer::<i16>::new(5, spec);
+            let mut buffer = AudioBuffer::<i16>::new(spec, 5);
             buffer.render_silence(None);
 
             // Fill both channels with minimum amplitude
             for ch in 0..2 {
-                let chan = buffer.chan_mut(ch);
+                let chan = buffer.plane_mut(ch).expect("valid audio channel");
                 for sample in chan.iter_mut() {
                     *sample = i16::MIN; // -32768
                 }

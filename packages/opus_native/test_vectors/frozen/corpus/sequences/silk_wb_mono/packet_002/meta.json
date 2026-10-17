@@ -1,0 +1,9 @@
+{
+      "format_version": 2, "sample_rate": 16000, "channels": 1,
+      "frame_size_ms": 20, "frame_samples": 320,
+      "mode": "silk", "bandwidth": "wb",
+      "pcm_semantics": "raw_decoder_output", "packet_index": 2,
+      "decoder_state": "continued", "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+      "reference_config": "fixed-point;scalar;float-api=off;force-mode;CBR;complexity=10",
+      "bitrate": 16000, "packet_fnv1a64": "c7b33938487da00f", "pcm_fnv1a64": "0786d48ef557d216"
+    }

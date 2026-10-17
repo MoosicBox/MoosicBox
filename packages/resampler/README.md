@@ -26,10 +26,10 @@ moosicbox_resampler = "0.1.4"
 
 ```rust
 use moosicbox_resampler::Resampler;
-use symphonia::core::audio::{AudioBuffer, SignalSpec, Channels};
+use symphonia::core::audio::{AudioBuffer, AudioSpec, Position};
 
 // Configure signal spec for stereo input
-let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
 
 // Create resampler: 44.1kHz -> 48kHz
 // duration = number of input samples per processing chunk
@@ -65,7 +65,7 @@ let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 2048);
 let input: AudioBuffer<f32> = /* ... */;
 
 // Resample and get output as AudioBuffer
-if let Some(output_buffer) = resampler.resample_to_audio_buffer(&input) {
+if let Some(output_buffer) = resampler.resample_to_audio_buffer(&input)? {
     // output_buffer is AudioBuffer<f32>
     println!("Output buffer duration: {}", output_buffer.capacity());
 }
@@ -75,13 +75,13 @@ if let Some(output_buffer) = resampler.resample_to_audio_buffer(&input) {
 
 ```rust
 use moosicbox_resampler::to_audio_buffer;
-use symphonia::core::audio::{SignalSpec, Channels};
+use symphonia::core::audio::{AudioSpec, Channels};
 
 // Convert interleaved samples to AudioBuffer
 let interleaved_samples: &[f32] = &[/* ... */];
-let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+let spec = AudioSpec::new(48000, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
 
-let audio_buffer = to_audio_buffer(interleaved_samples, spec);
+let audio_buffer = to_audio_buffer(interleaved_samples, spec)?;
 ```
 
 ## Programming Interface
@@ -92,7 +92,7 @@ let audio_buffer = to_audio_buffer(interleaved_samples, spec);
 pub struct Resampler<T> {
     // Internal rubato resampler (FftFixedIn)
     // Input/output buffers
-    pub spec: SignalSpec,
+    pub spec: AudioSpec,
 }
 
 impl<T> Resampler<T>
@@ -105,7 +105,7 @@ where
     /// * `spec` - Input signal specification (sample rate, channels, etc.)
     /// * `to_sample_rate` - Target output sample rate
     /// * `duration` - Chunk size in frames for fixed-size processing
-    pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self;
+    pub fn new(spec: AudioSpec, to_sample_rate: usize, duration: u64) -> Self;
 
     /// Resample a planar audio buffer to interleaved output
     ///
@@ -113,7 +113,7 @@ where
     pub fn resample(&mut self, input: &AudioBuffer<f32>) -> Option<&[T]>;
 
     /// Resample and return output as AudioBuffer
-    pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>>;
+    pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Result<Option<AudioBuffer<T>>, AudioBufferConversionError>;
 
     /// Flush remaining buffered samples
     ///
@@ -123,8 +123,8 @@ where
 
 /// Convert interleaved samples to Symphonia AudioBuffer
 ///
-/// Note: Currently only supports stereo (2-channel) audio
-pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
+/// Supports any nonzero channel count; rejects incomplete interleaved frames.
+pub fn to_audio_buffer<S>(samples: &[S], spec: AudioSpec) -> Result<AudioBuffer<S>, AudioBufferConversionError>
 where
     S: Sample;
 ```
@@ -152,7 +152,9 @@ The resampler operates on fixed-size chunks:
 
 - Input: Planar (non-interleaved) via Symphonia `AudioBuffer`
 - Output: Interleaved samples
-- `to_audio_buffer` currently supports stereo (2-channel) only
+- `to_audio_buffer` supports mono, stereo, and multichannel audio in specification order
+- Conversion rejects zero channels or incomplete frames; empty input yields zero frames
+- `output_spec()` supplies the destination rate; public `spec` describes input audio
 
 ## Dependencies
 

@@ -40,7 +40,7 @@ use super::track::{BytesStreamItem, GetTrackBytesError, TrackBytes};
 pub static HANDLE: LazyLock<Arc<RwLock<Option<service::Handle>>>> =
     LazyLock::new(|| Arc::new(RwLock::new(None)));
 
-type FetchTrackBytesFunc = Box<
+pub(super) type FetchTrackBytesFunc = Box<
     dyn Fn(
             Option<u64>,
             Option<u64>,

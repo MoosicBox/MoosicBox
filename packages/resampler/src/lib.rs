@@ -8,17 +8,17 @@
 //!
 //! ```rust
 //! # use moosicbox_resampler::Resampler;
-//! # use symphonia::core::audio::{AudioBuffer, SignalSpec, Signal, Channels};
+//! # use symphonia::core::audio::{AudioBuffer, AudioSpec, Audio, AudioMut, Position};
 //! # use symphonia::core::units::Duration;
 //! # fn example() {
 //! // Create a signal specification for stereo 44.1kHz audio
-//! let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+//! let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
 //!
 //! // Create a resampler to convert to 48kHz with a duration of 1024 samples
-//! let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+//! let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 //!
 //! // Resample an audio buffer (in practice, this would come from a decoder)
-//! # let input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
+//! # let input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
 //! if let Some(resampled) = resampler.resample(&input_buffer) {
 //!     // Use the resampled audio data
 //!     println!("Resampled {} samples", resampled.len());
@@ -30,9 +30,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, clippy::struct_field_names)]
 
-use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
-use symphonia::core::conv::{IntoSample, ReversibleSample};
-use symphonia::core::sample::Sample;
+use symphonia::core::audio::conv::{IntoSample, ReversibleSample};
+use symphonia::core::audio::sample::Sample;
+use symphonia::core::audio::{Audio, AudioBuffer, AudioMut, AudioSpec};
 
 /// Audio resampler for converting between sample rates.
 ///
@@ -43,8 +43,9 @@ pub struct Resampler<T> {
     output: Vec<Vec<f32>>,
     interleaved: Vec<T>,
     duration: usize,
-    /// Signal specification for the output audio.
-    pub spec: SignalSpec,
+    output_spec: AudioSpec,
+    /// Signal specification for the input audio.
+    pub spec: AudioSpec,
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
@@ -107,18 +108,18 @@ where
     ///
     /// ```rust
     /// use moosicbox_resampler::Resampler;
-    /// use symphonia::core::audio::{Channels, SignalSpec};
+    /// use symphonia::core::audio::{Position, AudioSpec};
     ///
-    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-    /// let _resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    /// let spec = AudioSpec::new(44_100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+    /// let _resampler: Resampler<f32> = Resampler::new(spec.clone(), 48_000, 1_024);
     /// ```
     #[must_use]
-    pub fn new(spec: SignalSpec, to_sample_rate: usize, duration: u64) -> Self {
+    pub fn new(spec: AudioSpec, to_sample_rate: usize, duration: u64) -> Self {
         let duration = usize::try_from(duration).unwrap();
-        let num_channels = spec.channels.count();
+        let num_channels = spec.channels().count();
 
         let resampler = rubato::FftFixedIn::<f32>::new(
-            spec.rate as usize,
+            spec.rate() as usize,
             to_sample_rate,
             duration,
             2,
@@ -137,6 +138,10 @@ where
             input,
             output,
             duration,
+            output_spec: AudioSpec::new(
+                u32::try_from(to_sample_rate).unwrap(),
+                spec.channels().clone(),
+            ),
             spec,
             interleaved: Vec::default(),
         }
@@ -156,13 +161,13 @@ where
     ///
     /// ```rust
     /// use moosicbox_resampler::Resampler;
-    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    /// use symphonia::core::audio::{AudioBuffer, Position, Audio, AudioMut, AudioSpec};
     ///
-    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    /// let spec = AudioSpec::new(44_100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48_000, 1_024);
     ///
-    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(1_024, spec);
-    /// input.render_reserved(Some(1_024));
+    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1_024);
+    /// input.render_uninit(Some(1_024));
     ///
     /// let output = resampler.resample(&input);
     /// assert!(output.is_some());
@@ -188,27 +193,41 @@ where
     /// # Panics
     ///
     /// * If the internal resampler's `process_into_buffer` operation fails
-    /// * If the audio is not stereo (2-channel) - the `to_audio_buffer` conversion will panic
+    ///
+    /// # Errors
+    ///
+    /// * Returns `AudioBufferConversionError` if the resampled interleaved data
+    ///   does not contain a whole number of frames or has no channels.
     ///
     /// # Examples
     ///
     /// ```rust
     /// use moosicbox_resampler::Resampler;
-    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    /// use symphonia::core::audio::{AudioBuffer, Position, Audio, AudioMut, AudioSpec};
     ///
-    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    /// let spec = AudioSpec::new(44_100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48_000, 1_024);
     ///
-    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(1_024, spec);
-    /// input.render_reserved(Some(1_024));
+    /// let mut input: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1_024);
+    /// input.render_uninit(Some(1_024));
     ///
-    /// let output = resampler.resample_to_audio_buffer(&input);
+    /// let output = resampler.resample_to_audio_buffer(&input).unwrap();
     /// assert!(output.is_some());
     /// ```
-    pub fn resample_to_audio_buffer(&mut self, input: &AudioBuffer<f32>) -> Option<AudioBuffer<T>> {
-        let spec = self.spec;
+    pub fn resample_to_audio_buffer(
+        &mut self,
+        input: &AudioBuffer<f32>,
+    ) -> Result<Option<AudioBuffer<T>>, AudioBufferConversionError> {
+        let spec = self.output_spec.clone();
         self.resample(input)
             .map(|samples| to_audio_buffer(samples, spec))
+            .transpose()
+    }
+
+    /// Output specification with destination rate and original channel order.
+    #[must_use]
+    pub const fn output_spec(&self) -> &AudioSpec {
+        &self.output_spec
     }
 
     /// Resample any remaining samples in the resample buffer.
@@ -227,13 +246,13 @@ where
     ///
     /// ```rust
     /// use moosicbox_resampler::Resampler;
-    /// use symphonia::core::audio::{AudioBuffer, Channels, Signal, SignalSpec};
+    /// use symphonia::core::audio::{AudioBuffer, Position, Audio, AudioMut, AudioSpec};
     ///
-    /// let spec = SignalSpec::new(44_100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-    /// let mut resampler: Resampler<f32> = Resampler::new(spec, 48_000, 1_024);
+    /// let spec = AudioSpec::new(44_100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+    /// let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48_000, 1_024);
     ///
-    /// let mut partial: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-    /// partial.render_reserved(Some(512));
+    /// let mut partial: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+    /// partial.render_uninit(Some(512));
     /// assert!(resampler.resample(&partial).is_none());
     ///
     /// let flushed = resampler.flush();
@@ -267,58 +286,83 @@ where
     S: Sample + IntoSample<f32>,
 {
     for (c, dst) in output.iter_mut().enumerate() {
-        let src = input.chan(c);
+        let src = input.plane(c).unwrap();
         dst.extend(src.iter().map(|&s| s.into_sample()));
     }
 }
 
-/// Converts interleaved samples to an `AudioBuffer`.
+/// Errors converting interleaved samples to planar audio.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioBufferConversionError {
+    /// A frame must contain at least one channel.
+    NoChannels,
+    /// Every frame must supply one sample per channel; no samples are dropped.
+    IncompleteFrame { samples: usize, channels: usize },
+}
+
+impl std::fmt::Display for AudioBufferConversionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoChannels => formatter.write_str("audio specification has no channels"),
+            Self::IncompleteFrame { samples, channels } => write!(
+                formatter,
+                "{samples} samples do not form complete {channels}-channel frames"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AudioBufferConversionError {}
+
+/// Convert interleaved samples to planar audio in specification channel order.
 ///
-/// **Note**: Currently only supports stereo (2-channel) audio. The function will panic
-/// or produce incorrect results if used with mono or multi-channel audio.
+/// Empty input yields zero frames. Frame count and capacity are exactly
+/// `samples.len() / channels`; sample values are copied without conversion.
 ///
-/// # Panics
+/// # Errors
 ///
-/// * If the audio is not stereo (2-channel) - the `chan_pair_mut()` call will panic
+/// * `NoChannels` if the specification contains no channels (even for empty input).
+/// * `IncompleteFrame` if the sample count is not divisible by the channel count.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use moosicbox_resampler::to_audio_buffer;
-/// use symphonia::core::audio::{Channels, Signal, SignalSpec};
+/// use symphonia::core::audio::{Position, Audio, AudioMut, AudioSpec};
 ///
-/// let spec = SignalSpec::new(48_000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+/// let spec = AudioSpec::new(48_000, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
 /// let samples = vec![0.1_f32, 0.2, 0.3, 0.4];
-/// let buffer = to_audio_buffer(&samples, spec);
+/// let buffer = to_audio_buffer(&samples, spec).unwrap();
 ///
 /// assert_eq!(buffer.frames(), 2);
 /// ```
-#[must_use]
 #[cfg_attr(feature = "profiling", profiling::function)]
-pub fn to_audio_buffer<S>(samples: &[S], spec: SignalSpec) -> AudioBuffer<S>
+pub fn to_audio_buffer<S>(
+    samples: &[S],
+    spec: AudioSpec,
+) -> Result<AudioBuffer<S>, AudioBufferConversionError>
 where
     S: Sample,
 {
-    let duration = samples.len() as u64;
-    let mut buf: AudioBuffer<S> = AudioBuffer::new(duration, spec);
-    buf.render_reserved(Some(samples.len() / spec.channels.count()));
-
-    let (left, right) = buf.chan_pair_mut(0, 1);
-    let mut is_left = true;
-    let mut i = 0;
-
-    for sample in samples {
-        if is_left {
-            left[i] = *sample;
-            is_left = false;
-        } else {
-            right[i] = *sample;
-            is_left = true;
-            i += 1;
+    let channels = spec.channels().count();
+    if channels == 0 {
+        return Err(AudioBufferConversionError::NoChannels);
+    }
+    if !samples.len().is_multiple_of(channels) {
+        return Err(AudioBufferConversionError::IncompleteFrame {
+            samples: samples.len(),
+            channels,
+        });
+    }
+    let frames = samples.len() / channels;
+    let mut buffer = AudioBuffer::new(spec, frames);
+    buffer.render_uninit(Some(frames));
+    for (channel, plane) in buffer.iter_planes_mut().enumerate() {
+        for (sample, frame) in plane.iter_mut().zip(samples.chunks_exact(channels)) {
+            *sample = frame[channel];
         }
     }
-
-    buf
+    Ok(buffer)
 }
 
 #[cfg(test)]
@@ -333,32 +377,142 @@ where
 )]
 mod tests {
     use super::*;
-    use symphonia::core::audio::Channels;
+    use symphonia::core::audio::Position;
+
+    fn channel_spec(channels: usize, rate: u32) -> AudioSpec {
+        use symphonia::core::audio::{ChannelLabel, Channels};
+        AudioSpec::new(
+            rate,
+            Channels::from(
+                (0..channels)
+                    .map(|channel| ChannelLabel::Discrete(channel as u16))
+                    .collect::<Vec<_>>(),
+            ),
+        )
+    }
+
+    #[test]
+    fn interleaved_materialization_all_channels_and_exact_bits() {
+        for channels in [1, 2, 3, 6] {
+            let samples: Vec<f32> = (0..channels * 5)
+                .map(|i| f32::from_bits(0x3f00_0000 + i as u32))
+                .collect();
+            let buffer = to_audio_buffer(&samples, channel_spec(channels, 48000)).unwrap();
+            assert_eq!(buffer.frames(), 5);
+            assert_eq!(buffer.capacity(), 5);
+            for channel in 0..channels {
+                for frame in 0..5 {
+                    assert_eq!(
+                        buffer.plane(channel).unwrap()[frame].to_bits(),
+                        samples[frame * channels + channel].to_bits()
+                    );
+                }
+            }
+            let empty = to_audio_buffer::<f32>(&[], channel_spec(channels, 48000)).unwrap();
+            assert_eq!(empty.frames(), 0);
+            assert_eq!(empty.capacity(), 0);
+        }
+        let specials = [0.0_f32, -0.0, f32::from_bits(0x7fc0_0042), f32::INFINITY];
+        let stereo = to_audio_buffer(&specials, channel_spec(2, 48000)).unwrap();
+        assert_eq!(
+            stereo
+                .plane(0)
+                .unwrap()
+                .iter()
+                .map(|s| s.to_bits())
+                .collect::<Vec<_>>(),
+            [specials[0].to_bits(), specials[2].to_bits()]
+        );
+        assert_eq!(
+            stereo
+                .plane(1)
+                .unwrap()
+                .iter()
+                .map(|s| s.to_bits())
+                .collect::<Vec<_>>(),
+            [specials[1].to_bits(), specials[3].to_bits()]
+        );
+    }
+
+    #[test]
+    fn materialization_rejects_invalid_frame_shapes() {
+        for samples in [&[][..], &[1.0_f32][..]] {
+            assert_eq!(
+                to_audio_buffer(samples, channel_spec(0, 48000))
+                    .err()
+                    .unwrap(),
+                AudioBufferConversionError::NoChannels
+            );
+        }
+        for channels in [2, 3, 6] {
+            let samples = vec![1.0_f32; channels + 1];
+            assert_eq!(
+                to_audio_buffer(&samples, channel_spec(channels, 48000))
+                    .err()
+                    .unwrap(),
+                AudioBufferConversionError::IncompleteFrame {
+                    samples: channels + 1,
+                    channels
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn resampled_materialization_matches_interleaved_all_channels() {
+        for channels in [1, 2, 3, 6] {
+            let spec = channel_spec(channels, 44100);
+            let samples: Vec<f32> = (0..1024)
+                .flat_map(|frame| {
+                    (0..channels).map(move |channel| {
+                        ((frame as f32) * 0.05).sin() * (channel + 1) as f32 * 0.1
+                    })
+                })
+                .collect();
+            let input = to_audio_buffer(&samples, spec.clone()).unwrap();
+            let mut interleaved: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
+            let mut planar: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+            assert_eq!(planar.output_spec().rate(), 48000);
+            let expected = interleaved.resample(&input).unwrap();
+            assert!(expected.iter().any(|sample| sample.abs() > 0.01));
+            let actual = planar.resample_to_audio_buffer(&input).unwrap().unwrap();
+            assert_eq!(actual.spec().rate(), 48000);
+            assert_eq!(actual.frames() * channels, expected.len());
+            for channel in 0..channels {
+                for (frame, sample) in actual.plane(channel).unwrap().iter().enumerate() {
+                    assert_eq!(
+                        sample.to_bits(),
+                        expected[frame * channels + channel].to_bits()
+                    );
+                }
+            }
+        }
+    }
 
     /// Test that a resampler can be created with valid parameters
     #[test_log::test]
     fn test_resampler_creation() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
         let resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
 
-        assert_eq!(resampler.spec.rate, 44100);
-        assert_eq!(resampler.spec.channels.count(), 2);
+        assert_eq!(resampler.spec.rate(), 44100);
+        assert_eq!(resampler.spec.channels().count(), 2);
         assert_eq!(resampler.duration, 1024);
     }
 
     /// Test that resampler returns None when insufficient samples are buffered
     #[test_log::test]
     fn test_resample_insufficient_samples() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Create a buffer with fewer samples than required duration
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
 
         // Fill with some test data
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -372,16 +526,16 @@ mod tests {
     /// Test that resampler produces output once sufficient samples are accumulated
     #[test_log::test]
     fn test_resample_sufficient_samples() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Create a buffer with exactly the required duration
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+        input_buffer.render_uninit(Some(1024));
 
         // Fill with test data
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = (i as f32) / 1024.0;
             }
@@ -401,14 +555,14 @@ mod tests {
     /// Test that resampler accumulates samples across multiple calls
     #[test_log::test]
     fn test_resample_accumulation() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // First call with 512 samples - should return None
-        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer1.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer1.chan_mut(ch);
+        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer1.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer1.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.3;
             }
@@ -416,10 +570,10 @@ mod tests {
         assert!(resampler.resample(&input_buffer1).is_none());
 
         // Second call with another 512 samples - should now return Some
-        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer2.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer2.chan_mut(ch);
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer2.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer2.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.7;
             }
@@ -432,7 +586,7 @@ mod tests {
     /// Test that flush returns None when buffer is empty
     #[test_log::test]
     fn test_flush_empty_buffer() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
         let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
 
         // Flush without adding any samples
@@ -443,14 +597,14 @@ mod tests {
     /// Test that flush processes partial buffers by padding with silence
     #[test_log::test]
     fn test_flush_partial_buffer() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Add partial buffer (less than duration)
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -470,14 +624,14 @@ mod tests {
     /// Test that flush handles exact multiples of duration correctly
     #[test_log::test]
     fn test_flush_exact_multiple() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Add exactly duration samples
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+        input_buffer.render_uninit(Some(1024));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -494,19 +648,19 @@ mod tests {
     /// Test to_audio_buffer conversion for stereo audio
     #[test_log::test]
     fn test_to_audio_buffer_stereo() {
-        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(48000, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
 
         // Create interleaved stereo samples: [L0, R0, L1, R1, L2, R2, ...]
         let samples: Vec<f32> = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
 
-        let audio_buffer = to_audio_buffer(&samples, spec);
+        let audio_buffer = to_audio_buffer(&samples, spec).unwrap();
 
         // Check buffer size
         assert_eq!(audio_buffer.frames(), 4);
 
         // Check that samples were correctly de-interleaved
-        let left = audio_buffer.chan(0);
-        let right = audio_buffer.chan(1);
+        let left = audio_buffer.plane(0).unwrap();
+        let right = audio_buffer.plane(1).unwrap();
 
         assert_eq!(left[0], 0.1);
         assert_eq!(right[0], 0.2);
@@ -521,26 +675,26 @@ mod tests {
     /// Test resample_to_audio_buffer method
     #[test_log::test]
     fn test_resample_to_audio_buffer() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Create input buffer
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+        input_buffer.render_uninit(Some(1024));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = (i as f32) / 1024.0;
             }
         }
 
         // Should return Some with AudioBuffer
-        let result = resampler.resample_to_audio_buffer(&input_buffer);
+        let result = resampler.resample_to_audio_buffer(&input_buffer).unwrap();
         assert!(result.is_some());
 
         let output_buffer = result.unwrap();
         assert!(output_buffer.frames() > 0);
-        assert_eq!(output_buffer.spec().channels.count(), 2);
+        assert_eq!(output_buffer.spec().channels().count(), 2);
     }
 
     /// Test that resampler handles different sample rates correctly
@@ -548,14 +702,17 @@ mod tests {
     fn test_resample_rate_change() {
         let input_rate = 44100;
         let output_rate = 48000;
-        let spec = SignalSpec::new(input_rate, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, output_rate, 1024);
+        let spec = AudioSpec::new(
+            input_rate,
+            (Position::FRONT_LEFT | Position::FRONT_RIGHT).into(),
+        );
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), output_rate, 1024);
 
         // Create input buffer
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+        input_buffer.render_uninit(Some(1024));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -581,12 +738,12 @@ mod tests {
     /// Test resampling with mono audio
     #[test_log::test]
     fn test_resample_mono() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
-        let channel = input_buffer.chan_mut(0);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 1024);
+        input_buffer.render_uninit(Some(1024));
+        let channel = input_buffer.plane_mut(0).unwrap();
         for (i, sample) in channel.iter_mut().enumerate() {
             *sample = (i as f32) / 1024.0;
         }
@@ -604,14 +761,17 @@ mod tests {
     fn test_resample_downsampling() {
         let input_rate = 48000;
         let output_rate = 44100;
-        let spec = SignalSpec::new(input_rate, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, output_rate, 1024);
+        let spec = AudioSpec::new(
+            input_rate,
+            (Position::FRONT_LEFT | Position::FRONT_RIGHT).into(),
+        );
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), output_rate, 1024);
 
         // Create input buffer with a simple sine wave pattern
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+        input_buffer.render_uninit(Some(1024));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 // Use a simple pattern to verify data flows through correctly
                 *sample = ((i as f32) * std::f32::consts::PI / 128.0).sin();
@@ -640,15 +800,15 @@ mod tests {
     /// Test multiple consecutive resample cycles to verify state is properly managed
     #[test_log::test]
     fn test_multiple_resample_cycles() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Perform multiple resample cycles
         for cycle in 0..3 {
-            let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-            input_buffer.render_reserved(Some(1024));
-            for ch in 0..spec.channels.count() {
-                let channel = input_buffer.chan_mut(ch);
+            let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1024);
+            input_buffer.render_uninit(Some(1024));
+            for ch in 0..spec.channels().count() {
+                let channel = input_buffer.plane_mut(ch).unwrap();
                 for (i, sample) in channel.iter_mut().enumerate() {
                     // Use cycle-dependent values to ensure we're getting fresh data each time
                     *sample = ((i + cycle * 1024) as f32) / 3072.0;
@@ -670,14 +830,14 @@ mod tests {
     /// Test that flush handles remainder after multiple partial buffers
     #[test_log::test]
     fn test_flush_after_multiple_partial_buffers() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Add 300 samples
-        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(300, spec);
-        input_buffer1.render_reserved(Some(300));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer1.chan_mut(ch);
+        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 300);
+        input_buffer1.render_uninit(Some(300));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer1.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.3;
             }
@@ -685,10 +845,10 @@ mod tests {
         assert!(resampler.resample(&input_buffer1).is_none());
 
         // Add another 200 samples (total 500, still less than 1024)
-        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(200, spec);
-        input_buffer2.render_reserved(Some(200));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer2.chan_mut(ch);
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 200);
+        input_buffer2.render_uninit(Some(200));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer2.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -696,10 +856,10 @@ mod tests {
         assert!(resampler.resample(&input_buffer2).is_none());
 
         // Add another 100 samples (total 600, still less than 1024)
-        let mut input_buffer3: AudioBuffer<f32> = AudioBuffer::new(100, spec);
-        input_buffer3.render_reserved(Some(100));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer3.chan_mut(ch);
+        let mut input_buffer3: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 100);
+        input_buffer3.render_uninit(Some(100));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer3.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.7;
             }
@@ -717,14 +877,14 @@ mod tests {
     /// Test resampling with more than duration samples produces output and keeps remainder
     #[test_log::test]
     fn test_resample_excess_samples() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
         // Add 1500 samples (more than duration of 1024)
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1500, spec);
-        input_buffer.render_reserved(Some(1500));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 1500);
+        input_buffer.render_uninit(Some(1500));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = (i as f32) / 1500.0;
             }
@@ -736,10 +896,10 @@ mod tests {
 
         // There should be 476 samples remaining (1500 - 1024)
         // Adding another 548 samples should trigger another output (476 + 548 = 1024)
-        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(548, spec);
-        input_buffer2.render_reserved(Some(548));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer2.chan_mut(ch);
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 548);
+        input_buffer2.render_uninit(Some(548));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer2.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
@@ -755,10 +915,10 @@ mod tests {
     /// Test to_audio_buffer with empty samples
     #[test_log::test]
     fn test_to_audio_buffer_empty() {
-        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(48000, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
         let samples: Vec<f32> = vec![];
 
-        let audio_buffer = to_audio_buffer(&samples, spec);
+        let audio_buffer = to_audio_buffer(&samples, spec).unwrap();
         assert_eq!(audio_buffer.frames(), 0);
     }
 
@@ -768,13 +928,16 @@ mod tests {
         // Test 8kHz to 48kHz (6x upsampling)
         let input_rate = 8000;
         let output_rate = 48000;
-        let spec = SignalSpec::new(input_rate, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, output_rate, 512);
+        let spec = AudioSpec::new(
+            input_rate,
+            (Position::FRONT_LEFT | Position::FRONT_RIGHT).into(),
+        );
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), output_rate, 512);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin();
             }
@@ -798,19 +961,19 @@ mod tests {
     /// Test that resample_to_audio_buffer returns None when insufficient samples
     #[test_log::test]
     fn test_resample_to_audio_buffer_insufficient() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for sample in channel.iter_mut() {
                 *sample = 0.5;
             }
         }
 
-        let result = resampler.resample_to_audio_buffer(&input_buffer);
+        let result = resampler.resample_to_audio_buffer(&input_buffer).unwrap();
         assert!(result.is_none());
     }
 
@@ -820,16 +983,16 @@ mod tests {
     /// meaning no padding is needed but samples still need processing.
     #[test_log::test]
     fn test_flush_exact_duration_not_consumed() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
         let duration = 256;
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, duration);
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, duration);
 
         // Add exactly duration samples via two smaller buffers
         // but don't call resample() enough times to consume them
-        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(128, spec);
-        input_buffer1.render_reserved(Some(128));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer1.chan_mut(ch);
+        let mut input_buffer1: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 128);
+        input_buffer1.render_uninit(Some(128));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer1.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = (i as f32) / 128.0;
             }
@@ -837,10 +1000,10 @@ mod tests {
         // Returns None - only 128 samples buffered
         assert!(resampler.resample(&input_buffer1).is_none());
 
-        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(128, spec);
-        input_buffer2.render_reserved(Some(128));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer2.chan_mut(ch);
+        let mut input_buffer2: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 128);
+        input_buffer2.render_uninit(Some(128));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer2.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = 0.5 + (i as f32) / 256.0;
             }
@@ -851,13 +1014,13 @@ mod tests {
 
         // Actually, let's add just under duration to test the exact boundary
         // Reset and try again with exact buffer
-        let mut resampler2: Resampler<f32> = Resampler::new(spec, 48000, duration);
+        let mut resampler2: Resampler<f32> = Resampler::new(spec.clone(), 48000, duration);
 
         // Add exactly 256 samples at once
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(256, spec);
-        input_buffer.render_reserved(Some(256));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 256);
+        input_buffer.render_uninit(Some(256));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = ((i as f32) * std::f32::consts::PI / 32.0).sin() * 0.8;
             }
@@ -868,13 +1031,13 @@ mod tests {
         assert!(result.is_some());
 
         // Now test with 2x duration samples where we only consume once
-        let mut resampler3: Resampler<f32> = Resampler::new(spec, 48000, duration);
+        let mut resampler3: Resampler<f32> = Resampler::new(spec.clone(), 48000, duration);
 
         // Add 2x duration samples
-        let mut large_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        large_buffer.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = large_buffer.chan_mut(ch);
+        let mut large_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        large_buffer.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = large_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.7;
             }
@@ -902,14 +1065,14 @@ mod tests {
     /// This test verifies the conversion path for integer sample types works correctly.
     #[test_log::test]
     fn test_resample_i16_output() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<i16> = Resampler::new(spec, 48000, 512);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<i16> = Resampler::new(spec.clone(), 48000, 512);
 
         // Create input buffer with a simple pattern
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 // Use a sine wave pattern with values in [-1, 1] range
                 *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.9;
@@ -932,25 +1095,26 @@ mod tests {
     ///
     /// The resample_inner() function interleaves output channels in a loop. This test
     /// verifies the interleaving logic works correctly for more than 2 channels.
-    /// Note: to_audio_buffer only supports stereo, so we use resample() directly.
+    /// All channel counts are supported by both output representations.
     #[test_log::test]
     fn test_resample_quad_channel() {
         // Create a 4-channel (quadraphonic) spec
-        let spec = SignalSpec::new(
+        let spec = AudioSpec::new(
             44100,
-            Channels::FRONT_LEFT
-                | Channels::FRONT_RIGHT
-                | Channels::REAR_LEFT
-                | Channels::REAR_RIGHT,
+            (Position::FRONT_LEFT
+                | Position::FRONT_RIGHT
+                | Position::REAR_LEFT
+                | Position::REAR_RIGHT)
+                .into(),
         );
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 512);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
 
         // Fill each channel with a distinct pattern so we can verify interleaving
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 // Each channel gets a different base value plus a pattern
                 let base = (ch as f32) * 0.2;
@@ -986,20 +1150,20 @@ mod tests {
     /// doesn't mix up channels).
     #[test_log::test]
     fn test_resample_channel_separation() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 1024);
+        let spec = AudioSpec::new(44100, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 1024);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(1024, spec);
-        input_buffer.render_reserved(Some(1024));
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 1024);
+        input_buffer.render_uninit(Some(1024));
 
         // Left channel: high amplitude signal (0.9)
-        let left = input_buffer.chan_mut(0);
+        let left = input_buffer.plane_mut(0).unwrap();
         for (i, sample) in left.iter_mut().enumerate() {
             *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.9;
         }
 
         // Right channel: low amplitude signal (0.1)
-        let right = input_buffer.chan_mut(1);
+        let right = input_buffer.plane_mut(1).unwrap();
         for (i, sample) in right.iter_mut().enumerate() {
             *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.1;
         }
@@ -1036,15 +1200,15 @@ mod tests {
     /// correctly, passing through samples with minimal modification.
     #[test_log::test]
     fn test_resample_same_rate() {
-        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut resampler: Resampler<f32> = Resampler::new(spec, 48000, 512);
+        let spec = AudioSpec::new(48000, (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
+        let mut resampler: Resampler<f32> = Resampler::new(spec.clone(), 48000, 512);
 
-        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(512, spec);
-        input_buffer.render_reserved(Some(512));
+        let mut input_buffer: AudioBuffer<f32> = AudioBuffer::new(spec.clone(), 512);
+        input_buffer.render_uninit(Some(512));
 
         // Fill with a known pattern
-        for ch in 0..spec.channels.count() {
-            let channel = input_buffer.chan_mut(ch);
+        for ch in 0..spec.channels().count() {
+            let channel = input_buffer.plane_mut(ch).unwrap();
             for (i, sample) in channel.iter_mut().enumerate() {
                 *sample = ((i as f32) * std::f32::consts::PI / 64.0).sin() * 0.8;
             }

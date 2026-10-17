@@ -23,7 +23,7 @@ mod local {
         PlaybackType, Player, PlayerSource, local::LocalPlayer, set_service_port,
     };
     use switchy_async::time::sleep;
-    use symphonia::core::audio::Signal;
+    use symphonia::core::audio::Audio;
 
     /// Helper function to create a test track
     fn create_test_track() -> Track {
@@ -57,10 +57,10 @@ mod local {
 
     /// Helper function to create a test audio output factory
     fn create_test_audio_factory() -> moosicbox_audio_output::AudioOutputFactory {
-        let spec = symphonia::core::audio::SignalSpec {
-            rate: 44100,
-            channels: symphonia::core::audio::Layout::Stereo.into_channels(),
-        };
+        let spec = symphonia::core::audio::AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
 
         moosicbox_audio_output::AudioOutputFactory::new(
             "test-factory".to_string(),
@@ -444,10 +444,10 @@ mod local {
         let overlap_detected_clone = overlapping_detected.clone();
 
         // Create AudioOutputFactory that tracks creation and lifecycle timing
-        let spec = symphonia::core::audio::SignalSpec {
-            rate: 44100,
-            channels: symphonia::core::audio::Layout::Stereo.into_channels(),
-        };
+        let spec = symphonia::core::audio::AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
 
         let output = AudioOutputFactory::new(
             "test-seek-overlap".to_string(),
@@ -494,10 +494,10 @@ mod local {
                 let active_count_for_drop = active_count_clone.clone();
 
                 // Create a proper AudioWrite implementation that simulates slow drain behavior
-                let spec = symphonia::core::audio::SignalSpec {
-                    rate: 44100,
-                    channels: symphonia::core::audio::Layout::Stereo.into_channels(),
-                };
+                let spec = symphonia::core::audio::AudioSpec::new(
+                    44100,
+                    symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+                );
 
                 Ok(Box::new(SlowDrainAudioOutput::new(
                     1000, // ring buffer size
@@ -691,7 +691,7 @@ mod local {
     where
         F: FnOnce() + Send + 'static,
     {
-        spec: symphonia::core::audio::SignalSpec,
+        spec: symphonia::core::audio::AudioSpec,
         audio_data: Arc<Mutex<Vec<f32>>>,
         volume: Arc<AtomicF64>,
         samples_consumed: Arc<AtomicUsize>,
@@ -706,7 +706,7 @@ mod local {
     {
         fn new(
             ring_buffer_size: usize,
-            spec: symphonia::core::audio::SignalSpec,
+            spec: symphonia::core::audio::AudioSpec,
             drop_callback: F,
         ) -> Self {
             Self {
@@ -757,7 +757,7 @@ mod local {
             &mut self,
             decoded: symphonia::core::audio::AudioBuffer<f32>,
         ) -> Result<usize, moosicbox_audio_output::AudioOutputError> {
-            let samples: Vec<f32> = decoded.chan(0).to_vec();
+            let samples: Vec<f32> = decoded.plane(0).expect("channel exists").to_vec();
             self.add_samples_to_ring_buffer(&samples);
             Ok(samples.len())
         }
@@ -787,8 +787,8 @@ mod local {
             self.progress_callback = callback;
         }
 
-        fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
-            Some(self.spec)
+        fn get_output_spec(&self) -> Option<symphonia::core::audio::AudioSpec> {
+            Some(self.spec.clone())
         }
 
         fn handle(&self) -> moosicbox_audio_output::AudioHandle {

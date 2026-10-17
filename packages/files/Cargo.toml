@@ -165,6 +165,12 @@ decoder-opus = [
     "format-opus",
     "moosicbox_audio_decoder?/opus",
 ]
+decoder-opus-native = [
+    "dep:moosicbox_audio_decoder",
+    "format-opus",
+    "moosicbox_audio_decoder?/opus-native",
+]
+
 
 all-formats = [
     "all-os-formats",

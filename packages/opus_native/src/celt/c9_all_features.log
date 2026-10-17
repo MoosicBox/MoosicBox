@@ -1,0 +1,712 @@
+    Blocking waiting for file lock on build directory
+   Compiling moosicbox_opus_native v0.5.0 (/hdd/GitHub/wt-moosicbox/opus/packages/opus_native)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.76s
+     Running unittests src/lib.rs (target/debug/deps/moosicbox_opus_native-1b2b8728c00db664)
+
+running 592 tests
+test celt::decoder::coarse_energy_tests::denormalize_q24_matches_actual_libopus ... ok
+test celt::decoder::coarse_energy_tests::fine_final_q24_stereo_matches_actual_libopus ... ok
+test celt::decoder::coarse_energy_tests::q24_history_transient_and_band_switch_semantics ... ok
+test celt::decoder::coarse_energy_tests::restricted_bands_and_budget_fallback_match_actual_libopus ... ok
+test celt::decoder::coarse_energy_tests::tf_budget_reservation_exhaustion_and_signed_resolution ... ok
+test celt::decoder::residual::tests::inverse_spreading_matches_fixed_libopus ... ok
+test celt::decoder::residual::tests::inverse_tf_matches_reference_haar_schedule ... ok
+test celt::decoder::residual::tests::scalar_residual_matches_actual_alg_unquant ... ok
+test celt::decoder::tests::test_all_frame_sizes_produce_correct_band_dimensions ... ok
+test celt::decoder::tests::test_allocation_struct_creation ... ok
+test celt::decoder::tests::test_anti_collapse_prng_distribution ... ok
+test celt::decoder::tests::test_anti_collapse_prng_lcg_constants ... ok
+test celt::decoder::tests::test_anti_collapse_prng_lcg_formula ... ok
+test celt::decoder::tests::test_anti_collapse_prng_range ... ok
+test celt::decoder::tests::test_anti_collapse_preserves_normalization ... ok
+test celt::decoder::tests::test_apply_anti_collapse_collapsed_band ... ok
+test celt::decoder::tests::test_apply_anti_collapse_disabled ... ok
+test celt::decoder::tests::test_apply_anti_collapse_energy_preservation ... ok
+test celt::decoder::tests::test_apply_anti_collapse_non_collapsed_band ... ok
+test celt::decoder::tests::test_apply_anti_collapse_partial_mdct_collapse ... ok
+test celt::decoder::tests::test_apply_anti_collapse_uses_min_of_two_prev ... ok
+test celt::decoder::tests::test_band_boost_quanta_formula ... ok
+test celt::decoder::tests::test_bins_per_band_10ms ... ok
+test celt::decoder::tests::test_celt_decoder_creation ... ok
+test celt::decoder::tests::test_celt_overlap_window ... ok
+test celt::decoder::tests::test_compute_caps_mono ... ok
+test celt::decoder::tests::test_compute_caps_stereo ... ok
+test celt::decoder::tests::test_celt_overlap_window_formula ... ok
+test celt::decoder::tests::test_compute_lm ... ok
+test celt::decoder::tests::test_celt_overlap_window_range ... ok
+test celt::decoder::tests::test_decode_allocation_trim_default ... ok
+test celt::decoder::tests::test_celt_overlap_window_smooth_rise ... ok
+test celt::decoder::tests::test_coarse_energy_clamping ... ok
+test celt::decoder::tests::test_compute_allocation_fine_energy_extraction ... ok
+test celt::decoder::tests::test_compute_allocation_high_rate ... ok
+test celt::decoder::tests::test_compute_allocation_partial_bands ... ok
+test celt::decoder::tests::test_compute_allocation_stereo ... ok
+test celt::decoder::tests::test_compute_allocation_transient_reservation ... ok
+test celt::decoder::tests::test_compute_allocation_trim_high ... ok
+test celt::decoder::tests::test_compute_allocation_skip_reservation ... ok
+test celt::decoder::tests::test_decode_allocation_trim_with_bits ... ok
+test celt::decoder::tests::test_decode_anti_collapse_bit_no_reservation ... ok
+test celt::decoder::tests::test_coarse_energy_first_packet_reference_q8_boundary ... ok
+test celt::decoder::tests::test_coarse_energy_intra ... ok
+test celt::decoder::tests::test_decode_anti_collapse_bit_with_reservation ... ok
+test celt::decoder::tests::test_coarse_energy_inter ... ok
+test celt::decoder::tests::test_decode_band_boost_no_budget ... ok
+test celt::decoder::tests::test_compute_allocation_low_rate ... ok
+test celt::decoder::tests::test_compute_allocation_conservative_subtraction ... ok
+test celt::decoder::tests::test_decode_band_boost_with_budget ... ok
+test celt::decoder::tests::test_compute_allocation_mono_basic ... ok
+test celt::decoder::tests::test_decode_post_filter_params_gain_q8_format ... ok
+test celt::decoder::tests::test_compute_allocation_trim_low ... ok
+test celt::decoder::tests::test_decode_post_filter_params_tapset_values ... ok
+test celt::decoder::tests::test_decode_stereo_params_insufficient_bits ... ok
+test celt::decoder::tests::test_decoder_initialization ... ok
+test celt::decoder::tests::test_complete_celt_synthesis_pipeline ... ok
+test celt::decoder::tests::test_decode_stereo_params_mono ... ok
+test celt::decoder::tests::test_denormalize_bands_downsample_6 ... ok
+test celt::decoder::tests::test_denormalize_bands_no_extra_zeroing_without_downsample ... ok
+test celt::decoder::tests::test_denormalize_bands_downsample_bound_limiting ... ok
+test celt::decoder::tests::test_denormalize_bands_respects_band_range ... ok
+test celt::decoder::tests::test_energy_q8_to_linear_large_positive ... ok
+test celt::decoder::tests::test_denormalize_bands_unit_shapes ... ok
+test celt::decoder::tests::test_energy_q8_to_linear_negative ... ok
+test celt::decoder::tests::test_denormalize_bands_zero_energy ... ok
+test celt::decoder::tests::test_energy_q8_to_linear_positive ... ok
+test celt::decoder::tests::test_compute_allocation_with_boost ... ok
+test celt::decoder::tests::test_denormalize_bands_total_length ... ok
+test celt::decoder::tests::test_energy_q8_to_linear_zero ... ok
+test celt::decoder::tests::test_final_energy_both_priorities ... ok
+test celt::decoder::tests::test_final_energy_priority_0 ... ok
+test celt::decoder::tests::test_final_energy_unused_bits_left ... ok
+test celt::decoder::tests::test_fine_energy_multiple_bits ... ok
+test celt::decoder::tests::test_fine_energy_no_bits ... ok
+test celt::decoder::tests::test_fine_energy_single_bit ... ok
+test celt::decoder::tests::test_frame_duration_calculation ... ok
+test celt::decoder::tests::test_frame_size_validation_48khz ... ok
+test celt::decoder::tests::test_fullband_continuous_packet_prefix_matches_libopus ... ok
+test celt::decoder::tests::test_overlap_size_48khz ... ok
+test celt::decoder::tests::test_overlap_size_all_frame_sizes ... ok
+test celt::decoder::tests::test_prefix_omits_flags_without_bitstream_symbols ... ok
+test celt::decoder::tests::test_pvq_band_dimension_interleaving_correctness ... ok
+test celt::decoder::tests::test_renormalize_band ... ok
+test celt::decoder::tests::test_renormalize_band_zero_energy ... ok
+test celt::decoder::tests::test_rfc_table_60_non_transient_tf_select_0 ... ok
+test celt::decoder::tests::test_rfc_table_61_non_transient_tf_select_1 ... ok
+test celt::decoder::tests::test_rfc_table_62_transient_tf_select_0 ... ok
+test celt::decoder::coarse_energy_tests::continuous_coarse_q24_matches_actual_libopus ... ok
+test celt::decoder::tests::test_rfc_table_63_transient_tf_select_1 ... ok
+test celt::decoder::tests::test_should_decode_tf_select_with_actual_tf_change ... ok
+test celt::decoder::tests::test_set_frame_size_preserves_history_and_rejects_invalid_sizes ... ok
+test celt::decoder::tests::test_silence_flag_decoding ... ok
+test celt::decoder::tests::test_state_reset ... ok
+test celt::decoder::tests::test_tf_change_decoding ... ok
+test celt::decoder::tests::test_tf_change_partial_bands ... ok
+test celt::decoder::tests::test_tf_change_pdf_first_band_normal ... ok
+test celt::decoder::tests::test_tf_change_pdf_first_band_transient ... ok
+test celt::decoder::tests::test_tf_change_pdf_subsequent_normal ... ok
+test celt::decoder::tests::test_tf_change_pdf_subsequent_transient ... ok
+test celt::decoder::tests::test_tf_change_validation_end_exceeds_num_bands ... ok
+test celt::decoder::tests::test_tf_change_validation_start_gte_end ... ok
+test celt::decoder::tests::test_tf_change_with_start_offset ... ok
+test celt::decoder::tests::test_tf_resolution_clamping ... ok
+test celt::decoder::tests::test_tf_resolution_computation ... ok
+test celt::decoder::tests::test_tf_resolution_error_without_tf_change ... ok
+test celt::decoder::tests::test_tf_resolution_rfc_compliance ... ok
+test celt::decoder::tests::test_tf_resolution_with_changes ... ok
+test celt::decoder::tests::test_tf_select_conditional_decoding ... ok
+test celt::decoder::tests::test_tf_select_error_without_tf_change ... ok
+test celt::decoder::tests::test_tf_select_table_dimensions ... ok
+test celt::decoder::tests::test_transient_flag_decoding_basic ... ok
+test celt::decoder::tests::test_transient_flag_state_update ... ok
+test celt::decoder::tests::test_decode_celt_frame_with_various_frame_bytes ... ok
+test celt::fixed_point::tests::test_add_sub_16_overflow_wrap ... ok
+test celt::fixed_point::tests::test_celt_cos_norm_special_values ... ok
+test celt::fixed_point::tests::test_celt_cos_special_angles ... ok
+test celt::fixed_point::tests::test_celt_exp2_db_large_value ... ok
+test celt::fixed_point::tests::test_celt_exp2_db_small_value ... ok
+test celt::fixed_point::tests::test_celt_exp2_db_zero ... ok
+test celt::fixed_point::tests::test_celt_exp2_extreme_negative ... ok
+test celt::fixed_point::tests::test_celt_exp2_extreme_positive ... ok
+test celt::fixed_point::tests::test_celt_exp2_one ... ok
+test celt::fixed_point::tests::test_celt_exp2_zero ... ok
+test celt::fixed_point::tests::test_celt_ilog2_basic ... ok
+test celt::decoder::transform::tests::real_payload_synthesis_matches_fixed_libopus ... ok
+test celt::fixed_point::tests::test_celt_inner_prod_basic ... ok
+test celt::fixed_point::tests::test_celt_inner_prod_empty ... ok
+test celt::fixed_point::tests::test_celt_inner_prod_negative ... ok
+test celt::fixed_point::tests::test_celt_rsqrt_norm_boundary_high ... ok
+test celt::fixed_point::tests::test_celt_rsqrt_norm_boundary_low ... ok
+test celt::fixed_point::tests::test_celt_rsqrt_norm_typical_input ... ok
+test celt::fixed_point::tests::test_celt_sin_special_angles ... ok
+test celt::fixed_point::tests::test_celt_sqrt_large_values ... ok
+test celt::fixed_point::tests::test_celt_sqrt_powers_of_four ... ok
+test celt::fixed_point::tests::test_celt_sqrt_small_values ... ok
+test celt::fixed_point::tests::test_celt_sqrt_zero ... ok
+test celt::fixed_point::tests::test_celt_zlog2_handles_zero ... ok
+test celt::fixed_point::tests::test_celt_zlog2_positive ... ok
+test celt::fixed_point::tests::test_denorm_coeff_q15_q14_basic ... ok
+test celt::fixed_point::tests::test_denorm_coeff_q15_q14_negative ... ok
+test celt::fixed_point::tests::test_denorm_coeff_q15_q14_zero ... ok
+test celt::fixed_point::tests::test_ec_ilog_non_powers ... ok
+test celt::fixed_point::tests::test_ec_ilog_powers_of_two ... ok
+test celt::fixed_point::tests::test_ec_ilog_zero ... ok
+test celt::fixed_point::tests::test_int16_to_sig ... ok
+test celt::fixed_point::tests::test_mult16_16 ... ok
+test celt::fixed_point::tests::test_extract16_extend32_roundtrip ... ok
+test celt::fixed_point::tests::test_mult16_16_p15 ... ok
+test celt::fixed_point::tests::test_mult16_32_q15 ... ok
+test celt::fixed_point::tests::test_mult16_32_q16_basic ... ok
+test celt::fixed_point::tests::test_mult32_32_q31_basic ... ok
+test celt::fixed_point::tests::test_neg16_neg32 ... ok
+test celt::fixed_point::tests::test_normalize_pulses_to_q15_basic ... ok
+test celt::fixed_point::tests::test_normalize_pulses_to_q15_single_pulse ... ok
+test celt::fixed_point::tests::test_pshr32_rounding ... ok
+test celt::fixed_point::tests::test_q15_one ... ok
+test celt::fixed_point::tests::test_qconst16_basic ... ok
+test celt::fixed_point::tests::test_qconst32_basic ... ok
+test celt::fixed_point::tests::test_renormalize_vector_i16_unit_norm ... ok
+test celt::fixed_point::tests::test_sat16 ... ok
+test celt::fixed_point::tests::test_shift_operations_consistency ... ok
+test celt::fixed_point::tests::test_sig_shift ... ok
+test celt::fixed_point::tests::test_sig_to_int16 ... ok
+test celt::fixed_point::tests::test_sig_to_int16_rounding ... ok
+test celt::fixed_point::tests::test_sig_to_int16_saturation ... ok
+test celt::fixed_point::tests::test_trig_identity_sin_cos ... ok
+test celt::fixed_point::tests::test_vshr32_negative_shift ... ok
+test celt::fixed_point::tests::test_vshr32_positive_shift ... ok
+test celt::fixed_point::tests::test_vshr32_zero_shift ... ok
+test celt::pvq::tests::test_apply_spreading_invalid_block_division ... ok
+test celt::pvq::tests::test_apply_spreading_invalid_spread ... ok
+test celt::pvq::tests::test_apply_spreading_large_nb_blocks ... ok
+test celt::pvq::tests::test_apply_spreading_multi_block_no_pre_rotation ... ok
+test celt::pvq::tests::test_apply_spreading_multi_block_with_pre_rotation ... ok
+test celt::pvq::tests::test_apply_spreading_no_rotation ... ok
+test celt::pvq::tests::test_apply_spreading_stride_calculation ... ok
+test celt::pvq::tests::test_apply_spreading_with_rotation ... ok
+test celt::pvq::tests::test_apply_spreading_zero_nb_blocks ... ok
+test celt::pvq::tests::test_apply_spreading_transient_frame_example ... ok
+test celt::pvq::tests::test_apply_spreading_zero_pulses ... ok
+test celt::pvq::tests::test_avoid_split_noise_activation ... ok
+test celt::pvq::tests::test_avoid_split_noise_endpoint_forcing ... ok
+test celt::pvq::tests::test_apply_spreading_zero_spread_multi_block ... ok
+test celt::pvq::tests::test_bitexact_cos_reference_values ... ok
+test celt::pvq::tests::test_bitexact_log2tan_reference_values ... ok
+test celt::pvq::tests::test_bits_to_pulses_basic ... ok
+test celt::pvq::tests::test_bits_to_pulses_with_balance ... ok
+test celt::pvq::tests::test_bits_to_pulses_zero_bits ... ok
+test celt::pvq::tests::test_compute_pulse_split_balanced ... ok
+test celt::pvq::tests::test_compute_pulse_split_unbalanced_mid ... ok
+test celt::pvq::tests::test_compute_pulse_split_zero_bits ... ok
+test celt::pvq::tests::test_compute_pulse_split_unbalanced_side ... ok
+test celt::pvq::tests::test_compute_pvq_size_base_cases ... ok
+test celt::pvq::tests::test_compute_pvq_size_k1 ... ok
+test celt::pvq::tests::test_compute_pvq_size_small_values ... ok
+test celt::pvq::tests::test_compute_pvq_size_symmetry ... ok
+test celt::pvq::tests::test_compute_qn_basic ... ok
+test celt::pvq::tests::test_bit_threshold_prevents_unnecessary_split ... ok
+test celt::pvq::tests::test_compute_qn_zero_bits ... ok
+test celt::pvq::tests::test_decode_pvq_vector_invalid_n ... ok
+test celt::pvq::tests::test_decode_pvq_vector_one_pulse ... ok
+test celt::pvq::tests::test_decode_pvq_vector_split_invalid_n ... ok
+test celt::pvq::tests::test_decode_pvq_vector_split_zero_pulses ... ok
+test celt::pvq::tests::test_decode_pvq_vector_zero_pulses ... ok
+test celt::pvq::tests::test_decode_split_gain_uniform ... ok
+test celt::pvq::tests::test_decode_split_gain_zero_qn ... ok
+test celt::pvq::tests::test_decode_spread ... ok
+test celt::pvq::tests::test_compute_split_threshold ... ok
+test celt::pvq::tests::test_ec_ilog_reference_values ... ok
+test celt::pvq::tests::test_frac_mul16_reference_values ... ok
+test celt::pvq::tests::test_get_pulses ... ok
+test celt::pvq::tests::test_decode_pvq_vector_split_small_codebook ... ok
+test celt::pvq::tests::test_isqrt ... ok
+test celt::pvq::tests::test_normalize_vector_already_normalized ... ok
+test celt::pvq::tests::test_normalize_vector_empty ... ok
+test celt::pvq::tests::test_normalize_vector_unit ... ok
+test celt::pvq::tests::test_normalize_vector_zero ... ok
+test celt::pvq::tests::test_n_greater_than_2_requirement ... ok
+test channels_tests::test_channels_equality ... ok
+test channels_tests::test_channels_mono_value ... ok
+test channels_tests::test_channels_stereo_value ... ok
+test celt::pvq::tests::test_transient_b_halving ... ok
+test decoder_tests::test_calculate_samples_all_frame_sizes ... ok
+test decoder_tests::packet_loss_is_unsupported_without_writing_output ... ok
+test decoder_tests::test_calculate_samples_different_rates ... ok
+test decoder_tests::test_calculate_samples_ms20_at_16khz ... ok
+test decoder_tests::test_calculate_silk_delay_samples ... ok
+test decoder_tests::test_calculate_silk_delay_samples_unknown_rate ... ok
+test decoder_tests::test_decode_empty_packet_error ... ok
+test framing::tests::test_code1_empty_frames ... ok
+test framing::tests::test_code0_single_frame ... ok
+test celt::pvq::tests::test_lm_negative_stops_recursion ... ok
+test celt::pvq::tests::test_fits_in_32 ... ok
+test framing::tests::test_code1_odd_payload_fails ... ok
+test celt::pvq::tests::test_split_threshold_reasonable ... ok
+test framing::tests::test_code1_frame_content_validation ... ok
+test framing::tests::test_code2_frame1_too_large ... ok
+test framing::tests::test_code2_packet_too_short ... ok
+test framing::tests::test_code1_two_equal_frames ... ok
+test framing::tests::test_code2_two_variable_frames ... ok
+test framing::tests::test_code3_cbr_non_divisible_fails ... ok
+test framing::tests::test_code3_cbr_three_frames ... ok
+test framing::tests::test_code3_cbr_with_padding_content ... ok
+test celt::pvq::tests::test_transient_b_parameter_non_transient ... ok
+test framing::tests::test_code3_incomplete_padding ... ok
+test framing::tests::test_code3_cbr_with_zero_length_frames ... ok
+test framing::tests::test_code3_padding_exceeds_packet_size ... ok
+test framing::tests::test_code3_vbr_frame_exceeds_packet ... ok
+test framing::tests::test_code3_vbr_three_frames ... ok
+test framing::tests::test_code3_vbr_with_dtx_zero_length_frame ... ok
+test framing::tests::test_code3_vbr_with_padding_content ... ok
+test framing::tests::test_decode_frame_length_boundary_251 ... ok
+test framing::tests::test_decode_frame_length_boundary_252 ... ok
+test framing::tests::test_decode_frame_length_direct ... ok
+test framing::tests::test_decode_frame_length_dtx ... ok
+test framing::tests::test_decode_frame_length_empty_data ... ok
+test framing::tests::test_decode_frame_length_max ... ok
+test celt::pvq::tests::test_transient_b_parameter_transient ... ok
+test framing::tests::test_decode_frame_length_two_byte ... ok
+test framing::tests::test_decode_frame_length_two_byte_missing_second ... ok
+test framing::tests::test_empty_packet_fails ... ok
+test celt::decoder::coarse_energy_tests::production_energy_uses_q24_history_not_legacy_q8 ... ok
+test framing::tests::test_frame_count_byte_all_flags_set ... ok
+test framing::tests::test_frame_count_zero_fails ... ok
+test framing::tests::test_padding_chain ... ok
+test framing::tests::test_frame_count_byte_max_count ... ok
+test framing::tests::test_padding_single_byte ... ok
+test framing::tests::test_r5_2_5ms_boundary_47_frames_valid ... ok
+test framing::tests::test_r5_2_5ms_boundary_48_frames_valid ... ok
+test framing::tests::test_r5_2_5ms_boundary_49_frames_invalid ... ok
+test framing::tests::test_r5_2_5ms_boundary_50_frames_invalid ... ok
+test framing::tests::test_r5_exceeds_120ms_10ms ... ok
+test framing::tests::test_r5_exceeds_120ms_20ms ... ok
+test framing::tests::test_r5_exceeds_120ms_2_5ms ... ok
+test framing::tests::test_r5_exceeds_120ms_40ms ... ok
+test framing::tests::test_r5_exceeds_120ms_5ms ... ok
+test framing::tests::test_r5_exceeds_120ms_60ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_10ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_2_5ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_20ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_40ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_60ms ... ok
+test framing::tests::test_r5_valid_at_120ms_limit_5ms ... ok
+test lbrr_tests::test_decode_silk_header_flags_mono_20ms ... ok
+test lbrr_tests::test_decode_silk_header_flags_stereo_40ms ... ok
+test lbrr_tests::test_decode_silk_header_flags_stereo_60ms ... ok
+test lbrr_tests::test_lbrr_40ms_icdf_values ... ok
+test lbrr_tests::test_lbrr_60ms_icdf_values ... ok
+test lbrr_tests::test_per_frame_lbrr_flags_20ms ... ok
+test lbrr_tests::test_per_frame_lbrr_flags_40ms ... ok
+test lbrr_tests::test_per_frame_lbrr_flags_60ms ... ok
+test lbrr_tests::test_vad_flag_indexing_stereo_40ms ... ok
+test public_state_tests::float_decode_propagates_invalid_packet_without_writing_output ... ok
+test public_state_tests::float_packet_loss_is_unsupported_without_writing_output ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_returns_false ... ok
+test public_state_tests::reset_restores_initial_configuration_and_mode ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_1_returns_false ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_returns_true ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_1_returns_true ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_4_returns_false ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_4_returns_true ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_8_returns_false ... ok
+test range::decoder::tests::test_ec_dec_bit_logp_with_various_inputs::logp_8_returns_true ... ok
+test range::decoder::tests::test_ec_dec_bits_all_ones_from_end ... ok
+test range::decoder::tests::test_ec_dec_bits_all_zeros_from_end ... ok
+test range::decoder::tests::test_ec_dec_bits_backward_reading ... ok
+test range::decoder::tests::test_ec_dec_bits_bit_ordering_in_window ... ok
+test range::decoder::tests::test_ec_dec_bits_independent_from_range_coder ... ok
+test range::decoder::tests::test_ec_dec_bits_lsb_first_within_byte ... ok
+test range::decoder::tests::test_ec_dec_bits_max ... ok
+test range::decoder::tests::test_ec_dec_bits_multi_byte_backward ... ok
+test range::decoder::tests::test_ec_dec_bits_too_many ... ok
+test range::decoder::tests::test_ec_dec_bits_window_management ... ok
+test range::decoder::tests::test_ec_dec_bits_zero ... ok
+test range::decoder::tests::test_ec_dec_icdf ... ok
+test range::decoder::tests::test_ec_dec_icdf_last_symbol ... ok
+test range::decoder::tests::test_ec_dec_icdf_u16_basic ... ok
+test range::decoder::tests::test_ec_dec_icdf_u16_first_symbol ... ok
+test range::decoder::tests::test_ec_dec_icdf_u16_high_precision ... ok
+test range::decoder::tests::test_ec_dec_icdf_u16_varying_precision ... ok
+test range::decoder::tests::test_ec_dec_icdf_with_terminating_zero ... ok
+test range::decoder::tests::test_ec_dec_uint_boundary_8_bit ... ok
+test range::decoder::tests::test_ec_dec_uint_ft_one ... ok
+test range::decoder::tests::test_ec_dec_uint_large ... ok
+test range::decoder::tests::test_ec_dec_uint_large_ft ... ok
+test range::decoder::tests::test_ec_dec_uint_small ... ok
+test range::decoder::tests::test_ec_dec_uint_zero ... ok
+test range::decoder::tests::test_ec_decode ... ok
+test range::decoder::tests::test_ec_decode_bin ... ok
+test range::decoder::tests::test_ec_tell ... ok
+test range::decoder::tests::test_ec_tell_after_operations ... ok
+test range::decoder::tests::test_ec_tell_frac ... ok
+test range::decoder::tests::test_ec_tell_frac_precision ... ok
+test range::decoder::tests::test_ec_tell_relationship ... ok
+test range::decoder::tests::test_get_accessors ... ok
+test range::decoder::tests::test_initialization_values ... ok
+test range::decoder::tests::test_laplace_decode_high_decay ... ok
+test range::decoder::tests::test_laplace_decode_high_fs ... ok
+test range::decoder::tests::test_laplace_decode_low_decay ... ok
+test celt::pvq::tests::test_split_requires_sufficient_bits ... ok
+test range::decoder::tests::test_laplace_decode_nonzero ... ok
+test range::decoder::tests::test_laplace_decode_various_decay ... ok
+test celt::decoder::coarse_energy_tests::actual_nb_mono_stage_boundary ... ok
+test range::decoder::tests::test_laplace_decode_zero ... ok
+test range::decoder::tests::test_new_with_empty_buffer ... ok
+test range::decoder::tests::test_new_with_single_byte_buffer ... ok
+test range::decoder::tests::test_new_with_valid_buffer ... ok
+test range::decoder::tests::test_read_beyond_buffer_returns_zero ... ok
+test sample_rate_tests::test_from_hz_all_valid_rates ... ok
+test sample_rate_tests::test_from_hz_error_message_includes_rate ... ok
+test sample_rate_tests::test_from_hz_invalid_rates ... ok
+test silk::decoder::reference_tests::nb_packet_five_nlsf_stabilization_matches_independent_c ... ok
+test silk::decoder::reference_tests::reference_nb_impulse_decoded_channel ... ok
+test silk::decoder::reference_tests::reference_mb_stereo_channels_before_unmixing ... ok
+test silk::decoder::tests::test_cosine_table_bounds ... ok
+test silk::decoder::tests::test_bandwidth_expansion_reduces_magnitude ... ok
+test silk::decoder::tests::test_dc_response_instability ... ok
+test silk::decoder::tests::test_decode_lsbs_all_coefficients ... ok
+test silk::decoder::reference_tests::reference_nb_mono_raw_api_two_persistent_frames ... ok
+test silk::decoder::reference_tests::reference_nb_mono_decoded_channel_two_persistent_frames ... ok
+test silk::decoder::reference_tests::reference_mb_stereo_raw_lr_before_api_delay ... ok
+test silk::decoder::tests::test_decode_lsbs_multiple_lsb ... ok
+test silk::decoder::tests::test_decode_lsbs_no_lsb ... ok
+test silk::decoder::tests::test_decode_lsbs_zero_pulses_get_lsbs ... ok
+test silk::decoder::tests::test_decode_mid_only_flag_false ... ok
+test silk::decoder::tests::test_decode_lsbs_single_lsb ... ok
+test silk::decoder::tests::test_decode_lsbs_magnitude_doubling ... ok
+test silk::decoder::tests::test_decode_pulse_count_all_rate_levels ... ok
+test silk::decoder::tests::test_decode_mid_only_flag_true ... ok
+test silk::decoder::tests::test_decode_pulse_count_invalid_rate_level ... ok
+test silk::decoder::tests::test_decode_pulse_count_lsb_cap ... ok
+test silk::decoder::tests::test_decode_pulse_count_no_lsb ... ok
+test silk::decoder::tests::test_decode_pulse_count_with_lsb ... ok
+test silk::decoder::tests::test_decode_pulse_count_rate_level_switching ... ok
+test silk::decoder::tests::test_decode_pulse_locations_max_pulses ... ok
+test silk::decoder::tests::test_decode_pulse_locations_multiple_pulses ... ok
+test silk::decoder::tests::test_decode_pulse_locations_single_pulse ... ok
+test silk::decoder::tests::test_decode_pulse_locations_zero_pulses ... ok
+test silk::decoder::tests::test_decode_rate_level_inactive ... ok
+test silk::decoder::tests::test_decode_rate_level_unvoiced_uses_inactive_pdf ... ok
+test silk::decoder::tests::test_decode_rate_level_voiced ... ok
+test silk::decoder::tests::test_decode_signs_all_42_pdfs ... ok
+test silk::decoder::tests::test_decode_signs_all_zero_magnitudes ... ok
+test silk::decoder::tests::test_decode_signs_mixed_zero_nonzero ... ok
+test silk::decoder::tests::test_decode_signs_negative_values ... ok
+test silk::decoder::tests::test_decode_signs_positive_values ... ok
+test celt::pvq::tests::test_compute_qn_stereo ... ok
+test silk::decoder::tests::test_dequantize_gain_log_gain_63 ... ok
+test silk::decoder::tests::test_dequantize_gain_log_gain_zero ... ok
+test silk::decoder::tests::test_dequantize_gain_output_range ... ok
+test silk::decoder::tests::test_dequantize_gain_rfc_constants ... ok
+test silk::decoder::tests::test_decode_silk_frame_complete_10ms_mono ... ok
+test silk::decoder::tests::test_excitation_q14_range ... ok
+test silk::decoder::tests::test_excitation_lsb_pdf ... ok
+test silk::decoder::tests::test_excitation_reconstruction_negative_value ... ok
+test silk::decoder::tests::test_excitation_reconstruction_positive_value ... ok
+test silk::decoder::tests::test_excitation_reconstruction_zero_no_20_factor ... ok
+test silk::decoder::tests::test_full_lsf_pipeline_nb ... ok
+test silk::decoder::tests::test_full_lsf_pipeline_wb ... ok
+test silk::decoder::tests::test_gain_indices_stored ... ok
+test silk::decoder::tests::test_get_pulse_split_pdf_all_sizes ... ok
+test silk::decoder::tests::test_decode_silk_frame_state_persistence ... ok
+test silk::decoder::tests::test_decode_silk_frame_complete_20ms_wb ... ok
+test silk::decoder::tests::test_get_pulse_split_pdf_invalid ... ok
+test silk::decoder::tests::test_decode_silk_frame_accepts_vad_parameter ... ok
+test silk::decoder::reference_tests::reference_wb_persistent_decoded_channel ... ok
+test silk::decoder::tests::test_get_sign_pdf_voiced_high ... ok
+test silk::decoder::tests::test_get_sign_pdf_inactive_low ... ok
+test silk::decoder::tests::test_header_bits_mono ... ok
+test silk::decoder::tests::test_get_sign_pdf_unvoiced_all_pulse_counts ... ok
+test silk::decoder::tests::test_ihmw_weights_invalid_bandwidth ... ok
+test silk::decoder::tests::test_ihmw_weights_nb ... ok
+test silk::decoder::tests::test_header_bits_stereo ... ok
+test silk::decoder::tests::test_ihmw_weights_wb ... ok
+test silk::decoder::tests::test_independent_gain_decoding ... ok
+test silk::decoder::tests::test_lbrr_flag_decoding ... ok
+test silk::decoder::tests::test_lcg_formula ... ok
+test silk::decoder::tests::test_lcg_seed_decoding ... ok
+test silk::decoder::tests::test_lcg_seed_uniform_distribution ... ok
+test silk::decoder::tests::test_lcg_sequence ... ok
+test silk::decoder::tests::test_limit_lpc_invalid_bandwidth ... ok
+test silk::decoder::tests::test_lpc_synthesis_clamping ... ok
+test silk::decoder::tests::test_lpc_synthesis_all_bandwidths ... ok
+test silk::decoder::tests::test_lpc_synthesis_gain_scaling_half ... ok
+test silk::decoder::tests::test_lpc_synthesis_history_saved ... ok
+test silk::decoder::tests::test_lpc_synthesis_negative_clamping ... ok
+test silk::decoder::reference_tests::reference_wb_sequence_public_decoder_raw_48khz ... ok
+test silk::decoder::tests::test_lpc_synthesis_simple_gain_scaling ... ok
+test silk::decoder::tests::test_lsf_interpolation_10ms_returns_none ... ok
+test silk::decoder::tests::test_decode_silk_frame_wrapper_mono_vs_stereo ... ok
+test silk::decoder::tests::test_lsf_interpolation_20ms_nb ... ok
+test silk::decoder::tests::test_lpc_synthesis_zero_residual ... ok
+test silk::decoder::tests::test_lsf_interpolation_decoder_reset_forces_w_q2_4 ... ok
+test silk::decoder::tests::test_lpc_synthesis_with_history ... ok
+test silk::decoder::tests::test_lsf_interpolation_no_previous_returns_none ... ok
+test silk::decoder::tests::test_lsf_interpolation_uncoded_side_channel_forces_w_q2_4 ... ok
+test silk::decoder::tests::test_lpc_selection_10ms_no_interpolation ... ok
+test silk::decoder::tests::test_lpc_coefficients_generated_for_20ms_interpolation ... ok
+test silk::decoder::tests::test_lsf_ordering_lengths ... ok
+test silk::decoder::tests::test_lsf_interpolation_wb ... ok
+test silk::decoder::tests::test_lsf_ordering_values_in_bounds ... ok
+test silk::decoder::tests::test_lsf_reconstruction_monotonic_before_stabilization ... ok
+test silk::decoder::tests::test_lsf_reconstruction_nb ... ok
+test silk::decoder::tests::test_lsf_reconstruction_wb ... ok
+test silk::decoder::tests::test_lsf_stabilization_enforces_minimum_spacing_nb ... ok
+test silk::decoder::tests::test_lsf_stabilization_enforces_minimum_spacing_wb ... ok
+test silk::decoder::tests::test_lsf_stabilization_maintains_monotonicity ... ok
+test silk::decoder::tests::test_lsf_stabilization_nb ... ok
+test silk::decoder::tests::test_lsf_stabilization_wb ... ok
+test silk::decoder::tests::test_lsf_stage1_nb_inactive ... ok
+test silk::decoder::tests::test_lsf_stage1_wb_voiced ... ok
+test silk::decoder::tests::test_lsf_stage2_decoding_nb ... ok
+test silk::decoder::tests::test_lsf_stage2_decoding_wb ... ok
+test silk::decoder::tests::test_lsf_stage2_extension ... ok
+test silk::decoder::tests::test_lsf_to_lpc_invalid_bandwidth ... ok
+test silk::decoder::tests::test_lsf_to_output_nb ... ok
+test silk::decoder::tests::test_lsf_to_output_wb ... ok
+test celt::decoder::coarse_energy_tests::persistent_raw_corpus_production_pcm_matches_exactly ... ok
+test silk::decoder::tests::test_ltp_buffer_sizes ... ok
+test silk::decoder::tests::test_ltp_filter_all_periodicities ... ok
+test silk::decoder::tests::test_ltp_filter_periodicity_0 ... ok
+test silk::decoder::reference_tests::reference_wb_persistent_full_raw_api_48khz ... ok
+test silk::decoder::tests::test_ltp_scaling_decode ... ok
+test silk::decoder::tests::test_ltp_filter_periodicity_1 ... ok
+test silk::decoder::tests::test_ltp_scaling_default ... ok
+test silk::decoder::tests::test_ltp_state_reset ... ok
+test silk::decoder::tests::test_ltp_state_initialization ... ok
+test silk::decoder::tests::test_ltp_synthesis_unvoiced_full_subframe ... ok
+test silk::decoder::tests::test_ltp_synthesis_unvoiced_simple ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_5tap_filter ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_all_bandwidths ... ok
+test celt::decoder::coarse_energy_tests::persistent_corpus_mono_residual_and_tdac_match_reference ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_nonzero_gain ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_out_end_interpolation ... ok
+test silk::decoder::reference_tests::reference_stereo_coded_api_mono_and_stereo_persistent_and_reset ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_pitch_lag_short ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_pitch_lag_long ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_out_end_normal ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_subframe_indices ... ok
+test silk::decoder::tests::test_ltp_synthesis_voiced_zero_excitation ... ok
+test silk::decoder::tests::test_magnitude_limiting_large_coefficients ... ok
+test silk::decoder::tests::test_magnitude_limiting_within_q12_range ... ok
+test silk::decoder::tests::test_mark_uncoded_side_channel ... ok
+test silk::decoder::tests::test_mono_one_sample_delay ... ok
+test silk::decoder::tests::test_pulse_location_sum_conservation ... ok
+test silk::decoder::tests::test_num_silk_frames_calculation ... ok
+test silk::decoder::tests::test_quantization_offset_inactive_high ... ok
+test silk::decoder::tests::test_num_subframes_10ms ... ok
+test silk::decoder::tests::test_num_subframes_20ms ... ok
+test silk::decoder::tests::test_pitch_contour_clamping ... ok
+test silk::decoder::tests::test_pitch_contour_mb_10ms ... ok
+test silk::decoder::tests::test_pitch_contour_nb_10ms ... ok
+test silk::decoder::tests::test_pitch_contour_wb_20ms ... ok
+test silk::decoder::tests::test_pitch_contour_nb_20ms ... ok
+test silk::decoder::tests::test_prediction_gain_limiting_nb ... ok
+test silk::decoder::tests::test_primary_pitch_lag_absolute_mb ... ok
+test silk::decoder::tests::test_prediction_gain_limiting_wb ... ok
+test silk::decoder::tests::test_primary_pitch_lag_absolute_nb ... ok
+test silk::decoder::tests::test_primary_pitch_lag_absolute_wb ... ok
+test silk::decoder::tests::test_primary_pitch_lag_invalid_bandwidth ... ok
+test silk::decoder::tests::test_primary_pitch_lag_relative ... ok
+test silk::decoder::tests::test_primary_pitch_lag_relative_no_previous ... ok
+test silk::decoder::tests::test_quantization_offset_inactive_low ... ok
+test silk::decoder::tests::test_pseudorandom_inversion_msb ... ok
+test silk::decoder::tests::test_quantization_offset_unvoiced_high ... ok
+test silk::decoder::tests::test_quantization_offset_unvoiced_low ... ok
+test silk::decoder::tests::test_quantization_offset_voiced_high ... ok
+test silk::decoder::tests::test_quantization_offset_voiced_low ... ok
+test silk::decoder::tests::test_reconstruct_excitation_all_zeros ... ok
+test silk::decoder::tests::test_reconstruct_excitation_nonzero ... ok
+test silk::decoder::tests::test_resampler_delay_constants ... ok
+test silk::decoder::tests::test_resampling_same_rate ... ok
+test silk::decoder::tests::test_reset_decoder_state ... ok
+test silk::decoder::tests::test_residual_dequantization_invalid_bandwidth ... ok
+test silk::decoder::tests::test_residual_dequantization_nb ... ok
+test silk::decoder::tests::test_residual_dequantization_wb ... ok
+test silk::decoder::tests::test_round_15_forces_zero ... ok
+test silk::decoder::tests::test_samples_per_subframe_mb ... ok
+test silk::decoder::tests::test_samples_per_subframe_nb ... ok
+test silk::decoder::tests::test_samples_per_subframe_wb ... ok
+test silk::decoder::tests::test_seed_update_with_raw_value ... ok
+test silk::decoder::tests::test_shell_block_count_invalid ... ok
+test silk::decoder::tests::test_shell_block_count_invalid_nb ... ok
+test silk::decoder::tests::test_shell_block_count_mb_special ... ok
+test silk::decoder::tests::test_shell_block_count_nb_all ... ok
+test silk::decoder::tests::test_shell_block_count_wb ... ok
+test silk::decoder::tests::test_silk_decoder_creation_valid ... ok
+test silk::decoder::tests::test_silk_decoder_invalid_frame_size ... ok
+test silk::decoder::tests::test_silk_log2lin_integer_powers ... ok
+test silk::decoder::tests::test_silk_log2lin_rfc_formula_verification ... ok
+test silk::decoder::tests::test_resampling_16khz_to_48khz ... ok
+test silk::decoder::tests::test_silk_log2lin_zero ... ok
+test silk::decoder::tests::test_small_dc_response_stable ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_basic ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_history_updated ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_large_values ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_negative_values ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_phase1_duration ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_phase1_mb ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_phase1_nb ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_short_frame ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_weight_interpolation ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_with_history ... ok
+test silk::decoder::tests::test_stereo_ms_to_lr_zero_weights ... ok
+test silk::decoder::tests::test_stereo_weight_decoding ... ok
+test silk::decoder::tests::test_stereo_weights_stored ... ok
+test silk::decoder::tests::test_store_previous_lsf_nb ... ok
+test silk::decoder::tests::test_store_previous_lsf_wb ... ok
+test silk::decoder::tests::test_subframe_params_10ms_frame ... ok
+test silk::decoder::tests::test_subframe_params_field_values ... ok
+test silk::decoder::tests::test_subframe_params_interpolated_lpc ... ok
+test silk::decoder::tests::test_subframe_params_nb_bandwidth ... ok
+test silk::decoder::tests::test_subframe_params_ltp_scale_adjustment_subframe3 ... ok
+test silk::decoder::tests::test_subframe_params_interpolated_lpc_subframe1 ... ok
+test silk::decoder::tests::test_subframe_params_ltp_scale_normal_w_q2_ge_4 ... ok
+test silk::decoder::tests::test_subframe_params_ltp_scale_adjustment_subframe2 ... ok
+test silk::decoder::tests::test_subframe_start_index ... ok
+test silk::decoder::tests::test_vad_flag_affects_frame_type ... ok
+test silk::decoder::tests::test_subframe_params_normal_lpc_subframe2 ... ok
+test silk::decoder::tests::test_vad_flags_decoding ... ok
+test silk::decoder::tests::test_subframe_params_normal_lpc_w_q2_ge_4 ... ok
+test silk::resampler::tests::same_rate_mb_matches_raw_api_without_trimming ... ok
+test toc::tests::test_all_configurations_match_rfc_table_2 ... ok
+test silk_output_integration_tests::same_rate_delay_is_not_removed_and_transition_is_explicit ... ok
+test toc::tests::test_bandwidth_debug_display ... ok
+test toc::tests::test_channels_mono ... ok
+test toc::tests::test_channels_stereo ... ok
+test toc::tests::test_configuration_celt_swb ... ok
+test toc::tests::test_configuration_hybrid_fb ... ok
+test silk_output_integration_tests::raw_nb_reference_two_packets_keep_synthesis_and_resampler_history ... ok
+test toc::tests::test_configuration_silk_nb ... ok
+test toc::tests::test_frame_size_to_ms_all_variants ... ok
+test toc::tests::test_opus_mode_debug_display ... ok
+test toc::tests::test_toc_frame_count_code_all_values ... ok
+test toc::tests::test_toc_frame_duration_tenths_ms_all_configs ... ok
+test toc::tests::test_toc_parsing_hybrid_swb ... ok
+test toc::tests::test_toc_parsing_silk_nb ... ok
+test util::tests::test_ilog_non_powers ... ok
+test util::tests::test_ilog_powers_of_two ... ok
+test util::tests::test_ilog_zero ... ok
+test silk::resampler::tests::invalid_blocks_do_not_change_state_and_millisecond_partition_is_exact ... ok
+test silk::resampler::tests::all_rate_pairs_match_c_persistent_reference ... ok
+test celt::pvq::tests::test_bit_threshold_allows_split_above_limit ... ok
+test silk_output_integration_tests::planar_resamplers_preserve_independent_channels_packets_and_reset ... ok
+test celt::decoder::coarse_energy_tests::actual_stereo_payload_stages_and_output_channel_pcm ... ok
+test celt::decoder::coarse_energy_tests::frozen_hybrid_highband_residual_stages ... ok
+test celt::pvq::tests::test_split_with_sufficient_bits ... ok
+test celt::pvq::tests::test_lm_split_limit_enforcement ... ok
+test celt::decoder::coarse_energy_tests::frozen_hybrid_highband_shared_entropy_and_q12_synthesis ... ok
+test celt::pvq::tests::test_lm_countdown_mechanism ... ok
+test silk::decoder::reference_tests::persistent_per_channel_nlsf_and_mid_only_restart_match_c ... ok
+
+test result: ok. 592 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/output_tests.rs (target/debug/deps/output_tests-307e0ada8ff9ba07)
+
+running 14 tests
+test malformed_shape_and_short_buffer_do_not_mutate_state_or_output ... ok
+test non_res24_reference_rounding_boundary_is_preserved ... ok
+test unsupported_fec_and_plc_preserve_output_and_decoder_state ... ok
+test public_silence_packet_counts_and_reset_match_all_rates_and_channels ... ok
+test output_durations_and_reset_state_are_exact ... ok
+test hybrid_unverified_transitions_are_explicit_and_preserve_output ... ok
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+test storage_shrink_matches_upstream_shared_entropy_exactly ... ok
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+test silk_mono_to_stereo_exact_public_api ... ok
+test celt_mono_to_stereo_exact_public_api ... ok
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+test hybrid_nonzero_persistent_mapping_matches_pinned_api_all_rates ... ok
+test hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates ... ok
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+test celt_stereo_coded_output_mapping_matches_pinned_api_all_rates ... ok
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+{"reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15", "archive": "/hdd/GitHub/wt-moosicbox/opus/target/debug/build/moosicbox_opus_native_libopus-1b0f83aef5ae8bab/out/lib64/libopus.a", "archive_sha256": "f3d7c4e484957f38bef6b47a69c923df1c4e0056690532e917b551440aa6a841", "config_sha256": "2f37329f73fa0a807fd0d2117a4556434e97f03676e0201425b4c13b851c922f", "res24": false}
+test silk_stereo_coded_output_mapping_matches_pinned_api_all_rates ... ok
+test pinned_reference_deemphasis_matches_all_rates_channels_and_shapes ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.22s
+
+     Running tests/range_decoder_tests.rs (target/debug/deps/range_decoder_tests-8ca4196b90f1cff2)
+
+running 6 tests
+test test_all_public_api_functions ... ok
+test test_complete_decode_sequence ... ok
+test test_error_recovery_empty_buffer ... ok
+test test_error_recovery_insufficient_buffer ... ok
+test test_mixed_decode_operations ... ok
+test test_sequential_symbol_decoding ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/range_encoder_tests.rs (target/debug/deps/range_encoder_tests-b27b628c5928f7c4)
+
+running 3 tests
+test frozen_mixed_trace_from_pinned_entenc ... ok
+test invalid_arguments_are_rejected_without_state_changes ... ok
+test pinned_libopus_bytes_tell_and_decoder_interop ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.76s
+
+   Doc-tests moosicbox_opus_native
+
+running 9 tests
+test packages/opus_native/src/celt/decoder.rs - celt::decoder::CeltDecoder::energy_q8_to_linear (line 2151) ... ignored
+test packages/opus_native/src/celt/decoder.rs - celt::decoder::CeltDecoder::start_band (line 261) ... ignored
+test packages/opus_native/src/celt/decoder.rs - celt::decoder::CeltDecoder (line 228) - compile ... ok
+test packages/opus_native/src/range/decoder.rs - range::decoder::RangeDecoder (line 21) ... ok
+test packages/opus_native/src/silk/decoder.rs - silk::decoder::SilkDecoder (line 233) - compile ... ok
+test packages/opus_native/src/celt/decoder.rs - celt::decoder::CeltDecoder::compute_celt_overlap_window (line 2315) ... ok
+test packages/opus_native/src/lib.rs - (line 20) ... ok
+test packages/opus_native/src/lib.rs - (line 38) ... ok
+test packages/opus_native/src/range/decoder.rs - range::decoder::RangeDecoder::ec_tell_frac (line 454) ... ok
+
+test result: ok. 7 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 1.92s; merged doctests compilation took 1.90s

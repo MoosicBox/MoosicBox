@@ -50,8 +50,8 @@ use switchy_async::util::CancellationToken;
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 use switchy_http::models::Method;
 use symphonia::core::{
+    formats::probe::Hint,
     io::{MediaSourceStream, MediaSourceStreamOptions},
-    probe::Hint,
 };
 use thiserror::Error;
 use tokio::{

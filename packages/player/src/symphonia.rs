@@ -6,14 +6,16 @@
 
 use std::{fs::File, path::Path};
 
-use moosicbox_audio_decoder::{AudioDecodeHandler, DecodeError, decode};
+use moosicbox_audio_decoder::{
+    AudioDecodeHandler, DecodeError, DecodeOptions, decode_with_options,
+};
 use switchy_async::task::JoinError;
 use symphonia::core::{
-    codecs::DecoderOptions,
+    codecs::audio::AudioDecoderOptions,
     formats::FormatOptions,
+    formats::probe::Hint,
     io::{MediaSourceStream, MediaSourceStreamOptions},
     meta::MetadataOptions,
-    probe::Hint,
 };
 use thiserror::Error;
 
@@ -60,28 +62,76 @@ pub async fn play_file_path_str_async(
     track_num: Option<usize>,
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
+    play_file_path_str_async_with_options(
+        path_str,
+        get_audio_output_handler,
+        DecodeOptions {
+            decoder: AudioDecoderOptions::default()
+                .gapless(enable_gapless)
+                .verify(verify),
+            ..DecodeOptions::default()
+        },
+        track_num,
+        seek,
+    )
+    .await
+}
+
+/// Play using an explicitly selected decoder backend; never silently falls back.
+///
+/// # Errors
+/// * Returns source, decoding, unavailable-backend, or task errors.
+pub async fn play_file_path_str_async_with_options(
+    path_str: &str,
+    get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
+    options: DecodeOptions,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
     let path_str = path_str.to_owned();
     switchy_async::runtime::Handle::current()
         .spawn_blocking_with_name("audio_decoder: Play file path", move || {
             let mut handler = get_audio_output_handler()?;
-            play_file_path_str(
-                &path_str,
-                &mut handler,
-                enable_gapless,
-                verify,
-                track_num,
-                seek,
-            )
+            play_file_path_str_with_options(&path_str, &mut handler, options, track_num, seek)
         })
         .await?
 }
 
+/// Play a file with compatibility Libopus selection.
+///
+/// # Errors
+/// * Returns source, decoding, or unavailable-backend errors.
 #[allow(clippy::too_many_arguments)]
-fn play_file_path_str(
+pub fn play_file_path_str(
     path_str: &str,
     audio_decode_handler: &mut AudioDecodeHandler,
     enable_gapless: bool,
     verify: bool,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
+    play_file_path_str_with_options(
+        path_str,
+        audio_decode_handler,
+        DecodeOptions {
+            decoder: AudioDecoderOptions::default()
+                .gapless(enable_gapless)
+                .verify(verify),
+            ..DecodeOptions::default()
+        },
+        track_num,
+        seek,
+    )
+}
+
+/// Play using an explicitly selected decoder backend; never silently falls back.
+///
+/// # Errors
+/// * Returns source, decoding, unavailable-backend, or task errors.
+pub fn play_file_path_str_with_options(
+    path_str: &str,
+    audio_decode_handler: &mut AudioDecodeHandler,
+    options: DecodeOptions,
     track_num: Option<usize>,
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
@@ -102,15 +152,7 @@ fn play_file_path_str(
     // Create the media source stream using the boxed media source from above.
     let mss = MediaSourceStream::new(source, MediaSourceStreamOptions::default());
 
-    play_media_source(
-        mss,
-        &hint,
-        audio_decode_handler,
-        enable_gapless,
-        verify,
-        track_num,
-        seek,
-    )
+    play_media_source_with_options(mss, &hint, audio_decode_handler, options, track_num, seek)
 }
 
 /// Return type for functions that provide audio decode handlers.
@@ -129,7 +171,7 @@ pub type GetAudioDecodeHandlerRet = Result<AudioDecodeHandler, PlaybackError>;
 /// * If failed to play the `MediaSourceStream`
 /// * If the tokio task failed to join
 pub async fn play_media_source_async(
-    media_source_stream: MediaSourceStream,
+    media_source_stream: MediaSourceStream<'static>,
     hint: &Hint,
     get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
     enable_gapless: bool,
@@ -137,16 +179,43 @@ pub async fn play_media_source_async(
     track_num: Option<usize>,
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
+    play_media_source_async_with_options(
+        media_source_stream,
+        hint,
+        get_audio_output_handler,
+        DecodeOptions {
+            decoder: AudioDecoderOptions::default()
+                .gapless(enable_gapless)
+                .verify(verify),
+            ..DecodeOptions::default()
+        },
+        track_num,
+        seek,
+    )
+    .await
+}
+
+/// Play using an explicitly selected decoder backend; never silently falls back.
+///
+/// # Errors
+/// * Returns source, decoding, unavailable-backend, or task errors.
+pub async fn play_media_source_async_with_options(
+    media_source_stream: MediaSourceStream<'static>,
+    hint: &Hint,
+    get_audio_output_handler: impl FnOnce() -> GetAudioDecodeHandlerRet + Send + 'static,
+    options: DecodeOptions,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
     let hint = hint.clone();
     switchy_async::runtime::Handle::current()
         .spawn_blocking_with_name("audio_decoder: Play media source", move || {
             let mut handler = get_audio_output_handler()?;
-            play_media_source(
+            play_media_source_with_options(
                 media_source_stream,
                 &hint,
                 &mut handler,
-                enable_gapless,
-                verify,
+                options,
                 track_num,
                 seek,
             )
@@ -164,7 +233,7 @@ pub async fn play_media_source_async(
 /// * If failed to play the `MediaSourceStream`
 #[allow(clippy::too_many_arguments)]
 pub fn play_media_source(
-    media_source_stream: MediaSourceStream,
+    media_source_stream: MediaSourceStream<'static>,
     hint: &Hint,
     audio_decode_handler: &mut AudioDecodeHandler,
     enable_gapless: bool,
@@ -172,36 +241,58 @@ pub fn play_media_source(
     track_num: Option<usize>,
     seek: Option<f64>,
 ) -> Result<i32, PlaybackError> {
+    play_media_source_with_options(
+        media_source_stream,
+        hint,
+        audio_decode_handler,
+        DecodeOptions {
+            decoder: AudioDecoderOptions::default()
+                .gapless(enable_gapless)
+                .verify(verify),
+            ..DecodeOptions::default()
+        },
+        track_num,
+        seek,
+    )
+}
+
+/// Play using an explicitly selected decoder backend; never silently falls back.
+///
+/// # Errors
+/// * Returns source, decoding, unavailable-backend, or task errors.
+pub fn play_media_source_with_options(
+    media_source_stream: MediaSourceStream<'static>,
+    hint: &Hint,
+    audio_decode_handler: &mut AudioDecodeHandler,
+    options: DecodeOptions,
+    track_num: Option<usize>,
+    seek: Option<f64>,
+) -> Result<i32, PlaybackError> {
     // Use the default options for format readers other than for gapless playback.
-    let format_opts = FormatOptions {
-        enable_gapless,
-        ..Default::default()
-    };
+    let format_opts = FormatOptions::default();
 
     // Use the default options for metadata readers.
     let metadata_opts = MetadataOptions::default();
 
     // Probe the media source stream for metadata and get the format reader.
-    match symphonia::default::get_probe().format(
+    match symphonia::default::get_probe().probe(
         hint,
         media_source_stream,
-        &format_opts,
-        &metadata_opts,
+        format_opts,
+        metadata_opts,
     ) {
         Ok(probed) => {
             // If present, parse the seek argument.
             let seek_time = seek;
 
             // Set the decoder options.
-            let decode_opts = DecoderOptions { verify };
-
             // Play it!
-            Ok(decode(
-                probed.format,
+            Ok(decode_with_options(
+                probed,
                 audio_decode_handler,
                 track_num,
                 seek_time,
-                decode_opts,
+                options,
             )?)
         }
         Err(err) => {

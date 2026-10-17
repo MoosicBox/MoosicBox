@@ -1,0 +1,383 @@
+{
+  "command": [
+    "python3",
+    "packages/opus_native/src/silk/stage_oracle.py",
+    "--build",
+    "target/debug/build/moosicbox_opus_native_libopus-f3d2ff998a04d366/out/build",
+    "--rate",
+    "48000",
+    "--channels",
+    "1",
+    "packages/opus_native/src/silk/reference/wb_sequence_0.packet",
+    "packages/opus_native/src/silk/reference/wb_sequence_1.packet",
+    "packages/opus_native/src/silk/reference/wb_sequence_2.packet",
+    "packages/opus_native/src/silk/reference/wb_sequence_3.packet"
+  ],
+  "records": [
+    {
+      "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+      "archive_sha256": "52790c7a566fca71ad236ce073856a7a44f346167816a8e0e26a7ffd8247d8c1",
+      "oracle_sha256": "e11fee5d61c3805676e7db769f47061a925831db7d21c284ce94a713dd770ac9"
+    },
+    {
+      "stage": "core_input",
+      "gains": [
+        61603840,
+        115867648,
+        61603840,
+        32768000
+      ],
+      "coefficients": [
+        6616,
+        -2821,
+        638,
+        -386,
+        -140,
+        -335,
+        813,
+        -473,
+        85,
+        -152,
+        449,
+        -318,
+        86,
+        -180,
+        490,
+        -336,
+        6616,
+        -2821,
+        638,
+        -386,
+        -140,
+        -335,
+        813,
+        -473,
+        85,
+        -152,
+        449,
+        -318,
+        86,
+        -180,
+        490,
+        -336
+      ]
+    },
+    {
+      "stage": "ltp_parameters",
+      "scale": 0,
+      "lags": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "taps": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 1,
+      "quant_offset": 0,
+      "gain_indices": [
+        42,
+        8,
+        0,
+        0
+      ],
+      "seed": 0,
+      "tell": 299
+    },
+    {
+      "stage": "core_input",
+      "gains": [
+        17301504,
+        9240576,
+        7929856,
+        7929856
+      ],
+      "coefficients": [
+        2847,
+        2211,
+        -355,
+        -944,
+        -490,
+        355,
+        289,
+        -60,
+        240,
+        -266,
+        -138,
+        708,
+        -388,
+        415,
+        -147,
+        -697,
+        2847,
+        2211,
+        -355,
+        -944,
+        -490,
+        355,
+        289,
+        -60,
+        240,
+        -266,
+        -138,
+        708,
+        -388,
+        415,
+        -147,
+        -697
+      ]
+    },
+    {
+      "stage": "ltp_parameters",
+      "scale": 15565,
+      "lags": [
+        55,
+        55,
+        55,
+        55
+      ],
+      "taps": [
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664
+      ]
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 2,
+      "quant_offset": 0,
+      "gain_indices": [
+        34,
+        0,
+        3,
+        4
+      ],
+      "seed": 2,
+      "tell": 292
+    },
+    {
+      "stage": "core_input",
+      "gains": [
+        6782976,
+        6782976,
+        6782976,
+        6782976
+      ],
+      "coefficients": [
+        2847,
+        2211,
+        -355,
+        -944,
+        -490,
+        355,
+        289,
+        -60,
+        240,
+        -266,
+        -138,
+        708,
+        -388,
+        415,
+        -147,
+        -697,
+        2847,
+        2211,
+        -355,
+        -944,
+        -490,
+        355,
+        289,
+        -60,
+        240,
+        -266,
+        -138,
+        708,
+        -388,
+        415,
+        -147,
+        -697
+      ]
+    },
+    {
+      "stage": "ltp_parameters",
+      "scale": 15565,
+      "lags": [
+        55,
+        55,
+        55,
+        55
+      ],
+      "taps": [
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664
+      ]
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 2,
+      "quant_offset": 0,
+      "gain_indices": [
+        28,
+        4,
+        4,
+        4
+      ],
+      "seed": 3,
+      "tell": 279
+    },
+    {
+      "stage": "core_input",
+      "gains": [
+        5767168,
+        5767168,
+        5767168,
+        5767168
+      ],
+      "coefficients": [
+        2923,
+        1422,
+        25,
+        -442,
+        -177,
+        46,
+        159,
+        -71,
+        125,
+        -142,
+        -8,
+        328,
+        -236,
+        172,
+        -116,
+        -388,
+        2987,
+        617,
+        421,
+        -42,
+        140,
+        -169,
+        119,
+        -118,
+        18,
+        -120,
+        123,
+        -105,
+        -55,
+        -6,
+        -86,
+        -65
+      ]
+    },
+    {
+      "stage": "ltp_parameters",
+      "scale": 15565,
+      "lags": [
+        55,
+        55,
+        55,
+        55
+      ],
+      "taps": [
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        1024,
+        -2432,
+        13056,
+        5888,
+        -1664,
+        -128,
+        -640,
+        9344,
+        7168,
+        128
+      ]
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 2,
+      "quant_offset": 0,
+      "gain_indices": [
+        27,
+        4,
+        4,
+        4
+      ],
+      "seed": 0,
+      "tell": 298
+    }
+  ],
+  "files": {
+    "wb_sequence.api48.pcm": "c5769ac67e20531256cc006e22152d5803391106bde3fe31bcb9bf887187b721",
+    "wb_sequence.decoded.pcm": "a49dc606c9710844250f82511838a317baad8efcbc2c11bf248b06265b342210",
+    "wb_sequence_0.packet": "11a5cb8ea03471e2ece1dad52cadb3230907736d0fc6c71207a69424498682df",
+    "wb_sequence_1.packet": "015ee60b9b8c38c0a98338903eaa19d338d7f74621d1250378ee4c86b9e9f888",
+    "wb_sequence_2.packet": "3f7bb807834127db7c0c4522c265ac6113e66670f351d43f27e690013a684bb0",
+    "wb_sequence_3.packet": "9932b6085f54ba96e52c3b7430128e58578f4b7da5a3d7938ddf8173ed0744bf"
+  }
+}

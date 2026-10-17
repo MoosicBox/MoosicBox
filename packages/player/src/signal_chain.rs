@@ -11,13 +11,13 @@ use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::encoder::AudioEncoder;
 use moosicbox_resampler::Resampler;
 use symphonia::core::{
-    audio::{AudioBuffer, Signal},
+    audio::AudioBuffer,
+    formats::probe::Hint,
     io::{MediaSource, MediaSourceStream, MediaSourceStreamOptions},
-    probe::Hint,
 };
 use thiserror::Error;
 
-use super::symphonia_unsync::{PlaybackError, play_media_source};
+use super::symphonia_unsync::{PlaybackError, play_media_source_with_options_result};
 
 /// Errors that can occur during signal chain processing.
 #[derive(Debug, Error)]
@@ -84,6 +84,15 @@ impl SignalChain {
     ) -> Self {
         if let Some(step) = self.steps.pop() {
             self.steps.push(step.with_encoder(encoder));
+        }
+        self
+    }
+
+    /// Select decoding behavior for the most recently added step.
+    #[must_use]
+    pub fn with_decode_options(mut self, options: crate::DecodeOptions) -> Self {
+        if let Some(step) = self.steps.pop() {
+            self.steps.push(step.with_decode_options(options));
         }
         self
     }
@@ -180,8 +189,7 @@ pub struct SignalChainStep {
     audio_output_handler: Option<CreateAudioDecodeStream>,
     encoder: Option<CreateAudioEncoder>,
     resampler: Option<Resampler<f32>>,
-    enable_gapless: bool,
-    verify: bool,
+    decode_options: crate::DecodeOptions,
     seek: Option<f64>,
 }
 
@@ -194,8 +202,11 @@ impl SignalChainStep {
             audio_output_handler: None,
             encoder: None,
             resampler: None,
-            enable_gapless: true,
-            verify: true,
+            decode_options: crate::DecodeOptions {
+                decoder: symphonia::core::codecs::audio::AudioDecoderOptions::default()
+                    .verify(true),
+                ..crate::DecodeOptions::default()
+            },
             seek: None,
         }
     }
@@ -245,7 +256,14 @@ impl SignalChainStep {
     /// Sets whether to verify decoded audio for this step.
     #[must_use]
     pub const fn with_verify(mut self, verify: bool) -> Self {
-        self.verify = verify;
+        self.decode_options.decoder.verify = verify;
+        self
+    }
+
+    /// Select decoding behavior and the exact Opus backend for this step.
+    #[must_use]
+    pub const fn with_decode_options(mut self, options: crate::DecodeOptions) -> Self {
+        self.decode_options = options;
         self
     }
 
@@ -270,11 +288,10 @@ impl SignalChainStep {
         let hint = self.hint.unwrap_or_default();
         let mss = MediaSourceStream::new(media_source, MediaSourceStreamOptions::default());
 
-        let receiver = play_media_source(
+        let receiver = play_media_source_with_options_result(
             mss,
             &hint,
-            self.enable_gapless,
-            self.verify,
+            self.decode_options,
             None,
             self.seek,
         )?;
@@ -286,6 +303,7 @@ impl SignalChainStep {
             resampler: self.resampler,
             receiver,
             overflow: vec![],
+            drained: false,
         })
     }
 }
@@ -308,9 +326,10 @@ pub struct SignalChainStepProcessor {
     /// Optional resampler for sample rate conversion
     resampler: Option<Resampler<f32>>,
     /// Channel receiver for incoming audio buffers
-    receiver: Receiver<AudioBuffer<f32>>,
+    receiver: Receiver<Result<AudioBuffer<f32>, moosicbox_audio_decoder::DecodeError>>,
     /// Buffer for bytes that overflow the read buffer
     overflow: Vec<u8>,
+    drained: bool,
 }
 
 impl SignalChainStepProcessor {}
@@ -325,6 +344,9 @@ impl std::io::Seek for SignalChainStepProcessor {
 
 impl std::io::Read for SignalChainStepProcessor {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         if !self.overflow.is_empty() {
             log::debug!("buf len={} overflow len={}", buf.len(), self.overflow.len());
             let end = std::cmp::min(buf.len(), self.overflow.len());
@@ -335,42 +357,81 @@ impl std::io::Read for SignalChainStepProcessor {
             return Ok(end);
         }
 
+        if buf.is_empty() || self.drained {
+            return Ok(0);
+        }
         let bytes = loop {
-            log::debug!("Waiting for samples from receiver...");
-            let audio = self
+            let audio = match self
                 .receiver
                 .recv_timeout(std::time::Duration::from_secs(1))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::TimedOut, e))?;
-            log::debug!("Received {} frames from receiver", audio.frames());
-
-            let audio = if let Some(resampler) = &mut self.resampler {
-                let channels = audio.spec().channels.count();
-
-                log::debug!("Resampling frames...");
-                let samples = resampler
-                    .resample(&audio)
-                    .ok_or_else(|| std::io::Error::other("Failed to resample"))?;
-                let buf = AudioBuffer::new((samples.len() / channels) as u64, resampler.spec);
-                log::debug!("Resampled into {} frames", buf.frames());
-                buf
-            } else {
-                audio
-            };
-
-            if let Some(encoder) = &mut self.encoder {
-                log::debug!("Encoding frames...");
-                let bytes = encoder.encode(audio).map_err(std::io::Error::other)?;
-                log::debug!("Encoded into {} bytes", bytes.len());
-
-                if !bytes.is_empty() {
-                    break Some(bytes);
+            {
+                Ok(Err(error)) => {
+                    self.drained = true;
+                    return Err(std::io::Error::other(error));
                 }
-            } else {
-                break None;
+                Ok(Ok(audio)) => {
+                    if let Some(resampler) = &mut self.resampler {
+                        let Some(audio) = resampler
+                            .resample_to_audio_buffer(&audio)
+                            .map_err(std::io::Error::other)?
+                        else {
+                            continue;
+                        };
+                        audio
+                    } else {
+                        audio
+                    }
+                }
+                Err(flume::RecvTimeoutError::Timeout) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "audio input timed out",
+                    ));
+                }
+                Err(flume::RecvTimeoutError::Disconnected) => {
+                    let tail = if let Some(resampler) = &mut self.resampler {
+                        let spec = resampler.output_spec().clone();
+                        resampler
+                            .flush()
+                            .map(|samples| moosicbox_resampler::to_audio_buffer(samples, spec))
+                            .transpose()
+                            .map_err(std::io::Error::other)?
+                    } else {
+                        None
+                    };
+                    if let Some(tail) = tail {
+                        tail
+                    } else {
+                        self.drained = true;
+                        let bytes = self
+                            .encoder
+                            .as_mut()
+                            .map(|encoder| encoder.finish())
+                            .transpose()
+                            .map_err(std::io::Error::other)?
+                            .unwrap_or_default();
+                        if bytes.is_empty() {
+                            return Ok(0);
+                        }
+                        break bytes;
+                    }
+                }
+            };
+            let Some(encoder) = &mut self.encoder else {
+                return Err(std::io::Error::other("signal chain has no encoder"));
+            };
+            let bytes = encoder.encode(audio).map_err(|error| {
+                self.drained = true;
+                std::io::Error::other(error)
+            })?;
+            if !bytes.is_empty() {
+                break bytes;
+            }
+            if self.drained {
+                return Ok(0);
             }
         };
 
-        let bytes = bytes.unwrap();
         let (bytes_now, overflow) = bytes.split_at(std::cmp::min(buf.len(), bytes.len()));
 
         log::debug!(
@@ -410,6 +471,252 @@ pub enum SignalChainProcessorError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::{
+        io::Read as _,
+        sync::{Arc, Mutex},
+    };
+    use symphonia::core::audio::{Audio as _, AudioMut as _, AudioSpec, layouts};
+
+    struct InspectEncoder {
+        spec: AudioSpec,
+        calls: Arc<Mutex<usize>>,
+    }
+    impl AudioEncoder for InspectEncoder {
+        fn encode(
+            &mut self,
+            audio: AudioBuffer<f32>,
+        ) -> Result<bytes::Bytes, moosicbox_audio_output::AudioOutputError> {
+            assert_eq!(audio.spec(), &self.spec);
+            assert!(audio.frames() > 0);
+            assert!(
+                audio
+                    .iter_planes()
+                    .all(|plane| plane.iter().any(|sample| sample.abs() > 0.01))
+            );
+            *self.calls.lock().unwrap() += 1;
+            Ok(bytes::Bytes::from_static(&[1, 2, 3, 4]))
+        }
+        fn spec(&self) -> AudioSpec {
+            self.spec.clone()
+        }
+    }
+
+    fn partial_input(spec: AudioSpec) -> AudioBuffer<f32> {
+        let mut input = AudioBuffer::<f32>::new(spec, 4096);
+        input.render_silence(Some(512));
+        for plane in input.iter_planes_mut() {
+            plane.fill(0.25);
+        }
+        input
+    }
+
+    #[test_log::test]
+    fn test_decode_options_are_explicit_and_verify_builder_preserves_backend() {
+        let options = crate::DecodeOptions {
+            opus_backend: crate::OpusDecodeBackend::Native,
+            decoder: symphonia::core::codecs::audio::AudioDecoderOptions::default().gapless(false),
+        };
+        let chain = SignalChain::new()
+            .next_step()
+            .with_decode_options(options)
+            .with_verify(false);
+        assert_eq!(
+            chain.steps[0].decode_options.opus_backend,
+            crate::OpusDecodeBackend::Native
+        );
+        assert!(!chain.steps[0].decode_options.decoder.gapless);
+        assert!(!chain.steps[0].decode_options.decoder.verify);
+        assert_eq!(
+            SignalChainStep::new().decode_options.opus_backend,
+            crate::OpusDecodeBackend::Libopus
+        );
+    }
+
+    #[test_log::test]
+    fn test_partial_inputs_continue_and_disconnect_drains_once() {
+        for chunks in [2, 9] {
+            let input_spec = AudioSpec::new(44_100, layouts::CHANNEL_LAYOUT_MONO);
+            let output_spec = AudioSpec::new(48_000, layouts::CHANNEL_LAYOUT_MONO);
+            let calls = Arc::new(Mutex::new(0));
+            let (tx, receiver) = flume::unbounded();
+            for _ in 0..chunks {
+                tx.send(Ok(partial_input(input_spec.clone()))).unwrap();
+            }
+            drop(tx);
+            let mut processor = SignalChainStepProcessor {
+                encoder: Some(Box::new(InspectEncoder {
+                    spec: output_spec,
+                    calls: calls.clone(),
+                })),
+                resampler: Some(Resampler::new(input_spec, 48_000, 4096)),
+                receiver,
+                overflow: vec![],
+                drained: false,
+            };
+            let mut bytes = Vec::new();
+            // Tiny reads force overflow handling after both ordinary and EOF encoding.
+            let mut byte = [0];
+            while processor.read(&mut byte).unwrap() != 0 {
+                bytes.push(byte[0]);
+            }
+            let expected_calls = if chunks == 2 { 1 } else { 2 };
+            assert_eq!(*calls.lock().unwrap(), expected_calls);
+            assert_eq!(bytes, [1, 2, 3, 4].repeat(expected_calls));
+            assert_eq!(processor.read(&mut byte).unwrap(), 0);
+            assert_eq!(*calls.lock().unwrap(), expected_calls);
+        }
+    }
+
+    struct DrainEncoder {
+        finishes: Arc<Mutex<usize>>,
+        fail: bool,
+    }
+    impl AudioEncoder for DrainEncoder {
+        fn encode(
+            &mut self,
+            _audio: AudioBuffer<f32>,
+        ) -> Result<bytes::Bytes, moosicbox_audio_output::AudioOutputError> {
+            Ok(bytes::Bytes::new())
+        }
+        fn finish(&mut self) -> Result<bytes::Bytes, moosicbox_audio_output::AudioOutputError> {
+            *self.finishes.lock().unwrap() += 1;
+            if self.fail {
+                return Err(moosicbox_audio_output::AudioOutputError::Interrupt);
+            }
+            Ok(bytes::Bytes::from_static(&[5, 6, 7]))
+        }
+        fn spec(&self) -> AudioSpec {
+            AudioSpec::new(48_000, layouts::CHANNEL_LAYOUT_MONO)
+        }
+    }
+
+    #[test_log::test]
+    fn test_encoder_finish_once_with_overflow_and_error() {
+        for fail in [false, true] {
+            let finishes = Arc::new(Mutex::new(0));
+            let (tx, receiver) = flume::unbounded();
+            drop(tx);
+            let mut processor = SignalChainStepProcessor {
+                encoder: Some(Box::new(DrainEncoder {
+                    finishes: finishes.clone(),
+                    fail,
+                })),
+                resampler: None,
+                receiver,
+                overflow: vec![],
+                drained: false,
+            };
+            let mut byte = [0];
+            if fail {
+                assert_eq!(
+                    processor.read(&mut byte).unwrap_err().kind(),
+                    std::io::ErrorKind::Other
+                );
+            } else {
+                for expected in [5, 6, 7] {
+                    assert_eq!(processor.read(&mut byte).unwrap(), 1);
+                    assert_eq!(byte[0], expected);
+                }
+            }
+            assert_eq!(processor.read(&mut byte).unwrap(), 0);
+            assert_eq!(*finishes.lock().unwrap(), 1);
+        }
+    }
+
+    #[test_log::test]
+    fn test_terminal_decoder_error_is_not_clean_eof() {
+        let (tx, receiver) = flume::unbounded();
+        tx.send(Err(moosicbox_audio_decoder::DecodeError::InvalidSource))
+            .unwrap();
+        drop(tx);
+        let mut processor = SignalChainStepProcessor {
+            encoder: Some(Box::new(FailingEncoder)),
+            resampler: None,
+            receiver,
+            overflow: vec![9],
+            drained: false,
+        };
+        let mut byte = [0];
+        assert_eq!(processor.read(&mut byte).unwrap(), 1);
+        assert_eq!(byte, [9]);
+        let error = processor.read(&mut byte).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Other);
+        assert!(
+            error
+                .get_ref()
+                .unwrap()
+                .is::<moosicbox_audio_decoder::DecodeError>()
+        );
+        assert_eq!(processor.read(&mut byte).unwrap(), 0);
+    }
+
+    struct FailingEncoder;
+    impl AudioEncoder for FailingEncoder {
+        fn encode(
+            &mut self,
+            _audio: AudioBuffer<f32>,
+        ) -> Result<bytes::Bytes, moosicbox_audio_output::AudioOutputError> {
+            Err(moosicbox_audio_output::AudioOutputError::Interrupt)
+        }
+        fn spec(&self) -> AudioSpec {
+            AudioSpec::new(48_000, layouts::CHANNEL_LAYOUT_MONO)
+        }
+    }
+
+    #[test_log::test]
+    fn test_disconnect_tail_encoder_error_propagates_once() {
+        let spec = AudioSpec::new(44_100, layouts::CHANNEL_LAYOUT_MONO);
+        let (tx, receiver) = flume::unbounded();
+        tx.send(Ok(partial_input(spec.clone()))).unwrap();
+        drop(tx);
+        let mut processor = SignalChainStepProcessor {
+            encoder: Some(Box::new(FailingEncoder)),
+            resampler: Some(Resampler::new(spec, 48_000, 4096)),
+            receiver,
+            overflow: vec![],
+            drained: false,
+        };
+        let mut buf = [0; 8];
+        assert_eq!(
+            processor.read(&mut buf).unwrap_err().kind(),
+            std::io::ErrorKind::Other
+        );
+        assert_eq!(processor.read(&mut buf).unwrap(), 0);
+    }
+
+    #[test_log::test]
+    fn test_resampling_materializes_mono_and_stereo_once() {
+        for channels in [layouts::CHANNEL_LAYOUT_MONO, layouts::CHANNEL_LAYOUT_STEREO] {
+            let input_spec = AudioSpec::new(44_100, channels.clone());
+            let output_spec = AudioSpec::new(48_000, channels);
+            let mut input = AudioBuffer::<f32>::new(input_spec.clone(), 4096);
+            input.render_silence(Some(4096));
+            for plane in input.iter_planes_mut() {
+                plane.fill(0.25);
+            }
+            let calls = Arc::new(Mutex::new(0));
+            let (tx, receiver) = flume::unbounded();
+            tx.send(Ok(input)).unwrap();
+            let mut processor = SignalChainStepProcessor {
+                encoder: Some(Box::new(InspectEncoder {
+                    spec: output_spec,
+                    calls: calls.clone(),
+                })),
+                resampler: Some(Resampler::new(input_spec, 48_000, 4096)),
+                receiver,
+                overflow: vec![],
+                drained: false,
+            };
+            let mut first = [0; 2];
+            assert_eq!(processor.read(&mut first).unwrap(), 2);
+            assert_eq!(first, [1, 2]);
+            let mut rest = [0; 8];
+            assert_eq!(processor.read(&mut rest).unwrap(), 2);
+            assert_eq!(&rest[..2], &[3, 4]);
+            assert_eq!(*calls.lock().unwrap(), 1);
+        }
+    }
 
     #[test_log::test]
     fn test_signal_chain_new_creates_empty_chain() {
@@ -483,8 +790,8 @@ mod tests {
         assert!(step.audio_output_handler.is_none());
         assert!(step.encoder.is_none());
         assert!(step.resampler.is_none());
-        assert!(step.enable_gapless);
-        assert!(step.verify);
+        assert!(step.decode_options.decoder.gapless);
+        assert!(step.decode_options.decoder.verify);
         assert!(step.seek.is_none());
     }
 
@@ -495,18 +802,18 @@ mod tests {
         assert!(step.audio_output_handler.is_none());
         assert!(step.encoder.is_none());
         assert!(step.resampler.is_none());
-        assert!(step.enable_gapless);
-        assert!(step.verify);
+        assert!(step.decode_options.decoder.gapless);
+        assert!(step.decode_options.decoder.verify);
         assert!(step.seek.is_none());
     }
 
     #[test_log::test]
     fn test_signal_chain_step_with_verify_sets_value() {
         let step = SignalChainStep::new().with_verify(false);
-        assert!(!step.verify);
+        assert!(!step.decode_options.decoder.verify);
 
         let step = SignalChainStep::new().with_verify(true);
-        assert!(step.verify);
+        assert!(step.decode_options.decoder.verify);
     }
 
     #[test_log::test]
@@ -555,7 +862,7 @@ mod tests {
             .with_seek(Some(20.0));
 
         assert!(step.hint.is_some());
-        assert!(!step.verify);
+        assert!(!step.decode_options.decoder.verify);
         assert_eq!(step.seek, Some(20.0));
     }
 
@@ -657,11 +964,11 @@ mod tests {
                     Ok(bytes::Bytes::new())
                 }
 
-                fn spec(&self) -> symphonia::core::audio::SignalSpec {
-                    symphonia::core::audio::SignalSpec {
-                        rate: 44100,
-                        channels: symphonia::core::audio::Layout::Stereo.into_channels(),
-                    }
+                fn spec(&self) -> symphonia::core::audio::AudioSpec {
+                    symphonia::core::audio::AudioSpec::new(
+                        44100,
+                        symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+                    )
                 }
             }
 
@@ -685,6 +992,7 @@ mod tests {
                 resampler: None,
                 receiver: rx,
                 overflow: vec![],
+                drained: false,
             };
 
             // Seeking should always return an error
@@ -708,6 +1016,7 @@ mod tests {
                 resampler: None,
                 receiver: rx,
                 overflow: vec![],
+                drained: false,
             };
 
             // MediaSource should report as not seekable
@@ -727,6 +1036,7 @@ mod tests {
                 resampler: None,
                 receiver: rx,
                 overflow: vec![],
+                drained: false,
             };
 
             // MediaSource should report unknown byte length
@@ -740,12 +1050,15 @@ mod tests {
             use std::io::Read;
 
             // Create a processor with pre-populated overflow
-            let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let (_tx, rx) = flume::unbounded::<
+                Result<AudioBuffer<f32>, moosicbox_audio_decoder::DecodeError>,
+            >();
             let mut processor = SignalChainStepProcessor {
                 encoder: None,
                 resampler: None,
                 receiver: rx,
                 overflow: vec![1, 2, 3, 4, 5, 6, 7, 8],
+                drained: false,
             };
 
             // Read should pull from overflow first
@@ -766,12 +1079,15 @@ mod tests {
             use std::io::Read;
 
             // Create a processor with pre-populated overflow
-            let (_tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let (_tx, rx) = flume::unbounded::<
+                Result<AudioBuffer<f32>, moosicbox_audio_decoder::DecodeError>,
+            >();
             let mut processor = SignalChainStepProcessor {
                 encoder: None,
                 resampler: None,
                 receiver: rx,
                 overflow: vec![10, 20, 30],
+                drained: false,
             };
 
             // Read buffer larger than overflow
@@ -792,27 +1108,28 @@ mod tests {
             use std::io::Read;
 
             // Create a processor with empty overflow and a receiver that won't receive
-            let (tx, rx) = flume::unbounded::<symphonia::core::audio::AudioBuffer<f32>>();
+            let (tx, rx) = flume::unbounded::<
+                Result<AudioBuffer<f32>, moosicbox_audio_decoder::DecodeError>,
+            >();
             let mut processor = SignalChainStepProcessor {
                 encoder: None,
                 resampler: None,
                 receiver: rx,
                 overflow: vec![],
+                drained: false,
             };
 
-            // Drop the sender so receiver will timeout immediately
-            drop(tx);
+            // Keep the sender alive: temporary starvation is not EOF.
+            let sender = tx;
 
             // Read should timeout and return an error
             let mut buf = [0u8; 10];
             let result = processor.read(&mut buf);
             assert!(result.is_err());
-            // The error should be a timeout or disconnected channel error
-            let err = result.unwrap_err();
-            assert!(
-                err.kind() == std::io::ErrorKind::TimedOut
-                    || err.to_string().contains("Disconnected")
-            );
+            assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
+            assert!(!processor.drained);
+            drop(sender);
+            assert_eq!(processor.read(&mut buf).unwrap(), 0);
         }
     }
 }

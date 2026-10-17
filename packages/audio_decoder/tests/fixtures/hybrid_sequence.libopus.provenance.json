@@ -1,0 +1,11 @@
+{
+  "oracle": "direct opus_decoder_create / persistent opus_decode calls (no Rust decoder)",
+  "library": "/nix/store/hsm2d9pyy2gy139hp7vy8kgb8vgs0v3a-libopus-1.6.1/lib/libopus.so.0.11.1",
+  "library_sha256": "6059cda77019802e358173b72a6e2b7003bf2a7ac855303a7ac028baf75ba8b2",
+  "version": "libopus 1.6.1",
+  "sample_rate": 48000,
+  "channels": 1,
+  "fec": false,
+  "frames_per_packet": 960,
+  "pcm_sha256": "23e2f61ef7225c105e5a3ca7e38781e26058382211121461c909aed3fd019f23"
+}

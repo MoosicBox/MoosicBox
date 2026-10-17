@@ -16,9 +16,12 @@ tests    = false
 
 [dependencies]
 serde_json = { workspace = true }
+sha2       = { workspace = true }
 
 [build-dependencies]
 moosicbox_opus_native_libopus = { workspace = true }
+serde_json                    = { workspace = true }
+sha2                          = { workspace = true }
 
 [features]
 fail-on-warnings = ["moosicbox_opus_native_libopus/fail-on-warnings"]

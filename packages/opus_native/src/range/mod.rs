@@ -15,3 +15,8 @@
 pub mod decoder;
 
 pub use decoder::RangeDecoder;
+
+/// Native integer entropy encoder and fixed-budget packet finalization.
+pub mod encoder;
+
+pub use encoder::{RangeEncoder, RangeEncoderError};

@@ -12,8 +12,9 @@ use moosicbox_audio_encoder::flac::{Encoder, encoder_flac};
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use switchy_async::task::JoinHandle;
 use symphonia::core::{
-    audio::{AudioBuffer, Channels, Signal, SignalSpec},
-    formats::{Packet, Track},
+    audio::{Audio, AudioBuffer, AudioSpec},
+    formats::Track,
+    packet::Packet,
     units::Duration,
 };
 
@@ -29,6 +30,7 @@ use super::AudioEncoder;
 pub struct FlacEncoder {
     resampler: Option<RwLock<Resampler<i16>>>,
     input_rate: Option<u32>,
+    finished: bool,
     resample_rate: Option<u32>,
     output_rate: usize,
     duration: Option<Duration>,
@@ -49,6 +51,7 @@ impl FlacEncoder {
         Self {
             resampler: None,
             input_rate: None,
+            finished: false,
             resample_rate: None,
             output_rate: 44100,
             duration: None,
@@ -70,6 +73,7 @@ impl FlacEncoder {
         Self {
             resampler: None,
             input_rate: None,
+            finished: false,
             resample_rate: None,
             output_rate: 44100,
             duration: None,
@@ -83,23 +87,23 @@ impl FlacEncoder {
     /// # Arguments
     /// * `spec` - Input audio signal specification
     /// * `duration` - Audio duration in samples
-    pub fn init_resampler(&mut self, spec: &SignalSpec, duration: Duration) -> &Self {
-        self.input_rate.replace(spec.rate);
+    pub fn init_resampler(&mut self, spec: &AudioSpec, duration: Duration) -> &Self {
+        self.input_rate.replace(spec.rate());
         self.duration.replace(duration);
 
-        if self.resample_rate.is_none_or(|r| r != spec.rate)
-            && self.output_rate != spec.rate as usize
+        if self.resample_rate.is_none_or(|r| r != spec.rate())
+            && self.output_rate != spec.rate() as usize
         {
             log::debug!(
                 "Initializing resampler with rate={} duration={}",
-                spec.rate,
+                spec.rate(),
                 duration,
             );
-            self.resample_rate.replace(spec.rate);
+            self.resample_rate.replace(spec.rate());
             self.resampler.replace(RwLock::new(Resampler::new(
-                *spec,
+                spec.clone(),
                 self.output_rate,
-                duration,
+                duration.get(),
             )));
         }
         self
@@ -113,47 +117,48 @@ impl FlacEncoder {
     /// * `spec` - Audio signal specification
     /// * `duration` - Audio duration in samples
     #[must_use]
-    pub fn open(mut self, spec: SignalSpec, duration: Duration) -> Self {
-        self.init_resampler(&spec, duration);
+    pub fn open(mut self, spec: impl std::borrow::Borrow<AudioSpec>, duration: Duration) -> Self {
+        self.init_resampler(spec.borrow(), duration);
         self
     }
 
     fn encode_output(&mut self, buf: &[i16]) -> Bytes {
-        let mut read = 0;
-        let mut written = vec![];
-        loop {
-            let end = std::cmp::min(read + 1024, buf.len());
-            let mut output = [0u8; 4096];
-            match moosicbox_audio_encoder::flac::encode_flac(
-                &mut self.encoder,
-                &buf[read..end]
-                    .iter()
-                    .map(|x| i32::from(*x))
-                    .collect::<Vec<_>>(),
-                &mut output,
-            ) {
-                Ok(info) => {
-                    written.extend_from_slice(&output[..info.output_size]);
-                    read += info.input_consumed;
-
-                    if read >= buf.len() {
-                        break;
-                    }
-                }
-                Err(err) => {
-                    panic!("Failed to convert: {err:?}");
-                }
-            }
+        if buf.is_empty() {
+            return Bytes::new();
         }
-        written.into()
+        // Encode one complete FLAC stream per input batch, not concatenated
+        // independent streams for each arbitrary 1024-sample slice.
+        let input: Vec<_> = buf.iter().map(|&sample| i32::from(sample)).collect();
+        let mut output = vec![0; buf.len() * 4 + 4096];
+        let info =
+            moosicbox_audio_encoder::flac::encode_flac(&mut self.encoder, &input, &mut output)
+                .expect("Failed to encode FLAC");
+        output.truncate(info.output_size);
+        // flacenc 0.5.1 includes the short final block in STREAMINFO's minimum
+        // block size even though it emits fixed-block frame numbers. FLAC
+        // excludes that last block from this minimum. A mismatched min/max
+        // advertises variable blocking, so strict readers reject every frame.
+        // The audio_encoder helper uses a fixed 512-frame block size.
+        assert_eq!(&output[..8], b"fLaC\x80\x00\x00\x22");
+        assert_eq!(&output[10..12], &512_u16.to_be_bytes());
+        output[8..10].copy_from_slice(&512_u16.to_be_bytes());
+        output.into()
     }
 
     fn resample_if_needed(
         &mut self,
         decoded: &AudioBuffer<f32>,
     ) -> Result<Vec<i16>, AudioOutputError> {
+        if self.finished {
+            return Err(AudioOutputError::StreamEnd);
+        }
         let spec = decoded.spec();
-        let duration = decoded.capacity() as u64;
+        if spec.channels() != self.spec().channels() {
+            return Err(AudioOutputError::UnsupportedChannels(
+                spec.channels().count(),
+            ));
+        }
+        let duration = Duration::from(decoded.capacity() as u64);
 
         self.init_resampler(spec, duration);
 
@@ -169,15 +174,14 @@ impl FlacEncoder {
 
             Ok(resampler
                 .resample(decoded)
-                .ok_or(AudioOutputError::StreamEnd)?
-                .to_vec())
+                .map_or_else(Vec::new, <[_]>::to_vec))
         } else {
             log::debug!(
-                "Passing through audio frames={} duration={duration} rate={} channels={} channels_count={}",
+                "Passing through audio frames={} duration={duration} rate={} channels={:?} channels_count={}",
                 decoded.frames(),
-                spec.rate,
-                spec.channels,
-                spec.channels.count(),
+                spec.rate(),
+                spec.channels(),
+                spec.channels().count(),
             );
             Ok(to_samples(decoded))
         }
@@ -196,14 +200,35 @@ impl AudioEncoder for FlacEncoder {
 
         let decoded = self.resample_if_needed(&decoded)?;
 
+        if decoded.is_empty() {
+            return Ok(Bytes::new());
+        }
         Ok(self.encode_output(&decoded))
     }
 
-    fn spec(&self) -> SignalSpec {
-        SignalSpec {
-            rate: u32::try_from(self.output_rate).unwrap(),
-            channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
+    fn finish(&mut self) -> Result<Bytes, AudioOutputError> {
+        if self.finished {
+            return Ok(Bytes::new());
         }
+        self.finished = true;
+        let mut tail = Vec::new();
+        if let Some(resampler) = &self.resampler {
+            let mut resampler = resampler.write().map_err(|_| AudioOutputError::Interrupt)?;
+            while let Some(samples) = resampler.flush() {
+                tail.extend_from_slice(samples);
+            }
+        }
+        if tail.is_empty() {
+            return Ok(Bytes::new());
+        }
+        Ok(self.encode_output(&tail))
+    }
+
+    fn spec(&self) -> AudioSpec {
+        AudioSpec::new(
+            u32::try_from(self.output_rate).unwrap(),
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        )
     }
 }
 
@@ -240,6 +265,9 @@ impl AudioDecode for FlacEncoder {
 
         Ok(())
     }
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        AudioWrite::flush(self).map_err(|error| AudioDecodeError::Other(Box::new(error)))
+    }
 }
 
 impl AudioWrite for FlacEncoder {
@@ -270,6 +298,11 @@ impl AudioWrite for FlacEncoder {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
+        let bytes = self.finish()?;
+        if let Some(writer) = &mut self.writer {
+            writer.write_all(&bytes)?;
+            writer.flush()?;
+        }
         Ok(())
     }
 
@@ -324,7 +357,7 @@ pub fn encode_flac<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str
     let mut audio_decode_handler =
         AudioDecodeHandler::new().with_output(Box::new(move |spec, duration| {
             Ok(Box::new(
-                FlacEncoder::with_writer(writer.clone()).open(spec, duration),
+                FlacEncoder::with_writer(writer.clone()).open(&spec, duration),
             ))
         }));
 

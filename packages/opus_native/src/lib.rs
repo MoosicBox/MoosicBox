@@ -1,7 +1,8 @@
 //! Pure Rust Opus audio decoder implementation.
 //!
 //! This crate provides a native Rust implementation of the Opus audio decoder according to
-//! RFC 6716, supporting SILK (voice-optimized), CELT (full-spectrum), and Hybrid modes.
+//! RFC 6716. SILK, CELT and hybrid paths are under conformance development.
+//! Feature availability is not a general PCM parity claim.
 //!
 //! # Features
 //!
@@ -9,7 +10,8 @@
 //! * `silk` - SILK codec for voice (Narrowband/Mediumband/Wideband)
 //! * `celt` - CELT codec for full-spectrum audio (all bandwidths)
 //! * `hybrid` - Hybrid mode (SILK low frequencies + CELT high frequencies)
-//! * `resampling` - Sample rate conversion support
+//! * `resampling` - Compatibility feature; raw SILK output uses the integer
+//!   normative converter regardless of this flag.
 //!
 //! # Examples
 //!
@@ -49,23 +51,11 @@
 //! # }
 //! ```
 //!
-//! ## Hybrid decoding (48kHz with resampling)
+//! ## Hybrid limitations
 //!
-//! ```rust
-//! # #[cfg(all(feature = "hybrid", feature = "resampling"))]
-//! # {
-//! use moosicbox_opus_native::{Decoder, SampleRate, Channels};
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo)?;
-//!
-//! let packet = vec![0x74; 100];
-//! let mut output = vec![0i16; 480 * 2];
-//! let samples = decoder.decode(Some(&packet), &mut output, false)?;
-//! # Ok(())
-//! # }
-//! # }
-//! ```
+//! Ordinary hybrid frames use shared entropy and reference-order CELT deemphasis,
+//! conversion and saturating accumulation onto SILK PCM. Redundant transition
+//! synthesis remains unsupported, as do FEC and packet-loss concealment.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
@@ -78,6 +68,8 @@ pub mod celt;
 pub mod error;
 /// Opus packet framing and parsing according to RFC 6716
 pub mod framing;
+#[cfg(feature = "celt")]
+mod output;
 /// Range decoder for entropy decoding
 pub mod range;
 /// SILK decoder implementation (enabled with `silk` feature)
@@ -161,6 +153,10 @@ pub struct Decoder {
 
     #[cfg(feature = "celt")]
     celt: celt::CeltDecoder,
+    #[cfg(feature = "celt")]
+    celt_output: output::CeltOutput,
+    #[cfg(feature = "celt")]
+    celt_packet_channels: Option<Channels>,
 
     #[allow(dead_code)]
     prev_mode: Option<OpusMode>,
@@ -175,14 +171,10 @@ pub struct Decoder {
     #[cfg(feature = "silk")]
     silk_configured_frame_ms: u8,
 
-    #[cfg(all(feature = "silk", feature = "resampling"))]
-    silk_resampler_state: Option<moosicbox_resampler::Resampler<i16>>,
-    #[cfg(all(feature = "silk", feature = "resampling"))]
+    #[cfg(feature = "silk")]
+    silk_resamplers: Vec<silk::resampler::SilkResampler>,
+    #[cfg(feature = "silk")]
     silk_resampler_input_rate: u32,
-    #[cfg(all(feature = "silk", feature = "resampling"))]
-    silk_resampler_output_rate: u32,
-    #[cfg(all(feature = "silk", feature = "resampling"))]
-    silk_resampler_required_delay_ms: f32,
 }
 
 /// SILK header flags structure
@@ -222,6 +214,11 @@ impl Decoder {
                 480, // Default: 10ms @ 48kHz (will be updated per packet)
             )?,
 
+            #[cfg(feature = "celt")]
+            celt_output: output::CeltOutput::default(),
+            #[cfg(feature = "celt")]
+            celt_packet_channels: None,
+
             prev_mode: None,
 
             #[cfg(feature = "silk")]
@@ -234,14 +231,10 @@ impl Decoder {
             #[cfg(feature = "silk")]
             silk_configured_frame_ms: 20,
 
-            #[cfg(all(feature = "silk", feature = "resampling"))]
-            silk_resampler_state: None,
-            #[cfg(all(feature = "silk", feature = "resampling"))]
+            #[cfg(feature = "silk")]
+            silk_resamplers: Vec::new(),
+            #[cfg(feature = "silk")]
             silk_resampler_input_rate: 0,
-            #[cfg(all(feature = "silk", feature = "resampling"))]
-            silk_resampler_output_rate: 0,
-            #[cfg(all(feature = "silk", feature = "resampling"))]
-            silk_resampler_required_delay_ms: 0.0,
         })
     }
 
@@ -256,7 +249,7 @@ impl Decoder {
     /// # Arguments
     /// * `input` - Optional input packet (None = packet loss)
     /// * `output` - Output buffer for decoded PCM
-    /// * `fec` - Forward Error Correction flag
+    /// * `fec` - Forward Error Correction request (currently unsupported)
     ///
     /// # Returns
     /// Number of samples decoded per channel
@@ -265,11 +258,17 @@ impl Decoder {
     /// * `Error::InvalidPacket` - Packet violates RFC R1-R7
     /// * `Error::UnsupportedMode` - Mode not enabled via features
     /// * `Error::DecodeFailed` - Decoder error
+    /// * `Error::Unsupported` - FEC or packet-loss concealment requested; state and output untouched
     #[allow(clippy::too_many_lines)]
     pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) -> Result<usize> {
-        let Some(packet) = input else {
-            return Ok(self.handle_packet_loss(output, fec));
-        };
+        if fec {
+            return Err(Error::Unsupported(
+                "Forward error correction is not implemented".into(),
+            ));
+        }
+        let packet = input.ok_or_else(|| {
+            Error::Unsupported("Packet loss concealment is not implemented".into())
+        })?;
 
         if packet.is_empty() {
             return Err(Error::InvalidPacket("Packet must be ≥1 byte (R1)".into()));
@@ -277,6 +276,7 @@ impl Decoder {
 
         #[cfg(not(any(feature = "silk", feature = "celt")))]
         {
+            let _ = output;
             Err(Error::UnsupportedMode(
                 "No decoding features enabled. Enable at least one of: 'silk', 'celt'".into(),
             ))
@@ -294,15 +294,26 @@ impl Decoder {
                 config.frame_size
             );
 
-            if toc.channels() != self.channels {
-                return Err(Error::InvalidPacket(format!(
-                    "Channel mismatch: packet={:?}, decoder={:?}",
-                    toc.channels(),
-                    self.channels
-                )));
-            }
-
             let frames = framing::parse_frames(packet)?;
+
+            if self.prev_mode.is_some_and(|previous| {
+                previous != config.mode
+                    && (previous == OpusMode::Hybrid || config.mode == OpusMode::Hybrid)
+            }) {
+                return Err(Error::Unsupported(
+                    "Hybrid mode transition crossfade is not implemented".into(),
+                ));
+            }
+            #[cfg(feature = "celt")]
+            if config.mode == OpusMode::Hybrid
+                && self
+                    .celt_packet_channels
+                    .is_some_and(|previous| previous != toc.channels())
+            {
+                return Err(Error::Unsupported(
+                    "Hybrid coded channel transition requires reference state mapping".into(),
+                ));
+            }
 
             // Mode changed - reset decoder state
             if let Some(prev) = self.prev_mode
@@ -316,15 +327,14 @@ impl Decoder {
                 {
                     self.silk.reset_decoder_state();
 
-                    #[cfg(feature = "resampling")]
-                    {
-                        self.silk_resampler_state = None;
-                    }
+                    self.silk_resamplers.clear();
+                    self.silk_resampler_input_rate = 0;
                 }
 
                 #[cfg(feature = "celt")]
                 if curr == toc::OpusMode::CeltOnly || curr == toc::OpusMode::Hybrid {
                     self.celt.reset();
+                    self.celt_output = output::CeltOutput::default();
                 }
             }
 
@@ -401,40 +411,27 @@ impl Decoder {
         }
     }
 
-    /// Handle packet loss
-    ///
-    /// Returns silence for now. Phase 6 will implement proper PLC.
-    ///
-    /// # Arguments
-    /// * `output` - Output buffer to fill with concealed samples
-    /// * `_fec` - FEC flag (unused in Phase 5)
-    ///
-    /// # Returns
-    /// Number of samples written per channel
-    fn handle_packet_loss(&self, output: &mut [i16], _fec: bool) -> usize {
-        for sample in output.iter_mut() {
-            *sample = 0;
-        }
-        output.len() / self.channels as usize
-    }
-
     /// Decodes an Opus packet to floating point PCM.
     ///
     /// # Errors
     ///
-    /// * Returns an error if decoding fails (not yet implemented - will be implemented in Phase 6).
+    /// * Returns an error if integer PCM decoding fails.
     ///
-    /// # Panics
-    ///
-    /// * Panics unconditionally because this function is currently a placeholder.
+    /// The fixed-point decoder is used for synthesis. Samples are converted to
+    /// floating point by dividing by 32768, without changing codec arithmetic.
     pub fn decode_float(
         &mut self,
         input: Option<&[u8]>,
         output: &mut [f32],
         fec: bool,
     ) -> Result<usize> {
-        let _ = (self, input, output, fec);
-        todo!("Implement in Phase 6")
+        let mut pcm = vec![0_i16; output.len()];
+        let samples = self.decode(input, &mut pcm, fec)?;
+        let sample_count = samples * self.channels as usize;
+        for (dst, &src) in output.iter_mut().zip(&pcm).take(sample_count) {
+            *dst = f32::from(src) / 32768.0;
+        }
+        Ok(samples)
     }
 
     /// Calculate samples for given frame size and rate
@@ -476,17 +473,21 @@ impl Decoder {
     #[cfg(feature = "silk")]
     const fn calculate_silk_delay_samples(internal_rate: u32) -> usize {
         match internal_rate {
-            8000 => 5,   // NB: 5 samples = 0.625ms
-            12000 => 10, // MB: 10 samples = 0.833ms
-            16000 => 13, // WB: 13 samples = 0.8125ms
-            _ => 0,      // Unknown rate - no delay compensation
+            8000 => 4,
+            12000 => 9,
+            16000 => 12,
+            _ => 0, // Unknown rate - no delay compensation
         }
     }
 
     /// Returns the current SILK algorithmic delay in samples.
     ///
     /// This is the number of initial samples that contain lookahead data.
-    /// The delay is included in the decoded output and should be skipped by the caller if needed.
+    /// Raw output includes this delay and must not be trimmed for reference parity.
+    /// Reports only the same-rate resampler's 4/9/12 input-sample delay.
+    /// The SILK API wrapper also preserves one sample of synthesis history for
+    /// both mono and stereo; that history and cross-rate filter latency are not
+    /// included in this metadata. This is not total codec/encoder lookahead.
     ///
     /// # Returns
     /// Delay in samples at the decoder's sample rate (0 if not using SILK)
@@ -506,14 +507,13 @@ impl Decoder {
     ///
     /// # Errors
     ///
-    /// * Returns an error if reset fails (not yet implemented - will be implemented in Phase 6).
+    /// * Returns an error if constructing fresh codec state fails.
     ///
-    /// # Panics
-    ///
-    /// * Panics unconditionally because this function is currently a placeholder.
+    /// The output sample rate and channel count are preserved. All prediction,
+    /// overlap, mode-transition, and resampler state is discarded.
     pub fn reset_state(&mut self) -> Result<()> {
-        let _ = self;
-        todo!("Implement in Phase 6")
+        *self = Self::new(self.sample_rate, self.channels)?;
+        Ok(())
     }
 
     /// Decode SILK header flags (VAD + LBRR)
@@ -733,11 +733,18 @@ impl Decoder {
         output: &mut [i16],
     ) -> Result<usize> {
         let mut ec = range::RangeDecoder::new(frame_data)?;
+        self.decode_silk_payload(&mut ec, config, channels, output)
+    }
 
-        let header_flags = Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
-
-        let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
-
+    #[cfg(feature = "silk")]
+    #[allow(clippy::too_many_lines)]
+    fn decode_silk_payload(
+        &mut self,
+        ec: &mut range::RangeDecoder,
+        config: Configuration,
+        channels: Channels,
+        output: &mut [i16],
+    ) -> Result<usize> {
         let internal_rate = match config.bandwidth {
             Bandwidth::Narrowband => 8000,
             Bandwidth::Mediumband => 12000,
@@ -769,6 +776,19 @@ impl Decoder {
             || self.silk_configured_channels != channels
             || self.silk_configured_frame_ms != silk_frame_size_ms;
 
+        if !self.silk_resamplers.is_empty()
+            && (self.silk_configured_rate != target_rate
+                || self.silk_configured_channels != channels)
+        {
+            return Err(Error::Unsupported(
+                "SILK rate/channel transition requires reference state migration".into(),
+            ));
+        }
+        if !self.silk_resamplers.is_empty() && self.silk_configured_frame_ms != silk_frame_size_ms {
+            return Err(Error::Unsupported(
+                "SILK frame-duration transition requires prediction-state reconfiguration".into(),
+            ));
+        }
         if needs_reconfigure {
             self.silk = silk::SilkDecoder::new(target_rate, channels, silk_frame_size_ms)?;
             self.silk_configured_rate = target_rate;
@@ -776,12 +796,29 @@ impl Decoder {
             self.silk_configured_frame_ms = silk_frame_size_ms;
         }
 
-        // Track SILK algorithmic delay for automatic removal
-        self.silk_delay_samples = Self::calculate_silk_delay_samples(internal_rate);
+        // One independently coded Opus SILK payload can contain 1–3 constituent
+        // SILK frames. Reset entropy independence once, never per constituent.
+        self.silk.begin_packet();
+
+        let header_flags = Self::decode_silk_header_flags(ec, config.frame_size, channels)?;
+
+        let _lbrr_frames = self.decode_lbrr_frames(ec, &header_flags, config, channels)?;
+
+        // Same-rate delay is diagnostic metadata only. Raw output is never shifted.
+        self.silk_delay_samples = if internal_rate == self.sample_rate as u32 {
+            Self::calculate_silk_delay_samples(internal_rate)
+        } else {
+            0
+        };
 
         let frame_samples =
             Self::calculate_samples(config.frame_size, internal_rate) / num_silk_frames;
-        let num_channels = channels as usize;
+        let synthesis_channels = if self.channels == Channels::Mono {
+            Channels::Mono
+        } else {
+            channels
+        };
+        let num_channels = synthesis_channels as usize;
         let total_samples = frame_samples * num_silk_frames;
         let mut silk_buffer = vec![0i16; total_samples * num_channels];
 
@@ -800,8 +837,8 @@ impl Decoder {
                     .copied()
                     .unwrap_or(true);
 
-                let frame_offset = frame_idx * frame_samples * 2;
-                let frame_end = frame_offset + frame_samples * 2;
+                let frame_offset = frame_idx * frame_samples * num_channels;
+                let frame_end = frame_offset + frame_samples * num_channels;
 
                 if frame_end > silk_buffer.len() {
                     return Err(Error::DecodeFailed(format!(
@@ -815,11 +852,16 @@ impl Decoder {
                 let frame_buffer = &mut silk_buffer[frame_offset..frame_end];
 
                 // decode_silk_frame_stereo returns samples per channel
-                let decoded = self.silk.decode_silk_frame_stereo(
-                    &mut ec,
-                    (mid_vad, side_vad),
-                    frame_buffer,
-                )?;
+                let decoded = if synthesis_channels == Channels::Mono {
+                    self.silk.decode_silk_frame_stereo_to_mono(
+                        ec,
+                        (mid_vad, side_vad),
+                        frame_buffer,
+                    )?
+                } else {
+                    self.silk
+                        .decode_silk_frame_stereo(ec, (mid_vad, side_vad), frame_buffer)?
+                };
 
                 if decoded != frame_samples {
                     return Err(Error::DecodeFailed(format!(
@@ -841,7 +883,7 @@ impl Decoder {
 
                 let decoded = self
                     .silk
-                    .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
+                    .decode_silk_frame(ec, vad_flag, &mut frame_buffer)?;
 
                 if decoded != frame_samples {
                     return Err(Error::DecodeFailed(format!(
@@ -855,27 +897,25 @@ impl Decoder {
         }
 
         let target_rate = self.sample_rate as u32;
-        #[cfg(feature = "resampling")]
-        if internal_rate != target_rate {
-            let resampled =
-                self.resample_silk(&silk_buffer, internal_rate, target_rate, channels)?;
-
-            let copy_len = resampled.len().min(output.len());
-            output[..copy_len].copy_from_slice(&resampled[..copy_len]);
-
-            return Ok(resampled.len() / num_channels);
+        let resampled =
+            self.resample_silk(&silk_buffer, internal_rate, target_rate, synthesis_channels)?;
+        if resampled.len() > output.len() {
+            return Err(Error::DecodeFailed("SILK output buffer too small".into()));
         }
-
-        #[cfg(not(feature = "resampling"))]
-        if internal_rate != target_rate {
-            return Err(Error::InvalidSampleRate(format!(
-                "Resampling not available: SILK internal rate {internal_rate} != target rate {target_rate}"
-            )));
+        if channels == Channels::Mono && self.channels == Channels::Stereo {
+            if output.len() < resampled.len() * 2 {
+                return Err(Error::DecodeFailed(
+                    "SILK stereo output buffer too small".into(),
+                ));
+            }
+            for (frame, sample) in resampled.iter().enumerate() {
+                output[2 * frame] = *sample;
+                output[2 * frame + 1] = *sample;
+            }
+        } else {
+            output[..resampled.len()].copy_from_slice(&resampled);
         }
-
-        let copy_len = silk_buffer.len().min(output.len());
-        output[..copy_len].copy_from_slice(&silk_buffer[..copy_len]);
-        Ok(total_samples)
+        Ok(resampled.len() / num_channels)
     }
 
     /// Decode CELT-only frame
@@ -902,87 +942,79 @@ impl Decoder {
     fn decode_celt_only(
         &mut self,
         frame_data: &[u8],
-        _config: Configuration,
+        config: Configuration,
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
+        if self
+            .celt_packet_channels
+            .is_some_and(|previous| previous != channels)
         {
-            use crate::{
-                celt::{CELT_NUM_BANDS, fixed_point::sig_to_int16},
-                range::RangeDecoder,
-            };
-
-            let mut ec = RangeDecoder::new(frame_data)?;
-
-            self.celt.set_start_band(0);
-            self.celt.set_end_band(CELT_NUM_BANDS);
-            self.celt.set_output_rate(self.sample_rate)?;
-
-            let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
-
-            if decoded_frame.channels != channels {
-                return Err(Error::DecodeFailed(format!(
-                    "CELT channel mismatch: expected {channels:?}, got {:?}",
-                    decoded_frame.channels
-                )));
+            return Err(Error::Unsupported(
+                "CELT coded channel transition requires reference overlap-state mapping".into(),
+            ));
+        }
+        if self.celt_packet_channels.is_none() {
+            self.celt.set_channels(channels);
+            self.celt_packet_channels = Some(channels);
+        }
+        let mut ec = range::RangeDecoder::new(frame_data)?;
+        let internal_samples = Self::calculate_samples(config.frame_size, 48000);
+        self.celt.set_output_rate(self.sample_rate)?;
+        self.celt.set_frame_size(internal_samples)?;
+        self.celt.set_start_band(0);
+        self.celt.set_end_band(match config.bandwidth {
+            Bandwidth::Narrowband => 13,
+            Bandwidth::Mediumband | Bandwidth::Wideband => 17,
+            Bandwidth::SuperWideband => 19,
+            Bandwidth::Fullband => 21,
+        });
+        let synthesis_channels = if self.channels == Channels::Mono {
+            Channels::Mono
+        } else {
+            channels
+        };
+        self.celt.configure_synthesis_channels(synthesis_channels);
+        let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
+        if decoded_frame.sample_rate != SampleRate::Hz48000
+            || decoded_frame.channels != synthesis_channels
+        {
+            return Err(Error::DecodeFailed(
+                "CELT synthesis configuration mismatch".into(),
+            ));
+        }
+        if channels == Channels::Mono && self.channels == Channels::Stereo {
+            let mut mono =
+                vec![0; Self::calculate_samples(config.frame_size, self.sample_rate as u32)];
+            let count = self.celt_output.process(
+                &decoded_frame.samples,
+                internal_samples,
+                1,
+                self.sample_rate as u32,
+                &mut mono,
+            )?;
+            for (frame, sample) in mono.iter().enumerate() {
+                output[2 * frame] = *sample;
+                output[2 * frame + 1] = *sample;
             }
-
-            log::debug!(
-                "decode_celt_only: frame has {} samples, nonzero={}, first 20: {:?}",
-                decoded_frame.samples.len(),
-                decoded_frame.samples.iter().filter(|&&x| x != 0).count(),
-                &decoded_frame.samples[..20.min(decoded_frame.samples.len())]
-            );
-            if decoded_frame.samples.len() >= 60 {
-                log::debug!(
-                    "decode_celt_only[40..60]: {:?}",
-                    &decoded_frame.samples[40..60]
-                );
-            }
-
-            // Convert CeltSig (Q12 format) to i16 PCM
-            for (i, &sample) in decoded_frame.samples.iter().enumerate() {
-                if i < output.len() {
-                    // sig_to_int16 converts Q12 → i16 with proper rounding and saturation
-                    output[i] = sig_to_int16(sample);
-                }
-            }
-
-            log::debug!(
-                "decode_celt_only: After conversion to PCM, output[0..20]: {:?}",
-                &output[..20]
-            );
-            if output.len() >= 60 {
-                log::debug!("decode_celt_only: output[40..60]: {:?}", &output[40..60]);
-            }
-
-            // DEBUG: For WB, log the Q12 samples before conversion
-            if self.sample_rate == SampleRate::Hz16000 && decoded_frame.samples.len() >= 60 {
-                log::debug!(
-                    "CELT decode Q12 samples[40..60]: {:?}",
-                    &decoded_frame.samples[40..60]
-                );
-            }
-
-            // TODO: Apply deemphasis + decimation when downsample > 1
-            // Currently CELT always outputs 48kHz samples (480 for 10ms frame).
-            // When self.sample_rate < 48kHz, we should decimate the output.
-            // For example, WB (16kHz) should output 160 samples, not 480.
-            // The downsample factor is set via set_output_rate(), but decimation
-            // is not yet implemented in this decode path.
-            //
-            // RFC 6716 lines 498-501: "decimate the MDCT layer output"
-            // LibOpus: celt_decoder.c applies deemphasis filter + time-domain decimation
-            //
-            // Until decimation is implemented:
-            // - 48kHz output works correctly (bit-exact for NB via downsampling)
-            // - Other rates (8/12/16/24kHz) will fail with sample count mismatch
-
-            Ok(decoded_frame.samples.len())
+            Ok(count)
+        } else {
+            self.celt_output.process(
+                &decoded_frame.samples,
+                internal_samples,
+                synthesis_channels as usize,
+                self.sample_rate as u32,
+                output,
+            )
         }
     }
 
     /// Decode hybrid mode frame (SILK low-freq + CELT high-freq)
+    ///
+    /// This path is incomplete: reference-equivalent SILK/CELT accumulation before
+    /// deemphasis and output conversion is not implemented. Successful execution
+    /// is not a claim of PCM parity; do not reuse the CELT-only output stage here
+    /// after independent i16 clipping.
     ///
     /// # RFC Reference
     /// * Lines 481-487: Hybrid overview
@@ -991,11 +1023,8 @@ impl Decoder {
     /// * Lines 1999-2050: LBRR frame decoding
     /// * Line 5804: "first 17 bands (up to 8 kHz) are not coded"
     ///
-    /// # Critical Algorithm
-    /// 1. SILK decodes first using range decoder (with multi-frame support)
-    /// 2. CELT continues with SAME range decoder (shared state!)
-    /// 3. CELT skips bands 0-16 (`start_band=17`, RFC 5804)
-    /// 4. Both outputs resampled to target, then summed
+    /// Decodes both layers from one entropy state and saturating-adds converted
+    /// CELT output to the persistent resampled SILK PCM.
     ///
     /// # Arguments
     /// * `frame_data` - Complete frame payload (NOT pre-split!)
@@ -1008,7 +1037,7 @@ impl Decoder {
     ///
     /// # Errors
     /// * Returns error if SILK or CELT decode fails
-    /// * Returns error if sample rate conversion fails
+    /// * Returns unsupported for redundant transition synthesis
     #[cfg(all(feature = "silk", feature = "celt"))]
     #[allow(dead_code)]
     fn decode_hybrid(
@@ -1018,130 +1047,78 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        {
-            use crate::{
-                celt::CELT_NUM_BANDS, celt::fixed_point::sig_to_int16, range::RangeDecoder,
-            };
-            const HYBRID_SILK_INTERNAL_RATE: u32 = 16000;
-            const HYBRID_START_BAND: usize = 17;
-
-            let mut ec = RangeDecoder::new(frame_data)?;
-
-            let header_flags =
-                Self::decode_silk_header_flags(&mut ec, config.frame_size, channels)?;
-
-            let _lbrr_frames = self.decode_lbrr_frames(&mut ec, &header_flags, config, channels)?;
-
-            let num_silk_frames = match config.frame_size.to_ms() {
-                10 | 20 => 1,
-                40 => 2,
-                60 => 3,
-                _ => return Err(Error::DecodeFailed("Invalid SILK frame size".into())),
-            };
-
-            let frame_samples = Self::calculate_samples(FrameSize::Ms20, HYBRID_SILK_INTERNAL_RATE);
-            let num_channels = channels as usize;
-            let total_samples = frame_samples * num_silk_frames;
-            let mut silk_16k = vec![0i16; total_samples * num_channels];
-
-            for frame_idx in 0..num_silk_frames {
-                for ch_idx in 0..num_channels {
-                    let vad_flag_index = ch_idx * num_silk_frames + frame_idx;
-                    let vad_flag = header_flags
-                        .vad_flags
-                        .get(vad_flag_index)
-                        .copied()
-                        .unwrap_or(true);
-
-                    let mut frame_buffer = vec![0i16; frame_samples];
-
-                    let decoded =
-                        self.silk
-                            .decode_silk_frame(&mut ec, vad_flag, &mut frame_buffer)?;
-
-                    if decoded != frame_samples {
-                        return Err(Error::DecodeFailed(format!(
-                            "Hybrid SILK sample count mismatch: expected {frame_samples}, got {decoded}"
-                        )));
-                    }
-
-                    let base_offset = frame_idx * frame_samples * num_channels;
-                    for sample_idx in 0..frame_samples {
-                        silk_16k[base_offset + sample_idx * num_channels + ch_idx] =
-                            frame_buffer[sample_idx];
-                    }
-                }
+        let mut ec = range::RangeDecoder::new(frame_data)?;
+        let samples = self.decode_silk_payload(
+            &mut ec,
+            Configuration {
+                bandwidth: Bandwidth::Wideband,
+                ..config
+            },
+            channels,
+            output,
+        )?;
+        let mut frame_bytes = frame_data.len();
+        if ec.ec_tell() as usize + 37 <= frame_bytes * 8 && ec.ec_dec_bit_logp(12)? {
+            let _celt_to_silk = ec.ec_dec_bit_logp(1)?;
+            let redundancy_bytes = ec.ec_dec_uint(256)? as usize + 2;
+            frame_bytes = frame_bytes
+                .checked_sub(redundancy_bytes)
+                .ok_or_else(|| Error::InvalidPacket("hybrid redundancy exceeds payload".into()))?;
+            if frame_bytes * 8 < ec.ec_tell() as usize {
+                return Err(Error::InvalidPacket(
+                    "hybrid redundancy overlaps entropy".into(),
+                ));
             }
-
-            self.celt.set_start_band(HYBRID_START_BAND);
-            self.celt.set_end_band(CELT_NUM_BANDS);
-
-            let target_rate = self.sample_rate as u32;
-            self.celt.set_output_rate(self.sample_rate)?;
-
-            let decoded_frame = self.celt.decode_celt_frame(&mut ec, frame_data.len())?;
-
-            if decoded_frame.channels != channels {
-                return Err(Error::DecodeFailed(format!(
-                    "Hybrid CELT channel mismatch: expected {channels:?}, got {:?}",
-                    decoded_frame.channels
-                )));
-            }
-
-            let target_samples = Self::calculate_samples(config.frame_size, target_rate);
-
-            #[cfg(feature = "resampling")]
-            let silk_target =
-                self.resample_silk(&silk_16k, HYBRID_SILK_INTERNAL_RATE, target_rate, channels)?;
-
-            #[cfg(not(feature = "resampling"))]
-            let silk_target = if HYBRID_SILK_INTERNAL_RATE == target_rate {
-                silk_16k.clone()
-            } else {
-                return Err(Error::InvalidSampleRate(format!(
-                    "Resampling not available: SILK rate {HYBRID_SILK_INTERNAL_RATE} != target rate {target_rate}"
-                )));
-            };
-
-            let celt_i16: Vec<i16> = decoded_frame
-                .samples
-                .iter()
-                .map(|&s| sig_to_int16(s))
-                .collect();
-
-            let sample_count = target_samples * channels as usize;
-            for i in 0..sample_count.min(output.len()) {
-                let silk_sample = silk_target.get(i).copied().unwrap_or(0);
-                let celt_sample = celt_i16.get(i).copied().unwrap_or(0);
-                output[i] = silk_sample.saturating_add(celt_sample);
-            }
-
-            Ok(target_samples)
+            ec.shrink_storage(frame_bytes)?;
+            return Err(Error::Unsupported(
+                "Hybrid redundancy transition synthesis is not implemented".into(),
+            ));
         }
+        self.celt.set_channels(channels);
+        self.celt_packet_channels = Some(channels);
+        let synthesis_channels = if self.channels == Channels::Mono {
+            Channels::Mono
+        } else {
+            channels
+        };
+        self.celt.configure_synthesis_channels(synthesis_channels);
+        let internal_samples = Self::calculate_samples(config.frame_size, 48000);
+        self.celt.set_output_rate(self.sample_rate)?;
+        let decoded = self.celt.decode_hybrid_highband(
+            &mut ec,
+            frame_bytes,
+            internal_samples,
+            if config.bandwidth == Bandwidth::SuperWideband {
+                19
+            } else {
+                21
+            },
+        )?;
+        let mut high = vec![0; samples * synthesis_channels as usize];
+        self.celt_output.process(
+            &decoded.samples,
+            internal_samples,
+            synthesis_channels as usize,
+            self.sample_rate as u32,
+            &mut high,
+        )?;
+        for frame in 0..samples {
+            for channel in 0..self.channels as usize {
+                let source = if synthesis_channels == Channels::Mono {
+                    frame
+                } else {
+                    frame * 2 + channel
+                };
+                let target = frame * self.channels as usize + channel;
+                output[target] = output[target].saturating_add(high[source]);
+            }
+        }
+        Ok(samples)
     }
 
-    /// Resample SILK output to target rate
-    ///
-    /// # RFC Reference
-    /// * Lines 5724-5795: SILK resampling (normative delays only)
-    /// * Lines 5766-5775: Table 54 - Resampler delay values (NORMATIVE)
-    /// * Lines 5736-5738: "this delay is normative"
-    /// * Lines 5757-5762: Allows non-integer delays, some tolerance acceptable
-    ///
-    /// # Arguments
-    /// * `input` - SILK output at internal rate (i16 samples, interleaved)
-    /// * `input_rate` - Internal SILK rate (8000/12000/16000 Hz)
-    /// * `output_rate` - Target decoder rate
-    /// * `channels` - Number of channels
-    ///
-    /// # Returns
-    /// Resampled i16 samples at `output_rate` (interleaved)
-    ///
-    /// # Errors
-    /// * Returns error if `input_rate` invalid
-    /// * Returns error if resampling fails
-    #[cfg(all(feature = "silk", feature = "resampling"))]
-    #[allow(dead_code)]
+    /// Convert raw interleaved SILK LR/mono with one persistent integer resampler
+    /// per channel, including normative delay for same-rate conversion.
+    #[cfg(feature = "silk")]
     fn resample_silk(
         &mut self,
         input: &[i16],
@@ -1149,77 +1126,51 @@ impl Decoder {
         output_rate: u32,
         channels: Channels,
     ) -> Result<Vec<i16>> {
+        let count = channels as usize;
+        if input.is_empty()
+            || !input.len().is_multiple_of(count)
+            || output_rate != self.sample_rate as u32
         {
-            use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
-
-            if input_rate == output_rate {
-                return Ok(input.to_vec());
-            }
-
-            let required_delay_ms = match input_rate {
-                8000 => 0.538,
-                12000 => 0.692,
-                16000 => 0.706,
-                _ => {
-                    return Err(Error::InvalidSampleRate(format!(
-                        "Invalid SILK internal rate: {input_rate} (must be 8000/12000/16000)"
-                    )));
-                }
-            };
-
-            let num_channels = match channels {
-                Channels::Mono => symphonia::core::audio::Channels::FRONT_LEFT,
-                Channels::Stereo => {
-                    symphonia::core::audio::Channels::FRONT_LEFT
-                        | symphonia::core::audio::Channels::FRONT_RIGHT
-                }
-            };
-
-            if self.silk_resampler_state.is_none()
-                || self.silk_resampler_input_rate != input_rate
-                || self.silk_resampler_output_rate != output_rate
-            {
-                let num_samples = input.len() / channels as usize;
-                let spec = SignalSpec::new(input_rate, num_channels);
-
-                let resampler = moosicbox_resampler::Resampler::<i16>::new(
-                    spec,
-                    output_rate as usize,
-                    num_samples as u64,
-                );
-
-                self.silk_resampler_state = Some(resampler);
-                self.silk_resampler_input_rate = input_rate;
-                self.silk_resampler_output_rate = output_rate;
-                self.silk_resampler_required_delay_ms = required_delay_ms;
-            }
-
-            let num_samples = input.len() / channels as usize;
-            let mut audio_buffer = AudioBuffer::<f32>::new(
-                num_samples as u64,
-                SignalSpec::new(input_rate, num_channels),
-            );
-
-            for ch in 0..channels as usize {
-                for sample_idx in 0..num_samples {
-                    let interleaved_idx = sample_idx * channels as usize + ch;
-                    #[allow(clippy::cast_precision_loss)]
-                    let sample_f32 = f32::from(input[interleaved_idx]) / 32768.0;
-                    audio_buffer.chan_mut(ch)[sample_idx] = sample_f32;
-                }
-            }
-
-            let resampler = self
-                .silk_resampler_state
-                .as_mut()
-                .ok_or_else(|| Error::DecodeFailed("Resampler not initialized".into()))?;
-
-            let resampled_i16 = resampler
-                .resample(&audio_buffer)
-                .ok_or_else(|| Error::DecodeFailed("Resampling produced no output".into()))?;
-
-            Ok(resampled_i16.to_vec())
+            return Err(Error::DecodeFailed(
+                "invalid SILK resampler input shape/configuration".into(),
+            ));
         }
+        if self.silk_resamplers.is_empty() {
+            self.silk_resamplers = (0..count)
+                .map(|_| silk::resampler::SilkResampler::new(input_rate, output_rate))
+                .collect::<Result<Vec<_>>>()?;
+            self.silk_resampler_input_rate = input_rate;
+        } else if self.silk_resampler_input_rate != input_rate
+            || self.silk_resamplers.len() != count
+        {
+            return Err(Error::Unsupported(
+                "SILK resampler rate/channel transition requires reference state migration".into(),
+            ));
+        }
+        let frames = input.len() / count;
+        let expected = frames
+            .checked_mul(output_rate as usize)
+            .ok_or_else(|| Error::DecodeFailed("SILK output size overflow".into()))?
+            / input_rate as usize;
+        let mut output = vec![0; expected * count];
+        for channel in 0..count {
+            let planar = input
+                .iter()
+                .skip(channel)
+                .step_by(count)
+                .copied()
+                .collect::<Vec<_>>();
+            let converted = self.silk_resamplers[channel].process(&planar)?;
+            if converted.len() != expected {
+                return Err(Error::DecodeFailed(
+                    "SILK resampler returned wrong duration".into(),
+                ));
+            }
+            for (frame, sample) in converted.into_iter().enumerate() {
+                output[frame * count + channel] = sample;
+            }
+        }
+        Ok(output)
     }
 }
 
@@ -1432,9 +1383,9 @@ mod decoder_tests {
     #[cfg(feature = "silk")]
     #[test_log::test]
     fn test_calculate_silk_delay_samples() {
-        assert_eq!(Decoder::calculate_silk_delay_samples(8000), 5);
-        assert_eq!(Decoder::calculate_silk_delay_samples(12000), 10);
-        assert_eq!(Decoder::calculate_silk_delay_samples(16000), 13);
+        assert_eq!(Decoder::calculate_silk_delay_samples(8000), 4);
+        assert_eq!(Decoder::calculate_silk_delay_samples(12000), 9);
+        assert_eq!(Decoder::calculate_silk_delay_samples(16000), 12);
     }
 
     #[cfg(feature = "silk")]
@@ -1452,17 +1403,6 @@ mod decoder_tests {
     }
 
     #[test_log::test]
-    fn test_handle_packet_loss_zeros_output() {
-        let decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
-        let mut output = vec![42i16; 960];
-
-        let samples = decoder.handle_packet_loss(&mut output, false);
-
-        assert_eq!(samples, 480); // 960 samples / 2 channels
-        assert!(output.iter().all(|&s| s == 0));
-    }
-
-    #[test_log::test]
     fn test_decode_empty_packet_error() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
         let mut output = vec![0i16; 480];
@@ -1476,14 +1416,66 @@ mod decoder_tests {
     }
 
     #[test_log::test]
-    fn test_decode_packet_loss_returns_silence() {
+    fn packet_loss_is_unsupported_without_writing_output() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-        let mut output = vec![42i16; 480];
+        let mut output = [42; 480];
+        assert!(matches!(
+            decoder.decode(None, &mut output, false),
+            Err(Error::Unsupported(_))
+        ));
+        assert_eq!(output, [42; 480]);
+    }
+}
 
-        let samples = decoder.decode(None, &mut output, false).unwrap();
+#[cfg(test)]
+mod public_state_tests {
+    use super::*;
 
-        assert_eq!(samples, 480);
-        assert!(output.iter().all(|&s| s == 0));
+    #[test_log::test]
+    fn reset_restores_initial_configuration_and_mode() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
+        decoder.prev_mode = Some(OpusMode::CeltOnly);
+        #[cfg(feature = "silk")]
+        {
+            decoder.silk_delay_samples = 13;
+            decoder.silk_configured_rate = SampleRate::Hz8000;
+        }
+        decoder.reset_state().unwrap();
+        assert_eq!(decoder.sample_rate, SampleRate::Hz48000);
+        assert_eq!(decoder.channels, Channels::Stereo);
+        assert_eq!(decoder.prev_mode, None);
+        #[cfg(feature = "silk")]
+        {
+            assert_eq!(decoder.silk_delay_samples, 0);
+            assert_eq!(decoder.silk_configured_rate, SampleRate::Hz16000);
+        }
+    }
+
+    #[test_log::test]
+    fn float_packet_loss_is_unsupported_without_writing_output() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Stereo).unwrap();
+        let mut output = vec![1.0; 960];
+        assert!(matches!(
+            decoder.decode_float(None, &mut output, false),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(
+            output
+                .iter()
+                .all(|sample| sample.to_bits() == 1.0_f32.to_bits())
+        );
+    }
+
+    #[test_log::test]
+    fn float_decode_propagates_invalid_packet_without_writing_output() {
+        let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+        let mut output = vec![1.0; 480];
+        assert!(decoder.decode_float(Some(&[]), &mut output, false).is_err());
+        assert!(
+            output
+                .iter()
+                .all(|&sample| sample.to_bits() == 1.0_f32.to_bits())
+        );
     }
 }
 
@@ -1508,11 +1500,120 @@ mod no_features_tests {
         assert!(matches!(result, Err(Error::UnsupportedMode(_))));
     }
 
-    // TODO: Remove ignore when implemented in Phase 6
-    #[ignore = "Will be implemented in Phase 6"]
     #[test_log::test]
     fn test_reset_state_succeeds_with_no_features() {
         let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-        let _ = decoder.reset_state();
+        decoder.reset_state().unwrap();
+    }
+}
+
+#[cfg(all(test, feature = "silk"))]
+mod silk_output_integration_tests {
+    use super::*;
+
+    #[test]
+    fn raw_nb_reference_two_packets_keep_synthesis_and_resampler_history() {
+        let packet = include_bytes!("silk/reference/nb_sine_mono.packet");
+        let bytes = include_bytes!("silk/reference/nb_sine_mono.api.pcm");
+        let expected = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|sample| i16::from_le_bytes(*sample))
+            .collect::<Vec<_>>();
+        let mut decoder = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        for index in 0..2 {
+            let mut output = [0; 160];
+            assert_eq!(
+                decoder.decode(Some(packet), &mut output, false).unwrap(),
+                160
+            );
+            assert_eq!(
+                output,
+                expected[index * 160..(index + 1) * 160],
+                "raw packet {index}"
+            );
+            assert_eq!(decoder.algorithmic_delay_samples(), 4);
+        }
+        decoder.reset_state().unwrap();
+        let mut output = [0; 160];
+        decoder.decode(Some(packet), &mut output, false).unwrap();
+        assert_eq!(output, expected[..160]);
+    }
+
+    #[test]
+    fn planar_resamplers_preserve_independent_channels_packets_and_reset() {
+        for input_rate in [8000, 12000, 16000] {
+            for output_rate in [8000, 12000, 16000, 24000, 48000] {
+                let mut decoder =
+                    Decoder::new(SampleRate::from_hz(output_rate).unwrap(), Channels::Stereo)
+                        .unwrap();
+                let mut left =
+                    silk::resampler::SilkResampler::new(input_rate, output_rate).unwrap();
+                let mut right =
+                    silk::resampler::SilkResampler::new(input_rate, output_rate).unwrap();
+                for packet in 0..3 {
+                    let n = input_rate as usize / 50;
+                    let l = (0..n)
+                        .map(|index| if index == packet { 12000 } else { 0 })
+                        .collect::<Vec<_>>();
+                    let r = (0..n)
+                        .map(|index| if index % 2 == 0 { 4000 } else { -7000 })
+                        .collect::<Vec<_>>();
+                    let input = l
+                        .iter()
+                        .zip(&r)
+                        .flat_map(|(l, r)| [*l, *r])
+                        .collect::<Vec<_>>();
+                    let expected_l = left.process(&l).unwrap();
+                    let expected_r = right.process(&r).unwrap();
+                    let actual = decoder
+                        .resample_silk(&input, input_rate, output_rate, Channels::Stereo)
+                        .unwrap();
+                    let expected = expected_l
+                        .iter()
+                        .zip(&expected_r)
+                        .flat_map(|(l, r)| [*l, *r])
+                        .collect::<Vec<_>>();
+                    assert_eq!(actual, expected);
+                    assert_eq!(actual.len(), output_rate as usize / 50 * 2);
+                }
+                decoder.reset_state().unwrap();
+                let zero = vec![0; input_rate as usize / 50 * 2];
+                assert!(
+                    decoder
+                        .resample_silk(&zero, input_rate, output_rate, Channels::Stereo)
+                        .unwrap()
+                        .iter()
+                        .all(|sample| *sample == 0)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn same_rate_delay_is_not_removed_and_transition_is_explicit() {
+        for (rate, delay) in [(8000, 4), (12000, 9), (16000, 12)] {
+            let mut decoder =
+                Decoder::new(SampleRate::from_hz(rate).unwrap(), Channels::Mono).unwrap();
+            let mut input = vec![0; rate as usize / 100];
+            input[0] = 1234;
+            let output = decoder
+                .resample_silk(&input, rate, rate, Channels::Mono)
+                .unwrap();
+            assert_eq!(output[delay], 1234);
+            assert!(output[..delay].iter().all(|sample| *sample == 0));
+            assert_eq!(output.len(), input.len());
+            assert!(
+                decoder
+                    .resample_silk(
+                        &vec![0; 160],
+                        if rate == 8000 { 16000 } else { 8000 },
+                        rate,
+                        Channels::Mono
+                    )
+                    .is_err()
+            );
+        }
     }
 }

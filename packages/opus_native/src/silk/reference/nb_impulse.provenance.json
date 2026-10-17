@@ -1,0 +1,100 @@
+{
+  "command": [
+    "python3",
+    "packages/opus_native/src/silk/stage_oracle.py",
+    "--build",
+    "target/debug/build/moosicbox_opus_native_libopus-f3d2ff998a04d366/out/build",
+    "--rate",
+    "8000",
+    "--channels",
+    "1",
+    "packages/opus_native/src/silk/reference/nb_impulse.packet"
+  ],
+  "records": [
+    {
+      "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+      "archive_sha256": "52790c7a566fca71ad236ce073856a7a44f346167816a8e0e26a7ffd8247d8c1",
+      "oracle_sha256": "e11fee5d61c3805676e7db769f47061a925831db7d21c284ce94a713dd770ac9"
+    },
+    {
+      "stage": "core_input",
+      "gains": [
+        1392640,
+        5767168,
+        3080192,
+        1646592
+      ],
+      "coefficients": [
+        1234,
+        796,
+        862,
+        460,
+        566,
+        180,
+        225,
+        -137,
+        65,
+        -289,
+        1234,
+        796,
+        862,
+        460,
+        566,
+        180,
+        225,
+        -137,
+        65,
+        -289
+      ]
+    },
+    {
+      "stage": "ltp_parameters",
+      "scale": 0,
+      "lags": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "taps": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "stage": "frame_parameters",
+      "signal_type": 1,
+      "quant_offset": 0,
+      "gain_indices": [
+        18,
+        13,
+        0,
+        0
+      ],
+      "seed": 0,
+      "tell": 266
+    }
+  ],
+  "files": {
+    "nb_impulse.decoded.pcm": "af619df7834bc9d434d290347acf3666bb8362bdaee58cc9ff13de91465344f4",
+    "nb_impulse.packet": "18752cac148ae4871903a23b963deaf29c0d72e5226d16ef01544886f6b157d7"
+  }
+}

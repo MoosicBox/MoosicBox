@@ -28,7 +28,7 @@ use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 
 use crate::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
-    send_playback_event, symphonia::play_media_source, track_or_id_to_playable,
+    send_playback_event, symphonia::play_media_source_with_options, track_or_id_to_playable,
 };
 
 #[derive(Debug, Clone)]
@@ -50,6 +50,7 @@ pub struct LocalPlayer {
     /// Unique identifier for this player instance
     pub id: u64,
     playback_type: PlaybackType,
+    decode_options: crate::DecodeOptions,
     source: PlayerSource,
     /// Audio output factory for creating audio streams
     pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
@@ -190,12 +191,11 @@ impl Player for LocalPlayer {
                         player_self.clone(),
                     )?;
 
-                    play_media_source(
+                    play_media_source_with_options(
                         mss,
                         &playable_track.hint,
                         &mut handler,
-                        true,
-                        true,
+                        player_self.decode_options,
                         None,
                         seek,
                     )
@@ -378,6 +378,11 @@ impl LocalPlayer {
         Ok(Self {
             id,
             playback_type: playback_type.unwrap_or_default(),
+            decode_options: crate::DecodeOptions {
+                decoder: symphonia::core::codecs::audio::AudioDecoderOptions::default()
+                    .verify(true),
+                ..crate::DecodeOptions::default()
+            },
             source,
             output: None,
             playback: Arc::new(RwLock::new(None)),
@@ -388,6 +393,14 @@ impl LocalPlayer {
             session_command_forwarder: Arc::new(RwLock::new(None)),
             session_coordinator_handle: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Select decoding behavior for this player's subsequent playback sessions.
+    /// Backend selection is explicit and never falls back when unavailable.
+    #[must_use]
+    pub const fn with_decode_options(mut self, options: crate::DecodeOptions) -> Self {
+        self.decode_options = options;
+        self
     }
 
     /// Sets the audio output factory for this player.
@@ -609,14 +622,14 @@ fn get_audio_decode_handler_with_command_receiver(
                     .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
 
                 log::debug!("🔍 Audio output creation: spec rate={}, channels={}",
-                    spec.rate, spec.channels.count());
+                    spec.rate(), spec.channels().count());
 
                 // Initialize consumed samples based on seek position for the AudioOutput
                 let consumed_samples = Arc::new(AtomicUsize::new(0));
 
                 #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                 let initial_consumed_samples = if seek_position > 0.0 {
-                    (seek_position * f64::from(spec.rate) * spec.channels.count() as f64) as usize
+                    (seek_position * f64::from(spec.rate()) * spec.channels().count() as f64) as usize
                 } else {
                     0
                 };

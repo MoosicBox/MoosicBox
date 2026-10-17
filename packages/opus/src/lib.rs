@@ -15,7 +15,7 @@ pub mod packet;
 pub mod registry;
 pub mod toc;
 
-pub use decoder::OpusDecoder;
+pub use decoder::{OpusBackend, OpusDecoder};
 pub use error::{Error, Result};
 pub use frame::{FramePacking, OpusFrame, decode_frame_length};
 pub use packet::OpusPacket;

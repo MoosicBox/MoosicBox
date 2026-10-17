@@ -81,6 +81,23 @@ impl RangeDecoder {
         Ok(decoder)
     }
 
+    /// Reduces the entropy storage boundary without reinitializing arithmetic state.
+    ///
+    /// Mirrors upstream hybrid `dec.storage -= redundancy_bytes`: forward/raw
+    /// offsets, buffered raw bits, range/value and tell are unchanged.
+    ///
+    /// # Errors
+    /// * Returns an error if `storage` exceeds current storage.
+    pub fn shrink_storage(&mut self, storage: usize) -> Result<()> {
+        if storage > self.buffer.len() {
+            return Err(Error::RangeDecoder(
+                "invalid storage shrink boundary".into(),
+            ));
+        }
+        self.buffer.truncate(storage);
+        Ok(())
+    }
+
     #[allow(clippy::unnecessary_wraps)]
     fn normalize(&mut self) -> Result<()> {
         while self.range <= 0x80_0000 {
@@ -333,10 +350,17 @@ impl RangeDecoder {
             ));
         }
 
-        while self.end_bits_available < bits {
-            let byte = self.read_byte_from_end();
-            self.end_window |= u32::from(byte) << self.end_bits_available;
-            self.end_bits_available += 8;
+        if self.end_bits_available < bits {
+            // Upstream fills the entire 32-bit raw window, not just the request.
+            // Prefetched bytes must survive a later hybrid storage shrink.
+            loop {
+                let byte = self.read_byte_from_end();
+                self.end_window |= u32::from(byte) << self.end_bits_available;
+                self.end_bits_available += 8;
+                if self.end_bits_available > 24 {
+                    break;
+                }
+            }
         }
 
         let mask = (1_u32 << bits) - 1;

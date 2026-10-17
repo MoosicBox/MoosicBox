@@ -48,16 +48,16 @@ use moosicbox_audio_decoder::{AudioDecode, AudioDecodeError};
 use moosicbox_resampler::{Resampler, to_audio_buffer};
 use switchy_async::sync::Mutex;
 use switchy_async::task::JoinError;
-use symphonia::core::audio::{AudioBuffer, Signal as _};
+use symphonia::core::audio::conv::FromSample;
+use symphonia::core::audio::{Audio as _, AudioBuffer};
 #[cfg(test)]
-use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecParameters};
-use symphonia::core::conv::FromSample;
-use symphonia::core::formats::{Packet, Track};
+use symphonia::core::codecs::{CodecParameters, audio::AudioCodecParameters};
+use symphonia::core::{formats::Track, packet::Packet};
 use thiserror::Error;
 
 // Reexport commonly used Symphonia types for centralized imports
-pub use symphonia::core::audio::{Channels, SignalSpec};
-pub use symphonia::core::conv::{ConvertibleSample, IntoSample};
+pub use symphonia::core::audio::conv::{ConvertibleSample, IntoSample};
+pub use symphonia::core::audio::{AudioSpec, Channels};
 pub use symphonia::core::units::Duration;
 
 // Export ProgressTracker for use by AudioOutput implementations
@@ -92,7 +92,7 @@ pub struct AudioOutput {
     /// Human-readable name for this audio output
     pub name: String,
     /// Audio signal specification (sample rate, channels, etc.)
-    pub spec: SignalSpec,
+    pub spec: AudioSpec,
     resampler: Option<Resampler<f32>>,
     writer: Box<dyn AudioWrite>,
 }
@@ -116,7 +116,7 @@ impl AudioOutput {
     /// * `spec` - Audio signal specification (sample rate, channels, etc.)
     /// * `writer` - The underlying audio writer implementation
     #[must_use]
-    pub fn new(id: String, name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
+    pub fn new(id: String, name: String, spec: AudioSpec, writer: Box<dyn AudioWrite>) -> Self {
         Self {
             id,
             name,
@@ -129,51 +129,43 @@ impl AudioOutput {
     fn resample_if_needed(
         &mut self,
         decoded: AudioBuffer<f32>,
-    ) -> Result<AudioBuffer<f32>, AudioOutputError> {
-        Ok(if let Some(resampler) = &mut self.resampler {
-            // Resampling is required. The resampler will return interleaved samples in the
-            // correct sample format.
-            let Some(samples) = resampler.resample(&decoded) else {
-                return Err(AudioOutputError::StreamEnd);
-            };
-
-            to_audio_buffer(samples, self.spec)
-        } else if decoded.spec().rate != self.spec.rate {
-            let duration = decoded.capacity();
-            log::debug!(
-                "audio_output: resample_if_needed: resampling from {} to {} original_duration={} target_duration={}",
-                decoded.spec().rate,
-                self.spec.rate,
-                decoded.capacity(),
-                duration,
-            );
-            self.resampler.replace(Resampler::new(
-                *decoded.spec(),
-                self.spec.rate as usize,
-                duration as u64,
+    ) -> Result<Option<AudioBuffer<f32>>, AudioOutputError> {
+        if decoded.spec().channels() != self.spec.channels() {
+            return Err(AudioOutputError::UnsupportedChannels(
+                decoded.spec().channels().count(),
             ));
-            self.resample_if_needed(decoded)?
-        } else {
-            decoded
-        })
+        }
+        if let Some(resampler) = &mut self.resampler {
+            return Ok(resampler.resample_to_audio_buffer(&decoded)?);
+        }
+        if decoded.spec().rate() != self.spec.rate() {
+            self.resampler = Some(Resampler::new(
+                decoded.spec().clone(),
+                self.spec.rate() as usize,
+                decoded.capacity() as u64,
+            ));
+            return self.resample_if_needed(decoded);
+        }
+        Ok(Some(decoded))
     }
 }
 
 impl AudioWrite for AudioOutput {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
-        let buf = {
-            match self.resample_if_needed(decoded) {
-                Ok(buf) => buf,
-                Err(e) => match e {
-                    AudioOutputError::StreamEnd => return Ok(0),
-                    _ => return Err(e),
-                },
-            }
+        let Some(buf) = self.resample_if_needed(decoded)? else {
+            return Ok(0);
         };
         self.writer.write(buf)
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
+        if let Some(resampler) = &mut self.resampler {
+            let spec = resampler.output_spec().clone();
+            while let Some(samples) = resampler.flush() {
+                let tail = to_audio_buffer(samples, spec.clone())?;
+                self.writer.write(tail)?;
+            }
+        }
         AudioWrite::flush(&mut *self.writer)
     }
 
@@ -193,7 +185,7 @@ impl AudioWrite for AudioOutput {
         self.writer.set_shared_volume(shared_volume);
     }
 
-    fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
+    fn get_output_spec(&self) -> Option<symphonia::core::audio::AudioSpec> {
         self.writer.get_output_spec()
     }
 
@@ -216,18 +208,7 @@ impl AudioDecode for AudioOutput {
         _packet: &Packet,
         _track: &Track,
     ) -> Result<(), AudioDecodeError> {
-        let buf = {
-            match self.resample_if_needed(decoded) {
-                Ok(buf) => buf,
-                Err(e) => match e {
-                    AudioOutputError::StreamEnd => return Ok(()),
-                    _ => return Err(AudioDecodeError::Other(Box::new(e))),
-                },
-            }
-        };
-        self.writer
-            .write(buf)
-            .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+        AudioWrite::write(self, decoded).map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
         Ok(())
     }
 
@@ -255,7 +236,7 @@ pub struct AudioOutputFactory {
     /// Human-readable name for this audio output
     pub name: String,
     /// Audio signal specification (sample rate, channels, etc.)
-    pub spec: SignalSpec,
+    pub spec: AudioSpec,
     get_writer: Arc<std::sync::Mutex<GetWriter>>,
 }
 
@@ -282,7 +263,7 @@ impl AudioOutputFactory {
     pub fn new(
         id: String,
         name: String,
-        spec: SignalSpec,
+        spec: AudioSpec,
         writer: impl (Fn() -> Result<InnerType, AudioOutputError>) + Send + 'static,
     ) -> Self {
         Self {
@@ -301,7 +282,7 @@ impl AudioOutputFactory {
     /// * `spec` - Audio signal specification (sample rate, channels, etc.)
     /// * `writer` - Boxed function that creates the underlying audio writer when called
     #[must_use]
-    pub fn new_box(id: String, name: String, spec: SignalSpec, writer: GetWriter) -> Self {
+    pub fn new_box(id: String, name: String, spec: AudioSpec, writer: GetWriter) -> Self {
         Self {
             id,
             name,
@@ -328,7 +309,7 @@ impl TryFrom<AudioOutputFactory> for AudioOutput {
         Ok(Self {
             id: value.id,
             name: value.name,
-            spec: value.spec,
+            spec: value.spec.clone(),
             resampler: None,
             writer: (value.get_writer.lock().unwrap())()?,
         })
@@ -342,7 +323,7 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
         Ok(Self {
             id: value.id.clone(),
             name: value.name.clone(),
-            spec: value.spec,
+            spec: value.spec.clone(),
             resampler: None,
             writer: (value.get_writer.lock().unwrap())()?,
         })
@@ -390,7 +371,7 @@ pub trait AudioWrite {
 
     /// Get the actual output audio specification (for accurate progress calculation)
     /// Returns None if not supported by the audio output implementation
-    fn get_output_spec(&self) -> Option<SignalSpec> {
+    fn get_output_spec(&self) -> Option<AudioSpec> {
         None
     }
 
@@ -459,6 +440,9 @@ impl From<Box<dyn AudioWrite>> for Box<dyn AudioDecode> {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum AudioOutputError {
+    /// Resampled interleaved audio could not be materialized.
+    #[error(transparent)]
+    AudioBufferConversion(#[from] moosicbox_resampler::AudioBufferConversionError),
     /// No audio output devices are available
     #[error("No audio outputs")]
     NoOutputs,
@@ -502,13 +486,13 @@ pub enum AudioOutputError {
 /// * `S` - The target sample type (must implement `FromSample<f32>`)
 #[allow(unused)]
 fn to_samples<S: FromSample<f32> + Default + Clone>(decoded: &AudioBuffer<f32>) -> Vec<S> {
-    let n_channels = decoded.spec().channels.count();
+    let n_channels = decoded.spec().channels().count();
     let n_samples = decoded.frames() * n_channels;
     let mut buf: Vec<S> = vec![S::default(); n_samples];
 
     // Interleave the source buffer channels into the sample buffer.
     for ch in 0..n_channels {
-        let ch_slice = decoded.chan(ch);
+        let ch_slice = decoded.plane(ch).expect("channel exists");
 
         for (dst, decoded) in buf[ch..].iter_mut().step_by(n_channels).zip(ch_slice) {
             *dst = (*decoded).into_sample();
@@ -716,7 +700,125 @@ impl Default for AudioOutputScanner {
 mod tests {
     use super::*;
     use std::io;
-    use symphonia::core::audio::Signal;
+    use symphonia::core::audio::{Audio, AudioMut};
+
+    #[derive(Default)]
+    struct ResampleCapture {
+        buffers: Arc<std::sync::Mutex<Vec<AudioBuffer<f32>>>>,
+        flushes: Arc<std::sync::atomic::AtomicUsize>,
+        fail: bool,
+    }
+    impl AudioWrite for ResampleCapture {
+        fn write(&mut self, audio: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+            if self.fail {
+                return Err(AudioOutputError::Interrupt);
+            }
+            let frames = audio.frames();
+            self.buffers.lock().unwrap().push(audio);
+            Ok(frames)
+        }
+        fn flush(&mut self) -> Result<(), AudioOutputError> {
+            self.flushes
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        fn handle(&self) -> AudioHandle {
+            unimplemented!("test writer has no commands")
+        }
+    }
+
+    fn partial_audio(spec: AudioSpec) -> AudioBuffer<f32> {
+        let mut audio = AudioBuffer::new(spec, 4096);
+        audio.render_silence(Some(512));
+        for plane in audio.iter_planes_mut() {
+            plane.fill(0.25);
+        }
+        audio
+    }
+
+    #[test_log::test]
+    fn test_resampler_pending_writes_and_flush_tail_once() {
+        for channels in [
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        ] {
+            let input = AudioSpec::new(44_100, channels.clone());
+            let target = AudioSpec::new(48_000, channels);
+            let capture = ResampleCapture::default();
+            let buffers = capture.buffers.clone();
+            let flushes = capture.flushes.clone();
+            let mut output = AudioOutput::new(
+                "test".into(),
+                "test".into(),
+                target.clone(),
+                Box::new(capture),
+            );
+            assert_eq!(
+                AudioWrite::write(&mut output, partial_audio(input.clone())).unwrap(),
+                0
+            );
+            assert_eq!(
+                AudioWrite::write(&mut output, partial_audio(input)).unwrap(),
+                0
+            );
+            assert!(buffers.lock().unwrap().is_empty());
+            AudioWrite::flush(&mut output).unwrap();
+            {
+                let buffers = buffers.lock().unwrap();
+                assert_eq!(buffers.len(), 1);
+                assert_eq!(buffers[0].spec(), &target);
+                assert!(buffers[0].frames() > 0);
+                assert!(
+                    buffers[0]
+                        .iter_planes()
+                        .all(|plane| plane.iter().any(|sample| sample.abs() > 0.01))
+                );
+                drop(buffers);
+            }
+            AudioWrite::flush(&mut output).unwrap();
+            assert_eq!(buffers.lock().unwrap().len(), 1);
+            assert_eq!(flushes.load(std::sync::atomic::Ordering::SeqCst), 2);
+        }
+    }
+
+    #[test_log::test]
+    fn test_mono_to_stereo_rejected_without_writing() {
+        let capture = ResampleCapture::default();
+        let buffers = capture.buffers.clone();
+        let target = AudioSpec::new(
+            48_000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
+        let mut output = AudioOutput::new("test".into(), "test".into(), target, Box::new(capture));
+        let mono = AudioSpec::new(44_100, symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO);
+        assert!(matches!(
+            AudioWrite::write(&mut output, partial_audio(mono)),
+            Err(AudioOutputError::UnsupportedChannels(1))
+        ));
+        assert!(buffers.lock().unwrap().is_empty());
+    }
+
+    #[test_log::test]
+    fn test_resampler_tail_write_error_propagates_before_writer_flush() {
+        let capture = ResampleCapture {
+            fail: true,
+            ..Default::default()
+        };
+        let flushes = capture.flushes.clone();
+        let channels = symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO;
+        let mut output = AudioOutput::new(
+            "test".into(),
+            "test".into(),
+            AudioSpec::new(48_000, channels.clone()),
+            Box::new(capture),
+        );
+        AudioWrite::write(&mut output, partial_audio(AudioSpec::new(44_100, channels))).unwrap();
+        assert!(matches!(
+            AudioWrite::flush(&mut output),
+            Err(AudioOutputError::Interrupt)
+        ));
+        assert_eq!(flushes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
 
     #[test_log::test]
     fn test_audio_output_error_debug() {
@@ -834,7 +936,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_debug() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -850,7 +955,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_clone() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -865,7 +973,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_new_box() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let writer: GetWriter = Box::new(|| Err(AudioOutputError::NoOutputs));
         let factory = AudioOutputFactory::new_box(
             "test-id".to_string(),
@@ -880,7 +991,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_try_into_output_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -895,7 +1009,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_try_from_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -910,7 +1027,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_try_from_ref_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -953,7 +1073,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_new() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -963,12 +1086,15 @@ mod tests {
 
         assert_eq!(output.id, "test-id");
         assert_eq!(output.name, "Test Output");
-        assert_eq!(output.spec.rate, 44100);
+        assert_eq!(output.spec.rate(), 44100);
     }
 
     #[test_log::test]
     fn test_audio_output_debug() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -984,7 +1110,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_handle() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -998,21 +1127,24 @@ mod tests {
     #[test_log::test]
     fn test_to_samples_stereo_interleaving() {
         // Create a stereo audio buffer with 4 frames
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 4);
         // Reserve 4 frames to make the buffer usable
-        buffer.render_reserved(Some(4));
+        buffer.render_uninit(Some(4));
 
         // Fill left channel with [1.0, 2.0, 3.0, 4.0]
         // Fill right channel with [5.0, 6.0, 7.0, 8.0]
         {
-            let left = buffer.chan_mut(0);
+            let left = buffer.plane_mut(0).expect("channel exists");
             left[0] = 1.0;
             left[1] = 2.0;
             left[2] = 3.0;
             left[3] = 4.0;
 
-            let right = buffer.chan_mut(1);
+            let right = buffer.plane_mut(1).expect("channel exists");
             right[0] = 5.0;
             right[1] = 6.0;
             right[2] = 7.0;
@@ -1037,14 +1169,17 @@ mod tests {
     #[test_log::test]
     fn test_to_samples_mono() {
         // Create a mono audio buffer with 4 frames
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT);
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(4, spec);
+        let spec = AudioSpec::new(
+            44100,
+            Channels::Positioned(symphonia::core::audio::Position::FRONT_LEFT),
+        );
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 4);
         // Reserve 4 frames to make the buffer usable
-        buffer.render_reserved(Some(4));
+        buffer.render_uninit(Some(4));
 
         // Fill mono channel with [1.0, 2.0, 3.0, 4.0]
         {
-            let mono = buffer.chan_mut(0);
+            let mono = buffer.plane_mut(0).expect("channel exists");
             mono[0] = 1.0;
             mono[1] = 2.0;
             mono[2] = 3.0;
@@ -1064,18 +1199,21 @@ mod tests {
     #[test_log::test]
     fn test_to_samples_type_conversion_to_i16() {
         // Test that type conversion works correctly
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(2, spec);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 2);
         // Reserve 2 frames to make the buffer usable
-        buffer.render_reserved(Some(2));
+        buffer.render_uninit(Some(2));
 
         // Use normalized float values (-1.0 to 1.0)
         {
-            let left = buffer.chan_mut(0);
+            let left = buffer.plane_mut(0).expect("channel exists");
             left[0] = 0.5;
             left[1] = -0.5;
 
-            let right = buffer.chan_mut(1);
+            let right = buffer.plane_mut(1).expect("channel exists");
             right[0] = 0.25;
             right[1] = -0.25;
         }
@@ -1166,11 +1304,11 @@ mod tests {
 
     struct MockAudioWriteWithSpec {
         handle: AudioHandle,
-        output_spec: SignalSpec,
+        output_spec: AudioSpec,
     }
 
     impl MockAudioWriteWithSpec {
-        fn new(output_spec: SignalSpec) -> Self {
+        fn new(output_spec: AudioSpec) -> Self {
             let (tx, _rx) = flume::bounded(1);
             Self {
                 handle: AudioHandle::new(tx),
@@ -1188,8 +1326,8 @@ mod tests {
             Ok(())
         }
 
-        fn get_output_spec(&self) -> Option<SignalSpec> {
-            Some(self.output_spec)
+        fn get_output_spec(&self) -> Option<AudioSpec> {
+            Some(self.output_spec.clone())
         }
 
         fn handle(&self) -> AudioHandle {
@@ -1258,23 +1396,26 @@ mod tests {
     #[test_log::test]
     fn test_audio_output_write_same_sample_rate() {
         // Test that when sample rates match, samples pass through without resampling
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
-            spec,
+            spec.clone(),
             Box::new(mock_writer),
         );
 
         // Create an audio buffer with matching sample rate
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(100, spec);
-        buffer.render_reserved(Some(100));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 100);
+        buffer.render_uninit(Some(100));
         // Fill with some data
         for ch in 0..2 {
-            let chan = buffer.chan_mut(ch);
+            let chan = buffer.plane_mut(ch).expect("channel exists");
             #[allow(clippy::cast_precision_loss)]
             for (i, sample) in chan.iter_mut().enumerate().take(100) {
                 *sample = (i as f32) / 100.0;
@@ -1294,19 +1435,22 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_write_empty_buffer() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
-            spec,
+            spec.clone(),
             Box::new(mock_writer),
         );
 
         // Create an empty audio buffer (0 capacity means 0 frames)
-        let buffer: AudioBuffer<f32> = AudioBuffer::new(0, spec);
+        let buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 0);
 
         // Write through AudioWrite trait
         let result = AudioWrite::write(&mut output, buffer);
@@ -1318,7 +1462,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_flush() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
 
@@ -1342,7 +1489,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_get_playback_position() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = MockAudioWriteWithPosition::new(42.5);
 
         let output = AudioOutput::new(
@@ -1358,8 +1508,14 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_get_output_spec() {
-        let input_spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
-        let output_spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let input_spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
+        let output_spec = AudioSpec::new(
+            48000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = MockAudioWriteWithSpec::new(output_spec);
 
         let output = AudioOutput::new(
@@ -1372,27 +1528,30 @@ mod tests {
         // get_output_spec should delegate to the underlying writer
         let spec = output.get_output_spec();
         assert!(spec.is_some());
-        assert_eq!(spec.unwrap().rate, 48000);
+        assert_eq!(spec.unwrap().rate(), 48000);
     }
 
     #[test_log::test]
     fn test_audio_output_audio_decode_decoded_success() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
-            spec,
+            spec.clone(),
             Box::new(mock_writer),
         );
 
         // Create an audio buffer with matching sample rate
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(50, spec);
-        buffer.render_reserved(Some(50));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 50);
+        buffer.render_uninit(Some(50));
         for ch in 0..2 {
-            let chan = buffer.chan_mut(ch);
+            let chan = buffer.plane_mut(ch).expect("channel exists");
             #[allow(clippy::cast_precision_loss)]
             for (i, sample) in chan.iter_mut().enumerate().take(50) {
                 *sample = (i as f32) / 100.0;
@@ -1400,8 +1559,10 @@ mod tests {
         }
 
         // Create dummy packet and track for the AudioDecode trait
-        let packet = Packet::new_from_slice(0, 0, 0, &[]);
-        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+        let packet = Packet::new(0, 0.into(), 0u64.into(), &[][..]);
+        let track = Track::new(0)
+            .with_codec_params(CodecParameters::Audio(AudioCodecParameters::new()))
+            .clone();
 
         // Call decoded through AudioDecode trait
         let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);
@@ -1413,7 +1574,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_flush_success() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
 
@@ -1434,7 +1598,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_flush_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = FailingFlushWriter::new(|| AudioOutputError::Interrupt);
 
         let mut output = AudioOutput::new(
@@ -1451,24 +1618,29 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_decoded() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
 
         let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
 
         // Create an audio buffer
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(25, spec);
-        buffer.render_reserved(Some(25));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 25);
+        buffer.render_uninit(Some(25));
         for ch in 0..2 {
-            let chan = buffer.chan_mut(ch);
+            let chan = buffer.plane_mut(ch).expect("channel exists");
             for sample in chan.iter_mut().take(25) {
                 *sample = 0.5;
             }
         }
 
-        let packet = Packet::new_from_slice(0, 0, 0, &[]);
-        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+        let packet = Packet::new(0, 0.into(), 0u64.into(), &[][..]);
+        let track = Track::new(0)
+            .with_codec_params(CodecParameters::Audio(AudioCodecParameters::new()))
+            .clone();
 
         // Call decoded through AudioDecode trait on Box<dyn AudioWrite>
         let result = AudioDecode::decoded(&mut boxed_writer, buffer, &packet, &track);
@@ -1480,7 +1652,10 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_flush() {
-        let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let _spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
 
@@ -1496,7 +1671,10 @@ mod tests {
 
     #[test_log::test]
     fn test_ref_mut_dyn_audio_write_audio_decode_decoded() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let written_frames = mock_writer.written_frames.clone();
 
@@ -1504,17 +1682,19 @@ mod tests {
         let writer_ref: &mut dyn AudioWrite = &mut *boxed_writer;
 
         // Create an audio buffer
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(30, spec);
-        buffer.render_reserved(Some(30));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 30);
+        buffer.render_uninit(Some(30));
         for ch in 0..2 {
-            let chan = buffer.chan_mut(ch);
+            let chan = buffer.plane_mut(ch).expect("channel exists");
             for sample in chan.iter_mut().take(30) {
                 *sample = 0.3;
             }
         }
 
-        let packet = Packet::new_from_slice(0, 0, 0, &[]);
-        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+        let packet = Packet::new(0, 0.into(), 0u64.into(), &[][..]);
+        let track = Track::new(0)
+            .with_codec_params(CodecParameters::Audio(AudioCodecParameters::new()))
+            .clone();
 
         // Call decoded through AudioDecode trait on &mut dyn AudioWrite
         let result = AudioDecode::decoded(&mut { writer_ref }, buffer, &packet, &track);
@@ -1526,7 +1706,10 @@ mod tests {
 
     #[test_log::test]
     fn test_ref_mut_dyn_audio_write_audio_decode_flush() {
-        let _spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let _spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = TrackingMockAudioWrite::new();
         let flush_count = mock_writer.flush_count.clone();
 
@@ -1543,16 +1726,21 @@ mod tests {
 
     #[test_log::test]
     fn test_box_dyn_audio_write_audio_decode_write_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = FailingWriter::new(|| AudioOutputError::StreamClosed);
 
         let mut boxed_writer: Box<dyn AudioWrite> = Box::new(mock_writer);
 
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
-        buffer.render_reserved(Some(10));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 10);
+        buffer.render_uninit(Some(10));
 
-        let packet = Packet::new_from_slice(0, 0, 0, &[]);
-        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+        let packet = Packet::new(0, 0.into(), 0u64.into(), &[][..]);
+        let track = Track::new(0)
+            .with_codec_params(CodecParameters::Audio(AudioCodecParameters::new()))
+            .clone();
 
         // Call decoded - should convert AudioOutputError to AudioDecodeError
         let result = AudioDecode::decoded(&mut boxed_writer, buffer, &packet, &track);
@@ -1572,7 +1760,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_factory_try_into_output_success() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "test-id".to_string(),
             "Test Output".to_string(),
@@ -1586,12 +1777,15 @@ mod tests {
         let output = result.unwrap();
         assert_eq!(output.id, "test-id");
         assert_eq!(output.name, "Test Output");
-        assert_eq!(output.spec.rate, 44100);
+        assert_eq!(output.spec.rate(), 44100);
     }
 
     #[test_log::test]
     fn test_audio_output_factory_try_from_success() {
-        let spec = SignalSpec::new(48000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            48000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "factory-id".to_string(),
             "Factory Output".to_string(),
@@ -1605,12 +1799,15 @@ mod tests {
         let output = result.unwrap();
         assert_eq!(output.id, "factory-id");
         assert_eq!(output.name, "Factory Output");
-        assert_eq!(output.spec.rate, 48000);
+        assert_eq!(output.spec.rate(), 48000);
     }
 
     #[test_log::test]
     fn test_audio_output_factory_try_from_ref_success() {
-        let spec = SignalSpec::new(96000, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            96000,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let factory = AudioOutputFactory::new(
             "ref-factory-id".to_string(),
             "Ref Factory Output".to_string(),
@@ -1624,24 +1821,27 @@ mod tests {
         let output = result.unwrap();
         assert_eq!(output.id, "ref-factory-id");
         assert_eq!(output.name, "Ref Factory Output");
-        assert_eq!(output.spec.rate, 96000);
+        assert_eq!(output.spec.rate(), 96000);
     }
 
     #[test_log::test]
     fn test_audio_output_write_underlying_writer_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = FailingWriter::new(|| AudioOutputError::StreamClosed);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
-            spec,
+            spec.clone(),
             Box::new(mock_writer),
         );
 
         // Create an audio buffer with matching sample rate
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
-        buffer.render_reserved(Some(10));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 10);
+        buffer.render_uninit(Some(10));
 
         // Write through AudioWrite trait - should propagate the error
         let result = AudioWrite::write(&mut output, buffer);
@@ -1654,7 +1854,10 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_flush_underlying_writer_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = FailingFlushWriter::new(|| AudioOutputError::Interrupt);
 
         let mut output = AudioOutput::new(
@@ -1672,22 +1875,27 @@ mod tests {
 
     #[test_log::test]
     fn test_audio_output_audio_decode_decoded_writer_error() {
-        let spec = SignalSpec::new(44100, Channels::FRONT_LEFT | Channels::FRONT_RIGHT);
+        let spec = AudioSpec::new(
+            44100,
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_STEREO,
+        );
         let mock_writer = FailingWriter::new(|| AudioOutputError::OpenStream);
 
         let mut output = AudioOutput::new(
             "test-id".to_string(),
             "Test Output".to_string(),
-            spec,
+            spec.clone(),
             Box::new(mock_writer),
         );
 
         // Create an audio buffer
-        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(10, spec);
-        buffer.render_reserved(Some(10));
+        let mut buffer: AudioBuffer<f32> = AudioBuffer::new(spec, 10);
+        buffer.render_uninit(Some(10));
 
-        let packet = Packet::new_from_slice(0, 0, 0, &[]);
-        let track = Track::new(0, CodecParameters::new().for_codec(CODEC_TYPE_NULL).clone());
+        let packet = Packet::new(0, 0.into(), 0u64.into(), &[][..]);
+        let track = Track::new(0)
+            .with_codec_params(CodecParameters::Audio(AudioCodecParameters::new()))
+            .clone();
 
         // Call decoded - should convert AudioOutputError to AudioDecodeError
         let result = AudioDecode::decoded(&mut output, buffer, &packet, &track);

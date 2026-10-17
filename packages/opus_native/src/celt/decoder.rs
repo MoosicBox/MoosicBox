@@ -17,11 +17,9 @@ use crate::{Channels, SampleRate};
 
 use super::constants::{
     ALLOCATION_TABLE, CACHE_CAPS, CELT_BINS_2_5MS, CELT_BINS_5MS, CELT_BINS_10MS, CELT_BINS_20MS,
-    CELT_INTRA_PDF, CELT_NUM_BANDS, CELT_SILENCE_PDF, CELT_TRANSIENT_PDF, LOG2_FRAC_TABLE,
-    TRIM_PDF,
+    CELT_NUM_BANDS, LOG2_FRAC_TABLE, TRIM_PDF,
 };
-use super::fixed_point::{CeltNorm, CeltSig, SIG_SHIFT, mult16_32_q15, qconst16};
-use super::pvq::{compute_pulse_cap, decode_pvq_vector_split};
+use super::fixed_point::{CeltNorm, CeltSig, SIG_SHIFT, mult16_32_q15};
 
 /// Result of bit allocation computation
 #[derive(Debug, Clone)]
@@ -249,8 +247,10 @@ pub struct CeltDecoder {
     sample_rate: SampleRate,
     #[allow(dead_code)]
     channels: Channels,
+    synthesis_channels: Channels,
     frame_size: usize, // In samples
     state: CeltState,
+    energy_q24: energy::EnergyHistory,
 
     // Band configuration (matching libopus st->start and st->end)
     /// Starting band index (usually 0, can be 17 for narrowband)
@@ -287,11 +287,14 @@ pub struct CeltDecoder {
     tf_change: Vec<bool>,
     /// Computed TF resolution per band
     tf_resolution: Vec<u8>,
+    /// Exact signed resolution used by production TF decoding.
+    tf_resolution_signed: Vec<i8>,
 
     /// Downsampling factor (1 for 48kHz, 2 for 24kHz, 4 for 12kHz, 6 for 8kHz)
     downsample: u32,
     /// Deemphasis filter memory (per channel)
     preemph_memd: Vec<f32>,
+    postfilter: postfilter::Postfilter,
 }
 
 impl CeltDecoder {
@@ -301,21 +304,7 @@ impl CeltDecoder {
     ///
     /// * Returns an error if `frame_size` is invalid for the given `sample_rate`.
     pub fn new(sample_rate: SampleRate, channels: Channels, frame_size: usize) -> Result<Self> {
-        // Validate frame size based on sample rate (RFC Section 2)
-        // CELT supports 2.5/5/10/20 ms frames
-        let valid_frame_sizes = match sample_rate {
-            SampleRate::Hz8000 => vec![20, 40, 80, 160],
-            SampleRate::Hz12000 => vec![30, 60, 120, 240],
-            SampleRate::Hz16000 => vec![40, 80, 160, 320],
-            SampleRate::Hz24000 => vec![60, 120, 240, 480],
-            SampleRate::Hz48000 => vec![120, 240, 480, 960],
-        };
-
-        if !valid_frame_sizes.contains(&frame_size) {
-            return Err(Error::CeltDecoder(format!(
-                "invalid frame size {frame_size} for sample rate {sample_rate:?}"
-            )));
-        }
+        Self::validate_frame_size(sample_rate, frame_size)?;
 
         let num_channels = match channels {
             Channels::Mono => 1,
@@ -325,22 +314,109 @@ impl CeltDecoder {
         Ok(Self {
             sample_rate,
             channels,
+            synthesis_channels: channels,
             frame_size,
             state: CeltState::new(),
+            energy_q24: energy::EnergyHistory::new(),
             start_band: 0,
             end_band: CELT_NUM_BANDS,
             transient: false,
             tf_select: None,
             tf_change: Vec::new(),
             tf_resolution: Vec::new(),
+            tf_resolution_signed: Vec::new(),
             downsample: 1,
             preemph_memd: vec![0.0; num_channels],
+            postfilter: postfilter::Postfilter::default(),
         })
+    }
+
+    fn validate_frame_size(sample_rate: SampleRate, frame_size: usize) -> Result<()> {
+        let valid_frame_sizes = match sample_rate {
+            SampleRate::Hz8000 => [20, 40, 80, 160],
+            SampleRate::Hz12000 => [30, 60, 120, 240],
+            SampleRate::Hz16000 => [40, 80, 160, 320],
+            SampleRate::Hz24000 => [60, 120, 240, 480],
+            SampleRate::Hz48000 => [120, 240, 480, 960],
+        };
+        if !valid_frame_sizes.contains(&frame_size) {
+            return Err(Error::CeltDecoder(format!(
+                "invalid frame size {frame_size} for sample rate {sample_rate:?}"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Updates the encoded channel count without resetting energy predictors.
+    /// Mono uses the larger of the previous stereo energies, as in libopus;
+    /// mono history is duplicated when returning to stereo. Overlap/deemphasis
+    /// slots are duplicated for stereo and averaged when returning to mono.
+    pub fn set_channels(&mut self, channels: Channels) {
+        if self.channels == channels {
+            return;
+        }
+        if channels == Channels::Mono {
+            for band in 0..CELT_NUM_BANDS {
+                self.energy_q24.band[band] =
+                    self.energy_q24.band[band].max(self.energy_q24.band[CELT_NUM_BANDS + band]);
+            }
+            let half = self.state.overlap_buffers.len() / 2;
+            for index in 0..half {
+                for sample in 0..self.state.overlap_buffers[index].len() {
+                    let a = i64::from(self.state.overlap_buffers[index][sample]);
+                    let b = i64::from(self.state.overlap_buffers[half + index][sample]);
+                    self.state.overlap_buffers[index][sample] = a.midpoint(b) as i32;
+                }
+            }
+            self.state.overlap_buffers.truncate(half);
+            self.preemph_memd[0] = self.preemph_memd[0].midpoint(self.preemph_memd[1]);
+            self.preemph_memd.truncate(1);
+        } else {
+            self.energy_q24
+                .band
+                .copy_within(..CELT_NUM_BANDS, CELT_NUM_BANDS);
+            let buffers = self.state.overlap_buffers.clone();
+            self.state.overlap_buffers.extend(buffers);
+            self.preemph_memd.push(self.preemph_memd[0]);
+        }
+        self.channels = channels;
+    }
+
+    /// Selects output synthesis channels independently of the coded channel count.
+    ///
+    /// Entropy decoding and energy prediction continue using `self.channels`.
+    /// Stereo-to-mono uses `HALF32(L) + HALF32(R)` on denormalized frequencies
+    /// before the single inverse transform, TDAC, postfilter and deemphasis.
+    /// Changing this does not reset predictor, TDAC or postfilter history.
+    pub const fn configure_synthesis_channels(&mut self, channels: Channels) {
+        self.synthesis_channels = channels;
+    }
+
+    /// Updates the number of samples per channel in the next CELT frame.
+    ///
+    /// Sizes use the decoder's construction rate, not the output rate selected
+    /// with [`Self::set_output_rate`]. At 48 kHz, valid sizes are 120, 240, 480,
+    /// and 960 samples (2.5, 5, 10, and 20 ms).
+    ///
+    /// This does not reset energy prediction, post-filter, overlap, random, or
+    /// deemphasis history. Synthesis retains one 60-sample TDAC tail per channel
+    /// across short/long transforms; duration transitions require corpus coverage.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if `frame_size` is not a supported CELT frame size for
+    ///   the construction sample rate. On error, the decoder is unchanged.
+    pub fn set_frame_size(&mut self, frame_size: usize) -> Result<()> {
+        Self::validate_frame_size(self.sample_rate, frame_size)?;
+        self.frame_size = frame_size;
+        Ok(())
     }
 
     /// Resets decoder state
     pub fn reset(&mut self) {
         self.state.reset();
+        self.energy_q24 = energy::EnergyHistory::new();
+        self.postfilter = postfilter::Postfilter::default();
         let num_channels = match self.channels {
             Channels::Mono => 1,
             Channels::Stereo => 2,
@@ -395,8 +471,11 @@ impl CeltDecoder {
     ///
     /// Returns an error if range decoding fails.
     pub fn decode_silence(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
-        let value = range_decoder.ec_dec_icdf_u16(CELT_SILENCE_PDF, 15)?;
-        Ok(value == 1)
+        // A shared hybrid entropy decoder has already passed the silence bit.
+        if range_decoder.ec_tell() != 1 {
+            return Ok(false);
+        }
+        range_decoder.ec_dec_bit_logp(15)
     }
 
     /// Decodes post-filter flag (RFC Table 56)
@@ -414,8 +493,7 @@ impl CeltDecoder {
     ///
     /// Returns an error if range decoding fails.
     pub fn decode_transient_flag(&mut self, range_decoder: &mut RangeDecoder) -> Result<bool> {
-        let value = range_decoder.ec_dec_icdf(CELT_TRANSIENT_PDF, 8)?;
-        let transient = value == 1;
+        let transient = self.compute_lm() > 0 && range_decoder.ec_dec_bit_logp(3)?;
         self.transient = transient;
         Ok(transient)
     }
@@ -514,8 +592,8 @@ impl CeltDecoder {
     ) -> Result<PostFilterParams> {
         use super::constants::CELT_TAPSET_PDF;
 
-        // Octave: uniform 0-6
-        let octave = range_decoder.ec_dec_uint(7)?;
+        // Six octave symbols (0 through 5), not seven.
+        let octave = range_decoder.ec_dec_uint(6)?;
 
         // Period: 4+octave raw bits
         let raw_bits = 4 + octave;
@@ -744,97 +822,113 @@ impl CeltDecoder {
     ///
     /// Returns error if range decoder fails
     pub fn decode_intra(&mut self, range_decoder: &mut RangeDecoder) -> Result<bool> {
-        let value = range_decoder.ec_dec_icdf(CELT_INTRA_PDF, 15)?;
-        Ok(value == 1)
+        range_decoder.ec_dec_bit_logp(3)
     }
 
-    /// ## Critical Implementation Note
+    /// Decodes coarse energy and projects the first channel to the legacy Q8
+    /// synthesis interface. The exact Q24 stage is [`Self::decode_coarse_energy_q24`].
     ///
-    /// The frequency prediction uses an IIR filter state update:
-    /// ```c
-    /// prev[c] = prev[c] + q - MULT16_32_Q15(beta,q);  // L487
-    /// ```
-    /// Equivalent to: `prev = prev + q*(1 - beta)`
-    ///
-    /// **Bug Fixed in Phase 4.2**: Initial implementation incorrectly used
-    /// `prev = beta * energy[band]` which violated RFC specification.
-    ///
-    /// # Arguments
-    ///
-    /// * `range_decoder` - Range decoder state
-    /// * `intra_flag` - Whether this is an intra frame (from `decode_intra()`)
-    ///
-    /// # Returns
-    ///
-    /// Array of coarse energy values (Q8 format, base-2 log domain)
+    /// `frame_bytes` is the CELT payload size used for entropy budget decisions.
+    /// The legacy history and result cannot retain Q24 fractional precision or
+    /// independent stereo energies; downstream migration remains necessary.
     ///
     /// # Errors
     ///
-    /// * Returns error if Laplace decoding fails
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    /// * Returns an error for invalid band bounds or entropy decoding failure.
     pub fn decode_coarse_energy(
         &mut self,
         range_decoder: &mut RangeDecoder,
         intra_flag: bool,
+        frame_bytes: usize,
     ) -> Result<[i16; CELT_NUM_BANDS]> {
+        let channels = if self.channels == Channels::Stereo {
+            2
+        } else {
+            1
+        };
+        let mut energy = Vec::with_capacity(channels * CELT_NUM_BANDS);
+        for _ in 0..channels {
+            energy.extend(self.state.prev_energy.iter().map(|&e| i32::from(e) << 16));
+        }
+        self.decode_coarse_energy_q24(range_decoder, intra_flag, frame_bytes, &mut energy)?;
+        Ok(std::array::from_fn(|band| (energy[band] >> 16) as i16))
+    }
+
+    /// Decodes coarse log energies in place using bundled fixed-point libopus's
+    /// Q24 representation (`DB_SHIFT=24`).
+    ///
+    /// `energy` holds one contiguous 21-band history per channel. Only configured
+    /// start..end bands are changed. Symbols are read band-first, channel-second;
+    /// predictor accumulators are independent per channel. Pass the final Q24
+    /// energy history from the preceding frame, including fine-energy updates.
+    /// This stage does not modify the decoder's legacy Q8 history.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error, before consuming symbols, for invalid band bounds or
+    ///   a history whose length differs from 21 times the channel count.
+    /// * Returns an error if entropy decoding fails; history may be partially updated.
+    pub fn decode_coarse_energy_q24(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        intra_flag: bool,
+        frame_bytes: usize,
+        energy: &mut [i32],
+    ) -> Result<()> {
         use super::constants::{
             ENERGY_ALPHA_INTER, ENERGY_BETA_INTER, ENERGY_BETA_INTRA, ENERGY_PROB_MODEL,
         };
 
-        let mut coarse_energy = [0_i16; CELT_NUM_BANDS];
-        let mut prev_q8 = 0_i32;
-
-        let (coef_q15, beta_q15) = if intra_flag {
-            (0_i16, qconst16(f64::from(ENERGY_BETA_INTRA), 15))
+        const ONE: i32 = 1 << 24;
+        let channels = if self.channels == Channels::Stereo {
+            2
         } else {
-            let frame_idx = self.frame_duration_index();
-            (
-                qconst16(f64::from(ENERGY_ALPHA_INTER[frame_idx]), 15),
-                qconst16(f64::from(ENERGY_BETA_INTER[frame_idx]), 15),
-            )
+            1
         };
-
-        let frame_idx = self.frame_duration_index();
-        let prob_model = &ENERGY_PROB_MODEL[frame_idx][usize::from(intra_flag)];
-
-        #[allow(clippy::needless_range_loop)]
-        for band in 0..CELT_NUM_BANDS {
-            let time_pred_q8 = if intra_flag || self.state.prev_energy[band] == 0 {
-                0_i32
-            } else {
-                mult16_32_q15(coef_q15, i32::from(self.state.prev_energy[band]) << 8)
-            };
-
-            let freq_pred_q8 = prev_q8;
-
-            let prediction_q8 = time_pred_q8 + freq_pred_q8;
-
-            let pi = 2 * band.min(20);
-            let fs = u32::from(prob_model[pi]) << 7;
-            let decay = u32::from(prob_model[pi + 1]) << 6;
-
-            let error = range_decoder.ec_laplace_decode(fs, decay)?;
-
-            // qi is in units where 1 = 6dB. Convert to Q8 format (256 units per integer)
-            // q_q8 = qi * 6 * 256 = qi * 1536
-            let q_q8 = error * 1536;
-            let raw_energy_q8 = prediction_q8 + q_q8;
-
-            // Clamp to Q8 range: -128 to 127 maps to -32768 to 32512 in Q8
-            let clamped_q8 = raw_energy_q8.clamp(-32768, 32512);
-            coarse_energy[band] = (clamped_q8 >> 8) as i16;
-
-            // prev = prev + q - beta * q = prev + q * (1 - beta)
-            let beta_q = mult16_32_q15(beta_q15, q_q8);
-            prev_q8 = prev_q8 + q_q8 - beta_q;
-
-            log::trace!(
-                "Band {band}: error={error}, q_q8={q_q8}, pred_q8={prediction_q8}, energy={}",
-                coarse_energy[band]
-            );
+        if self.start_band > self.end_band
+            || self.end_band > CELT_NUM_BANDS
+            || energy.len() != channels * CELT_NUM_BANDS
+        {
+            return Err(Error::CeltDecoder(
+                "invalid coarse energy bands or history length".into(),
+            ));
         }
-
-        Ok(coarse_energy)
+        let lm = self.frame_duration_index();
+        let (coef, beta) = if intra_flag {
+            (0, ENERGY_BETA_INTRA)
+        } else {
+            (ENERGY_ALPHA_INTER[lm], ENERGY_BETA_INTER[lm])
+        };
+        let model = &ENERGY_PROB_MODEL[lm][usize::from(intra_flag)];
+        let budget = frame_bytes.saturating_mul(8);
+        let mut prev = [0_i64; 2];
+        for band in self.start_band..self.end_band {
+            for (channel, prediction) in prev.iter_mut().enumerate().take(channels) {
+                let remaining = budget.saturating_sub(range_decoder.ec_tell() as usize);
+                let qi = if remaining >= 15 {
+                    range_decoder.ec_laplace_decode(
+                        u32::from(model[2 * band]) << 7,
+                        u32::from(model[2 * band + 1]) << 6,
+                    )?
+                } else if remaining >= 2 {
+                    let symbol = range_decoder.ec_dec_icdf(&[2, 1, 0], 2)? as i32;
+                    (symbol >> 1) ^ -(symbol & 1)
+                } else if remaining >= 1 {
+                    -i32::from(range_decoder.ec_dec_bit_logp(1)?)
+                } else {
+                    -1
+                };
+                let q = qi.wrapping_mul(ONE);
+                let index = channel * CELT_NUM_BANDS + band;
+                let old = energy[index].max(-9 * ONE);
+                let predicted = i64::from(mult16_32_q15(coef, old));
+                energy[index] = (predicted + *prediction + i64::from(q))
+                    .clamp(i64::from(-28 * ONE), i64::from(28 * ONE))
+                    as i32;
+                *prediction += i64::from(q) - i64::from(mult16_32_q15(beta, q));
+            }
+        }
+        Ok(())
     }
 
     /// Decodes fine energy quantization
@@ -987,8 +1081,13 @@ impl CeltDecoder {
         let mut bits_consumed = 0_i32;
         let mut dynalloc_logp = 6; // Initial cost: 6 bits
 
-        for band in 0..CELT_NUM_BANDS {
-            let n = i32::from(bins[band]);
+        for band in self.start_band..self.end_band {
+            let channels = if self.channels == Channels::Stereo {
+                2
+            } else {
+                1
+            };
+            let n = channels * i32::from(bins[band]);
             // RFC line 6346: quanta = min(8*N, max(48, N))
             let quanta = (8 * n).min(48.max(n));
 
@@ -999,7 +1098,7 @@ impl CeltDecoder {
             // FIXED 4.6.9.3: total_bits_8th already in eighth-bits
             while dynalloc_loop_logp * 8
                 + i32::try_from(range_decoder.ec_tell_frac()).unwrap_or(i32::MAX)
-                < total_bits_8th + total_boost
+                < total_bits_8th - total_boost
                 && boost < caps[band]
             {
                 let bit = range_decoder
@@ -1508,6 +1607,65 @@ impl CeltDecoder {
         false // tf_select has no effect on any band
     }
 
+    /// Decodes TF-change and TF-select as one budgeted entropy stage.
+    ///
+    /// Reserves TF-select before reading changes, carries the last change across
+    /// budget exhaustion, and retains negative resolution values from libopus's
+    /// table (negative means increased frequency resolution).
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error for invalid configured bands or entropy decoding failure.
+    pub fn decode_tf(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        frame_bytes: usize,
+    ) -> Result<Vec<i8>> {
+        use super::constants::TF_SELECT_TABLE;
+        if self.start_band >= self.end_band || self.end_band > CELT_NUM_BANDS {
+            return Err(Error::CeltDecoder("invalid TF band bounds".into()));
+        }
+        let lm = self.frame_duration_index();
+        let transient = usize::from(self.transient);
+        let table = &TF_SELECT_TABLE[lm][transient];
+        let mut budget = frame_bytes.saturating_mul(8);
+        let mut tell = range_decoder.ec_tell() as usize;
+        let mut logp = if self.transient { 2 } else { 4 };
+        let reserved = lm > 0 && tell.saturating_add(logp as usize + 1) <= budget;
+        budget = budget.saturating_sub(usize::from(reserved));
+        let mut current = false;
+        let mut changed = false;
+        self.tf_change = vec![false; CELT_NUM_BANDS];
+        for band in self.start_band..self.end_band {
+            if tell.saturating_add(logp as usize) <= budget {
+                current ^= range_decoder.ec_dec_bit_logp(logp)?;
+                tell = range_decoder.ec_tell() as usize;
+                changed |= current;
+            }
+            self.tf_change[band] = current;
+            logp = if self.transient { 4 } else { 5 };
+        }
+        let select = if reserved && table[0][usize::from(changed)] != table[1][usize::from(changed)]
+        {
+            u8::from(range_decoder.ec_dec_bit_logp(1)?)
+        } else {
+            0
+        };
+        self.tf_select = Some(select);
+        let mut resolution = vec![0; CELT_NUM_BANDS];
+        for (band, value) in resolution
+            .iter_mut()
+            .enumerate()
+            .take(self.end_band)
+            .skip(self.start_band)
+        {
+            *value = table[usize::from(select)][usize::from(self.tf_change[band])];
+        }
+        self.tf_resolution_signed.clone_from(&resolution);
+        Ok(resolution)
+    }
+
+    /// Legacy unbudgeted TF-select helper. Production uses [`Self::decode_tf`].
     /// Decode `tf_select` flag if it affects outcome
     ///
     /// RFC 6716 Section 4.3.1 (lines 6020-6023)
@@ -1745,7 +1903,7 @@ impl CeltDecoder {
         if !anti_collapse_rsv {
             return Ok(false);
         }
-        range_decoder.ec_dec_bit_logp(1)
+        Ok(range_decoder.ec_dec_bits(1)? != 0)
     }
 
     /// Apply anti-collapse processing to prevent zero energy in bands
@@ -2291,6 +2449,8 @@ impl CeltDecoder {
     ///
     /// libopus `celt_decoder.c:417`: `clt_mdct_backward(&freq[b], ..., stride=B)`
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    #[cfg(test)]
+    #[allow(dead_code)] // Retained legacy transform helper tests pending removal.
     fn inverse_mdct_strided(
         freq_data: &[CeltSig],
         offset: usize,
@@ -2400,14 +2560,14 @@ impl CeltDecoder {
     /// Returns a frame filled with zeros.
     #[must_use]
     fn generate_silence_frame(&self) -> DecodedFrame {
-        let num_channels = match self.channels {
+        let num_channels = match self.synthesis_channels {
             Channels::Mono => 1,
             Channels::Stereo => 2,
         };
         DecodedFrame {
             samples: vec![0; self.frame_size * num_channels],
             sample_rate: self.sample_rate,
-            channels: self.channels,
+            channels: self.synthesis_channels,
         }
     }
 
@@ -2464,44 +2624,66 @@ impl CeltDecoder {
         // 1. silence (RFC Table 56 line 5946)
         let silence = self.decode_silence(range_decoder)?;
         if silence {
+            let channels = if self.channels == Channels::Stereo {
+                2
+            } else {
+                1
+            };
+            self.energy_q24.update(
+                vec![-28 * (1 << 24); channels * CELT_NUM_BANDS],
+                channels,
+                false,
+                self.start_band,
+                self.end_band,
+            );
             return Ok(self.generate_silence_frame());
         }
 
         // 2. post-filter + params (RFC Table 56 lines 5948-5956)
-        let post_filter = self.decode_post_filter(range_decoder)?;
-        let _post_filter_params = if post_filter {
+        let total_bits = u32::try_from(frame_bytes)
+            .unwrap_or(u32::MAX)
+            .saturating_mul(8);
+        let post_filter = self.start_band == 0
+            && range_decoder.ec_tell().saturating_add(16) <= total_bits
+            && self.decode_post_filter(range_decoder)?;
+        let post_filter_params = if post_filter {
             Some(self.decode_post_filter_params(range_decoder)?)
         } else {
             None
         };
 
         // 3. transient (RFC Table 56 line 5958)
-        let _transient = self.decode_transient_flag(range_decoder)?;
+        self.transient = false;
+        if range_decoder.ec_tell().saturating_add(3) <= total_bits {
+            self.decode_transient_flag(range_decoder)?;
+        }
 
         // 4. intra (RFC Table 56 line 5960)
-        let intra = self.decode_intra(range_decoder)?;
+        let intra = range_decoder.ec_tell().saturating_add(3) <= total_bits
+            && self.decode_intra(range_decoder)?;
 
         // 5. coarse energy (RFC Table 56 line 5962) - MOVED HERE from position 11
-        let coarse_energy = self.decode_coarse_energy(range_decoder, intra)?;
+        let channels = if self.channels == Channels::Stereo {
+            2
+        } else {
+            1
+        };
+        let mut energy = self.energy_q24.band[..channels * CELT_NUM_BANDS].to_vec();
+        self.decode_coarse_energy_q24(range_decoder, intra, frame_bytes, &mut energy)?;
 
         // 6. tf_change (RFC Table 56 line 5964) - MOVED HERE from position 5
-        self.decode_tf_changes(range_decoder, self.start_band, self.end_band)?;
-
-        // 7. tf_select (RFC Table 56 line 5966) - MOVED HERE from position 6
-        self.decode_tf_select(range_decoder, self.start_band, self.end_band)?;
+        self.decode_tf(range_decoder, frame_bytes)?;
 
         // 8. spread (RFC Table 56 line 5968) - NEWLY ADDED
-        let _spread = self.decode_spread(range_decoder)?;
+        let spread = if range_decoder.ec_tell().saturating_add(4) <= total_bits {
+            self.decode_spread(range_decoder)?
+        } else {
+            2
+        };
 
-        // Calculate bit budget (RFC lines 6411-6414) - BIT-EXACT
-        // FIXED 4.6.9.1: Use bit-exact formula (no rounding!)
-        // RFC: total = (frame_bytes × 8 × 8) - ec_tell_frac() - 1
-        // This preserves all fractional precision in eighth-bits
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let tell_frac = i32::try_from(range_decoder.ec_tell_frac())
-            .map_err(|_| Error::CeltDecoder("tell_frac overflow".into()))?;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-        let total_bits_8th = (frame_bytes as i32 * 8 * 8) - tell_frac - 1;
+        // Dynalloc consumes a shrinking absolute packet budget; allocation
+        // receives remaining bits only after dynalloc/trim have been decoded.
+        let total_bits_8th = frame_bytes as i32 * 64;
 
         // 9. dyn. alloc. (band boost) (RFC Table 56 line 5970)
         let lm = self.compute_lm();
@@ -2518,232 +2700,138 @@ impl CeltDecoder {
         let total_boost = boost.iter().sum();
         let trim = self.decode_allocation_trim(range_decoder, total_bits_8th, total_boost)?;
 
-        // Compute allocation (handles ALL reservations: anti-collapse, skip, intensity, dual)
-        // FIXED 4.6.8.2: Now includes intensity/dual reservations per RFC 6423-6429
-        // FIXED 4.6.9.1: Pass total_bits_8th (already in eighth-bits, bit-exact)
-        let allocation = self.compute_allocation(
-            total_bits_8th,
-            lm,
-            num_channels,
-            &boost,
-            trim,
-            self.start_band,
-            self.end_band,
-            self.transient,
-        )?;
+        let total_bits_8th = frame_bytes as i32 * 64 - range_decoder.ec_tell_frac() as i32 - 1;
 
-        // 11. skip (RFC Table 56 line 5974)
-        let _skip = self.decode_skip(range_decoder, allocation.skip_rsv > 0)?;
-
-        // 12. intensity (RFC Table 56 line 5976)
-        // FIXED 4.6.8.4: Decode AFTER skip (correct Table 56 order)
-        let _intensity = if allocation.intensity_rsv > 0 {
-            let num_coded_bands = self.end_band - self.start_band;
-            self.decode_intensity(range_decoder, num_coded_bands)?
-        } else {
-            0
-        };
-
-        // 13. dual (RFC Table 56 line 5978)
-        // FIXED 4.6.8.4: Decode AFTER intensity (correct Table 56 order)
-        let _dual_stereo = if allocation.dual_stereo_rsv > 0 {
-            self.decode_dual_stereo(range_decoder)?
-        } else {
-            false
-        };
+        let (allocation, intensity, dual_stereo) =
+            self.allocation_decode(range_decoder, total_bits_8th, &boost, trim, self.transient)?;
+        let _ = (intensity, dual_stereo);
 
         // 14. fine energy (RFC Table 56 line 5980)
-        let fine_energy =
-            self.decode_fine_energy(range_decoder, &coarse_energy, &allocation.fine_energy_bits)?;
+        self.decode_fine_energy_q24(range_decoder, &mut energy, &allocation.fine_energy_bits)?;
 
-        // 15. residual (PVQ shapes) (RFC Table 56 line 5982)
-        let bins_per_band = self.bins_per_band();
-
-        // Compute pulse allocation (K-values) for each band
-        let mut k_values = [0_u32; CELT_NUM_BANDS];
-        for band in self.start_band..self.end_band {
-            let n = u32::from(bins_per_band[band]);
-            let bits = allocation.shape_bits[band];
-
-            if n > 0 && bits > 0 {
-                #[allow(clippy::cast_sign_loss)]
-                let k = compute_pulse_cap(n, bits).max(0) as u32;
-                k_values[band] = k;
-            }
-        }
-
-        // Compute B parameter (block size splits)
-        // RFC 6716 line 6618: Transient uses lm+1 splits, non-transient uses 1
-        let b_init = if self.transient { u32::from(lm) + 1 } else { 1 };
-
-        // Decode PVQ shapes for each band
-        // Shapes are stored as i16 normalized coefficients in Q15 format
-        let is_stereo = num_channels == 2;
-        let mut shapes: Vec<Vec<CeltNorm>> = Vec::new();
-
-        for band in 0..CELT_NUM_BANDS {
-            // RFC 6716 Line 6308: "set N to the number of MDCT bins covered by the band"
-            // N0 = bins per single MDCT, N = N0 * 2^LM = total across all interleaved MDCTs
-            let n0 = u32::from(bins_per_band[band]);
-            let n = n0 << lm; // Full dimension including all interleaved MDCTs
-            let k = k_values[band];
-
-            // Skip bands outside coded range
-            if band < self.start_band || band >= self.end_band {
-                shapes.push(vec![0; n as usize]);
-                continue;
-            }
-
-            // Decode PVQ shape as integer pulses
-            let pulses = if k > 0 && n > 0 {
-                let bits = allocation.shape_bits[band];
-                let b0 = 1_u32; // Initial B0 value (libopus bands.c:774)
-
-                // LM must fit in i8 for PVQ decode - use proper error handling
-                let lm_i8 = i8::try_from(lm)
-                    .map_err(|_| Error::CeltDecoder(format!("LM value {lm} exceeds i8 range")))?;
-
-                decode_pvq_vector_split(
-                    range_decoder,
-                    n, // Correct dimension: N0 << LM
-                    k,
-                    bits,
-                    is_stereo,
-                    lm_i8,
-                    b0,
-                    b_init,
-                )?
-            } else {
-                vec![0_i32; n as usize]
-            };
-
-            // Normalize i32 pulses to i16 Q15 coefficients
-            // This produces unit-norm coefficients in Q15 fixed-point format
-            let mut shape = vec![0_i16; n as usize];
-            super::fixed_point::normalize_pulses_to_q15(&pulses, &mut shape);
-
-            shapes.push(shape);
-        }
+        let (channel_shapes, collapse_by_channel) = if num_channels == 1 {
+            let (shapes, trace) = self.mono_residual(
+                range_decoder,
+                &allocation,
+                spread,
+                frame_bytes as i32 * 64 - allocation.anti_collapse_rsv,
+            )?;
+            (
+                vec![shapes],
+                vec![
+                    std::iter::repeat_n(0, self.start_band)
+                        .chain(trace.iter().map(|entry| entry.mask as u8))
+                        .chain(std::iter::repeat_n(0, CELT_NUM_BANDS - self.end_band))
+                        .collect::<Vec<_>>(),
+                ],
+            )
+        } else {
+            self.stereo_residual(
+                range_decoder,
+                &allocation,
+                spread,
+                frame_bytes as i32 * 64 - allocation.anti_collapse_rsv,
+                intensity,
+                dual_stereo,
+            )?
+        };
 
         // 16. anti-collapse (RFC Table 56 line 5984)
         let anti_collapse_on =
             self.decode_anti_collapse_bit(range_decoder, allocation.anti_collapse_rsv > 0)?;
 
         // 17. finalize (final energy bits) (RFC Table 56 line 5986)
-        #[allow(clippy::cast_sign_loss)]
-        let unused_bits = allocation.balance.max(0) as u32;
-        let final_energy = self.decode_final_energy(
+        let unused_bits = frame_bytes
+            .saturating_mul(8)
+            .saturating_sub(range_decoder.ec_tell() as usize);
+        self.decode_final_energy_q24(
             range_decoder,
-            &fine_energy,
+            &mut energy,
+            &allocation.fine_energy_bits,
             &allocation.fine_priority,
             unused_bits,
         )?;
 
-        // Apply anti-collapse processing
-        // Convert k_values to pulses array (k_values are already the pulse counts)
-        let mut pulses = [0u16; CELT_NUM_BANDS];
-        for (i, &k) in k_values.iter().enumerate() {
-            #[allow(clippy::cast_possible_truncation)]
-            {
-                pulses[i] = k.min(u32::from(u16::MAX)) as u16;
-            }
-        }
-
-        // Compute collapse masks for transient frames
-        // A band "collapses" if it has zero pulses (k=0)
-        // The mask indicates which MDCTs within the band have collapsed
-        // For now, use simple logic: all MDCTs collapse if k=0
-        let mut collapse_masks = vec![0u8; CELT_NUM_BANDS];
-        if self.transient {
-            let num_mdcts = 1_usize << lm; // 2^LM MDCTs per band
-            for (band, &k) in k_values.iter().enumerate() {
-                if k == 0 {
-                    // All MDCTs in this band collapsed - set all bits
-                    #[allow(clippy::cast_possible_truncation)]
-                    {
-                        collapse_masks[band] = if num_mdcts >= 8 {
-                            0xFF // All 8 bits set
-                        } else {
-                            (1u8 << num_mdcts) - 1 // Set num_mdcts bits
-                        };
-                    }
+        let pulses = allocation
+            .shape_bits
+            .map(|v| u16::try_from(v.max(0)).unwrap_or(u16::MAX));
+        let mut frequency_channels = Vec::with_capacity(channels);
+        for channel in 0..channels {
+            let mut channel_shapes = channel_shapes[channel].clone();
+            self.apply_anti_collapse_q24(
+                &mut channel_shapes,
+                &energy,
+                channel,
+                &collapse_by_channel[channel],
+                &pulses,
+                anti_collapse_on,
+            )?;
+            let mut spectrum = vec![0_i16; self.frame_size];
+            let mut offset = 0;
+            for shape in &channel_shapes {
+                let count = shape.len().min(spectrum.len().saturating_sub(offset));
+                for (dst, &src) in spectrum[offset..offset + count].iter_mut().zip(shape) {
+                    // Residual reconstruction now supplies libopus Q14 coefficients.
+                    *dst = src;
                 }
+                offset += count;
+            }
+            frequency_channels.push(self.denormalize_bands_q24(
+                &spectrum,
+                &energy[channel * CELT_NUM_BANDS..(channel + 1) * CELT_NUM_BANDS],
+                false,
+            )?);
+        }
+
+        let output_channels = if self.synthesis_channels == Channels::Stereo {
+            2
+        } else {
+            1
+        };
+        if channels == 2 && output_channels == 1 {
+            let mixed = frequency_channels[0]
+                .iter()
+                .zip(&frequency_channels[1])
+                .map(|(&left, &right)| (left >> 1) + (right >> 1))
+                .collect();
+            frequency_channels = vec![mixed];
+        } else if channels == 1 && output_channels == 2 {
+            frequency_channels.push(frequency_channels[0].clone());
+        }
+        // One persistent TDAC tail per channel, shared across consecutive short blocks.
+        let mut channel_samples = Vec::with_capacity(output_channels);
+        for (channel, frequency) in frequency_channels.iter().enumerate() {
+            while self.state.overlap_buffers.len() <= channel {
+                self.state.overlap_buffers.push(Vec::new());
+            }
+            channel_samples.push(transform::synthesize(
+                frequency,
+                self.transient,
+                &mut self.state.overlap_buffers[channel],
+            ));
+        }
+        self.postfilter
+            .apply(&mut channel_samples, post_filter_params, lm);
+        let mut all_samples = Vec::with_capacity(self.frame_size * output_channels);
+        for sample in 0..self.frame_size {
+            for samples in &channel_samples {
+                all_samples.push(samples[sample]);
             }
         }
-
-        self.apply_anti_collapse(
-            &mut shapes,
-            &final_energy,
-            &collapse_masks,
-            &pulses,
-            anti_collapse_on,
-        )?;
-
-        // Denormalization with frequency-domain bound limiting (Stage 1)
-        // Returns flat frequency buffer with high frequencies zeroed if downsampling
-        let freq_data = self.denormalize_bands(&shapes, &final_energy);
-
-        // Phase 4.6.3: Inverse MDCT and overlap-add for M short MDCTs
-        // libopus celt_decoder.c:416-417: for (b=0;b<B;b++) clt_mdct_backward(&freq[b], ..., B)
-        // Where B = M = 2^LM (number of short MDCTs) and stride = B
-        let lm = self.compute_lm();
-        let num_short_mdcts = 1_usize << lm; // M = 2^LM
-        let short_mdct_size = self.frame_size >> lm; // NB = frame_size / M
-
-        log::debug!(
-            "IMDCT: LM={}, M={}, shortMdctSize={}, frame_size={}",
-            lm,
-            num_short_mdcts,
-            short_mdct_size,
-            self.frame_size
-        );
-        if self.state.overlap_buffers.len() != num_short_mdcts {
-            self.state.overlap_buffers = vec![vec![0; short_mdct_size]; num_short_mdcts];
-            log::debug!("Initialized {num_short_mdcts} overlap buffers of size {short_mdct_size}");
-        }
-
-        // Process each short MDCT separately
-        let mut all_samples = Vec::with_capacity(self.frame_size);
-
-        for mdct_idx in 0..num_short_mdcts {
-            log::trace!("Processing short MDCT {mdct_idx}/{num_short_mdcts}");
-
-            // Strided IMDCT: reads freq_data[mdct_idx], freq_data[mdct_idx + M], freq_data[mdct_idx + 2*M], ...
-            let time_data =
-                Self::inverse_mdct_strided(&freq_data, mdct_idx, num_short_mdcts, short_mdct_size);
-            log::trace!(
-                "  IMDCT {} produced {} time samples",
-                mdct_idx,
-                time_data.len()
-            );
-
-            // Overlap-add with this MDCT's dedicated overlap buffer
-            let samples = self.overlap_add_indexed(&time_data, mdct_idx)?;
-            log::trace!(
-                "  Overlap-add {} produced {} output samples",
-                mdct_idx,
-                samples.len()
-            );
-
-            all_samples.extend_from_slice(&samples);
-            log::trace!("  Total samples so far: {}", all_samples.len());
-        }
-
-        log::debug!(
-            "IMDCT complete: produced {} samples from {} short MDCTs (expected {})",
-            all_samples.len(),
-            num_short_mdcts,
-            self.frame_size
+        self.energy_q24.update(
+            energy,
+            channels,
+            self.transient,
+            self.start_band,
+            self.end_band,
         );
 
-        // Update state for next frame
-        self.state.prev_prev_energy = self.state.prev_energy;
-        self.state.prev_energy = final_energy;
-
+        // As in celt_decoder.c, next-frame folding starts from final entropy range.
+        self.state.anti_collapse_state.seed = range_decoder.get_range();
         Ok(DecodedFrame {
             samples: all_samples,
             sample_rate: self.sample_rate,
-            channels: self.channels,
+            channels: self.synthesis_channels,
         })
     }
 
@@ -2890,6 +2978,105 @@ mod tests {
     }
 
     #[test]
+    fn test_set_frame_size_preserves_history_and_rejects_invalid_sizes() {
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        decoder.state.prev_energy[0] = 123;
+        decoder.state.prev_prev_energy[1] = -456;
+        decoder.state.anti_collapse_state.seed = 789;
+        decoder.state.overlap_buffers = vec![vec![42; 120]; 4];
+        decoder.state.post_filter_state = Some(PostFilterState {
+            prev_period: 39,
+            prev_gain: 192,
+            memory: vec![1.0; 8],
+        });
+        decoder.preemph_memd[0] = 0.5;
+        decoder.set_output_rate(SampleRate::Hz16000).unwrap();
+        for size in [120, 240, 480, 960] {
+            decoder.set_frame_size(size).unwrap();
+            assert_eq!(decoder.frame_size, size);
+            assert_eq!(decoder.state.prev_energy[0], 123);
+            assert_eq!(decoder.state.prev_prev_energy[1], -456);
+            assert_eq!(decoder.state.anti_collapse_state.seed, 789);
+            assert_eq!(decoder.state.overlap_buffers, vec![vec![42; 120]; 4]);
+            assert_eq!(
+                decoder
+                    .state
+                    .post_filter_state
+                    .as_ref()
+                    .unwrap()
+                    .prev_period,
+                39
+            );
+            assert_eq!(decoder.preemph_memd[0], 0.5);
+        }
+        for size in [0, 119, 160, 481, 1920, usize::MAX] {
+            assert!(decoder.set_frame_size(size).is_err());
+            assert_eq!(decoder.frame_size, 960);
+        }
+    }
+
+    #[test]
+    fn test_prefix_omits_flags_without_bitstream_symbols() {
+        let data = [0x9f, 0xd5, 0xdc, 0xd0, 0xe2];
+        let mut rd = RangeDecoder::new(&data).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 120).unwrap();
+        let before = (rd.get_range(), rd.get_value(), rd.ec_tell());
+        assert!(!decoder.decode_transient_flag(&mut rd).unwrap());
+        assert_eq!((rd.get_range(), rd.get_value(), rd.ec_tell()), before);
+        rd.ec_dec_bit_logp(1).unwrap();
+        let before = (rd.get_range(), rd.get_value(), rd.ec_tell());
+        assert!(!decoder.decode_silence(&mut rd).unwrap());
+        assert_eq!((rd.get_range(), rd.get_value(), rd.ec_tell()), before);
+    }
+
+    #[test]
+    fn test_fullband_continuous_packet_prefix_matches_libopus() {
+        // Three consecutive 10 ms mono frames from bundled fixed-point libopus:
+        // OPUS_APPLICATION_RESTRICTED_LOWDELAY, 48 kHz, 48 kbit/s, CBR,
+        // 1200 Hz sine at amplitude 12000. TOC 0xf0 is fullband CELT.
+        // Expected entropy states follow entdec.c and celt_decoder.c's prefix
+        // operations, independently of the native synthesis/output wrapper.
+        let packets = [
+            "f09fd5dcd0e2977eabecef98ff3f560f5b9c1abf4d0e0f83e0b75614b38d422b6f4d8b6df89d13a8bde303412c8c8f42d40aa00d44dc6c7771bc5ba9",
+            "f09e7fa7c18f07cfc4b4ed6f2f27f7b680d73dda6173fa286d5e3dd4bc073e5a3eb39c48eb03c2e520d412db0c99392e4305794e1d5003900c37c8e8",
+            "f09cdd1897ac354bab791dd827c73eba1364e3efd874f6e47a46bf446daee38662daa462cbc3c539720792374ae45fe926f9f82af83250c6637e7fe8",
+        ];
+        let expected = [
+            (40, 144, true, true, 357_902_848, 342_989_198, 20),
+            (39, 192, false, true, 9_786_410, 1_368_780, 17),
+            (39, 192, false, false, 68_504_876, 5_297_719, 14),
+        ];
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        for (packet, (period, gain, transient, intra, range, value, tell)) in
+            packets.iter().zip(expected)
+        {
+            let bytes: Vec<u8> = packet
+                .as_bytes()
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+                .collect();
+            assert_eq!(bytes[0], 0xf0);
+            let mut rd = RangeDecoder::new(&bytes[1..]).unwrap();
+            assert!(!decoder.decode_silence(&mut rd).unwrap());
+            assert_eq!(rd.get_range(), 2_147_418_112, "silence range");
+            assert!(decoder.decode_post_filter(&mut rd).unwrap());
+            let params = decoder.decode_post_filter_params(&mut rd).unwrap();
+            assert_eq!(
+                (params.period, params.gain_q8, params.tapset),
+                (period, gain, 0)
+            );
+            assert_eq!(decoder.decode_transient_flag(&mut rd).unwrap(), transient);
+            assert_eq!(decoder.decode_intra(&mut rd).unwrap(), intra);
+            assert_eq!(
+                (rd.get_range(), rd.get_value(), rd.ec_tell()),
+                (range, value, tell)
+            );
+        }
+    }
+
+    #[test]
     fn test_silence_flag_decoding() {
         let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
@@ -2911,12 +3098,30 @@ mod tests {
     }
 
     #[test]
+    fn test_coarse_energy_first_packet_reference_q8_boundary() {
+        let bytes: Vec<u8> = "9fd5dcd0e2977eabecef98ff3f560f5b9c1abf4d0e0f83e0b75614b38d422b6f4d8b6df89d13a8bde303412c8c8f42d40aa00d44dc6c7771bc5ba9"
+            .as_bytes().as_chunks::<2>().0.iter().map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()).collect();
+        let mut rd = RangeDecoder::new(&bytes).unwrap();
+        let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+        assert!(!decoder.decode_silence(&mut rd).unwrap());
+        assert!(decoder.decode_post_filter(&mut rd).unwrap());
+        decoder.decode_post_filter_params(&mut rd).unwrap();
+        assert!(decoder.decode_transient_flag(&mut rd).unwrap());
+        assert!(decoder.decode_intra(&mut rd).unwrap());
+        let energy = decoder
+            .decode_coarse_energy(&mut rd, true, bytes.len())
+            .unwrap();
+        // Projection of actual fixed-point libopus Q24 output, not whole dB.
+        assert_eq!(&energy[..4], &[0, 256, 217, 985]);
+    }
+
+    #[test]
     fn test_coarse_energy_intra() {
         let data = vec![0x55; 256];
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let result = decoder.decode_coarse_energy(&mut range_decoder, true);
+        let result = decoder.decode_coarse_energy(&mut range_decoder, true, data.len());
         assert!(result.is_ok());
         let energy = result.unwrap();
         assert_eq!(energy.len(), CELT_NUM_BANDS);
@@ -2931,7 +3136,7 @@ mod tests {
         decoder.state.prev_energy[0] = 50;
         decoder.state.prev_energy[10] = 60;
 
-        let result = decoder.decode_coarse_energy(&mut range_decoder, false);
+        let result = decoder.decode_coarse_energy(&mut range_decoder, false, data.len());
         assert!(result.is_ok());
         let energy = result.unwrap();
         assert_eq!(energy.len(), CELT_NUM_BANDS);
@@ -2943,12 +3148,12 @@ mod tests {
         let mut range_decoder = RangeDecoder::new(&data).unwrap();
         let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        let result = decoder.decode_coarse_energy(&mut range_decoder, true);
+        let result = decoder.decode_coarse_energy(&mut range_decoder, true, data.len());
         assert!(result.is_ok());
         let energy = result.unwrap();
 
         for &e in &energy {
-            assert!((-128..=127).contains(&e));
+            assert!((-28 * 256..=28 * 256).contains(&e));
         }
     }
 
@@ -4435,9 +4640,8 @@ mod tests {
     fn test_decode_post_filter_params_tapset_values() {
         let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
 
-        // Tapset PDF: {2,1,1}/4 -> ICDF [4,2,1,0]
-        // ec_dec_icdf with len=4, ftb=2 can return 0-3
-        // But only 0-2 are valid tapset values per RFC
+        // Tapset PDF: {2,1,1}/4 -> ICDF [2,1,0].
+        // Exactly three tapsets are valid.
 
         for pattern in &[0x00, 0x55, 0xAA, 0xFF] {
             let data = vec![*pattern; 100];
@@ -4448,7 +4652,7 @@ mod tests {
 
             let p = params.unwrap();
             assert!(
-                p.tapset <= 3,
+                p.tapset <= 2,
                 "tapset={} exceeds ICDF maximum for pattern {pattern:02X}",
                 p.tapset
             );
@@ -4686,3 +4890,31 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "coarse_energy_tests.rs"]
+mod coarse_energy_tests;
+
+#[path = "energy.rs"]
+mod energy;
+
+#[path = "residual.rs"]
+mod residual;
+
+#[path = "allocation.rs"]
+mod allocation;
+
+#[path = "mono.rs"]
+mod mono;
+
+#[path = "transform.rs"]
+mod transform;
+
+#[path = "postfilter.rs"]
+mod postfilter;
+
+#[path = "stereo.rs"]
+mod stereo;
+
+#[path = "hybrid.rs"]
+mod hybrid;

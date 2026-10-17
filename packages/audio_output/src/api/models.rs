@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioOutputFactory, SignalSpec};
+use crate::{AudioOutputFactory, AudioSpec};
 
 /// API representation of an audio output device.
 ///
@@ -43,11 +43,11 @@ pub struct ApiSignalSpec {
     pub channels: usize,
 }
 
-impl From<SignalSpec> for ApiSignalSpec {
-    fn from(value: SignalSpec) -> Self {
+impl From<AudioSpec> for ApiSignalSpec {
+    fn from(value: AudioSpec) -> Self {
         Self {
-            rate: value.rate,
-            channels: value.channels.count(),
+            rate: value.rate(),
+            channels: value.channels().count(),
         }
     }
 }

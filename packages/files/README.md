@@ -318,3 +318,17 @@ Optional dependencies (enabled by features):
 - `moosicbox_audio_decoder` / `moosicbox_audio_output` - Audio processing (with decoder/encoder features)
 - `moosicbox_image` - Image processing (with `image` feature)
 - `utoipa` - OpenAPI documentation (with `openapi` feature)
+
+### Explicit decode backend
+
+`files::track::get_audio_bytes_with_options(source, format, size, start, end,
+options)` accepts `moosicbox_audio_decoder::DecodeOptions` for local and remote
+transcoding. `decoder-opus` retains Libopus compatibility; independent
+`decoder-opus-native` enables native capability. Explicit options bypass the
+legacy shared encoded-byte cache, whose key has no decoder/options identity.
+Source-format passthrough does not decode. Existing APIs keep their defaults.
+
+Transcoded streams now preserve terminal decoder failures as `io::Error` items
+after any emitted bytes. The legacy byte pool cannot replay upstream errors,
+so only source-format passthrough uses that cache; transcoding bypasses it for
+both legacy and explicit-options calls. No generic cache protocol was changed.

@@ -14,9 +14,15 @@ version     = "0.5.0"
 examples = false
 
 [dependencies]
-audiopus  = { workspace = true }
-bytes     = { workspace = true }
-log       = { workspace = true }
+audiopus = { workspace = true, optional = true }
+bytes = { workspace = true }
+log = { workspace = true }
+moosicbox_opus_native = { workspace = true, optional = true, features = [
+    "celt",
+    "hybrid",
+    "resampling",
+    "silk",
+] }
 symphonia = { workspace = true }
 thiserror = { workspace = true }
 
@@ -26,5 +32,7 @@ test-case         = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default          = []
+default          = ["libopus"]
 fail-on-warnings = []
+libopus          = ["dep:audiopus"]
+native           = ["dep:moosicbox_opus_native"]

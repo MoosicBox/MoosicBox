@@ -768,7 +768,7 @@ swc_ecma_parser = "36.0.0"
 swc_ecma_transforms_base = "39.0.0"
 swc_ecma_transforms_typescript = "43.0.0"
 swc_ecma_visit = "21.0.0"
-symphonia = { version = "0.5.5", features = ["all"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["all"] }
 syn = "2.0.119"
 syntect = "5.3.0"
 tantivy = "0.25.0"

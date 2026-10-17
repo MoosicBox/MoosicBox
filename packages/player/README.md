@@ -506,3 +506,30 @@ Key dependencies from Cargo.toml:
 - [MoosicBox Audio Decoder](../audio_decoder/README.md) - Audio format decoding
 - [MoosicBox Session](../session/README.md) - Session management
 - [MoosicBox Music API](../music_api/README.md) - Music metadata API
+
+### Explicit native Opus decoding
+
+`decoder-opus` retains the libopus compatibility backend. `decoder-opus-native`
+only enables the Rust decoder capability; it does not change the default backend.
+For decoder-only builds, disable default features (which include C encoders):
+
+```sh
+cargo check -p moosicbox_player --no-default-features --features decoder-opus-native,local
+```
+
+Select Native per playback using `DecodeOptions` and `OpusDecodeBackend::Native`:
+
+```rust,no_run
+use moosicbox_player::{DecodeOptions, OpusDecodeBackend};
+let options = DecodeOptions {
+    opus_backend: OpusDecodeBackend::Native,
+    ..DecodeOptions::default()
+};
+// Pass options to LocalPlayer::with_decode_options,
+// SignalChainStep::with_decode_options, or symphonia::*_with_options.
+```
+
+The selection is honored even when both backends are compiled. An unavailable
+backend returns an error; it never falls back. Native hybrid packets remain
+unsupported. Gapless options do not repair the known Symphonia Ogg pre-skip defect.
+Opus encoder features still explicitly depend on C libraries.

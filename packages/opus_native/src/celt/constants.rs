@@ -48,18 +48,9 @@ pub const CELT_BINS_20MS: [u8; CELT_NUM_BANDS] = [
     8, 8, 8, 8, 8, 8, 8, 8, 16, 16, 16, 16, 32, 32, 32, 48, 48, 64, 96, 144, 176,
 ];
 
-/// Silence flag PDF: {32767, 1}/32768 (RFC Table 56)
-pub const CELT_SILENCE_PDF: &[u16] = &[32768, 1, 0];
-
 /// Post-filter flag PDF: {1, 1}/2 (RFC Table 56)
 #[allow(dead_code)]
 pub const CELT_POST_FILTER_PDF: &[u8] = &[2, 1, 0];
-
-/// Transient flag PDF: {7, 1}/8 (RFC Table 56)
-pub const CELT_TRANSIENT_PDF: &[u8] = &[8, 1, 0];
-
-/// Intra flag PDF: {7, 1}/8 (RFC Table 56)
-pub const CELT_INTRA_PDF: &[u8] = &[8, 1, 0];
 
 /// Dual stereo flag PDF: {1, 1}/2 (RFC Table 56)
 #[allow(dead_code)]
@@ -68,10 +59,10 @@ pub const CELT_DUAL_STEREO_PDF: &[u8] = &[2, 1, 0];
 /// Spread parameter PDF: {7, 2, 21, 2}/32 (RFC Table 56 line 5968)
 ///
 /// Controls PVQ rotation amount per RFC Section 4.3.4.3 (lines 6543-6600)
-pub const CELT_SPREAD_PDF: &[u8] = &[32, 25, 23, 2, 0];
+pub const CELT_SPREAD_PDF: &[u8] = &[25, 23, 2, 0];
 
 /// Post-filter tapset PDF: {2, 1, 1}/4 (RFC Section 4.3.7.1 line 6769)
-pub const CELT_TAPSET_PDF: &[u8] = &[4, 2, 1, 0];
+pub const CELT_TAPSET_PDF: &[u8] = &[2, 1, 0];
 
 /// Cache caps table for allocation maximums (RFC lines 6290-6316)
 ///
@@ -164,32 +155,22 @@ pub const ENERGY_PROB_MODEL: [[[u8; 42]; 2]; 4] = [
 ///
 /// Values: [0.9, 0.8, 0.65, 0.5] = [29440, 26112, 21248, 16384] / 32768
 /// Index: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
-pub const ENERGY_ALPHA_INTER: [f32; 4] = [
-    29440.0 / 32768.0,
-    26112.0 / 32768.0,
-    21248.0 / 32768.0,
-    16384.0 / 32768.0,
-];
+pub const ENERGY_ALPHA_INTER: [i16; 4] = [29440, 26112, 21248, 16384];
 
 /// Beta coefficient for intra-frame frequency-domain prediction
 ///
 /// RFC 6716 line 6063: "beta=4915/32768 when using intra energy"
 ///
 /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L67-69>
-pub const ENERGY_BETA_INTRA: f32 = 4915.0 / 32768.0;
+pub const ENERGY_BETA_INTRA: i16 = 4915;
 
 /// Beta coefficient for inter-frame frequency-domain prediction (frame-size dependent)
 ///
 /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/34bba701ae97c913de719b1f7c10686f62cddb15/celt/quant_bands.c#L67-69>
 ///
-/// Values: [30147, 22282, 12124, 6554] / 32768
+/// Q15 integers: [30147, 22282, 12124, 6554]
 /// Index: 0=2.5ms, 1=5ms, 2=10ms, 3=20ms
-pub const ENERGY_BETA_INTER: [f32; 4] = [
-    30147.0 / 32768.0,
-    22282.0 / 32768.0,
-    12124.0 / 32768.0,
-    6554.0 / 32768.0,
-];
+pub const ENERGY_BETA_INTER: [i16; 4] = [30147, 22282, 12124, 6554];
 
 /// Static bit allocation table (RFC Table 57, lines 6234-6290)
 ///
@@ -236,7 +217,7 @@ pub const ALLOCATION_TABLE: [[u8; 11]; CELT_NUM_BANDS] = [
 ///
 /// Reference: <https://gitlab.xiph.org/xiph/opus/-/blob/master/celt/celt.h#L165>
 /// libopus: `trim_icdf[11] = {126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0}` (omits total)
-pub const TRIM_PDF: [u16; 12] = [128, 126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0];
+pub const TRIM_PDF: [u16; 11] = [126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0];
 
 /// Maximum allocation caps per band (from `compute_pulse_cache`)
 ///

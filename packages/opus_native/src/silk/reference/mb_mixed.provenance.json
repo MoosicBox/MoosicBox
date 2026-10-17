@@ -1,0 +1,692 @@
+{
+  "runs": [
+    {
+      "command": [
+        "python3",
+        "packages/opus_native/src/silk/stage_oracle.py",
+        "--build",
+        "target/debug/build/moosicbox_opus_native_libopus-f3d2ff998a04d366/out/build",
+        "--rate",
+        "12000",
+        "--channels",
+        "1",
+        "target/debug/build/moosicbox_opus_native_test_vectors-dba6b52440238931/out/generated/silk/mb/mixed_stereo/packet.bin",
+        "target/debug/build/moosicbox_opus_native_test_vectors-dba6b52440238931/out/generated/silk/mb/mixed_stereo/packet.bin"
+      ],
+      "records": [
+        {
+          "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+          "archive_sha256": "52790c7a566fca71ad236ce073856a7a44f346167816a8e0e26a7ffd8247d8c1",
+          "oracle_sha256": "e11fee5d61c3805676e7db769f47061a925831db7d21c284ce94a713dd770ac9"
+        },
+        {
+          "stage": "stereo_prediction",
+          "weights": [
+            -1033,
+            1033
+          ],
+          "tell": 15
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            17301504,
+            83886080,
+            217055232,
+            253755392
+          ],
+          "coefficients": [
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40,
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            34,
+            14,
+            10,
+            5
+          ],
+          "seed": 2,
+          "tell": 132
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            210944,
+            180224,
+            32768000,
+            83886080
+          ],
+          "coefficients": [
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279,
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            6,
+            3,
+            27,
+            10
+          ],
+          "seed": 2,
+          "tell": 294
+        },
+        {
+          "stage": "stereo_prediction",
+          "weights": [
+            -1033,
+            1033
+          ],
+          "tell": 15
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            20316160,
+            98566144,
+            253755392,
+            295698432
+          ],
+          "coefficients": [
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40,
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            34,
+            14,
+            10,
+            5
+          ],
+          "seed": 2,
+          "tell": 132
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            6782976,
+            5767168,
+            217055232,
+            557842432
+          ],
+          "coefficients": [
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279,
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            6,
+            3,
+            27,
+            10
+          ],
+          "seed": 2,
+          "tell": 294
+        }
+      ]
+    },
+    {
+      "command": [
+        "python3",
+        "packages/opus_native/src/silk/stage_oracle.py",
+        "--build",
+        "target/debug/build/moosicbox_opus_native_libopus-f3d2ff998a04d366/out/build",
+        "--rate",
+        "12000",
+        "--channels",
+        "2",
+        "target/debug/build/moosicbox_opus_native_test_vectors-dba6b52440238931/out/generated/silk/mb/mixed_stereo/packet.bin",
+        "target/debug/build/moosicbox_opus_native_test_vectors-dba6b52440238931/out/generated/silk/mb/mixed_stereo/packet.bin"
+      ],
+      "records": [
+        {
+          "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+          "archive_sha256": "52790c7a566fca71ad236ce073856a7a44f346167816a8e0e26a7ffd8247d8c1",
+          "oracle_sha256": "e11fee5d61c3805676e7db769f47061a925831db7d21c284ce94a713dd770ac9"
+        },
+        {
+          "stage": "stereo_prediction",
+          "weights": [
+            -1033,
+            1033
+          ],
+          "tell": 15
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            17301504,
+            83886080,
+            217055232,
+            253755392
+          ],
+          "coefficients": [
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40,
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            34,
+            14,
+            10,
+            5
+          ],
+          "seed": 2,
+          "tell": 132
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            210944,
+            180224,
+            32768000,
+            83886080
+          ],
+          "coefficients": [
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279,
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            6,
+            3,
+            27,
+            10
+          ],
+          "seed": 2,
+          "tell": 294
+        },
+        {
+          "stage": "stereo_prediction",
+          "weights": [
+            -1033,
+            1033
+          ],
+          "tell": 15
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            20316160,
+            98566144,
+            253755392,
+            295698432
+          ],
+          "coefficients": [
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40,
+            7104,
+            -3036,
+            -481,
+            1031,
+            -1108,
+            590,
+            -312,
+            -56,
+            208,
+            -40
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            34,
+            14,
+            10,
+            5
+          ],
+          "seed": 2,
+          "tell": 132
+        },
+        {
+          "stage": "core_input",
+          "gains": [
+            6782976,
+            5767168,
+            217055232,
+            557842432
+          ],
+          "coefficients": [
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279,
+            951,
+            779,
+            994,
+            151,
+            574,
+            -681,
+            215,
+            545,
+            -161,
+            -279
+          ]
+        },
+        {
+          "stage": "ltp_parameters",
+          "scale": 0,
+          "lags": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "taps": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "stage": "frame_parameters",
+          "signal_type": 1,
+          "quant_offset": 0,
+          "gain_indices": [
+            6,
+            3,
+            27,
+            10
+          ],
+          "seed": 2,
+          "tell": 294
+        }
+      ]
+    }
+  ],
+  "layout": "two repeated stereo packets on persistent C decoder; reset between API channel modes",
+  "files": {
+    "mb_mixed.api1.pcm": "c9b945d2c1999188e15d2b9ac39fde11243718b6b511c62ab7a6e1be027c450a",
+    "mb_mixed.api2.pcm": "7f863621221b3a4a9627930e3079dd00dc513c214185d96eb27f3312bbe17045",
+    "mb_mixed.packet": "6573d3ae5d5a118ed8ce999c293e3375d2ad410f27e0162333d53e951415e53c"
+  }
+}

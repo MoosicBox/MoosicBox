@@ -1,0 +1,5 @@
+{
+          "format_version": 1, "decoder_state": "persistent", "pcm_semantics": "raw_decoder_output",
+          "packets": [".", "packet_001", "packet_002", "packet_003"],
+          "signal": "integer_triangle_v1"
+        }

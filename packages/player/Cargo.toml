@@ -122,7 +122,9 @@ all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
 decoder-aac  = ["format-aac", "moosicbox_audio_decoder/aac"]
 decoder-flac = ["format-flac", "moosicbox_audio_decoder/flac"]
 decoder-mp3  = ["format-mp3", "moosicbox_audio_decoder/mp3"]
-decoder-opus = ["format-opus", "moosicbox_audio_decoder/opus"]
+decoder-opus = ["format-opus", "moosicbox_audio_decoder/opus-libopus"]
+# Capability only: select Native explicitly in playback/decode options.
+decoder-opus-native = ["format-opus", "moosicbox_audio_decoder/opus-native"]
 
 all-formats = [
     "all-os-formats",
