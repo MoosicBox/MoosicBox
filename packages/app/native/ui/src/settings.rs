@@ -438,6 +438,20 @@ fn connection_input(
     input: ConnectionInput,
     placeholder: Option<&str>,
 ) -> Containers {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    // Connection names are unique persistence keys. Encode them rather than using
+    // list positions, so retained controls keep their identity after reordering.
+    let scope: String = connection
+        .name
+        .bytes()
+        .flat_map(|byte| {
+            [
+                char::from(HEX[usize::from(byte >> 4)]),
+                char::from(HEX[usize::from(byte & 0x0f)]),
+            ]
+        })
+        .collect();
+    let id = format!("connection-{}-{scope}", input.as_ref());
     container! {
         @let name = input.as_ref();
         @let value = match input {
@@ -448,7 +462,7 @@ fn connection_input(
             type=text
             placeholder=[placeholder]
             value=(value)
-            id=(name)
+            id=(id)
             name=(name);
     }
 }

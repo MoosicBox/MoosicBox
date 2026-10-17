@@ -285,8 +285,8 @@ fn actual_home_settings_connection_forms_and_registered_icons() {
         )
         .unwrap();
         for node in &tree.nodes {
-            if node.key == "name"
-                || node.key == "api-url"
+            if node.key.starts_with("connection-name-")
+                || node.key.starts_with("connection-api-url-")
                 || node.text.iter().any(|text| text.text.contains("API URL"))
             {
                 eprintln!(
@@ -300,9 +300,11 @@ fn actual_home_settings_connection_forms_and_registered_icons() {
             "successful response lost API URL canonical label"
         );
         assert!(
-            tree.nodes.iter().any(|node| node.key == "api-url"
-                && node.visible
-                && node.bounds.intersection(node.clip).width > 0),
+            tree.nodes
+                .iter()
+                .any(|node| node.key.starts_with("connection-api-url-")
+                    && node.visible
+                    && node.bounds.intersection(node.clip).width > 0),
             "API URL input not visible after actual response"
         );
         dump_navigation(surface.program.state.root(), "settings-after-response");
