@@ -888,6 +888,7 @@ async fn publish_pending_queue(
         preflight::validate(workspace_root, packages, publish_order, config)?;
     }
     for (index, name) in publish_order.iter().enumerate() {
+        log_queue_progress(config.color, publish_order, index, reports);
         let package = packages
             .get(name)
             .ok_or_else(|| format!("Unknown workspace package '{name}'"))?;
@@ -934,13 +935,6 @@ async fn publish_pending_queue(
             }
         }
 
-        log_publish_event(
-            config.color,
-            "35;1",
-            "Publishing",
-            &package.name,
-            &package.version,
-        );
         let publish_attempt = attempt_next_upload(
             workspace_root,
             packages,
@@ -948,6 +942,7 @@ async fn publish_pending_queue(
             &publish_order[index + 1..],
             config,
             reports,
+            &queue_progress(publish_order, index, reports),
         )?;
 
         match publish_attempt {
@@ -980,7 +975,44 @@ async fn publish_pending_queue(
         }
     }
 
+    log_queue_progress(config.color, publish_order, publish_order.len(), reports);
     Ok(())
+}
+
+#[must_use]
+fn queue_progress(order: &[String], completed: usize, reports: &[PublishPackageReport]) -> String {
+    // Count only completed entries in this queue. Preflight may already have
+    // skipped other packages; disabled and purity-only reports are not uploads.
+    let count = |status| {
+        order[..completed]
+            .iter()
+            .filter(|name| {
+                reports
+                    .iter()
+                    .any(|report| &report.name == *name && report.status == status)
+            })
+            .count()
+    };
+    format!(
+        "Publish progress: {completed}/{} packages complete; {} published, {} already published/skipped, {} dry-run; {} remaining",
+        order.len(),
+        count(PublishPackageStatus::Published),
+        count(PublishPackageStatus::AlreadyPublished),
+        count(PublishPackageStatus::DryRun),
+        order.len() - completed,
+    )
+}
+
+fn log_queue_progress(
+    color: ColorMode,
+    order: &[String],
+    completed: usize,
+    reports: &[PublishPackageReport],
+) {
+    eprintln!(
+        "{}",
+        paint(color, "34;1", &queue_progress(order, completed, reports))
+    );
 }
 
 fn attempt_next_upload(
@@ -990,8 +1022,16 @@ fn attempt_next_upload(
     remaining: &[String],
     config: &PublishConfig,
     reports: &[PublishPackageReport],
+    progress: &str,
 ) -> Result<PublishAttempt, BoxError> {
-    publish_package(workspace_root, packages, package, config).inspect_err(|_| {
+    log_publish_event(
+        config.color,
+        "35;1",
+        "Publishing",
+        &package.name,
+        &package.version,
+    );
+    publish_package(workspace_root, packages, package, config, progress).inspect_err(|_| {
         print_failure_summary(config.color, package, remaining, packages, reports);
     })
 }
@@ -1433,6 +1473,7 @@ fn publish_package(
     packages: &BTreeMap<String, PublishPackageInfo>,
     package: &PublishPackageInfo,
     config: &PublishConfig,
+    progress: &str,
 ) -> Result<PublishAttempt, BoxError> {
     let sanitized = SanitizedPackage::prepare(workspace_root, packages, package)?;
     seed_publish_lockfile(workspace_root, &sanitized, config)?;
@@ -1448,7 +1489,10 @@ fn publish_package(
                 config,
             ))
         },
-        thread::sleep,
+        |wait| {
+            eprintln!("{}", paint(config.color, "34;1", progress));
+            thread::sleep(wait);
+        },
     )
 }
 

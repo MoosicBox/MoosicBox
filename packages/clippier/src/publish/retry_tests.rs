@@ -2,6 +2,39 @@
 
 use super::*;
 
+#[test]
+fn queue_progress_distinguishes_uploads_skips_and_uncompleted_packages() {
+    let order = ["a", "b", "c"].map(str::to_string);
+    let reports = vec![
+        PublishPackageReport::new("outside", "1.0.0", PublishPackageStatus::AlreadyPublished),
+        PublishPackageReport::new("disabled", "1.0.0", PublishPackageStatus::PublishDisabled),
+        PublishPackageReport::new("a", "1.0.0", PublishPackageStatus::Published),
+        PublishPackageReport::new("b", "1.0.0", PublishPackageStatus::AlreadyPublished),
+    ];
+    assert_eq!(
+        queue_progress(&order, 0, &reports),
+        "Publish progress: 0/3 packages complete; 0 published, 0 already published/skipped, 0 dry-run; 3 remaining"
+    );
+    let waiting = queue_progress(&order, 2, &reports);
+    assert_eq!(
+        waiting,
+        "Publish progress: 2/3 packages complete; 1 published, 1 already published/skipped, 0 dry-run; 1 remaining"
+    );
+    // A retry is still working on the same queue entry.
+    assert_eq!(waiting, queue_progress(&order, 2, &reports));
+    let mut completed = reports;
+    completed.push(PublishPackageReport::new(
+        "c",
+        "1.0.0",
+        PublishPackageStatus::DryRun,
+    ));
+    assert_eq!(
+        queue_progress(&order, 3, &completed),
+        "Publish progress: 3/3 packages complete; 1 published, 1 already published/skipped, 1 dry-run; 0 remaining"
+    );
+    assert!(queue_progress(&[], 0, &[]).contains("0/0 packages complete"));
+}
+
 #[cfg(unix)]
 #[test]
 fn pre_upload_transport_failure_retries_but_uncertain_upload_does_not() {

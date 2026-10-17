@@ -1092,6 +1092,12 @@ clippier publish /path/to/workspace
 
 Real publishes **skip queue-wide Cargo preflight by default**. Each package's exact version is checked immediately before its upload; already-published versions are skipped without scanning the whole queue first. Manifest, category, dependency-availability, and purity checks run for the current pending upload. Cargo still packages each upload and honors `--verify`.
 
+Real uploads show queue progress before each package and after completion, with
+completed/total, published, already-published/skipped, dry-run, and remaining counts.
+The same progress is repeated before rate-limit/network retry sleeps; retries do
+not advance the queue. The denominator is the upload queue after any enabled
+preflight filtering, and excludes `publish = false` packages.
+
 Transient registry `config.json` connection failures before uploading retry up to three
 times (1s, 2s, 4s). Ambiguous transport failures during an upload are not blindly
 replayed; rerunning publication checks for the already-published version first.
