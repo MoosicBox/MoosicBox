@@ -397,7 +397,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "/config/connection-id": "bmux-acceptance",
                 "/config/profiles": ["master"],
                 "/music-api": page([]),
-                "/menu/albums": page([album]),
+                "/menu/albums": page(
+                    [
+                        dict(album, albumId=index + 1)
+                        for index in range(self.server.album_count)
+                    ]
+                ),
                 "/menu/artists": page([]),
                 "/session/sessions": page([]),
                 "/audio-zone/audio-zones": [],
@@ -434,6 +439,7 @@ def run(args):
     }
     print(json.dumps(metadata), flush=True)
     mock = Mock()
+    mock.album_count = args.album_count
     mock.hold_websocket = args.hold_websocket
     thread = threading.Thread(target=mock.serve_forever, daemon=True)
     thread.start()
@@ -750,6 +756,7 @@ def main():
         action="store_true",
         help="leave WebSocket handshake pending while testing HTTP browsing",
     )
+    parser.add_argument("--album-count", type=int, default=1)
     parser.add_argument("--artifacts", required=True)
     run(parser.parse_args())
 

@@ -26,6 +26,7 @@ def run(executable, artifacts):
     artifacts = Path(artifacts)
     artifacts.mkdir(parents=True, exist_ok=True)
     mock = Mock()
+    mock.album_count = 1
     mock.hold_websocket = True
     # These requests accept TCP and then deliberately never return a response.
     original = mock.RequestHandlerClass.do_GET

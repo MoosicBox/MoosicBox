@@ -94,7 +94,7 @@ pub struct BmuxProgram {
     committed: Option<(u64, LayoutTree)>,
     pending: VecDeque<Work>,
     active: bool,
-    resource_active: bool,
+    resource_active: usize,
     quitting: bool,
     stopping: bool,
     active_abort: Option<(Option<String>, tokio::sync::watch::Sender<bool>)>,
@@ -150,7 +150,7 @@ impl BmuxProgram {
             committed: None,
             pending: VecDeque::new(),
             active: false,
-            resource_active: false,
+            resource_active: 0,
             quitting: false,
             stopping: false,
             active_abort: None,
@@ -243,6 +243,7 @@ impl BmuxProgram {
         }
         self.effective = Some(effective);
         self.candidate = Some(tree);
+        self.schedule_resources()?;
         Ok(())
     }
 
@@ -391,14 +392,24 @@ impl BmuxProgram {
                 ..
             } = &node.element
             {
-                images.push((layout::node_key(node, path), source.clone()));
+                images.push((
+                    layout::node_key(node, path),
+                    source.clone(),
+                    matches!(
+                        node.element,
+                        Element::Image {
+                            loading: Some(hyperchad_transformer_models::ImageLoading::Lazy),
+                            ..
+                        }
+                    ),
+                ));
             }
         });
         let counts = (
             images.len(),
             images
                 .iter()
-                .map(|(_, source)| source)
+                .map(|(_, source, _)| source)
                 .collect::<BTreeSet<_>>()
                 .len(),
         );
@@ -410,7 +421,7 @@ impl BmuxProgram {
             );
             self.resource_scan_counts = Some(counts);
         }
-        let present: BTreeSet<_> = images.iter().map(|(key, _)| key.clone()).collect();
+        let present: BTreeSet<_> = images.iter().map(|(key, _, _)| key.clone()).collect();
         self.resources.retain(|key, _| present.contains(key));
         self.resource_epochs.retain(|key, _| present.contains(key));
         self.pending.retain(|work| match work {
@@ -424,9 +435,45 @@ impl BmuxProgram {
             }
             _ => true,
         });
-        for (key, source) in images {
+        for (key, source, lazy) in images {
+            if lazy
+                && !self
+                    .candidate
+                    .as_ref()
+                    .or_else(|| {
+                        self.committed
+                            .as_ref()
+                            .filter(|(generation, _)| *generation == self.state.generation())
+                            .map(|(_, tree)| tree)
+                    })
+                    .is_some_and(|tree| {
+                        tree.get(&key).is_some_and(|node| {
+                            node.visible
+                                && node.bounds.intersection(node.clip).width > 0
+                                && node.bounds.intersection(node.clip).height > 0
+                        })
+                    })
+            {
+                continue;
+            }
             if self.resources.get(&key) != Some(&source) {
-                self.schedule_resource(key, source)?;
+                if let Some((width, height, rgba)) =
+                    self.resources.iter().find_map(|(other, loaded)| {
+                        (loaded == &source)
+                            .then(|| self.graphics.rgba(other))
+                            .flatten()
+                    })
+                {
+                    let (width, height, rgba) = (width, height, rgba.to_vec());
+                    self.graphics.register_rgba(&key, width, height, rgba)?;
+                    self.resources.insert(key, source);
+                } else if !self
+                    .resources
+                    .values()
+                    .any(|scheduled| scheduled == &source)
+                {
+                    self.schedule_resource(key, source)?;
+                }
             }
         }
         Ok(())
@@ -523,7 +570,7 @@ impl BmuxProgram {
         } else {
             update.cancelled_subscriptions.push(timer_key);
         }
-        if self.stopping && !self.active && !self.resource_active && self.pending.is_empty() {
+        if self.stopping && !self.active && self.resource_active == 0 && self.pending.is_empty() {
             update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
         }
         // Navigation hands intent to the application's independent router. Do not
@@ -552,7 +599,7 @@ impl BmuxProgram {
                 Some(Message::Advance)
             }));
         }
-        if !self.resource_active
+        while self.resource_active < 4
             && let Some(index) = self
                 .pending
                 .iter()
@@ -581,7 +628,7 @@ impl BmuxProgram {
     fn start_work(&mut self, work: Work) -> Command<Message> {
         let resource = matches!(&work, Work::Resource { .. });
         if resource {
-            self.resource_active = true;
+            self.resource_active += 1;
         } else {
             self.active = true;
         }
@@ -811,7 +858,9 @@ impl BmuxProgram {
                 || node.actions.iter().any(|action| {
                     matches!(action.trigger, hyperchad_actions::ActionTrigger::Immediate)
                 });
-            keys.push(layout::node_key(node, path));
+            if crate::actions::has_load_route(node) || !node.actions.is_empty() {
+                keys.push(layout::node_key(node, path));
+            }
         });
         // Lifecycle actions run before presentation, but still require current
         // document geometry. This layout is not published for pointer hit testing.
@@ -1232,7 +1281,7 @@ impl BmuxProgram {
         mut result: Result<HostResponse, Error>,
     ) -> Result<(), Error> {
         if matches!(&work, Completion::Resource { .. }) {
-            self.resource_active = false;
+            self.resource_active = self.resource_active.saturating_sub(1);
         } else {
             self.active = false;
             self.active_abort = None;
@@ -1590,6 +1639,24 @@ impl Program for BmuxProgram {
                 Update::redraw()
             }));
         }
+        if matches!(&event, RuntimeEvent::Message(Message::Quit)) {
+            self.message(Message::Quit)?;
+            return Ok(self.drive(Update::none()));
+        }
+        if matches!(
+            &event,
+            RuntimeEvent::Message(
+                Message::Completed {
+                    work: Completion::Resource { .. },
+                    ..
+                } | Message::Advance
+            )
+        ) {
+            if let RuntimeEvent::Message(message) = event {
+                self.message(message)?;
+            }
+            return Ok(self.drive(Update::redraw()));
+        }
         let before = self.state.root().clone();
         let generation_before = self.state.generation();
         match event {
@@ -1904,10 +1971,83 @@ mod runtime_regressions {
     }
 
     #[test]
+    fn lazy_placeholder_grid_only_loads_visible_unique_sources() {
+        let mut program = program();
+        let image = |index| Container {
+            str_id: Some(format!("placeholder-{index}")),
+            width: Some(hyperchad_transformer::Number::Integer(32)),
+            height: Some(hyperchad_transformer::Number::Integer(32)),
+            element: Element::Image {
+                source: Some("/album.svg".into()),
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: Some(hyperchad_transformer_models::ImageLoading::Lazy),
+            },
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    children: (0..100).map(image).collect(),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        assert!(
+            program.resources.is_empty(),
+            "lazy images wait for viewport geometry"
+        );
+        program.prepare().unwrap();
+        assert_eq!(
+            program
+                .pending
+                .iter()
+                .filter(|work| matches!(work, Work::Resource { .. }))
+                .count(),
+            1
+        );
+        let key = program.resources.keys().next().unwrap().clone();
+        program
+            .graphics
+            .register_rgba(&key, 1, 1, vec![255; 4])
+            .unwrap();
+        program.pending.clear();
+        program.schedule_resources().unwrap();
+        assert!(
+            program.pending.is_empty(),
+            "same-source placeholders reuse decoded bytes"
+        );
+        assert!(
+            program.resources.len() < 100,
+            "offscreen placeholders are not loaded"
+        );
+    }
+
+    #[test]
+    fn image_requests_have_bounded_parallelism() {
+        let mut program = program();
+        for index in 0..10 {
+            program.pending.push_back(Work::Resource {
+                key: index.to_string(),
+                source: format!("/{index}.png"),
+                generation: index,
+            });
+        }
+        let update = program.drive(Update::none());
+        assert_eq!(update.commands.len(), 4);
+        assert_eq!(program.resource_active, 4);
+        assert_eq!(program.pending.len(), 6);
+        assert!(program.drive(Update::none()).commands.is_empty());
+    }
+
+    #[test]
     fn user_quit_exits_without_draining_stalled_work() {
         let mut program = program();
         program.active = true;
-        program.resource_active = true;
+        program.resource_active = 1;
         let (cancel, receiver) = tokio::sync::watch::channel(false);
         program.active_abort = Some((None, cancel));
         program
@@ -1933,7 +2073,7 @@ mod runtime_regressions {
         });
         let update = program.drive(Update::none());
         assert_eq!(update.commands.len(), 1);
-        assert!(program.resource_active);
+        assert_eq!(program.resource_active, 1);
         assert!(program.active);
         program
             .complete(
@@ -1945,7 +2085,7 @@ mod runtime_regressions {
                 Err(std::io::Error::other("denied").into()),
             )
             .unwrap();
-        assert!(!program.resource_active);
+        assert_eq!(program.resource_active, 0);
         assert!(program.active);
     }
 

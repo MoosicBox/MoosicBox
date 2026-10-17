@@ -1,6 +1,10 @@
 //! Application-owned, connection-scoped artwork transport for the terminal renderer.
 
-use std::{io, sync::Arc, time::Duration};
+use std::{
+    io,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use hyperchad::renderer_bmux::renderer::{
     BmuxConfig, Error, HostCallbacks, HostRequest, HostResponse,
@@ -10,6 +14,14 @@ use reqwest::{Client, Url};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(15);
+
+static CLIENT: LazyLock<Result<Client, reqwest::Error>> = LazyLock::new(|| {
+    Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(TIMEOUT)
+        .connect_timeout(Duration::from_secs(5))
+        .build()
+});
 
 fn denied(message: &'static str) -> Error {
     io::Error::other(message).into()
@@ -174,11 +186,8 @@ async fn fetch(connection: &Connection, url: Url, max_bytes: usize) -> Result<Ve
     }
     // Deliberately support HTTP when the application has explicitly configured it, including
     // local servers. Never follow even same-origin redirects; a default client could leak auth.
-    let client = Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(TIMEOUT)
-        .connect_timeout(Duration::from_secs(5))
-        .build()
+    let client = CLIENT
+        .as_ref()
         .map_err(|_| denied("artwork client initialization failed"))?;
     switchy_async::time::timeout(TIMEOUT, async {
         let mut request = client

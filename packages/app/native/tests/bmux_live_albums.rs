@@ -33,10 +33,14 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
         state
             .set_current_connection(&Connection {
                 name: "Read-only acceptance".into(),
-                api_url: endpoint,
+                api_url: endpoint.clone(),
             })
             .await
             .unwrap();
+        *state.api_url.write().await = Some(endpoint.clone());
+        *state.connection_config.write().await = Some(moosicbox_app_state::ConnectionConfig::new(&endpoint, "master", "read-only-test").unwrap());
+        *state.connection_id.write().await = Some("read-only-test".into());
+        *state.profile.write().await = Some("master".into());
         moosicbox_app_native::STATE_LOCK.set(state.clone()).unwrap();
         let router = moosicbox_app_native::init();
         fn has_album_link(node: &Container) -> bool {
@@ -67,6 +71,19 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
             assert!(!rendered.contains("Reconnecting to server"));
             assert!(has_album_link(root), "real album must contain a detail link");
             eprintln!("Live album fragment loaded in {:?}", start.elapsed());
+            fn artwork(node: &Container) -> Option<String> {
+                if let Element::Image { source: Some(source), .. } = &node.element
+                    && source.contains("/files/albums/") { return Some(source.clone()); }
+                node.children.iter().find_map(artwork)
+            }
+            let source = artwork(root).expect("first page has real artwork");
+            let callback = moosicbox_app_native::renderer_bmux::config().host.request.unwrap();
+            let started = std::time::Instant::now();
+            let hyperchad::renderer_bmux::renderer::HostResponse::Bytes(bytes) = callback(
+                hyperchad::renderer_bmux::renderer::HostRequest::Resource { source, max_bytes: 1024*1024 },
+            ).await.unwrap() else { panic!("artwork bytes") };
+            assert!(bytes.len() > 100);
+            eprintln!("Live artwork: {} bytes in {:?}", bytes.len(), started.elapsed());
         }
     });
 }
