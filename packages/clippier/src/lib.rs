@@ -1651,104 +1651,98 @@ pub async fn process_configs(
     Ok(packages)
 }
 
-/// Handle chunking and `max_parallel` re-chunking by combining packages
+/// Reduce a feature matrix by merging entries with identical execution settings.
 ///
-/// Applies `max_parallel` re-chunking by combining packages when the total count
-/// exceeds `max_parallel`. Respects the original chunking constraint - only
-/// combines packages when necessary to meet the `max_parallel` limit, never
-/// creates packages with fewer features than the original chunking.
+/// Only `features` may differ: package, path, OS, toolchains, environment and
+/// other metadata must match. Feature lists are unioned without dropping coverage,
+/// and merged lists must fit `chunked`. Empty feature runs remain separate from
+/// feature-enabled runs. Entries are merged only until the job limit is met.
 ///
 /// # Errors
 ///
+/// * If `max_parallel` or `chunked` is zero
+/// * If an entry has an invalid feature list
+/// * If the limit cannot be met without mixing execution settings or losing coverage
 /// * If JSON serialization fails
 pub fn apply_max_parallel_rechunking(
     packages: Vec<serde_json::Map<String, serde_json::Value>>,
     max_parallel: usize,
     chunked: Option<u16>,
 ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, BoxError> {
+    if max_parallel == 0 || chunked == Some(0) {
+        return Err("max-parallel and chunked must be greater than zero".into());
+    }
     if packages.len() <= max_parallel {
-        // Already within limit, no need to re-chunk
         return Ok(packages);
     }
 
-    let mut result = Vec::new();
-
-    // Distribute packages evenly across exactly max_parallel slots
-    let total_packages = packages.len();
-    let base_packages_per_slot = total_packages / max_parallel;
-    let extra_packages = total_packages % max_parallel;
-
-    let mut package_index = 0;
-
-    for slot_index in 0..max_parallel {
-        if package_index >= total_packages {
-            break;
-        }
-
-        // Some slots get one extra package to distribute remainder evenly
-        let packages_for_this_slot = if slot_index < extra_packages {
-            base_packages_per_slot + 1
-        } else {
-            base_packages_per_slot
+    let mut groups = BTreeMap::<String, Vec<BTreeSet<String>>>::new();
+    for mut package in packages {
+        let features = package
+            .remove("features")
+            .ok_or("Missing matrix features")?;
+        let features = features
+            .as_array()
+            .ok_or("Matrix features must be an array")?
+            .iter()
+            .map(|feature| {
+                feature
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or("Matrix features must be strings")
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        // Empty runs exercise a different configuration from any enabled feature.
+        let key = serde_json::to_string(&(package, features.is_empty()))?;
+        groups.entry(key).or_default().push(features);
+    }
+    let mut count = groups.values().map(Vec::len).sum::<usize>();
+    while count > max_parallel {
+        // Deterministically prefer small unions, retaining room for later merges.
+        let candidate = groups
+            .iter()
+            .flat_map(|(key, entries)| {
+                entries.iter().enumerate().flat_map(move |(left, a)| {
+                    entries
+                        .iter()
+                        .enumerate()
+                        .skip(left + 1)
+                        .filter_map(move |(right, b)| {
+                            let size = a.union(b).count();
+                            chunked
+                                .is_none_or(|limit| size <= usize::from(limit))
+                                .then_some((size, key, left, right))
+                        })
+                })
+            })
+            .min();
+        let Some((_, key, left, right)) = candidate else {
+            return Err(format!(
+                "Cannot meet max-parallel={max_parallel}: {count} matrix entries remain with incompatible execution settings or chunked={chunked:?}. Increase max-parallel/chunked or select fewer packages; refusing to drop feature coverage."
+            ).into());
         };
-
-        if packages_for_this_slot == 0 {
-            break;
-        }
-
-        let end_index = (package_index + packages_for_this_slot).min(total_packages);
-        let chunk_packages = &packages[package_index..end_index];
-
-        if chunk_packages.len() == 1 {
-            // Single package, no need to combine
-            result.push(chunk_packages[0].clone());
-        } else {
-            // Combine multiple packages while respecting chunking constraints
-            let mut combined_features = Vec::new();
-            let template_package = chunk_packages[0].clone();
-
-            for package in chunk_packages {
-                if let Some(features) = package.get("features").and_then(|f| f.as_array()) {
-                    for feature in features {
-                        if let Some(feature_str) = feature.as_str() {
-                            combined_features.push(feature_str.to_string());
-                        }
-                    }
-                }
-            }
-
-            // Remove duplicates while preserving order
-            combined_features.sort();
-            combined_features.dedup();
-
-            // Respect chunking constraint if specified
-            if let Some(chunk_limit) = chunked {
-                let chunk_limit = chunk_limit as usize;
-                if combined_features.len() > chunk_limit {
-                    combined_features.truncate(chunk_limit);
-                }
-            }
-
-            // Create the combined package
-            let mut combined_package = template_package;
-            combined_package.insert(
-                "features".to_string(),
-                serde_json::to_value(combined_features)?,
-            );
-
-            result.push(combined_package);
-        }
-
-        package_index = end_index;
+        let key = key.clone();
+        let entries = groups.get_mut(&key).ok_or("Missing matrix group")?;
+        let removed = entries.remove(right);
+        entries[left].extend(removed);
+        count -= 1;
     }
 
-    // Sort results by package name for consistent, predictable output
+    let mut result = Vec::with_capacity(count);
+    for (key, entries) in groups {
+        let (identity, _): (serde_json::Map<String, serde_json::Value>, bool) =
+            serde_json::from_str(&key)?;
+        for features in entries {
+            let mut entry = identity.clone();
+            entry.insert("features".into(), serde_json::to_value(features)?);
+            result.push(entry);
+        }
+    }
     result.sort_by(|a, b| {
-        let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        name_a.cmp(name_b)
+        a.get("name")
+            .and_then(|v| v.as_str())
+            .cmp(&b.get("name").and_then(|v| v.as_str()))
     });
-
     Ok(result)
 }
 

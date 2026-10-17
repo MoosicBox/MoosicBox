@@ -197,7 +197,7 @@ async fn test_git_submodules_with_chunking_and_spreading() {
         None,
         None,
         None,
-        Some(2),
+        Some(6), // two packages across three OS configurations cannot share jobs
         None,
         true,
         true,

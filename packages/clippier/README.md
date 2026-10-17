@@ -2280,6 +2280,13 @@ These options are shared across multiple subcommands (they are not top-level glo
 
 ### Features Command Options
 
+`features --max-parallel` merges only entries whose package, path, OS, environment,
+required features, toolchains, and other non-feature metadata match. Merging never
+truncates feature coverage and respects `--chunked`; empty-feature runs remain
+separate. If those constraints make the requested limit impossible, Clippier
+returns an error. Increase the job/chunk limit or select fewer packages instead
+of relying on cross-package merging.
+
 | Option                | Description                                                             | Default      |
 | --------------------- | ----------------------------------------------------------------------- | ------------ |
 | `--os`                | Target operating system                                                 | -            |

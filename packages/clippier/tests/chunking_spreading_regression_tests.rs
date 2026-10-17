@@ -361,22 +361,13 @@ async fn test_max_parallel_with_chunking() {
     )
     .await;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
-
-    // Should be limited to exactly 8 packages by max_parallel
-    assert_eq!(configs.len(), 8, "max_parallel should limit results to 8");
-
-    // Each package should have at most 4 features
-    for config in &configs {
-        let features = config.get("features").unwrap().as_array().unwrap();
-        assert!(
-            features.len() <= 4,
-            "Package {} has {} features, expected <= 4 (chunk limit)",
-            config.get("name").unwrap().as_str().unwrap(),
-            features.len()
-        );
-    }
+    // Ten distinct packages cannot fit into eight jobs without losing checks.
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot meet max-parallel=8")
+    );
 }
 
 /// Test the main regression case - simulate changed-files scenario with chunking and spreading
@@ -695,22 +686,13 @@ async fn test_complex_scenario_all_flags() {
     )
     .await;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
-
-    // Should be limited to 5 packages by max_parallel
-    assert_eq!(configs.len(), 5, "max_parallel should limit results to 5");
-
-    // Each package should have at most 4 features
-    for config in &configs {
-        let features = config.get("features").unwrap().as_array().unwrap();
-        assert!(
-            features.len() <= 4,
-            "Package {} has {} features, expected <= 4 (chunk limit)",
-            config.get("name").unwrap().as_str().unwrap(),
-            features.len()
-        );
-    }
+    // Spreading does not permit merging different package identities either.
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot meet max-parallel=5")
+    );
 }
 
 /// Test that chunking without spreading still works correctly

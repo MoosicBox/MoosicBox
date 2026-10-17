@@ -7,6 +7,111 @@ use clippier::{
 use clippier_test_utilities::TempDir;
 use clippier_test_utilities::test_resources::{create_simple_workspace, load_test_workspace};
 
+/// Reproduce the CI failure: exceeding the 256-job limit must not attach
+/// dependency features to aconverter or discard another package's checks.
+#[test]
+fn max_parallel_rechunking_preserves_feature_ownership_across_packages() {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    // The first two entries straddle a package boundary. The remaining entries
+    // make the matrix exceed the workflow's limit by exactly one job, while
+    // leaving plenty of compatible aconverter entries available to combine.
+    let aconverter = serde_json::json!({
+        "name": "moosicbox_aconverter",
+        "path": "./packages/aconverter",
+        "os": "ubuntu-latest",
+        "features": ["aac", "default", "flac", "mp3", "opus"],
+    });
+    let files = serde_json::json!({
+        "name": "moosicbox_files",
+        "path": "./packages/files",
+        "os": "ubuntu-latest",
+        "features": ["api", "base64", "qobuz", "scan", "tidal"],
+    });
+    let mut input = vec![aconverter.as_object().unwrap().clone(); 257];
+    input[1] = files.as_object().unwrap().clone();
+    // Compare coverage per complete execution identity, not just global feature
+    // coverage: a global union would miss the bug this test guards against.
+    let coverage = |entries: &[serde_json::Map<String, serde_json::Value>]| {
+        let mut coverage = BTreeMap::<String, BTreeSet<String>>::new();
+        for entry in entries {
+            let mut identity = entry.clone();
+            let features = identity.remove("features").unwrap();
+            let covered = coverage
+                .entry(serde_json::to_string(&identity).unwrap())
+                .or_default();
+            covered.extend(
+                features
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|feature| feature.as_str().unwrap().to_string()),
+            );
+        }
+        coverage
+    };
+    let expected = coverage(&input);
+    let output = clippier::apply_max_parallel_rechunking(input, 256, Some(15)).unwrap();
+    assert!(output.len() <= 256);
+    assert_eq!(
+        coverage(&output),
+        expected,
+        "re-chunking must preserve every package's execution identity and owned features"
+    );
+}
+
+#[test]
+fn max_parallel_rechunking_preserves_execution_settings_and_chunk_coverage() {
+    let base = serde_json::json!({"name":"app", "path":"packages/app", "os":"ubuntu", "env":"MODE=a", "features":["a"]});
+    let entry = base.as_object().unwrap().clone();
+    for (field, value) in [
+        ("name", "other"),
+        ("path", "other/app"),
+        ("os", "windows"),
+        ("env", "MODE=b"),
+        ("toolchains", "nightly"),
+        ("requiredFeatures", "special"),
+    ] {
+        let mut different = entry.clone();
+        different.insert(field.into(), value.into());
+        let error =
+            clippier::apply_max_parallel_rechunking(vec![entry.clone(), different], 1, None)
+                .unwrap_err();
+        assert!(
+            error.to_string().contains("Cannot meet max-parallel"),
+            "{field}: {error}"
+        );
+    }
+    let mut second = entry.clone();
+    second.insert("features".into(), serde_json::json!(["b", "c"]));
+    assert!(
+        clippier::apply_max_parallel_rechunking(vec![entry.clone(), second.clone()], 1, Some(2))
+            .is_err()
+    );
+    let merged =
+        clippier::apply_max_parallel_rechunking(vec![entry.clone(), second.clone()], 1, Some(3))
+            .unwrap();
+    assert_eq!(merged[0]["features"], serde_json::json!(["a", "b", "c"]));
+    assert_eq!(
+        merged,
+        clippier::apply_max_parallel_rechunking(vec![second, entry.clone()], 1, Some(3)).unwrap()
+    );
+    let mut empty = entry.clone();
+    empty.insert("features".into(), serde_json::json!([]));
+    assert!(clippier::apply_max_parallel_rechunking(vec![entry.clone(), empty], 1, None).is_err());
+    assert!(clippier::apply_max_parallel_rechunking(vec![entry.clone()], 0, None).is_err());
+    assert!(clippier::apply_max_parallel_rechunking(vec![entry.clone()], 1, Some(0)).is_err());
+    assert_eq!(
+        clippier::apply_max_parallel_rechunking(vec![entry.clone()], 1, Some(2)).unwrap(),
+        vec![entry]
+    );
+    assert!(
+        clippier::apply_max_parallel_rechunking(Vec::new(), 1, None)
+            .unwrap()
+            .is_empty()
+    );
+}
+
 /// Helper function to normalize paths in test results for consistent snapshots
 fn normalize_paths(mut parsed: serde_json::Value) -> serde_json::Value {
     if let Some(array) = parsed.as_array_mut() {
@@ -917,27 +1022,15 @@ serde = "1.0"
     )
     .await;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
-
-    // Should be limited to exactly 10 results by max_parallel
-    assert_eq!(configs.len(), 10, "max_parallel should limit results to 10");
-
-    // Verify that features are preserved (not truncated) - count total features
-    let total_features: usize = configs
-        .iter()
-        .filter_map(|config| config.get("features"))
-        .filter_map(|features| features.as_array())
-        .map(|arr| arr.len())
-        .sum();
-
-    // There should be a significant number of features preserved (each package has 6 features: default + 5 named)
+    // Twenty distinct packages cannot fit in ten jobs without losing identities.
     assert!(
-        total_features > 0,
-        "Features should be preserved during re-chunking"
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot meet max-parallel=10")
     );
 
-    // Test with only max_parallel (backward compatibility)
+    // The same safety rule applies when no explicit chunk limit is supplied.
     let result = handle_features_command(
         temp_dir.path().to_str().unwrap(),
         Some("ubuntu"),
@@ -971,27 +1064,11 @@ serde = "1.0"
     )
     .await;
 
-    assert!(result.is_ok());
-    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
-
-    // Should be limited to exactly 5 results by max_parallel
-    assert_eq!(
-        configs.len(),
-        5,
-        "max_parallel without chunked should limit results to 5"
-    );
-
-    // Verify that features are preserved in this case too
-    let total_features: usize = configs
-        .iter()
-        .filter_map(|config| config.get("features"))
-        .filter_map(|features| features.as_array())
-        .map(|arr| arr.len())
-        .sum();
-
     assert!(
-        total_features > 0,
-        "Features should be preserved during re-chunking"
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot meet max-parallel=5")
     );
 }
 
