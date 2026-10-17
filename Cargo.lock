@@ -10659,6 +10659,8 @@ dependencies = [
 name = "moosicbox_app_native"
 version = "0.5.0"
 dependencies = [
+ "bmux_tui",
+ "bmux_tui_runtime",
  "console-subscriber",
  "flume 0.12.0",
  "hyperchad",

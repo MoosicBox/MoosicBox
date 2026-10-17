@@ -113,6 +113,10 @@ serde_json         = { workspace = true }
 strum              = { workspace = true }
 thiserror          = { workspace = true }
 
+[dev-dependencies]
+bmux_tui         = { workspace = true }
+bmux_tui_runtime = { workspace = true }
+
 [features]
 default = [
     "all-decoders",

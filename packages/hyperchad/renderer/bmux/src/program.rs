@@ -240,6 +240,18 @@ impl BmuxProgram {
 
     /// Paint only a previously prepared layout into a local, host-clipped context.
     pub fn paint(&mut self, cx: &mut PaintCx<'_, '_>) {
+        let base_style = self
+            .background
+            .map_or_else(bmux_tui::style::Style::new, |color| {
+                bmux_tui::style::Style::new()
+                    .bg(bmux_tui::style::Color::Rgb(color.r, color.g, color.b))
+            });
+        // A fill alone is insufficient: subsequent glyph/control writes otherwise
+        // replace cells with a default (terminal-transparent) background.
+        cx.with_style(base_style, |cx| self.paint_document(cx));
+    }
+
+    fn paint_document(&mut self, cx: &mut PaintCx<'_, '_>) {
         let Some(tree) = &self.candidate else {
             return;
         };
@@ -256,7 +268,9 @@ impl BmuxProgram {
             if !node.visible {
                 continue;
             }
-            self.controls.paint(&node.key, cx);
+            cx.with_style(node.style.style, |cx| {
+                self.controls.paint(&node.key, cx);
+            });
             let Some(source) = at_path(
                 self.effective.as_ref().unwrap_or_else(|| self.state.root()),
                 &node.path,
@@ -670,10 +684,29 @@ impl BmuxProgram {
             report.generation = next.mark_changed()?;
         }
         self.state = next;
+        let mut image_sources = BTreeMap::new();
+        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            if let Element::Image {
+                source: Some(source),
+                ..
+            } = &node.element
+            {
+                image_sources.insert(layout::node_key(node, path), source.clone());
+            }
+        });
         for key in &report.lifecycle_removed {
-            self.graphics.remove(key);
-            self.resources.remove(key);
-            self.resource_epochs.remove(key);
+            // Document lifetimes reset event/request ownership, not immutable image
+            // bytes. Authorization context changes are purged independently below.
+            let unchanged_image = self.graphics.rgba(key).is_some()
+                && self
+                    .resources
+                    .get(key)
+                    .is_some_and(|source| image_sources.get(key) == Some(source));
+            if !unchanged_image {
+                self.graphics.remove(key);
+                self.resources.remove(key);
+                self.resource_epochs.remove(key);
+            }
         }
         self.controls.reconcile_report(self.state.root(), &report);
         self.actions.reconcile_removed(
@@ -2538,6 +2571,131 @@ mod runtime_regressions {
             .unwrap();
         assert!(program.state.find_node("stale-response").is_none());
         assert!(program.pending.is_empty());
+    }
+
+    #[test]
+    fn navigation_preserves_unchanged_image_bytes_and_epoch() {
+        let mut program = program();
+        let page = |label: &str, source: &str| Container {
+            str_id: Some("page".into()),
+            children: vec![
+                Container {
+                    str_id: Some("logo".into()),
+                    element: Element::Image {
+                        source: Some(source.into()),
+                        alt: None,
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    ..Default::default()
+                },
+                Container {
+                    element: Element::Raw {
+                        value: label.into(),
+                    },
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        program
+            .apply_view(View::from(page("Home", "/logo.svg")), None)
+            .unwrap();
+        let epoch = program.resource_epochs["logo"];
+        program
+            .graphics
+            .register_rgba("logo", 1, 1, vec![255; 4])
+            .unwrap();
+        program.pending.clear();
+        for label in ["Settings", "Home", "Settings"] {
+            program
+                .apply_view(View::from(page(label, "/logo.svg")), None)
+                .unwrap();
+            assert_eq!(program.resource_epochs["logo"], epoch);
+            assert!(program.graphics.rgba("logo").is_some());
+            assert!(
+                !program
+                    .pending
+                    .iter()
+                    .any(|work| matches!(work, Work::Resource { .. }))
+            );
+        }
+        program
+            .apply_view(View::from(page("Home", "/different.svg")), None)
+            .unwrap();
+        assert_ne!(program.resource_epochs["logo"], epoch);
+        assert!(program.graphics.rgba("logo").is_none());
+    }
+
+    #[test]
+    fn text_controls_and_fallbacks_keep_application_background() {
+        let mut program = program();
+        program.background = Some(hyperchad_color::Color::from_hex("#181a1b"));
+        program.set_graphics_available(false);
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        Container {
+                            element: Element::Raw {
+                                value: "Settings".into(),
+                            },
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::Button { r#type: None },
+                            children: vec![Container {
+                                element: Element::Raw {
+                                    value: "Save".into(),
+                                },
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::Image {
+                                source: Some("/missing.svg".into()),
+                                alt: Some("Missing icon".into()),
+                                fit: None,
+                                source_set: None,
+                                sizes: None,
+                                loading: None,
+                            },
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::Input {
+                                autofocus: None,
+                                name: Some("name".into()),
+                                input: hyperchad_transformer::Input::Text {
+                                    value: Some("Desktop".into()),
+                                    placeholder: None,
+                                },
+                            },
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        let mut buffer =
+            bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+        let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+        program.paint(&mut PaintCx::new(&mut frame));
+        assert!(buffer.cells().iter().any(|cell| cell.symbol == "S"));
+        for cell in buffer.cells() {
+            assert_eq!(
+                cell.style.bg,
+                Some(bmux_tui::style::Color::Rgb(24, 26, 27)),
+                "{}",
+                cell.symbol
+            );
+        }
     }
 
     #[test]
