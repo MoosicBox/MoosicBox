@@ -127,9 +127,10 @@ Tab/Shift-Tab traverse prepared enabled controls; typing/paste edit text, Space
 toggles checkboxes, Enter activates buttons/links or selects popup choices, arrows
 navigate native selects/editors, and multiline editors accept line breaks. Password
 buffers edit real values but paint masked projections and do not expose secret
-values in semantic change events. The standalone host owns shutdown via
-`BmuxRenderer::shutdown`; do not assume every application's Escape/Ctrl-C binding
-means quit. Input is routed against successfully committed geometry, not failed
+values in semantic change events. **Ctrl-C or Ctrl-Q exits standalone mode**, draining
+admitted effects and restoring the terminal. Escape remains available to controls.
+Embedded hosts own their quit policy; applications can also call
+`BmuxRenderer::shutdown`. Input is routed against successfully committed geometry, not failed
 presentation candidates.
 
 ## Element support matrix

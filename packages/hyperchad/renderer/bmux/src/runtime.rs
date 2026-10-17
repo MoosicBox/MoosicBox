@@ -67,6 +67,17 @@ impl RenderRunner for BmuxRenderRunner {
     }
 }
 
+// Standalone ownership reserves quit chords; embedded hosts retain input policy.
+const fn is_quit_event(event: &Event) -> bool {
+    matches!(event, Event::Key(key)
+        if key.modifiers.ctrl
+            && !key.modifiers.alt
+            && !key.modifiers.super_key
+            && !key.modifiers.hyper
+            && !key.modifiers.meta
+            && matches!(key.key, bmux_keyboard::KeyCode::Char('c' | 'C' | 'q' | 'Q')))
+}
+
 async fn run_terminal(
     shared: Arc<Shared>,
     receiver: flume::Receiver<Message>,
@@ -121,6 +132,11 @@ async fn run_terminal(
                             break;
                         }
                     };
+                    if is_quit_event(&event) {
+                        shared.stopping.store(true, std::sync::atomic::Ordering::Release);
+                        let _ = handle.send(Message::Shutdown).await;
+                        break;
+                    }
                     // Keep all input ordered: coalescing resize past a click changes meaning.
                     let oversized = matches!(&event, Event::Paste(text) if text.len() > shared.config.max_event_bytes);
                     if oversized { continue; }
@@ -161,4 +177,30 @@ async fn run_terminal(
     ingress_result?;
     input_result?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bmux_keyboard::{KeyCode, KeyStroke, Modifiers};
+
+    #[test]
+    fn quit_chords_are_reserved_only_with_control() {
+        for character in ['c', 'C', 'q', 'Q'] {
+            let key = KeyStroke::simple(KeyCode::Char(character));
+            assert!(!is_quit_event(&Event::Key(key)));
+            let mut key = key;
+            key.modifiers = Modifiers {
+                ctrl: true,
+                ..Modifiers::NONE
+            };
+            assert!(is_quit_event(&Event::Key(key)));
+            key.modifiers.alt = true;
+            assert!(!is_quit_event(&Event::Key(key)));
+        }
+        assert!(!is_quit_event(&Event::Key(KeyStroke::simple(
+            KeyCode::Escape
+        ))));
+        assert!(!is_quit_event(&Event::Paste("\u{3}\u{11}".into())));
+    }
 }

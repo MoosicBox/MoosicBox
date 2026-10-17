@@ -28,7 +28,7 @@ def winsize(fd, columns, rows):
     )
 
 
-def run(executable, workflow, protocol):
+def run(executable, workflow, protocol, exit_key="timed"):
     master, slave = pty.openpty()
     winsize(slave, 120, 60)
     original = termios.tcgetattr(slave)
@@ -50,7 +50,7 @@ def run(executable, workflow, protocol):
     )
     env.pop("HYPERCHAD_BMUX_IMAGE_PROTOCOL", None)
     process = subprocess.Popen(
-        [executable, workflow, "--smoke"],
+        [executable, workflow] + (["--smoke"] if exit_key == "timed" else []),
         stdin=slave,
         stdout=slave,
         stderr=slave,
@@ -61,9 +61,13 @@ def run(executable, workflow, protocol):
     started = time.monotonic()
     sent = False
     resized = False
+    quit_sent = False
     try:
         while time.monotonic() - started < 12:
             elapsed = time.monotonic() - started
+            if elapsed > 2 and exit_key != "timed" and not quit_sent:
+                os.write(master, b"\x03" if exit_key == "ctrl-c" else b"\x11")
+                quit_sent = True
             if elapsed > 0.6 and not sent:
                 # Keyboard-only edit/navigation + bracketed paste. The malicious
                 # source must not become an OSC52 write in terminal output.
@@ -148,6 +152,9 @@ def main():
     parser.add_argument(
         "--protocol", choices=["text", "kitty", "sixel", "iterm2"], default="text"
     )
+    parser.add_argument(
+        "--exit-key", choices=("timed", "ctrl-c", "ctrl-q"), default="timed"
+    )
     args = parser.parse_args()
     executable = os.path.realpath(args.executable)
     if not os.path.isfile(executable) or not os.access(executable, os.X_OK):
@@ -160,7 +167,7 @@ def main():
     failures = []
     for workflow in ("dashboard", "documents", "music"):
         try:
-            run(executable, workflow, args.protocol)
+            run(executable, workflow, args.protocol, args.exit_key)
         except (AssertionError, OSError) as error:
             failures.append(f"{workflow} {args.protocol}: {error}")
             print(f"FAIL {failures[-1]}", flush=True)
