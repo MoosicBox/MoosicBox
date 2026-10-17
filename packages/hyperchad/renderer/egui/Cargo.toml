@@ -32,9 +32,9 @@ hyperchad_transformer = { workspace = true, features = [
 moosicbox_app_native_image = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["macros"] }
-switchy_async = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["time", "tokio"] }
 switchy_env = { workspace = true, features = ["std"] }
-switchy_http = { workspace = true, features = ["reqwest"] }
+switchy_http = { workspace = true, features = ["reqwest", "stream"] }
 
 async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [
@@ -43,12 +43,14 @@ eframe = { workspace = true, default-features = false, features = [
 ] }
 egui_extras = { workspace = true, features = ["image", "svg"] }
 flume = { workspace = true }
-image = { workspace = true, features = ["webp"] }
+futures-util = { workspace = true }
+image = { workspace = true, features = ["png", "webp"] }
 itertools = { workspace = true }
 log = { workspace = true }
 profiling = { workspace = true, optional = true }
 puffin = { workspace = true, optional = true }
 puffin_http = { workspace = true, optional = true }
+rfd = { workspace = true, features = ["wayland", "xdg-portal"] }
 tracing-subscriber = { workspace = true, optional = true }
 tracy-client = { workspace = true, default-features = false, optional = true, features = [
     "enable",
@@ -93,10 +95,21 @@ profiling-tracy = [
     "profiling",
 ]
 
-debug = []
+debug    = []
+feedback = ["v2"]
 
 v1 = []
 v2 = []
 
 [dev-dependencies]
 test-log = { workspace = true }
+
+[[test]]
+name              = "feedback"
+path              = "tests/feedback/main.rs"
+required-features = ["feedback"]
+
+[[example]]
+name              = "feedback"
+path              = "examples/feedback.rs"
+required-features = ["feedback"]

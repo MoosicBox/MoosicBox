@@ -113,8 +113,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
 {
     /// # Errors
     ///
-    /// * This implementation currently always returns `Ok(())`.
-    /// * Failures from `eframe::run_native` are logged and not propagated as errors.
+    /// * Returns native window startup errors.
+    /// * Returns screenshot timeout, cancellation, or output errors in feedback mode.
     ///
     /// # Panics
     ///
@@ -141,27 +141,34 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
         };
 
         log::debug!("EguiRenderer: starting");
+        #[cfg(feature = "feedback")]
+        {
+            *self.app.capture.lock().unwrap() = crate::feedback::NativeCapture::from_env();
+        }
         if let Err(e) = eframe::run_native(
             self.app.title.as_deref().unwrap_or("MoosicBox"),
             options,
             Box::new(|cc| {
                 // Initialize fonts and image loaders
                 let _ = cc.egui_ctx.run(egui::RawInput::default(), |_| {});
-                egui_extras::install_image_loaders(&cc.egui_ctx);
-
-                // Set context in app
-                *self.app.ctx.write().unwrap() = Some(cc.egui_ctx.clone());
-
-                // Update calculator with context
-                let mut calculator = self.app.calculator.write().unwrap();
-                *calculator = calculator.clone().with_context(cc.egui_ctx.clone());
-                drop(calculator);
+                self.app.initialize(&cc.egui_ctx);
 
                 log::debug!("EguiRenderer: initialized");
                 Ok(Box::new(self.app.clone()))
             }),
         ) {
-            log::error!("EguiRenderer: eframe error: {e:?}");
+            return Err(Box::new(std::io::Error::other(e.to_string())));
+        }
+        #[cfg(feature = "feedback")]
+        if let Some(error) = self
+            .app
+            .capture
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(crate::feedback::NativeCapture::failed)
+        {
+            return Err(Box::new(std::io::Error::other(error.to_owned())));
         }
         log::debug!("EguiRenderer: finished");
 
@@ -197,7 +204,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::ToRenderRu
 ///
 /// Manages rendering state, UI widgets, and communication channels.
 #[derive(Clone)]
-struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
+pub(crate) struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     /// The egui context used for rendering.
     ctx: Arc<RwLock<Option<egui::Context>>>,
     /// The layout calculator for computing element dimensions.
@@ -235,11 +242,17 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     text_inputs: Arc<RwLock<HashMap<egui::Id, String>>>,
     /// Cache of loaded images.
     images: Arc<RwLock<HashMap<String, AppImage>>>,
+    #[cfg(feature = "feedback")]
+    pub(crate) geometry: Arc<RwLock<std::collections::BTreeMap<String, egui::Rect>>>,
+    #[cfg(feature = "feedback")]
+    capture: Arc<std::sync::Mutex<Option<crate::feedback::NativeCapture>>>,
+    #[cfg(feature = "feedback")]
+    previous_geometry: std::collections::BTreeMap<String, egui::Rect>,
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     /// Creates a new `EguiApp` instance with the specified communication channels.
-    fn new(
+    pub(crate) fn new(
         sender: Sender<String>,
         request_action: Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
@@ -265,6 +278,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             text_inputs: Arc::new(RwLock::new(HashMap::new())),
             images: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "feedback")]
+            geometry: Arc::default(),
+            #[cfg(feature = "feedback")]
+            capture: Arc::default(),
+            #[cfg(feature = "feedback")]
+            previous_geometry: std::collections::BTreeMap::new(),
         }
     }
 
@@ -311,6 +330,19 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     ///
     /// Returns the UI response if the container was rendered, or `None` if hidden.
     fn render_container(&self, ui: &mut Ui, container: &Container) -> Option<Response> {
+        let response = self.render_container_inner(ui, container)?;
+        #[cfg(feature = "feedback")]
+        if let Some(id) = &container.str_id {
+            self.geometry
+                .write()
+                .unwrap()
+                .insert(id.clone(), response.rect);
+        }
+        self.handle_actions(ui, container, &response);
+        Some(response)
+    }
+
+    fn render_container_inner(&self, ui: &mut Ui, container: &Container) -> Option<Response> {
         if container.is_hidden() || container.visibility == Some(Visibility::Hidden) {
             return None;
         }
@@ -449,9 +481,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             }
         });
 
-        // Handle actions
-        self.handle_actions(ui, container, &response.response);
-
         Some(response.response)
     }
 
@@ -516,7 +545,20 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             };
 
             if should_trigger {
-                self.handle_action_with_handler(action, container);
+                let value = self
+                    .text_inputs
+                    .read()
+                    .unwrap()
+                    .get(&response.id)
+                    .cloned()
+                    .or_else(|| {
+                        self.checkboxes
+                            .read()
+                            .unwrap()
+                            .get(&response.id)
+                            .map(bool::to_string)
+                    });
+                self.handle_action_with_handler(action, container, value.as_deref());
             }
         }
     }
@@ -528,10 +570,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         &self,
         action: &hyperchad_actions::Action,
         root_container: &Container,
+        event_value: Option<&str>,
     ) {
         // Create action context
         let action_context = EguiActionContext {
-            ctx: Arc::new(RwLock::new(None)), // Will be set when context is available
+            ctx: self.ctx.clone(),
             navigation_sender: Some(self.sender.clone()),
             action_sender: Some(self.request_action.clone()),
         };
@@ -576,9 +619,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             &action.effect.action,
             Some(&action.effect),
             style_trigger,
-            0, // self_id - would need to be determined from context
+            root_container.id,
             &action_context,
-            None, // event_value
+            event_value,
             None, // value
         );
     }
@@ -857,6 +900,63 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.frame(ctx);
+        #[cfg(feature = "feedback")]
+        if let Some(capture) = self.capture.lock().unwrap().as_mut() {
+            let geometry = self.geometry.read().unwrap().clone();
+            let ready = !geometry.is_empty()
+                && geometry == self.previous_geometry
+                && !ctx.has_pending_images()
+                && self.assets_ready()
+                && capture.required_geometry_ready(ctx, &geometry);
+            capture.frame(ctx, ready, &geometry);
+            self.previous_geometry = geometry;
+        }
+    }
+}
+
+impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
+    pub(crate) fn initialize(&self, ctx: &egui::Context) {
+        egui_extras::install_image_loaders(ctx);
+        *self.ctx.write().unwrap() = Some(ctx.clone());
+        let mut calculator = self.calculator.write().unwrap();
+        *calculator = calculator.clone().with_context(ctx.clone());
+    }
+
+    #[cfg(feature = "feedback")]
+    pub(crate) fn set_view(&self, view: Container) {
+        self.render_queue
+            .write()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .push_back(RenderView::View(view));
+    }
+
+    #[cfg(all(test, feature = "feedback"))]
+    pub(crate) fn feedback_loading(&self, loading: bool) {
+        let mut images = self.images.write().unwrap();
+        if loading {
+            images.insert("feedback-test-image".to_owned(), AppImage::Loading);
+        } else {
+            images.remove("feedback-test-image");
+        }
+    }
+
+    pub(crate) fn assets_ready(&self) -> bool {
+        !self
+            .images
+            .read()
+            .unwrap()
+            .values()
+            .any(|image| matches!(image, AppImage::Loading))
+    }
+
+    pub(crate) fn frame(&self, ctx: &egui::Context) {
+        #[cfg(feature = "feedback")]
+        self.geometry.write().unwrap().clear();
+        // Resize before calculating newly queued views.
+        self.check_frame_resize(ctx);
         // Process queued renders if context is ready
         let render_queue = self.render_queue.write().unwrap().take();
         if let Some(render_queue) = render_queue {

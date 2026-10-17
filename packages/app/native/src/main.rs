@@ -39,6 +39,16 @@ use switchy_env::{var_parse_opt, var_parse_or};
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Resolve the application data root before any lazy state or logging initialization.
+    // This also permits native UI tests to run without reading the user's connections.
+    if let Some(root) = std::env::var_os("MOOSICBOX_CONFIG_DIR") {
+        let root = std::path::PathBuf::from(root);
+        if !root.is_absolute() {
+            return Err("MOOSICBOX_CONFIG_DIR must be an absolute path".into());
+        }
+        moosicbox_config::set_root_dir(root);
+    }
+
     if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
     } else {

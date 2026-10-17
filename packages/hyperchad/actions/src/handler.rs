@@ -91,6 +91,39 @@ pub trait ElementFinder {
 
     /// Get element position
     fn get_position(&self, element_id: usize) -> Option<(f32, f32)>;
+
+    /// Authored visibility when no action override exists.
+    fn get_visibility(&self, _element_id: usize) -> Option<Visibility> {
+        None
+    }
+
+    /// Authored display when no action override exists.
+    fn get_display(&self, _element_id: usize) -> Option<bool> {
+        None
+    }
+
+    /// Resolve all mutation targets. Legacy implementations retain first-match behavior.
+    /// Override this for renderers supporting multi-element mutations and CSS selectors.
+    ///
+    /// # Errors
+    /// * Unsupported selector grammar must return an error, never an empty success.
+    fn find_all(&self, target: &ElementTarget, source: usize) -> Result<Vec<usize>, String> {
+        let found = match target {
+            ElementTarget::ById(Target::Literal(id)) => self.find_by_str_id(id),
+            ElementTarget::Class(Target::Literal(class)) => self.find_by_class(class),
+            ElementTarget::ChildClass(Target::Literal(class)) => {
+                self.find_child_by_class(source, class)
+            }
+            ElementTarget::Selector(_) => {
+                return Err("selector lookup unsupported by this host".into());
+            }
+            ElementTarget::Id(id) => Some(*id),
+            ElementTarget::SelfTarget => Some(source),
+            ElementTarget::LastChild => self.get_last_child(source),
+            _ => return Err("unresolved dynamic target".into()),
+        };
+        Ok(found.into_iter().collect())
+    }
 }
 
 /// Trait for container types that can be used with the action system
@@ -206,6 +239,40 @@ pub trait ActionContext {
 
     /// Log a message
     fn log(&self, level: LogLevel, message: &str);
+
+    /// Current named event, used to unwrap `ActionType::Event` only on a match.
+    fn event_name(&self) -> Option<&str> {
+        None
+    }
+
+    /// Resolve an event payload only when an expression reads it.
+    /// Legacy hosts retain their supplied scalar string semantics. Structured hosts
+    /// may return a documented serialized representation without changing `Value`.
+    ///
+    /// # Errors
+    /// * The host cannot represent the current payload as an action value.
+    fn resolve_event_value(&self, fallback: Option<&str>) -> Result<Option<String>, String> {
+        Ok(fallback.map(str::to_owned))
+    }
+
+    /// Read current native focus before a reversible focus write.
+    fn is_focused(&self, _element: usize) -> Option<bool> {
+        None
+    }
+
+    /// Request focus on a host element.
+    /// # Errors
+    /// * The default host does not support focus.
+    fn set_focus(&self, _element: usize, _focus: bool) -> Result<(), String> {
+        Err("focus unsupported by this action host".into())
+    }
+
+    /// Select the text of an input element.
+    /// # Errors
+    /// * The default host does not support input selection.
+    fn select_input(&self, _element: usize) -> Result<(), String> {
+        Err("input selection unsupported by this action host".into())
+    }
 }
 
 /// Trait for action event handling
@@ -221,6 +288,8 @@ pub enum StyleTrigger {
     UiEvent,
     /// Trigger from custom event
     CustomEvent,
+    /// Exact execution owner. Scoped runtimes never erase another binding's overrides.
+    Binding(u64),
 }
 
 /// Style override with trigger information
@@ -286,6 +355,65 @@ impl<T> StyleManager<T> for BTreeMapStyleManager<T> {
     fn clear_element(&mut self, element_id: usize) {
         self.overrides.remove(&element_id);
     }
+}
+
+#[derive(Debug, Clone)]
+struct StyleWrite {
+    id: usize,
+    action: StyleAction,
+    trigger: StyleTrigger,
+    delay: u64,
+    deadline: Option<u64>,
+}
+
+/// Exact reversible writes made by one execution, including its selected `Logic` branch.
+#[derive(Debug, Clone, Default)]
+pub struct ExecutionReceipt {
+    writes: Vec<StyleWrite>,
+}
+
+impl ExecutionReceipt {
+    /// Earliest pending undo deadline in caller-supplied monotonic milliseconds.
+    #[allow(clippy::must_use_candidate)] // Option is already must_use; repository policy forbids redundancy.
+    pub fn next_deadline(&self) -> Option<u64> {
+        self.writes.iter().filter_map(|write| write.deadline).min()
+    }
+
+    /// Start delay-off at deactivation, matching browser reset semantics.
+    pub fn begin_undo(&mut self, now_ms: u64) {
+        for write in &mut self.writes {
+            write
+                .deadline
+                .get_or_insert_with(|| now_ms.saturating_add(write.delay));
+        }
+    }
+
+    /// Merge writes from another execution of the same activation.
+    pub fn append(&mut self, mut other: Self) {
+        self.writes.append(&mut other.writes);
+    }
+
+    /// Whether all reversible writes have been undone.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.writes.is_empty()
+    }
+}
+
+#[derive(Debug, Default)]
+struct BindingState {
+    throttle: BTreeMap<Vec<usize>, u64>,
+    unique: std::collections::BTreeSet<Vec<usize>>,
+    variables: BTreeMap<String, crate::dsl::Expression>,
+}
+
+/// Scoped execution outcome. Failed executions retain receipts for already-applied writes.
+#[derive(Debug)]
+pub struct ExecutionResult {
+    /// Whether every requested operation succeeded.
+    pub success: bool,
+    /// Exact writes owned by this activation.
+    pub receipt: ExecutionReceipt,
 }
 
 /// Action delay/throttle manager
@@ -355,6 +483,12 @@ where
     background_manager: B,
     display_manager: D,
     timing_manager: ActionTimingManager,
+    bindings: BTreeMap<u64, BindingState>,
+    active_binding: Option<u64>,
+    next_execution: u64,
+    legacy_receipts: Vec<(usize, StyleTrigger, ExecutionReceipt)>,
+    focus_manager: BTreeMapStyleManager<bool>,
+    focus_base: BTreeMap<usize, bool>,
 }
 
 impl<F, V, B, D> ActionHandler<F, V, B, D>
@@ -378,39 +512,54 @@ where
             background_manager,
             display_manager,
             timing_manager: ActionTimingManager::default(),
+            bindings: BTreeMap::new(),
+            active_binding: None,
+            next_execution: 0,
+            legacy_receipts: Vec::new(),
+            focus_manager: BTreeMapStyleManager::default(),
+            focus_base: BTreeMap::new(),
         }
     }
 
     /// Gets the element ID from a target selector
-    #[must_use]
     pub fn get_element_id(&self, target: &ElementTarget, self_id: usize) -> Option<usize> {
-        match target {
-            ElementTarget::ById(id) | ElementTarget::Selector(id) => {
-                let Target::Literal(id) = id else {
-                    return None;
-                };
-                self.finder.find_by_str_id(id)
+        let target = self.resolve_target(target).ok()?;
+        self.finder
+            .find_all(&target, self_id)
+            .ok()?
+            .into_iter()
+            .next()
+    }
+
+    fn resolve_target(&self, target: &ElementTarget) -> Result<ElementTarget, String> {
+        let resolve = |value: &Target| -> Result<Target, String> {
+            match value {
+                Target::Literal(_) => Ok(value.clone()),
+                Target::Ref(name) => {
+                    let expression = self
+                        .active_binding
+                        .and_then(|id| self.bindings.get(&id))
+                        .and_then(|state| state.variables.get(name))
+                        .ok_or_else(|| format!("undefined target variable: {name}"))?;
+                    match expression {
+                        crate::dsl::Expression::Literal(crate::dsl::Literal::String(value)) => {
+                            Ok(Target::Literal(value.clone()))
+                        }
+                        _ => Err(format!("target variable is not a string: {name}")),
+                    }
+                }
             }
-            ElementTarget::Class(class) => {
-                let Target::Literal(class) = class else {
-                    return None;
-                };
-                self.finder.find_by_class(class)
-            }
-            ElementTarget::ChildClass(class) => {
-                let Target::Literal(class) = class else {
-                    return None;
-                };
-                self.finder.find_child_by_class(self_id, class)
-            }
-            ElementTarget::Id(id) => Some(*id),
-            ElementTarget::SelfTarget => Some(self_id),
-            ElementTarget::LastChild => self.finder.get_last_child(self_id),
-        }
+        };
+        Ok(match target {
+            ElementTarget::ById(value) => ElementTarget::ById(resolve(value)?),
+            ElementTarget::Selector(value) => ElementTarget::Selector(resolve(value)?),
+            ElementTarget::Class(value) => ElementTarget::Class(resolve(value)?),
+            ElementTarget::ChildClass(value) => ElementTarget::ChildClass(resolve(value)?),
+            other => other.clone(),
+        })
     }
 
     /// Calculates a dynamic value by evaluating computed values
-    #[must_use]
     pub fn calc_value(
         &self,
         value: &Value,
@@ -428,6 +577,7 @@ where
                     .get_current_value(element_id)
                     .copied()
                     .flatten()
+                    .or_else(|| self.finder.get_visibility(element_id))
                     .unwrap_or_default();
                 Some(LogicValue::Visibility(visibility))
             }
@@ -437,6 +587,7 @@ where
                     .display_manager
                     .get_current_value(element_id)
                     .copied()
+                    .or_else(|| self.finder.get_display(element_id))
                     .unwrap_or_default();
                 Some(LogicValue::Display(display))
             }
@@ -451,7 +602,13 @@ where
                     .map(LogicValue::String)
             }
             CalcValue::Key { key } => Some(LogicValue::String(key.to_string())),
-            CalcValue::EventValue => event_value.map(ToString::to_string).map(LogicValue::String),
+            CalcValue::EventValue => match context.resolve_event_value(event_value) {
+                Ok(value) => value.map(LogicValue::String),
+                Err(error) => {
+                    context.log(LogLevel::Error, &error);
+                    None
+                }
+            },
             CalcValue::WidthPx { target } => {
                 let element_id = self.get_element_id(target, self_id)?;
                 self.finder
@@ -518,10 +675,25 @@ where
         trigger: StyleTrigger,
         self_id: usize,
     ) -> bool {
-        let Some(element_id) = self.get_element_id(target, self_id) else {
+        let Ok(ids) = self
+            .resolve_target(target)
+            .and_then(|target| self.finder.find_all(&target, self_id))
+        else {
             return false;
         };
+        if ids.is_empty() {
+            return false;
+        }
+        ids.into_iter()
+            .all(|element_id| self.apply_style(action, element_id, trigger))
+    }
 
+    fn apply_style(
+        &mut self,
+        action: &StyleAction,
+        element_id: usize,
+        trigger: StyleTrigger,
+    ) -> bool {
         match action {
             StyleAction::SetVisibility(visibility) => {
                 self.visibility_manager
@@ -531,8 +703,9 @@ where
                 self.display_manager
                     .add_override(element_id, trigger, *display);
             }
-            StyleAction::SetFocus(_focus) => {
-                // TODO: Implement focus management
+            StyleAction::SetFocus(_) => {
+                log::error!("focus requires ActionContext; use handle_action");
+                return false;
             }
             StyleAction::SetBackground(background) => {
                 let color = if let Some(background) = background {
@@ -571,7 +744,7 @@ where
                 self.display_manager.remove_overrides(element_id, trigger);
             }
             StyleAction::SetFocus(..) => {
-                // TODO: Implement focus management
+                log::error!("focus undo requires an execution receipt");
             }
             StyleAction::SetBackground(..) => {
                 self.background_manager
@@ -580,8 +753,8 @@ where
         }
     }
 
-    /// Handles an action and returns success status
-    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    /// Execute a legacy action. For exact undo ownership use `execute_binding`.
+    #[allow(clippy::too_many_arguments)]
     pub fn handle_action(
         &mut self,
         action: &ActionType,
@@ -592,141 +765,442 @@ where
         event_value: Option<&str>,
         value: Option<&Value>,
     ) -> bool {
-        // Check throttling
-        if let Some(ActionEffect {
-            throttle: Some(throttle),
-            ..
-        }) = effect
-            && self.timing_manager.should_throttle(self_id, *throttle)
+        let mut receipt = ExecutionReceipt::default();
+        let success = self.execute_node(
+            action,
+            effect,
+            trigger,
+            self_id,
+            context,
+            event_value,
+            value,
+            None,
+            0,
+            &mut Vec::new(),
+            0,
+            &mut receipt,
+        );
+        self.legacy_receipts.push((self_id, trigger, receipt));
+        success
+    }
+
+    /// Execute one persistent binding with an independent effect-path clock.
+    /// `owner` must be unique for the lifetime of this handler. Time is monotonic milliseconds.
+    /// Reuse the owner on repeated input; retire it only after undoing its receipts.
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute_binding(
+        &mut self,
+        owner: u64,
+        effect: &ActionEffect,
+        self_id: usize,
+        context: &impl ActionContext,
+        event_value: Option<&str>,
+        now_ms: u64,
+    ) -> ExecutionResult {
+        let Some(execution) = self.next_execution.checked_add(1) else {
+            context.log(LogLevel::Error, "execution identity exhausted");
+            return ExecutionResult {
+                success: false,
+                receipt: ExecutionReceipt::default(),
+            };
+        };
+        self.next_execution = execution;
+        self.bindings.entry(owner).or_default();
+        self.active_binding = Some(owner);
+        let mut receipt = ExecutionReceipt::default();
+        let success = self.execute_node(
+            &effect.action,
+            Some(effect),
+            StyleTrigger::Binding(execution),
+            self_id,
+            context,
+            event_value,
+            None,
+            Some(owner),
+            now_ms,
+            &mut Vec::new(),
+            0,
+            &mut receipt,
+        );
+        self.active_binding = None;
+        ExecutionResult { success, receipt }
+    }
+
+    /// Undo only writes actually performed by an execution, never re-evaluate `Logic`.
+    /// Returns false while delay-off writes remain. Stale document sources are valid here.
+    pub fn undo_receipt(
+        &mut self,
+        receipt: &mut ExecutionReceipt,
+        now_ms: u64,
+        context: &impl ActionContext,
+    ) -> bool {
+        receipt.begin_undo(now_ms);
+        receipt.writes.retain(|write| {
+            let StyleWrite {
+                id,
+                action,
+                trigger,
+                deadline,
+                ..
+            } = write;
+            if deadline.is_some_and(|deadline| now_ms < deadline) {
+                return true;
+            }
+            match action {
+                StyleAction::SetVisibility(_) => {
+                    self.visibility_manager.remove_overrides(*id, *trigger);
+                }
+                StyleAction::SetDisplay(_) => self.display_manager.remove_overrides(*id, *trigger),
+                StyleAction::SetBackground(_) => {
+                    self.background_manager.remove_overrides(*id, *trigger);
+                }
+                StyleAction::SetFocus(_) => {
+                    self.focus_manager.remove_overrides(*id, *trigger);
+                    let focused = self
+                        .focus_manager
+                        .get_current_value(*id)
+                        .copied()
+                        .or_else(|| self.focus_base.get(id).copied());
+                    let Some(focused) = focused else {
+                        context.log(LogLevel::Error, "missing saved native focus");
+                        return true;
+                    };
+                    if let Err(error) = context.set_focus(*id, focused) {
+                        context.log(LogLevel::Error, &error);
+                        return true;
+                    }
+                }
+            }
+            context.request_repaint();
+            false
+        });
+        receipt.is_empty()
+    }
+
+    /// Retire binding variables and timing after its receipts have been released.
+    pub fn forget_binding(&mut self, owner: u64) {
+        self.bindings.remove(&owner);
+    }
+
+    /// Replace a renderer's current finder while preserving timing, styles and variables.
+    pub fn set_finder(&mut self, finder: F) {
+        self.finder = finder;
+    }
+
+    fn expression(
+        &self,
+        expression: &crate::dsl::Expression,
+        event_value: Option<&str>,
+        context: &impl ActionContext,
+    ) -> Result<crate::dsl::Expression, String> {
+        use crate::dsl::{Expression, Literal};
+        match expression {
+            Expression::Literal(_) => Ok(expression.clone()),
+            Expression::Variable(name) if name == "event_value" => context
+                .resolve_event_value(event_value)?
+                .map(|value| Expression::Literal(Literal::String(value)))
+                .ok_or_else(|| "event_value is absent".into()),
+            Expression::Variable(name) => self
+                .active_binding
+                .and_then(|owner| self.bindings.get(&owner))
+                .and_then(|state| state.variables.get(name))
+                .cloned()
+                .ok_or_else(|| format!("undefined variable: {name}")),
+            Expression::Grouping(inner) => self.expression(inner, event_value, context),
+            Expression::RawRust(_) => Err("RawRust execution is forbidden".into()),
+            _ => Err("unsupported runtime DSL expression".into()),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn execute_node(
+        &mut self,
+        action: &ActionType,
+        effect: Option<&ActionEffect>,
+        trigger: StyleTrigger,
+        source: usize,
+        context: &impl ActionContext,
+        event_value: Option<&str>,
+        value: Option<&Value>,
+        owner: Option<u64>,
+        now: u64,
+        path: &mut Vec<usize>,
+        inherited_delay: u64,
+        receipt: &mut ExecutionReceipt,
+    ) -> bool {
+        let fail = |error: &str| {
+            context.log(LogLevel::Error, error);
+            false
+        };
+        let delay = effect
+            .and_then(|effect| effect.delay_off)
+            .unwrap_or(inherited_delay);
+        if let (Some(owner), Some(effect)) = (owner, effect) {
+            let state = self.bindings.entry(owner).or_default();
+            if effect.unique == Some(true) && state.unique.contains(path) {
+                return true;
+            }
+            if let Some(period) = effect.throttle {
+                if state
+                    .throttle
+                    .get(path)
+                    .is_some_and(|deadline| now < *deadline)
+                {
+                    return true;
+                }
+                state
+                    .throttle
+                    .insert(path.clone(), now.saturating_add(period));
+            }
+        } else if let Some(period) = effect.and_then(|effect| effect.throttle)
+            && self.timing_manager.should_throttle(source, period)
         {
             context.request_repaint();
             return true;
         }
 
-        match action {
+        let success = match action {
+            ActionType::NoOp => true,
+            ActionType::Let { name, value } => match self.expression(value, event_value, context) {
+                Ok(value) => {
+                    if let Some(owner) = owner {
+                        self.bindings
+                            .entry(owner)
+                            .or_default()
+                            .variables
+                            .insert(name.clone(), value);
+                        true
+                    } else {
+                        fail("variable assignment requires scoped binding execution")
+                    }
+                }
+                Err(error) => fail(&error),
+            },
             ActionType::Style { target, action } => {
-                // Handle delay off
-                if let Some(ActionEffect {
-                    delay_off: Some(delay),
-                    ..
-                }) = effect
+                if owner.is_none() && delay > 0 {
+                    self.timing_manager.start_delay_off(source, delay);
+                }
+                let ids = match self
+                    .resolve_target(target)
+                    .and_then(|target| self.finder.find_all(&target, source))
                 {
-                    self.timing_manager.start_delay_off(self_id, *delay);
+                    Ok(ids) if !ids.is_empty() => ids,
+                    Ok(_) => return fail("action target did not match an element"),
+                    Err(error) => return fail(&error),
+                };
+                for id in ids {
+                    let success = if let StyleAction::SetFocus(focus) = action {
+                        let Some(previous) = context.is_focused(id) else {
+                            return fail("native focus state unavailable");
+                        };
+                        self.focus_base.entry(id).or_insert(previous);
+                        match context.set_focus(id, *focus) {
+                            Ok(()) => {
+                                self.focus_manager.add_override(id, trigger, *focus);
+                                true
+                            }
+                            Err(error) => fail(&error),
+                        }
+                    } else {
+                        self.apply_style(action, id, trigger)
+                    };
+                    if !success {
+                        return fail("style action failed");
+                    }
+                    receipt.writes.push(StyleWrite {
+                        id,
+                        action: action.clone(),
+                        trigger,
+                        delay,
+                        deadline: None,
+                    });
                 }
-
-                self.handle_style_action(action, target, trigger, self_id)
+                context.request_repaint();
+                true
             }
-            ActionType::Navigate { url } => {
-                if let Err(e) = context.navigate(url.clone()) {
-                    context.log(LogLevel::Error, &format!("Failed to navigate: {e:?}"));
-                    false
-                } else {
-                    true
+            ActionType::Input(crate::InputActionType::Select { target }) => {
+                let ids = match self
+                    .resolve_target(target)
+                    .and_then(|target| self.finder.find_all(&target, source))
+                {
+                    Ok(ids) if !ids.is_empty() => ids,
+                    Ok(_) => return fail("input target did not match an element"),
+                    Err(error) => return fail(&error),
+                };
+                for id in ids {
+                    if let Err(error) = context.select_input(id) {
+                        return fail(&error);
+                    }
                 }
+                true
             }
+            ActionType::Navigate { url } => context
+                .navigate(url.clone())
+                .map_err(|error| context.log(LogLevel::Error, &error.to_string()))
+                .is_ok(),
+            ActionType::Custom { action } => context
+                .request_custom_action(action.clone(), value.cloned())
+                .map_err(|error| context.log(LogLevel::Error, &error.to_string()))
+                .is_ok(),
             ActionType::Log { message, level } => {
-                let log_level = match level {
+                let level = match level {
                     crate::LogLevel::Error => LogLevel::Error,
                     crate::LogLevel::Warn => LogLevel::Warn,
                     crate::LogLevel::Info => LogLevel::Info,
                     crate::LogLevel::Debug => LogLevel::Debug,
                     crate::LogLevel::Trace => LogLevel::Trace,
                 };
-                context.log(log_level, message);
+                context.log(level, message);
                 true
             }
-            ActionType::Custom { action } => {
-                if let Err(e) = context.request_custom_action(action.clone(), value.cloned()) {
-                    context.log(
-                        LogLevel::Error,
-                        &format!("Failed to request custom action: {e:?}"),
-                    );
-                    false
-                } else {
-                    true
+            ActionType::Event { name, action } => {
+                if context.event_name() != Some(name.as_str()) {
+                    return fail("event wrapper does not match current named event");
                 }
-            }
-            ActionType::Logic(eval) => {
-                let success = match &eval.condition {
-                    crate::logic::Condition::Eq(a, b) => {
-                        let a = self.calc_value(a, self_id, context, event_value);
-                        let b = self.calc_value(b, self_id, context, event_value);
-                        a == b
-                    }
-                    crate::logic::Condition::Bool(b) => *b,
-                };
-
-                let actions = if success {
-                    &eval.actions
-                } else {
-                    &eval.else_actions
-                };
-
-                for action in actions {
-                    if !self.handle_action(
-                        &action.action,
-                        Some(action),
-                        trigger,
-                        self_id,
-                        context,
-                        event_value,
-                        value,
-                    ) {
-                        return false;
-                    }
-                }
-                true
+                path.push(0);
+                let success = self.execute_node(
+                    action,
+                    None,
+                    trigger,
+                    source,
+                    context,
+                    event_value,
+                    value,
+                    owner,
+                    now,
+                    path,
+                    delay,
+                    receipt,
+                );
+                path.pop();
+                success
             }
             ActionType::Multi(actions) => {
-                for action in actions {
-                    if !self.handle_action(
+                for (index, action) in actions.iter().enumerate() {
+                    path.push(index);
+                    let success = self.execute_node(
                         action,
-                        effect,
+                        None,
                         trigger,
-                        self_id,
+                        source,
                         context,
                         event_value,
                         value,
-                    ) {
+                        owner,
+                        now,
+                        path,
+                        delay,
+                        receipt,
+                    );
+                    path.pop();
+                    if !success {
                         return false;
                     }
                 }
                 true
             }
             ActionType::MultiEffect(effects) => {
-                for effect in effects {
-                    if !self.handle_action(
+                for (index, effect) in effects.iter().enumerate() {
+                    path.push(index);
+                    let success = self.execute_node(
                         &effect.action,
                         Some(effect),
                         trigger,
-                        self_id,
+                        source,
                         context,
                         event_value,
                         value,
-                    ) {
+                        owner,
+                        now,
+                        path,
+                        delay,
+                        receipt,
+                    );
+                    path.pop();
+                    if !success {
                         return false;
                     }
                 }
                 true
             }
             ActionType::Parameterized { action, value } => {
-                let calculated_value = self.calc_value(value, self_id, context, event_value);
-                self.handle_action(
+                let Some(value) = self.calc_value(value, source, context, event_value) else {
+                    return fail("parameter evaluation failed");
+                };
+                path.push(0);
+                let success = self.execute_node(
                     action,
-                    effect,
+                    None,
                     trigger,
-                    self_id,
+                    source,
                     context,
                     event_value,
-                    calculated_value.as_ref(),
-                )
+                    Some(&value),
+                    owner,
+                    now,
+                    path,
+                    delay,
+                    receipt,
+                );
+                path.pop();
+                success
             }
-            ActionType::Event { .. } // Event actions are handled by the event system
-            | ActionType::NoOp | ActionType::Input(..) | ActionType::Let { .. } => {
-                // TODO: Implement input and variable handling
+            ActionType::Logic(logic) => {
+                let condition = match &logic.condition {
+                    crate::logic::Condition::Bool(value) => *value,
+                    crate::logic::Condition::Eq(a, b) => {
+                        let (Some(a), Some(b)) = (
+                            self.calc_value(a, source, context, event_value),
+                            self.calc_value(b, source, context, event_value),
+                        ) else {
+                            return fail("condition evaluation failed");
+                        };
+                        a == b
+                    }
+                };
+                path.push(usize::from(!condition));
+                let actions = if condition {
+                    &logic.actions
+                } else {
+                    &logic.else_actions
+                };
+                for (index, effect) in actions.iter().enumerate() {
+                    path.push(index);
+                    let success = self.execute_node(
+                        &effect.action,
+                        Some(effect),
+                        trigger,
+                        source,
+                        context,
+                        event_value,
+                        value,
+                        owner,
+                        now,
+                        path,
+                        delay,
+                        receipt,
+                    );
+                    path.pop();
+                    if !success {
+                        path.pop();
+                        return false;
+                    }
+                }
+                path.pop();
                 true
             }
+        };
+        if success
+            && effect.is_some_and(|effect| effect.unique == Some(true))
+            && let Some(owner) = owner
+        {
+            self.bindings
+                .entry(owner)
+                .or_default()
+                .unique
+                .insert(path.clone());
         }
+        success
     }
 
     /// Cleans up an action (reverses its effects)
@@ -762,25 +1236,45 @@ where
             ActionType::Parameterized { action, .. } => {
                 self.unhandle_action(action, trigger, self_id, context);
             }
+            ActionType::Logic(_) => {
+                let receipts = std::mem::take(&mut self.legacy_receipts);
+                for (source, owner, receipt) in receipts {
+                    if source == self_id && owner == trigger {
+                        for StyleWrite {
+                            id,
+                            action,
+                            trigger,
+                            ..
+                        } in receipt.writes
+                        {
+                            self.unhandle_style_action(
+                                &action,
+                                &ElementTarget::Id(id),
+                                trigger,
+                                self_id,
+                            );
+                        }
+                    } else {
+                        self.legacy_receipts.push((source, owner, receipt));
+                    }
+                }
+            }
             // Most actions don't need cleanup
             _ => {}
         }
     }
 
     /// Gets the current visibility override for an element
-    #[must_use]
     pub fn get_visibility_override(&self, element_id: usize) -> Option<&Option<Visibility>> {
         self.visibility_manager.get_current_value(element_id)
     }
 
     /// Gets the current background override for an element
-    #[must_use]
     pub fn get_background_override(&self, element_id: usize) -> Option<&Option<Color>> {
         self.background_manager.get_current_value(element_id)
     }
 
     /// Gets the current display override for an element
-    #[must_use]
     pub fn get_display_override(&self, element_id: usize) -> Option<&bool> {
         self.display_manager.get_current_value(element_id)
     }
@@ -2560,5 +3054,160 @@ mod tests {
             let (logged_level, _) = &logs[i];
             assert_eq!(logged_level, expected_level);
         }
+    }
+    #[test]
+    fn scoped_two_bindings_same_node_have_independent_throttle_and_undo() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let mut effect: ActionEffect = ActionType::hide_by_id("test-element").into();
+        effect.throttle = Some(100);
+        let mut first = handler.execute_binding(1, &effect, 10, &context, None, 0);
+        let mut second = handler.execute_binding(2, &effect, 10, &context, None, 0);
+        assert!(first.success && second.success);
+        assert!(!first.receipt.is_empty() && !second.receipt.is_empty());
+        assert!(
+            handler
+                .execute_binding(1, &effect, 10, &context, None, 1)
+                .receipt
+                .is_empty()
+        );
+        assert!(handler.undo_receipt(&mut second.receipt, 0, &context));
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert!(handler.undo_receipt(&mut first.receipt, 0, &context));
+        assert_eq!(handler.get_visibility_override(10), None);
+    }
+
+    #[test]
+    fn scoped_throttled_multi_runs_all_children_and_parameter_wrapper_once() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let mut effect: ActionEffect = ActionType::Multi(vec![
+            ActionType::hide_by_id("test-element"),
+            ActionType::no_display_by_id("other-element"),
+        ])
+        .into();
+        effect.throttle = Some(100);
+        let result = handler.execute_binding(1, &effect, 10, &context, None, 0);
+        assert!(result.success);
+        assert_eq!(result.receipt.writes.len(), 2);
+        assert_eq!(handler.get_display_override(20), Some(&false));
+        assert!(
+            handler
+                .execute_binding(1, &effect, 10, &context, None, 100)
+                .success
+        );
+    }
+
+    #[test]
+    fn scoped_logic_undo_records_branch_and_preserves_other_bindings() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let base: ActionEffect = ActionType::show_by_id("test-element").into();
+        let _base = handler.execute_binding(1, &base, 10, &context, None, 0);
+        let effect: ActionEffect = ActionType::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Bool(true),
+            actions: vec![ActionType::hide_by_id("test-element").into()],
+            else_actions: vec![ActionType::no_display_by_id("other-element").into()],
+        })
+        .into();
+        let mut hover = handler.execute_binding(2, &effect, 10, &context, None, 0);
+        assert!(hover.success);
+        assert!(handler.undo_receipt(&mut hover.receipt, 0, &context));
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Visible))
+        );
+        assert_eq!(handler.get_display_override(20), None);
+    }
+
+    #[test]
+    fn scoped_delay_unique_and_errors_are_explicit() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let mut effect: ActionEffect = ActionType::hide_by_id("test-element").into();
+        effect.delay_off = Some(20);
+        effect.unique = Some(true);
+        let mut result = handler.execute_binding(1, &effect, 10, &context, None, 10);
+        result.receipt.begin_undo(10);
+        assert_eq!(result.receipt.next_deadline(), Some(30));
+        assert!(!handler.undo_receipt(&mut result.receipt, 29, &context));
+        assert!(handler.undo_receipt(&mut result.receipt, 30, &context));
+        assert!(
+            handler
+                .execute_binding(1, &effect, 10, &context, None, 50)
+                .receipt
+                .is_empty()
+        );
+        let focus: ActionEffect = ActionType::set_focus_by_id(true, "test-element").into();
+        assert!(
+            !handler
+                .execute_binding(2, &focus, 10, &context, None, 50)
+                .success
+        );
+        let input: ActionEffect = ActionType::select_by_id("test-element").into();
+        assert!(
+            !handler
+                .execute_binding(2, &input, 10, &context, None, 50)
+                .success
+        );
+        let raw: ActionEffect = ActionType::Let {
+            name: "x".into(),
+            value: crate::dsl::Expression::RawRust("unsafe {}".into()),
+        }
+        .into();
+        assert!(
+            !handler
+                .execute_binding(2, &raw, 10, &context, None, 50)
+                .success
+        );
+        assert!(!context.logs.borrow().is_empty());
+    }
+
+    #[test]
+    fn scoped_variables_resolve_dynamic_targets_and_missing_parameters_fail() {
+        let mut handler = create_test_handler();
+        let context = MockActionContext::default();
+        let effect: ActionEffect = ActionType::Multi(vec![
+            ActionType::Let {
+                name: "target".into(),
+                value: crate::dsl::Expression::Variable("event_value".into()),
+            },
+            ActionType::hide_by_id(Target::Ref("target".into())),
+        ])
+        .into();
+        assert!(
+            handler
+                .execute_binding(1, &effect, 10, &context, Some("test-element"), 0)
+                .success
+        );
+        assert_eq!(
+            handler.get_visibility_override(10),
+            Some(&Some(Visibility::Hidden))
+        );
+        assert!(
+            !handler
+                .execute_binding(
+                    2,
+                    &ActionType::hide_by_id(Target::Ref("target".into())).into(),
+                    10,
+                    &context,
+                    None,
+                    0
+                )
+                .success
+        );
+        let parameter: ActionEffect = ActionType::Parameterized {
+            action: Box::new(ActionType::NoOp),
+            value: Value::Calc(crate::logic::CalcValue::EventValue),
+        }
+        .into();
+        assert!(
+            !handler
+                .execute_binding(1, &parameter, 10, &context, None, 0)
+                .success
+        );
     }
 }

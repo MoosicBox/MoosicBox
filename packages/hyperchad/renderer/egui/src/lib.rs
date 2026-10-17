@@ -78,3 +78,27 @@ pub mod font_metrics;
 pub mod layout;
 
 pub use eframe;
+
+/// Persistent shared-handler action execution.
+pub mod action_runtime;
+/// Replacement UI-owned frame core, not yet selected as the public renderer.
+pub mod backend;
+/// Retained canvas command application and painting.
+pub mod canvas;
+/// UI-owned document reconciliation and stable element identities.
+pub mod document;
+/// Persistent ordered event routing and native input contracts.
+pub mod events;
+/// Shared calculated geometry projection.
+pub mod geometry;
+/// Generation-checked image resource state and worker completions.
+pub mod resources;
+/// Scoped asynchronous route and form completion transport.
+pub mod routing;
+/// Nonblocking document command transport.
+pub mod runtime;
+/// Projected native widgets and state adapters.
+pub mod widgets;
+
+/// Production frame host and opt-in screenshot inspection.
+pub mod feedback;

@@ -679,6 +679,41 @@
               ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ amdvlk ];
           };
 
+          # Private X11/software-GL capture; deliberately separate from GPU/dev shells.
+          egui-visual-test = pkgs.mkShell {
+            packages = with pkgs; [
+              (python3.withPackages (python: [ python.pillow ]))
+              xorg-server
+              xauth
+              xdpyinfo
+              mesa-demos
+              fontconfig
+              dejavu_fonts
+            ];
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
+              eguiPackages
+              ++ [
+                pkgs.mesa
+                pkgs.libGL
+              ]
+            );
+            LIBGL_DRIVERS_PATH = "${pkgs.mesa}/lib/dri";
+            VK_ICD_FILENAMES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.parsed.cpu.name}.json";
+            FONTCONFIG_FILE = pkgs.writeText "egui-visual-test-fonts.conf" ''
+              <?xml version="1.0"?>
+              <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+              <fontconfig>
+                <dir>${pkgs.dejavu_fonts}/share/fonts</dir>
+                <cachedir prefix="xdg">fontconfig</cachedir>
+                <config><rescan><int>0</int></rescan></config>
+              </fontconfig>
+            '';
+            shellHook = ''
+              echo "Use python3 packages/hyperchad/renderer/egui/scripts/native-screenshot.py --help"
+              echo "No desktop display is selected; each capture creates a private Xvfb."
+            '';
+          };
+
           egui-player = mkEguiShell {
             name = "Egui Player";
             extraPackages = [ ];
