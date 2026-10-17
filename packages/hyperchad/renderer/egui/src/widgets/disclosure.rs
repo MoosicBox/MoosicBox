@@ -1,5 +1,5 @@
 //! Persistent native disclosure state and pre-calculation traversal policy.
-use super::*;
+use super::{Container, Document, Element, ElementKey, WidgetPainter};
 use std::collections::BTreeSet;
 
 pub(super) struct Disclosure {
@@ -83,7 +83,6 @@ impl<F, R, C> WidgetPainter<F, R, C> {
         document: &Document,
         roots: &mut [Container],
     ) -> Result<(), String> {
-        self.reconcile_disclosures(document);
         fn apply(
             document: &Document,
             keys: &[ElementKey],
@@ -131,6 +130,7 @@ impl<F, R, C> WidgetPainter<F, R, C> {
             }
             Ok(())
         }
+        self.reconcile_disclosures(document);
         apply(
             document,
             &document.root_keys(),

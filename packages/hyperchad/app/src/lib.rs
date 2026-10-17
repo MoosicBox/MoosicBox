@@ -89,6 +89,9 @@ pub enum BuilderError {
     /// Runtime handle was not provided to the builder.
     #[error("Missing Runtime")]
     MissingRuntime,
+    /// Native response metadata already has a consumer or cannot be attached.
+    #[error("Failed to install native response consumer: {0}")]
+    NativeResponseConsumer(String),
 }
 
 /// Command-line arguments for the hyperchad application.
@@ -887,27 +890,47 @@ pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'sta
     initial_route: Option<Navigation>,
 }
 
+async fn apply_native_response_metadata(
+    router: &Router,
+    response: &hyperchad_renderer::ResponseMetadata,
+) -> Result<bool, Error> {
+    if !response.cookies.is_empty() {
+        return Err(Error::OtherSend(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "native response cookies require an installed cookie store",
+        ))));
+    }
+    match response.navigation.as_ref() {
+        Some(ResponseNavigation::Internal(location)) => {
+            router
+                .navigate_send((
+                    location.as_str(),
+                    hyperchad_router::RequestInfo {
+                        client: DEFAULT_CLIENT_INFO.clone(),
+                    },
+                ))
+                .await
+                .map_err(|error| Error::OtherSend(Box::new(error)))?;
+            Ok(true)
+        }
+        Some(ResponseNavigation::External(location)) => {
+            open::that_detached(location)
+                .map_err(|error| Error::ExternalNavigation(error.to_string()))?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 async fn apply_native_view_response<R: Renderer>(
     renderer: &R,
     router: &Router,
     view: hyperchad_renderer::View,
 ) -> Result<(), Error> {
-    match view.response.navigation.as_ref() {
-        Some(ResponseNavigation::Internal(location)) => router
-            .navigate_send((
-                location.as_str(),
-                hyperchad_router::RequestInfo {
-                    client: DEFAULT_CLIENT_INFO.clone(),
-                },
-            ))
-            .await
-            .map_err(|error| Error::OtherSend(Box::new(error))),
-        Some(ResponseNavigation::External(location)) => {
-            open::that_detached(location)
-                .map_err(|error| Error::ExternalNavigation(error.to_string()))?;
-            Ok(())
-        }
-        None => renderer.render(view).await.map_err(Error::OtherSend),
+    if apply_native_response_metadata(router, &view.response).await? {
+        Ok(())
+    } else {
+        renderer.render(view).await.map_err(Error::OtherSend)
     }
 }
 
@@ -1804,6 +1827,32 @@ mod tests {
             route_context.participant_id,
             ParticipantId::new("participant-1")
         );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn native_default_response_has_no_navigation_effect() {
+        assert!(
+            !apply_native_response_metadata(
+                &Router::new(),
+                &hyperchad_renderer::ResponseMetadata::default(),
+            )
+            .await
+            .expect("default metadata requires no host effects")
+        );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn native_cookie_response_is_rejected_before_redirect() {
+        let response = hyperchad_renderer::ResponseMetadata {
+            cookies: vec![hyperchad_renderer::ResponseCookie::secure(
+                "session", "value",
+            )],
+            navigation: Some(ResponseNavigation::Internal("/not-dispatched".to_owned())),
+        };
+        let error = apply_native_response_metadata(&Router::new(), &response)
+            .await
+            .expect_err("cookies cannot be silently dropped before navigation");
+        assert!(error.to_string().contains("cookie store"));
     }
 
     #[test_log::test(switchy_async::test)]

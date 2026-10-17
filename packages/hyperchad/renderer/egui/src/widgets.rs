@@ -1,4 +1,4 @@
-//! Native painting of projected HyperChad nodes, without child layout or traversal.
+//! Native painting of projected `HyperChad` nodes, without child layout or traversal.
 //!
 //! Native Raw policy: Raw and Text are literal text runs. The HTML parser emits
 //! Raw for ordinary text and provides no provenance distinguishing injected HTML.
@@ -30,7 +30,7 @@ use crate::{
 ///
 /// Implementations paint only this node, in the supplied screen-space geometry.
 /// They must return the actual native response (including changed values), and must
-/// not arrange or recursively paint HyperChad children. Identity is `stamp.key`;
+/// not arrange or recursively paint `HyperChad` children. Identity is `stamp.key`;
 /// asynchronous completion must additionally validate the complete stamp.
 pub trait WidgetAdapter {
     /// Retire removed generations and reconcile retained native state.
@@ -43,7 +43,7 @@ pub trait WidgetAdapter {
         mutations: &[MutationSummary],
     ) -> Result<(), String>;
 
-    /// Paint one node; never perform HyperChad child layout.
+    /// Paint one node; never perform `HyperChad` child layout.
     ///
     /// # Errors
     /// * Returns a diagnostic for unsupported data or a failed native operation.
@@ -68,6 +68,30 @@ pub trait WidgetAdapter {
         Err("canvas adapter not installed".to_owned())
     }
 
+    /// Focus a current eligible native control using its authoritative identity.
+    ///
+    /// # Errors
+    /// * Returns an error when unsupported, stale, unmounted or ineligible.
+    fn focus(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native focus adapter unavailable".to_owned())
+    }
+
+    /// Blur a current eligible native control.
+    ///
+    /// # Errors
+    /// * Returns an error when unsupported, stale, unmounted or ineligible.
+    fn blur(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native blur adapter unavailable".to_owned())
+    }
+
+    /// Select all text in a current eligible native editor.
+    ///
+    /// # Errors
+    /// * Returns an error when unsupported, stale, unmounted or not editable.
+    fn select_all(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native selection adapter unavailable".to_owned())
+    }
+
     /// Drain lossless native changes (arrays/files cannot use `NodeOutput::value`).
     fn take_changes(&mut self) -> Vec<(ElementStamp, crate::events::EventValue)> {
         Vec::new()
@@ -88,7 +112,36 @@ pub type NativeWidgetPainter = WidgetPainter<
 >;
 
 impl NativeWidgetPainter {
+    /// Install completed image work on the UI thread before frame painting.
+    ///
+    /// The resource adapter validates document generations and requests repaint
+    /// after successful installation. Fetch/decode work belongs to the returned
+    /// [`crate::resources::ResourceWorker`], never to this method or paint.
+    #[must_use]
+    pub fn install_resource_completions(
+        &mut self,
+        document: &Document,
+        context: &egui::Context,
+    ) -> usize {
+        self.resources.install_completions(document, context)
+    }
+
     /// Install native forms, bounded image resources and retained canvas painting.
+    ///
+    /// Host invocation contract:
+    /// * Retain both returned values for the host lifetime.
+    /// * Service `worker.try_request()` outside paint with bounded fetch/decode;
+    ///   submit success or failure via `worker.complete(completion, context)`.
+    /// * Call [`Self::install_resource_completions`] on the UI thread, then
+    ///   [`FramePainter::reconcile`] before layout and traversal.
+    /// * Apply [`FramePainter::prepare_layout`] only to fresh calculated clones,
+    ///   before the shared calculator; filter traversal and event targets with
+    ///   [`FramePainter::allows_node`]. Prepare nodes in document preorder even
+    ///   when clipped, then paint visible nodes once using projected geometry.
+    /// * Route canvas updates with [`FramePainter::apply_canvas`] and drain
+    ///   [`FramePainter::take_changes`] once after traversal. Drain native form
+    ///   intents/file requests through [`Self::forms_mut`].
+    ///
     /// Returns the worker endpoint for the native host's asynchronous loader.
     #[must_use]
     pub fn native(
@@ -122,6 +175,32 @@ pub struct WidgetPainter<F, R, C> {
     list_markers: std::collections::BTreeMap<ElementKey, String>,
     text_styles: std::collections::BTreeMap<ElementKey, text::TextStyle>,
     opacity: std::collections::BTreeMap<ElementKey, f32>,
+}
+
+impl<F: WidgetAdapter, R, C> WidgetPainter<F, R, C> {
+    /// Delegate focus to the forms adapter without inventing a native widget ID.
+    ///
+    /// # Errors
+    /// * Propagates stale-generation, eligibility or unsupported-adapter errors.
+    pub fn focus(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.focus(ctx, stamp)
+    }
+
+    /// Delegate blur to the forms adapter's current native control.
+    ///
+    /// # Errors
+    /// * Propagates stale-generation, eligibility or unsupported-adapter errors.
+    pub fn blur(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.blur(ctx, stamp)
+    }
+
+    /// Delegate selection to the forms adapter's authoritative editor state.
+    ///
+    /// # Errors
+    /// * Propagates stale-generation, editability or unsupported-adapter errors.
+    pub fn select_all(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.select_all(ctx, stamp)
+    }
 }
 
 impl<F, R, C> WidgetPainter<F, R, C> {
@@ -158,5 +237,25 @@ impl<F, R, C> WidgetPainter<F, R, C> {
             text_styles: std::collections::BTreeMap::new(),
             opacity: std::collections::BTreeMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod installation_tests {
+    use super::{FramePainter, NativeWidgetPainter};
+    use crate::{document::Document, resources::ResourceLimits};
+
+    #[test]
+    fn production_stack_installs_without_starting_resource_work() {
+        let (mut painter, worker) = NativeWidgetPainter::native(ResourceLimits::default());
+        let document = Document::new();
+        painter.reconcile(&document, &[]).unwrap();
+        assert_eq!(painter.pending_resources(), 0);
+        assert!(worker.try_request().is_none());
+        assert_eq!(
+            painter.install_resource_completions(&document, &eframe::egui::Context::default()),
+            0
+        );
+        assert_eq!(painter.take_changes(), []);
     }
 }

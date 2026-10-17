@@ -3,8 +3,9 @@
 //! Call `reconcile` after document mutations and `refresh_geometry` after layout or
 //! scroll changes. Feed inputs in native order, once. Widgets own activation and
 //! editing; mark their pointer input with `native_widget` and report activation
-//! separately using the same gesture ID. Do not also report `Response::clicked`
-//! as a raw click. All positions are egui logical screen points.
+//! separately using the same gesture ID. Raw release routes `Click`/`ClickOutside`;
+//! native pointer activation only acknowledges that gesture. Do not report it as
+//! an uncorrelated activation. All positions are egui logical screen points.
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -100,13 +101,14 @@ pub struct PointerEvent {
     pub gesture: u64,
     /// Screen position in egui points.
     pub position: Pos2,
-    /// Native button (only primary produces Click/ClickOutside).
+    /// Native button (only primary produces `Click`/`ClickOutside`).
     pub button: PointerButton,
     /// Press or release.
     pub pressed: bool,
     /// Event-time modifiers.
     pub modifiers: Modifiers,
-    /// Native widget owns activation for this gesture. Raw `MouseDown` still routes once.
+    /// Native widget owns command activation. Raw release still routes `Click` once.
+    /// Save this owner on press and supply it unchanged on release, even outside.
     pub native_widget: Option<ElementKey>,
 }
 
@@ -122,7 +124,9 @@ pub struct WidgetEvent {
 /// Widget results, not requests to mutate the widget's editing state.
 #[derive(Clone, Debug)]
 pub enum WidgetEventKind {
-    /// `Some` for a pointer gesture; `None` for keyboard/accessibility activation.
+    /// `Some` acknowledges an already-routed pointer click, without emitting another.
+    /// `None` routes keyboard/accessibility activation. Acknowledgements must precede
+    /// `EventRouter::end_input_batch` and may occur after pointer departure.
     Activate { gesture: Option<u64> },
     /// New native value; the widget owns text/IME editing and commits.
     Change(EventValue),
@@ -154,6 +158,9 @@ pub enum InputEvent {
     PointerMoved(Pos2),
     /// Pointer down/up.
     Pointer(PointerEvent),
+    /// Pointer left the window/surface (including touch-up's `PointerGone`).
+    /// Clears hover, but preserves gestures awaiting release/acknowledgement.
+    PointerDeparted,
     /// Platform cancellation, not a click or release outside.
     PointerCancelled,
     /// Full native key metadata. Keyup is recognized but has no model trigger.
@@ -214,7 +221,7 @@ struct Mounted {
 struct Gesture {
     pointer: PointerEvent,
     path: Vec<ElementKey>,
-    outside: Vec<(ElementStamp, usize)>,
+    outside: Vec<(ElementKey, usize, Action)>,
     released: bool,
 }
 
@@ -391,6 +398,15 @@ impl EventRouter {
                     .is_none_or(|key| next.contains_key(&key))
         });
         self.sizes.retain(|key, _| next.contains_key(key));
+        // Once a binding changes during a gesture it cannot rejoin that gesture,
+        // even if another reconciliation later restores identical authored actions.
+        for gesture in self.gestures.values_mut() {
+            gesture.outside.retain(|(key, index, action)| {
+                next.get(key)
+                    .and_then(|mounted| mounted.actions.get(*index))
+                    == Some(action)
+            });
+        }
         self.mounted = next;
         self.order = keys;
         Ok(out)
@@ -454,6 +470,10 @@ impl EventRouter {
     /// Route exactly one normalized input in native order. The returned vector is
     /// already in dispatch order. Feed native widget results once, not as raw clicks.
     ///
+    /// `KeyDown` without element focus selects the first root with a handler, in
+    /// document order; it never broadcasts to unrelated descendants. Focused keys
+    /// use nearest-handler ancestry. Editing-consumed and composing keys are excluded.
+    ///
     /// # Errors
     /// * Rejects stale/unsynchronized sources and geometry.
     /// * Rejects invalid gesture ownership, duplicate activation and missing key names.
@@ -475,6 +495,10 @@ impl EventRouter {
                 Ok(self.hover(geometry, Some(position)))
             }
             InputEvent::Pointer(pointer) => self.pointer(geometry, pointer),
+            InputEvent::PointerDeparted => {
+                self.position = None;
+                Ok(self.hover(geometry, None))
+            }
             InputEvent::PointerCancelled => {
                 self.gestures.clear();
                 self.capture = None;
@@ -499,9 +523,10 @@ impl EventRouter {
                 if !key.pressed || key.editing_consumed || key.composing {
                     return Ok(Vec::new());
                 }
-                let path = self
-                    .focused
-                    .map_or_else(Vec::new, |target| Self::path(geometry, target));
+                let path = self.focused.map_or_else(
+                    || document.root_keys(),
+                    |target| Self::path(geometry, target),
+                );
                 let mut out = self.nearest(
                     &path,
                     &ActionTrigger::KeyDown,
@@ -590,16 +615,13 @@ impl EventRouter {
                 {
                     return Err(EventError::InvalidGesture);
                 }
-                let gesture = self
+                let _acknowledged = self
                     .gestures
                     .remove(&id)
                     .ok_or(EventError::InvalidGesture)?;
-                let mut out = self.nearest(&gesture.path, &ActionTrigger::Click, &EventValue::Null);
-                out.extend(self.outside(&gesture));
-                for event in &mut out {
-                    event.pointer = Some(gesture.pointer);
-                }
-                Ok(out)
+                // The release already emitted Click and ClickOutside. Widget command
+                // activation is a separate fact, not a second model click.
+                Ok(Vec::new())
             }
         }
     }
@@ -629,16 +651,7 @@ impl EventRouter {
             {
                 return Err(EventError::InvalidGesture);
             }
-            let mut outside = Vec::new();
-            for key in &self.order {
-                if geometry.node(*key).is_some_and(|node| node.visible) {
-                    for (index, action) in self.mounted[key].actions.iter().enumerate() {
-                        if action.trigger == ActionTrigger::ClickOutside {
-                            outside.push((self.mounted[key].stamp, index));
-                        }
-                    }
-                }
-            }
+            let outside = self.outside_snapshot(geometry);
             self.gestures.insert(
                 pointer.gesture,
                 Gesture {
@@ -676,11 +689,19 @@ impl EventRouter {
         let mut out = self.hover(geometry, Some(pointer.position));
         // Browser click uses the nearest common ancestor of press/release targets.
         // Crossing into the viewport background from an element has no such target.
-        let click_path = gesture
-            .path
-            .iter()
-            .position(|key| path.contains(key))
-            .map(|index| gesture.path[index..].to_vec());
+        // Native widgets are authoritative activation targets, never decorative
+        // descendants. Outside the owner, retain browser common-ancestor targeting.
+        let click_path = pointer
+            .native_widget
+            .filter(|owner| path.contains(owner))
+            .map(|owner| Self::path(geometry, owner))
+            .or_else(|| {
+                gesture
+                    .path
+                    .iter()
+                    .position(|key| path.contains(key))
+                    .map(|index| gesture.path[index..].to_vec())
+            });
         let background = gesture.path.is_empty() && path.is_empty();
         if pointer.button != PointerButton::Primary || (click_path.is_none() && !background) {
             return Ok(out);
@@ -688,12 +709,11 @@ impl EventRouter {
         gesture.path = click_path.unwrap_or_default();
         gesture.pointer = pointer;
         gesture.released = true;
+        out.extend(self.nearest(&gesture.path, &ActionTrigger::Click, &EventValue::Null));
+        out.extend(self.outside(&gesture, geometry));
         if pointer.native_widget.is_some() {
-            // Keep only until native activation/end_input_batch. No raw Click here.
+            // Retain only for an optional native command acknowledgement.
             self.gestures.insert(pointer.gesture, gesture);
-        } else {
-            out.extend(self.nearest(&gesture.path, &ActionTrigger::Click, &EventValue::Null));
-            out.extend(self.outside(&gesture));
         }
         for event in &mut out {
             event.pointer = Some(pointer);
@@ -707,23 +727,38 @@ impl EventRouter {
         self.gestures.retain(|_, gesture| !gesture.released);
     }
 
-    fn outside(&self, gesture: &Gesture) -> Vec<UiEvent> {
+    fn outside_snapshot(
+        &self,
+        geometry: &GeometrySnapshot<ElementKey>,
+    ) -> Vec<(ElementKey, usize, Action)> {
+        let mut outside = Vec::new();
+        for key in &self.order {
+            if geometry.node(*key).is_some_and(|node| node.visible) {
+                for (index, action) in self.mounted[key].actions.iter().enumerate() {
+                    if action.trigger == ActionTrigger::ClickOutside {
+                        outside.push((*key, index, action.clone()));
+                    }
+                }
+            }
+        }
+        outside
+    }
+
+    fn outside(&self, gesture: &Gesture, geometry: &GeometrySnapshot<ElementKey>) -> Vec<UiEvent> {
         gesture
             .outside
             .iter()
-            .filter_map(|&(stamp, index)| {
-                let current = self.mounted.get(&stamp.key)?;
-                // A replacement/rebind cannot consume the opener's click.
-                (current.stamp == stamp
-                    && !gesture.path.contains(&stamp.key)
-                    && current
-                        .actions
-                        .get(index)
-                        .is_some_and(|action| action.trigger == ActionTrigger::ClickOutside))
+            .filter_map(|(key, index, binding)| {
+                let current = self.mounted.get(key)?;
+                // Unrelated subtree generations do not invalidate a binding. A new
+                // binding or a listener hidden at press cannot consume its opener.
+                (!gesture.path.contains(key)
+                    && geometry.node(*key).is_some_and(|node| node.visible)
+                    && current.actions.get(*index) == Some(binding))
                 .then(|| {
                     self.envelope(
-                        stamp,
-                        index,
+                        current.stamp,
+                        *index,
                         ActionTrigger::ClickOutside,
                         EventPhase::Fire,
                         EventValue::Null,
@@ -1098,16 +1133,19 @@ mod tests {
             .unwrap();
         assert_eq!(down.len(), 1);
         assert_eq!(down[0].trigger, ActionTrigger::MouseDown);
-        assert!(
-            router
-                .route(
-                    &document,
-                    &geometry,
-                    pointer(1, false, 10.0, 10.0, Some(widget))
-                )
-                .unwrap()
-                .is_empty()
-        );
+        let released = router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, false, 10.0, 10.0, Some(widget)),
+            )
+            .unwrap();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].trigger, ActionTrigger::Click);
+        // Touch-up commonly sends PointerGone before the native activation fact.
+        router
+            .route(&document, &geometry, InputEvent::PointerDeparted)
+            .unwrap();
         let activation = InputEvent::Widget(WidgetEvent {
             source: document.stamp(widget).unwrap(),
             kind: WidgetEventKind::Activate { gesture: Some(1) },
@@ -1115,8 +1153,7 @@ mod tests {
         let events = router
             .route(&document, &geometry, activation.clone())
             .unwrap();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].trigger, ActionTrigger::Click);
+        assert!(events.is_empty());
         assert_eq!(
             router.route(&document, &geometry, activation).unwrap_err(),
             EventError::InvalidGesture
@@ -1215,11 +1252,11 @@ mod tests {
                 .is_empty()
         );
         // Child starts outside the ancestor clip. Scrolling projects it under the pointer.
-        let scrolled = geometry(
+        let projected = geometry(
             &document,
             &BTreeMap::from([(key(&document, "scroll"), vec2(0.0, 50.0))]),
         );
-        let events = router.refresh_geometry(&document, &scrolled).unwrap();
+        let events = router.refresh_geometry(&document, &projected).unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].source.key, key(&document, "child"));
         assert_eq!(events[0].phase, EventPhase::Enter);
@@ -1227,7 +1264,7 @@ mod tests {
             router
                 .route(
                     &document,
-                    &scrolled,
+                    &projected,
                     InputEvent::PointerMoved(pos2(10.0, 80.0))
                 )
                 .unwrap()
@@ -1641,6 +1678,289 @@ mod tests {
             .unwrap();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].source.key, target);
+    }
+
+    #[test]
+    fn native_release_outside_never_activates_owner() {
+        let document = document(node(
+            "widget",
+            0.0,
+            0.0,
+            50.0,
+            50.0,
+            vec![ActionTrigger::Click],
+            vec![],
+        ));
+        let (mut router, geometry) = setup(&document);
+        let owner = key(&document, "widget");
+        router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, true, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        assert!(
+            router
+                .route(
+                    &document,
+                    &geometry,
+                    pointer(1, false, 200.0, 200.0, Some(owner))
+                )
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            router
+                .route(
+                    &document,
+                    &geometry,
+                    InputEvent::Widget(WidgetEvent {
+                        source: document.stamp(owner).unwrap(),
+                        kind: WidgetEventKind::Activate { gesture: Some(1) }
+                    })
+                )
+                .unwrap_err(),
+            EventError::InvalidGesture
+        );
+    }
+
+    #[test]
+    fn decorated_native_owner_routes_once_and_editor_click_closes_outside() {
+        let document = document(node(
+            "root",
+            0.0,
+            0.0,
+            200.0,
+            200.0,
+            vec![],
+            vec![
+                node(
+                    "editor",
+                    0.0,
+                    0.0,
+                    80.0,
+                    80.0,
+                    vec![ActionTrigger::Click],
+                    vec![node(
+                        "decoration",
+                        0.0,
+                        0.0,
+                        20.0,
+                        20.0,
+                        vec![ActionTrigger::Click],
+                        vec![],
+                    )],
+                ),
+                node(
+                    "popup",
+                    100.0,
+                    0.0,
+                    50.0,
+                    50.0,
+                    vec![ActionTrigger::ClickOutside],
+                    vec![],
+                ),
+            ],
+        ));
+        let (mut router, geometry) = setup(&document);
+        let owner = key(&document, "editor");
+        router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, true, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        let events = router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, false, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].source.key, owner);
+        assert_eq!(events[1].trigger, ActionTrigger::ClickOutside);
+        // Editors need not emit command activation. Outside delivery is complete now.
+        router.end_input_batch();
+        assert!(router.gestures.is_empty());
+    }
+
+    #[test]
+    fn global_escape_works_unfocused_and_from_unconsuming_editor() {
+        let document = document(node(
+            "root",
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            vec![ActionTrigger::KeyDown],
+            vec![node("editor", 0.0, 0.0, 30.0, 30.0, vec![], vec![])],
+        ));
+        let (mut router, geometry) = setup(&document);
+        let mut keyboard = KeyboardEvent {
+            key: "Escape".into(),
+            code: Some("Escape".into()),
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::default(),
+            composing: false,
+            editing_consumed: false,
+        };
+        let root = key(&document, "root");
+        let events = router
+            .route(&document, &geometry, InputEvent::Key(keyboard.clone()))
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].source.key, root);
+        router
+            .focus(&document, &geometry, Some(key(&document, "editor")), true)
+            .unwrap();
+        let events = router
+            .route(&document, &geometry, InputEvent::Key(keyboard.clone()))
+            .unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].source.key, root);
+        keyboard.editing_consumed = true;
+        assert!(
+            router
+                .route(&document, &geometry, InputEvent::Key(keyboard))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn popup_becoming_visible_during_gesture_is_not_outside_eligible() {
+        let mut document = document(node(
+            "root",
+            0.0,
+            0.0,
+            200.0,
+            200.0,
+            vec![],
+            vec![node(
+                "popup",
+                100.0,
+                0.0,
+                50.0,
+                50.0,
+                vec![ActionTrigger::ClickOutside],
+                vec![],
+            )],
+        ));
+        let mut roots = document.roots().to_vec();
+        roots[0].children[0].visibility = Some(hyperchad_transformer::models::Visibility::Hidden);
+        let hidden = geometry_roots(&document, &roots, &BTreeMap::new());
+        let mut router = EventRouter::new();
+        router.reconcile(&document).unwrap();
+        router.refresh_geometry(&document, &hidden).unwrap();
+        router
+            .route(&document, &hidden, pointer(1, true, 10.0, 10.0, None))
+            .unwrap();
+        let visible = geometry(&document, &BTreeMap::new());
+        router.refresh_geometry(&document, &visible).unwrap();
+        let events = router
+            .route(&document, &visible, pointer(1, false, 10.0, 10.0, None))
+            .unwrap();
+        assert!(
+            events
+                .iter()
+                .all(|event| event.trigger != ActionTrigger::ClickOutside)
+        );
+        // An unrelated authored descendant mutation must not suppress the same binding
+        // on the next gesture merely because its content stamp changes.
+        router
+            .route(&document, &visible, pointer(2, true, 10.0, 10.0, None))
+            .unwrap();
+        let popup = key(&document, "popup");
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        children: vec![node("new", 0.0, 0.0, 10.0, 10.0, vec![], vec![])],
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Element {
+                    source: popup,
+                    target: Selector::SelfTarget,
+                    strategy: SwapStrategy::BeforeEnd,
+                },
+            )
+            .unwrap();
+        router.reconcile(&document).unwrap();
+        let current = geometry(&document, &BTreeMap::new());
+        let events = router
+            .route(&document, &current, pointer(2, false, 10.0, 10.0, None))
+            .unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.trigger == ActionTrigger::ClickOutside)
+                .count(),
+            1
+        );
+        assert_eq!(events[0].source, document.stamp(popup).unwrap());
+    }
+
+    #[test]
+    fn departure_preserves_press_but_cancel_invalidates_it() {
+        let document = document(node(
+            "widget",
+            0.0,
+            0.0,
+            50.0,
+            50.0,
+            vec![ActionTrigger::Click, ActionTrigger::Hover],
+            vec![],
+        ));
+        let (mut router, geometry) = setup(&document);
+        let owner = key(&document, "widget");
+        router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, true, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        let departed = router
+            .route(&document, &geometry, InputEvent::PointerDeparted)
+            .unwrap();
+        assert_eq!(departed.len(), 1);
+        assert_eq!(departed[0].phase, EventPhase::Leave);
+        let events = router
+            .route(
+                &document,
+                &geometry,
+                pointer(1, false, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| event.trigger == ActionTrigger::Click)
+                .count(),
+            1
+        );
+        router
+            .route(&document, &geometry, InputEvent::PointerCancelled)
+            .unwrap();
+        assert_eq!(
+            router
+                .route(
+                    &document,
+                    &geometry,
+                    InputEvent::Widget(WidgetEvent {
+                        source: document.stamp(owner).unwrap(),
+                        kind: WidgetEventKind::Activate { gesture: Some(1) }
+                    })
+                )
+                .unwrap_err(),
+            EventError::InvalidGesture
+        );
     }
 
     #[test]

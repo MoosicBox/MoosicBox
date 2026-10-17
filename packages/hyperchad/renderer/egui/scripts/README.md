@@ -42,6 +42,20 @@ updates, or automatically blesses a baseline. This variation changes actual nati
 fixture background at unchanged scale/dimensions; it does not edit image pixels. The baseline must come from a real
 captured frame, not manufactured pixels.
 
+## Launcher contract validation
+
+```sh
+nix develop .#egui-visual-test --command python3 -B -m unittest discover \
+  -s packages/hyperchad/renderer/egui/scripts -p 'test_*.py' -v
+black --check packages/hyperchad/renderer/egui/scripts/*.py
+```
+
+These checks cover invalid arguments without side effects, repeatable semantic
+IDs/variant parsing, invalid/tiny/uniform image rejection, hash preservation and
+owned process cleanup. Generated pixels in these unit checks are **not** native
+renderer acceptance or a baseline. Native acceptance still requires inspected
+actual rendered frames and deliberate matching/mismatching comparisons.
+
 ## Production contract
 
 * `HYPERCHAD_EGUI_SCREENSHOT` is the absolute destination PNG.

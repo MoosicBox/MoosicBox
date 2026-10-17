@@ -145,12 +145,592 @@ mod egui {
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
 
+    #[cfg(feature = "assets")]
+    mod native_assets {
+        use std::{
+            io::{self, Read as _},
+            path::{Component, Path},
+            sync::Arc,
+        };
+
+        use hyperchad_renderer::{
+            Content,
+            assets::{AssetNotFoundBehavior, AssetPathTarget, StaticAssetRoute},
+        };
+        use hyperchad_router::{RouteFunc, RoutePath, RouteRequest, Router};
+        use switchy::{http::models::Method, unsync::runtime::Handle};
+
+        // Match the native image resolver's bounded-work requirement. Never read a
+        // whole arbitrary file before checking the limit (including growing files).
+        const MAX_ASSET_BYTES: usize = 16 * 1024 * 1024;
+
+        /// Register the configured asset layer before handing the router to egui.
+        ///
+        /// Capture the already-configured application routes for explicit fallthrough;
+        /// requests never publish into App's navigation channel.
+        ///
+        /// # Panics
+        /// * If the router's route locks are poisoned.
+        pub(super) fn register(
+            router: &Router,
+            assets: Vec<StaticAssetRoute>,
+            missing: AssetNotFoundBehavior,
+            runtime: Handle,
+        ) {
+            if assets.is_empty() {
+                return;
+            }
+            let fallback = router.routes.read().expect("router routes lock").clone();
+            #[cfg(feature = "static-routes")]
+            let fallback = {
+                let mut routes = fallback;
+                routes.extend(
+                    router
+                        .static_routes
+                        .read()
+                        .expect("router static routes lock")
+                        .clone(),
+                );
+                routes
+            };
+            let paths: Vec<RoutePath> = assets
+                .iter()
+                .flat_map(|asset| {
+                    let exact = RoutePath::Literal(asset.route.clone());
+                    if matches!(&asset.target, AssetPathTarget::Directory(_)) {
+                        vec![
+                            exact,
+                            RoutePath::LiteralPrefix(format!(
+                                "{}/",
+                                asset.route.trim_end_matches('/')
+                            )),
+                        ]
+                    } else {
+                        vec![exact]
+                    }
+                })
+                .collect();
+            let handler: RouteFunc = Arc::new(Box::new(move |request: RouteRequest| {
+                let assets = assets.clone();
+                let fallback = fallback.clone();
+                let runtime = runtime.clone();
+                Box::pin(async move {
+                    dispatch(&assets, &fallback, missing, &runtime, request)
+                        .await
+                        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+                })
+            }));
+            let mut routes = router.routes.write().expect("router routes lock");
+            for path in paths.into_iter().rev() {
+                routes.insert(0, (path, handler.clone()));
+            }
+        }
+
+        async fn dispatch(
+            assets: &[StaticAssetRoute],
+            fallback: &[(RoutePath, RouteFunc)],
+            missing: AssetNotFoundBehavior,
+            runtime: &Handle,
+            request: RouteRequest,
+        ) -> io::Result<Option<Content>> {
+            // Router's string conversion retains the query in `path`, whereas
+            // RouteRequest::from_path separates it. Both are valid native callers;
+            // query bytes must never become part of a filesystem path.
+            let resource_path = request
+                .path
+                .split_once('?')
+                .map_or(request.path.as_str(), |(path, _)| path);
+            let path = decoded_path(resource_path)?;
+            for asset in assets {
+                let Some(relative) = asset_suffix(asset, &path) else {
+                    continue;
+                };
+                if !matches!(request.method, Method::Get | Method::Head) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "native assets require GET or HEAD",
+                    ));
+                }
+                let target = asset.target.clone();
+                let result = match target {
+                    AssetPathTarget::FileContents(data) => {
+                        if data.len() > MAX_ASSET_BYTES {
+                            Err(too_large())
+                        } else {
+                            Ok(data.to_vec())
+                        }
+                    }
+                    target => {
+                        let relative = relative.to_owned();
+                        runtime
+                            .spawn_blocking(move || {
+                                read_target(&target, &relative, MAX_ASSET_BYTES)
+                            })
+                            .await
+                            .map_err(|_| io::Error::other("native asset read task failed"))?
+                    }
+                };
+                match result {
+                    Ok(data) => {
+                        return Ok(Some(Content::Raw {
+                            data: if request.method == Method::Head {
+                                Vec::new().into()
+                            } else {
+                                data.into()
+                            },
+                            content_type: media_type(&path).to_owned(),
+                        }));
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        match asset.not_found_behavior.unwrap_or(missing) {
+                            AssetNotFoundBehavior::Fallthrough => continue,
+                            AssetNotFoundBehavior::NotFound => {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::NotFound,
+                                    "native asset not found",
+                                ));
+                            }
+                            AssetNotFoundBehavior::InternalServerError => {
+                                return Err(io::Error::other(
+                                    "native asset missing (internal-error policy)",
+                                ));
+                            }
+                        }
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            if let Some((_, handler)) = fallback
+                .iter()
+                .find(|(route, _)| route.matches(&request.path))
+            {
+                return handler(request)
+                    .await
+                    .map_err(|_| io::Error::other("native asset fallback handler failed"));
+            }
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "native route not found",
+            ))
+        }
+
+        fn asset_suffix<'a>(asset: &StaticAssetRoute, path: &'a str) -> Option<&'a str> {
+            if !asset.route.starts_with('/') || asset.route.starts_with("//") {
+                return None;
+            }
+            match &asset.target {
+                AssetPathTarget::Directory(_) => {
+                    let prefix = asset.route.trim_end_matches('/');
+                    if path == prefix {
+                        Some("")
+                    } else {
+                        path.strip_prefix(prefix)?.strip_prefix('/')
+                    }
+                }
+                AssetPathTarget::File(_) | AssetPathTarget::FileContents(_) => {
+                    (path == asset.route).then_some("")
+                }
+            }
+        }
+
+        fn decoded_path(path: &str) -> io::Result<String> {
+            let invalid =
+                || io::Error::new(io::ErrorKind::PermissionDenied, "unsafe native asset path");
+            if !path.starts_with('/') || path.starts_with("//") || path.contains(['?', '#', '\\']) {
+                return Err(invalid());
+            }
+            let mut bytes = path.bytes();
+            let mut decoded = Vec::new();
+            while let Some(byte) = bytes.next() {
+                decoded.push(if byte == b'%' {
+                    let high = bytes
+                        .next()
+                        .and_then(|b| char::from(b).to_digit(16))
+                        .ok_or_else(invalid)?;
+                    let low = bytes
+                        .next()
+                        .and_then(|b| char::from(b).to_digit(16))
+                        .ok_or_else(invalid)?;
+                    let value = u8::try_from(high * 16 + low).map_err(|_| invalid())?;
+                    // Reject encoded separators, double escapes and Windows prefixes.
+                    if matches!(value, b'/' | b'\\' | b'%' | b':') {
+                        return Err(invalid());
+                    }
+                    value
+                } else {
+                    byte
+                });
+            }
+            let path = String::from_utf8(decoded).map_err(|_| invalid())?;
+            if path.chars().any(char::is_control)
+                || path.contains(['\\', ':'])
+                || path.split('/').any(|segment| matches!(segment, "." | ".."))
+            {
+                return Err(invalid());
+            }
+            Ok(path)
+        }
+
+        fn read_target(
+            target: &AssetPathTarget,
+            relative: &str,
+            limit: usize,
+        ) -> io::Result<Vec<u8>> {
+            let path = match target {
+                AssetPathTarget::File(path) => path.canonicalize()?,
+                AssetPathTarget::Directory(root) => {
+                    if relative.is_empty() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "native asset directory is not a file",
+                        ));
+                    }
+                    let relative = Path::new(relative);
+                    if relative
+                        .components()
+                        .any(|part| !matches!(part, Component::Normal(_)))
+                    {
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "unsafe native asset relative path",
+                        ));
+                    }
+                    let root = root.canonicalize()?;
+                    let path = root.join(relative).canonicalize()?;
+                    if !path.starts_with(&root) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "native asset escapes configured directory",
+                        ));
+                    }
+                    path
+                }
+                AssetPathTarget::FileContents(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "memory asset is not a filesystem target",
+                    ));
+                }
+            };
+            // Reject device/FIFO/directory targets before opening; these are not
+            // bounded regular-file reads. Recheck the opened handle as well.
+            if !std::fs::metadata(&path)?.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "native asset is not a regular file",
+                ));
+            }
+            let file = std::fs::File::open(path)?;
+            let metadata = file.metadata()?;
+            if !metadata.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "native asset is not a regular file",
+                ));
+            }
+            if metadata.len() > limit as u64 {
+                return Err(too_large());
+            }
+            let mut bytes = Vec::new();
+            file.take(limit.saturating_add(1) as u64)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > limit {
+                return Err(too_large());
+            }
+            Ok(bytes)
+        }
+
+        fn too_large() -> io::Error {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "native asset exceeds byte limit",
+            )
+        }
+
+        fn media_type(path: &str) -> &'static str {
+            match path
+                .rsplit('.')
+                .next()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                "svg" => "image/svg+xml",
+                "ico" => "image/x-icon",
+                "avif" => "image/avif",
+                "css" => "text/css",
+                "js" | "mjs" => "text/javascript",
+                "html" | "htm" => "text/html",
+                "txt" => "text/plain",
+                "json" => "application/json",
+                "woff" => "font/woff",
+                "woff2" => "font/woff2",
+                _ => "application/octet-stream",
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+            use std::{
+                path::PathBuf,
+                sync::atomic::{AtomicU64, Ordering},
+            };
+            use switchy::unsync::runtime::Runtime;
+
+            struct Fixture(PathBuf);
+            impl Fixture {
+                fn new() -> Self {
+                    static NEXT: AtomicU64 = AtomicU64::new(0);
+                    let path = std::env::temp_dir().join(format!(
+                        "hyperchad-native-assets-{}-{}",
+                        std::process::id(),
+                        NEXT.fetch_add(1, Ordering::Relaxed)
+                    ));
+                    std::fs::create_dir(&path).unwrap();
+                    Self(path)
+                }
+            }
+            impl Drop for Fixture {
+                fn drop(&mut self) {
+                    let _ = std::fs::remove_dir_all(&self.0);
+                }
+            }
+            fn asset(route: &str, target: AssetPathTarget) -> StaticAssetRoute {
+                StaticAssetRoute {
+                    route: route.into(),
+                    target,
+                    not_found_behavior: None,
+                }
+            }
+            fn raw(content: Option<Content>) -> Vec<u8> {
+                let Some(Content::Raw { data, .. }) = content else {
+                    panic!("expected native raw asset");
+                };
+                data.to_vec()
+            }
+            fn request(path: &str) -> RouteRequest {
+                RouteRequest::from_path(path, hyperchad_router::RequestInfo::default())
+            }
+
+            #[test]
+            fn configured_memory_file_and_directory_are_real_router_raw_routes() {
+                let fixture = Fixture::new();
+                let file = fixture.0.join("photo.png");
+                std::fs::write(&file, b"file-image").unwrap();
+                let runtime = Runtime::new();
+                let router = Router::new();
+                register(
+                    &router,
+                    vec![
+                        asset(
+                            "/custom/embedded.svg",
+                            AssetPathTarget::FileContents(b"<svg/>".to_vec().into()),
+                        ),
+                        asset("/custom/photo", AssetPathTarget::File(file)),
+                        asset(
+                            "/custom/tree",
+                            AssetPathTarget::Directory(fixture.0.clone()),
+                        ),
+                    ],
+                    AssetNotFoundBehavior::NotFound,
+                    runtime.handle(),
+                );
+                runtime.handle().block_on(async {
+                    assert_eq!(
+                        raw(router.navigate("/custom/embedded.svg").await.unwrap()),
+                        b"<svg/>"
+                    );
+                    assert_eq!(
+                        raw(router.navigate("/custom/photo").await.unwrap()),
+                        b"file-image"
+                    );
+                    let Some(Content::Raw { data, content_type }) = router
+                        .navigate("/custom/tree/photo.png?cache=1")
+                        .await
+                        .unwrap()
+                    else {
+                        panic!("raw file");
+                    };
+                    assert_eq!(data.as_ref(), b"file-image");
+                    assert_eq!(content_type, "image/png");
+                    // Query content is not a path component, regardless of which
+                    // Router request constructor the native resolver uses.
+                    assert_eq!(
+                        raw(router
+                            .navigate("/custom/tree/photo.png?next=../secret")
+                            .await
+                            .unwrap()),
+                        b"file-image"
+                    );
+                    assert_eq!(
+                        raw(router
+                            .navigate(request("/custom/tree/photo.png?cache=2"))
+                            .await
+                            .unwrap()),
+                        b"file-image"
+                    );
+                    assert!(
+                        router
+                            .navigate("/custom/tree/%2e%2e/secret?cache=1")
+                            .await
+                            .is_err()
+                    );
+                    assert!(
+                        router
+                            .navigate("/custom/treehouse/photo.png")
+                            .await
+                            .is_err()
+                    );
+                    assert!(router.navigate("/custom/photo/child").await.is_err());
+                    let mut head = request("/custom/tree/photo.png");
+                    head.method = Method::Head;
+                    assert_eq!(raw(router.navigate(head).await.unwrap()), [0_u8; 0]);
+                });
+            }
+
+            #[test]
+            fn missing_policy_override_default_and_application_fallthrough() {
+                let fixture = Fixture::new();
+                let runtime = Runtime::new();
+                let fallback = Router::new().with_route("/assets/missing.png", |_| async {
+                    Content::Raw {
+                        data: b"fallback".to_vec().into(),
+                        content_type: "text/plain".into(),
+                    }
+                });
+                let routes = fallback.routes.read().unwrap().clone();
+                runtime.handle().block_on(async {
+                    for (policy, kind) in [
+                        (AssetNotFoundBehavior::NotFound, io::ErrorKind::NotFound),
+                        (
+                            AssetNotFoundBehavior::InternalServerError,
+                            io::ErrorKind::Other,
+                        ),
+                    ] {
+                        let mut route =
+                            asset("/assets", AssetPathTarget::Directory(fixture.0.clone()));
+                        route.not_found_behavior = Some(policy);
+                        let error = dispatch(
+                            &[route],
+                            &routes,
+                            AssetNotFoundBehavior::Fallthrough,
+                            &runtime.handle(),
+                            request("/assets/missing.png"),
+                        )
+                        .await
+                        .unwrap_err();
+                        assert_eq!(error.kind(), kind);
+                    }
+                    let route = asset("/assets", AssetPathTarget::Directory(fixture.0.clone()));
+                    let content = dispatch(
+                        &[route],
+                        &routes,
+                        AssetNotFoundBehavior::Fallthrough,
+                        &runtime.handle(),
+                        request("/assets/missing.png"),
+                    )
+                    .await
+                    .unwrap();
+                    assert_eq!(raw(content), b"fallback");
+                    let registered = Router::new().with_route("/assets/missing.png", |_| async {
+                        Content::Raw {
+                            data: b"registered-fallback".to_vec().into(),
+                            content_type: "text/plain".into(),
+                        }
+                    });
+                    register(
+                        &registered,
+                        vec![asset(
+                            "/assets",
+                            AssetPathTarget::Directory(fixture.0.clone()),
+                        )],
+                        AssetNotFoundBehavior::Fallthrough,
+                        runtime.handle(),
+                    );
+                    assert_eq!(
+                        raw(registered.navigate("/assets/missing.png").await.unwrap()),
+                        b"registered-fallback"
+                    );
+                    let file = asset(
+                        "/assets/missing.png",
+                        AssetPathTarget::File(fixture.0.join("missing.png")),
+                    );
+                    assert_eq!(
+                        dispatch(
+                            &[file],
+                            &[],
+                            AssetNotFoundBehavior::NotFound,
+                            &runtime.handle(),
+                            request("/assets/missing.png")
+                        )
+                        .await
+                        .unwrap_err()
+                        .kind(),
+                        io::ErrorKind::NotFound
+                    );
+                });
+            }
+
+            #[test]
+            fn directory_traversal_symlink_escape_and_bounded_reads() {
+                let fixture = Fixture::new();
+                let root = fixture.0.join("root");
+                std::fs::create_dir(&root).unwrap();
+                std::fs::write(fixture.0.join("secret"), b"private").unwrap();
+                std::fs::write(root.join("large"), b"12345").unwrap();
+                for path in [
+                    "/assets/../secret",
+                    "/assets/%2e%2e/secret",
+                    "/assets/%2fetc",
+                    "/assets/%252e%252e/secret",
+                    "/assets/..\\secret",
+                    "/assets/%00",
+                    "//host/assets",
+                    "/assets/C:secret",
+                ] {
+                    assert!(decoded_path(path).is_err(), "{path}");
+                }
+                assert_eq!(
+                    decoded_path("/assets/a%20b.png").unwrap(),
+                    "/assets/a b.png"
+                );
+                let directory = AssetPathTarget::Directory(root.clone());
+                assert_eq!(
+                    read_target(&directory, "large", 4).unwrap_err().kind(),
+                    io::ErrorKind::InvalidData
+                );
+                assert_eq!(
+                    read_target(&directory, "../secret", 20).unwrap_err().kind(),
+                    io::ErrorKind::PermissionDenied
+                );
+                assert_eq!(
+                    read_target(&directory, "", 20).unwrap_err().kind(),
+                    io::ErrorKind::NotFound
+                );
+                #[cfg(unix)]
+                {
+                    std::os::unix::fs::symlink(fixture.0.join("secret"), root.join("escape"))
+                        .unwrap();
+                    assert_eq!(
+                        read_target(&directory, "escape", 20).unwrap_err().kind(),
+                        io::ErrorKind::PermissionDenied
+                    );
+                }
+            }
+        }
+    }
+
     /// Calculator for egui font metrics and layout calculations.
     #[derive(Clone)]
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
     /// Type alias for the egui renderer with custom calculator.
-    pub type EguiRenderer = hyperchad_renderer_egui::EguiRenderer<EguiCalculator>;
+    pub type EguiRenderer = hyperchad_renderer_egui::backend::EguiRenderer<EguiCalculator>;
 
     impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
         /// Calculates layout for a container using egui font metrics.
@@ -233,6 +813,40 @@ mod egui {
         pub fn build_egui(self, renderer: EguiRenderer) -> Result<App<EguiRenderer>, BuilderError> {
             log::debug!("build_egui");
 
+            let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
+            let responses = renderer
+                .take_response_receiver()
+                .map_err(BuilderError::NativeResponseConsumer)?;
+            self.runtime_handle().spawn({
+                let router = router.clone();
+                async move {
+                    while let Ok(response) = responses.recv_async().await {
+                        if let Err(error) =
+                            crate::apply_native_response_metadata(&router, &response).await
+                        {
+                            log::error!("Failed to apply native response metadata: {error}");
+                        }
+                    }
+                }
+            });
+            self.runtime_handle().spawn({
+                let renderer = renderer.clone();
+                async move {
+                    while let Some(path) = renderer.wait_for_navigation().await {
+                        if let Err(error) = router
+                            .navigate_send((
+                                &path,
+                                hyperchad_router::RequestInfo {
+                                    client: DEFAULT_CLIENT_INFO.clone(),
+                                },
+                            ))
+                            .await
+                        {
+                            log::error!("Failed to navigate: {error:?}");
+                        }
+                    }
+                }
+            });
             self.build(renderer)
         }
 
@@ -247,8 +861,15 @@ mod egui {
             let action_tx = self.listen_actions(self.action_handlers.clone());
             let resize_tx = self.listen_resize(self.resize_listeners.clone());
             let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
+            #[cfg(feature = "assets")]
+            native_assets::register(
+                &router,
+                self.static_asset_routes.clone(),
+                self.asset_not_found_behavior,
+                self.runtime_handle(),
+            );
             let calculator = EguiCalculator(None);
-            let renderer = hyperchad_renderer_egui::EguiRenderer::new(
+            let renderer = hyperchad_renderer_egui::backend::EguiRenderer::new(
                 router.clone(),
                 #[cfg(feature = "logic")]
                 action_tx,
@@ -257,26 +878,7 @@ mod egui {
                 calculator,
             );
 
-            self.runtime_handle().spawn({
-                let renderer = renderer.clone();
-                async move {
-                    while let Some(path) = renderer.wait_for_navigation().await {
-                        if let Err(e) = router
-                            .navigate_send((
-                                &path,
-                                hyperchad_router::RequestInfo {
-                                    client: DEFAULT_CLIENT_INFO.clone(),
-                                },
-                            ))
-                            .await
-                        {
-                            log::error!("Failed to navigate: {e:?}");
-                        }
-                    }
-                }
-            });
-
-            self.build(renderer)
+            self.build_egui(renderer)
         }
     }
 }

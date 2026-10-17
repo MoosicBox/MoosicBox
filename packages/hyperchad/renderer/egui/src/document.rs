@@ -50,6 +50,8 @@ pub enum ViewOrigin {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Diagnostic {
     DuplicateStringId(String),
+    /// Repeated nonzero internal IDs. Zero is ordinary unassigned construction and
+    /// is omitted from structural warnings, not removed from the numeric index.
     DuplicateNumericId(usize),
     MissingTarget,
 }
@@ -751,7 +753,7 @@ impl Document {
             .chain(
                 self.numeric_ids
                     .iter()
-                    .filter(|(_, keys)| keys.len() > 1)
+                    .filter(|(id, keys)| **id != 0 && keys.len() > 1)
                     .map(|(id, _)| Diagnostic::DuplicateNumericId(*id)),
             )
             .collect()
@@ -939,7 +941,7 @@ mod tests {
             SwapStrategy::Delete,
             vec![],
         );
-        assert!(document.roots().is_empty());
+        assert_eq!(document.roots(), []);
     }
 
     #[test]
@@ -1091,9 +1093,9 @@ mod tests {
         );
         assert!(document.is_current(before));
         assert!(!summary.layout_dirty);
-        assert!(summary.inserted.is_empty());
-        assert!(summary.removed.is_empty());
-        assert!(summary.changed.is_empty());
+        assert_eq!(summary.inserted, []);
+        assert_eq!(summary.removed, []);
+        assert_eq!(summary.changed, []);
     }
 
     #[test]
@@ -1111,6 +1113,73 @@ mod tests {
         assert_ne!(key(&document, "a"), source);
         assert!(!document.is_current(stamp));
         assert!(summary.layout_dirty); // authored content equal, but widget identity changed
+    }
+
+    #[test]
+    fn default_numeric_ids_keep_distinct_keys_and_string_self_selection_without_warning() {
+        let mut document = Document::new();
+        let summary = document
+            .apply_view(
+                page(Container {
+                    str_id: Some("root".into()),
+                    children: vec![
+                        Container {
+                            str_id: Some("a".into()),
+                            ..Container::default()
+                        },
+                        Container {
+                            str_id: Some("b".into()),
+                            ..Container::default()
+                        },
+                    ],
+                    ..Container::default()
+                }),
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        assert_eq!(summary.diagnostics, []);
+        let root = key(&document, "root");
+        let a = key(&document, "a");
+        let b = key(&document, "b");
+        assert_ne!(root, a);
+        assert_ne!(a, b);
+        assert_ne!(root, b);
+        assert_eq!(document.numeric_matches(0), [root, a, b]);
+        for identity in [root, a, b] {
+            assert_eq!(document.get(identity).unwrap().id, 0);
+            assert_eq!(
+                document.select(&Selector::SelfTarget, Some(identity)),
+                [identity]
+            );
+        }
+        assert_eq!(document.select(&Selector::Id("b".into()), Some(a)), [b]);
+    }
+
+    #[test]
+    fn nonzero_numeric_and_string_duplicate_warnings_survive_default_zero_policy() {
+        let mut document = Document::new();
+        let summary = document
+            .apply_view(
+                page(Container {
+                    children: vec![
+                        Container::default(),
+                        node(7, Some("duplicate"), vec![]),
+                        node(7, Some("duplicate"), vec![]),
+                    ],
+                    ..Container::default()
+                }),
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        assert_eq!(
+            summary.diagnostics,
+            [
+                Diagnostic::DuplicateStringId("duplicate".into()),
+                Diagnostic::DuplicateNumericId(7),
+            ]
+        );
+        assert_eq!(document.numeric_matches(0).len(), 2);
+        assert_eq!(document.numeric_matches(7).len(), 2);
     }
 
     #[test]
@@ -1182,10 +1251,9 @@ mod tests {
             SwapStrategy::Delete,
             vec![],
         );
-        assert!(
-            document
-                .select(&Selector::Id("root".into()), Some(detached))
-                .is_empty()
+        assert_eq!(
+            document.select(&Selector::Id("root".into()), Some(detached)),
+            []
         );
     }
 
@@ -1493,15 +1561,13 @@ mod tests {
 
     #[test]
     fn concurrent_namespace_allocation_never_aliases_equal_documents() {
-        let workers = (0..4)
-            .map(|_| {
-                std::thread::spawn(|| {
-                    (0..32)
-                        .map(|_| fixture().root_keys()[0])
-                        .collect::<Vec<_>>()
-                })
+        let workers: [_; 4] = std::array::from_fn(|_| {
+            std::thread::spawn(|| {
+                (0..32)
+                    .map(|_| fixture().root_keys()[0])
+                    .collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>();
+        });
         let keys = workers
             .into_iter()
             .flat_map(|worker| worker.join().unwrap())

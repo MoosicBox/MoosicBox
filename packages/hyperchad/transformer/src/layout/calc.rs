@@ -154,7 +154,9 @@ macro_rules! calc_size_on_axis {
 
         log::trace!("{LABEL}:\n{}", $container);
 
-        let root_id = $container.id;
+        // Traversal does not move containers; compare addresses, never authored
+        // IDs (which may be zero or duplicated). No raw pointer is dereferenced.
+        let root_ptr = std::ptr::from_ref::<Container>($container);
         let defaults = $self.defaults;
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
@@ -164,7 +166,7 @@ macro_rules! calc_size_on_axis {
             Container::default(),
             $container,
             |parent, mut context| {
-                if parent.id == root_id {
+                if std::ptr::eq(std::ptr::from_ref(parent), root_ptr) {
                     context.calculated_font_size = Some(defaults.font_size);
                     context.calculated_margin_top = Some(defaults.font_margin_top);
                     context.calculated_margin_bottom = Some(defaults.font_margin_bottom);
@@ -391,7 +393,7 @@ macro_rules! flex_on_axis {
 
         log::trace!("{LABEL}:\n{}", $container);
 
-        let root_id = $container.id;
+        let root_ptr = std::ptr::from_ref::<Container>($container);
         let view_width = $container.calculated_width.expect("Missing view_width");
         let view_height = $container.calculated_height.expect("Missing view_height");
         let mut rect = crate::layout::Rect::default();
@@ -402,7 +404,7 @@ macro_rules! flex_on_axis {
             &mut rect,
             $container,
             |parent, relative_container| {
-                if parent.id == root_id {
+                if std::ptr::eq(std::ptr::from_ref(parent), root_ptr) {
                     relative_container.x = 0.0;
                     relative_container.y = 0.0;
                     relative_container.width = view_width;
@@ -800,7 +802,7 @@ macro_rules! flex_on_axis {
                 }
 
                 for child in parent.fixed_positioned_elements_mut() {
-                    let mut remaining_container_size = *relative_size;
+                    let mut remaining_container_size = paste!([<view_ $size>]);
 
                     if let Some(size) = paste!(child.[<margin_ $unit>]()) {
                         log::trace!(
@@ -1308,7 +1310,7 @@ mod pass_positioning {
         ) -> bool {
             log::trace!("position_elements:\n{container}");
 
-            let root_id = container.id;
+            let root_ptr = std::ptr::from_ref::<Container>(container);
             let root_text_align = container.text_align;
             let view_width = container.calculated_width.expect("Missing view_width");
             let view_height = container.calculated_height.expect("Missing view_height");
@@ -1321,7 +1323,7 @@ mod pass_positioning {
                 context,
                 container,
                 |parent, relative_container| {
-                    if parent.id == root_id {
+                    if std::ptr::eq(std::ptr::from_ref(parent), root_ptr) {
                         relative_container.calculated_x = Some(0.0);
                         relative_container.calculated_y = Some(0.0);
                         relative_container.calculated_width = Some(view_width);
@@ -1343,7 +1345,7 @@ mod pass_positioning {
                     }
                 },
                 |parent, relative_container| {
-                    let is_top_level = parent.id == root_id;
+                    let is_top_level = std::ptr::eq(std::ptr::from_ref(parent), root_ptr);
                     let direction = parent.direction;
                     let justify_content = parent.justify_content.unwrap_or_default();
                     let align_items = parent.align_items.unwrap_or_default();
@@ -1697,7 +1699,9 @@ mod pass_positioning {
                     let height = *height;
 
                     macro_rules! position_absolute {
-                        ($iter:expr) => {
+                        ($iter:expr, $width:expr, $height:expr) => {
+                            let width = $width;
+                            let height = $height;
                             for child in ($iter) {
                                 let mut x = 0.0;
                                 let mut y = 0.0;
@@ -1729,8 +1733,8 @@ mod pass_positioning {
                         };
                     }
 
-                    position_absolute!(parent.absolute_positioned_elements_mut());
-                    position_absolute!(parent.fixed_positioned_elements_mut());
+                    position_absolute!(parent.absolute_positioned_elements_mut(), width, height);
+                    position_absolute!(parent.fixed_positioned_elements_mut(), view_width, view_height);
                 },
             );
 
@@ -10933,6 +10937,127 @@ mod test {
 
     mod position_fixed {
         use super::*;
+
+        fn nested_positioned_tree() -> Container {
+            let positioned = |position| Container {
+                position: Some(position),
+                width: Some(Number::IntegerPercent(50)),
+                height: Some(Number::IntegerPercent(50)),
+                right: Some(Number::IntegerPercent(10)),
+                bottom: Some(Number::IntegerPercent(20)),
+                ..Container::default()
+            };
+            Container {
+                calculated_width: Some(400.0),
+                calculated_height: Some(200.0),
+                children: vec![Container {
+                    position: Some(Position::Relative),
+                    width: Some(Number::Integer(120)),
+                    height: Some(Number::Integer(80)),
+                    children: vec![Container {
+                        position: Some(Position::Relative),
+                        width: Some(Number::Integer(100)),
+                        height: Some(Number::Integer(60)),
+                        font_size: Some(Number::Integer(22)),
+                        children: vec![positioned(Position::Fixed), positioned(Position::Absolute)],
+                        ..Container::default()
+                    }],
+                    ..Container::default()
+                }],
+                ..Container::default()
+            }
+        }
+
+        #[test_log::test]
+        fn nested_fixed_percentages_use_viewport_absolute_uses_relative_container() {
+            let mut tree = nested_positioned_tree();
+            CALCULATOR.calc(&mut tree);
+            let children = &tree.children[0].children[0].children;
+            let fixed = &children[0];
+            let absolute = &children[1];
+            pretty_assertions::assert_eq!(fixed.calculated_width, Some(200.0));
+            pretty_assertions::assert_eq!(fixed.calculated_height, Some(100.0));
+            pretty_assertions::assert_eq!(fixed.calculated_x, Some(160.0));
+            pretty_assertions::assert_eq!(fixed.calculated_y, Some(60.0));
+            pretty_assertions::assert_eq!(absolute.calculated_width, Some(50.0));
+            pretty_assertions::assert_eq!(absolute.calculated_height, Some(30.0));
+            pretty_assertions::assert_eq!(absolute.calculated_x, Some(40.0));
+            pretty_assertions::assert_eq!(absolute.calculated_y, Some(18.0));
+        }
+
+        fn assign_ids(tree: &mut Container, next: &mut usize, repeated: Option<usize>) {
+            tree.id = repeated.unwrap_or(*next);
+            *next += 1;
+            for child in &mut tree.children {
+                assign_ids(child, next, repeated);
+            }
+        }
+
+        fn all_ids(tree: &Container, ids: &mut Vec<usize>) {
+            ids.push(tree.id);
+            for child in &tree.children {
+                all_ids(child, ids);
+            }
+        }
+
+        #[test_log::test]
+        fn duplicate_and_zero_authored_ids_do_not_change_layout() {
+            let mut unique = nested_positioned_tree();
+            // A text descendant exercises inherited font context, not only
+            // containing-block dimensions. No IDs are rewritten by Calculator.
+            unique.children[0].children[0].children[1]
+                .children
+                .push(Container {
+                    element: Element::Text {
+                        value: "ab".to_owned(),
+                    },
+                    ..Container::default()
+                });
+            let mut next = 10;
+            assign_ids(&mut unique, &mut next, None);
+            for repeated_id in [0, 10] {
+                let mut repeated = unique.clone();
+                assign_ids(&mut repeated, &mut 0, Some(repeated_id));
+                let mut before = Vec::new();
+                all_ids(&repeated, &mut before);
+                let mut expected = unique.clone();
+                let expected_changed = CALCULATOR.calc(&mut expected);
+                let actual_changed = CALCULATOR.calc(&mut repeated);
+                pretty_assertions::assert_eq!(actual_changed, expected_changed);
+                let mut after = Vec::new();
+                all_ids(&repeated, &mut after);
+                pretty_assertions::assert_eq!(after, before);
+                // Compare all serializable calculated outputs after normalizing
+                // identities on test-only copies; authored IDs remain intact.
+                assign_ids(&mut expected, &mut 0, Some(repeated_id));
+                compare_containers(&repeated, &expected);
+            }
+        }
+
+        #[test_log::test]
+        fn sticky_flow_position_is_not_overwritten_by_fixed_positioning() {
+            let mut tree = Container {
+                calculated_width: Some(200.0),
+                calculated_height: Some(100.0),
+                children: vec![
+                    Container {
+                        width: Some(Number::Integer(20)),
+                        height: Some(Number::Integer(25)),
+                        ..Container::default()
+                    },
+                    Container {
+                        position: Some(Position::Sticky),
+                        width: Some(Number::Integer(20)),
+                        height: Some(Number::Integer(15)),
+                        ..Container::default()
+                    },
+                ],
+                ..Container::default()
+            };
+            CALCULATOR.calc(&mut tree);
+            pretty_assertions::assert_eq!(tree.children[1].calculated_y, Some(25.0));
+            pretty_assertions::assert_eq!(tree.children[1].calculated_height, Some(15.0));
+        }
 
         #[test_log::test]
         fn does_size_dynamic_width_correctly() {

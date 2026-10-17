@@ -74,13 +74,14 @@ fn identifier(value: &str) -> bool {
 
 impl Finder {
     fn selector(&self, selector: &str) -> Result<Vec<usize>, String> {
-        let (prefix, value) = if let Some(value) = selector.strip_prefix('#') {
-            ('#', value)
-        } else if let Some(value) = selector.strip_prefix('.') {
-            ('.', value)
-        } else {
-            ('#', selector)
-        };
+        let (prefix, value) = selector.strip_prefix('#').map_or_else(
+            || {
+                selector
+                    .strip_prefix('.')
+                    .map_or(('#', selector), |value| ('.', value))
+            },
+            |value| ('#', value),
+        );
         if !identifier(value) {
             return Err(format!("unsupported action selector: {selector:?}"));
         }
@@ -285,6 +286,7 @@ impl ActionContext for Host<'_> {
 }
 
 /// UI-thread-owned persistent evaluator. Call `dispatch` in native event order.
+///
 /// Drain host effects after dispatch/tick, project styles before layout, refresh
 /// geometry afterwards, and feed G's reconcile-generated Leaves even when stale.
 pub struct ActionRuntime {
@@ -795,8 +797,8 @@ mod tests {
         assert_eq!(effects.select_input.len(), 1);
         assert_eq!(effects.navigation, ["/next"]);
         assert_eq!(effects.custom.len(), 1);
-        assert!(effects.diagnostics.is_empty());
-        assert!(runtime.take_effects().navigation.is_empty());
+        assert_eq!(effects.diagnostics, [] as [String; 0]);
+        assert_eq!(runtime.take_effects().navigation, [] as [String; 0]);
     }
 
     #[test]
@@ -812,7 +814,7 @@ mod tests {
         let mut runtime = ActionRuntime::new();
         let input = event(&document, 0, ActionTrigger::Click, EventPhase::Fire);
         assert!(runtime.dispatch(&document, &input, 10).is_err());
-        assert!(!runtime.take_effects().diagnostics.is_empty());
+        assert_ne!(runtime.take_effects().diagnostics, [] as [String; 0]);
         assert!(runtime.tick(9).is_err());
     }
 
@@ -841,6 +843,31 @@ mod tests {
         );
     }
     #[test]
+    fn requested_event_conversion_preserves_scalar_and_nested_json_semantics() {
+        assert_eq!(event_text(&EventValue::Null).unwrap(), None);
+        assert_eq!(
+            event_text(&EventValue::String("not JSON: \"value\"".into())).unwrap(),
+            Some("not JSON: \"value\"".into())
+        );
+        assert_eq!(
+            event_text(&EventValue::Bool(true)).unwrap(),
+            Some("true".into())
+        );
+        let payload = EventValue::Object(BTreeMap::from([(
+            "selected".into(),
+            EventValue::Array(vec![
+                EventValue::Null,
+                EventValue::String("a\t\u{0001}".into()),
+            ]),
+        )]));
+        assert_eq!(
+            event_text(&payload).unwrap(),
+            Some(r#"{"selected":[null,"a\t\u0001"]}"#.into())
+        );
+        assert!(event_text(&EventValue::Number(f64::INFINITY)).is_err());
+    }
+
+    #[test]
     fn multi_select_change_plain_actions_ignore_structured_payload() {
         let document = fixture(vec![binding(
             ActionType::Multi(vec![
@@ -866,7 +893,7 @@ mod tests {
         );
         let effects = runtime.take_effects();
         assert_eq!(effects.logs, [(LogLevel::Info, "selection changed".into())]);
-        assert!(effects.diagnostics.is_empty());
+        assert_eq!(effects.diagnostics, [] as [String; 0]);
     }
 
     #[test]
@@ -944,7 +971,7 @@ mod tests {
         input.value = EventValue::Array(vec![EventValue::Number(f64::NAN)]);
         assert!(runtime.dispatch(&document, &input, 2).is_err());
         let effects = runtime.take_effects();
-        assert!(effects.custom.is_empty());
+        assert_eq!(effects.custom, [] as [(String, Option<Value>); 0]);
         assert!(
             effects
                 .diagnostics

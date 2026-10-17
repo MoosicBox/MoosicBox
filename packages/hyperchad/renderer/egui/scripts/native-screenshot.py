@@ -236,13 +236,13 @@ def main():
                 options.baseline.resolve(strict=True)
             )
             env["HYPERCHAD_FEEDBACK_ARTIFACTS"] = str(artifacts / "comparison")
+    with executable.open("rb") as executable_file:
+        executable_hash = hashlib.file_digest(executable_file, "sha256").hexdigest()
     metadata = {
         "status": "starting",
         "kind": options.kind,
         "executable": str(executable),
-        "executable_sha256": hashlib.file_digest(
-            executable.open("rb"), "sha256"
-        ).hexdigest(),
+        "executable_sha256": executable_hash,
         "display": display,
         "protocol": "x11",
         "software_graphics": True,

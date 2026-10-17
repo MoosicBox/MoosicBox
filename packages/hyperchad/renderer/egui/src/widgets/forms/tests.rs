@@ -263,7 +263,7 @@ fn multi_select_keeps_empty_and_duplicate_values_and_omits_disabled_options() {
         node(
             3,
             Element::Option {
-                value: Some("".into()),
+                value: Some(String::new()),
                 disabled: None,
             },
             vec![],
@@ -431,7 +431,7 @@ fn native_cursor_selection_and_focus_survive_unrelated_reconcile() {
     );
     adapter.reconcile(&document, &[]).unwrap();
     let _ = paint(&context, &mut adapter, &document, key);
-    assert_eq!(context.memory(|memory| memory.focused()), Some(id));
+    assert_eq!(context.memory(egui::Memory::focused), Some(id));
     assert_eq!(
         egui::text_edit::TextEditState::load(&context, id)
             .unwrap()
@@ -441,7 +441,7 @@ fn native_cursor_selection_and_focus_survive_unrelated_reconcile() {
     );
     adapter.reset_control(document.stamp(key).unwrap()).unwrap();
     let _ = paint(&context, &mut adapter, &document, key);
-    assert_eq!(context.memory(|memory| memory.focused()), Some(id));
+    assert_eq!(context.memory(egui::Memory::focused), Some(id));
     assert_ne!(
         egui::text_edit::TextEditState::load(&context, id)
             .unwrap()
@@ -521,7 +521,7 @@ fn trait_changes_forward_lossless_selection_and_file_bytes_once() {
         EventValue::Array(vec![EventValue::Number(0.0), EventValue::Number(255.0)])
     );
     assert_eq!(file["mediaType"], EventValue::Null);
-    assert!(WidgetAdapter::take_changes(&mut adapter).is_empty());
+    assert_eq!(WidgetAdapter::take_changes(&mut adapter), []);
     assert!(adapter.take_changes().is_empty());
 }
 

@@ -49,7 +49,7 @@ fn normalize_radii(mut radii: [f32; 4], width: f32, height: f32) -> [f32; 4] {
 fn arc(center: Pos2, radius: f32, start: f32, end: f32) -> Vec<Pos2> {
     (0_u16..=12)
         .map(|step| {
-            let angle = start + (end - start) * (f32::from(step) / 12.0);
+            let angle = (end - start).mul_add(f32::from(step) / 12.0, start);
             center + egui::vec2(angle.cos(), angle.sin()) * radius
         })
         .collect()

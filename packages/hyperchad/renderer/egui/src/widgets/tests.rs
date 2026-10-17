@@ -367,7 +367,7 @@ fn production_html_raw_labels_emit_visible_white_glyph_meshes() {
         .iter()
         .filter_map(|primitive| match &primitive.primitive {
             egui::epaint::Primitive::Mesh(mesh) => Some((primitive.clip_rect, mesh)),
-            _ => None,
+            egui::epaint::Primitive::Callback(_) => None,
         })
         .flat_map(|(clip, mesh)| {
             mesh.vertices.iter().filter(move |vertex| {

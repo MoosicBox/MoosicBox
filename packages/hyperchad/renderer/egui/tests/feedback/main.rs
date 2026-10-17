@@ -60,7 +60,7 @@ fn alternate_authored_background_changes_visible_tessellated_color() {
                 continue;
             }
             if let Primitive::Mesh(mesh) = primitive.primitive {
-                for indices in mesh.indices.chunks_exact(3) {
+                for indices in mesh.indices.as_chunks::<3>().0 {
                     let vertices = [indices[0], indices[1], indices[2]]
                         .map(|index| mesh.vertices[index as usize]);
                     let triangle =
@@ -141,6 +141,22 @@ fn production_html_labels_emit_visible_nontransparent_text_meshes() {
 #[test]
 fn production_interaction_geometry_actions_values_and_navigation() {
     let mut driver = Driver::new(fixture::view());
+    let (sent, received) = std::sync::mpsc::channel();
+    let router = hyperchad_router::Router::new().with_route(
+        fixture::NEXT_ROUTE,
+        move |request: hyperchad_router::RouteRequest| {
+            let sent = sent.clone();
+            async move {
+                sent.send(request.path.clone()).expect("test receiver live");
+                hyperchad_renderer::View::default()
+            }
+        },
+    );
+    driver.app = hyperchad_renderer_egui::feedback::FeedbackApp::new(
+        fixture::view(),
+        driver::FixtureCalc::default(),
+    )
+    .with_router(router, "/".to_owned());
     driver.settle();
     let geometry = driver.app.geometry();
     assert!(geometry[fixture::BUTTON_ID].top() > geometry[fixture::INPUT_ID].bottom());
@@ -221,9 +237,36 @@ fn production_interaction_geometry_actions_values_and_navigation() {
     );
     driver.click(fixture::LINK_ID);
     assert_eq!(
-        driver.app.drain_navigation(),
-        vec![fixture::NEXT_ROUTE.to_owned()]
+        received
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("real router reached without sleeps"),
+        fixture::NEXT_ROUTE
     );
+    assert!(
+        driver.app.drain_navigation().is_empty(),
+        "local navigation must not bypass R tickets"
+    );
+}
+
+#[test]
+fn fixture_has_unique_numeric_identity_and_zero_diagnostics() {
+    fn collect(
+        node: &hyperchad_transformer::Container,
+        ids: &mut std::collections::BTreeSet<usize>,
+    ) {
+        assert!(
+            ids.insert(node.id),
+            "duplicate fixture numeric ID {}",
+            node.id
+        );
+        for child in &node.children {
+            collect(child, ids);
+        }
+    }
+    collect(&fixture::view(), &mut std::collections::BTreeSet::new());
+    let mut driver = Driver::new(fixture::view());
+    driver.settle();
+    assert!(driver.app.take_diagnostics().is_empty());
 }
 
 #[test]

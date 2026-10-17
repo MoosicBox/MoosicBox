@@ -51,70 +51,19 @@ pub(super) fn paint_text(
     if !size.is_finite() || size <= 0.0 {
         return Err("native text requires a finite positive calculated font size".to_owned());
     }
-    let available = painter.ctx().fonts(|fonts| fonts.families());
-    let mut family = FontFamily::Proportional;
-    if let Some(families) = &style.font_family {
-        for name in families {
-            let candidate = if name.eq_ignore_ascii_case("monospace") {
-                FontFamily::Monospace
-            } else if name.eq_ignore_ascii_case("sans-serif") {
-                FontFamily::Proportional
-            } else {
-                FontFamily::Name(name.clone().into())
-            };
-            if available.contains(&candidate) {
-                family = candidate;
-                break;
-            }
-        }
-    }
-    if let Some(weight) = style.font_weight {
-        use hyperchad_transformer::models::FontWeight;
-        if !matches!(weight, FontWeight::Normal | FontWeight::Weight400) {
-            let base = match &family {
-                FontFamily::Name(name) => name.as_ref(),
-                FontFamily::Monospace => "monospace",
-                FontFamily::Proportional => "sans-serif",
-            };
-            let weighted = [format!("{base}-{weight}"), weight.to_string()]
-                .into_iter()
-                .map(|name| FontFamily::Name(name.into()))
-                .find(|candidate| available.contains(candidate));
-            family = weighted.ok_or_else(|| {
-                format!("native text font weight {weight} requires a registered font family")
-            })?;
-        }
-    }
+    let family = font_family(painter, style)?;
     let format = TextFormat {
         font_id: FontId::new(size, family),
         color: foreground,
         ..TextFormat::default()
     };
-    let mut decorations = Vec::new();
-    if let Some(decoration) = &style.text_decoration {
-        let decoration_style = decoration.style.unwrap_or(TextDecorationStyle::Solid);
-        let thickness = decoration.thickness.as_ref().map_or(1.0, |value| {
-            value.calc(size / scale, rect.width() / scale, rect.height() / scale)
-        }) * scale;
-        if !thickness.is_finite() {
-            return Err("native text decoration requires finite thickness".to_owned());
-        }
-        let stroke = Stroke::new(
-            thickness.max(0.0),
-            decoration.color.map_or(foreground, color),
-        );
-        for line in &decoration.line {
-            match line {
-                TextDecorationLine::Underline
-                | TextDecorationLine::LineThrough
-                | TextDecorationLine::Overline => {
-                    decorations.push((*line, decoration_style, stroke))
-                }
-                TextDecorationLine::Inherit | TextDecorationLine::None => {}
-            }
-        }
-    }
-    let mut job = LayoutJob::default();
+    let decorations = text_decorations(style, size, rect, scale, foreground)?;
+    // Match EguiFontMetrics: logical row/galley bounds are not GUI-rounded.
+    // This leaves native glyph pixel snapping enabled at fractional DPI.
+    let mut job = LayoutJob {
+        round_output_to_gui: false,
+        ..LayoutJob::default()
+    };
     let text = normalize_whitespace(value, style.white_space);
     job.append(&text, 0.0, format);
     job.halign = match style.text_align {
@@ -167,6 +116,84 @@ pub(super) fn paint_text(
     Ok(())
 }
 
+fn font_family(painter: &egui::Painter, style: &TextStyle) -> Result<FontFamily, String> {
+    #[expect(
+        clippy::redundant_closure_for_method_calls,
+        reason = "FontsView::families method item is not lifetime-general enough for Context::fonts; b12-tests confirms FnOnce failure"
+    )]
+    let available = painter.ctx().fonts(|fonts| fonts.families());
+    let mut family = FontFamily::Proportional;
+    if let Some(families) = &style.font_family {
+        for name in families {
+            let candidate = if name.eq_ignore_ascii_case("monospace") {
+                FontFamily::Monospace
+            } else if name.eq_ignore_ascii_case("sans-serif") {
+                FontFamily::Proportional
+            } else {
+                FontFamily::Name(name.clone().into())
+            };
+            if available.contains(&candidate) {
+                family = candidate;
+                break;
+            }
+        }
+    }
+    if let Some(weight) = style.font_weight {
+        use hyperchad_transformer::models::FontWeight;
+        if !matches!(weight, FontWeight::Normal | FontWeight::Weight400) {
+            let base = match &family {
+                FontFamily::Name(name) => name.as_ref(),
+                FontFamily::Monospace => "monospace",
+                FontFamily::Proportional => "sans-serif",
+            };
+            let weighted = [format!("{base}-{weight}"), weight.to_string()]
+                .into_iter()
+                .map(|name| FontFamily::Name(name.into()))
+                .find(|candidate| available.contains(candidate));
+            family = weighted.ok_or_else(|| {
+                format!("native text font weight {weight} requires a registered font family")
+            })?;
+        }
+    }
+    Ok(family)
+}
+
+type Decoration = (TextDecorationLine, TextDecorationStyle, Stroke);
+
+fn text_decorations(
+    style: &TextStyle,
+    size: f32,
+    rect: egui::Rect,
+    scale: f32,
+    foreground: Color32,
+) -> Result<Vec<Decoration>, String> {
+    let mut decorations = Vec::new();
+    if let Some(decoration) = &style.text_decoration {
+        let decoration_style = decoration.style.unwrap_or(TextDecorationStyle::Solid);
+        let thickness = decoration.thickness.as_ref().map_or(1.0, |value| {
+            value.calc(size / scale, rect.width() / scale, rect.height() / scale)
+        }) * scale;
+        if !thickness.is_finite() {
+            return Err("native text decoration requires finite thickness".to_owned());
+        }
+        let stroke = Stroke::new(
+            thickness.max(0.0),
+            decoration.color.map_or(foreground, color),
+        );
+        for line in &decoration.line {
+            match line {
+                TextDecorationLine::Underline
+                | TextDecorationLine::LineThrough
+                | TextDecorationLine::Overline => {
+                    decorations.push((*line, decoration_style, stroke));
+                }
+                TextDecorationLine::Inherit | TextDecorationLine::None => {}
+            }
+        }
+    }
+    Ok(decorations)
+}
+
 fn decoration_line(
     painter: &egui::Painter,
     left: f32,
@@ -194,17 +221,19 @@ fn decoration_line(
             } else {
                 stroke.width * 3.0
             };
-            let stride = (length + stroke.width * 2.0)
+            let stride = stroke
+                .width
+                .mul_add(2.0, length)
                 .max(0.5)
                 .max((right - left) / 4095.0);
             for index in 0_u16..4096 {
-                let x = left + f32::from(index) * stride;
+                let x = f32::from(index).mul_add(stride, left);
                 if x >= right {
                     break;
                 }
                 if style == TextDecorationStyle::Dotted {
                     painter.circle_filled(
-                        point(x + stroke.width * 0.5, y),
+                        point(stroke.width.mul_add(0.5, x), y),
                         stroke.width * 0.5,
                         stroke.color,
                     );
@@ -217,15 +246,15 @@ fn decoration_line(
             let step = stroke.width.max(1.0).max((right - left) / 4095.0);
             let mut points = Vec::new();
             for index in 0_u16..4096 {
-                let x = left + f32::from(index) * step;
+                let x = f32::from(index).mul_add(step, left);
                 if x >= right {
                     break;
                 }
-                points.push(point(x, y + ((x - left) / (step * 2.0)).sin() * step));
+                points.push(point(x, ((x - left) / (step * 2.0)).sin().mul_add(step, y)));
             }
             points.push(point(
                 right,
-                y + ((right - left) / (step * 2.0)).sin() * step,
+                ((right - left) / (step * 2.0)).sin().mul_add(step, y),
             ));
             painter.add(egui::Shape::line(points, stroke));
         }
@@ -256,6 +285,67 @@ fn normalize_whitespace(value: &str, white_space: Option<WhiteSpace>) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fractional_dpi_width_measurement_matches_actual_painted_galley() {
+        use crate::font_metrics::EguiFontMetrics;
+        use hyperchad_transformer::layout::font::FontMetrics;
+
+        let value = "Fractional widths wrap several words without rounding drift.";
+        for dpi in [1.25, 1.5, 1.75] {
+            for width in [73.25, 119.625, 183.375] {
+                let context = egui::Context::default();
+                context.set_pixels_per_point(dpi);
+                let mut measured = None;
+                let output = context.run(egui::RawInput::default(), |ctx| {
+                    let metrics = EguiFontMetrics::new(ctx.clone());
+                    measured = Some(metrics.measure_text(value, 17.375, width));
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let node = Container {
+                            calculated_font_size: Some(17.375),
+                            ..Container::default()
+                        };
+                        let rect = egui::Rect::from_min_size(
+                            egui::pos2(8.0, 8.0),
+                            egui::vec2(width, 400.0),
+                        );
+                        paint_text(
+                            ui.painter(),
+                            &node,
+                            &TextStyle::resolve(&node, None),
+                            value,
+                            rect,
+                            1.0,
+                        )
+                        .unwrap();
+                    });
+                });
+                let painted = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) => Some(&text.galley),
+                        _ => None,
+                    })
+                    .expect("actual painted text galley");
+                assert!(!painted.job.round_output_to_gui);
+                let measured = measured.unwrap();
+                assert_eq!(measured.rows.len(), painted.rows.len());
+                for (index, (measured, painted_row)) in
+                    measured.rows.iter().zip(&painted.rows).enumerate()
+                {
+                    let bottom = painted
+                        .rows
+                        .get(index + 1)
+                        .map_or_else(|| painted.rect.bottom(), |row| row.pos.y);
+                    assert!((measured.width - painted_row.size.x).abs() < 0.0001);
+                    assert!((measured.height - (bottom - painted_row.pos.y)).abs() < 0.0001);
+                }
+                assert!((measured.height() - painted.rect.height()).abs() < 0.0001);
+                assert!(painted.mesh_bounds.is_positive());
+            }
+        }
+    }
 
     #[test]
     fn resolve_inherits_text_properties_without_copying_background() {

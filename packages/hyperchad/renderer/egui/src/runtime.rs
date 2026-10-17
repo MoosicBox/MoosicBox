@@ -1,4 +1,5 @@
 //! Transport only: producers enqueue owned commands; the UI thread drains and mutates.
+//!
 //! Queue admission is the ordering boundary, not async task start time. No facade
 //! performs layout or waits for a frame. A wake hook can be installed after startup.
 
@@ -26,6 +27,8 @@ pub enum DocumentCommand {
     },
     /// Applied synchronously against the document at this command's FIFO position.
     Canvas(CanvasCommand),
+    /// Host-owned lifecycle/application boundary in the same admission FIFO.
+    RouteCompletion(crate::routing::PreparedCompletion),
 }
 
 type WakeCallback = Arc<dyn Fn() + Send + Sync>;
@@ -94,6 +97,30 @@ impl DocumentHandle {
         Ok(())
     }
 
+    /// Await bounded admission without blocking the UI thread or an executor thread.
+    ///
+    /// Wake the host before waiting so a full queue can drain, then wake again after
+    /// admission. Commands retain FIFO channel admission order; concurrent task start
+    /// order does not reserve a position. No overflow queue is created. Hosts must
+    /// bound concurrent producers as well if they need to bound waiting payloads.
+    /// Dropping this future before admission cancels the send and drops its command;
+    /// dropping it after admission does not retract the queued command.
+    ///
+    /// # Errors
+    /// * Returns `SendError(command)` with the owned command when the inbox disconnects,
+    ///   including when disconnection occurs while waiting for capacity.
+    // Keep rejected command ownership consistent with submit's frozen transport API.
+    #[allow(clippy::result_large_err)]
+    pub async fn submit_async(
+        &self,
+        command: DocumentCommand,
+    ) -> Result<(), flume::SendError<DocumentCommand>> {
+        self.wake.notify();
+        self.sender.send_async(command).await?;
+        self.wake.notify();
+        Ok(())
+    }
+
     /// Wake registration for native or context-only hosts.
     #[must_use]
     pub fn wake(&self) -> DocumentWake {
@@ -107,6 +134,8 @@ impl DocumentHandle {
 pub enum CommandOutcome {
     Document(Result<MutationSummary, DocumentError>),
     Canvas(Result<ElementStamp, String>),
+    /// Last item in this batch. The host must handle it before draining again.
+    RouteCompletion(crate::routing::PreparedCompletion),
 }
 
 /// A drain returns every application result; the caller must observe errors and
@@ -160,6 +189,9 @@ impl DocumentInbox {
     /// nothing. Remaining work schedules another frame; no command is coalesced.
     /// The nonblocking canvas callback runs at the exact dequeue position, with the
     /// current document; it must apply immediately, not append to another queue.
+    /// A route completion is yielded without application and ends the batch even if
+    /// budget remains. Process it before calling `drain` again so later commands
+    /// cannot overtake its lifecycle dispatch and response application.
     #[must_use]
     pub fn drain(
         &mut self,
@@ -173,6 +205,10 @@ impl DocumentInbox {
                 break;
             };
             results.push(match command {
+                DocumentCommand::RouteCompletion(prepared) => {
+                    results.push(CommandOutcome::RouteCompletion(prepared));
+                    break;
+                }
                 DocumentCommand::Apply { view, origin } => {
                     CommandOutcome::Document(document.apply_view(view, origin))
                 }
@@ -215,11 +251,226 @@ mod tests {
         }
     }
 
+    fn prepared_route() -> (crate::routing::Routing, crate::routing::PreparedCompletion) {
+        use crate::routing::{RequestContext, Routing};
+        use hyperchad_transformer::models::{Selector, SwapStrategy};
+        use std::future::Future;
+        use std::task::{Context, Waker};
+
+        let mut document = Document::new();
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container::default()),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let source = document.stamp(document.root_keys()[0]).unwrap();
+        let (mut routing, worker) = Routing::new(1, 1024, Arc::new(|| {})).unwrap();
+        routing
+            .submit(
+                &mut document,
+                RequestContext::get(
+                    source,
+                    "/runtime-boundary",
+                    Selector::SelfTarget,
+                    SwapStrategy::None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let router = hyperchad_router::Router::new()
+            .with_route("/runtime-boundary", |_| async { View::default() });
+        let mut work = Box::pin(worker.run(router));
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(work.as_mut().poll(&mut context).is_pending());
+        let prepared = routing.try_take().unwrap();
+        (routing, prepared)
+    }
+
+    #[test]
+    fn route_boundary_yields_after_prior_commands_and_leaves_later_commands_queued() {
+        let (_routing, prepared) = prepared_route();
+        let (handle, mut inbox) = document_channel();
+        let wakes = Arc::new(AtomicUsize::new(0));
+        let observed = wakes.clone();
+        handle.wake().attach(move || {
+            observed.fetch_add(1, Ordering::SeqCst);
+        });
+        handle.submit(command("before")).unwrap();
+        handle
+            .submit(DocumentCommand::RouteCompletion(prepared))
+            .unwrap();
+        handle.submit(command("after")).unwrap();
+        let before_drain = wakes.load(Ordering::SeqCst);
+        let mut document = Document::new();
+        let batch = inbox.drain(&mut document, 256, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [
+                CommandOutcome::Document(Ok(_)),
+                CommandOutcome::RouteCompletion(_)
+            ]
+        ));
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("before"));
+        assert!(batch.has_more);
+        assert_eq!(wakes.load(Ordering::SeqCst), before_drain + 1);
+        // Host handles the yielded boundary before asking for the next batch.
+        let batch = inbox.drain(&mut document, 256, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::Document(Ok(_))]
+        ));
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("after"));
+        assert!(!batch.has_more);
+    }
+
+    #[test]
+    fn route_boundary_respects_capacity_zero_limit_and_single_item_batches() {
+        let (_routing, prepared) = prepared_route();
+        let (handle, mut inbox) = document_channel_with_capacity(NonZeroUsize::new(1).unwrap());
+        handle.submit(command("before")).unwrap();
+        let prepared = match handle.submit(DocumentCommand::RouteCompletion(prepared)) {
+            Err(flume::TrySendError::Full(DocumentCommand::RouteCompletion(prepared))) => prepared,
+            other => panic!("expected owned route completion on full queue: {other:?}"),
+        };
+        let mut document = Document::new();
+        let batch = inbox.drain(&mut document, 0, no_canvas);
+        assert_eq!(batch.results.len(), 0);
+        assert!(batch.has_more);
+        assert_eq!(document.roots(), []);
+        let batch = inbox.drain(&mut document, 1, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::Document(Ok(_))]
+        ));
+        handle
+            .submit(DocumentCommand::RouteCompletion(prepared))
+            .unwrap();
+        assert!(matches!(
+            handle.submit(command("after")),
+            Err(flume::TrySendError::Full(_))
+        ));
+        let batch = inbox.drain(&mut document, 0, no_canvas);
+        assert_eq!(batch.results.len(), 0);
+        assert!(batch.has_more);
+        let batch = inbox.drain(&mut document, 256, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::RouteCompletion(_)]
+        ));
+        assert!(!batch.has_more);
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("before"));
+        handle.submit(command("after")).unwrap();
+        let batch = inbox.drain(&mut document, 1, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::Document(Ok(_))]
+        ));
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("after"));
+    }
+
+    #[test]
+    fn async_admission_waits_for_drain_then_wakes_host_and_preserves_order() {
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+
+        let (handle, mut inbox) = document_channel_with_capacity(NonZeroUsize::new(1).unwrap());
+        let host_wakes = Arc::new(AtomicUsize::new(0));
+        let observed_wakes = host_wakes.clone();
+        handle.wake().attach(move || {
+            observed_wakes.fetch_add(1, Ordering::SeqCst);
+        });
+        handle.submit(command("first")).unwrap();
+        let before_wait = host_wakes.load(Ordering::SeqCst);
+        let mut context = Context::from_waker(Waker::noop());
+        let mut pending = Box::pin(handle.submit_async(command("second")));
+        assert!(pending.as_mut().poll(&mut context).is_pending());
+        assert_eq!(host_wakes.load(Ordering::SeqCst), before_wait + 1);
+        let mut document = Document::new();
+        let batch = inbox.drain(&mut document, 1, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::Document(Ok(_))]
+        ));
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("first"));
+        let before_admission_wake = host_wakes.load(Ordering::SeqCst);
+        assert!(matches!(
+            pending.as_mut().poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+        assert_eq!(host_wakes.load(Ordering::SeqCst), before_admission_wake + 1);
+        let batch = inbox.drain(&mut document, 1, no_canvas);
+        assert!(matches!(
+            batch.results.as_slice(),
+            [CommandOutcome::Document(Ok(_))]
+        ));
+        assert!(!batch.has_more);
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn async_disconnection_returns_owned_command_before_or_during_wait() {
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+
+        fn assert_owned(error: flume::SendError<DocumentCommand>, expected: &str) {
+            let DocumentCommand::Apply {
+                view,
+                origin: ViewOrigin::Navigation,
+            } = error.0
+            else {
+                panic!("wrong returned command");
+            };
+            assert_eq!(view.primary.unwrap().str_id.as_deref(), Some(expected));
+        }
+
+        let mut context = Context::from_waker(Waker::noop());
+        let (handle, inbox) = document_channel_with_capacity(NonZeroUsize::new(1).unwrap());
+        handle.submit(command("fills-capacity")).unwrap();
+        let mut pending = Box::pin(handle.submit_async(command("waiting-owned")));
+        assert!(pending.as_mut().poll(&mut context).is_pending());
+        drop(inbox);
+        let Poll::Ready(Err(error)) = pending.as_mut().poll(&mut context) else {
+            panic!("disconnected admission must return its command");
+        };
+        assert_owned(error, "waiting-owned");
+        let mut disconnected = Box::pin(handle.submit_async(command("already-closed")));
+        let Poll::Ready(Err(error)) = disconnected.as_mut().poll(&mut context) else {
+            panic!("already disconnected admission must return immediately");
+        };
+        assert_owned(error, "already-closed");
+    }
+
+    #[test]
+    fn cancelling_waiting_async_admission_does_not_enqueue_an_overflow_command() {
+        use std::future::Future;
+        use std::task::{Context, Waker};
+
+        let (handle, mut inbox) = document_channel_with_capacity(NonZeroUsize::new(1).unwrap());
+        handle.submit(command("first")).unwrap();
+        let mut context = Context::from_waker(Waker::noop());
+        let mut pending = Box::pin(handle.submit_async(command("cancelled")));
+        assert!(pending.as_mut().poll(&mut context).is_pending());
+        drop(pending);
+        let mut document = Document::new();
+        let batch = inbox.drain(&mut document, 2, no_canvas);
+        assert_eq!(batch.results.len(), 1);
+        assert!(!batch.has_more);
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("first"));
+        handle.submit(command("next")).unwrap();
+        let batch = inbox.drain(&mut document, 1, no_canvas);
+        assert_eq!(batch.results.len(), 1);
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("next"));
+    }
+
     #[test]
     fn pre_attachment_commands_are_fifo_and_bounded() {
         let (handle, mut inbox) = document_channel();
         handle.submit(command("first")).unwrap();
-        handle.clone().submit(command("second")).unwrap();
+        handle.submit(command("second")).unwrap();
         let calls = Arc::new(AtomicUsize::new(0));
         let wake_calls = calls.clone();
         handle.wake().attach(move || {
@@ -228,7 +479,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         let mut document = Document::new();
         assert!(inbox.drain(&mut document, 0, no_canvas).has_more);
-        assert!(document.roots().is_empty());
+        assert_eq!(document.roots(), []);
         let batch = inbox.drain(&mut document, 1, no_canvas);
         assert!(matches!(batch.results[0], CommandOutcome::Document(Ok(_))));
         assert!(batch.has_more);
@@ -255,7 +506,7 @@ mod tests {
         let (handle, mut inbox) = document_channel_with_capacity(NonZeroUsize::new(2).unwrap());
         handle.submit(command("first")).unwrap();
         handle.submit(command("second")).unwrap();
-        let rejected = match handle.clone().submit(command("third")) {
+        let rejected = match handle.submit(command("third")) {
             Err(flume::TrySendError::Full(command)) => command,
             other => panic!("expected full queue, got {other:?}"),
         };
@@ -298,29 +549,29 @@ mod tests {
         assert_eq!(document.roots()[0].str_id.as_deref(), Some("accepted"));
     }
 
+    fn canvas_view(id: usize) -> View {
+        View {
+            primary: Some(Container {
+                id,
+                str_id: Some("drawing".into()),
+                element: hyperchad_transformer::Element::Canvas,
+                ..Container::default()
+            }),
+            ..View::default()
+        }
+    }
+
+    fn clear_canvas() -> hyperchad_renderer::canvas::CanvasUpdate {
+        hyperchad_renderer::canvas::CanvasUpdate {
+            target: "drawing".into(),
+            canvas_actions: vec![hyperchad_renderer::canvas::CanvasAction::Clear],
+        }
+    }
+
     #[test]
     fn document_canvas_document_commands_apply_at_their_fifo_positions() {
         use crate::canvas::CanvasAdapter;
-        use hyperchad_renderer::canvas::{CanvasAction, CanvasUpdate};
-        use hyperchad_transformer::Element;
 
-        fn canvas_view(id: usize) -> View {
-            View {
-                primary: Some(Container {
-                    id,
-                    str_id: Some("drawing".into()),
-                    element: Element::Canvas,
-                    ..Container::default()
-                }),
-                ..View::default()
-            }
-        }
-        fn update() -> CanvasUpdate {
-            CanvasUpdate {
-                target: "drawing".into(),
-                canvas_actions: vec![CanvasAction::Clear],
-            }
-        }
         let (handle, mut inbox) = document_channel();
         handle
             .submit(DocumentCommand::Apply {
@@ -329,7 +580,9 @@ mod tests {
             })
             .unwrap();
         handle
-            .submit(DocumentCommand::Canvas(CanvasCommand::Update(update())))
+            .submit(DocumentCommand::Canvas(CanvasCommand::Update(
+                clear_canvas(),
+            )))
             .unwrap();
         handle
             .submit(DocumentCommand::Apply {
@@ -338,7 +591,9 @@ mod tests {
             })
             .unwrap();
         handle
-            .submit(DocumentCommand::Canvas(CanvasCommand::Update(update())))
+            .submit(DocumentCommand::Canvas(CanvasCommand::Update(
+                clear_canvas(),
+            )))
             .unwrap();
         let mut document = Document::new();
         let mut adapter = CanvasAdapter::new();
@@ -368,7 +623,7 @@ mod tests {
         handle
             .submit(DocumentCommand::Canvas(CanvasCommand::Stamped {
                 stamp: observed[0].1,
-                update: update(),
+                update: clear_canvas(),
             }))
             .unwrap();
         handle.submit(command("after-canvas-error")).unwrap();

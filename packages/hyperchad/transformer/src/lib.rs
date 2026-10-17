@@ -1462,7 +1462,7 @@ mod test_container_methods {
     }
 
     #[test_log::test]
-    fn fixed_positioned_elements_only_returns_fixed_and_sticky() {
+    fn fixed_positioned_elements_only_returns_fixed() {
         let container = Container {
             children: vec![
                 Container {
@@ -1481,7 +1481,15 @@ mod test_container_methods {
             ],
             ..Default::default()
         };
-        assert_eq!(container.fixed_positioned_elements().count(), 2);
+        assert_eq!(container.fixed_positioned_elements().count(), 1);
+        let mut container = container;
+        for fixed in container.fixed_positioned_elements_mut() {
+            assert_eq!(fixed.position, Some(Position::Fixed));
+            fixed.hidden = Some(true);
+        }
+        assert_eq!(container.fixed_positioned_elements().count(), 0);
+        assert_eq!(container.children[1].position, Some(Position::Sticky));
+        assert!(!container.children[1].is_hidden());
     }
 }
 
@@ -3584,13 +3592,13 @@ fn absolute_positioned_elements_mut(
 }
 
 fn fixed_positioned_elements(elements: &[Container]) -> impl Iterator<Item = &Container> {
-    visible_elements(elements).filter(|x| x.is_fixed())
+    visible_elements(elements).filter(|x| x.position == Some(Position::Fixed))
 }
 
 fn fixed_positioned_elements_mut(
     elements: &mut [Container],
 ) -> impl Iterator<Item = &mut Container> {
-    visible_elements_mut(elements).filter(|x| x.is_fixed())
+    visible_elements_mut(elements).filter(|x| x.position == Some(Position::Fixed))
 }
 
 impl Container {
@@ -3696,12 +3704,12 @@ impl Container {
         absolute_positioned_elements_mut(&mut self.children)
     }
 
-    /// Returns an iterator over fixed positioned child elements.
+    /// Returns an iterator over viewport-fixed child elements, excluding sticky children.
     pub fn fixed_positioned_elements(&self) -> impl Iterator<Item = &Self> {
         fixed_positioned_elements(&self.children)
     }
 
-    /// Returns a mutable iterator over fixed positioned child elements.
+    /// Returns a mutable iterator over viewport-fixed children, excluding sticky children.
     pub fn fixed_positioned_elements_mut(&mut self) -> impl Iterator<Item = &mut Self> {
         fixed_positioned_elements_mut(&mut self.children)
     }

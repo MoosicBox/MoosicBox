@@ -40,6 +40,14 @@ const HTML: &str = r##"
 pub fn view() -> Container {
     let html = HTML.lines().map(str::trim).collect::<String>();
     let mut root = Container::try_from(html).expect("feedback HTML must parse");
+    fn assign_fixture_ids(node: &mut Container, next: &mut usize) {
+        node.id = *next;
+        *next += 1;
+        for child in &mut node.children {
+            assign_fixture_ids(child, next);
+        }
+    }
+    assign_fixture_ids(&mut root, &mut 1);
     for (id, trigger, name) in [
         (BUTTON_ID, ActionTrigger::Click, CLICK_ACTION),
         (INPUT_ID, ActionTrigger::Change, CHANGE_ACTION),

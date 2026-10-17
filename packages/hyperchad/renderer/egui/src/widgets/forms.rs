@@ -3,6 +3,13 @@
 //! The host drains [`FormsAdapter::take_actions`] and
 //! [`FormsAdapter::take_file_requests`] after traversal. A native dialog service
 //! performs its work outside paint and returns bytes through `complete_file`.
+//!
+//! Routing integration: reconcile first, seed action state with `control_stamps`
+//! and stamped `current_value`, then deliver native scalar changes and trait
+//! `WidgetAdapter::take_changes` exactly once. Structural button activation calls
+//! `activate_button` once; `take_actions` supplies captured Submit payloads to the
+//! routing orchestrator. Reset is already applied and is only a notification.
+//! Never collect submission values from authored defaults or encode transport here.
 
 pub mod native_files;
 pub use native_files::{FileLimits, FileServiceError, NativeFileService};
@@ -123,7 +130,9 @@ struct Field {
     name: Option<String>,
     form: Option<ElementKey>,
     disabled: bool,
+    readonly: bool,
     multiple: bool,
+    native_id: Option<Id>,
     label: String,
     focus: Option<bool>,
     /// Separate editor identity only changes on an intentional value reset.
@@ -153,6 +162,7 @@ impl Field {
         }
         if self.stamp != stamp {
             self.pending = None;
+            self.native_id = None;
         }
         self.stamp = stamp;
         self.spec = spec;
@@ -206,6 +216,147 @@ impl FormsAdapter {
     #[must_use]
     pub fn take_changes(&mut self) -> Vec<FormChange> {
         std::mem::take(&mut self.changes)
+    }
+
+    /// Return the authoritative native focus ID after checking the full stamp.
+    /// Text editors and select owners have explicit IDs; checkbox/file IDs are
+    /// captured from the native response and require painting this generation.
+    /// The host must additionally check current geometry visibility before focus.
+    ///
+    /// # Errors
+    /// * Rejects missing/stale, disabled, or hidden controls.
+    /// * Rejects checkbox/file controls not painted in the current generation.
+    pub fn focus_id(&self, source: ElementStamp) -> Result<Id, String> {
+        let field = self.focus_field(source)?;
+        if matches!(field.spec.kind, ControlKind::Checkbox | ControlKind::File) {
+            field
+                .native_id
+                .ok_or_else(|| "control has no current native focus response".into())
+        } else {
+            Ok(field.id())
+        }
+    }
+
+    /// Focus an eligible control without repeating first-paint autofocus.
+    ///
+    /// # Errors
+    /// * Returns the same eligibility/stamp errors as `focus_id`.
+    pub fn focus(&mut self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        let id = self.focus_id(source)?;
+        self.fields
+            .get_mut(&source.key)
+            .ok_or("control is missing")?
+            .focus = None;
+        context.memory_mut(|memory| memory.request_focus(id));
+        context.request_repaint();
+        Ok(())
+    }
+
+    /// Blur only this control, never a different currently focused widget.
+    ///
+    /// # Errors
+    /// * Returns the same eligibility/stamp errors as `focus_id`.
+    pub fn blur(&mut self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        let id = self.focus_id(source)?;
+        self.fields
+            .get_mut(&source.key)
+            .ok_or("control is missing")?
+            .focus = None;
+        context.memory_mut(|memory| memory.surrender_focus(id));
+        context.request_repaint();
+        Ok(())
+    }
+
+    /// Select all Unicode character positions in a live editable text control.
+    /// Does not implicitly focus it; call `focus` separately when desired.
+    /// Applies a pending authoritative editor reset first, so next paint retains
+    /// this selection rather than clearing it. Password values are never logged.
+    ///
+    /// # Errors
+    /// * Rejects missing/stale, hidden, disabled, read-only or non-text controls.
+    pub fn select_all(&self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        let field = self.focus_field(source)?;
+        if field.readonly
+            || !matches!(
+                field.spec.kind,
+                ControlKind::Text | ControlKind::Password | ControlKind::Textarea
+            )
+        {
+            return Err("control does not support editable text selection".into());
+        }
+        let Value::Text(value) = &field.value else {
+            return Err("control has no text editor".into());
+        };
+        let id = field.id();
+        let end = value.chars().count();
+        prepare_editor(context, id, field.editor_revision);
+        let mut editor = egui::text_edit::TextEditState::load(context, id).unwrap_or_default();
+        editor
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(end),
+            )));
+        editor.store(context, id);
+        context.request_repaint();
+        Ok(())
+    }
+
+    fn focus_field(&self, source: ElementStamp) -> Result<&Field, String> {
+        let field = self
+            .fields
+            .get(&source.key)
+            .filter(|field| field.stamp == source)
+            .ok_or("control focus source is stale or missing")?;
+        if field.disabled || field.spec.kind == ControlKind::Hidden {
+            return Err("control is not focus eligible".into());
+        }
+        Ok(field)
+    }
+
+    /// Snapshot a live control's effective native value for action/routing state.
+    /// Checkbox values are booleans; selections and files are ordered arrays.
+    /// Password text is sensitive payload, never a diagnostic. Disabled controls
+    /// remain readable here but are omitted by `collect_submission`.
+    ///
+    /// # Errors
+    /// * Returns a value-free error for a missing or stale control stamp.
+    pub fn current_value(&self, source: ElementStamp) -> Result<crate::events::EventValue, String> {
+        use crate::events::EventValue;
+        let field = self
+            .fields
+            .get(&source.key)
+            .filter(|field| field.stamp == source)
+            .ok_or("control value source is stale or missing")?;
+        Ok(match &field.value {
+            Value::Text(value) => EventValue::String(value.clone()),
+            Value::Checked(value) => EventValue::Bool(*value),
+            Value::Selected(selected) => EventValue::Array(
+                selected
+                    .iter()
+                    .filter_map(|index| field.spec.choices.get(*index))
+                    .map(|choice| EventValue::String(choice.value.clone()))
+                    .collect(),
+            ),
+            Value::Files => EventValue::Array(
+                field
+                    .files
+                    .iter()
+                    .cloned()
+                    .map(|file| event_value(FormValue::File(file)))
+                    .collect(),
+            ),
+        })
+    }
+
+    /// Live control stamps in document order, including hidden/disabled controls.
+    /// Use with `current_value` to seed state after reconciliation, before events.
+    #[must_use]
+    pub fn control_stamps(&self) -> Vec<ElementStamp> {
+        self.order
+            .iter()
+            .filter_map(|key| self.fields.get(key).map(|field| field.stamp))
+            .collect()
     }
 
     /// Drain native dialog requests, to be processed outside the paint thread.
@@ -341,6 +492,10 @@ impl FormsAdapter {
             return Err("control reset is stale".into());
         }
         field.reset();
+        self.changes
+            .retain(|change| change.source.key != source.key);
+        self.file_requests
+            .retain(|request| request.source.key != source.key);
         Ok(())
     }
 
@@ -359,6 +514,11 @@ impl FormsAdapter {
         {
             field.reset();
         }
+        self.changes.retain(|change| {
+            self.fields
+                .get(&change.source.key)
+                .is_some_and(|field| field.form != Some(form))
+        });
         self.file_requests.retain(|request| {
             self.fields
                 .get(&request.source.key)
@@ -563,7 +723,9 @@ impl WidgetAdapter for FormsAdapter {
                 name: None,
                 form: None,
                 disabled,
+                readonly: flag(container, "readonly"),
                 multiple,
+                native_id: None,
                 label: String::new(),
                 focus: Some(autofocus),
                 editor_revision: 0,
@@ -573,6 +735,7 @@ impl WidgetAdapter for FormsAdapter {
             field.name = name;
             field.form = enclosing_form(document, key);
             field.disabled = disabled;
+            field.readonly = flag(container, "readonly");
             if field.multiple != multiple {
                 field.reset();
             }
@@ -675,6 +838,7 @@ impl WidgetAdapter for FormsAdapter {
                 &mut self.file_requests,
             )?,
         };
+        field.native_id = Some(response.id);
         response = label_and_focus(ui, field, response, rect);
         if response.clicked() {
             response.request_focus();
@@ -702,34 +866,24 @@ impl WidgetAdapter for FormsAdapter {
         })
     }
 
+    fn focus(&mut self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        Self::focus(self, context, source)
+    }
+
+    fn blur(&mut self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        Self::blur(self, context, source)
+    }
+
+    fn select_all(&mut self, context: &egui::Context, source: ElementStamp) -> Result<(), String> {
+        Self::select_all(self, context, source)
+    }
+
     fn take_changes(&mut self) -> Vec<(ElementStamp, crate::events::EventValue)> {
         use crate::events::EventValue;
-        FormsAdapter::take_changes(self)
+        Self::take_changes(self)
             .into_iter()
             .map(|change| {
-                let values = change
-                    .values
-                    .into_iter()
-                    .map(|value| match value {
-                        FormValue::Text(value) => EventValue::String(value),
-                        FormValue::File(file) => EventValue::Object(BTreeMap::from([
-                            ("name".into(), EventValue::String(file.name)),
-                            (
-                                "mediaType".into(),
-                                file.media_type.map_or(EventValue::Null, EventValue::String),
-                            ),
-                            (
-                                "bytes".into(),
-                                EventValue::Array(
-                                    file.bytes
-                                        .iter()
-                                        .map(|byte| EventValue::Number(f64::from(*byte)))
-                                        .collect(),
-                                ),
-                            ),
-                        ])),
-                    })
-                    .collect();
+                let values = change.values.into_iter().map(event_value).collect();
                 (change.source, EventValue::Array(values))
             })
             .collect()
@@ -829,6 +983,15 @@ impl FormsAdapter {
     }
 }
 
+fn prepare_editor(context: &egui::Context, id: Id, revision: u64) {
+    let revision_id = id.with("revision");
+    let previous = context.data_mut(|data| data.get_temp::<u64>(revision_id));
+    if previous != Some(revision) {
+        egui::text_edit::TextEditState::default().store(context, id);
+        context.data_mut(|data| data.insert_temp(revision_id, revision));
+    }
+}
+
 fn paint_text(
     ui: &mut egui::Ui,
     field: &mut Field,
@@ -836,6 +999,7 @@ fn paint_text(
     rect: egui::Rect,
 ) -> (egui::Response, Option<String>) {
     let id = field.id();
+    prepare_editor(ui.ctx(), id, field.editor_revision);
     let Value::Text(value) = &mut field.value else {
         unreachable!()
     };
@@ -849,14 +1013,6 @@ fn paint_text(
         | Element::Textarea { placeholder, .. } => placeholder.as_deref().unwrap_or_default(),
         _ => "",
     };
-    // Keep the focus ID stable. Reset only the editor's cursor/undo state.
-    let revision_id = id.with("revision");
-    let previous = ui.ctx().data_mut(|data| data.get_temp::<u64>(revision_id));
-    if previous != Some(field.editor_revision) {
-        egui::text_edit::TextEditState::default().store(ui.ctx(), id);
-        ui.ctx()
-            .data_mut(|data| data.insert_temp(revision_id, field.editor_revision));
-    }
     let editor = if field.spec.kind == ControlKind::Textarea {
         egui::TextEdit::multiline(&mut *value)
     } else {
@@ -869,6 +1025,7 @@ fn paint_text(
                 editor
                     .id(id)
                     .password(password)
+                    .interactive(!field.readonly)
                     .hint_text(placeholder)
                     .desired_width(rect.width()),
             )
@@ -1037,7 +1194,7 @@ fn paint_file(
 }
 
 fn label_and_focus(
-    ui: &mut egui::Ui,
+    ui: &egui::Ui,
     field: &mut Field,
     mut response: egui::Response,
     rect: egui::Rect,
@@ -1068,4 +1225,362 @@ fn label_and_focus(
         response = response.labelled_by(label_id);
     }
     response
+}
+
+fn event_value(value: FormValue) -> crate::events::EventValue {
+    use crate::events::EventValue;
+    match value {
+        FormValue::Text(value) => EventValue::String(value),
+        FormValue::File(file) => EventValue::Object(BTreeMap::from([
+            ("name".into(), EventValue::String(file.name)),
+            (
+                "mediaType".into(),
+                file.media_type.map_or(EventValue::Null, EventValue::String),
+            ),
+            (
+                "bytes".into(),
+                EventValue::Array(
+                    file.bytes
+                        .iter()
+                        .map(|byte| EventValue::Number(f64::from(*byte)))
+                        .collect(),
+                ),
+            ),
+        ])),
+    }
+}
+
+#[cfg(test)]
+mod focus_effect_tests {
+    use super::*;
+    use crate::document::ViewOrigin;
+    use hyperchad_renderer::View;
+
+    fn fixture(
+        element: Element,
+        attributes: &[(&str, &str)],
+    ) -> (Document, FormsAdapter, ElementStamp) {
+        let mut document = Document::new();
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        id: 1,
+                        element,
+                        data: attributes
+                            .iter()
+                            .map(|(key, value)| ((*key).into(), (*value).into()))
+                            .collect(),
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let mut forms = FormsAdapter::new();
+        forms.reconcile(&document, &[]).unwrap();
+        let source = document.stamp(document.root_keys()[0]).unwrap();
+        (document, forms, source)
+    }
+
+    fn input(input: Input) -> Element {
+        Element::Input {
+            input,
+            name: Some("field".into()),
+            autofocus: Some(true),
+        }
+    }
+
+    fn paint(
+        context: &egui::Context,
+        forms: &mut FormsAdapter,
+        document: &Document,
+        source: ElementStamp,
+    ) -> Id {
+        let mut response_id = None;
+        let _ = context.run(egui::RawInput::default(), |context| {
+            egui::CentralPanel::default().show(context, |ui| {
+                let rect =
+                    egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(220.0, 32.0));
+                let geometry = NodeGeometry {
+                    key: source.key,
+                    container_id: 1,
+                    parent: None,
+                    containing_block: None,
+                    margin_box: rect,
+                    padding_box: rect,
+                    content_box: rect,
+                    border_box: rect,
+                    paint_clip: rect,
+                    descendant_clip: rect,
+                    transform: crate::geometry::GeometryTransform {
+                        origin: rect.min,
+                        scale: 1.0,
+                    },
+                    scroll_extent: rect,
+                    scroll_max: egui::Vec2::ZERO,
+                    scroll_offset: egui::Vec2::ZERO,
+                    visible: true,
+                    fixed: false,
+                };
+                let authored = document.get(source.key).unwrap();
+                response_id = Some(
+                    forms
+                        .paint_node(ui, source, authored, authored, &geometry)
+                        .unwrap()
+                        .response
+                        .id,
+                );
+            });
+        });
+        response_id.unwrap()
+    }
+
+    #[test]
+    fn generic_adapter_dispatches_native_focus_selection_blur_and_rejects_stale() {
+        fn exercise<C: WidgetAdapter>(
+            adapter: &mut C,
+            context: &egui::Context,
+            source: ElementStamp,
+            id: Id,
+        ) {
+            adapter.focus(context, source).unwrap();
+            adapter.select_all(context, source).unwrap();
+            assert_eq!(context.memory(egui::Memory::focused), Some(id));
+            let selection = egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(4),
+            );
+            assert_eq!(
+                egui::text_edit::TextEditState::load(context, id)
+                    .unwrap()
+                    .cursor
+                    .char_range(),
+                Some(selection)
+            );
+            let stale = ElementStamp {
+                generation: source.generation + 1,
+                ..source
+            };
+            assert!(adapter.focus(context, stale).is_err());
+            assert!(adapter.select_all(context, stale).is_err());
+            assert!(adapter.blur(context, stale).is_err());
+            assert_eq!(context.memory(egui::Memory::focused), Some(id));
+            assert_eq!(
+                egui::text_edit::TextEditState::load(context, id)
+                    .unwrap()
+                    .cursor
+                    .char_range(),
+                Some(selection)
+            );
+            adapter.blur(context, source).unwrap();
+            assert_eq!(context.memory(egui::Memory::focused), None);
+        }
+        let (document, mut forms, source) = fixture(
+            input(Input::Text {
+                value: Some("aé🦀z".into()),
+                placeholder: None,
+            }),
+            &[],
+        );
+        let context = egui::Context::default();
+        let id = paint(&context, &mut forms, &document, source);
+        assert_eq!(forms.focus_id(source).unwrap(), id);
+        exercise(&mut forms, &context, source, id);
+    }
+
+    #[test]
+    fn native_focus_selection_and_blur_use_authoritative_ids_across_paint_and_reset() {
+        for element in [
+            input(Input::Text {
+                value: Some("aé🦀z".into()),
+                placeholder: None,
+            }),
+            input(Input::Password {
+                value: Some("aé🦀z".into()),
+                placeholder: None,
+            }),
+            Element::Textarea {
+                value: "aé🦀z".into(),
+                placeholder: None,
+                name: None,
+                rows: None,
+                cols: None,
+            },
+        ] {
+            let (document, mut forms, source) = fixture(element, &[]);
+            let context = egui::Context::default();
+            let id = forms.focus_id(source).unwrap();
+            forms.focus(&context, source).unwrap();
+            forms.select_all(&context, source).unwrap();
+            assert_eq!(context.memory(egui::Memory::focused), Some(id));
+            assert_eq!(paint(&context, &mut forms, &document, source), id);
+            let selection = egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(4),
+            );
+            assert_eq!(
+                egui::text_edit::TextEditState::load(&context, id)
+                    .unwrap()
+                    .cursor
+                    .char_range(),
+                Some(selection)
+            );
+            forms.reset_control(source).unwrap();
+            forms.select_all(&context, source).unwrap();
+            paint(&context, &mut forms, &document, source);
+            assert_eq!(
+                egui::text_edit::TextEditState::load(&context, id)
+                    .unwrap()
+                    .cursor
+                    .char_range(),
+                Some(selection)
+            );
+            forms.blur(&context, source).unwrap();
+            assert_eq!(context.memory(egui::Memory::focused), None);
+            let other = Id::new("different native control");
+            context.memory_mut(|memory| memory.request_focus(other));
+            forms.blur(&context, source).unwrap();
+            assert_eq!(context.memory(egui::Memory::focused), Some(other));
+        }
+    }
+
+    #[test]
+    fn rejects_stale_hidden_disabled_readonly_and_nontext_selection_without_side_effects() {
+        let (_, mut forms, source) = fixture(
+            input(Input::Text {
+                value: Some("text".into()),
+                placeholder: None,
+            }),
+            &[],
+        );
+        let context = egui::Context::default();
+        let stale = ElementStamp {
+            generation: source.generation + 1,
+            ..source
+        };
+        assert!(forms.focus_id(stale).is_err());
+        assert!(forms.focus(&context, stale).is_err());
+        assert!(forms.blur(&context, stale).is_err());
+        assert!(forms.select_all(&context, stale).is_err());
+        assert_eq!(context.memory(egui::Memory::focused), None);
+        for (element, attributes) in [
+            (input(Input::Hidden { value: None }), vec![]),
+            (
+                input(Input::Text {
+                    value: None,
+                    placeholder: None,
+                }),
+                vec![("disabled", "true")],
+            ),
+        ] {
+            let (_, mut forms, source) = fixture(element, &attributes);
+            assert!(forms.focus_id(source).is_err());
+            assert!(forms.focus(&context, source).is_err());
+            assert!(forms.select_all(&context, source).is_err());
+        }
+        let (_, forms, source) = fixture(
+            input(Input::Text {
+                value: Some("readonly".into()),
+                placeholder: None,
+            }),
+            &[("readonly", "true")],
+        );
+        assert!(forms.focus_id(source).is_ok());
+        assert!(forms.select_all(&context, source).is_err());
+        let (document, mut forms, source) = fixture(
+            input(Input::Checkbox {
+                checked: Some(true),
+            }),
+            &[],
+        );
+        assert!(forms.focus_id(source).is_err());
+        assert!(forms.select_all(&context, source).is_err());
+        let actual_id = paint(&context, &mut forms, &document, source);
+        assert_eq!(forms.focus_id(source).unwrap(), actual_id);
+        forms.focus(&context, source).unwrap();
+        assert_eq!(context.memory(egui::Memory::focused), Some(actual_id));
+    }
+}
+
+#[cfg(test)]
+mod integration_state_tests {
+    use super::*;
+    use crate::{document::ViewOrigin, events::EventValue};
+    use hyperchad_renderer::View;
+
+    #[test]
+    fn effective_state_is_stamped_and_reset_retires_queued_changes() {
+        let mut document = Document::new();
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        id: 1,
+                        element: Element::Form {
+                            action: None,
+                            method: None,
+                            multipart: false,
+                        },
+                        children: vec![Container {
+                            id: 2,
+                            element: Element::Input {
+                                input: Input::Text {
+                                    value: Some("default".into()),
+                                    placeholder: None,
+                                },
+                                name: Some(String::new()),
+                                autofocus: None,
+                            },
+                            ..Container::default()
+                        }],
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let mut forms = FormsAdapter::new();
+        forms.reconcile(&document, &[]).unwrap();
+        let source = forms.control_stamps()[0];
+        let field = forms.fields.get_mut(&source.key).unwrap();
+        field.value = Value::Text("effective local edit".into());
+        field.focus = None;
+        let id = field.id();
+        assert_eq!(
+            forms.current_value(source).unwrap(),
+            EventValue::String("effective local edit".into())
+        );
+        let stale = ElementStamp {
+            generation: source.generation + 1,
+            ..source
+        };
+        assert!(forms.current_value(stale).is_err());
+        assert!(forms.reset_control(stale).is_err());
+        assert_eq!(
+            forms.current_value(source).unwrap(),
+            EventValue::String("effective local edit".into())
+        );
+        forms.changes.push(FormChange {
+            source,
+            values: vec![FormValue::Text("obsolete".into())],
+        });
+        forms.reset_form(document.root_keys()[0]).unwrap();
+        assert_eq!(WidgetAdapter::take_changes(&mut forms), []);
+        assert_eq!(
+            forms.current_value(source).unwrap(),
+            EventValue::String("default".into())
+        );
+        assert_eq!(forms.fields[&source.key].id(), id);
+        assert!(forms.fields[&source.key].focus.is_none());
+        let submission = forms
+            .collect_submission(document.root_keys()[0], None)
+            .unwrap();
+        assert_eq!(submission.entries[0].name, "");
+        assert!(
+            matches!(&submission.entries[0].value, FormValue::Text(value) if value == "default")
+        );
+    }
 }

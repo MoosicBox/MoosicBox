@@ -23,12 +23,16 @@ pub struct NodeOutput {
 /// Widget/resource boundary. Document mutation is deferred until after traversal.
 pub trait FramePainter {
     /// Retire removed generations and reconcile retained resource/widget state.
+    /// # Errors
+    /// * Returns resource or retained state reconciliation failures.
     fn reconcile(
         &mut self,
         document: &Document,
         mutations: &[MutationSummary],
     ) -> Result<(), String>;
     /// Prepare inherited node state even when this parent is fully clipped.
+    /// # Errors
+    /// * Returns inherited state preparation failures.
     fn prepare_node(
         &mut self,
         _stamp: ElementStamp,
@@ -38,7 +42,9 @@ pub trait FramePainter {
     ) -> Result<(), String> {
         Ok(())
     }
-    /// Paint one projected node. Must not lay out its HyperChad children.
+    /// Paint one projected node. Must not lay out its `HyperChad` children.
+    /// # Errors
+    /// * Returns widget or resource preparation failures.
     fn paint_node(
         &mut self,
         ui: &mut egui::Ui,
@@ -50,6 +56,8 @@ pub trait FramePainter {
     /// Current-generation resource jobs still outstanding.
     fn pending_resources(&self) -> usize;
     /// Project retained widget state into fresh calculated roots before layout.
+    /// # Errors
+    /// * Returns invalid retained widget state errors.
     fn prepare_layout(
         &mut self,
         _document: &Document,
@@ -62,12 +70,32 @@ pub trait FramePainter {
         true
     }
     /// Apply canvas updates at their exact position in the document mailbox.
+    /// # Errors
+    /// * Returns invalid canvas commands or unavailable canvas adapter errors.
     fn apply_canvas(
         &mut self,
         _document: &Document,
         _command: crate::canvas::CanvasCommand,
     ) -> Result<ElementStamp, String> {
         Err("canvas adapter not installed".to_owned())
+    }
+    /// Focus an authoritative native control.
+    /// # Errors
+    /// * Unsupported or unmounted control.
+    fn focus(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native focus adapter unavailable".to_owned())
+    }
+    /// Blur an authoritative native control.
+    /// # Errors
+    /// * Unsupported or unmounted control.
+    fn blur(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native blur adapter unavailable".to_owned())
+    }
+    /// Select all characters in an authoritative native editor.
+    /// # Errors
+    /// * Unsupported or unmounted editor.
+    fn select_all(&mut self, _ctx: &egui::Context, _stamp: ElementStamp) -> Result<(), String> {
+        Err("native selection adapter unavailable".to_owned())
     }
     /// Lossless native changes, especially select arrays and file lists.
     fn take_changes(&mut self) -> Vec<(ElementStamp, crate::events::EventValue)> {
@@ -95,6 +123,7 @@ struct WindowConfiguration {
 }
 
 pub struct EguiRenderer<C> {
+    terminal_error: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     host_factory: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<HostFactory<C>>>>>,
     window: std::sync::Arc<std::sync::Mutex<WindowConfiguration>>,
     input_sender: flume::Sender<crate::events::InputEvent>,
@@ -104,6 +133,10 @@ pub struct EguiRenderer<C> {
     context: std::sync::Arc<std::sync::Mutex<Option<egui::Context>>>,
     handle: DocumentHandle,
     bootstrap: std::sync::Arc<std::sync::Mutex<Option<BackendFrame<C>>>>,
+    response_receiver: std::sync::Arc<
+        std::sync::Mutex<Option<flume::Receiver<hyperchad_renderer::ResponseMetadata>>>,
+    >,
+    shutdown: flume::Receiver<()>,
     navigation: flume::Receiver<String>,
     pub(crate) navigation_sender: flume::Sender<String>,
     pub(crate) request_action: flume::Sender<(String, Option<hyperchad_actions::logic::Value>)>,
@@ -115,6 +148,7 @@ pub struct EguiRenderer<C> {
 impl<C> Clone for EguiRenderer<C> {
     fn clone(&self) -> Self {
         Self {
+            terminal_error: self.terminal_error.clone(),
             host_factory: self.host_factory.clone(),
             window: self.window.clone(),
             input_sender: self.input_sender.clone(),
@@ -122,6 +156,8 @@ impl<C> Clone for EguiRenderer<C> {
             context: self.context.clone(),
             handle: self.handle.clone(),
             bootstrap: self.bootstrap.clone(),
+            response_receiver: self.response_receiver.clone(),
+            shutdown: self.shutdown.clone(),
             navigation: self.navigation.clone(),
             navigation_sender: self.navigation_sender.clone(),
             request_action: self.request_action.clone(),
@@ -142,15 +178,24 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
         calculator: C,
     ) -> Self {
         let (handle, mut frame) = BackendFrame::new(calculator);
+        let terminal_error = std::sync::Arc::new(std::sync::Mutex::new(None));
+        frame.terminal_error = terminal_error.clone();
+        let (shutdown_sender, shutdown) = flume::bounded(1);
+        frame.shutdown_sender = Some(shutdown_sender);
+        let (response_sender, response_receiver) = flume::bounded(64);
+        frame.response_sender = Some(response_sender);
         let (input_sender, input_receiver) = flume::bounded(256);
         frame.input_receiver = Some(input_receiver);
         let (navigation_sender, navigation) = flume::unbounded();
         let navigation_output = navigation_sender.clone();
         let custom_output = request_action.clone();
         let resize_output = on_resize.clone();
+        let host_router = router.clone();
         let factory: std::sync::Arc<HostFactory<C>> = std::sync::Arc::new(move |frame, _ctx| {
             Ok(Box::new(NativeHost {
-                app: crate::feedback::FeedbackApp::from_frame(frame),
+                app: crate::feedback::FeedbackApp::from_frame(frame)
+                    .with_native_capture_from_env()
+                    .with_router(host_router.clone(), "/".to_owned()),
                 navigation: navigation_output.clone(),
                 custom: custom_output.clone(),
                 resize: resize_output.clone(),
@@ -158,6 +203,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
             }))
         });
         Self {
+            terminal_error,
             host_factory: std::sync::Arc::new(std::sync::Mutex::new(Some(factory))),
             window: std::sync::Arc::default(),
             input_sender,
@@ -165,6 +211,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
             context: std::sync::Arc::default(),
             handle,
             bootstrap: std::sync::Arc::new(std::sync::Mutex::new(Some(frame))),
+            response_receiver: std::sync::Arc::new(std::sync::Mutex::new(Some(response_receiver))),
+            shutdown,
             navigation,
             navigation_sender,
             request_action,
@@ -174,8 +222,24 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
         }
     }
 
-    /// Install the real WidgetPainter/event/action/resource native host before taking the runner.
-    /// No default host is guessed while adapter integration is in progress.
+    /// Transfer the bounded response stream once across all facade clones.
+    /// App is the sole redirect consumer; cookies remain rejected before commit.
+    /// # Errors
+    /// * The receiver was already taken or its lock was poisoned.
+    pub fn take_response_receiver(
+        &self,
+    ) -> Result<flume::Receiver<hyperchad_renderer::ResponseMetadata>, String> {
+        self.response_receiver
+            .lock()
+            .map_err(|error| error.to_string())?
+            .take()
+            .ok_or_else(|| "response receiver already taken".to_owned())
+    }
+
+    /// Install the real `WidgetPainter`/event/action/resource native host before taking the runner.
+    ///
+    /// # Errors
+    /// * Returns an error if the shared factory lock is poisoned.
     pub fn install_host(
         &self,
         factory: impl Fn(BackendFrame<C>, &egui::Context) -> Result<Box<dyn eframe::App>, String>
@@ -194,6 +258,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
     ///
     /// # Errors
     /// * Returns the owned command if the UI mailbox has been dropped.
+    #[allow(
+        clippy::result_large_err,
+        reason = "preserve the caller's owned bounded mailbox command on rejection"
+    )]
     pub fn submit(
         &self,
         view: hyperchad_renderer::View,
@@ -221,7 +289,16 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
     }
 
     pub async fn wait_for_navigation(&self) -> Option<String> {
-        self.navigation.recv_async().await.ok()
+        use futures_util::future::{Either, select};
+        match select(
+            Box::pin(self.shutdown.recv_async()),
+            Box::pin(self.navigation.recv_async()),
+        )
+        .await
+        {
+            Either::Left(_) => None,
+            Either::Right((result, _)) => result.ok(),
+        }
     }
 }
 
@@ -235,6 +312,7 @@ struct NativeHost<C: EguiCalc + Clone + Send + Sync> {
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for NativeHost<C> {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         self.app.frame(ctx);
+        self.app.flush_responses(ctx);
         for url in self.app.drain_navigation() {
             if let Err(error) = self.navigation.send(url) {
                 log::error!("navigation output: {error}");
@@ -295,7 +373,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
                     "replacement native WidgetPainter/event/resource host not installed".to_owned(),
                 )
             })?;
-        let mut viewport = egui::ViewportBuilder::default().with_inner_size([size.0, size.1]);
+        let mut viewport =
+            egui::ViewportBuilder::default().with_inner_size(egui::vec2(size.0, size.1));
         if let Some((x, y)) = config.position {
             #[allow(clippy::cast_precision_loss)]
             {
@@ -319,7 +398,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::RenderRunn
                 })
             }),
         )
-        .map_err(|e| error(e.to_string()))
+        .map_err(|e| error(e.to_string()))?;
+        let terminal_error = self
+            .renderer
+            .terminal_error
+            .lock()
+            .map_err(|e| error(e.to_string()))?
+            .take();
+        terminal_error.map_or(Ok(()), |message| Err(error(message)))
     }
 }
 
@@ -348,6 +434,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         config.position = x.zip(y);
         config.title = title.map(str::to_owned);
         config.background = background;
+        drop(config);
         Ok(())
     }
     fn add_responsive_trigger(
@@ -382,7 +469,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         &self,
         view: hyperchad_renderer::View,
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
-        self.submit(view, crate::document::ViewOrigin::Navigation)
+        if !view.response.cookies.is_empty() {
+            return Err(Box::new(std::io::Error::other(
+                "native cookies require a real host store",
+            )));
+        }
+        self.handle
+            .submit_async(crate::runtime::DocumentCommand::Apply {
+                view,
+                origin: crate::document::ViewOrigin::Navigation,
+            })
+            .await
             .map_err(|e| {
                 Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error + Send>
             })
@@ -404,6 +501,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
 /// UI-thread-only state; no document or calculated tree is shared with producers.
 pub struct BackendFrame<C> {
+    terminal_error: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    command_handle: DocumentHandle,
+    pub(crate) route_boundary: Option<crate::routing::PreparedCompletion>,
+    pending_mutations: Vec<MutationSummary>,
+    shutdown_sender: Option<flume::Sender<()>>,
     document: Document,
     inbox: DocumentInbox,
     calculator: C,
@@ -416,10 +518,11 @@ pub struct BackendFrame<C> {
     backlog: bool,
     input_receiver: Option<flume::Receiver<crate::events::InputEvent>>,
     actions: crate::action_runtime::ActionRuntime,
+    pub navigation_effects: Vec<(ElementStamp, String)>,
     pub action_effects: Vec<crate::action_runtime::ActionEffects>,
     action_dirty: bool,
     pointer_gesture: u64,
-    active_gestures: BTreeMap<u8, u64>,
+    active_gestures: BTreeMap<u8, (u64, Option<ElementKey>)>,
     events: crate::events::EventRouter,
     pub routed_events: Vec<crate::events::UiEvent>,
     /// Already-normalized inputs from the platform adapter, in native order.
@@ -427,6 +530,7 @@ pub struct BackendFrame<C> {
     pub diagnostics: Vec<String>,
     pub interactions: Vec<NodeInteraction>,
     /// Response effects are retained for the host; unsupported effects also diagnose.
+    response_sender: Option<flume::Sender<hyperchad_renderer::ResponseMetadata>>,
     pub response_effects: Vec<hyperchad_renderer::ResponseMetadata>,
 }
 
@@ -436,8 +540,13 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
     pub fn new(calculator: C) -> (DocumentHandle, Self) {
         let (handle, inbox) = document_channel();
         (
-            handle,
+            handle.clone(),
             Self {
+                terminal_error: std::sync::Arc::default(),
+                command_handle: handle,
+                route_boundary: None,
+                pending_mutations: Vec::new(),
+                shutdown_sender: None,
                 document: Document::new(),
                 inbox,
                 calculator,
@@ -450,6 +559,7 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                 backlog: false,
                 input_receiver: None,
                 actions: crate::action_runtime::ActionRuntime::new(),
+                navigation_effects: Vec::new(),
                 action_effects: Vec::new(),
                 action_dirty: false,
                 pointer_gesture: 0,
@@ -459,9 +569,92 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                 pending_inputs: Vec::new(),
                 diagnostics: Vec::new(),
                 interactions: Vec::new(),
+                response_sender: None,
                 response_effects: Vec::new(),
             },
         )
+    }
+
+    /// Persist a terminal native-host failure for the runner to return after UI exit.
+    pub fn fail_native_host(&mut self, ctx: &egui::Context, message: String) {
+        if let Ok(mut error) = self.terminal_error.lock() {
+            *error = Some(message);
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// Nonblocking response delivery. Overflow or a missing App consumer is fatal,
+    /// closes this native viewport and drops the sole sender, never silently loses effects.
+    pub fn flush_responses(&mut self, ctx: &egui::Context) {
+        for response in std::mem::take(&mut self.response_effects) {
+            if let Some(sender) = &self.response_sender {
+                if let Err(error) = sender.try_send(response) {
+                    self.diagnostics
+                        .push(format!("fatal response delivery: {error}"));
+                    self.response_sender = None;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    break;
+                }
+            } else {
+                self.diagnostics
+                    .push("response metadata requires installed App consumer".to_owned());
+            }
+        }
+    }
+
+    pub fn handle(&self) -> DocumentHandle {
+        self.command_handle.clone()
+    }
+
+    /// Reconcile a route mutation on the next projection before later mailbox work.
+    pub fn retain_route_mutation(&mut self, mutation: MutationSummary) {
+        self.pending_mutations.push(mutation);
+        self.invalidate_document();
+    }
+
+    /// UI-host lifecycle access. Call only outside node traversal.
+    pub const fn document_mut(&mut self) -> &mut Document {
+        &mut self.document
+    }
+
+    /// Invalidate after a ticket completion applied authored changes.
+    pub fn invalidate_document(&mut self) {
+        self.viewport = None;
+        self.geometry = None;
+    }
+
+    /// Dispatch lifecycle before/terminal events synchronously before host I/O or swaps.
+    ///
+    /// # Errors
+    /// * Missing geometry, invalid event target, or action handler failure.
+    pub fn dispatch_host_event(
+        &mut self,
+        ctx: &egui::Context,
+        input: crate::events::InputEvent,
+    ) -> Result<(), String> {
+        let snapshot = self
+            .geometry
+            .as_ref()
+            .ok_or_else(|| "host lifecycle requires projected geometry".to_owned())?;
+        let events = self
+            .events
+            .route(&self.document, snapshot, input)
+            .map_err(|error| error.to_string())?;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let now_ms = ctx.input(|input| (input.time.max(0.0) * 1000.0) as u64);
+        for event in events {
+            self.actions.dispatch(&self.document, &event, now_ms)?;
+            let mut effects = self.actions.take_effects();
+            self.navigation_effects
+                .extend(effects.navigation.drain(..).map(|url| (event.source, url)));
+            self.action_dirty |= effects.rebuild;
+            self.action_effects.push(effects);
+            self.routed_events.push(event);
+        }
+        let effects = self.actions.take_effects();
+        self.action_dirty |= effects.rebuild;
+        self.action_effects.push(effects);
+        Ok(())
     }
 
     /// Clear accumulated diagnostics after the host has observed them.
@@ -470,16 +663,22 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
     }
 
     #[must_use]
-    pub fn document(&self) -> &Document {
+    pub const fn document(&self) -> &Document {
         &self.document
     }
 
-    pub fn geometry(&self) -> Option<&GeometrySnapshot<ElementKey>> {
+    pub const fn geometry(&self) -> Option<&GeometrySnapshot<ElementKey>> {
         self.geometry.as_ref()
     }
 
     /// Apply queued mutations, calculate owned clones and paint projected geometry.
     /// No network operation, blocking receive, or callback-side document mutation.
+    /// # Panics
+    /// * The process exhausts its monotonic pointer gesture counter.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one ordered UI transaction; split only after the integration contract settles"
+    )]
     pub fn frame(&mut self, ctx: &egui::Context, painter: &mut impl FramePainter) {
         if let Some(receiver) = &self.input_receiver {
             self.pending_inputs.extend(receiver.try_iter().take(256));
@@ -494,33 +693,41 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             self.calculator = self.calculator.clone().with_context(ctx.clone());
             self.initialized = true;
         }
-        let batch = self
-            .inbox
-            .drain(&mut self.document, 256, |document, command| {
-                painter.apply_canvas(document, command)
-            });
+        let batch = self.inbox.drain(
+            &mut self.document,
+            if self.route_boundary.is_some() {
+                0
+            } else {
+                256
+            },
+            |document, command| painter.apply_canvas(document, command),
+        );
         self.backlog = batch.has_more;
         if self.backlog {
             ctx.request_repaint();
         }
-        let mut mutations = Vec::new();
+        let mut mutations = std::mem::take(&mut self.pending_mutations);
         for result in batch.results {
             match result {
                 crate::runtime::CommandOutcome::Document(Ok(mutation)) => {
                     for diagnostic in &mutation.diagnostics {
                         self.diagnostics.push(format!("document: {diagnostic:?}"));
                     }
-                    if mutation.response != hyperchad_renderer::ResponseMetadata::default() {
-                        self.diagnostics.push(format!(
-                            "unhandled response metadata: {:?}",
-                            mutation.response
-                        ));
+                    if !mutation.response.cookies.is_empty() {
+                        self.diagnostics.push(
+                            "cookie-bearing mailbox response requires a real host store".to_owned(),
+                        );
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    } else if mutation.response != hyperchad_renderer::ResponseMetadata::default() {
                         self.response_effects.push(mutation.response.clone());
                     }
                     mutations.push(mutation);
                 }
                 crate::runtime::CommandOutcome::Document(Err(error)) => {
-                    self.diagnostics.push(error.to_string())
+                    self.diagnostics.push(error.to_string());
+                }
+                crate::runtime::CommandOutcome::RouteCompletion(prepared) => {
+                    self.route_boundary = Some(prepared);
                 }
                 crate::runtime::CommandOutcome::Canvas(Ok(_)) => {}
                 crate::runtime::CommandOutcome::Canvas(Err(error)) => self.diagnostics.push(error),
@@ -537,10 +744,36 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             rect: ctx.content_rect(),
             zoom: 1.0,
         };
-        let dirty = self
-            .viewport
-            .as_ref()
-            .is_none_or(|old| old.rect != viewport.rect || old.zoom != viewport.zoom)
+        let mut wheel_changed = false;
+        if let Some(snapshot) = &self.geometry {
+            let mut cursor_position = ctx.input(|input| input.pointer.hover_pos());
+            for event in ctx.input(|input| input.events.clone()) {
+                match event {
+                    egui::Event::PointerMoved(position) => cursor_position = Some(position),
+                    egui::Event::MouseWheel { unit, delta, .. } => {
+                        if let Some(point) = cursor_position {
+                            let delta = match unit {
+                                egui::MouseWheelUnit::Point => delta,
+                                egui::MouseWheelUnit::Line => delta * 24.0,
+                                egui::MouseWheelUnit::Page => delta * viewport.rect.size(),
+                            };
+                            wheel_changed |= scroll_wheel(
+                                &self.document,
+                                snapshot,
+                                &mut self.scroll,
+                                point,
+                                delta,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let dirty = wheel_changed
+            || self.viewport.as_ref().is_none_or(|old| {
+                old.rect != viewport.rect || old.zoom.to_bits() != viewport.zoom.to_bits()
+            })
             || self.action_dirty
             || mutations.iter().any(|mutation| mutation.layout_dirty);
         if dirty {
@@ -559,13 +792,11 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             }
             let paths = key_paths(&self.document);
             if !failed {
-                self.revision = match self.revision.checked_add(1) {
-                    Some(revision) => revision,
-                    None => {
-                        self.diagnostics.push("frame revision exhausted".to_owned());
-                        return;
-                    }
+                let Some(revision) = self.revision.checked_add(1) else {
+                    self.diagnostics.push("frame revision exhausted".to_owned());
+                    return;
                 };
+                self.revision = revision;
                 match GeometrySnapshot::build_roots(
                     &self.roots,
                     viewport,
@@ -622,7 +853,7 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                         ui.set_clip_rect(geometry.paint_clip);
                         match painter.paint_node(ui, stamp, authored, calculated, geometry) {
                             Ok(Some(output)) => {
-                                self.interactions.push(NodeInteraction { stamp, output })
+                                self.interactions.push(NodeInteraction { stamp, output });
                             }
                             Ok(None) => {}
                             Err(error) => self.diagnostics.push(error),
@@ -632,15 +863,39 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             });
         // Feed normalized platform facts and authoritative native widget facts to
         // G's persistent router. H consumes routed_events after this traversal.
-        let mut released_gesture = None;
+        let mut released_gestures = BTreeMap::new();
+        if let Some(interaction) = self
+            .interactions
+            .iter()
+            .find(|interaction| interaction.output.response.has_focus())
+        {
+            let editing = self
+                .document
+                .get(interaction.stamp.key)
+                .is_some_and(|node| {
+                    matches!(
+                        node.element,
+                        hyperchad_transformer::Element::Input { .. }
+                            | hyperchad_transformer::Element::Textarea { .. }
+                    )
+                });
+            if let Err(error) = self.events.focus(
+                &self.document,
+                snapshot,
+                Some(interaction.stamp.key),
+                editing,
+            ) {
+                self.diagnostics.push(error.to_string());
+            }
+        }
         let raw_events = ctx.input(|input| input.events.clone());
         for event in raw_events {
             use crate::events::{InputEvent, PointerEvent};
             match event {
                 egui::Event::PointerMoved(position) => {
-                    self.pending_inputs.push(InputEvent::PointerMoved(position))
+                    self.pending_inputs.push(InputEvent::PointerMoved(position));
                 }
-                egui::Event::PointerGone => self.pending_inputs.push(InputEvent::PointerCancelled),
+                egui::Event::PointerGone => self.pending_inputs.push(InputEvent::PointerDeparted),
                 egui::Event::Key {
                     key,
                     physical_key: _,
@@ -674,7 +929,27 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                                             | hyperchad_transformer::Element::Textarea { .. }
                                     )
                                 })
-                    });
+                    }) && (matches!(
+                        key,
+                        egui::Key::ArrowLeft
+                            | egui::Key::ArrowRight
+                            | egui::Key::ArrowUp
+                            | egui::Key::ArrowDown
+                            | egui::Key::Home
+                            | egui::Key::End
+                            | egui::Key::Backspace
+                            | egui::Key::Delete
+                            | egui::Key::Space
+                    ) || ((modifiers.command || modifiers.ctrl)
+                        && matches!(
+                            key,
+                            egui::Key::A
+                                | egui::Key::C
+                                | egui::Key::V
+                                | egui::Key::X
+                                | egui::Key::Y
+                                | egui::Key::Z
+                        )));
                     self.pending_inputs
                         .push(InputEvent::Key(crate::events::KeyboardEvent {
                             key: logical,
@@ -687,7 +962,7 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                         }));
                 }
                 egui::Event::WindowFocused(focus) => {
-                    self.pending_inputs.push(InputEvent::WindowFocus(focus))
+                    self.pending_inputs.push(InputEvent::WindowFocus(focus));
                 }
                 egui::Event::PointerButton {
                     pos,
@@ -695,27 +970,27 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
                     pressed,
                     modifiers,
                 } => {
-                    let gesture = if pressed {
+                    let hit_widget = native_hit_owner(snapshot, pos, &self.interactions, |key| {
+                        painter.allows_node(key)
+                    });
+                    let (gesture, native_widget) = if pressed {
                         self.pointer_gesture = self
                             .pointer_gesture
                             .checked_add(1)
                             .expect("pointer gesture exhausted");
-                        self.active_gestures
-                            .insert(button as u8, self.pointer_gesture);
-                        self.pointer_gesture
+                        let entry = (self.pointer_gesture, hit_widget);
+                        self.active_gestures.insert(button as u8, entry);
+                        entry
                     } else {
                         self.active_gestures
                             .remove(&(button as u8))
-                            .unwrap_or(self.pointer_gesture)
+                            .unwrap_or((self.pointer_gesture, None))
                     };
-                    let native_widget = self
-                        .interactions
-                        .iter()
-                        .rev()
-                        .find(|interaction| interaction.output.response.rect.contains(pos))
-                        .map(|interaction| interaction.stamp.key);
-                    if !pressed {
-                        released_gesture = Some(gesture);
+                    if !pressed
+                        && button == egui::PointerButton::Primary
+                        && let Some(owner) = native_widget
+                    {
+                        released_gestures.insert(owner, gesture);
                     }
                     self.pending_inputs.push(InputEvent::Pointer(PointerEvent {
                         gesture,
@@ -751,7 +1026,7 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             }];
             if interaction.output.response.clicked() {
                 facts.push(WidgetEventKind::Activate {
-                    gesture: released_gesture,
+                    gesture: released_gestures.get(&interaction.stamp.key).copied(),
                 });
             }
             let value = interaction.output.value.clone().map(EventValue::String);
@@ -789,43 +1064,57 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
         self.events.end_input_batch();
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let now_ms = ctx.input(|input| (input.time.max(0.0) * 1000.0) as u64);
+        self.actions.sync_focus(
+            self.interactions
+                .iter()
+                .find(|interaction| interaction.output.response.has_focus())
+                .map(|interaction| interaction.stamp.key),
+        );
         for event in &self.routed_events {
             if let Err(error) = self.actions.dispatch(&self.document, event, now_ms) {
                 self.diagnostics.push(error);
             }
+            let mut effects = self.actions.take_effects();
+            self.navigation_effects
+                .extend(effects.navigation.drain(..).map(|url| (event.source, url)));
+            self.action_dirty |= effects.rebuild;
+            self.action_effects.push(effects);
         }
         if let Err(error) = self.actions.tick(now_ms) {
             self.diagnostics.push(error);
         }
         let effects = self.actions.take_effects();
-        for (key, focused) in &effects.focus {
-            let id = egui::Id::new(*key);
-            ctx.memory_mut(|memory| {
-                if *focused {
-                    memory.request_focus(id);
-                } else {
-                    memory.surrender_focus(id);
-                }
-            });
-        }
-        for key in &effects.select_input {
-            let id = egui::Id::new(*key);
-            if let Some(mut state) = egui::text_edit::TextEditState::load(ctx, id) {
-                state
-                    .cursor
-                    .set_char_range(Some(egui::text::CCursorRange::two(
-                        egui::text::CCursor::new(0),
-                        egui::text::CCursor::new(usize::MAX),
-                    )));
-                state.store(ctx, id);
-            } else {
-                self.diagnostics
-                    .push("select-input target has no mounted native editor".to_owned());
-            }
-        }
         self.action_dirty |= effects.rebuild;
         self.diagnostics.extend(effects.diagnostics.iter().cloned());
         self.action_effects.push(effects);
+        for effects in &self.action_effects {
+            for (key, focused) in &effects.focus {
+                let result = match self.document.stamp(*key) {
+                    Some(stamp) if *focused => painter.focus(ctx, stamp),
+                    Some(stamp) => painter.blur(ctx, stamp),
+                    None => Err("focus effect target is no longer mounted".to_owned()),
+                };
+                if let Err(error) = result {
+                    self.diagnostics.push(error);
+                }
+            }
+            for key in &effects.select_input {
+                let result = self
+                    .document
+                    .stamp(*key)
+                    .ok_or_else(|| "selection target is no longer mounted".to_owned())
+                    .and_then(|stamp| painter.select_all(ctx, stamp));
+                if let Err(error) = result {
+                    self.diagnostics.push(error);
+                }
+            }
+        }
+        self.actions.sync_focus(
+            self.interactions
+                .iter()
+                .find(|interaction| interaction.output.response.has_focus())
+                .map(|interaction| interaction.stamp.key),
+        );
         if self.action_dirty {
             ctx.request_repaint();
         }
@@ -836,31 +1125,143 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
         }
     }
 
+    /// Required resource membership from current calculated participation and clipping.
+    #[must_use]
+    pub fn scene_images(&self, painter: &impl FramePainter) -> Vec<ElementStamp> {
+        let Some(snapshot) = &self.geometry else {
+            return Vec::new();
+        };
+        let paths = key_paths(&self.document);
+        paths
+            .iter()
+            .filter_map(|(path, key)| {
+                let node = at_path(&self.roots, path)?;
+                if !matches!(node.element, hyperchad_transformer::Element::Image { .. })
+                    || !painter.allows_node(*key)
+                    || snapshot.node(*key)?.visible_bounds().is_none()
+                {
+                    return None;
+                }
+                let mut opacity = 1.0;
+                for length in 1..=path.len() {
+                    opacity *= at_path(&self.roots, &path[..length])?
+                        .calculated_opacity
+                        .unwrap_or(1.0);
+                }
+                (opacity.is_finite() && opacity > 0.0)
+                    .then(|| self.document.stamp(*key))
+                    .flatten()
+            })
+            .collect()
+    }
+
+    /// Current geometry exists and every admitted mailbox item preceding it settled.
+    #[must_use]
+    pub const fn projection_ready(&self) -> bool {
+        !self.backlog && self.geometry.is_some() && self.route_boundary.is_none()
+    }
+
     #[must_use]
     pub fn ready(&self, painter: &impl FramePainter) -> bool {
         !self.backlog && self.geometry.is_some() && painter.pending_resources() == 0
     }
 }
 
+fn native_hit_owner(
+    snapshot: &GeometrySnapshot<ElementKey>,
+    point: egui::Pos2,
+    interactions: &[NodeInteraction],
+    allows: impl Fn(ElementKey) -> bool,
+) -> Option<ElementKey> {
+    let mut key = snapshot.hit_test(point, |_| true);
+    while let Some(current) = key {
+        if allows(current)
+            && interactions.iter().any(|interaction| {
+                interaction.stamp.key == current
+                    && interaction.output.response.enabled()
+                    && interaction.output.response.sense.interactive()
+            })
+        {
+            return Some(current);
+        }
+        key = snapshot.node(current)?.parent;
+    }
+    None
+}
+
+/// Consume screen-space wheel movement from the deepest clipped hit outward.
+/// Each axis chains independently; fixed descendants start at their own DOM ancestors.
+fn scroll_wheel(
+    document: &Document,
+    snapshot: &GeometrySnapshot<ElementKey>,
+    offsets: &mut BTreeMap<ElementKey, egui::Vec2>,
+    point: egui::Pos2,
+    delta: egui::Vec2,
+) -> bool {
+    use hyperchad_transformer::models::LayoutOverflow;
+    let mut remaining = delta;
+    let mut current = snapshot.hit_test(point, |_| true);
+    let mut changed = false;
+    while let Some(key) = current {
+        let Some(node) = snapshot.node(key) else {
+            break;
+        };
+        current = node.parent;
+        let Some(authored) = document.get(key) else {
+            continue;
+        };
+        let zoom = node.transform.scale;
+        let old = offsets
+            .get(&key)
+            .copied()
+            .unwrap_or(node.scroll_offset)
+            .clamp(egui::Vec2::ZERO, node.scroll_max);
+        let mut next = old;
+        for (axis, overflow) in [authored.overflow_x, authored.overflow_y]
+            .into_iter()
+            .enumerate()
+        {
+            if matches!(overflow, LayoutOverflow::Auto | LayoutOverflow::Scroll) {
+                next[axis] = (old[axis] - remaining[axis] / zoom).clamp(0.0, node.scroll_max[axis]);
+                remaining[axis] = (next[axis] - old[axis]).mul_add(zoom, remaining[axis]);
+            }
+        }
+        if next != old {
+            offsets.insert(key, next);
+            changed = true;
+        }
+    }
+    changed
+}
+
 fn key_paths(document: &Document) -> BTreeMap<Vec<usize>, ElementKey> {
     fn collect(
         document: &Document,
         key: ElementKey,
-        path: Vec<usize>,
+        path: &[usize],
         paths: &mut BTreeMap<Vec<usize>, ElementKey>,
     ) {
-        paths.insert(path.clone(), key);
+        paths.insert(path.to_vec(), key);
         for (index, child) in document.children(key).into_iter().enumerate() {
-            let mut child_path = path.clone();
+            let mut child_path = path.to_vec();
             child_path.push(index);
-            collect(document, child, child_path, paths);
+            collect(document, child, &child_path, paths);
         }
     }
     let mut paths = BTreeMap::new();
     for (index, key) in document.root_keys().into_iter().enumerate() {
-        collect(document, key, vec![index], &mut paths);
+        collect(document, key, &[index], &mut paths);
     }
     paths
+}
+
+fn at_path<'a>(roots: &'a [Container], path: &[usize]) -> Option<&'a Container> {
+    let (root, children) = path.split_first()?;
+    let mut node = roots.get(*root)?;
+    for index in children {
+        node = node.children.get(*index)?;
+    }
+    Some(node)
 }
 
 #[cfg(test)]
@@ -868,6 +1269,160 @@ mod tests {
     use super::*;
     use crate::document::ViewOrigin;
     use crate::runtime::DocumentCommand;
+
+    #[test]
+    fn wheel_offsets_chain_at_inner_limit_and_respect_clip() {
+        use hyperchad_transformer::models::LayoutOverflow;
+        fn node(id: usize, y: f32, height: f32) -> Container {
+            Container {
+                id,
+                calculated_x: Some(0.0),
+                calculated_y: Some(y),
+                calculated_width: Some(100.0),
+                calculated_height: Some(height),
+                ..Container::default()
+            }
+        }
+        let mut root = node(1, 0.0, 100.0);
+        root.overflow_y = LayoutOverflow::Scroll;
+        let mut inner = node(2, 0.0, 80.0);
+        inner.overflow_y = LayoutOverflow::Scroll;
+        inner.children.push(node(3, 0.0, 200.0));
+        root.children = vec![inner, node(4, 300.0, 20.0)];
+        let mut document = Document::new();
+        document
+            .apply_view(
+                hyperchad_renderer::View {
+                    primary: Some(root.clone()),
+                    ..Default::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let paths = key_paths(&document);
+        let viewport = GeometryViewport {
+            rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 100.0)),
+            zoom: 1.0,
+        };
+        let snapshot =
+            GeometrySnapshot::build_roots(&[root], viewport, 0, &BTreeMap::new(), |path, _| {
+                paths.get(path).copied()
+            })
+            .unwrap();
+        let root_key = paths[&vec![0]];
+        let inner_key = paths[&vec![0, 0]];
+        let mut offsets = BTreeMap::new();
+        assert!(!scroll_wheel(
+            &document,
+            &snapshot,
+            &mut offsets,
+            egui::pos2(150.0, 50.0),
+            egui::vec2(0.0, -200.0)
+        ));
+        assert!(scroll_wheel(
+            &document,
+            &snapshot,
+            &mut offsets,
+            egui::pos2(20.0, 20.0),
+            egui::vec2(0.0, -150.0)
+        ));
+        assert_eq!(offsets[&inner_key], egui::vec2(0.0, 120.0));
+        assert_eq!(offsets[&root_key], egui::vec2(0.0, 30.0));
+        assert!(scroll_wheel(
+            &document,
+            &snapshot,
+            &mut offsets,
+            egui::pos2(20.0, 20.0),
+            egui::vec2(0.0, 150.0)
+        ));
+        assert_eq!(offsets[&inner_key], egui::Vec2::ZERO);
+        assert_eq!(offsets[&root_key], egui::Vec2::ZERO);
+    }
+
+    #[test]
+    fn facade_render_backpressures_before_first_frame() {
+        use hyperchad_renderer::Renderer;
+        use std::future::Future;
+        let (custom, _) = flume::unbounded();
+        let (resize, _) = flume::unbounded();
+        let renderer = EguiRenderer::new(
+            hyperchad_router::Router::new(),
+            custom,
+            resize,
+            std::sync::Arc::new(hyperchad_router::ClientInfo::default()),
+            Calc,
+        );
+        for _ in 0..256 {
+            renderer
+                .submit(hyperchad_renderer::View::default(), ViewOrigin::Navigation)
+                .unwrap();
+        }
+        let mut pending = Box::pin(renderer.render(hyperchad_renderer::View::default()));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(pending.as_mut().poll(&mut context).is_pending());
+        let mut frame = renderer.take_frame(&egui::Context::default()).unwrap();
+        let _ = frame.inbox.drain(&mut frame.document, 1, |_, _| {
+            Err("unexpected canvas".to_owned())
+        });
+        assert!(matches!(
+            pending.as_mut().poll(&mut context),
+            std::task::Poll::Ready(Ok(()))
+        ));
+    }
+
+    #[test]
+    fn native_shutdown_closes_waiters_despite_live_facade_clones() {
+        use std::future::Future;
+        let (custom, _) = flume::unbounded();
+        let (resize, _) = flume::unbounded();
+        let renderer = EguiRenderer::new(
+            hyperchad_router::Router::new(),
+            custom,
+            resize,
+            std::sync::Arc::new(hyperchad_router::ClientInfo::default()),
+            Calc,
+        );
+        let retained = renderer.clone();
+        let receiver = renderer.take_response_receiver().unwrap();
+        assert!(retained.take_response_receiver().is_err());
+        let frame = renderer.take_frame(&egui::Context::default()).unwrap();
+        let mut waiter = Box::pin(retained.wait_for_navigation());
+        let waker = std::task::Waker::noop();
+        let mut context = std::task::Context::from_waker(waker);
+        assert!(waiter.as_mut().poll(&mut context).is_pending());
+        drop(frame);
+        assert_eq!(
+            waiter.as_mut().poll(&mut context),
+            std::task::Poll::Ready(None)
+        );
+        assert!(receiver.is_disconnected());
+    }
+
+    #[test]
+    fn metadata_delivery_is_bounded_and_shutdown_disconnects() {
+        let (_, mut frame) = BackendFrame::new(Calc);
+        let (sender, receiver) = flume::bounded(1);
+        frame.response_sender = Some(sender);
+        frame
+            .response_effects
+            .push(hyperchad_renderer::ResponseMetadata::default());
+        let ctx = egui::Context::default();
+        frame.flush_responses(&ctx);
+        assert_eq!(receiver.len(), 1);
+        frame
+            .response_effects
+            .push(hyperchad_renderer::ResponseMetadata::default());
+        frame.flush_responses(&ctx);
+        assert!(frame.response_sender.is_none());
+        assert!(
+            frame
+                .diagnostics
+                .iter()
+                .any(|error| error.contains("fatal response delivery"))
+        );
+        assert!(receiver.try_recv().is_ok());
+        assert_eq!(receiver.try_recv(), Err(flume::TryRecvError::Disconnected));
+    }
 
     #[derive(Clone)]
     struct Calc;
@@ -919,12 +1474,12 @@ mod tests {
         let ctx = egui::Context::default();
         let mut painter = Probe;
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            frame.frame(ctx, &mut painter)
+            frame.frame(ctx, &mut painter);
         });
         assert!(frame.backlog);
         assert!(!frame.ready(&painter));
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            frame.frame(ctx, &mut painter)
+            frame.frame(ctx, &mut painter);
         });
         assert!(!frame.backlog);
     }
@@ -956,13 +1511,4 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert_ne!(paths[&vec![0]], paths[&vec![0, 0]]);
     }
-}
-
-fn at_path<'a>(roots: &'a [Container], path: &[usize]) -> Option<&'a Container> {
-    let (root, children) = path.split_first()?;
-    let mut node = roots.get(*root)?;
-    for index in children {
-        node = node.children.get(*index)?;
-    }
-    Some(node)
 }

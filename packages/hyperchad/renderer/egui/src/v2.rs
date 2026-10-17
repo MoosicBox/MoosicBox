@@ -924,25 +924,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     }
 
     #[cfg(feature = "feedback")]
-    pub(crate) fn set_view(&self, view: Container) {
-        self.render_queue
-            .write()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .push_back(RenderView::View(view));
-    }
-
-    #[cfg(all(test, feature = "feedback"))]
-    pub(crate) fn feedback_loading(&self, loading: bool) {
-        let mut images = self.images.write().unwrap();
-        if loading {
-            images.insert("feedback-test-image".to_owned(), AppImage::Loading);
-        } else {
-            images.remove("feedback-test-image");
-        }
-    }
-
     pub(crate) fn assets_ready(&self) -> bool {
         !self
             .images

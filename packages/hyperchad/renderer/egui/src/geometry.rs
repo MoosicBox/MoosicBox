@@ -3,15 +3,15 @@
 //! Coordinates are egui logical points. Borders overlay the padding box, matching
 //! the calculator's bounding helpers (which do not reserve border widths).
 //! Only `Relative` establishes an absolute containing block in the current
-//! calculator. Fixed coordinates are consumed verbatim relative to the viewport;
-//! the calculator's incorrect fixed right/bottom resolution must be fixed there.
-//! Sticky is rejected: the shared calculator currently positions it twice.
+//! calculator. Fixed coordinates resolve and project relative to the viewport.
+//! Sticky uses the shared axis constraint solver without altering normal flow.
 
 use std::collections::BTreeMap;
 
 use eframe::egui::{Pos2, Rect, Vec2, vec2};
 use hyperchad_transformer::{
     Container,
+    layout::{StickyAxis, sticky_offset},
     models::{LayoutOverflow, Position, Visibility},
 };
 
@@ -124,8 +124,8 @@ pub enum GeometryError {
     DuplicateIdentity(usize),
     /// Missing/nonfinite calculated geometry, inverted size, or nonfinite scroll.
     InvalidCalculatedGeometry(usize),
-    /// Shared calculator does not yet provide usable sticky positions.
-    UnsupportedSticky(usize),
+    /// Invalid sticky inset or constraint geometry.
+    InvalidStickyGeometry(usize),
 }
 
 impl std::fmt::Display for GeometryError {
@@ -140,10 +140,9 @@ impl std::fmt::Display for GeometryError {
                 f,
                 "invalid calculated geometry or scroll for container {id}"
             ),
-            Self::UnsupportedSticky(id) => write!(
-                f,
-                "sticky container {id} requires shared calculator support"
-            ),
+            Self::InvalidStickyGeometry(id) => {
+                write!(f, "invalid sticky geometry for container {id}")
+            }
         }
     }
 }
@@ -157,6 +156,7 @@ pub struct GeometrySnapshot<K> {
     pub revision: u64,
     nodes: Vec<NodeGeometry<K>>,
     indices: BTreeMap<K, usize>,
+    paint_indices: Vec<usize>,
 }
 
 #[derive(Clone, Copy)]
@@ -166,19 +166,21 @@ struct Placement {
     relative: Option<usize>,
     origin: Pos2,
     visible: bool,
+    sticky_insets: Option<[Option<f32>; 4]>,
+    view_size: Vec2,
 }
 
 impl<K: Copy + Ord> GeometrySnapshot<K> {
     /// Projects already-calculated boxes. Never runs a second layout engine.
     ///
-    /// Paint order is DOM preorder with later siblings on top; no CSS stacking
-    /// contexts or z-index are invented. Fixed subtrees restart at the viewport
+    /// Paint order is DOM preorder, with sticky subtrees above ordinary sibling
+    /// subtrees. There is no authored z-index model. Fixed subtrees restart at the viewport
     /// clip and escape ancestor scrolling. Negative overflow is recorded but
     /// scrolling is intentionally nonnegative. Hidden subtrees need no identities.
     ///
     /// # Errors
     /// * Returns an error for invalid/missing geometry or identities, duplicate
-    ///   identities, invalid viewport/scroll input, or unsupported sticky nodes.
+    ///   identities, invalid viewport/scroll input, or invalid sticky constraints.
     pub fn build(
         tree: &Container,
         viewport: GeometryViewport,
@@ -218,6 +220,7 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
             revision,
             nodes: Vec::new(),
             indices: BTreeMap::new(),
+            paint_indices: Vec::new(),
         };
         let mut placements = Vec::new();
         let mut overflow = Vec::new();
@@ -230,6 +233,8 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
                     relative: None,
                     origin: Pos2::ZERO,
                     visible: true,
+                    sticky_insets: None,
+                    view_size: viewport.logical_size()?,
                 },
                 &mut vec![root_index],
                 &resolve,
@@ -266,6 +271,28 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
                 extents[parent] = extents[parent].union(bounds);
             }
         }
+        snapshot.project_nodes(&placements, &overflow, viewport)?;
+        // Sticky subtrees paint above ordinary sibling subtrees. There is no
+        // authored z-index model; preserve DOM order inside each group.
+        let mut ranks: Vec<Vec<(bool, usize)>> = Vec::with_capacity(placements.len());
+        for (index, placement) in placements.iter().enumerate() {
+            let mut rank = placement.parent.map_or_else(Vec::new, |p| ranks[p].clone());
+            rank.push((placement.sticky_insets.is_some(), index));
+            ranks.push(rank);
+        }
+        snapshot.paint_indices = (0..snapshot.nodes.len()).collect();
+        snapshot
+            .paint_indices
+            .sort_by(|&a, &b| ranks[a].cmp(&ranks[b]));
+        Ok(snapshot)
+    }
+
+    fn project_nodes(
+        &mut self,
+        placements: &[Placement],
+        overflow: &[(LayoutOverflow, LayoutOverflow)],
+        viewport: GeometryViewport,
+    ) -> Result<(), GeometryError> {
         // Absolute nodes follow their containing block for scroll and overflow,
         // not intervening static DOM ancestors. CSS2 11.1 excludes clipping by
         // ancestors between an absolute box and its containing block. The
@@ -273,18 +300,31 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
         // Descendants of that absolute box still inherit its own overflow clip.
         // Only this projection applies zoom and scroll. Local calculator outputs
         // remain untouched, including grid/wrap positions and reserved gutters.
-        let mut translations = vec![Vec2::ZERO; snapshot.nodes.len()];
-        for i in 0..snapshot.nodes.len() {
-            let n = &snapshot.nodes[i];
+        let mut translations = vec![Vec2::ZERO; self.nodes.len()];
+        let mut sticky_translations = vec![Vec2::ZERO; self.nodes.len()];
+        for i in 0..self.nodes.len() {
+            let n = &self.nodes[i];
             let parent = placements[i].geometry_parent;
             let (translation, clip) = if let Some(parent) = parent.filter(|_| !n.fixed) {
                 (
-                    translations[parent] - snapshot.nodes[parent].scroll_offset,
-                    snapshot.nodes[parent].descendant_clip,
+                    translations[parent] - self.nodes[parent].scroll_offset,
+                    self.nodes[parent].descendant_clip,
                 )
             } else {
                 (Vec2::ZERO, viewport.rect)
             };
+            // Sticky is a DOM-subtree displacement, even when an absolute
+            // descendant skips static ancestors for its scroll/clip chain.
+            let inherited_sticky = if n.fixed {
+                Vec2::ZERO
+            } else {
+                placements[i]
+                    .parent
+                    .map_or(Vec2::ZERO, |p| sticky_translations[p])
+            };
+            let geometry_sticky = parent.map_or(Vec2::ZERO, |p| sticky_translations[p]);
+            let translation =
+                translation + inherited_sticky - if n.fixed { Vec2::ZERO } else { geometry_sticky };
             translations[i] = translation;
             let project = |r: Rect| {
                 Rect::from_min_max(
@@ -292,11 +332,27 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
                     viewport.rect.min + (r.max.to_vec2() + translation) * viewport.zoom,
                 )
             };
-            let n = &mut snapshot.nodes[i];
+            let displacement = self.sticky_displacement(
+                i,
+                placements,
+                overflow,
+                viewport,
+                (
+                    project(self.nodes[i].border_box),
+                    project(self.nodes[i].margin_box),
+                ),
+            )?;
+            translations[i] += displacement / viewport.zoom;
+            sticky_translations[i] = inherited_sticky + displacement / viewport.zoom;
+            let n = &mut self.nodes[i];
             n.margin_box = project(n.margin_box);
             n.padding_box = project(n.padding_box);
             n.border_box = project(n.border_box);
             n.content_box = project(n.content_box);
+            n.margin_box = n.margin_box.translate(displacement);
+            n.padding_box = n.padding_box.translate(displacement);
+            n.border_box = n.border_box.translate(displacement);
+            n.content_box = n.content_box.translate(displacement);
             if !n.margin_box.is_finite()
                 || !n.border_box.is_finite()
                 || !n.padding_box.is_finite()
@@ -311,7 +367,83 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
                 scale: viewport.zoom,
             };
         }
-        Ok(snapshot)
+        Ok(())
+    }
+
+    fn sticky_displacement(
+        &self,
+        index: usize,
+        placements: &[Placement],
+        overflow: &[(LayoutOverflow, LayoutOverflow)],
+        viewport: GeometryViewport,
+        boxes: (Rect, Rect),
+    ) -> Result<Vec2, GeometryError> {
+        let (normal, margin) = boxes;
+        let Some(insets) = placements[index].sticky_insets else {
+            return Ok(Vec2::ZERO);
+        };
+        let containing = placements[index].parent.map_or(viewport.rect, |p| {
+            let parent = &self.nodes[p];
+            let mut bounds = parent
+                .content_box
+                .translate(-parent.scroll_offset * viewport.zoom);
+            // A scroll container's content extends through its scrollable
+            // area; a non-scrolling wrapper still constrains sticky to
+            // its own allocated content height/width.
+            if scrolls(overflow[p].0) {
+                bounds.max.x = parent
+                    .scroll_extent
+                    .max
+                    .x
+                    .mul_add(viewport.zoom, bounds.min.x);
+            }
+            if scrolls(overflow[p].1) {
+                bounds.max.y = parent
+                    .scroll_extent
+                    .max
+                    .y
+                    .mul_add(viewport.zoom, bounds.min.y);
+            }
+            bounds
+        });
+        let mut displacement = Vec2::ZERO;
+        for axis in 0..2 {
+            let mut ancestor = placements[index].parent;
+            let mut port = viewport.rect;
+            while let Some(p) = ancestor {
+                let mode = if axis == 0 {
+                    overflow[p].0
+                } else {
+                    overflow[p].1
+                };
+                if clips(mode) {
+                    port = self.nodes[p].padding_box;
+                    break;
+                }
+                if self.nodes[p].fixed {
+                    break;
+                }
+                ancestor = placements[p].parent;
+            }
+            // The position box uses margins, reduced where the normal
+            // margin already crosses its containing-block boundary.
+            let start_margin =
+                (normal.min[axis] - margin.min[axis]).min(normal.min[axis] - containing.min[axis]);
+            let end_margin =
+                (margin.max[axis] - normal.max[axis]).min(containing.max[axis] - normal.max[axis]);
+            displacement[axis] = sticky_offset(StickyAxis {
+                normal_start: normal.min[axis],
+                size: normal.size()[axis],
+                containing_start: containing.min[axis] + start_margin,
+                containing_end: containing.max[axis] - end_margin,
+                scrollport_start: port.min[axis],
+                scrollport_end: port.max[axis],
+                start_inset: insets[axis * 2].map(|x| x * viewport.zoom),
+                end_inset: insets[axis * 2 + 1].map(|x| x * viewport.zoom),
+            })
+            .map_err(|_| GeometryError::InvalidStickyGeometry(self.nodes[index].container_id))?;
+        }
+        Ok(displacement)
     }
 
     /// Looks up geometry without consulting mutable document state.
@@ -321,14 +453,13 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
 
     /// Nodes in actual paint order. Paint must use this same ordering.
     pub fn paint_order(&self) -> impl DoubleEndedIterator<Item = &NodeGeometry<K>> {
-        self.nodes.iter()
+        self.paint_indices.iter().map(|&i| &self.nodes[i])
     }
 
     /// Topmost visible, unclipped box accepted by the caller's interaction policy.
     /// Margins are never hit targets. Opacity zero is not visibility-hidden.
     pub fn hit_test(&self, point: Pos2, accepts: impl Fn(K) -> bool) -> Option<K> {
-        self.nodes
-            .iter()
+        self.paint_order()
             .rev()
             .find(|n| {
                 n.visible
@@ -351,9 +482,6 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
     ) -> Result<(), GeometryError> {
         if tree.is_hidden() {
             return Ok(());
-        }
-        if tree.position == Some(Position::Sticky) {
-            return Err(GeometryError::UnsupportedSticky(tree.id));
         }
         let key = resolve(path, tree).ok_or(GeometryError::MissingIdentity(tree.id))?;
         let index = self.nodes.len();
@@ -444,8 +572,47 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
             visible,
             fixed,
         });
+        let view_size = placement.view_size;
+        let sticky_insets = if tree.position == Some(Position::Sticky) {
+            let mut basis = view_size;
+            for axis in 0..2 {
+                let mut ancestor = placement.parent;
+                while let Some(p) = ancestor {
+                    let mode = if axis == 0 {
+                        overflow[p].0
+                    } else {
+                        overflow[p].1
+                    };
+                    if clips(mode) {
+                        basis[axis] = self.nodes[p].padding_box.size()[axis];
+                        break;
+                    }
+                    if self.nodes[p].fixed {
+                        break;
+                    }
+                    ancestor = placements[p].parent;
+                }
+            }
+            Some([
+                tree.left
+                    .as_ref()
+                    .map(|n| n.calc(basis.x, view_size.x, view_size.y)),
+                tree.right
+                    .as_ref()
+                    .map(|n| n.calc(basis.x, view_size.x, view_size.y)),
+                tree.top
+                    .as_ref()
+                    .map(|n| n.calc(basis.y, view_size.x, view_size.y)),
+                tree.bottom
+                    .as_ref()
+                    .map(|n| n.calc(basis.y, view_size.x, view_size.y)),
+            ])
+        } else {
+            None
+        };
         placements.push(Placement {
             geometry_parent: containing,
+            sticky_insets,
             ..placement
         });
         overflow.push((tree.overflow_x, tree.overflow_y));
@@ -464,6 +631,8 @@ impl<K: Copy + Ord> GeometrySnapshot<K> {
                     relative,
                     origin: content_box.min,
                     visible,
+                    sticky_insets: None,
+                    view_size,
                 },
                 path,
                 resolve,
@@ -487,7 +656,7 @@ const fn clips(overflow: LayoutOverflow) -> bool {
     )
 }
 
-fn clip_axes(mut rect: Rect, clip: Rect, overflow: (LayoutOverflow, LayoutOverflow)) -> Rect {
+const fn clip_axes(mut rect: Rect, clip: Rect, overflow: (LayoutOverflow, LayoutOverflow)) -> Rect {
     if clips(overflow.0) {
         rect.min.x = rect.min.x.max(clip.min.x);
         rect.max.x = rect.max.x.min(clip.max.x);
@@ -568,6 +737,43 @@ mod tests {
     }
 
     #[test]
+    fn nested_relative_fixed_projection_ignores_ancestor_scroll_and_clip() {
+        // Calculator regression nested_fixed_percentages_use_viewport_absolute_uses_relative_container
+        // verifies these calculated fixed outputs for a 400x200 viewport.
+        let mut root = node(1, 0.0, 0.0, 400.0, 200.0);
+        root.overflow_y = LayoutOverflow::Scroll;
+        root.children.push(node(2, 0.0, 300.0, 10.0, 10.0));
+        let mut relative = node(3, 20.0, 30.0, 100.0, 60.0);
+        relative.position = Some(Position::Relative);
+        relative.overflow_y = LayoutOverflow::Hidden;
+        let mut middle = node(4, 5.0, 5.0, 20.0, 20.0);
+        let mut fixed = node(5, 160.0, 60.0, 200.0, 100.0);
+        fixed.position = Some(Position::Fixed);
+        fixed.children.push(node(6, 3.0, 4.0, 10.0, 10.0));
+        middle.children.push(fixed);
+        relative.children.push(middle);
+        root.children.push(relative);
+        let before = build(&root, &BTreeMap::new());
+        let after = build(&root, &BTreeMap::from([(1, vec2(0.0, 80.0))]));
+        assert_ne!(
+            before.node(3).unwrap().content_box,
+            after.node(3).unwrap().content_box
+        );
+        for key in [5, 6] {
+            assert_eq!(
+                before.node(key).unwrap().content_box,
+                after.node(key).unwrap().content_box
+            );
+            assert_eq!(
+                before.node(key).unwrap().paint_clip,
+                after.node(key).unwrap().paint_clip
+            );
+        }
+        assert_eq!(after.node(5).unwrap().content_box.min, pos2(330.0, 140.0));
+        assert_eq!(after.hit_test(pos2(350.0, 150.0), |key| key == 5), Some(5));
+    }
+
+    #[test]
     fn absolute_uses_relative_not_immediate_parent() {
         let mut root = node(1, 0.0, 0.0, 100.0, 100.0);
         let mut relative = node(2, 10.0, 10.0, 80.0, 80.0);
@@ -640,8 +846,10 @@ mod tests {
         hidden.children.push(node(3, 0.0, 0.0, 20.0, 20.0));
         root.children.push(hidden);
         root.children.push(node(4, 0.0, 0.0, 30.0, 30.0));
-        let mut absent = Container::default();
-        absent.hidden = Some(true);
+        let absent = Container {
+            hidden: Some(true),
+            ..Container::default()
+        };
         root.children.push(absent);
         let snapshot = build(&root, &BTreeMap::new());
         assert!(!snapshot.node(2).unwrap().visible);
@@ -718,9 +926,243 @@ mod tests {
     }
 
     #[test]
-    fn sticky_and_missing_geometry_are_errors() {
+    fn modal_top_zero_header_moves_subtree_without_changing_flow() {
+        use hyperchad_transformer::Number;
+
+        // Same positioning/overflow contract as native UI modal(): fixed host,
+        // overflow-auto dialog and a sticky top=0 header before dialog content.
+        let mut modal = node(1, 0.0, 0.0, 100.0, 100.0);
+        modal.position = Some(Position::Fixed);
+        let mut dialog = node(2, 5.0, 5.0, 80.0, 80.0);
+        dialog.overflow_y = LayoutOverflow::Auto;
+        let mut header = node(3, 0.0, 0.0, 80.0, 20.0);
+        header.position = Some(Position::Sticky);
+        header.top = Some(Number::Integer(0));
+        header.children.push(node(4, 5.0, 4.0, 10.0, 10.0));
+        // Absolute DOM descendants also move with a sticky ancestor even when
+        // their containing-block scroll chain skips that ancestor.
+        let mut absolute = node(7, 10.0, 10.0, 5.0, 5.0);
+        absolute.position = Some(Position::Absolute);
+        header.children.push(absolute);
+        let mut fixed = node(8, 60.0, 60.0, 5.0, 5.0);
+        fixed.position = Some(Position::Fixed);
+        header.children.push(fixed);
+        dialog.children.push(header);
+        dialog.children.push(node(5, 0.0, 20.0, 80.0, 180.0));
+        modal.children.push(dialog);
+        let before = build(&modal, &BTreeMap::new());
+        let after = build(&modal, &BTreeMap::from([(2, vec2(0.0, 40.0))]));
+        assert_eq!(
+            after.node(8).unwrap().border_box,
+            before.node(8).unwrap().border_box
+        );
+        assert_eq!(
+            after.node(8).unwrap().paint_clip,
+            before.node(8).unwrap().paint_clip
+        );
+        assert_eq!(after.node(3).unwrap().content_box.min, pos2(20.0, 30.0));
+        assert_eq!(
+            after.node(3).unwrap().border_box,
+            before.node(3).unwrap().border_box
+        );
+        assert_eq!(after.node(4).unwrap().content_box.min, pos2(30.0, 38.0));
+        assert_eq!(
+            after.node(7).unwrap().content_box.min.y - before.node(7).unwrap().content_box.min.y,
+            80.0
+        );
+        assert_eq!(after.hit_test(pos2(35.0, 40.0), |_| true), Some(4));
+        assert_eq!(
+            after.node(4).unwrap().visible_bounds(),
+            Some(after.node(4).unwrap().border_box)
+        );
+        assert_eq!(
+            after.node(2).unwrap().scroll_max,
+            before.node(2).unwrap().scroll_max
+        );
+        assert_eq!(
+            after.node(5).unwrap().content_box.min.y,
+            before.node(5).unwrap().content_box.min.y - 80.0
+        );
+        assert_eq!(modal.children[0].children[0].calculated_y, Some(0.0));
+    }
+
+    #[test]
+    fn parsed_modal_header_uses_shared_calculator_flow_then_sticky_projection() {
+        use hyperchad_transformer::layout::{
+            Calc as _,
+            calc::{Calculator, CalculatorDefaults},
+            font::{FontMetrics, FontMetricsBounds},
+        };
+
+        struct NoText;
+        impl FontMetrics for NoText {
+            fn measure_text(&self, _: &str, _: f32, _: f32) -> FontMetricsBounds {
+                FontMetricsBounds { rows: Vec::new() }
+            }
+        }
+        let defaults = CalculatorDefaults {
+            font_size: 14.0,
+            font_margin_top: 0.0,
+            font_margin_bottom: 0.0,
+            h1_font_size: 28.0,
+            h1_font_margin_top: 0.0,
+            h1_font_margin_bottom: 0.0,
+            h2_font_size: 21.0,
+            h2_font_margin_top: 0.0,
+            h2_font_margin_bottom: 0.0,
+            h3_font_size: 18.0,
+            h3_font_margin_top: 0.0,
+            h3_font_margin_bottom: 0.0,
+            h4_font_size: 14.0,
+            h4_font_margin_top: 0.0,
+            h4_font_margin_bottom: 0.0,
+            h5_font_size: 12.0,
+            h5_font_margin_top: 0.0,
+            h5_font_margin_bottom: 0.0,
+            h6_font_size: 10.0,
+            h6_font_margin_top: 0.0,
+            h6_font_margin_bottom: 0.0,
+        };
+        // Modal's authored position/overflow/top contract, with explicit sizes
+        // to isolate sticky behavior from unrelated intrinsic-control gaps.
+        let mut tree: Container = "<div sx-position=\"fixed\" sx-width=\"100\" sx-height=\"100\"><div sx-width=\"80\" sx-height=\"80\" sx-overflow-y=\"auto\"><div sx-position=\"sticky\" sx-top=\"0\" sx-width=\"80\" sx-height=\"20\"></div><div sx-width=\"80\" sx-height=\"180\"></div></div></div>".parse().unwrap();
+        tree.calculated_width = Some(100.0);
+        tree.calculated_height = Some(100.0);
+        Calculator::new(NoText, defaults).calc(&mut tree);
+        let viewport = GeometryViewport {
+            rect: Rect::from_min_size(Pos2::ZERO, Vec2::splat(100.0)),
+            zoom: 1.0,
+        };
+        // Resolve by structural path, never parser-generated numeric IDs.
+        let resolve = |path: &[usize], _: &Container| match path {
+            [0] => Some(1),
+            [0, 0] => Some(2),
+            [0, 0, 0] => Some(3),
+            [0, 0, 0, 0] => Some(4),
+            [0, 0, 0, 1] => Some(5),
+            _ => None,
+        };
+        let before = GeometrySnapshot::build_roots(
+            std::slice::from_ref(&tree),
+            viewport,
+            1,
+            &BTreeMap::new(),
+            resolve,
+        )
+        .unwrap();
+        let after = GeometrySnapshot::build_roots(
+            std::slice::from_ref(&tree),
+            viewport,
+            2,
+            &BTreeMap::from([(3, vec2(0.0, 40.0))]),
+            resolve,
+        )
+        .unwrap();
+        assert_eq!(
+            after.node(4).unwrap().border_box.min.y,
+            after.node(3).unwrap().content_box.min.y
+        );
+        assert_eq!(
+            after.node(4).unwrap().border_box,
+            before.node(4).unwrap().border_box
+        );
+        assert_eq!(
+            after.node(5).unwrap().border_box.min.y,
+            before.node(5).unwrap().border_box.min.y - 40.0
+        );
+    }
+
+    #[test]
+    fn sticky_uses_nearest_nested_scrollport_and_containing_end() {
+        use hyperchad_transformer::Number;
+
+        let mut root = node(1, 0.0, 0.0, 100.0, 100.0);
+        root.overflow_y = LayoutOverflow::Scroll;
+        let mut inner = node(2, 0.0, 40.0, 80.0, 50.0);
+        inner.overflow_y = LayoutOverflow::Auto;
+        let mut section = node(3, 0.0, 0.0, 80.0, 70.0);
+        let mut header = node(4, 0.0, 0.0, 80.0, 10.0);
+        header.position = Some(Position::Sticky);
+        header.top = Some(Number::Integer(0));
+        section.children.push(header);
+        section.children.push(node(5, 0.0, 10.0, 80.0, 60.0));
+        inner.children.push(section);
+        inner.children.push(node(6, 0.0, 70.0, 80.0, 100.0));
+        root.children.push(inner);
+        root.children.push(node(7, 0.0, 200.0, 10.0, 10.0));
+        let active = build(
+            &root,
+            &BTreeMap::from([(1, vec2(0.0, 20.0)), (2, vec2(0.0, 30.0))]),
+        );
+        assert_eq!(
+            active.node(4).unwrap().content_box.min.y,
+            active.node(2).unwrap().content_box.min.y
+        );
+        let ended = build(
+            &root,
+            &BTreeMap::from([(1, vec2(0.0, 20.0)), (2, vec2(0.0, 90.0))]),
+        );
+        assert_eq!(
+            ended.node(4).unwrap().border_box.max.y,
+            ended.node(3).unwrap().content_box.max.y
+        );
+        assert!(ended.node(4).unwrap().visible_bounds().is_none());
+    }
+
+    #[test]
+    fn sticky_both_axes_no_inset_and_oversized_scrollport() {
+        use hyperchad_transformer::Number;
+
+        let mut root = node(1, 0.0, 0.0, 100.0, 100.0);
+        root.overflow_x = LayoutOverflow::Scroll;
+        root.overflow_y = LayoutOverflow::Scroll;
+        let mut sticky = node(2, 20.0, 20.0, 150.0, 150.0);
+        sticky.position = Some(Position::Sticky);
+        sticky.left = Some(Number::IntegerPercent(10));
+        sticky.top = Some(Number::Integer(0));
+        sticky.bottom = Some(Number::Integer(0));
+        root.children.push(sticky);
+        root.children.push(node(3, 300.0, 300.0, 10.0, 10.0));
+        let active = build(&root, &BTreeMap::from([(1, vec2(60.0, 60.0))]));
+        assert_eq!(active.node(2).unwrap().border_box.min, pos2(30.0, 20.0));
+        root.children[0].left = None;
+        root.children[0].top = None;
+        root.children[0].bottom = None;
+        let unpinned = build(&root, &BTreeMap::from([(1, vec2(60.0, 60.0))]));
+
+        assert_eq!(unpinned.node(2).unwrap().border_box.min, pos2(-70.0, -60.0));
+    }
+
+    #[test]
+    fn sticky_end_insets_and_hidden_scrollport_keep_ancestor_clipping() {
+        use hyperchad_transformer::Number;
+
+        let mut root = node(1, 0.0, 0.0, 100.0, 100.0);
+        root.overflow_y = LayoutOverflow::Scroll;
+        let mut hidden_port = node(2, 0.0, 20.0, 100.0, 40.0);
+        hidden_port.overflow_y = LayoutOverflow::Hidden;
+        let mut sticky = node(3, 0.0, 60.0, 20.0, 10.0);
+        sticky.position = Some(Position::Sticky);
+        sticky.bottom = Some(Number::Integer(5));
+        hidden_port.children.push(sticky);
+        root.children.push(hidden_port);
+        root.children.push(node(4, 0.0, 200.0, 10.0, 10.0));
+        let snapshot = build(&root, &BTreeMap::from([(1, vec2(0.0, 30.0))]));
+        let port = snapshot.node(2).unwrap();
+        let sticky = snapshot.node(3).unwrap();
+        assert_eq!(sticky.border_box.bottom(), port.padding_box.bottom() - 10.0);
+        assert_eq!(sticky.paint_clip, port.descendant_clip);
+        assert_eq!(
+            snapshot.hit_test(sticky.border_box.center(), |key| key == 3),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn invalid_sticky_inset_and_missing_geometry_are_errors() {
         let mut root = node(1, 0.0, 0.0, 100.0, 100.0);
         root.position = Some(Position::Sticky);
+        root.top = Some(hyperchad_transformer::Number::Real(f32::NAN));
         let viewport = GeometryViewport {
             rect: Rect::from_min_size(Pos2::ZERO, Vec2::splat(100.0)),
             zoom: 1.0,
@@ -728,7 +1170,7 @@ mod tests {
         assert_eq!(
             GeometrySnapshot::build(&root, viewport, 0, &BTreeMap::new(), |c| Some(c.id))
                 .unwrap_err(),
-            GeometryError::UnsupportedSticky(1)
+            GeometryError::InvalidStickyGeometry(1)
         );
         root.position = None;
         root.calculated_width = None;

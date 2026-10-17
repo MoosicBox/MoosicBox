@@ -13,6 +13,110 @@ pub mod calc;
 /// Font metrics traits and types for text measurement during layout.
 pub mod font;
 
+/// One physical axis of a sticky box, in a single current coordinate space.
+///
+/// Normal position already includes ancestor scrolling and ancestor sticky
+/// displacement. Intervals must not include this box's own sticky displacement.
+/// Call independently for X and Y; never alter the box's normal-flow allocation.
+#[derive(Clone, Copy, Debug)]
+pub struct StickyAxis {
+    /// Normal border-box start.
+    pub normal_start: f32,
+    /// Border-box size, excluding margins.
+    pub size: f32,
+    /// Containing block start, adjusted for the box's effective start margin.
+    pub containing_start: f32,
+    /// Containing block end, adjusted for the box's effective end margin.
+    pub containing_end: f32,
+    /// Nearest scrollport start (not its intersection with ancestor clips).
+    pub scrollport_start: f32,
+    /// Nearest scrollport end.
+    pub scrollport_end: f32,
+    /// Start inset; `None` imposes no start-edge constraint.
+    pub start_inset: Option<f32>,
+    /// End inset; `None` imposes no end-edge constraint.
+    pub end_inset: Option<f32>,
+}
+
+/// Invalid sticky input or an arithmetic overflow during constraint resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StickyError;
+
+impl std::fmt::Display for StickyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("nonfinite or inverted sticky geometry")
+    }
+}
+
+impl std::error::Error for StickyError {}
+
+/// Computes sticky displacement without changing normal flow or scroll extents.
+///
+/// Insets of `None` count as zero when sizing the sticky view rectangle, but do
+/// not constrain their corresponding edge. If that rectangle is smaller than
+/// the box, its end inset is reduced (possibly negative) so the box fits; the
+/// start edge has priority. Movement remains inside the containing interval.
+/// An oversized containing-block child keeps its normal position when no legal
+/// movement exists rather than panicking or creating an inverted clamp range.
+/// With neither inset, displacement is zero.
+///
+/// # Errors
+/// * Returns `StickyError` for nonfinite inputs, negative size, inverted intervals,
+///   or nonfinite intermediate/output arithmetic. Finite negative insets are valid.
+pub fn sticky_offset(axis: StickyAxis) -> Result<f32, StickyError> {
+    let a = axis;
+    if ![
+        a.normal_start,
+        a.size,
+        a.containing_start,
+        a.containing_end,
+        a.scrollport_start,
+        a.scrollport_end,
+        a.start_inset.unwrap_or(0.0),
+        a.end_inset.unwrap_or(0.0),
+    ]
+    .iter()
+    .all(|x| x.is_finite())
+        || a.size < 0.0
+        || a.containing_end < a.containing_start
+        || a.scrollport_end < a.scrollport_start
+    {
+        return Err(StickyError);
+    }
+    if a.start_inset.is_none() && a.end_inset.is_none() {
+        return Ok(0.0);
+    }
+    let start = a.scrollport_start + a.start_inset.unwrap_or(0.0);
+    let requested_end = a.scrollport_end - a.end_inset.unwrap_or(0.0);
+    let required_end = start + a.size;
+    let containing_limit = a.containing_end - a.size;
+    if ![start, requested_end, required_end, containing_limit]
+        .iter()
+        .all(|x| x.is_finite())
+    {
+        return Err(StickyError);
+    }
+    let end = requested_end.max(required_end);
+    let min_position = a.containing_start.min(a.normal_start);
+    let max_position = containing_limit.max(a.normal_start);
+    let mut position = a.normal_start;
+    if a.end_inset.is_some() {
+        position = position.min(end - a.size);
+    }
+    if a.start_inset.is_some() {
+        position = position.max(start);
+    }
+    let position = position.max(min_position).min(max_position);
+    let offset = position - a.normal_start;
+    if ![start, end, min_position, max_position, offset]
+        .iter()
+        .all(|x| x.is_finite())
+    {
+        return Err(StickyError);
+    }
+    Ok(offset)
+}
+
 /// Epsilon value for floating-point comparisons in layout calculations.
 ///
 /// Used by float comparison macros to determine equality within a tolerance of 0.001.
@@ -226,6 +330,119 @@ mod tests {
     use serial_test::serial;
 
     use super::*;
+
+    fn sticky_axis() -> StickyAxis {
+        StickyAxis {
+            normal_start: -30.0,
+            size: 20.0,
+            containing_start: -80.0,
+            containing_end: 200.0,
+            scrollport_start: 0.0,
+            scrollport_end: 100.0,
+            start_inset: Some(0.0),
+            end_inset: None,
+        }
+    }
+
+    #[test]
+    fn sticky_threshold_and_containing_end_preserve_normal_flow() {
+        let axis = sticky_axis();
+        assert_eq!(sticky_offset(axis), Ok(30.0));
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                normal_start: 10.0,
+                ..axis
+            }),
+            Ok(0.0)
+        );
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                containing_end: 5.0,
+                ..axis
+            }),
+            Ok(15.0)
+        );
+    }
+
+    #[test]
+    fn sticky_end_only_no_inset_and_oversized_box() {
+        let axis = sticky_axis();
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                normal_start: 120.0,
+                start_inset: None,
+                end_inset: Some(10.0),
+                ..axis
+            }),
+            Ok(-50.0)
+        );
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                start_inset: None,
+                ..axis
+            }),
+            Ok(0.0)
+        );
+        // End inset becomes -50: oversized box pins at start rather than
+        // switching unpredictably between incompatible edge constraints.
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                size: 150.0,
+                end_inset: Some(0.0),
+                ..axis
+            }),
+            Ok(30.0)
+        );
+        assert_eq!(
+            sticky_offset(StickyAxis {
+                containing_end: -20.0,
+                ..axis
+            }),
+            Ok(0.0)
+        );
+    }
+
+    #[test]
+    fn sticky_current_coordinate_translation_is_invariant() {
+        let axis = sticky_axis();
+        let translated = StickyAxis {
+            normal_start: axis.normal_start + 37.0,
+            containing_start: axis.containing_start + 37.0,
+            containing_end: axis.containing_end + 37.0,
+            scrollport_start: axis.scrollport_start + 37.0,
+            scrollport_end: axis.scrollport_end + 37.0,
+            ..axis
+        };
+        assert_eq!(sticky_offset(axis), sticky_offset(translated));
+    }
+
+    #[test]
+    fn sticky_rejects_nonfinite_inverted_and_overflowing_input() {
+        let axis = sticky_axis();
+        for invalid in [
+            StickyAxis { size: -1.0, ..axis },
+            StickyAxis {
+                start_inset: Some(f32::NAN),
+                ..axis
+            },
+            StickyAxis {
+                scrollport_end: -1.0,
+                ..axis
+            },
+            StickyAxis {
+                containing_end: -90.0,
+                ..axis
+            },
+            StickyAxis {
+                scrollport_start: f32::MAX,
+                scrollport_end: f32::MAX,
+                start_inset: Some(f32::MAX),
+                ..axis
+            },
+        ] {
+            assert_eq!(sticky_offset(invalid), Err(StickyError));
+        }
+    }
 
     #[test_log::test]
     #[serial(scrollbar_size)]

@@ -104,7 +104,7 @@ mod tests {
             assert!(measured.height() > 0.0);
             assert_eq!(measured.width(), galley.rect.width());
             assert_eq!(measured.height(), galley.rect.height());
-            assert!(galley.rows[0].visuals.mesh.vertices.is_empty());
+            assert_eq!(galley.rows[0].visuals.mesh.vertices, []);
         });
     }
 

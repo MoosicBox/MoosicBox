@@ -103,8 +103,43 @@ impl ResourceSnapshot {
     }
 }
 
+/// Resource evidence for exactly the host-supplied, post-frame image membership.
+///
+/// Omitted images remain in [`ResourceSnapshot`]. The host must derive required
+/// stamps from current participating, clipped viewport-visible image geometry;
+/// this type neither guesses visibility nor silently excludes failures.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SceneResourceReadiness {
+    /// Current stamps and selected sources with installed textures.
+    pub ready: Vec<(ElementStamp, String)>,
+    /// Current stamps and selected sources awaiting admission or completion.
+    pub pending: Vec<(ElementStamp, String)>,
+    /// Required failures, including missing sources and inconsistent ready state.
+    pub failed: Vec<(ElementStamp, Option<String>, String)>,
+    /// Current images absent from reconciliation or not yet source-selected.
+    pub unobserved: Vec<ElementStamp>,
+    /// Stale document/entry generations or required nodes that are not images.
+    pub stale: Vec<ElementStamp>,
+    /// Global admission failure blocks even an otherwise empty required scene.
+    pub diagnostic: Option<String>,
+}
+
+impl SceneResourceReadiness {
+    /// True only when every supplied image has current installed resource evidence.
+    /// An empty required scene is ready only when no global diagnostic exists.
+    #[must_use]
+    pub const fn is_ready(&self) -> bool {
+        self.diagnostic.is_none()
+            && self.pending.is_empty()
+            && self.failed.is_empty()
+            && self.unobserved.is_empty()
+            && self.stale.is_empty()
+    }
+}
+
 /// One admitted load. Keep this value alive through fetch/decode; it is the permit.
 /// A resolver must cap streamed bytes at `max_encoded_bytes` and complete failures.
+#[must_use = "an admitted image load must be completed or explicitly cancelled"]
 pub struct LoadRequest {
     /// Full document generation to validate before texture installation.
     pub stamp: ElementStamp,
@@ -164,6 +199,10 @@ pub struct ResourceWorker {
 
 impl ResourceWorker {
     /// Nonblocking request admission; perform fetch/decode after returning to backend.
+    #[allow(
+        clippy::must_use_candidate,
+        reason = "repository forbids function-level must_use on Option; LoadRequest itself is must_use"
+    )]
     pub fn try_request(&self) -> Option<LoadRequest> {
         self.requests.try_recv().ok()
     }
@@ -259,6 +298,106 @@ impl ImageResources {
             texture_bytes: self.entries.values().map(|entry| entry.bytes).sum(),
             diagnostic: self.diagnostic.clone(),
         }
+    }
+
+    /// Assess exactly the host's current post-frame required image stamps.
+    ///
+    /// This does not mutate loads or weaken global [`ResourceSnapshot::all_ready`].
+    /// Unselected valid authored sources are unobserved, not ready. Missing sources
+    /// are explicit failures, even if the node was never painted. Duplicate stamps
+    /// are reported once, in their first supplied order. The caller must also keep
+    /// document/geometry and required membership stable across capture frames.
+    #[must_use]
+    pub fn scene_readiness(
+        &self,
+        document: &Document,
+        required: &[ElementStamp],
+    ) -> SceneResourceReadiness {
+        let mut result = SceneResourceReadiness {
+            ready: Vec::new(),
+            pending: Vec::new(),
+            failed: Vec::new(),
+            unobserved: Vec::new(),
+            stale: Vec::new(),
+            diagnostic: self.diagnostic.clone(),
+        };
+        for (index, &stamp) in required.iter().enumerate() {
+            if required[..index].contains(&stamp) {
+                continue;
+            }
+            if !document.is_current(stamp) {
+                result.stale.push(stamp);
+                continue;
+            }
+            let Some(Container {
+                element:
+                    Element::Image {
+                        source, source_set, ..
+                    },
+                ..
+            }) = document.get(stamp.key)
+            else {
+                result.stale.push(stamp);
+                continue;
+            };
+            let entry = self.entries.get(&stamp.key);
+            if entry.is_some_and(|entry| entry.stamp != stamp) {
+                result.stale.push(stamp);
+                continue;
+            }
+            if let Some(Entry {
+                source,
+                status: ResourceStatus::Failed(error),
+                ..
+            }) = entry
+            {
+                result.failed.push((stamp, source.clone(), error.clone()));
+                continue;
+            }
+            let has_authored_source = source
+                .as_deref()
+                .is_some_and(|source| !source.trim().is_empty())
+                || source_set
+                    .as_deref()
+                    .is_some_and(|set| !set.trim().is_empty());
+            if !has_authored_source {
+                result
+                    .failed
+                    .push((stamp, None, "image source missing".into()));
+                continue;
+            }
+            let Some(entry) = entry else {
+                result.unobserved.push(stamp);
+                continue;
+            };
+            let Some(source) = entry
+                .source
+                .as_ref()
+                .filter(|source| !source.trim().is_empty())
+            else {
+                result.unobserved.push(stamp);
+                continue;
+            };
+            match &entry.status {
+                ResourceStatus::Ready if entry.texture.is_some() => {
+                    result.ready.push((stamp, source.clone()));
+                }
+                ResourceStatus::Ready => result.failed.push((
+                    stamp,
+                    Some(source.clone()),
+                    "ready image texture missing".into(),
+                )),
+                ResourceStatus::Deferred | ResourceStatus::Queued => {
+                    result.pending.push((stamp, source.clone()));
+                }
+                ResourceStatus::Failed(error) => {
+                    result
+                        .failed
+                        .push((stamp, Some(source.clone()), error.clone()));
+                }
+            }
+        }
+        result
     }
 
     /// Explicit retry; no automatic infinite retry loop for broken artwork.
@@ -436,9 +575,10 @@ impl WidgetAdapter for ImageResources {
         let rect = geometry.content_box;
         let density = ui.ctx().pixels_per_point();
         let viewport = ui.ctx().content_rect().size();
-        let slot = sizes.as_ref().map_or(rect.width(), |size| {
-            size.calc(rect.width(), viewport.x, viewport.y)
-        });
+        let slot = sizes.as_ref().map_or_else(
+            || rect.width(),
+            |size| size.calc(rect.width(), viewport.x, viewport.y),
+        );
         let selected = select_source(source.as_deref(), source_set.as_deref(), slot, density);
         let entry = self
             .entries
@@ -464,13 +604,18 @@ impl WidgetAdapter for ImageResources {
         let visible = geometry.visible_bounds().is_some() && rect.intersects(ui.clip_rect());
         let lazy = *loading == Some(ImageLoading::Lazy);
         if !lazy || visible {
-            self.queue(
-                stamp.key,
-                [
-                    ((rect.width() * density).ceil() as u32).max(1),
-                    ((rect.height() * density).ceil() as u32).max(1),
-                ],
-            )?;
+            let target = raster_target(rect.size(), density, self.limits.max_dimension);
+            match target {
+                Ok(target) => self.queue(stamp.key, target)?,
+                Err(error) => {
+                    let entry = self
+                        .entries
+                        .get_mut(&stamp.key)
+                        .ok_or("image state missing")?;
+                    entry.cancel();
+                    entry.status = ResourceStatus::Failed(error);
+                }
+            }
         }
         let entry = self.entries.get(&stamp.key).ok_or("image state missing")?;
         let response = ui.interact(
@@ -568,13 +713,18 @@ pub fn select_source(
         if !value.is_finite() || value <= 0.0 || (unit == 'w' && value.fract() != 0.0) {
             return Err("invalid srcset size".into());
         }
-        if candidates.iter().any(|(existing, _)| *existing == value) {
+        if candidates
+            .iter()
+            .any(|(existing, _): &(f32, &str)| existing.total_cmp(&value).is_eq())
+        {
             return Err("duplicate srcset size".into());
         }
         candidates.push((value, url));
     }
     if kind == Some('x')
-        && !candidates.iter().any(|(value, _)| *value == 1.0)
+        && !candidates
+            .iter()
+            .any(|(value, _)| value.total_cmp(&1.0).is_eq())
         && let Some(source) = source.filter(|source| !source.trim().is_empty())
     {
         candidates.push((1.0, source));
@@ -591,6 +741,31 @@ pub fn select_source(
         .or_else(|| candidates.last())
         .map(|(_, url)| (*url).to_owned())
         .ok_or_else(|| "empty srcset".into())
+}
+
+// Convert physical raster dimensions only after rejecting invalid layout input.
+// Work in f64 so a finite f32 size/density product cannot overflow; clamp BEFORE
+// integer conversion. Clipping the target limits work, not authored layout size.
+fn raster_target(size: Vec2, density: f32, maximum: u32) -> Result<[u32; 2], String> {
+    if maximum == 0 || !density.is_finite() || density <= 0.0 {
+        return Err("invalid image raster density or dimension budget".into());
+    }
+    let dimension = |logical: f32| {
+        if !logical.is_finite() || logical < 0.0 {
+            return Err("invalid image raster dimensions".to_owned());
+        }
+        let bounded = (f64::from(logical) * f64::from(density))
+            .ceil()
+            .clamp(1.0, f64::from(maximum));
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "finite ceiled value clamped to inclusive 1..=u32 maximum before conversion"
+        )]
+        let pixels = bounded as u32;
+        Ok(pixels)
+    };
+    Ok([dimension(size.x)?, dimension(size.y)?])
 }
 
 fn fitted(rect: Rect, intrinsic: Vec2, fit: ImageFit) -> (Rect, Rect) {
@@ -625,9 +800,9 @@ fn decode(bytes: &[u8], target: [u32; 2], limits: ResourceLimits) -> Result<Colo
     let image = if svg {
         // Resolve neither local files nor nested raster/data images from SVG.
         // The rasterizer caps the output regardless of authored SVG dimensions.
-        let side = (limits.max_decoded_bytes / 4)
-            .isqrt()
-            .min(limits.max_dimension as usize) as u32;
+        let side = u32::try_from((limits.max_decoded_bytes / 4).isqrt())
+            .unwrap_or(u32::MAX)
+            .min(limits.max_dimension);
         if side == 0 {
             return Err("decoded image budget is zero".into());
         }
@@ -972,6 +1147,304 @@ mod tests {
         assert!(worker.try_request().is_some());
         assert_eq!(resources.snapshot().texture_bytes, 0);
         assert_eq!(resources.snapshot().entries[0].2, ResourceStatus::Queued);
+    }
+
+    fn scene_fixture(
+        sources: &[(Option<&str>, Option<&str>)],
+        limits: ResourceLimits,
+    ) -> (Document, Vec<ElementStamp>, ImageResources, ResourceWorker) {
+        let children = sources
+            .iter()
+            .map(|(source, source_set)| Container {
+                element: Element::Image {
+                    source: source.map(str::to_owned),
+                    source_set: source_set.map(str::to_owned),
+                    alt: None,
+                    fit: None,
+                    sizes: None,
+                    loading: Some(ImageLoading::Lazy),
+                },
+                ..Container::default()
+            })
+            .collect();
+        let mut document = Document::new();
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        children,
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let stamps = document
+            .keys()
+            .into_iter()
+            .filter_map(|key| {
+                document
+                    .get(key)
+                    .filter(|node| matches!(node.element, Element::Image { .. }))?;
+                document.stamp(key)
+            })
+            .collect();
+        let (mut resources, worker) = ImageResources::new(limits);
+        resources.reconcile(&document, &[]).unwrap();
+        (document, stamps, resources, worker)
+    }
+
+    fn select_and_queue(resources: &mut ImageResources, stamp: ElementStamp, source: &str) {
+        resources.entries.get_mut(&stamp.key).unwrap().source = Some(source.into());
+        resources.queue(stamp.key, [8, 4]).unwrap();
+    }
+
+    #[test]
+    fn scene_membership_tracks_hidden_reveal_scroll_without_weakening_snapshot() {
+        let (document, stamps, mut resources, worker) = scene_fixture(
+            &[(Some("first.svg"), None), (Some("hidden.svg"), None)],
+            ResourceLimits::default(),
+        );
+        let context = egui::Context::default();
+        // Host omits both hidden/offscreen images; global accounting retains them.
+        assert!(resources.scene_readiness(&document, &[]).is_ready());
+        assert!(!resources.snapshot().all_ready());
+        assert_eq!(resources.snapshot().entries.len(), 2);
+        assert_eq!(
+            resources
+                .scene_readiness(&document, &stamps[..1])
+                .unobserved,
+            stamps[..1]
+        );
+        select_and_queue(&mut resources, stamps[0], "first.svg");
+        let pending = resources.scene_readiness(&document, &stamps[..1]);
+        assert!(!pending.is_ready());
+        assert_eq!(pending.pending, [(stamps[0], "first.svg".into())]);
+        submit(&worker, worker.try_request().unwrap().decode(SVG), &context);
+        resources.install_completions(&document, &context);
+        let first = resources.scene_readiness(&document, &stamps[..1]);
+        assert!(first.is_ready());
+        assert_eq!(first.ready, [(stamps[0], "first.svg".into())]);
+        assert!(!resources.snapshot().all_ready());
+        // Revealing/scrolling the second image into view blocks until its load finishes.
+        assert!(!resources.scene_readiness(&document, &stamps).is_ready());
+        assert_eq!(
+            resources
+                .scene_readiness(&document, &stamps[1..])
+                .unobserved,
+            stamps[1..]
+        );
+        select_and_queue(&mut resources, stamps[1], "hidden.svg");
+        submit(&worker, worker.try_request().unwrap().decode(SVG), &context);
+        resources.install_completions(&document, &context);
+        assert!(
+            resources
+                .scene_readiness(&document, &stamps[1..])
+                .is_ready()
+        );
+        assert!(resources.snapshot().all_ready());
+        // Duplicate host membership must not duplicate evidence.
+        assert_eq!(
+            resources
+                .scene_readiness(&document, &[stamps[0]; 2])
+                .ready
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn scene_required_broken_and_missing_sources_are_explicit_failures() {
+        let (document, stamps, mut resources, worker) = scene_fixture(
+            &[
+                (Some("broken.svg"), None),
+                (None, None),
+                (Some("  "), Some("  ")),
+            ],
+            ResourceLimits::default(),
+        );
+        let before = resources.scene_readiness(&document, &stamps);
+        assert_eq!(before.unobserved, stamps[..1]);
+        assert_eq!(before.failed.len(), 2);
+        assert!(!before.is_ready());
+        select_and_queue(&mut resources, stamps[0], "broken.svg");
+        let context = egui::Context::default();
+        submit(
+            &worker,
+            worker.try_request().unwrap().fail("HTTP 404"),
+            &context,
+        );
+        resources.install_completions(&document, &context);
+        let broken = resources.scene_readiness(&document, &stamps);
+        assert_eq!(broken.failed.len(), 3);
+        assert_eq!(
+            broken.failed[0],
+            (stamps[0], Some("broken.svg".into()), "HTTP 404".into())
+        );
+        assert!(!broken.is_ready());
+        // Exclusion is supplied by actual host visibility, never inferred from failure.
+        assert!(resources.scene_readiness(&document, &[]).is_ready());
+        assert_eq!(
+            resources.snapshot().entries[0].2,
+            ResourceStatus::Failed("HTTP 404".into())
+        );
+    }
+
+    #[test]
+    fn scene_srcset_only_needs_selected_source_and_installed_texture() {
+        let (document, stamps, mut resources, worker) = scene_fixture(
+            &[(None, Some("small.svg 1x, retina.svg 2x"))],
+            ResourceLimits::default(),
+        );
+        let stamp = stamps[0];
+        assert_eq!(
+            resources.scene_readiness(&document, &stamps).unobserved,
+            stamps
+        );
+        let selected = select_source(None, Some("small.svg 1x, retina.svg 2x"), 8.0, 2.0).unwrap();
+        select_and_queue(&mut resources, stamp, &selected);
+        let context = egui::Context::default();
+        submit(&worker, worker.try_request().unwrap().decode(SVG), &context);
+        resources.install_completions(&document, &context);
+        assert_eq!(
+            resources.scene_readiness(&document, &stamps).ready,
+            [(stamp, "retina.svg".into())]
+        );
+        assert!(resources.scene_readiness(&document, &stamps).is_ready());
+        resources.entries.get_mut(&stamp.key).unwrap().texture = None;
+        let inconsistent = resources.scene_readiness(&document, &stamps);
+        assert!(!inconsistent.is_ready());
+        assert_eq!(inconsistent.failed[0].2, "ready image texture missing");
+    }
+
+    #[test]
+    fn scene_stale_missing_reconciliation_and_global_budgets_block() {
+        let (mut document, stamps, mut resources, worker) =
+            scene_fixture(&[(Some("old.svg"), None)], ResourceLimits::default());
+        select_and_queue(&mut resources, stamps[0], "old.svg");
+        let request = worker.try_request().unwrap();
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        element: Element::Image {
+                            source: Some("new.svg".into()),
+                            alt: None,
+                            fit: None,
+                            source_set: None,
+                            sizes: None,
+                            loading: None,
+                        },
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let current = document.stamp(document.keys()[0]).unwrap();
+        assert_eq!(resources.scene_readiness(&document, &stamps).stale, stamps);
+        assert_eq!(
+            resources.scene_readiness(&document, &[current]).unobserved,
+            [current]
+        );
+        resources.reconcile(&document, &[]).unwrap();
+        assert!(request.is_cancelled());
+        let context = egui::Context::default();
+        submit(&worker, request.decode(SVG), &context);
+        assert_eq!(resources.install_completions(&document, &context), 0);
+        assert!(!resources.scene_readiness(&document, &[current]).is_ready());
+        let (mut limited, _worker) = ImageResources::new(ResourceLimits {
+            max_entries: 0,
+            ..ResourceLimits::default()
+        });
+        assert!(limited.reconcile(&document, &[]).is_err());
+        assert!(limited.scene_readiness(&document, &[]).diagnostic.is_some());
+        assert!(!limited.scene_readiness(&document, &[]).is_ready());
+    }
+
+    #[test]
+    fn scene_texture_budget_failure_is_not_pending_or_ready() {
+        let (document, stamps, mut resources, worker) = scene_fixture(
+            &[(Some("large.svg"), None)],
+            ResourceLimits {
+                max_texture_bytes: 1,
+                ..ResourceLimits::default()
+            },
+        );
+        select_and_queue(&mut resources, stamps[0], "large.svg");
+        let context = egui::Context::default();
+        submit(&worker, worker.try_request().unwrap().decode(SVG), &context);
+        resources.install_completions(&document, &context);
+        let scene = resources.scene_readiness(&document, &stamps);
+        assert!(!scene.is_ready());
+        assert_eq!(scene.ready, [] as [(ElementStamp, String); 0]);
+        assert_eq!(scene.pending, [] as [(ElementStamp, String); 0]);
+        assert_eq!(scene.failed[0].2, "image texture budget exhausted");
+    }
+
+    #[test]
+    fn raster_target_checks_invalid_inputs_rounding_and_hard_bounds() {
+        assert_eq!(
+            raster_target(egui::vec2(0.0, 0.25), 2.0, 4096).unwrap(),
+            [1, 1]
+        );
+        assert_eq!(
+            raster_target(egui::vec2(10.1, 20.5), 2.0, 4096).unwrap(),
+            [21, 41]
+        );
+        assert_eq!(
+            raster_target(Vec2::splat(f32::MAX), f32::MAX, 4096).unwrap(),
+            [4096, 4096]
+        );
+        assert_eq!(
+            raster_target(Vec2::splat(f32::MAX), f32::MAX, u32::MAX).unwrap(),
+            [u32::MAX; 2]
+        );
+        assert_eq!(raster_target(Vec2::splat(10.0), 1.0, 1).unwrap(), [1; 2]);
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0] {
+            assert!(raster_target(egui::vec2(bad, 1.0), 1.0, 4096).is_err());
+            assert!(raster_target(egui::vec2(1.0, bad), 1.0, 4096).is_err());
+            assert!(raster_target(Vec2::splat(1.0), bad, 4096).is_err());
+        }
+        assert!(raster_target(Vec2::splat(1.0), 0.0, 4096).is_err());
+        assert!(raster_target(Vec2::splat(1.0), 1.0, 0).is_err());
+    }
+
+    #[test]
+    fn responsive_duplicates_use_exact_descriptor_values_not_epsilon() {
+        assert!(select_source(None, Some("a 1x, b 1.0000000x"), 1.0, 1.0).is_err());
+        assert_eq!(
+            select_source(Some("base"), Some("a 1.000001x"), 1.0, 1.0).unwrap(),
+            "base"
+        );
+        assert_eq!(
+            select_source(None, Some("a 1x, b 1.000001x"), 1.0, 1.000_001).unwrap(),
+            "b"
+        );
+        assert!(select_source(None, Some("a -0x"), 1.0, 1.0).is_err());
+    }
+
+    #[test]
+    fn svg_side_budget_accepts_large_usize_without_truncation() {
+        let limits = ResourceLimits {
+            max_decoded_bytes: usize::MAX,
+            max_dimension: 8,
+            ..ResourceLimits::default()
+        };
+        assert_eq!(decode(SVG, [u32::MAX; 2], limits).unwrap().size, [8, 4]);
+        assert!(
+            decode(
+                SVG,
+                [8, 4],
+                ResourceLimits {
+                    max_dimension: 0,
+                    ..limits
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]

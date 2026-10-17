@@ -74,6 +74,7 @@ pub enum Link {
 }
 
 /// Complete native request; query pairs and body are retained without logging secrets.
+///
 /// Headers are case-normalized at admission. Repeated GET query keys cannot be
 /// represented by Router's map API and are explicitly rejected, not overwritten.
 #[derive(Clone)]
@@ -211,20 +212,7 @@ impl RequestContext {
         request.scope = "form".into();
         request.trigger = Trigger::Form;
         request.submitter = submission.submitter;
-        let raw_size = submission.entries.iter().fold(0usize, |size, entry| {
-            let value = match &entry.value {
-                FormValue::Text(value) => value.len(),
-                FormValue::File(file) => file
-                    .bytes
-                    .len()
-                    .saturating_add(file.name.len())
-                    .saturating_add(file.media_type.as_ref().map_or(0, String::len)),
-            };
-            size.saturating_add(entry.name.len()).saturating_add(value)
-        });
-        if raw_size > max_bytes {
-            return Err(RoutingError::TooLarge);
-        }
+        validate_form_size(&submission, max_bytes)?;
         request.method = submission
             .method
             .as_deref()
@@ -235,31 +223,9 @@ impl RequestContext {
         validate_method(request.method)?;
         if request.method == Method::Get || request.method == Method::Head {
             // Browser GET submission replaces the action's query, preserving order.
-            request.query.clear();
-            for entry in submission.entries {
-                let FormValue::Text(value) = entry.value else {
-                    return Err(RoutingError::GetFileUnsupported);
-                };
-                request.query.push((entry.name, value));
-            }
+            request.query = form_query(submission.entries)?;
         } else if submission.multipart {
-            // Deterministic boundary, collision-checked against *all* entry data.
-            let mut boundary = "hyperchad-native-form".to_owned();
-            while submission.entries.iter().any(|entry| {
-                entry.name.contains(&boundary)
-                    || match &entry.value {
-                        FormValue::Text(text) => text.contains(&boundary),
-                        FormValue::File(file) => {
-                            file.name.contains(&boundary)
-                                || file
-                                    .bytes
-                                    .windows(boundary.len())
-                                    .any(|s| s == boundary.as_bytes())
-                        }
-                    }
-            }) {
-                boundary.push('x');
-            }
+            let boundary = multipart_boundary(&submission.entries);
             let mut body = Vec::new();
             for entry in submission.entries {
                 let name = disposition(&entry.name)?;
@@ -305,26 +271,11 @@ impl RequestContext {
             );
             request.body = Some(body.into());
         } else {
-            let mut body = Vec::new();
-            for (i, entry) in submission.entries.into_iter().enumerate() {
-                if i > 0 {
-                    append(&mut body, b"&", max_bytes)?;
-                }
-                let value = match entry.value {
-                    FormValue::Text(value) => value,
-                    FormValue::File(file) => file.name,
-                };
-                append(
-                    &mut body,
-                    format!("{}={}", encode(&entry.name), encode(&value)).as_bytes(),
-                    max_bytes,
-                )?;
-            }
+            request.body = Some(urlencoded_body(submission.entries, max_bytes)?.into());
             request.headers.insert(
                 "content-type".into(),
                 "application/x-www-form-urlencoded".into(),
             );
-            request.body = Some(body.into());
         }
         if request_size(&request) > max_bytes {
             return Err(RoutingError::TooLarge);
@@ -398,12 +349,22 @@ struct Pending {
 }
 
 /// A queued result held by B while it dispatches lifecycle events before swapping.
+///
 /// It retains its coordinator slot/ticket until `Routing::complete`.
 /// Cancellation releases the ticket but the completion must still be consumed.
 /// Do not discard it: call `complete` even when lifecycle handlers change the tree.
 pub struct PreparedCompletion {
     message: ResultMessage,
     cancellation: Arc<Cancellation>,
+}
+
+impl std::fmt::Debug for PreparedCompletion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PreparedCompletion")
+            .field("id", &self.message.id)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Terminal lifecycle: emit native after/success/error/abort, not HTTP events with
@@ -497,7 +458,7 @@ impl Routing {
         context: RequestContext,
     ) -> Result<RequestId, RoutingError> {
         let id = self.prepare(document, context)?;
-        self.start(id);
+        let _ = self.start(id);
         Ok(id)
     }
 
@@ -610,6 +571,7 @@ impl Routing {
 
     /// Release one prepared request after G/H before-event delivery. A prepared
     /// request must be started or cancelled; it intentionally holds FIFO order.
+    #[must_use]
     pub fn start(&self, id: RequestId) -> bool {
         self.pending
             .get(&id)
@@ -689,6 +651,7 @@ impl Routing {
 
     /// G's before envelope, only for successfully admitted requests. Never exposes
     /// bodies, form fields, cookies, credentials, or synthetic HTTP metadata.
+    #[allow(clippy::must_use_candidate)] // Option is already must_use; repository convention.
     pub fn before_event(&self, id: RequestId) -> Option<crate::events::InputEvent> {
         let pending = self.pending.get(&id)?;
         Some(lifecycle_event(
@@ -957,7 +920,7 @@ fn route_request(context: &RequestContext, max_bytes: usize) -> Result<RouteRequ
             .map(|body| Arc::new(body.to_vec().into())),
     })
 }
-fn validate_method(method: Method) -> Result<(), RoutingError> {
+const fn validate_method(method: Method) -> Result<(), RoutingError> {
     match method {
         Method::Get
         | Method::Post
@@ -1030,6 +993,79 @@ fn request_size(context: &RequestContext) -> usize {
     }
     size
 }
+fn multipart_boundary(entries: &[crate::widgets::forms::FormEntry]) -> String {
+    // Deterministic boundary, collision-checked against all entry data.
+    let mut boundary = "hyperchad-native-form".to_owned();
+    while entries.iter().any(|entry| {
+        entry.name.contains(&boundary)
+            || match &entry.value {
+                FormValue::Text(text) => text.contains(&boundary),
+                FormValue::File(file) => {
+                    file.name.contains(&boundary)
+                        || file
+                            .bytes
+                            .windows(boundary.len())
+                            .any(|s| s == boundary.as_bytes())
+                }
+            }
+    }) {
+        boundary.push('x');
+    }
+    boundary
+}
+
+fn form_query(
+    entries: Vec<crate::widgets::forms::FormEntry>,
+) -> Result<Vec<(String, String)>, RoutingError> {
+    entries
+        .into_iter()
+        .map(|entry| match entry.value {
+            FormValue::Text(value) => Ok((entry.name, value)),
+            FormValue::File(_) => Err(RoutingError::GetFileUnsupported),
+        })
+        .collect()
+}
+
+fn validate_form_size(submission: &FormSubmission, max_bytes: usize) -> Result<(), RoutingError> {
+    let raw_size = submission.entries.iter().fold(0usize, |size, entry| {
+        let value = match &entry.value {
+            FormValue::Text(value) => value.len(),
+            FormValue::File(file) => file
+                .bytes
+                .len()
+                .saturating_add(file.name.len())
+                .saturating_add(file.media_type.as_ref().map_or(0, String::len)),
+        };
+        size.saturating_add(entry.name.len()).saturating_add(value)
+    });
+    if raw_size > max_bytes {
+        return Err(RoutingError::TooLarge);
+    }
+    Ok(())
+}
+
+fn urlencoded_body(
+    entries: Vec<crate::widgets::forms::FormEntry>,
+    max_bytes: usize,
+) -> Result<Vec<u8>, RoutingError> {
+    let mut body = Vec::new();
+    for (i, entry) in entries.into_iter().enumerate() {
+        if i > 0 {
+            append(&mut body, b"&", max_bytes)?;
+        }
+        let value = match entry.value {
+            FormValue::Text(value) => value,
+            FormValue::File(file) => file.name,
+        };
+        append(
+            &mut body,
+            format!("{}={}", encode(&entry.name), encode(&value)).as_bytes(),
+            max_bytes,
+        )?;
+    }
+    Ok(body)
+}
+
 fn append(body: &mut Vec<u8>, bytes: &[u8], limit: usize) -> Result<(), RoutingError> {
     if body.len().saturating_add(bytes.len()) > limit {
         return Err(RoutingError::TooLarge);
@@ -1093,15 +1129,14 @@ mod tests {
     use super::*;
     use crate::widgets::forms::{FormEntry, FormFile};
     use hyperchad_transformer::Container;
-    use std::task::{Context, Wake, Waker};
+    use std::task::{Context, Waker};
 
-    struct Noop;
-    impl Wake for Noop {
-        fn wake(self: Arc<Self>) {}
-    }
     fn pump(future: std::pin::Pin<&mut impl Future<Output = ()>>) {
-        let waker = Waker::from(Arc::new(Noop));
-        assert!(future.poll(&mut Context::from_waker(&waker)).is_pending());
+        assert!(
+            future
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_pending()
+        );
     }
     fn fixture() -> (Document, ElementStamp) {
         let mut document = Document::default();
@@ -1212,11 +1247,7 @@ mod tests {
             assert_eq!(completion.id, id);
             if method == Method::Head {
                 assert!(matches!(completion.outcome, Ok(NativeOutcome::NoContent)));
-                assert!(
-                    document
-                        .select(&Selector::Id("result".into()), None)
-                        .is_empty()
-                );
+                assert_eq!(document.select(&Selector::Id("result".into()), None), []);
             } else {
                 assert!(matches!(completion.outcome, Ok(NativeOutcome::Applied(_))));
                 assert_eq!(
@@ -1226,11 +1257,10 @@ mod tests {
             }
             // Local dispatch must NOT also publish into App's navigation consumer.
             let mut app_channel = Box::pin(router.wait_for_navigation());
-            let waker = Waker::from(Arc::new(Noop));
             assert!(
                 app_channel
                     .as_mut()
-                    .poll(&mut Context::from_waker(&waker))
+                    .poll(&mut Context::from_waker(Waker::noop()))
                     .is_pending()
             );
         }
@@ -1258,7 +1288,7 @@ mod tests {
             context.headers["content-type"],
             "application/x-www-form-urlencoded"
         );
-        let mut get = context.clone();
+        let mut get = context;
         get.method = Method::Get;
         get.query = vec![("tag".into(), "a".into()), ("tag".into(), "b".into())];
         assert!(matches!(
@@ -1392,10 +1422,9 @@ mod tests {
             routing.try_complete(&mut document).unwrap().outcome,
             Err(RoutingError::Stale)
         ));
-        assert!(
-            document
-                .select(&Selector::Id("must-not-appear".into()), None)
-                .is_empty()
+        assert_eq!(
+            document.select(&Selector::Id("must-not-appear".into()), None),
+            []
         );
     }
 
@@ -1496,11 +1525,7 @@ mod tests {
             } else {
                 assert!(matches!(outcome, Ok(NativeOutcome::Redirected(_))));
             }
-            assert!(
-                document
-                    .select(&Selector::Id("ignored".into()), None)
-                    .is_empty()
-            );
+            assert_eq!(document.select(&Selector::Id("ignored".into()), None), []);
         }
     }
 
@@ -1582,11 +1607,7 @@ mod tests {
                 ..
             }
         ));
-        assert!(
-            document
-                .select(&Selector::Id("new".into()), None)
-                .is_empty()
-        );
+        assert_eq!(document.select(&Selector::Id("new".into()), None), []);
         // A lifecycle action can replace the document. No response may resurrect it.
         document
             .apply_view(View::from(Container::default()), ViewOrigin::Navigation)
@@ -1595,6 +1616,15 @@ mod tests {
             routing.complete(&mut document, prepared).unwrap().outcome,
             Err(RoutingError::Stale)
         ));
+    }
+
+    fn flatten(nodes: &[Container], output: &mut Vec<String>) {
+        for node in nodes {
+            if let Some(id) = &node.str_id {
+                output.push(id.clone());
+            }
+            flatten(&node.children, output);
+        }
     }
 
     #[test]
@@ -1642,14 +1672,6 @@ mod tests {
                 routing.try_complete(&mut document).unwrap().outcome,
                 Ok(NativeOutcome::Applied(_))
             ));
-            fn flatten(nodes: &[Container], output: &mut Vec<String>) {
-                for node in nodes {
-                    if let Some(id) = &node.str_id {
-                        output.push(id.clone());
-                    }
-                    flatten(&node.children, output);
-                }
-            }
             let mut actual = Vec::new();
             flatten(document.roots(), &mut actual);
             assert_eq!(actual, expected, "{strategy:?}");
@@ -1668,9 +1690,13 @@ mod tests {
                 assert_eq!(root.children[0].str_id.as_deref(), Some("old"));
                 let payload = &roots[1 - root_index];
                 assert_eq!(payload.str_id.as_deref(), Some("payload"));
-                assert!(payload.children.is_empty());
+                assert_eq!(payload.children, []);
             }
         }
+        assert_fragment_then_delete_transaction();
+    }
+
+    fn assert_fragment_then_delete_transaction() {
         let (mut document, source) = fixture();
         // Keep the request source alive across both operations. Replacing the source
         // itself detaches its key; D intentionally refuses subsequent selector
@@ -1719,17 +1745,13 @@ mod tests {
         };
         assert_eq!(document.roots().len(), 1);
         assert_eq!(document.roots()[0].str_id.as_deref(), Some("root"));
-        assert!(document.roots()[0].children.is_empty());
+        assert_eq!(document.roots()[0].children, []);
         assert!(document.stamp(source.key).is_some());
         assert!(document.stamp(victim).is_none());
-        assert!(
-            document
-                .select(&Selector::Id("fragment".into()), None)
-                .is_empty()
-        );
+        assert_eq!(document.select(&Selector::Id("fragment".into()), None), []);
         assert_eq!(summary.removed.len(), 1);
-        assert!(summary.inserted.is_empty()); // transient fragment never survives commit
-        assert!(summary.diagnostics.is_empty());
+        assert_eq!(summary.inserted, []); // transient fragment never survives commit
+        assert_eq!(summary.diagnostics, []);
     }
 
     #[test]
@@ -1758,6 +1780,151 @@ mod tests {
             Ok(NativeOutcome::Applied(_))
         ));
         assert_eq!(document.roots()[0].str_id.as_deref(), Some("new-root"));
+    }
+
+    #[test]
+    fn before_action_mutation_reconcile_cancels_without_polling_handler() {
+        let (mut document, source) = fixture();
+        let (mut routing, worker) = coordinator();
+        let called = Arc::new(AtomicBool::new(false));
+        let captured = called.clone();
+        let router = Router::new().with_route("/local", move |_| {
+            captured.store(true, Ordering::Release);
+            async { View::default() }
+        });
+        let id = routing.prepare(&mut document, request(source)).unwrap();
+        let ticket = routing.pending[&id].ticket.clone();
+        // Simulate Before handler replacing its own source via the document mailbox.
+        document
+            .apply_view(View::from(Container::default()), ViewOrigin::Navigation)
+            .unwrap();
+        routing.reconcile(&mut document);
+        assert!(!document.request_is_current(&ticket));
+        let _ = routing.start(id); // A late host release cannot revive cancelled authority.
+        let mut work = Box::pin(worker.run(router));
+        pump(work.as_mut());
+        assert!(!called.load(Ordering::Acquire));
+        assert!(matches!(
+            routing.try_complete(&mut document).unwrap().outcome,
+            Err(RoutingError::Cancelled)
+        ));
+    }
+
+    #[test]
+    fn prepared_completion_debug_redacts_success_payload_and_handler_errors() {
+        let cancellation = Arc::new(Cancellation {
+            cancelled: AtomicBool::new(false),
+            signal: flume::bounded(1).0,
+        });
+        let mut view = View::from(Container {
+            str_id: Some("private-payload".into()),
+            ..Container::default()
+        });
+        view.response
+            .cookies
+            .push(hyperchad_renderer::ResponseCookie::secure(
+                "session",
+                "private-cookie",
+            ));
+        for result in [
+            Ok(Some(Content::View(Box::new(view)))),
+            Err(RoutingError::Handler("private-handler-error".into())),
+        ] {
+            let prepared = PreparedCompletion {
+                message: ResultMessage {
+                    id: RequestId(7),
+                    result,
+                },
+                cancellation: cancellation.clone(),
+            };
+            assert_eq!(
+                format!("{prepared:?}"),
+                "PreparedCompletion { id: RequestId(7), .. }"
+            );
+            assert_eq!(
+                format!("{prepared:#?}"),
+                "PreparedCompletion {\n    id: RequestId(\n        7,\n    ),\n    ..\n}"
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_completion_retains_capacity_and_cannot_cross_coordinator_authority() {
+        let (mut document, source) = fixture();
+        let (mut other_document, other_source) = fixture();
+        let (mut routing, worker) = Routing::new(1, 1024, Arc::new(|| {})).unwrap();
+        let (mut other, other_worker) = Routing::new(1, 1024, Arc::new(|| {})).unwrap();
+        let router = Router::new().with_route("/local", |_| async { View::default() });
+        let id = routing.submit(&mut document, request(source)).unwrap();
+        let other_id = other
+            .submit(&mut other_document, request(other_source))
+            .unwrap();
+        assert_eq!(id, other_id); // IDs alone are deliberately not ticket authority.
+        let mut work = Box::pin(worker.run(router.clone()));
+        let mut other_work = Box::pin(other_worker.run(router));
+        pump(work.as_mut());
+        pump(other_work.as_mut());
+        let prepared = routing.try_take().unwrap();
+        assert_eq!(
+            routing.submit(&mut document, request(source)),
+            Err(RoutingError::QueueFull)
+        );
+        assert!(other.terminal_events(&other_document, &prepared).is_empty());
+        // Moving a completion to the wrong owner must not consume that owner's job.
+        assert!(other.complete(&mut other_document, prepared).is_none());
+        assert!(matches!(
+            other.try_complete(&mut other_document).unwrap().outcome,
+            Ok(NativeOutcome::Applied(_))
+        ));
+        routing.shutdown(&mut document); // clean abandoned prepared authority on teardown
+        assert!(!routing.cancel(&mut document, RequestId(u64::MAX)));
+    }
+
+    #[test]
+    fn head_metadata_is_returned_without_rendering_and_shutdown_releases_load_ticket() {
+        let (mut document, source) = fixture();
+        let (mut routing, worker) = coordinator();
+        routing.cookie_policy = CookiePolicy::HostManaged;
+        let router = Router::new().with_route("/local", |_| async {
+            let mut view = View::from(Container {
+                str_id: Some("never-render-head".into()),
+                ..Container::default()
+            });
+            view.response
+                .cookies
+                .push(hyperchad_renderer::ResponseCookie::secure(
+                    "session", "native",
+                ));
+            view
+        });
+        let mut context = request(source);
+        context.method = Method::Head;
+        routing.submit(&mut document, context).unwrap();
+        let mut work = Box::pin(worker.run(router));
+        pump(work.as_mut());
+        let Ok(NativeOutcome::Metadata(metadata)) =
+            routing.try_complete(&mut document).unwrap().outcome
+        else {
+            panic!("HEAD must retain native response effects");
+        };
+        assert_eq!(metadata.cookies.len(), 1);
+        assert_eq!(
+            document.select(&Selector::Id("never-render-head".into()), None),
+            []
+        );
+        let mut context = request(source);
+        context.trigger = Trigger::Load;
+        let id = routing.prepare(&mut document, context).unwrap();
+        let ticket = routing.pending[&id].ticket.clone();
+        assert!(document.request_is_current(&ticket));
+        routing.shutdown(&mut document);
+        assert!(!document.request_is_current(&ticket));
+        pump(work.as_mut());
+        assert!(matches!(
+            routing.try_complete(&mut document).unwrap().outcome,
+            Err(RoutingError::Cancelled)
+        ));
+        assert_eq!(routing.loaded, BTreeMap::new());
     }
 
     #[test]

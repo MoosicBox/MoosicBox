@@ -73,15 +73,15 @@ fn concrete_worker_dispatch_poll_updates_and_forwards_once() {
     service.attach(&mut forms);
     assert!(forms.file_service);
     queue(&mut forms, request);
-    assert!(service.dispatch(&mut forms).is_empty());
-    assert!(finish(&mut service, &mut forms).is_empty());
+    assert_eq!(service.dispatch(&mut forms), []);
+    assert_eq!(finish(&mut service, &mut forms), []);
     assert_eq!(forms.fields[&request.source.key].files[0].name, "picked");
     assert_eq!(
         &*forms.fields[&request.source.key].files[0].bytes,
         &[0, 255]
     );
     assert_eq!(WidgetAdapter::take_changes(&mut forms).len(), 1);
-    assert!(WidgetAdapter::take_changes(&mut forms).is_empty());
+    assert_eq!(WidgetAdapter::take_changes(&mut forms), []);
 }
 
 #[test]
@@ -103,11 +103,11 @@ fn cancellation_read_failure_and_limit_failure_preserve_prior_selection() {
             Box::new(move |_, _| outcome.take().unwrap()),
         );
         queue(&mut forms, request);
-        assert!(service.dispatch(&mut forms).is_empty());
+        assert_eq!(service.dispatch(&mut forms), []);
         let _ = finish(&mut service, &mut forms);
         assert_eq!(forms.fields[&request.source.key].files[0].name, "prior");
         assert_eq!(forms.pending_resources(), 0);
-        assert!(WidgetAdapter::take_changes(&mut forms).is_empty());
+        assert_eq!(WidgetAdapter::take_changes(&mut forms), []);
     }
 }
 
@@ -124,7 +124,7 @@ fn reset_and_superseded_sequences_reject_late_worker_result() {
         }),
     );
     queue(&mut forms, request);
-    assert!(service.dispatch(&mut forms).is_empty());
+    assert_eq!(service.dispatch(&mut forms), []);
     forms.reset_control(request.source).unwrap();
     let newer = FileRequest {
         sequence: 2,
@@ -133,10 +133,10 @@ fn reset_and_superseded_sequences_reject_late_worker_result() {
     queue(&mut forms, newer);
     assert_eq!(service.dispatch(&mut forms), [FileServiceError::Busy]);
     release.send(()).unwrap();
-    assert!(finish(&mut service, &mut forms).is_empty());
+    assert_eq!(finish(&mut service, &mut forms), []);
     assert!(forms.fields[&request.source.key].files.is_empty());
     assert_eq!(forms.pending_resources(), 0);
-    assert!(WidgetAdapter::take_changes(&mut forms).is_empty());
+    assert_eq!(WidgetAdapter::take_changes(&mut forms), []);
 }
 
 #[test]

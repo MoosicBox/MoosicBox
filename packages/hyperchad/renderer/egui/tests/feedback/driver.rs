@@ -105,8 +105,9 @@ impl Driver {
             }
         }
         panic!(
-            "production fixture failed readiness: {:?}",
-            self.app.geometry()
+            "production fixture failed readiness: {:?}; diagnostics: {:?}",
+            self.app.geometry(),
+            self.app.take_diagnostics()
         );
     }
 

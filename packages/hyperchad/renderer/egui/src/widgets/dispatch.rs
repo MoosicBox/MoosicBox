@@ -1,5 +1,8 @@
 //! Exhaustive native element dispatch.
-use super::*;
+use super::{
+    Container, Document, Element, ElementKey, ElementStamp, FramePainter, MutationSummary,
+    NodeGeometry, NodeOutput, WidgetAdapter, WidgetPainter, egui, paint, text,
+};
 use egui::accesskit::Role;
 
 impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for WidgetPainter<F, R, C> {
@@ -69,6 +72,18 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
         self.canvas.apply_canvas(document, command)
     }
 
+    fn focus(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.focus(ctx, stamp)
+    }
+
+    fn blur(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.blur(ctx, stamp)
+    }
+
+    fn select_all(&mut self, ctx: &egui::Context, stamp: ElementStamp) -> Result<(), String> {
+        self.forms.select_all(ctx, stamp)
+    }
+
     fn take_changes(&mut self) -> Vec<(ElementStamp, crate::events::EventValue)> {
         let mut changes = self.forms.take_changes();
         changes.extend(self.resources.take_changes());
@@ -87,11 +102,11 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
         document: &Document,
         roots: &mut [Container],
     ) -> Result<(), String> {
-        WidgetPainter::prepare_layout(self, document, roots)
+        Self::prepare_layout(self, document, roots)
     }
 
     fn allows_node(&self, key: ElementKey) -> bool {
-        WidgetPainter::allows_node(self, key)
+        Self::allows_node(self, key)
     }
 
     fn prepare_node(
@@ -188,6 +203,110 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
                     .paint_node(ui, stamp, authored, calculated, geometry)
                     .map(Some);
             }
+            _ => {
+                self.paint_structure(&painter, stamp, authored, calculated, geometry, &text_style)?
+            }
+        };
+        Ok(Some(self.structural_response(
+            ui,
+            &painter,
+            stamp,
+            authored,
+            geometry,
+            (role, interactive),
+        )))
+    }
+}
+
+impl<F, R, C> WidgetPainter<F, R, C> {
+    fn paint_summary(
+        &self,
+        painter: &egui::Painter,
+        stamp: ElementStamp,
+        calculated: &Container,
+        geometry: &NodeGeometry<ElementKey>,
+    ) -> (Role, bool) {
+        self.summary_owners
+            .get(&stamp.key)
+            .map_or((Role::GenericContainer, false), |owner| {
+                let open = self.disclosure.get(owner).is_some_and(|state| state.open);
+                let size = 5.0 * geometry.transform.scale;
+                let center = egui::pos2(
+                    geometry
+                        .transform
+                        .scale
+                        .mul_add(-8.0, geometry.content_box.left()),
+                    (calculated.calculated_font_size.unwrap_or(14.0) * geometry.transform.scale)
+                        .mul_add(0.5, geometry.content_box.top()),
+                );
+                let points = if open {
+                    vec![
+                        center + egui::vec2(-size, -size * 0.5),
+                        center + egui::vec2(size, -size * 0.5),
+                        center + egui::vec2(0.0, size * 0.5),
+                    ]
+                } else {
+                    vec![
+                        center + egui::vec2(-size * 0.5, -size),
+                        center + egui::vec2(size * 0.5, 0.0),
+                        center + egui::vec2(-size * 0.5, size),
+                    ]
+                };
+                painter.add(egui::Shape::convex_polygon(
+                    points,
+                    calculated.color.map_or(egui::Color32::BLACK, paint::color),
+                    egui::Stroke::NONE,
+                ));
+                (Role::Button, true)
+            })
+    }
+    fn paint_details(
+        &self,
+        painter: &egui::Painter,
+        stamp: ElementStamp,
+        calculated: &Container,
+        geometry: &NodeGeometry<ElementKey>,
+    ) -> (Role, bool) {
+        if self
+            .summary_owners
+            .values()
+            .any(|owner| *owner == stamp.key)
+        {
+            (Role::Group, false)
+        } else {
+            let open = self
+                .disclosure
+                .get(&stamp.key)
+                .is_some_and(|state| state.open);
+            let summary_rect = egui::Rect::from_min_size(
+                geometry.padding_box.min,
+                egui::vec2(
+                    geometry.padding_box.width(),
+                    24.0 * geometry.transform.scale,
+                ),
+            );
+            painter.text(
+                summary_rect.left_center(),
+                egui::Align2::LEFT_CENTER,
+                if open { "▾ Details" } else { "▸ Details" },
+                egui::FontId::proportional(
+                    calculated.calculated_font_size.unwrap_or(14.0) * geometry.transform.scale,
+                ),
+                calculated.color.map_or(egui::Color32::BLACK, paint::color),
+            );
+            (Role::Button, true)
+        }
+    }
+    fn paint_structure(
+        &self,
+        painter: &egui::Painter,
+        stamp: ElementStamp,
+        authored: &Container,
+        calculated: &Container,
+        geometry: &NodeGeometry<ElementKey>,
+        text_style: &text::TextStyle,
+    ) -> Result<(Role, bool), String> {
+        Ok(match &authored.element {
             // Raw is also the production HTML parser's ordinary text-run node.
             // Native policy is literal text for BOTH variants, not HTML execution
             // or reparsing: provenance is absent, so angle/entity heuristics would
@@ -195,9 +314,9 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
             // interpretation; its source is deliberately displayed verbatim.
             Element::Raw { value } | Element::Text { value } => {
                 text::paint_text(
-                    &painter,
+                    painter,
                     calculated,
-                    &text_style,
+                    text_style,
                     value,
                     geometry.content_box,
                     geometry.transform.scale,
@@ -206,40 +325,7 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
             }
             Element::Button { .. } => (Role::Button, true),
             Element::Anchor { href, .. } => (Role::Link, href.is_some()),
-            Element::Summary => {
-                if let Some(owner) = self.summary_owners.get(&stamp.key) {
-                    let open = self.disclosure.get(owner).is_some_and(|state| state.open);
-                    let size = 5.0 * geometry.transform.scale;
-                    let center = egui::pos2(
-                        geometry.content_box.left() - 8.0 * geometry.transform.scale,
-                        geometry.content_box.top()
-                            + calculated.calculated_font_size.unwrap_or(14.0)
-                                * geometry.transform.scale
-                                * 0.5,
-                    );
-                    let points = if open {
-                        vec![
-                            center + egui::vec2(-size, -size * 0.5),
-                            center + egui::vec2(size, -size * 0.5),
-                            center + egui::vec2(0.0, size * 0.5),
-                        ]
-                    } else {
-                        vec![
-                            center + egui::vec2(-size * 0.5, -size),
-                            center + egui::vec2(size * 0.5, 0.0),
-                            center + egui::vec2(-size * 0.5, size),
-                        ]
-                    };
-                    painter.add(egui::Shape::convex_polygon(
-                        points,
-                        calculated.color.map_or(egui::Color32::BLACK, paint::color),
-                        egui::Stroke::NONE,
-                    ));
-                    (Role::Button, true)
-                } else {
-                    (Role::GenericContainer, false)
-                }
-            }
+            Element::Summary => self.paint_summary(painter, stamp, calculated, geometry),
             Element::Heading { .. } => (Role::Heading, false),
             Element::OrderedList | Element::UnorderedList => (Role::List, false),
             Element::ListItem => {
@@ -266,40 +352,26 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
             Element::Header => (Role::Header, false),
             Element::Footer => (Role::Footer, false),
             Element::Form { .. } => (Role::Form, false),
-            Element::Details { .. } => {
-                if self
-                    .summary_owners
-                    .values()
-                    .any(|owner| *owner == stamp.key)
-                {
-                    (Role::Group, false)
-                } else {
-                    let open = self
-                        .disclosure
-                        .get(&stamp.key)
-                        .is_some_and(|state| state.open);
-                    let summary_rect = egui::Rect::from_min_size(
-                        geometry.padding_box.min,
-                        egui::vec2(
-                            geometry.padding_box.width(),
-                            24.0 * geometry.transform.scale,
-                        ),
-                    );
-                    painter.text(
-                        summary_rect.left_center(),
-                        egui::Align2::LEFT_CENTER,
-                        if open { "▾ Details" } else { "▸ Details" },
-                        egui::FontId::proportional(
-                            calculated.calculated_font_size.unwrap_or(14.0)
-                                * geometry.transform.scale,
-                        ),
-                        calculated.color.map_or(egui::Color32::BLACK, paint::color),
-                    );
-                    (Role::Button, true)
-                }
-            }
+            Element::Details { .. } => self.paint_details(painter, stamp, calculated, geometry),
             Element::Div | Element::Span | Element::Section => (Role::GenericContainer, false),
-        };
+            Element::Input { .. }
+            | Element::Textarea { .. }
+            | Element::Select { .. }
+            | Element::Option { .. }
+            | Element::Image { .. }
+            | Element::Canvas => unreachable!("adapter nodes dispatch before structural painting"),
+        })
+    }
+    fn structural_response(
+        &mut self,
+        ui: &mut egui::Ui,
+        painter: &egui::Painter,
+        stamp: ElementStamp,
+        authored: &Container,
+        geometry: &NodeGeometry<ElementKey>,
+        semantics: (Role, bool),
+    ) -> NodeOutput {
+        let (role, interactive) = semantics;
         if authored
             .data
             .get("disabled")
@@ -334,20 +406,55 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
             (matches!(authored.element, Element::Details { .. }) && interactive)
                 .then_some(stamp.key)
         });
-        if let Some(owner) = disclosure_owner {
-            if response.clicked() {
-                if let Some(state) = self.disclosure.get_mut(&owner) {
-                    state.open = !state.open;
-                    response.mark_changed();
-                    ui.ctx().request_repaint();
-                }
-            }
+        if let Some(owner) = disclosure_owner
+            && response.clicked()
+            && let Some(state) = self.disclosure.get_mut(&owner)
+        {
+            state.open = !state.open;
+            response.mark_changed();
+            ui.ctx().request_repaint();
         }
         let name = if matches!(authored.element, Element::Details { .. }) && interactive {
             "Details".to_owned()
         } else {
             accessible_name(authored)
         };
+        self.response_accessibility(
+            &response,
+            authored,
+            bounds,
+            (role, interactive),
+            &name,
+            disclosure_owner,
+        );
+        if interactive {
+            if response.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if response.has_focus() {
+                painter.rect_stroke(
+                    bounds.shrink(1.0),
+                    0.0,
+                    ui.visuals().selection.stroke,
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+        NodeOutput {
+            response,
+            value: None,
+        }
+    }
+    fn response_accessibility(
+        &self,
+        response: &egui::Response,
+        authored: &Container,
+        bounds: egui::Rect,
+        semantics: (Role, bool),
+        name: &str,
+        disclosure_owner: Option<ElementKey>,
+    ) {
+        let (role, interactive) = semantics;
         response.widget_info(|| {
             egui::WidgetInfo::labeled(
                 if matches!(authored.element, Element::Anchor { .. }) {
@@ -357,17 +464,17 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
                 } else {
                     egui::WidgetType::Label
                 },
-                ui.is_enabled(),
-                &name,
+                response.enabled(),
+                name,
             )
         });
-        ui.ctx().accesskit_node_builder(response.id, |node| {
+        response.ctx.accesskit_node_builder(response.id, |node| {
             node.set_role(role);
-            node.set_label(name.clone());
-            if let Some(owner) = disclosure_owner {
-                if let Some(state) = self.disclosure.get(&owner) {
-                    node.set_expanded(state.open);
-                }
+            node.set_label(name.to_owned());
+            if let Some(owner) = disclosure_owner
+                && let Some(state) = self.disclosure.get(&owner)
+            {
+                node.set_expanded(state.open);
             }
             node.set_bounds(egui::accesskit::Rect {
                 x0: f64::from(bounds.left()),
@@ -387,23 +494,6 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
                 });
             }
         });
-        if interactive {
-            if response.hovered() {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            }
-            if response.has_focus() {
-                painter.rect_stroke(
-                    bounds.shrink(1.0),
-                    0.0,
-                    ui.visuals().selection.stroke,
-                    egui::StrokeKind::Inside,
-                );
-            }
-        }
-        Ok(Some(NodeOutput {
-            response,
-            value: None,
-        }))
     }
 }
 

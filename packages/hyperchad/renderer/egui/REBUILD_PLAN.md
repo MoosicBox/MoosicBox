@@ -7,6 +7,12 @@ renderer/navigation contracts remain compatible; version-selection features and
 legacy source are removed only after the replacement passes the gates below.
 
 This is a working implementation plan, **not a claim of comprehensive support**.
+The coordinator resumed continuous implementation/review/validation after the user
+rejected stopping at the foundation checkpoint. The C7 basic native fixture and
+157-library/10-feedback-test checkpoint are historical foundation evidence only;
+strict lint, full runtime integration, shared layout support, expanded native
+scenarios, actual MoosicBox acceptance and legacy removal remain open.
+
 The corrected text/negative-fixture checkpoint has 157 library tests and ten production-frame feedback
 tests passing with `feedback,glow,x11`. Both legacy exports remain selected. The
 replacement native example, actual MoosicBox application, other graphics/platform
@@ -205,11 +211,10 @@ no unacknowledged temporary dependency overrides, and all workers/processes sett
     complete pipeline exists; removing the rejection alone is not support.
   - Implement shared table column/row/span sizing with the currently ignored
     regressions; do not substitute an egui grid.
-- Text rounding parity remains open: `font_metrics.rs` sets
-  `LayoutJob::round_output_to_gui = false`, while `widgets/text.rs` starts from
-  `LayoutJob::default()`. Assign the painting-lane correction and measurement/paint
-  regression together. Full parity additionally needs the shared family/weight/
-  whitespace measurement contract; current rich-style galleys are not universally
+- Text rounding parity is corrected: measurement and painting both disable GUI
+  output rounding, with an actual painted-galley regression across fractional
+  widths/DPI. Full typography parity still needs the shared family/weight/
+  whitespace measurement contract; rich-style galleys are not universally
   reused between measurement and paint.
 - Native `Raw` nodes also carry ordinary parser text. The current native policy
   renders their content literally through the text path, without reparsing markup
