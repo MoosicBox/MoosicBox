@@ -44,6 +44,36 @@ fn options(columns: u16, rows: u16) -> LayoutOptions {
 }
 
 #[test]
+fn positioned_right_and_bottom_anchor_the_margin_box() {
+    use hyperchad_transformer::models::Position;
+    for position in [Position::Absolute, Position::Fixed] {
+        let root = Container {
+            width: Some(Number::IntegerPercent(100)),
+            height: Some(Number::IntegerPercent(100)),
+            position: Some(Position::Relative),
+            children: vec![Container {
+                position: Some(position),
+                right: width(0),
+                bottom: height(0),
+                width: width(7),
+                height: height(5),
+                margin_left: width(3),
+                margin_right: width(2),
+                margin_top: height(1),
+                margin_bottom: height(2),
+                ..named("control")
+            }],
+            ..Container::default()
+        };
+        let tree = layout(&root, &options(80, 24), &DefaultLeafMeasure).unwrap();
+        assert_eq!(
+            tree.get("control").unwrap().bounds,
+            CellRect::new(71, 17, 7, 5)
+        );
+    }
+}
+
+#[test]
 fn definite_row_stretches_only_auto_height_children_without_explicit_alignment() {
     for (alignment, auto_y, auto_height) in [
         (None, 0, 20),

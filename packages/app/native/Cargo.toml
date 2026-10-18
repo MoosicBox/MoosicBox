@@ -173,6 +173,7 @@ bmux = [
     "dep:reqwest",
     "hyperchad/renderer-bmux",
     "hyperchad/renderer-bmux-images",
+    "moosicbox_app_native_ui/terminal",
     # Keep format feature propagation coherent across the existing audio crates,
     # including decoding format metadata in remote library responses.
     "all-formats",

@@ -95,7 +95,7 @@ async fn refresh_audio_zone_with_sessions() {
 
 async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) {
     let container = moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections);
-    let view = View::builder().with_fragment(container).build();
+    let view = View::builder().with_fragments(container).build();
     let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {
         log::error!("Failed to render: {e:?}");
@@ -222,7 +222,7 @@ async fn update_playlist_sessions() {
         &connection.api_url,
         &STATE.current_sessions.read().await,
     );
-    let view = View::builder().with_fragment(container).build();
+    let view = View::builder().with_fragments(container).build();
     let response = RENDERER.get().unwrap().render(view).await;
     if let Err(e) = response {
         log::error!("Failed to render: {e:?}");

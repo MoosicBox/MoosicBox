@@ -1736,7 +1736,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     draft.source.left.as_ref(),
                     draft.source.right.as_ref(),
                     anchor.width,
-                    bounds.width,
+                    positive(signed(bounds.width) + draft.margin.left + draft.margin.right),
                     true,
                     &draft.key,
                 )?
@@ -1746,7 +1746,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     draft.source.top.as_ref(),
                     draft.source.bottom.as_ref(),
                     anchor.height,
-                    bounds.height,
+                    positive(signed(bounds.height) + draft.margin.top + draft.margin.bottom),
                     false,
                     &draft.key,
                 )?

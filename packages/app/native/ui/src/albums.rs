@@ -128,15 +128,15 @@ pub fn album_page_immediate(
         div
             hx-get=(path)
             hx-trigger="load"
-            padding-x=60
+            padding-x=calc(min(60, 5%))
             padding-y=20
         {
             div direction=row {
-                @let size = 200;
+                @let size = crate::ALBUM_ART_SIZE;
                 div width=(size) height=(size + 30) {
                     image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
                 }
-                div {
+                div flex=1 {
                     h1 { "loading..." }
                     h2 { "loading..." }
                 }
@@ -191,13 +191,13 @@ pub fn album_page_content(
         .or_else(|| versions.first());
 
     container! {
-        div padding-x=60 padding-y=20 {
+        div padding-x=calc(min(60, 5%)) padding-y=20 {
             div direction=row gap=15 {
-                @let size = 200;
-                div {
+                @let size = crate::ALBUM_ART_SIZE;
+                div width=(size) {
                     (album_cover_img_from_album(host, &album, size))
                 }
-                div {
+                div flex=1 {
                     h1 { (album.title) }
                     anchor href={"/artists?artistId="(album.artist_id)"&source="(album.api_source)} {
                         h2 { (album.artist) }
@@ -228,7 +228,7 @@ pub fn album_page_content(
                     }
                 }
             }
-            div direction=row padding-y=20 gap=8 {
+            div direction=row padding-y=(if cfg!(feature = "terminal") { 8 } else { 20 }) gap=8 overflow-x=(if cfg!(feature = "terminal") { LayoutOverflow::Wrap { grid: false } } else { LayoutOverflow::default() }) {
                 button
                     direction=row
                     width=130
@@ -705,7 +705,7 @@ pub fn album_display(
         );
 
         container! {
-            div align-items=center text-align=center {
+            div align-items=center text-align=center white-space=(if cfg!(feature = "terminal") { hyperchad::transformer::models::WhiteSpace::Preserve } else { hyperchad::transformer::models::WhiteSpace::Normal }) text-overflow=ellipsis {
                 div {
                     anchor href=(album_page_url) { (album.title) }
                 }
@@ -903,11 +903,11 @@ pub fn albums_page_content(
     sort: AlbumSort,
     search: Option<&str>,
 ) -> Containers {
-    let size: u16 = 200;
+    let size: u16 = crate::ALBUM_ART_SIZE;
 
     container! {
         div background=(DARK_BACKGROUND) {
-            div padding-x=30 padding-y=15 {
+            div padding-x=(if cfg!(feature = "terminal") { 8 } else { 30 }) padding-y=(if cfg!(feature = "terminal") { 0 } else { 15 }) {
                 div direction=row align-items=center {
                     h1 { "Albums" }
                     @let button_size = 30;
@@ -1070,9 +1070,9 @@ pub fn load_albums(
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
             justify-content=space-evenly
-            gap=15
-            padding-x=30
-            padding-y=15
+            gap=(if cfg!(feature = "terminal") { 8 } else { 15 })
+            padding-x=(if cfg!(feature = "terminal") { 8 } else { 30 })
+            padding-y=(if cfg!(feature = "terminal") { 0 } else { 15 })
         {
             @for _ in 0..100 {
                 div width=(size) height=(size + 30) {

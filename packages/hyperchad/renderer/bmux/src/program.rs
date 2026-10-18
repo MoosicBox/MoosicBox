@@ -1914,7 +1914,21 @@ impl BmuxProgram {
             .and_then(|(_, tree)| {
                 tree.hit_test(i64::from(mouse.position.x), i64::from(mouse.position.y))
             })
-            .map(|node| node.key.clone());
+            .and_then(|node| {
+                if mouse.kind == MouseEventKind::Move {
+                    // Hover belongs to the actionable ancestor, not whichever
+                    // artwork/text descendant happens to be under the pointer.
+                    // Enter and release must use the same action owner.
+                    (0..=node.path.len()).rev().find_map(|len| {
+                        let path = &node.path[..len];
+                        let source = at_path(self.state.root(), path)?;
+                        accepts_event(source, &EventKind::Hover)
+                            .then(|| layout::node_key(source, path))
+                    })
+                } else {
+                    Some(node.key.clone())
+                }
+            });
         match mouse.kind {
             MouseEventKind::Down(_) => {
                 self.pressed.clone_from(&hit);
@@ -2275,7 +2289,9 @@ impl BmuxProgram {
 
     fn terminal(&mut self, event: &Event) -> Result<(), Error> {
         self.resource_paint_only = false;
-        self.geometry_dirty = true;
+        if !matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Move) {
+            self.geometry_dirty = true;
+        }
         if !matches!(event, Event::Key(_)) {
             self.key_chord.clear();
         }
@@ -2345,6 +2361,7 @@ impl BmuxProgram {
             }
         }
         let result = self.controls.event(event);
+        self.geometry_dirty |= result.redraw || result.relayout || !result.events.is_empty();
         self.control_events(result.events)?;
         if result.consumed {
             return Ok(());
@@ -2414,7 +2431,13 @@ impl Program for BmuxProgram {
             }
             return Ok(self.drive(Update::redraw()));
         }
-        self.geometry_dirty = true;
+        let pointer_move = matches!(
+            &event,
+            RuntimeEvent::Terminal(Event::Mouse(mouse)) if mouse.kind == MouseEventKind::Move
+        );
+        // Merely crossing a hit region is not a document mutation. Hover actions
+        // and native controls mark geometry dirty when they actually change it.
+        self.geometry_dirty |= !pointer_move;
         self.styles_changed = false;
         let generation_before = self.state.generation();
         match event {
@@ -2434,7 +2457,11 @@ impl Program for BmuxProgram {
                 &BTreeSet::new(),
             )?;
         }
-        Ok(self.drive(Update::redraw()))
+        Ok(self.drive(if pointer_move && !self.geometry_dirty {
+            Update::none()
+        } else {
+            Update::redraw()
+        }))
     }
 
     fn presentation_committed(
@@ -2893,6 +2920,231 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn targeted_playlist_fragments_preserve_shell_and_album_scroll() {
+        let mut program = program();
+        let node = |id: &str| Container {
+            str_id: Some(id.into()),
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("shell".into()),
+                    children: vec![
+                        node("sidebar"),
+                        node("main"),
+                        node("footer"),
+                        node("playback-sessions-content"),
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        let offset = layout::ScrollOffset { x: 0, y: 24 };
+        program.options.scroll_offsets.insert("main".into(), offset);
+        let containers = vec![Container {
+            str_id: Some("playback-sessions-content".into()),
+            children: vec![node("fixture-session")],
+            ..Default::default()
+        }];
+        program
+            .apply_view(View::builder().with_fragments(containers).build(), None)
+            .unwrap();
+        assert_eq!(program.state.root().str_id.as_deref(), Some("shell"));
+        for id in ["sidebar", "main", "footer", "fixture-session"] {
+            let mut found = false;
+            visit(program.state.root(), &mut Vec::new(), &mut |node, _| {
+                found |= node.str_id.as_deref() == Some(id);
+            });
+            assert!(found, "missing {id}");
+        }
+        assert_eq!(program.options.scroll_offsets["main"], offset);
+    }
+
+    #[test]
+    fn named_fragment_updates_preserve_sibling_domains() {
+        let ids = [
+            "audio-zones-content",
+            "albums",
+            "search-results-local",
+            "settings-download-settings-section",
+            "settings-scan-settings-section",
+        ];
+        let node = |id: &str| Container {
+            str_id: Some(id.into()),
+            ..Default::default()
+        };
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("shell".into()),
+                    children: ids.iter().map(|id| node(id)).collect(),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        for (index, id) in ids.iter().enumerate() {
+            let before = program.state.root().clone();
+            let update = Container {
+                children: vec![node(&format!("updated-{index}"))],
+                ..node(id)
+            };
+            program
+                .apply_view(
+                    View::builder().with_fragments(vec![update.clone()]).build(),
+                    None,
+                )
+                .unwrap();
+            let mut expected = before;
+            expected.children[index] = update;
+            assert_eq!(*program.state.root(), expected, "target={id}");
+        }
+    }
+
+    #[test]
+    fn explicit_fragment_envelope_retains_self_target_replacement_semantics() {
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("shell".into()),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        let view = View::builder()
+            .with_fragment(vec![Container {
+                str_id: Some("replacement".into()),
+                ..Default::default()
+            }])
+            .build();
+        assert!(matches!(
+            view.fragments[0].selector,
+            hyperchad_transformer_models::Selector::SelfTarget
+        ));
+        program.apply_view(view, None).unwrap();
+        assert_eq!(program.state.root().str_id, None);
+        assert_eq!(program.state.root().children.len(), 1);
+        assert_eq!(
+            program.state.root().children[0].str_id.as_deref(),
+            Some("replacement")
+        );
+    }
+
+    #[test]
+    fn inert_pointer_motion_does_not_relayout_or_request_presentation() {
+        use bmux_tui::{event::MouseEvent, geometry::Point};
+        use bmux_tui_runtime::Invalidation;
+
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("album".into()),
+                    width: Some(hyperchad_transformer::Number::Integer(160)),
+                    height: Some(hyperchad_transformer::Number::Integer(160)),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        let generation = program.state.generation();
+        let bounds = program
+            .committed
+            .as_ref()
+            .unwrap()
+            .1
+            .get("album")
+            .unwrap()
+            .bounds;
+        for position in [Point::new(0, 0), Point::new(1, 1), Point::new(50, 30)] {
+            let update = program
+                .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                    MouseEventKind::Move,
+                    position,
+                ))))
+                .unwrap();
+            assert_eq!(update.invalidation, Invalidation::None);
+            assert!(!program.geometry_dirty);
+            assert_eq!(program.state.generation(), generation);
+            assert_eq!(
+                program
+                    .committed
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .get("album")
+                    .unwrap()
+                    .bounds,
+                bounds
+            );
+        }
+    }
+
+    #[test]
+    fn hover_on_descendant_uses_and_releases_ancestor_style_owner() {
+        use bmux_tui::{event::MouseEvent, geometry::Point};
+        use hyperchad_actions::{Action, ActionTrigger, ActionType, ElementTarget, StyleAction};
+
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![Container {
+                        str_id: Some("album".into()),
+                        width: Some(hyperchad_transformer::Number::Integer(160)),
+                        height: Some(hyperchad_transformer::Number::Integer(160)),
+                        actions: vec![Action {
+                            trigger: ActionTrigger::Hover,
+                            effect: ActionType::Style {
+                                target: ElementTarget::SelfTarget,
+                                action: StyleAction::SetBackground(Some("#abcdef".into())),
+                            }
+                            .into(),
+                        }],
+                        children: vec![Container {
+                            str_id: Some("cover".into()),
+                            width: Some(hyperchad_transformer::Number::Integer(80)),
+                            height: Some(hyperchad_transformer::Number::Integer(80)),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        program
+            .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                MouseEventKind::Move,
+                Point::new(0, 0),
+            ))))
+            .unwrap();
+        assert_eq!(program.hover.as_deref(), Some("album"));
+        assert!(program.state.root().children[0].background.is_some());
+        assert!(program.geometry_dirty);
+        program.prepare().unwrap();
+        program.commit_prepared();
+        program
+            .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                MouseEventKind::Move,
+                Point::new(50, 30),
+            ))))
+            .unwrap();
+        assert_eq!(program.hover, None);
+        assert_eq!(program.state.root().children[0].background, None);
     }
 
     #[test]

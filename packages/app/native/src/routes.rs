@@ -1360,7 +1360,7 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
 
             let renderer = RENDERER.get().unwrap();
             renderer
-                .render(View::builder().with_fragment(markup).build())
+                .render(View::builder().with_fragments(markup).build())
                 .await
                 .unwrap();
 
@@ -1512,7 +1512,7 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
 
     let markup = download_settings_content(&settings);
 
-    Ok(Content::builder().with_fragment(markup).build())
+    Ok(Content::builder().with_fragments(markup).build())
 }
 
 /// Request body for download location operations.
@@ -1630,7 +1630,7 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
 
     let markup = scan_settings_content(&settings);
 
-    Ok(Content::builder().with_fragment(markup).build())
+    Ok(Content::builder().with_fragments(markup).build())
 }
 
 /// Request body for scan path operations.

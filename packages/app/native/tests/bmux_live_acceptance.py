@@ -228,7 +228,9 @@ def tracks_in(value):
 
 def decode_cover_worker(params, image, position, output):
     """CPU-heavy decoding/color inspection in a spawned process, never reader GIL."""
-    if position[0] <= 25:
+    # Artwork identity is still established by decoded rich pixel content.
+    # Compact terminal cards are 96px, unlike the former 200px desktop cards.
+    if position[0] < 18:
         return None
     if params.get("f") == "100":
         width, height, pixels = decode_png(image)
@@ -244,7 +246,7 @@ def decode_cover_worker(params, image, position, output):
         )
     else:
         return None
-    if min(width, height) < 100:
+    if min(width, height) < 96:
         return None
     colors = set()
     for index in range(0, len(pixels), 4):
@@ -257,6 +259,9 @@ def decode_cover_worker(params, image, position, output):
     return {
         "file": Path(output).name,
         "position_cells": position,
+        "image_id": params.get("i"),
+        "placement_columns": int(params.get("c", 0)),
+        "placement_rows": int(params.get("r", 0)),
         "width": width,
         "height": height,
         "sha256_rgba": hashlib.sha256(pixels).hexdigest(),
@@ -390,7 +395,7 @@ def album_positions(screen, payloads):
         matches = [
             (line.find(title), row) for row, line in enumerate(lines) if title in line
         ]
-        if len(matches) == 1 and matches[0][0] > 25:
+        if len(matches) == 1 and matches[0][0] >= 18:
             positions[next(iter(identities))] = matches[0]
     return positions
 
@@ -490,6 +495,11 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
         outer_modes = termios.tcgetattr(0)
         tty.setraw(0)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, geometry)
+    rows, columns, width_pixels, height_pixels = struct.unpack("HHHH", geometry)
+    # Keep input inside the main content at the observed terminal geometry.
+    # The old (90, 30) coordinate was outside an 80x24 terminal entirely.
+    wheel_x, wheel_y = max(1, columns * 3 // 4), max(1, rows // 2)
+    wheel_down = f"\x1b[<65;{wheel_x};{wheel_y}M".encode()
     original_modes = termios.tcgetattr(slave)
     recording = bytearray()
     events, failures, checks, decoded, seen_tracks = [], [], {}, [], set()
@@ -674,6 +684,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             # cover timing below starts only after the actual navigation click.
             settle(0.3)
             click("Albums")
+            frame("initial-shell")
             albums_start = time.monotonic()
             try:
                 wait(lambda: bool(decoded), "actual decoded real artwork", 15)
@@ -732,17 +743,30 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 "Six visible real covers not received within 1s",
             )
             frame("albums")
+            hover_positions = album_positions(screen, list(gateway.payloads))
+            frame("before-hover")
+            for x, y in ((wheel_x, wheel_y), (columns - 2, 3), (2, 4)):
+                os.write(master, f"\x1b[<35;{x};{y}M".encode())
+                settle(0.15)
+            frame("after-hover")
+            check(
+                "hover_album_positions",
+                bool(hover_positions)
+                and album_positions(screen, list(gateway.payloads)) == hover_positions,
+                "No stable visible album label geometry across mouse movement; inspect screenshots",
+            )
             wait(
                 lambda: bool(album_positions(screen, list(gateway.payloads))),
                 "real album labels after asynchronous list load",
                 12,
             )
             positions_before = album_positions(screen, list(gateway.payloads))
+            # Label stability is not proof of host graphics stability.
             assert (
                 positions_before
             ), "No unambiguous album labels to measure wheel movement"
             scroll_start = time.monotonic()
-            os.write(master, b"\x1b[<65;90;30M")
+            os.write(master, wheel_down)
             scroll_seconds = None
             try:
                 wait(
@@ -789,7 +813,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 settle(0.08)
                 before = album_positions(screen, list(gateway.payloads))
                 sent = time.monotonic()
-                os.write(master, b"\x1b[<65;90;30M")
+                os.write(master, wheel_down)
                 matched = None
                 until = min(deadline, sent + 1)
                 while time.monotonic() < until:
@@ -837,6 +861,12 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 len(completed) == 16 and all(value <= 0.25 for value in completed),
                 "Wheel samples missing or recurring >250ms stalls",
             )
+            settle(0.3)
+            wait(
+                lambda: not decode_jobs,
+                "decoded current covers before cover-center click",
+                5,
+            )
             frame("scrolled-samples")
             candidates = []
             for path, payload in list(gateway.payloads):
@@ -845,15 +875,63 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 for album in payload.get("items", []):
                     title = album.get("title", "")
                     position = screen.locate(title) if title else None
-                    if position and position[0] > 25:
+                    if position and position[0] >= 18 and position[1] >= 8:
                         candidates.append((position[1], album))
             assert candidates, "No real album title visible for safe click"
             album_clicked = min(candidates, key=lambda item: item[0])[1]
             preserved = screen.text()
             preserved_positions = album_positions(screen, list(gateway.payloads))
             event("list_checkpoint", positions=preserved_positions)
+            title_position = screen.locate(album_clicked["title"])
+            assert title_position
+            tx, ty = title_position
+            artwork = {image["image_id"]: image for image in decoded}
+            artwork_ids = set(artwork)
+
+            def placement_rows(params):
+                if params.get("r"):
+                    return int(params["r"])
+                image = artwork.get(params.get("i"))
+                if not image or not width_pixels or not height_pixels:
+                    return 0
+                # Kitty infers omitted rows from source aspect ratio, specified
+                # columns and the ACTUAL host cell pixels, not virtual CSS metrics.
+                return math.ceil(
+                    int(params.get("c", 0))
+                    * (width_pixels / columns)
+                    * image["height"]
+                    / image["width"]
+                    / (height_pixels / rows)
+                )
+
+            with screen.lock:
+                placements = list(screen.graphics)
+            cover = next(
+                (
+                    (params, x, y)
+                    for params, x, y in reversed(placements)
+                    if params.get("i") in artwork_ids
+                    and params.get("a") in ("p", "T")
+                    and x <= tx < x + int(params.get("c", 0))
+                    and 0 <= ty - (y + placement_rows(params)) <= 5
+                    and placement_rows(params) > 0
+                ),
+                None,
+            )
+            assert cover, "No decoded cover placement matched clicked album title"
+            params, x, y = cover
+            cx = x + int(params["c"]) // 2 + 1
+            cy = y + placement_rows(params) // 2 + 1
+            assert 1 <= cx <= columns and 1 <= cy <= rows
             click_started = time.monotonic()
-            click(album_clicked["title"])
+            os.write(master, f"\x1b[<0;{cx};{cy}M\x1b[<0;{cx};{cy}m".encode())
+            event(
+                "cover_center_click",
+                album_id=str(album_clicked["albumId"]),
+                x=cx,
+                y=cy,
+                placement=params,
+            )
             selected_id = str(album_clicked["albumId"])
 
             def selected_details():
@@ -899,7 +977,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                     or time.monotonic() >= deadline
                 ):
                     break
-                os.write(master, b"\x1b[<65;90;30M")
+                os.write(master, wheel_down)
                 settle(0.1)
             check(
                 "complete_track_list",
@@ -1028,7 +1106,10 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 if kitty_screenshots
                 else "No terminal compositor: placement/clipping unverified"
             ),
-            "No statistical input p95 or complete visible-cover set timing",
+            "Input timings are PTY label observations, not actual visible compositor frames",
+            "Navigation uses decoded artwork placement matched to a unique API album title",
+            "Hover injects SGR motion; inspect screenshots independently of label checks",
+            "Six-cover expectation is geometry-specific; small viewports may fail it",
             "Live WebSocket denied; startup may remain disconnected",
         ],
     }

@@ -191,7 +191,476 @@ fn production_hundred_album_document_fits_history_snapshot_budget() {
 }
 
 #[test]
-fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
+fn actual_albums_shell_confines_scrolling_at_140_by_56() {
+    assert_album_shell(140, 56, 9);
+}
+
+#[test]
+fn actual_albums_shell_is_stable_at_common_terminal_sizes() {
+    for (width, height, columns) in [(80, 24, 4), (120, 40, 7), (140, 60, 9)] {
+        assert_album_shell(width, height, columns);
+    }
+}
+
+#[test]
+fn actual_album_details_keep_artwork_beside_metadata_and_tracks_below() {
+    moosicbox_app_native::register_api_sources();
+    let state = State {
+        connection: Some(moosicbox_app_models::Connection {
+            name: "Geometry fixture".into(),
+            api_url: "http://example.invalid".into(),
+        }),
+        ..State::default()
+    };
+    let album = ApiAlbum {
+        title: "A very long realistic album title with remastered sessions".into(),
+        artist: "Artist with a long realistic display name".into(),
+        ..Default::default()
+    };
+    let versions: Vec<_> = serde_json::from_value(serde_json::json!([{
+        "tracks": [moosicbox_music_models::api::ApiTrack {
+            title: "A realistic long track title".into(),
+            artist: album.artist.clone(),
+            duration: 240.0,
+            ..Default::default()
+        }],
+        "format": null,
+        "bitDepth": 16,
+        "sampleRate": 44100,
+        "channels": 2,
+        "source": moosicbox_music_models::TrackApiSource::Local,
+    }]))
+    .unwrap();
+    let content = albums::album_page_content(&state, &album, &versions, None);
+    let loading: Container = moosicbox_app_native_ui::page(
+        &state,
+        &albums::album_page_immediate("0", None, None, None, None),
+    )
+    .into();
+    let target = key_for(&loading, |node| node.route.is_some());
+    let loading_root = loading.clone();
+    let mut view_state = ViewState::from_root(loading).unwrap();
+    // Same fragment swap as GET /albums?albumId=0&full=true after the
+    // production details loading route fires. Keep the surrounding shell.
+    view_state
+        .apply_response(content.into(), Some(&target), SwapStrategy::This)
+        .unwrap();
+    let root = view_state.root();
+    let cover_key = key_for(root, |node| {
+        matches!(node.element, Element::Image { .. })
+            && node.width == Some(moosicbox_app_native_ui::ALBUM_ART_SIZE.into())
+    });
+    let title_key = key_for(root, |node| {
+        matches!(node.element, Element::Heading { .. }) && node.children.iter().any(|child| matches!(&child.element, Element::Raw { value } | Element::Text { value } if value == &album.title))
+    });
+    let table_key = key_for(root, |node| matches!(node.element, Element::Table));
+    let mut controls = Controls::new();
+    controls.reconcile(root);
+    for (width, height) in [(80, 24), (120, 40), (140, 60)] {
+        let opts = LayoutOptions {
+            viewport: Size::new(width, height),
+            ..Default::default()
+        };
+        let tree = layout(root, &opts, &controls.measurer(root)).unwrap();
+        let mut loading_controls = Controls::new();
+        loading_controls.reconcile(&loading_root);
+        let before = layout(
+            &loading_root,
+            &opts,
+            &loading_controls.measurer(&loading_root),
+        )
+        .unwrap();
+        for element in [Element::Aside, Element::Main, Element::Footer] {
+            let before_key = key_for(&loading_root, |node| node.element == element);
+            let after_key = key_for(root, |node| node.element == element);
+            assert_eq!(
+                before.get(&before_key).unwrap().bounds,
+                tree.get(&after_key).unwrap().bounds
+            );
+        }
+        let cover = tree.get(&cover_key).unwrap();
+        let title = tree.get(&title_key).unwrap();
+        eprintln!(
+            "details {width}x{height}: cover={:?} title={:?}",
+            cover.bounds, title.bounds
+        );
+        assert!(
+            title.bounds.x >= cover.bounds.right(),
+            "metadata must be to the right of artwork"
+        );
+        assert!(
+            title.bounds.right() <= i64::from(width),
+            "metadata must fit the viewport"
+        );
+        assert!(title.bounds.width >= 15);
+        assert!(
+            tree.get(&table_key).unwrap().bounds.y
+                >= cover.bounds.bottom().max(title.bounds.bottom())
+        );
+    }
+}
+
+#[test]
+fn host_cell_metrics_are_sensitivity_checks_not_production_layout_metrics() {
+    use hyperchad::renderer_bmux::layout::TerminalMetrics;
+    moosicbox_app_native::register_api_sources();
+    let state = State::default();
+    let root: Container = albums::albums(&state, &[], AlbumSort::NameAsc, None).into();
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    // Production still uses virtual8x16 regardless of the host terminal font.
+    // These alternatives only exercise the general layout API's sensitivity.
+    for (width, height, cell_width, cell_height) in [
+        (80, 24, 11.0, 23.0),
+        (120, 40, 9.0, 18.0),
+        (140, 60, 8.0, 17.0),
+    ] {
+        let opts = LayoutOptions {
+            viewport: Size::new(width, height),
+            metrics: TerminalMetrics {
+                cell_width,
+                cell_height,
+            },
+            ..Default::default()
+        };
+        let tree = layout(&root, &opts, &controls.measurer(&root)).unwrap();
+        let main = tree
+            .get(&key_for(&root, |node| {
+                matches!(node.element, Element::Main)
+            }))
+            .unwrap();
+        let footer = tree
+            .get(&key_for(&root, |node| {
+                matches!(node.element, Element::Footer)
+            }))
+            .unwrap();
+        let search = tree.get("search-button").unwrap();
+        assert_eq!(main.bounds.bottom(), footer.bounds.y);
+        assert!(footer.bounds.bottom() <= i64::from(height));
+        assert!(search.bounds.right() <= i64::from(width));
+        eprintln!(
+            "sensitivity only{width}x{height} cells{cell_width}x{cell_height}: main={:?} footer={:?} search={:?}",
+            main.bounds, footer.bounds, search.bounds
+        );
+    }
+}
+
+#[test]
+fn actual_named_producer_containers_preserve_shell_and_untouched_siblings() {
+    use moosicbox_app_native_ui::{search, settings};
+    use moosicbox_music_models::ApiSource;
+    moosicbox_app_native::register_api_sources();
+    let source = ApiSource::library();
+    let outputs = [
+        moosicbox_app_native_ui::audio_zones::audio_zones(&[], &[]),
+        albums::load_albums(
+            moosicbox_app_native_ui::ALBUM_ART_SIZE,
+            AlbumSort::NameAsc,
+            &[],
+            "",
+        ),
+        search::results_content("http://example.invalid", &source, &[]),
+        settings::download_settings_content(&moosicbox_app_models::DownloadSettings {
+            download_locations: vec![],
+            default_download_location: None,
+        }),
+        settings::scan_settings_content(&moosicbox_app_models::ScanSettings { scan_paths: vec![] }),
+    ];
+    for output in outputs {
+        assert!(!output.is_empty());
+        let mut root: Container = moosicbox_app_native_ui::page(
+            &State::default(),
+            &hyperchad::template::container! { div #untouched { "Sibling" } },
+        )
+        .into();
+        fn insert_slots(node: &mut Container, output: &[Container]) -> bool {
+            if matches!(node.element, Element::Main) {
+                for item in output {
+                    let id = item
+                        .str_id
+                        .clone()
+                        .expect("actual producer output must have a named target");
+                    if id == moosicbox_app_native_ui::AUDIO_ZONES_CONTENT_ID {
+                        continue;
+                    }
+                    node.children.push(Container {
+                        str_id: Some(id),
+                        ..Default::default()
+                    });
+                }
+                return true;
+            }
+            node.children
+                .iter_mut()
+                .any(|child| insert_slots(child, output))
+        }
+        // These outputs belong to different routes. Model each route's existing
+        // named slot, while retaining actual output IDs and unmodified shell.
+        assert!(insert_slots(&mut root, &output));
+        let sibling = key_for(&root, |node| node.str_id.as_deref() == Some("untouched"));
+        let mut document = ViewState::from_root(root.clone()).unwrap();
+        document
+            .apply_response(
+                View::builder().with_fragments(output).build(),
+                None,
+                SwapStrategy::This,
+            )
+            .unwrap();
+        let after = document.root();
+        assert_eq!(
+            key_for(after, |node| node.str_id.as_deref() == Some("untouched")),
+            sibling
+        );
+        for (width, height) in [(80, 24), (120, 40), (140, 60)] {
+            let opts = LayoutOptions {
+                viewport: Size::new(width, height),
+                ..Default::default()
+            };
+            let mut controls = Controls::new();
+            controls.reconcile(&root);
+            let before = layout(&root, &opts, &controls.measurer(&root)).unwrap();
+            controls.reconcile(after);
+            let tree = layout(after, &opts, &controls.measurer(after)).unwrap();
+            for element in [Element::Aside, Element::Main, Element::Footer] {
+                let old_key = key_for(&root, |node| node.element == element);
+                let new_key = key_for(after, |node| node.element == element);
+                assert_eq!(
+                    before.get(&old_key).unwrap().bounds,
+                    tree.get(&new_key).unwrap().bounds
+                );
+            }
+            assert_eq!(
+                before.get(&sibling).unwrap().bounds,
+                tree.get(&sibling).unwrap().bounds
+            );
+        }
+    }
+}
+
+#[test]
+fn unsolicited_modal_fragments_target_loading_slots_before_routes_settle() {
+    use moosicbox_app_native_ui::{AUDIO_ZONES_CONTENT_ID, PLAYBACK_SESSIONS_CONTENT_ID};
+    moosicbox_app_native::register_api_sources();
+    let root: Container = albums::albums(&State::default(), &[], AlbumSort::NameAsc, None).into();
+    // No route resolution or manual loader replacement occurs before callbacks.
+    for id in [AUDIO_ZONES_CONTENT_ID, PLAYBACK_SESSIONS_CONTENT_ID] {
+        let slot = key_for(&root, |node| {
+            node.str_id.as_deref() == Some(id) && node.route.is_some()
+        });
+        assert_eq!(slot, id);
+    }
+    let mut document = ViewState::from_root(root.clone()).unwrap();
+    let audio = moosicbox_app_native_ui::audio_zones::audio_zones(&[], &[]);
+    document
+        .apply_response(
+            View::builder().with_fragments(audio).build(),
+            None,
+            SwapStrategy::This,
+        )
+        .unwrap();
+    let sessions = moosicbox_app_native_ui::playback_sessions::playback_sessions(
+        "http://example.invalid",
+        &[],
+    );
+    document
+        .apply_response(
+            View::builder().with_fragments(sessions).build(),
+            None,
+            SwapStrategy::This,
+        )
+        .unwrap();
+    let after = document.root();
+    for (width, height) in [(80, 24), (120, 40), (140, 60)] {
+        let opts = LayoutOptions {
+            viewport: Size::new(width, height),
+            ..Default::default()
+        };
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        let before = layout(&root, &opts, &controls.measurer(&root)).unwrap();
+        controls.reconcile(after);
+        let tree = layout(after, &opts, &controls.measurer(after)).unwrap();
+        for element in [Element::Aside, Element::Main, Element::Footer] {
+            let before_key = key_for(&root, |node| node.element == element);
+            let after_key = key_for(after, |node| node.element == element);
+            assert_eq!(
+                before.get(&before_key).unwrap().bounds,
+                tree.get(&after_key).unwrap().bounds
+            );
+        }
+    }
+}
+
+#[test]
+fn populated_session_partials_preserve_production_shell() {
+    use moosicbox_app_native_ui::state::{PlaybackState, PlayerState};
+    use moosicbox_session_models::{ApiSession, ApiSessionPlaylist, ApiUpdateSession};
+    moosicbox_app_native::register_api_sources();
+    let tracks: Vec<_> = (0_u64..40)
+        .map(|index| moosicbox_music_models::api::ApiTrack {
+            track_id: index.into(),
+            album_id: index.into(),
+            title: format!(
+                "Long current playlist track title {index} — Deluxe Remastered Sessions"
+            ),
+            artist: "An artist with a realistic long display name".into(),
+            album: "A complete remastered album with bonus tracks".into(),
+            duration: 240.0,
+            ..Default::default()
+        })
+        .collect();
+    let mut state = State {
+        connection: Some(moosicbox_app_models::Connection {
+            name: "Fixture".into(),
+            api_url: "http://example.invalid".into(),
+        }),
+        ..Default::default()
+    };
+    let root: Container = albums::albums(&state, &[], AlbumSort::NameAsc, None).into();
+    let mut document = ViewState::from_root(root.clone()).unwrap();
+    for position in [0, 15, 39] {
+        state.player = PlayerState {
+            playback: Some(PlaybackState {
+                session_id: 1,
+                playing: false,
+                position,
+                seek: 42.0,
+                volume: 0.7,
+                tracks: tracks.clone(),
+            }),
+        };
+        let session = ApiSession {
+            session_id: 1,
+            name: "Fixture session".into(),
+            active: true,
+            playing: false,
+            position: Some(position),
+            seek: Some(42.0),
+            volume: Some(0.7),
+            playback_target: None,
+            playlist: ApiSessionPlaylist {
+                session_playlist_id: 1,
+                tracks: tracks.clone(),
+            },
+        };
+        let update = ApiUpdateSession {
+            session_id: 1,
+            position: Some(position),
+            playing: Some(false),
+            seek: Some(42.0),
+            volume: Some(0.7),
+            ..Default::default()
+        };
+        // Exact events::handle_session_update boundary: unsolicited fragments,
+        // not primary content or a synthetic page replacement.
+        let view = View::builder()
+            .with_fragments(moosicbox_app_native_ui::session_updated(
+                &state, &update, &session,
+            ))
+            .build();
+        document
+            .apply_response(view, None, SwapStrategy::This)
+            .unwrap();
+        // Position/playlist updates also call update_playlist_sessions(), a
+        // SECOND fragment-only render. Omitting this lost the actual WS-ready
+        // boundary and concealed replacement of the entire application root.
+        let sessions = moosicbox_app_native_ui::playback_sessions::playback_sessions(
+            "http://example.invalid",
+            std::slice::from_ref(&session),
+        );
+        document
+            .apply_response(
+                View::builder().with_fragments(sessions).build(),
+                None,
+                SwapStrategy::This,
+            )
+            .unwrap();
+        let after = document.root();
+        assert_eq!(
+            after.str_id, root.str_id,
+            "second fragment render must preserve application root"
+        );
+        let settled: Container = albums::albums(&state, &[], AlbumSort::NameAsc, None).into();
+        assert_eq!(
+            after.children.len(),
+            root.children.len(),
+            "partials must not append shell siblings"
+        );
+        for (width, height) in [(80, 24), (120, 40), (140, 60)] {
+            let opts = LayoutOptions {
+                viewport: Size::new(width, height),
+                ..Default::default()
+            };
+            let mut controls = Controls::new();
+            controls.reconcile(after);
+            let tree = layout(after, &opts, &controls.measurer(after)).unwrap();
+            let mut settled_controls = Controls::new();
+            settled_controls.reconcile(&settled);
+            let settled_tree =
+                layout(&settled, &opts, &settled_controls.measurer(&settled)).unwrap();
+            let measure = controls.measurer(after);
+            let decoded = |node: &Container, constraints: Constraints| {
+                if matches!(node.element, Element::Image { .. }) {
+                    LogicalSize::new(500, 250)
+                } else {
+                    measure.measure(node, constraints)
+                }
+            };
+            let decoded_tree = layout(after, &opts, &decoded).unwrap();
+            for id in [
+                "player-current-playing",
+                "player-play-button",
+                "player-current-progress",
+            ] {
+                if let Some(node) = tree.get(id) {
+                    assert_eq!(node.bounds, settled_tree.get(id).unwrap().bounds);
+                    assert_eq!(node.bounds, decoded_tree.get(id).unwrap().bounds);
+                }
+            }
+            let mut before_controls = Controls::new();
+            before_controls.reconcile(&root);
+            let before = layout(&root, &opts, &before_controls.measurer(&root)).unwrap();
+            for element in [Element::Aside, Element::Main, Element::Footer] {
+                let key = key_for(&root, |node| node.element == element);
+                let after_key = key_for(after, |node| node.element == element);
+                assert_eq!(
+                    before.get(&key).unwrap().bounds,
+                    tree.get(&after_key).unwrap().bounds,
+                    "{width}x{height}, position {position}"
+                );
+            }
+            let footer_key = key_for(after, |node| matches!(node.element, Element::Footer));
+            let footer = tree.get(&footer_key).unwrap();
+            let playing = tree.get("player-current-playing").unwrap();
+            eprintln!(
+                "session {position} {width}x{height}: footer={:?} current={:?}",
+                footer.bounds, playing.bounds
+            );
+            assert!(
+                playing.bounds.right() <= footer.bounds.right(),
+                "current track must not displace controls"
+            );
+            assert!(
+                playing.bounds.bottom() <= footer.bounds.bottom(),
+                "current track must stay in footer"
+            );
+            let metadata = tree
+                .nodes
+                .iter()
+                .filter(|node| node.path.starts_with(&playing.path))
+                .map(|node| node.bounds.right())
+                .max()
+                .unwrap();
+            assert!(
+                metadata <= playing.bounds.right(),
+                "track metadata overflows its footer column: {metadata} > {}",
+                playing.bounds.right()
+            );
+        }
+    }
+}
+
+fn assert_album_shell(width: u16, height: u16, columns: usize) {
     moosicbox_app_native::register_api_sources();
     let state = State {
         connection: Some(moosicbox_app_models::Connection {
@@ -204,19 +673,32 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
     let sidebar_key = key_for(&root, |node| matches!(node.element, Element::Aside));
     let main_key = key_for(&root, |node| matches!(node.element, Element::Main));
     let footer_key = key_for(&root, |node| matches!(node.element, Element::Footer));
+    let playlist_key = key_for(
+        &root,
+        |node| matches!(&node.element, Element::Image { source: Some(source), .. } if source.ends_with("playlist-white.svg")),
+    );
     let mut controls = Controls::new();
     controls.reconcile(&root);
     let opts = LayoutOptions {
-        viewport: Size::new(140, 56),
+        viewport: Size::new(width, height),
         ..Default::default()
     };
+    let search_key = key_for(&root, |node| {
+        node.str_id.as_deref() == Some("search-button")
+    });
+    let search_tree = layout(&root, &opts, &controls.measurer(&root)).unwrap();
+    let search = search_tree.get(&search_key).unwrap().bounds;
+    assert!(
+        search.right() <= i64::from(width),
+        "search button must fit viewport: {search:?}"
+    );
     let skeleton = layout(&root, &opts, &controls.measurer(&root)).unwrap();
 
     // Exercise the exact dynamic response boundary. In particular, do NOT
     // assign album_display cards directly to grid.children: doing so bypasses
     // the response wrapper and previously concealed the live one-column bug.
     let page = Page::WithTotal {
-        items: (0_u64..11)
+        items: (0_u64..100)
             .map(|index| ApiAlbum {
                 album_id: index.into(),
                 artist_id: index.into(),
@@ -231,13 +713,20 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
             .collect(),
         offset: 0,
         limit: 100,
-        total: 11,
+        total: 100,
     };
     // Same Containers -> View conversion returned by albums_list_start_route.
     // Preserve its envelope: the response layer, not this test, must interpret it.
-    let response: View =
-        albums::albums_list_start(&state, &page, &[], AlbumSort::NameAsc, 200, "").into();
-    assert_eq!(response.primary.as_ref().unwrap().children.len(), 11);
+    let response: View = albums::albums_list_start(
+        &state,
+        &page,
+        &[],
+        AlbumSort::NameAsc,
+        moosicbox_app_native_ui::ALBUM_ART_SIZE,
+        "",
+    )
+    .into();
+    assert_eq!(response.primary.as_ref().unwrap().children.len(), 100);
     let mut view_state = ViewState::from_root(root).unwrap();
     view_state
         .apply_response(response, Some("albums"), SwapStrategy::Children)
@@ -258,16 +747,29 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
         let sidebar = tree.get(&sidebar_key).unwrap();
         let main = tree.get(&main_key).unwrap();
         let footer = tree.get(&footer_key).unwrap();
+        let playlist = tree.get(&playlist_key).unwrap();
+        assert_eq!(playlist.bounds.width, 3);
+        assert_eq!(playlist.bounds.height, 2);
+        assert!(playlist.bounds.x >= footer.bounds.x);
+        assert!(playlist.bounds.right() <= footer.bounds.right());
+        assert!(playlist.bounds.y >= footer.bounds.y);
+        assert!(playlist.bounds.bottom() <= footer.bounds.bottom());
         assert_eq!(sidebar.bounds.x, 0);
-        assert_eq!(sidebar.bounds.width, 30);
-        assert_eq!(main.bounds.x, 30);
-        assert_eq!(main.bounds.width, 110);
-        assert_eq!(main.bounds.y, 0);
+        assert_eq!(sidebar.bounds.width, 18);
+        assert_eq!(main.bounds.x, 18);
+        assert_eq!(main.bounds.width, u64::from(width) - 18);
         assert_eq!(main.bounds.bottom(), footer.bounds.y);
         assert_eq!(sidebar.bounds.height, main.bounds.height);
-        assert_eq!(footer.bounds.right(), 140);
-        assert!(footer.bounds.bottom() <= 56);
-        assert_eq!(tree.get("albums").unwrap().content_bounds.width, 102);
+        assert_eq!(footer.bounds.right(), i64::from(width));
+        assert!(footer.bounds.bottom() <= i64::from(height));
+        assert_eq!(
+            tree.get("albums").unwrap().content_bounds.width,
+            u64::from(width) - 20
+        );
+        eprintln!(
+            "{width}x{height}: sidebar={:?} main={:?} footer={:?}",
+            sidebar.bounds, main.bounds, footer.bounds
+        );
     }
     for tree in [&before, &after] {
         let grid = tree.get("albums").unwrap();
@@ -276,14 +778,28 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
             .iter()
             .map(|key| tree.get(key).unwrap())
             .collect();
-        assert_eq!(cards.len(), 11);
+        assert_eq!(cards.len(), 100);
+        let first = cards[0];
+        let label = tree
+            .nodes
+            .iter()
+            .find(|node| {
+                node.path.starts_with(&first.path)
+                    && node.text.iter().any(|fragment| fragment.text.contains('A'))
+            })
+            .expect("first card has title text");
+        assert!(label.bounds.y >= tree.get(&main_key).unwrap().bounds.y);
+        assert!(
+            label.bounds.bottom() <= tree.get(&main_key).unwrap().bounds.bottom(),
+            "a labeled album must be visible without scrolling"
+        );
         let first_y = cards[0].bounds.y;
         assert_eq!(
             cards
                 .iter()
                 .take_while(|card| card.bounds.y == first_y)
                 .count(),
-            3
+            columns
         );
         assert_eq!(
             cards
@@ -291,11 +807,11 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
                 .map(|card| card.bounds.x)
                 .collect::<BTreeSet<_>>()
                 .len(),
-            3
+            columns
         );
         for (index, card) in cards.iter().enumerate() {
-            assert_eq!(card.bounds.width, 25);
-            assert_eq!(card.bounds.x, cards[index % 3].bounds.x);
+            assert_eq!(card.bounds.width, 12);
+            assert_eq!(card.bounds.x, cards[index % columns].bounds.x);
             assert!(card.bounds.x >= grid.content_bounds.x);
             assert!(card.bounds.right() <= grid.content_bounds.right());
         }
@@ -303,9 +819,9 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
     let mut scrolled_opts = opts.clone();
     scrolled_opts
         .scroll_offsets
-        .insert(main_key.clone(), ScrollOffset { x: 0, y: 16 });
+        .insert(main_key.clone(), ScrollOffset { x: 0, y: 2 });
     let scrolled = layout(root, &scrolled_opts, &decoded).unwrap();
-    assert_eq!(scrolled.get(&main_key).unwrap().scroll_offset.y, 16);
+    assert_eq!(scrolled.get(&main_key).unwrap().scroll_offset.y, 2);
     for key in [&sidebar_key, &main_key, &footer_key] {
         assert_eq!(
             before.get(key).unwrap().bounds,
@@ -318,7 +834,7 @@ fn actual_albums_shell_has_three_columns_and_confines_scrolling_at_140_by_56() {
     }
     assert_eq!(
         scrolled.get("albums").unwrap().bounds.y,
-        after.get("albums").unwrap().bounds.y - 16
+        after.get("albums").unwrap().bounds.y - 2
     );
     let main = scrolled.get(&main_key).unwrap();
     assert_eq!(main.text_clip.bottom(), main.bounds.bottom());
