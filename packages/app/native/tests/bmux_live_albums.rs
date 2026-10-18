@@ -270,6 +270,39 @@ fn album_detail_uses_shared_table_columns_for_unequal_track_text() {
     let rows = visit(&root, &|node| node.data.contains_key("track-id"));
     assert_eq!(rows[0].data["track-id"], "1");
     assert_eq!(rows[1].data["track-id"], "2");
+
+    // A pointer left over the newly loaded table immediately triggers these real
+    // app hover actions. Their controls live inside the first cell, not directly
+    // under the row; dispatch must not fail with Missing("action target").
+    use hyperchad::renderer_bmux::actions::{
+        ActionEngine, EventContext, EventKind, FormValues, Source,
+    };
+    use hyperchad::transformer::models::Visibility;
+    for row in rows {
+        let mut row = row.clone();
+        let source = Source::at(&row, vec![], 0).unwrap();
+        let event = EventContext::new(source, EventKind::Hover, 0);
+        let mut engine = ActionEngine::default();
+        engine
+            .dispatch(&mut row, &event, &FormValues::new())
+            .unwrap();
+        for (class, expected) in [
+            ("track-number", Visibility::Hidden),
+            ("track-playing", Visibility::Hidden),
+            ("play-button", Visibility::Visible),
+        ] {
+            let controls = visit(&row, &|node| {
+                node.classes.iter().any(|value| value == class)
+            });
+            assert_eq!(controls.len(), 1);
+            assert_eq!(controls[0].visibility, Some(expected));
+        }
+        engine.release(&mut row, &event).unwrap();
+        let play = visit(&row, &|node| {
+            node.classes.iter().any(|value| value == "play-button")
+        });
+        assert_eq!(play[0].visibility, Some(Visibility::Hidden));
+    }
 }
 
 fn text(node: &Container, output: &mut String) {

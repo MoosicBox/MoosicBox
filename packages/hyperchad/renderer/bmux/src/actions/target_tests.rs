@@ -47,6 +47,45 @@ fn every_target_variant_has_a_direct_assertion() {
     }
 }
 #[test]
+fn child_class_matches_nested_descendants_in_document_order_only_within_source() {
+    let mut root = node("root", 1);
+    let mut row = node("row", 2);
+    row.classes.push("control".into());
+    let mut cell = node("cell", 3);
+    let mut nested = node("nested", 4);
+    nested.classes.push("control".into());
+    cell.children.push(nested);
+    let mut direct = node("direct", 5);
+    direct.classes.push("control".into());
+    row.children = vec![cell, direct];
+    let mut sibling = node("sibling", 6);
+    sibling.classes.push("control".into());
+    root.children = vec![row, sibling];
+    let source = Source::at(&root, vec![0], 0).unwrap();
+    let context = EventContext::new(source.clone(), EventKind::Hover, 0);
+    let values = FormValues::new();
+    let mut engine = ActionEngine::default();
+    let mut work = Work::new(&root, &context, &values, &mut engine).unwrap();
+    assert_eq!(
+        work.targets(
+            &ElementTarget::ChildClass(Target::Literal("control".into())),
+            &source,
+            0,
+        )
+        .unwrap(),
+        vec![vec![0, 0, 0], vec![0, 1]],
+    );
+    assert!(matches!(
+        work.targets(
+            &ElementTarget::ChildClass(Target::Literal("missing".into())),
+            &source,
+            0,
+        ),
+        Err(ActionError::Missing(_)),
+    ));
+}
+
+#[test]
 fn all_element_mutator_methods_have_direct_assertions() {
     for (method, args) in [
         ("show", vec![]),

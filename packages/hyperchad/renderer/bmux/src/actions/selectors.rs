@@ -106,7 +106,9 @@ impl Work<'_> {
                         ElementTarget::ById(_) => node.str_id.as_ref() == Some(&text),
                         ElementTarget::Class(_) => node.classes.contains(&text),
                         ElementTarget::ChildClass(_) => {
-                            path.len() == source.path.len() + 1
+                            // Match querySelectorAll on the source element, as the web
+                            // renderer does: nested descendants, but never the source itself.
+                            path.len() > source.path.len()
                                 && path.starts_with(&source.path)
                                 && node.classes.contains(&text)
                         }
