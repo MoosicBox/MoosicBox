@@ -161,7 +161,12 @@ _sse = [
     "hyperchad/renderer-vanilla-js-plugin-sse",
 ]
 
-bmux = ["_canvas", "hyperchad/renderer-bmux", "hyperchad/renderer-bmux-images"]
+bmux = [
+    "_canvas",
+    "hyperchad/renderer-bmux",
+    "hyperchad/renderer-bmux-images",
+    "static-routes",
+]
 egui = ["_calculated_canvas", "hyperchad/renderer-egui"]
 egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
 egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]

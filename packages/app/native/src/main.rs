@@ -49,8 +49,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         moosicbox_config::set_root_dir(root);
     }
 
-    if cfg!(feature = "profiling-tracing") {
+    let _log_handle = if cfg!(feature = "profiling-tracing") {
         // no global tracing defined here
+        None
     } else {
         #[allow(unused_mut)]
         let mut layers = vec![];
@@ -83,10 +84,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 mode: moosicbox_log_runtime::init::FileMode::Exact(filename),
             });
         }
+        // The terminal renderer exclusively owns stdout/stderr while in raw mode.
+        log_config.sinks.stderr = !cfg!(feature = "bmux");
         log_config.extra_layers = layers;
-        let _log_handle =
-            moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging");
-    }
+        Some(moosicbox_log_runtime::init::init(log_config).expect("Failed to initialize logging"))
+    };
 
     #[cfg(all(feature = "html", feature = "_canvas"))]
     moosicbox_app_native::visualization::disable_interval();

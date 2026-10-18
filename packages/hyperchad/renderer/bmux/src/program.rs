@@ -576,16 +576,50 @@ impl BmuxProgram {
 
     fn broadcast(&mut self, kind: &EventKind, value: Option<&str>) -> Result<(), Error> {
         let mut keys = Vec::new();
+        let mut has_immediate = false;
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            has_immediate |= node.actions.iter().any(|action| {
+                matches!(action.trigger, hyperchad_actions::ActionTrigger::Immediate)
+            });
             keys.push(layout::node_key(node, path));
         });
+        // Immediate actions run before first presentation, but still require current
+        // document geometry. This layout is not published for pointer hit testing.
+        let immediate_tree = if has_immediate && matches!(kind, EventKind::Immediate) {
+            let mut options = self.options.clone();
+            options.open_details = self.controls.details_open();
+            let mut effective = self.state.root().clone();
+            resolve_responsive(&mut effective, &self.responsive, self.options.viewport);
+            Some(layout::layout(
+                &effective,
+                &options,
+                &self.controls.measurer(&effective),
+            )?)
+        } else {
+            None
+        };
         for key in keys {
-            self.dispatch(&key, kind.clone(), value.map(str::to_owned))?;
+            self.dispatch_with_geometry(
+                &key,
+                kind.clone(),
+                value.map(str::to_owned),
+                immediate_tree.as_ref(),
+            )?;
         }
         Ok(())
     }
 
     fn dispatch(&mut self, key: &str, kind: EventKind, value: Option<String>) -> Result<(), Error> {
+        self.dispatch_with_geometry(key, kind, value, None)
+    }
+
+    fn dispatch_with_geometry(
+        &mut self,
+        key: &str,
+        kind: EventKind,
+        value: Option<String>,
+        geometry: Option<&LayoutTree>,
+    ) -> Result<(), Error> {
         let mut found = None;
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
             if layout::node_key(node, path) == key {
@@ -600,7 +634,7 @@ impl BmuxProgram {
         context.value = value;
         context.keys.clone_from(&self.key_chord);
         context.location.clone_from(&self.location);
-        if let Some((_, tree)) = &self.committed {
+        if let Some(tree) = geometry.or_else(|| self.committed.as_ref().map(|(_, tree)| tree)) {
             context.geometry = tree
                 .nodes
                 .iter()
@@ -956,8 +990,7 @@ impl BmuxProgram {
                         },
                         &bytes,
                     ) {
-                        self.resources.remove(&key);
-                        self.resource_epochs.remove(&key);
+                        // Preserve negative admission until explicit retry or source change.
                         log::warn!("image decode rejected: {error}");
                     }
                 }
@@ -968,11 +1001,8 @@ impl BmuxProgram {
                 (Completion::Request(request), Ok(HostResponse::View(view))) => {
                     self.apply_request_view(&request, &view)?;
                 }
-                (Completion::Resource { key, source }, Err(error)) => {
-                    if self.resources.get(&key) == Some(&source) {
-                        self.resources.remove(&key);
-                        self.resource_epochs.remove(&key);
-                    }
+                (Completion::Resource { .. }, Err(error)) => {
+                    // View refreshes must not retry denied resources automatically.
                     log::warn!("image resource load failed: {error}");
                 }
                 (_, Err(error)) => {
@@ -1643,23 +1673,62 @@ mod runtime_regressions {
     }
 
     #[test]
-    fn resource_failure_clears_admission_for_retry() {
-        let mut program = program();
-        program
-            .resources
-            .insert("image".into(), "https://example.test/a".into());
-        program.resource_epochs.insert("image".into(), 7);
-        program
-            .update(RuntimeEvent::Message(Message::Completed {
-                generation: 7,
-                work: Completion::Resource {
-                    key: "image".into(),
-                    source: "https://example.test/a".into(),
-                },
-                result: Err(std::io::Error::other("fetch failed").into()),
-            }))
-            .unwrap();
-        assert!(!program.resources.contains_key("image"));
+    fn resource_failure_requires_explicit_retry_or_source_change() {
+        for result in [
+            Err(std::io::Error::other("host denied resource").into()),
+            Ok(HostResponse::Bytes(vec![0, 1, 2])),
+        ] {
+            let mut program = program();
+            let image = |source: &str| {
+                View::from(Container {
+                    str_id: Some("image".into()),
+                    element: Element::Image {
+                        source: Some(source.into()),
+                        alt: Some("fallback".into()),
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    ..Default::default()
+                })
+            };
+            let source = "https://example.test/a";
+            program.apply_view(image(source), None).unwrap();
+            program.pending.clear();
+            let generation = program.resource_epochs["image"];
+            program
+                .update(RuntimeEvent::Message(Message::Completed {
+                    generation,
+                    work: Completion::Resource {
+                        key: "image".into(),
+                        source: source.into(),
+                    },
+                    result,
+                }))
+                .unwrap();
+            assert_eq!(
+                program.resources.get("image").map(String::as_str),
+                Some(source)
+            );
+            assert!(program.graphics.rgba("image").is_none());
+            for _ in 0..10 {
+                program.apply_view(image(source), None).unwrap();
+                assert!(program.pending.is_empty());
+            }
+            let update = program
+                .update(RuntimeEvent::Message(Message::RetryResource(
+                    "image".into(),
+                )))
+                .unwrap();
+            assert_eq!(update.commands.len(), 1);
+            program
+                .apply_view(image("https://example.test/b"), None)
+                .unwrap();
+            assert!(
+                matches!(program.pending.back(), Some(Work::Resource { source, .. }) if source.ends_with("/b"))
+            );
+        }
     }
 
     #[test]

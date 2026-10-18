@@ -38,6 +38,12 @@ application's normal service/configuration dependencies. Live audio playback,
 remote library connectivity and production authentication have **not** been
 verified by the renderer's fixture/PTy tests.
 
+The native `bmux` build writes logs to `moosicbox_app_native.log` (set
+`MOOSICBOX_LOG_DIR` to choose its directory), not stderr, to avoid corrupting the
+full-screen display. Image sources without an authorized host policy retain text
+fallbacks. Failed fetches/decodes are not retried on unrelated view refreshes;
+change the source or explicitly call `retry_resource` to retry.
+
 ## Standalone and embedded examples
 
 ```sh
