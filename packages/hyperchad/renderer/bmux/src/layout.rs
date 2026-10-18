@@ -798,6 +798,25 @@ impl<M: LeafMeasure> Engine<'_, M> {
             if measured.width > MAX_EXTENT || measured.height > MAX_EXTENT {
                 return Err(LayoutError::InvalidLength { key: draft.key });
             }
+            let measured = if matches!(node.element, Element::Image { .. } | Element::Canvas) {
+                // Decoded pixels are intrinsic input only for auto-sized axes.
+                // Explicit image boxes contain their payload; pixel dimensions
+                // must not become descendant overflow or change ancestor flow.
+                LogicalSize::new(
+                    if width.is_some() {
+                        content_width
+                    } else {
+                        measured.width
+                    },
+                    if requested_height.is_some() {
+                        content_height
+                    } else {
+                        measured.height
+                    },
+                )
+            } else {
+                measured
+            };
             draft.extents = measured;
             if width.is_none() && node.flex.is_none() {
                 draft.content.width = measured
