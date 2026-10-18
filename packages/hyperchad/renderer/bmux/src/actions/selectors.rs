@@ -75,6 +75,17 @@ impl Work<'_> {
         depth: usize,
     ) -> Result<Vec<Vec<usize>>, ActionError> {
         self.step(depth)?;
+        // The DSL lowers methods on stored element references to ById(Ref).
+        // Preserve the resolved element instead of coercing it to a scalar ID.
+        if let ElementTarget::ById(Target::Ref(name)) = target
+            && let Some(super::eval::Datum::Element(path)) = self
+                .engine
+                .variables
+                .get(&(source.key.clone(), name.clone()))
+        {
+            at(self.root, path).ok_or(ActionError::InvalidSource)?;
+            return Ok(vec![path.clone()]);
+        }
         let result = match target {
             ElementTarget::SelfTarget => vec![source.path.clone()],
             ElementTarget::LastChild => {
