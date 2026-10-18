@@ -32,7 +32,7 @@ def run(executable, artifacts):
     original = mock.RequestHandlerClass.do_GET
 
     def stalled(handler):
-        if handler.path.startswith(("/downloader/", "/menu/")):
+        if handler.path.startswith(("/downloader/", "/menu/", "/music-api")):
             handler.server.requests.append(handler.path)
             handler.server.stopping.wait(60)
             return
@@ -117,6 +117,18 @@ def run(executable, artifacts):
 
             wait(lambda: screen.locate("Albums"), "startup navigation missing")
             wait(lambda: bool(screen.images), "startup icons missing")
+            # Click the actual gear image in this fixed 140x60 viewport. This
+            # exercises nested image -> anchor targeting, not just keyboard focus.
+            started = time.monotonic()
+            os.write(master, b"\x1b[<0;18;2M\x1b[<0;18;2m")
+            wait(
+                lambda: "New Connection" in screen.text()
+                and "API URL:" in screen.text(),
+                "Settings blocked behind unreachable music API",
+                3,
+            )
+            settings_recovery = time.monotonic() - started
+            assert settings_recovery < 3, "local Settings navigation was not prompt"
             click("Downloads")
             wait(
                 lambda: any(
@@ -140,6 +152,15 @@ def run(executable, artifacts):
                 "album fragment did not reach stalled server",
             )
             started = time.monotonic()
+            os.write(master, b"\x1b[<0;18;2M\x1b[<0;18;2m")
+            wait(
+                lambda: "New Connection" in screen.text()
+                and "API URL:" in screen.text(),
+                "Settings blocked behind stalled album load",
+                3,
+            )
+            settings_from_albums = time.monotonic() - started
+            started = time.monotonic()
             os.write(master, b"\x03")
             while process.poll() is None and time.monotonic() - started < 3:
                 pump()
@@ -152,6 +173,8 @@ def run(executable, artifacts):
             assert b"\x1b[?1049l" in recording, "alternate screen not restored"
             metadata = {
                 "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+                "settings_recovery_seconds": settings_recovery,
+                "settings_from_stalled_albums_seconds": settings_from_albums,
                 "home_recovery_seconds": recovery,
                 "quit_seconds": time.monotonic() - started,
                 "result": "passed",

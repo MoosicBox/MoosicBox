@@ -1169,6 +1169,9 @@ impl BmuxProgram {
             };
             path
         };
+        let Some(path) = event_target_path(self.state.root(), &path, &kind) else {
+            return Ok(());
+        };
         let Some(node) = at_path(self.state.root(), &path) else {
             return Ok(());
         };
@@ -2446,6 +2449,32 @@ fn key_chord(stroke: &bmux_keyboard::KeyStroke) -> Vec<hyperchad_actions::Key> {
 // Keep the action engine authoritative for defaults, named registrations and
 // HTTP phases. Only prune built-in events whose handler/default admission can
 // be decided without constructing a transactional action context.
+// Pointer hit-testing returns the deepest painted node, not necessarily an interactive
+// element. Resolve clicks to their nearest owner, without letting a nested playback
+// button also activate the enclosing album link.
+fn event_target_path(root: &Container, path: &[usize], kind: &EventKind) -> Option<Vec<usize>> {
+    if !matches!(kind, EventKind::Click) {
+        return Some(path.to_vec());
+    }
+    (0..=path.len()).rev().find_map(|len| {
+        let candidate = &path[..len];
+        let node = at_path(root, candidate)?;
+        (node.route.is_some()
+            || node.actions.iter().any(|action| {
+                !matches!(action.trigger, hyperchad_actions::ActionTrigger::Event(_))
+                    && hyperchad_actions::handler::should_trigger_action(&action.trigger, "click")
+            })
+            || matches!(
+                node.element,
+                Element::Anchor { href: Some(_), .. }
+                    | Element::Button { .. }
+                    | Element::Input { .. }
+                    | Element::Textarea { .. }
+            ))
+        .then(|| candidate.to_vec())
+    })
+}
+
 fn accepts_event(node: &Container, kind: &EventKind) -> bool {
     use hyperchad_actions::{ActionTrigger, handler::should_trigger_action};
     let name = match kind {
@@ -2567,6 +2596,66 @@ pub fn validate_view(view: &View, config: &BmuxConfig) -> Result<(), Error> {
 #[cfg(test)]
 mod runtime_regressions {
     use super::*;
+
+    #[test]
+    fn nested_album_cover_click_navigates_but_playback_button_does_not() {
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    element: Element::Anchor {
+                        href: Some("/albums?albumId=42".into()),
+                        target: None,
+                    },
+                    children: vec![Container {
+                        children: vec![
+                            Container {
+                                str_id: Some("cover".into()),
+                                element: Element::Image {
+                                    source: Some("/cover.png".into()),
+                                    alt: None,
+                                    fit: None,
+                                    source_set: None,
+                                    sizes: None,
+                                    loading: None,
+                                },
+                                ..Default::default()
+                            },
+                            Container {
+                                element: Element::Button {
+                                    r#type: Some("button".into()),
+                                },
+                                children: vec![Container {
+                                    str_id: Some("play-icon".into()),
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            },
+                        ],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program
+            .dispatch("play-icon", EventKind::Click, None)
+            .unwrap();
+        assert!(
+            !program
+                .pending
+                .iter()
+                .any(|work| matches!(work, Work::Navigate(_)))
+        );
+        program.dispatch("cover", EventKind::Click, None).unwrap();
+        assert!(
+            program
+                .pending
+                .iter()
+                .any(|work| { matches!(work, Work::Navigate(url) if url == "/albums?albumId=42") })
+        );
+    }
 
     fn program() -> BmuxProgram {
         let (actions, _) = flume::bounded(8);

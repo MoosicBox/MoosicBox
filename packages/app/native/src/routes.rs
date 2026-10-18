@@ -736,8 +736,8 @@ pub async fn settings_route(req: RouteRequest) -> Result<Content, RouteError> {
     }
 
     let state = convert_state(&STATE).await;
-    let settings_fragment = settings_music_api_settings_markup(&state).await?;
-
+    // Connection controls must remain available even when the configured server is
+    // unreachable. Remote sections already have their own load-triggered routes.
     let connections = STATE.get_connections().await?;
     let current_connection = STATE.get_current_connection().await?;
     let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
@@ -750,26 +750,6 @@ pub async fn settings_route(req: RouteRequest) -> Result<Content, RouteError> {
         &[],
     )
     .into();
-    settings_page_response(primary, settings_fragment)
-}
-
-fn settings_page_response(
-    mut primary: Container,
-    mut settings_fragment: Container,
-) -> Result<Content, RouteError> {
-    let section = settings_fragment
-        .find_element_by_str_id_mut("settings-music-api-settings-section")
-        .map(std::mem::take)
-        .ok_or_else(|| {
-            RouteError::RouteFailed("resolved settings are missing their music API section".into())
-        })?;
-    let target = primary
-        .find_element_by_str_id_mut("settings-music-api-settings-section")
-        .ok_or_else(|| {
-            RouteError::RouteFailed("settings page is missing its music API section".into())
-        })?;
-    *target = section;
-
     Ok(Content::builder().with_primary(primary).build())
 }
 
@@ -1087,42 +1067,32 @@ mod tests {
     }
 
     #[test]
-    fn settings_response_contains_resolved_section_in_primary() {
-        let target_id = "settings-music-api-settings-section";
-        let primary = Container {
-            children: vec![Container {
-                str_id: Some(target_id.to_owned()),
-                ..Container::default()
-            }],
-            ..Container::default()
+    fn settings_local_page_has_connection_controls_and_one_remote_section() {
+        let state = State {
+            connection: Some(Connection {
+                name: "Offline".into(),
+                api_url: "http://127.0.0.1:1".into(),
+            }),
+            ..Default::default()
         };
-        let resolved = Container {
-            str_id: Some(target_id.to_owned()),
-            children: vec![Container {
-                str_id: Some("resolved-settings".to_owned()),
-                ..Container::default()
-            }],
-            ..Container::default()
-        };
-        let Content::View(view) = settings_page_response(primary, vec![resolved].into()).unwrap()
-        else {
-            panic!("settings response must be a view");
-        };
-        assert!(view.fragments.is_empty());
-        let primary = view.primary.unwrap();
+        let primary: Container = moosicbox_app_native_ui::settings::settings(
+            &state,
+            "Local app",
+            &[],
+            state.connection.as_ref(),
+            &[],
+        )
+        .into();
         assert!(
             primary
-                .find_element_by_str_id("resolved-settings")
+                .find_element_by_str_id("settings-connections")
                 .is_some()
         );
-    }
-
-    #[test]
-    fn settings_response_rejects_missing_section_without_detached_effects() {
-        assert!(matches!(
-            settings_page_response(Container::default(), Container::default()),
-            Err(RouteError::RouteFailed(_))
-        ));
+        assert!(
+            primary
+                .find_element_by_str_id("settings-music-api-settings-section")
+                .is_some()
+        );
     }
 
     #[test]
