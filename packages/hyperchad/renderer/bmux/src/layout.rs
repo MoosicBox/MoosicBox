@@ -2433,8 +2433,10 @@ mod scroll_reprojection_tests {
     #[test]
     fn hundred_album_scroll_matches_complete_reflow() {
         let root = album_document();
-        let mut options = LayoutOptions::default();
-        options.viewport = Size::new(100, 40);
+        let mut options = LayoutOptions {
+            viewport: Size::new(100, 40),
+            ..Default::default()
+        };
         let mut retained = layout(&root, &options, &DefaultLeafMeasure).unwrap();
         for offset in [3, 6, 30, 200, 99999, 6, 0] {
             options
@@ -2534,78 +2536,83 @@ mod scroll_reprojection_tests {
         }
     }
 
+    fn album_overlay_document(menu_hidden: bool) -> Container {
+        let mut root = album_document();
+        for (index, album) in root.children[0].children.iter_mut().enumerate() {
+            album.position = Some(Position::Relative);
+            album.children.push(Container {
+                str_id: Some(format!("cover-{index}")),
+                element: Element::Image {
+                    source: Some("/cover.png".into()),
+                    alt: None,
+                    fit: None,
+                    source_set: None,
+                    sizes: None,
+                    loading: None,
+                },
+                width: Some(Number::Integer(160)),
+                height: Some(Number::Integer(160)),
+                ..Default::default()
+            });
+            album.children.push(production_album_controls(index));
+            // Shape of native/ui/src/albums.rs #albums-menu: fixed width,
+            // intrinsic height, percentage top, two columns and bordered rows.
+            album.children.push(Container {
+                str_id: Some(format!("albums-menu-{index}")),
+                position: Some(Position::Absolute),
+                width: Some(Number::Integer(300)),
+                top: Some(Number::RealPercent(100.0)),
+                direction: LayoutDirection::Row,
+                visibility: Some(if menu_hidden {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                }),
+                children: ["Album Artist", "Album Title", "Release Date"]
+                    .into_iter()
+                    .map(|label| Container {
+                        border_top: Some((hyperchad_color::Color::BLACK, Number::Real(1.0))),
+                        children: vec![Container {
+                            element: Element::Button { r#type: None },
+                            children: vec![Container {
+                                element: Element::Text {
+                                    value: label.into(),
+                                },
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            });
+            album.children.push(Container {
+                str_id: Some(format!("overlay-{index}")),
+                position: Some(Position::Absolute),
+                left: Some(Number::Integer(8)),
+                top: Some(Number::Integer(16)),
+                width: Some(Number::Integer(80)),
+                height: Some(Number::Integer(32)),
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "Play album".into(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+        }
+        root
+    }
+
     #[test]
     fn album_absolute_overlays_reproject_with_complete_layout_parity() {
         for (width, height, menu_hidden) in [(80, 24), (120, 40), (140, 60)]
             .into_iter()
             .flat_map(|(width, height)| [false, true].map(|hidden| (width, height, hidden)))
         {
-            let mut root = album_document();
-            for (index, album) in root.children[0].children.iter_mut().enumerate() {
-                album.position = Some(Position::Relative);
-                album.children.push(Container {
-                    str_id: Some(format!("cover-{index}")),
-                    element: Element::Image {
-                        source: Some("/cover.png".into()),
-                        alt: None,
-                        fit: None,
-                        source_set: None,
-                        sizes: None,
-                        loading: None,
-                    },
-                    width: Some(Number::Integer(160)),
-                    height: Some(Number::Integer(160)),
-                    ..Default::default()
-                });
-                album.children.push(production_album_controls(index));
-                // Shape of native/ui/src/albums.rs #albums-menu: fixed width,
-                // intrinsic height, percentage top, two columns and bordered rows.
-                album.children.push(Container {
-                    str_id: Some(format!("albums-menu-{index}")),
-                    position: Some(Position::Absolute),
-                    width: Some(Number::Integer(300)),
-                    top: Some(Number::RealPercent(100.0)),
-                    direction: LayoutDirection::Row,
-                    visibility: Some(if menu_hidden {
-                        Visibility::Hidden
-                    } else {
-                        Visibility::Visible
-                    }),
-                    children: ["Album Artist", "Album Title", "Release Date"]
-                        .into_iter()
-                        .map(|label| Container {
-                            border_top: Some((hyperchad_color::Color::BLACK, Number::Real(1.0))),
-                            children: vec![Container {
-                                element: Element::Button { r#type: None },
-                                children: vec![Container {
-                                    element: Element::Text {
-                                        value: label.into(),
-                                    },
-                                    ..Default::default()
-                                }],
-                                ..Default::default()
-                            }],
-                            ..Default::default()
-                        })
-                        .collect(),
-                    ..Default::default()
-                });
-                album.children.push(Container {
-                    str_id: Some(format!("overlay-{index}")),
-                    position: Some(Position::Absolute),
-                    left: Some(Number::Integer(8)),
-                    top: Some(Number::Integer(16)),
-                    width: Some(Number::Integer(80)),
-                    height: Some(Number::Integer(32)),
-                    children: vec![Container {
-                        element: Element::Text {
-                            value: "Play album".into(),
-                        },
-                        ..Default::default()
-                    }],
-                    ..Default::default()
-                });
-            }
+            let root = album_overlay_document(menu_hidden);
             let mut options = LayoutOptions {
                 viewport: Size::new(width, height),
                 ..Default::default()

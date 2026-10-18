@@ -446,7 +446,7 @@ mod writer_tests {
         let error = writer.flush().unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::Other);
         assert_eq!(error.to_string(), "test flush");
-        assert!(writer.inner.bytes.is_empty());
+        assert_eq!(writer.inner.bytes.len(), 0);
         assert_eq!(writer.inner.flushes, 1);
     }
 }

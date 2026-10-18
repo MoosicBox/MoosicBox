@@ -852,8 +852,7 @@ mod tests {
     use super::*;
     use hyperchad_renderer::Color;
 
-    #[test]
-    fn decoded_artwork_uses_bounded_native_png_and_releases_both_buffers() {
+    fn decoded_artwork_store() -> (GraphicsStore, Vec<u8>, Vec<u8>) {
         let rgba = vec![123; 64 * 64 * 4];
         let mut encoded = std::io::Cursor::new(Vec::new());
         image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(64, 64, rgba.clone()).unwrap())
@@ -870,6 +869,12 @@ mod tests {
             encoded.get_ref(),
         )
         .unwrap();
+        (s, rgba, encoded.into_inner())
+    }
+
+    #[test]
+    fn decoded_artwork_uses_bounded_native_png_and_releases_both_buffers() {
+        let (mut s, rgba, encoded) = decoded_artwork_store();
         let GraphicsPlacement::Image(placement) = s
             .placement(
                 "art",
@@ -944,7 +949,7 @@ mod tests {
                     allow_memory: true,
                     ..Default::default()
                 },
-                encoded.get_ref(),
+                &encoded,
             )
             .unwrap();
         let GraphicsPlacement::Image(fallback) = bounded

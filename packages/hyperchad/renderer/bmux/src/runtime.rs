@@ -275,7 +275,7 @@ mod tests {
                 output.write_all(b"\x1b[1;2Hpixel").unwrap();
             }
             let buffer = output.inner.as_ref().unwrap();
-            assert!(buffer.get_ref().bytes.is_empty());
+            assert_eq!(buffer.get_ref().bytes.len(), 0);
             assert_eq!(buffer.capacity(), 64 * 1024);
             output.flush().unwrap();
             let inner = output.inner.as_ref().unwrap().get_ref();

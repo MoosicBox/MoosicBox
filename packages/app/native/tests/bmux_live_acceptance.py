@@ -19,6 +19,7 @@ A successful run is still not bmux-host or statistical p95 acceptance. No
 fabricated WS Ready state is supplied.
 """
 
+from collections import deque
 import argparse
 import ctypes
 import concurrent.futures
@@ -288,6 +289,43 @@ class LockedScreen(Screen):
             return super().locate(label, occurrence)
 
 
+class QueueTelemetry:
+    """Bounded in-memory per-stage windows; each stage has a single producer."""
+
+    def __init__(self, limit=8192):
+        self.windows = {
+            stage: deque(maxlen=limit)
+            for stage in (
+                "receipt",
+                "parse_enqueue",
+                "parse_finish",
+                "mirror_enqueue",
+                "mirror_dequeue",
+                "forward_start",
+                "forward_end",
+            )
+        }
+        self.counts = dict.fromkeys(self.windows, 0)
+        self.bytes = dict.fromkeys(self.windows, 0)
+
+    def record(self, stage, begin, end, timestamp=None):
+        self.windows[stage].append(
+            (begin, end, time.monotonic() if timestamp is None else timestamp)
+        )
+        self.counts[stage] += 1
+        self.bytes[stage] += end - begin
+
+    def snapshot(self):
+        return {
+            "coordinate": "cumulative application PTY bytes, half-open offsets",
+            "counts": dict(self.counts),
+            "bytes": dict(self.bytes),
+            "windows": {
+                stage: list(records) for stage, records in self.windows.items()
+            },
+        }
+
+
 class PtyDrain:
     """Continuously receive and timestamp PTY bytes, independent of screenshots."""
 
@@ -298,6 +336,8 @@ class PtyDrain:
         self.received = []
         self.parsed = []
         self.error = None
+        self.telemetry = QueueTelemetry()
+        self.byte_offset = 0
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.parse_queue = queue.Queue()
         self.mirror_queue = queue.Queue()
@@ -310,23 +350,29 @@ class PtyDrain:
                 item = self.parse_queue.get()
                 if item is None:
                     return
-                received, data = item
+                received, data, begin, end = item
                 self.screen.feed(data)
                 if self.observe:
                     self.observe(received)
-                self.parsed.append((received, time.monotonic()))
+                finished = time.monotonic()
+                self.parsed.append((received, finished))
+                self.telemetry.record("parse_finish", begin, end, finished)
         except Exception as error:
             self.error = repr(error)
 
     def forward(self):
         try:
             while True:
-                data = self.mirror_queue.get()
-                if data is None:
+                item = self.mirror_queue.get()
+                if item is None:
                     return
+                data, begin, end = item
+                self.telemetry.record("mirror_dequeue", begin, end)
                 remaining = memoryview(data)
+                self.telemetry.record("forward_start", begin, end)
                 while remaining:
                     remaining = remaining[os.write(1, remaining) :]
+                self.telemetry.record("forward_end", begin, end)
         except Exception as error:
             self.error = repr(error)
 
@@ -353,9 +399,15 @@ class PtyDrain:
                 received = time.monotonic()
                 self.recording.extend(data)
                 self.received.append((received, len(data)))
-                self.parse_queue.put((received, data))
+                begin = self.byte_offset
+                self.byte_offset += len(data)
+                end = self.byte_offset
+                self.telemetry.record("receipt", begin, end, received)
+                self.telemetry.record("parse_enqueue", begin, end)
+                self.parse_queue.put((received, data, begin, end))
                 if self.mirror:
-                    self.mirror_queue.put(data)
+                    self.telemetry.record("mirror_enqueue", begin, end)
+                    self.mirror_queue.put((data, begin, end))
         except Exception as error:
             self.error = repr(error)
 
@@ -393,11 +445,186 @@ def album_positions(screen, payloads):
         if len(identities) != 1:
             continue
         matches = [
-            (line.find(title), row) for row, line in enumerate(lines) if title in line
+            (match.start(), row)
+            for row, line in enumerate(lines)
+            for match in re.finditer(r"(?<!\w)" + re.escape(title) + r"(?!\w)", line)
         ]
         if len(matches) == 1 and matches[0][0] >= 18:
             positions[next(iter(identities))] = matches[0]
     return positions
+
+
+def elapsed_receipt(received, origin):
+    """Exclude pre-input receipts rather than clamping negative elapsed values."""
+    return received - origin if received is not None and received >= origin else None
+
+
+def current_cover_placements(graphics):
+    """Replay placement/deletion commands; never select a deleted historical cover.
+
+    Fail closed on deletion modes not modeled here rather than resurrecting stale
+    placements. The returned IDs are terminal protocol identities, not album IDs.
+    """
+    active = {}
+    for params, x, y in graphics:
+        action = params.get("a")
+        if action == "d":
+            mode = params.get("d", "a").lower()
+            if mode == "i":
+                active = {
+                    key: value
+                    for key, value in active.items()
+                    if key[0] != params.get("i")
+                }
+            elif mode == "p":
+                active.pop((params.get("i"), params.get("p", "0")), None)
+            else:
+                active.clear()
+        elif action in ("p", "T") and params.get("i"):
+            active[(params["i"], params.get("p", "0"))] = (params, x, y)
+    return list(active.values())
+
+
+def ascii_display_label(value, width):
+    """Mirror whole-ASCII-glyph ellipsize; unknown Unicode widths fail closed."""
+    if not value.isascii() or width < 1:
+        return None
+    return value if len(value) <= width else value[: width - 1] + "…"
+
+
+def centered_ascii_label(value, width):
+    label = ascii_display_label(value, width)
+    if label is None:
+        return None
+    spare = width - len(label)
+    return " " * (spare // 2) + label + " " * (spare - spare // 2)
+
+
+def connection_select_target(text, name, endpoint, main_bottom):
+    """Resolve B's bracketed button only with its visible name and URL above it."""
+    lines = text.splitlines()[:main_bottom]
+    targets = []
+    for y, line in enumerate(lines):
+        for match in re.finditer(r"\[ Select \]", line):
+            preceding = lines[max(0, y - 8) : y]
+            names = [i for i, value in enumerate(preceding) if value.strip() == name]
+            urls = [i for i, value in enumerate(preceding) if value.strip() == endpoint]
+            if len(names) == len(urls) == 1 and names[0] < urls[0]:
+                # A second form name between B and its button makes association unsafe.
+                if not any(
+                    "Fixture " in value and value.strip() != name
+                    for value in preceding[names[0] + 1 :]
+                ):
+                    targets.append((match.start() + len("[ Select ]") // 2, y))
+    return targets[0] if len(targets) == 1 else None
+
+
+def selected_connection_visible(text, name, endpoint, main_bottom):
+    """Require the selected marker, name and endpoint in one visible form."""
+    lines = [line[18:].strip() for line in text.splitlines()[:main_bottom]]
+    matches = []
+    for y, value in enumerate(lines):
+        if value != name:
+            continue
+        before = lines[max(0, y - 4) : y]
+        after = lines[y + 1 : y + 5]
+        if before.count("(Selected)") == 1 and after.count(endpoint) == 1:
+            matches.append(y)
+    return len(matches) == 1
+
+
+def exact_sidebar_target(text, label, main_bottom):
+    targets = [
+        (line.index(label) + len(label) // 2, y)
+        for y, line in enumerate(text.splitlines()[:main_bottom])
+        if line[:18].strip() == label
+    ]
+    return targets[0] if len(targets) == 1 else None
+
+
+def album_click_candidates(screen, payloads, card_columns=None):
+    """Resolve exact displayed title/artist pairs uniquely across ALL loaded IDs."""
+    albums = {}
+    for path, payload in payloads:
+        if urllib.parse.urlsplit(path).path == "/menu/albums":
+            for album in payload.get("items", []):
+                albums[str(album["albumId"])] = album
+    lines = screen.text().splitlines()
+    candidates = []
+    if card_columns is None:
+        # Full-label-only callers still use conservative complete identity lookup.
+        positions = album_positions(screen, payloads)
+        card_columns = {
+            (x, max(len(a["title"]), len(a.get("artist", ""))))
+            for identity, a in albums.items()
+            if identity in positions
+            for x, _ in [positions[identity]]
+        }
+    for x, width in sorted(set(card_columns)):
+        displayed = {
+            identity: (
+                centered_ascii_label(a["title"], width),
+                centered_ascii_label(a.get("artist", ""), width),
+            )
+            for identity, a in albums.items()
+        }
+        for y in range(8, len(lines) - 1):
+            title = lines[y][x : x + width].ljust(width)
+            artist = lines[y + 1][x : x + width].ljust(width)
+            matching = [
+                identity
+                for identity, pair in displayed.items()
+                if pair == (title, artist) and title and artist
+            ]
+            title_matches = [
+                identity for identity, pair in displayed.items() if pair[0] == title
+            ]
+            if len(matching) == 1 and len(title_matches) == 1:
+                candidates.append((y, albums[matching[0]], (x, y)))
+    return sorted(candidates, key=lambda value: (value[0], value[2][0]))
+
+
+def displayed_album_positions(screen, payloads, card_columns):
+    """Use the safe click identity matcher for restoration, rejecting duplicate IDs."""
+    candidates = album_click_candidates(screen, payloads, card_columns)
+    positions = {}
+    for _, album, position in candidates:
+        identity = str(album["albumId"])
+        if identity in positions:
+            return {}
+        positions[identity] = position
+    return positions
+
+
+def detail_metadata_matches(text, title, artist, main_left=18, footer_rows=4):
+    """Match a complete contiguous wrapped heading and artist, never across cards."""
+    lines = text.splitlines()[:-footer_rows]
+    title = " ".join(title.split())
+    for y, line in enumerate(lines):
+        heading = line[main_left:]
+        if not heading.strip():
+            continue
+        x = main_left + len(heading) - len(heading.lstrip())
+        for count in range(1, 4):
+            block = lines[y : y + count]
+            if len(block) != count or any(
+                value[main_left:x].strip() for value in block
+            ):
+                continue
+            if any(
+                not value[x:].strip() or value[x : x + 1].isspace() for value in block
+            ):
+                continue
+            if " ".join(" ".join(value[x:].split()) for value in block) != title:
+                continue
+            if y + count < len(lines):
+                following = lines[y + count]
+                if (
+                    not following[main_left:x].strip()
+                    and following[x:].strip() == artist
+                ):
+                    return True
+    return False
 
 
 def albums_moved_up(before, after):
@@ -412,6 +639,58 @@ def albums_moved_up(before, after):
         and after[identity][1] < position[1]
         for identity, position in before.items()
     )
+
+
+def settled_album_positions(settle, screen, payloads):
+    """Read the input baseline AFTER old frames finish settling, never before."""
+    settle(0.08)
+    return album_positions(screen, payloads)
+
+
+def clock_anchor():
+    """Bracket UTC with monotonic readings; retain uncertainty, never subtract it."""
+    before = time.monotonic_ns()
+    wall = time.time_ns()
+    after = time.monotonic_ns()
+    return {"monotonic_before_ns": before, "wall_ns": wall, "monotonic_after_ns": after}
+
+
+def classify_wheel_observations(before, observations, sent, until):
+    """Classify same-identity motion without treating lost overlap as success.
+
+    Receipt times are PTY drain times, not application admission or physical
+    presentation. Empty/clipped/disjoint labels leave latency inconclusive; they
+    must remain missing samples in the acceptance calculation. Stale receipts
+    never establish a response to this input.
+    """
+    fresh = [
+        (received, positions)
+        for received, positions in observations
+        if sent <= received <= until
+    ]
+    matched = next(
+        (
+            received
+            for received, positions in fresh
+            if albums_moved_up(before, positions)
+        ),
+        None,
+    )
+    if matched is not None:
+        status = "matched"
+    elif not fresh:
+        status = "no_response_observed"
+    elif not before or any(
+        not before.keys() & positions.keys() for _, positions in fresh
+    ):
+        status = "inconclusive_overlap_lost"
+    else:
+        status = "no_upward_movement_observed"
+    return {
+        "status": status,
+        "matched_received": matched,
+        "seconds": matched - sent if matched is not None else None,
+    }
 
 
 def capture_x11(path):
@@ -463,6 +742,429 @@ def capture_x11(path):
         if image:
             x.XDestroyImage(image)
         x.XCloseDisplay(display)
+
+
+class SettingsLoopback(http.server.ThreadingHTTPServer):
+    """Explicit isolated connection fixture; never forwards to the live gateway."""
+
+    daemon_threads = True
+
+    def __init__(self, name, hold_artwork=False):
+        from bmux_pty_acceptance import artwork_fixture
+
+        super().__init__(("127.0.0.1", 0), SettingsLoopbackHandler)
+        self.name = name
+        self.hold_websocket = False
+        self.requests = []
+        self.stopping = threading.Event()
+        self.art_requested = threading.Event()
+        self.art_completed = threading.Event()
+        self.art_release = threading.Event()
+        if not hold_artwork:
+            self.art_release.set()
+        self.artwork = artwork_fixture(1 if name == "A" else 2, 128)
+
+    def response(self, target):
+        path = urllib.parse.urlsplit(target).path
+        page = lambda items: {
+            "items": items,
+            "offset": 0,
+            "limit": 100,
+            "total": len(items),
+            "hasMore": False,
+        }
+        if path == "/menu/albums":
+            album = {
+                "albumId": 1 if self.name == "A" else 2,
+                "title": "Loopback " + self.name,
+                "artist": "Artist " + self.name,
+                "artistId": 1,
+                "albumType": "LP",
+                "dateReleased": None,
+                "dateAdded": None,
+                "containsCover": True,
+                "blur": False,
+                "versions": [],
+                "albumSource": "Local",
+                "apiSource": "Library",
+                "artistSources": [],
+                "albumSources": [],
+            }
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(target).query)
+            return page([album] if int(query.get("offset", ["0"])[0]) == 0 else [])
+        values = {
+            "/health": {"status": "OK"},
+            "/config/connection-id": "isolated-" + self.name,
+            "/config/profiles": [{"name": "master"}],
+            "/music-api": {"items": [], "offset": 0, "limit": 0, "total": 0},
+            "/menu/artists": page([]),
+            "/session/sessions": page([]),
+            "/audio-zone/audio-zones": [],
+            "/audio-zone/with-session": page([]),
+            "/downloader/download-locations": {
+                "items": [{"id": 1, "path": f"/fixture/{self.name}-download"}],
+                "offset": 0,
+                "limit": 1,
+                "total": 1,
+            },
+            "/scan/scan-paths": [{"path": f"/fixture/{self.name}-scan"}],
+        }
+        if path not in values:
+            raise ValueError("unexpected isolated endpoint " + path)
+        return values[path]
+
+
+class SettingsLoopbackHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def do_GET(self):
+        self.server.requests.append(
+            {"method": "GET", "path": self.path, "monotonic": time.monotonic()}
+        )
+        if urllib.parse.urlsplit(self.path).path == "/ws":
+            from bmux_pty_acceptance import Handler
+
+            return Handler.do_GET(self)
+        try:
+            if re.fullmatch(r"/files/albums/[12]/[^?]+(?:\?.*)?", self.path):
+                self.server.art_requested.set()
+                if not self.server.art_release.wait(30):
+                    self.send_error(504, "fixture artwork barrier expired")
+                    return
+                body, kind = self.server.artwork, "image/png"
+            else:
+                body = json.dumps(self.server.response(self.path)).encode()
+                kind = "application/json"
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            if kind == "image/png":
+                self.server.art_completed.set()
+        except (ValueError, KeyError):
+            self.send_error(404)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def reject_mutation(self):
+        self.server.requests.append(
+            {"method": self.command, "path": self.path, "denied": True}
+        )
+        self.send_error(403, "fixture forbids playback, scans and server writes")
+
+    do_POST = do_PATCH = do_DELETE = do_PUT = reject_mutation
+
+
+def run_settings_loopback(executable, artifacts):
+    """Actual Settings A->B UI and delayed-A artwork isolation; no live access.
+
+    Requires the dedicated Kitty display. This is functional evidence, not a
+    performance sample; restart/edit/error coverage remains a separate gap.
+    """
+    from bmux_visible_frames import FrameSampler
+
+    assert os.isatty(0) and os.isatty(1)
+    assert os.environ.get("BMUX_LIVE_ISOLATED_X11") == os.environ.get("DISPLAY")
+    executable = Path(executable).resolve(strict=True)
+    artifacts = Path(artifacts).resolve()
+    artifacts.mkdir(parents=True, exist_ok=False)
+    a, b = SettingsLoopback("A", True), SettingsLoopback("B")
+    for server in (a, b):
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    geometry = fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8)
+    rows, columns, width, height = struct.unpack("HHHH", geometry)
+    screen = LockedScreen(columns, rows)
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, geometry)
+    modes = termios.tcgetattr(0)
+    tty.setraw(0)
+    recording = bytearray()
+    events, failures = [], []
+    process = drain = sampler = None
+    started = time.monotonic()
+
+    def wait(predicate, label):
+        deadline = time.monotonic() + 12
+        while time.monotonic() < deadline:
+            if drain and drain.error:
+                raise AssertionError(drain.error)
+            if predicate():
+                return
+            time.sleep(0.01)
+        raise AssertionError(label)
+
+    def click(label):
+        wait(lambda: screen.locate(label), "missing UI label " + label)
+        x, y = screen.locate(label)
+        os.write(master, f"\x1b[<0;{x+2};{y+1}M\x1b[<0;{x+2};{y+1}m".encode())
+        events.append(
+            {
+                "kind": "click",
+                "label": label,
+                "coords": [x, y],
+                "monotonic": time.monotonic(),
+            }
+        )
+
+    def frame(name):
+        (artifacts / (name + ".txt")).write_text(screen.text())
+        capture_x11(artifacts / (name + ".png"))
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="bmux-settings-loopback-") as home:
+            connections = [
+                {
+                    "name": "Fixture " + server.name,
+                    "api_url": f"http://127.0.0.1:{server.server_port}",
+                }
+                for server in (a, b)
+            ]
+            database = (
+                Path(home) / ".local/moosicbox/app/profiles/master/persistence.db"
+            )
+            database.parent.mkdir(parents=True)
+            with sqlite3.connect(database) as db:
+                db.execute(
+                    "CREATE TABLE state (key TEXT NOT NULL UNIQUE, value TEXT NOT NULL)"
+                )
+                for key, value in [
+                    ("CONNECTION", connections[0]),
+                    ("CONNECTIONS", connections),
+                ]:
+                    db.execute(
+                        "INSERT INTO state VALUES (?, ?)", (key, json.dumps(value))
+                    )
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if key in ("PATH", "LANG", "LC_ALL", "LD_LIBRARY_PATH")
+            }
+            env.update(
+                HOME=home,
+                XDG_CONFIG_HOME=home + "/config",
+                XDG_STATE_HOME=home + "/state",
+                XDG_DATA_HOME=home + "/data",
+                XDG_CACHE_HOME=home + "/cache",
+                TERM="xterm-256color",
+                BMUX_IMAGE_PROTOCOL="kitty",
+                RUST_LOG="hyperchad=debug,moosicbox_app_native=debug",
+            )
+            process = subprocess.Popen(
+                [str(executable), "serve"],
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                cwd=home,
+                env=env,
+                start_new_session=True,
+            )
+            drain = PtyDrain(master, screen, recording, True)
+            drain.start()
+            click("Albums")
+            wait(lambda: screen.locate("Loopback A"), "A actual library missing")
+            wait(a.art_requested.is_set, "A delayed artwork request missing")
+            frame("connection-a")
+            click("Settings")
+            wait(lambda: screen.locate("Connections"), "full Settings page missing")
+            frame("settings-two-connections")
+            # Exactly one saved non-selected connection: B. Never match Selected.
+            b_image_start = len(screen.images)
+            target = None
+            for scroll_index in range(12):
+                target = connection_select_target(
+                    screen.text(),
+                    connections[1]["name"],
+                    connections[1]["api_url"],
+                    rows - 4,
+                )
+                if target:
+                    break
+                before_scroll = screen.text()
+                os.write(master, f"\x1b[<65;{columns*3//4};{rows//2}M".encode())
+                time.sleep(0.2)
+                events.append(
+                    {
+                        "kind": "settings_scroll",
+                        "index": scroll_index,
+                        "before": before_scroll,
+                        "after": screen.text(),
+                        "monotonic": time.monotonic(),
+                    }
+                )
+            assert target, "B form exact [ Select ] not visible with name/API context"
+            frame("settings-b-select-visible")
+            target = connection_select_target(
+                screen.text(),
+                connections[1]["name"],
+                connections[1]["api_url"],
+                rows - 4,
+            )
+            assert target, "B target moved before click"
+            x, y = target
+            os.write(master, f"\x1b[<0;{x+1};{y+1}M\x1b[<0;{x+1};{y+1}m".encode())
+            events.append(
+                {
+                    "kind": "select_connection",
+                    "name": connections[1]["name"],
+                    "endpoint": connections[1]["api_url"],
+                    "coords": target,
+                    "monotonic": time.monotonic(),
+                }
+            )
+            selected_at = events[-1]["monotonic"]
+            wait(
+                lambda: any(
+                    "/ws" in entry.get("path", "")
+                    and entry.get("monotonic", 0) >= selected_at
+                    for entry in b.requests
+                    if isinstance(entry, dict)
+                ),
+                "B websocket connection missing in selection epoch",
+            )
+            stable_text, stable_since = None, time.monotonic()
+
+            def selected_page_settled():
+                nonlocal stable_text, stable_since
+                current = screen.text()
+                if current != stable_text:
+                    stable_text, stable_since = current, time.monotonic()
+                return (
+                    selected_connection_visible(
+                        current,
+                        connections[1]["name"],
+                        connections[1]["api_url"],
+                        rows - 4,
+                    )
+                    and time.monotonic() - stable_since >= 0.3
+                )
+
+            wait(selected_page_settled, "B selected Settings form did not settle")
+            frame("settings-b-selected-settled")
+            nav_target = exact_sidebar_target(screen.text(), "Albums", rows - 4)
+            assert nav_target, "Albums sidebar link ambiguous or missing"
+            x, y = nav_target
+            os.write(master, f"\x1b[<0;{x+1};{y+1}M\x1b[<0;{x+1};{y+1}m".encode())
+            events.append(
+                {
+                    "kind": "click",
+                    "label": "Albums",
+                    "coords": nav_target,
+                    "selection_epoch": selected_at,
+                    "monotonic": time.monotonic(),
+                }
+            )
+            wait(lambda: screen.locate("Loopback B"), "B actual library missing")
+            wait(b.art_requested.is_set, "B artwork request missing")
+            wait(b.art_completed.is_set, "B artwork response incomplete")
+            wait(
+                lambda: len(screen.images) > b_image_start,
+                "B terminal artwork upload missing",
+            )
+            time.sleep(0.5)
+            frame("connection-b-before-stale-a")
+            sampler = FrameSampler(os.environ["DISPLAY"])
+            # First cover interior from current protocol placement, not route-only evidence.
+            with screen.lock:
+                placements = current_cover_placements(list(screen.graphics))
+            covers = [
+                (params, x, y)
+                for params, x, y in placements
+                if params.get("a") in ("p", "T")
+                and x >= 18
+                and int(params.get("c", 0)) >= 4
+            ]
+            assert len(covers) == 1, "B cover placement not uniquely visible"
+            params, x, y = covers[0]
+            cw, ch = width / columns, height / rows
+            rect = (
+                round(x * cw) + 2,
+                round(y * ch) + 2,
+                round(int(params["c"]) * cw) - 4,
+                min(round(int(params["c"]) * cw) - 4, round((rows - 3 - y) * ch) - 4),
+            )
+            assert rect[2] > 0 and rect[3] > 0
+            _, _, before, stride = sampler.grab(rect)
+            assert (
+                len(set(before[::4])) > 16
+            ), "B cover ROI empty/uniform; cannot prove stale-image isolation"
+            a.art_release.set()
+            wait(
+                a.art_completed.is_set,
+                "A delayed completion not delivered; stale-image test inconclusive",
+            )
+            time.sleep(0.7)
+            _, _, after, after_stride = sampler.grab(rect)
+            (artifacts / "b-cover-before.bgra").write_bytes(before)
+            (artifacts / "b-cover-after-stale-a.bgra").write_bytes(after)
+            assert (
+                before == after and stride == after_stride
+            ), "B cover changed after delayed A completion"
+            assert screen.locate("Loopback B") and not screen.locate(
+                "Loopback A"
+            ), "stale A metadata visible"
+            frame("connection-b-after-stale-a")
+            with sqlite3.connect(database) as db:
+                selected = json.loads(
+                    db.execute(
+                        "SELECT value FROM state WHERE key='CONNECTION'"
+                    ).fetchone()[0]
+                )
+            assert (
+                selected == connections[1]
+            ), "isolated selected B connection was not persisted"
+            events.append(
+                {
+                    "kind": "stale_a_rejected",
+                    "rect": rect,
+                    "stride": stride,
+                    "selected": selected,
+                    "monotonic": time.monotonic(),
+                }
+            )
+    except Exception as error:
+        failures.append(str(error))
+        frame("failure")
+    finally:
+        a.art_release.set()
+        if sampler:
+            sampler.close()
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        if drain:
+            drain.close()
+        termios.tcsetattr(0, termios.TCSANOW, modes)
+        os.close(master)
+        os.close(slave)
+        for server in (a, b):
+            server.stopping.set()
+            server.shutdown()
+            server.server_close()
+        (artifacts / "terminal.bin").write_bytes(recording)
+        (artifacts / "requests.json").write_text(
+            json.dumps({"A": a.requests, "B": b.requests}, indent=2)
+        )
+        result = {
+            "result": "failed" if failures else "passed",
+            "failures": failures,
+            "events": events,
+            "seconds": time.monotonic() - started,
+            "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+            "geometry": [columns, rows, width, height],
+            "limitations": [
+                "Kitty/Xvfb not user-host proof",
+                "no restart/edit/error workflow coverage",
+                "exact B cover invariance, not timing acceptance",
+            ],
+        }
+        (artifacts / "result.json").write_text(json.dumps(result, indent=2))
+    return bool(failures)
 
 
 def run(executable, artifacts, timeout, kitty_screenshots=False):
@@ -683,15 +1385,30 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             # Structure timing above remains measured from initial appearance;
             # cover timing below starts only after the actual navigation click.
             settle(0.3)
+            albums_start = time.monotonic()
             click("Albums")
             frame("initial-shell")
-            albums_start = time.monotonic()
             try:
-                wait(lambda: bool(decoded), "actual decoded real artwork", 15)
+                wait(
+                    lambda: any(
+                        image["received_seconds"] >= albums_start - started
+                        for image in decoded
+                    ),
+                    "actual decoded real artwork after navigation",
+                    15,
+                )
             except AssertionError as error:
                 failures.append(str(error))
             checks["decoded_real_artwork"] = bool(decoded)
-            cover_seconds = first_cover - albums_start if first_cover else None
+            cover_receipt = min(
+                (
+                    image["received_seconds"] + started
+                    for image in decoded
+                    if image["received_seconds"] >= albums_start - started
+                ),
+                default=None,
+            )
+            cover_seconds = elapsed_receipt(cover_receipt, albums_start)
             event("first_cover", seconds=cover_seconds)
             # This is stricter than adding server time: report both for interpretation.
             cover_server = max(
@@ -723,7 +1440,9 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 failures.append(str(error))
             visible_set = sorted(
                 {
-                    image["sha256_rgba"]: image["received_seconds"] for image in decoded
+                    image["sha256_rgba"]: image["received_seconds"]
+                    for image in decoded
+                    if image["received_seconds"] >= albums_start - started
                 }.values()
             )
             visible_set_seconds = (
@@ -749,6 +1468,12 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 os.write(master, f"\x1b[<35;{x};{y}M".encode())
                 settle(0.15)
             frame("after-hover")
+            check(
+                "hover_album_positions",
+                bool(hover_positions)
+                and album_positions(screen, list(gateway.payloads)) == hover_positions,
+                "No stable visible album label geometry across mouse movement; inspect screenshots",
+            )
             if (
                 kitty_screenshots
                 and os.environ.get("BMUX_VISIBLE_FRAME_SAMPLES") == "1"
@@ -774,6 +1499,8 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                         rect,
                         round(3 * ch),
                         artifacts,
+                        sequential_down=os.environ.get("BMUX_VISIBLE_SEQUENTIAL_DOWN")
+                        == "1",
                     )
                     telemetry = ""
                     for path in Path(home).rglob("*.log"):
@@ -791,14 +1518,15 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                         json.dumps(result, indent=2)
                     )
                     event("visible_frames", **result)
+                    check(
+                        "visible_input_p95",
+                        result["completed"] == 16
+                        and result["p95_upper_seconds"] is not None
+                        and result["p95_upper_seconds"] <= 0.1,
+                        "Visible pixel samples missing or p95 exceeds 100ms",
+                    )
                 finally:
                     sampler.close()
-            check(
-                "hover_album_positions",
-                bool(hover_positions)
-                and album_positions(screen, list(gateway.payloads)) == hover_positions,
-                "No stable visible album label geometry across mouse movement; inspect screenshots",
-            )
             wait(
                 lambda: bool(album_positions(screen, list(gateway.payloads))),
                 "real album labels after asynchronous list load",
@@ -851,33 +1579,59 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             measuring_input = True
             samples = []
             for sample_index in range(16):
-                before = album_positions(screen, list(gateway.payloads))
-                # Let any previously received frames finish parsing before marking
-                # a new input; otherwise stale buffered motion can look like 0ms.
-                settle(0.08)
-                before = album_positions(screen, list(gateway.payloads))
+                log_before = {
+                    str(p): p.stat().st_size for p in Path(home).rglob("*.log")
+                }
+                # Drain old frames before taking the baseline. Filesystem work
+                # stays before this settle/baseline/input sequence.
+                before = settled_album_positions(settle, screen, list(gateway.payloads))
+                anchor = clock_anchor()
+                sent_wall = time.time()
                 sent = time.monotonic()
                 os.write(master, wheel_down)
-                matched = None
+                write_completed = time.monotonic()
                 until = min(deadline, sent + 1)
                 while time.monotonic() < until:
                     pump()
-                    matched = next(
-                        (
-                            received
-                            for received, positions in list(observations)
-                            if received >= sent and albums_moved_up(before, positions)
-                        ),
-                        None,
+                    observation = classify_wheel_observations(
+                        before, list(observations), sent, until
                     )
-                    if matched is not None:
+                    if observation["matched_received"] is not None:
                         break
-                seconds = matched - sent if matched is not None else None
-                samples.append(seconds)
+                fresh = [
+                    (received, positions)
+                    for received, positions in list(observations)
+                    if sent <= received <= until
+                ]
+                observation = classify_wheel_observations(before, fresh, sent, until)
+                samples.append(observation["seconds"])
+                log_after = {
+                    str(p): p.stat().st_size for p in Path(home).rglob("*.log")
+                }
                 event(
                     "wheel_sample",
                     index=sample_index,
-                    seconds=seconds,
+                    input_id=f"pty-wheel-{sample_index}",
+                    clock_anchor=anchor,
+                    **observation,
+                    input_monotonic=sent,
+                    input_seconds=sent - started,
+                    input_wall_before_monotonic=sent_wall,
+                    write_completed_monotonic=write_completed,
+                    matched_received_seconds=(
+                        observation["matched_received"] - started
+                        if observation["matched_received"] is not None
+                        else None
+                    ),
+                    observations=[
+                        {"received_seconds": received - started, "positions": positions}
+                        for received, positions in fresh
+                    ],
+                    log_byte_ranges={
+                        path: [log_before.get(path, 0), size]
+                        for path, size in log_after.items()
+                    },
+                    metric="input write start to matching PTY drain receipt; not admission/presentation",
                     before_positions=before,
                     after_positions=album_positions(screen, list(gateway.payloads)),
                 )
@@ -912,22 +1666,40 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 5,
             )
             frame("scrolled-samples")
-            candidates = []
-            for path, payload in list(gateway.payloads):
-                if urllib.parse.urlsplit(path).path != "/menu/albums":
-                    continue
-                for album in payload.get("items", []):
-                    title = album.get("title", "")
-                    position = screen.locate(title) if title else None
-                    if position and position[0] >= 18 and position[1] >= 8:
-                        candidates.append((position[1], album))
-            assert candidates, "No real album title visible for safe click"
-            album_clicked = min(candidates, key=lambda item: item[0])[1]
+            with screen.lock:
+                current_placements = current_cover_placements(list(screen.graphics))
+            card_columns = [
+                (x, int(params.get("c", 0)))
+                for params, x, y in current_placements
+                if params.get("a") in ("p", "T")
+                and x >= 18
+                and int(params.get("c", 0)) >= 4
+                and 0 <= y < rows - 3
+            ]
+            candidates = album_click_candidates(
+                screen, list(gateway.payloads), card_columns
+            )
+            assert (
+                candidates
+            ), "No unambiguous full title/artist identity visible for safe click"
+            _, album_clicked, title_position = candidates[0]
             preserved = screen.text()
-            preserved_positions = album_positions(screen, list(gateway.payloads))
+
+            def current_display_positions():
+                columns_now = [
+                    (x, int(params.get("c", 0)))
+                    for params, x, y in current_active_placements(screen.graphics)
+                    if params.get("a") in ("p", "T")
+                    and x >= 18
+                    and int(params.get("c", 0)) >= 4
+                    and 0 <= y < rows - 3
+                ]
+                return displayed_album_positions(
+                    screen, list(gateway.payloads), columns_now
+                )
+
+            preserved_positions = current_display_positions()
             event("list_checkpoint", positions=preserved_positions)
-            title_position = screen.locate(album_clicked["title"])
-            assert title_position
             tx, ty = title_position
             artwork = {image["image_id"]: image for image in decoded}
             artwork_ids = set(artwork)
@@ -949,24 +1721,42 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 )
 
             with screen.lock:
-                placements = list(screen.graphics)
-            cover = next(
-                (
-                    (params, x, y)
-                    for params, x, y in reversed(placements)
-                    if params.get("i") in artwork_ids
-                    and params.get("a") in ("p", "T")
-                    and x <= tx < x + int(params.get("c", 0))
-                    and 0 <= ty - (y + placement_rows(params)) <= 5
-                    and placement_rows(params) > 0
-                ),
-                None,
-            )
-            assert cover, "No decoded cover placement matched clicked album title"
-            params, x, y = cover
+                placements = current_cover_placements(list(screen.graphics))
+            covers = [
+                (params, x, y)
+                for params, x, y in placements
+                if params.get("i") in artwork_ids
+                and params.get("a") in ("p", "T")
+                and x <= tx < x + int(params.get("c", 0))
+                and 0 <= ty - (y + placement_rows(params)) <= 1
+                and placement_rows(params) > 0
+                and 0 <= x < columns
+                and 0 <= y < rows - 3
+            ]
+            assert (
+                len(covers) == 1
+            ), "No unique CURRENT decoded cover aligned with full album label"
+            params, x, y = covers[0]
             cx = x + int(params["c"]) // 2 + 1
             cy = y + placement_rows(params) // 2 + 1
             assert 1 <= cx <= columns and 1 <= cy <= rows
+            event(
+                "cover_click_target",
+                album_id=str(album_clicked["albumId"]),
+                title=album_clicked["title"],
+                artist=album_clicked["artist"],
+                label_coords=title_position,
+                displayed_title=screen.text()
+                .splitlines()[ty][tx : tx + int(params["c"])]
+                .rstrip(),
+                displayed_artist=screen.text()
+                .splitlines()[ty + 1][tx : tx + int(params["c"])]
+                .rstrip(),
+                placement=params,
+                placement_coords=[x, y],
+                click_coords=[cx, cy],
+                expected_route=f"/menu/album?albumId={album_clicked['albumId']}",
+            )
             click_started = time.monotonic()
             back_sampler = None
             if (
@@ -1008,6 +1798,12 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                         == [selected_id]
                         and tracks_in(payload)
                     ):
+                        event(
+                            "detail_route_observed",
+                            expected_album_id=selected_id,
+                            route=path,
+                            observed_track_ids=sorted(tracks_in(payload)),
+                        )
                         return True
                 return False
 
@@ -1025,8 +1821,9 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             wait(lambda: bool(seen_tracks), "rendered real track titles", 5)
             check(
                 "detail_metadata_rendered",
-                bool(screen.locate(album_clicked["title"]))
-                and bool(screen.locate(album_clicked["artist"])),
+                detail_metadata_matches(
+                    screen.text(), album_clicked["title"], album_clicked["artist"]
+                ),
                 "Clicked album title/artist missing from detail frame",
             )
             frame("details")
@@ -1080,8 +1877,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             try:
                 wait(
                     lambda: bool(preserved_positions)
-                    and album_positions(screen, list(gateway.payloads))
-                    == preserved_positions,
+                    and current_display_positions() == preserved_positions,
                     "Back preserving exact Albums identity coordinates",
                     3,
                 )
@@ -1099,7 +1895,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 restored=restored,
                 seconds=back_seconds,
                 expected_positions=preserved_positions,
-                actual_positions=album_positions(screen, list(gateway.payloads)),
+                actual_positions=current_display_positions(),
                 additional_browsing_api=additional_api,
                 exact_text_match=screen.text() == preserved,
             )
@@ -1207,6 +2003,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                     "parse_lag_seconds": [
                         parsed - received for received, parsed in drain.parsed
                     ],
+                    "queue_telemetry": drain.telemetry.snapshot(),
                     "error": drain.error,
                 },
                 indent=2,
@@ -1402,6 +2199,7 @@ if __name__ == "__main__":
     parser.add_argument("--artifacts")
     parser.add_argument("--timeout", type=float, default=50)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--settings-loopback", action="store_true")
     parser.add_argument(
         "--kitty-screenshots",
         action="store_true",
@@ -1417,6 +2215,14 @@ if __name__ == "__main__":
     ):
         parser.error(
             "provide executable, new --artifacts directory and --timeout in 1..90 seconds"
+        )
+    elif arguments.settings_loopback:
+        if not arguments.kitty_screenshots:
+            parser.error(
+                "--settings-loopback requires --kitty-screenshots dedicated display"
+            )
+        raise SystemExit(
+            run_settings_loopback(arguments.executable, arguments.artifacts)
         )
     else:
         raise SystemExit(

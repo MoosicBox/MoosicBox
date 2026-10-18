@@ -259,6 +259,7 @@ impl BmuxProgram {
     /// Set host-provided cell geometry without assuming ownership of its terminal.
     pub const fn resize(&mut self, size: Size) {
         self.geometry_dirty = true;
+        self.scroll_reuse = false;
         self.options.viewport = size;
     }
 
@@ -325,17 +326,8 @@ impl BmuxProgram {
             );
         });
         let measure = |node: &Container, constraints: Constraints| {
-            let key = keys.get(&(std::ptr::from_ref(node) as usize));
-            if self.graphics_available
-                && self.shared.config.graphics_enabled
-                && let Some((width, height, _)) = key.and_then(|key| self.graphics.rgba(key))
-            {
-                return LogicalSize::new(
-                    u64::from(width.div_ceil(8)),
-                    u64::from(height.div_ceil(16)),
-                );
-            }
-            controls.measure(node, constraints)
+            self.measure_image(keys.get(&(std::ptr::from_ref(node) as usize)))
+                .unwrap_or_else(|| controls.measure(node, constraints))
         };
         let layout_started = Instant::now();
         let tree = layout::layout(root, &self.options, &measure)?;
@@ -428,7 +420,13 @@ impl BmuxProgram {
                 self.shared.config.graphics_enabled && self.graphics_available,
                 alt,
             ) {
-                Ok(GraphicsPlacement::Image(image)) => {
+                Ok(GraphicsPlacement::Image(mut image)) => {
+                    // Terminal Rect clips negative coordinates. Keep the original
+                    // allocation for fitting; only destination/clip may be cropped.
+                    let Some(allocation) = image_allocation(node.content_bounds) else {
+                        continue;
+                    };
+                    image.allocation = Some(allocation);
                     cx.push_image(ImageContribution::Present(image));
                 }
                 Ok(GraphicsPlacement::Fallback { rect, text }) => {
@@ -1249,6 +1247,62 @@ impl BmuxProgram {
         Ok(())
     }
 
+    fn measure_image(&self, key: Option<&String>) -> Option<LogicalSize> {
+        #[cfg(test)]
+        LEAF_MEASUREMENTS.with(|count| count.set(count.get() + 1));
+        if !self.graphics_available || !self.shared.config.graphics_enabled {
+            return None;
+        }
+        let (width, height, _) = key.and_then(|key| self.graphics.rgba(key))?;
+        Some(LogicalSize::new(
+            u64::from(width.div_ceil(8)),
+            u64::from(height.div_ceil(16)),
+        ))
+    }
+
+    fn complete_paint_event(
+        &mut self,
+        event: RuntimeEvent<Message>,
+        pending: bool,
+    ) -> Result<(), Error> {
+        // Restore only current bounded completions after context revalidation and
+        // successful decode. Normal prepare/reprojection guards remain authoritative.
+        let retain = pending && self.pending_scroll_resource(&event);
+        let key = match &event {
+            RuntimeEvent::Message(Message::Completed {
+                work: Completion::Resource { key, .. },
+                ..
+            }) => Some(key.clone()),
+            _ => None,
+        };
+        if let RuntimeEvent::Message(message) = event {
+            self.message(message)?;
+        }
+        self.scroll_reuse = retain
+            && self.resource_paint_only
+            && key.is_some_and(|key| {
+                self.resource_loaded.contains(&key) && self.graphics.rgba(&key).is_some()
+            });
+        Ok(())
+    }
+
+    fn pending_scroll_resource(&self, event: &RuntimeEvent<Message>) -> bool {
+        matches!(event, RuntimeEvent::Message(Message::Completed {
+            generation,
+            work: Completion::Resource { key, source },
+            result: Ok(HostResponse::Bytes(_)),
+        }) if self.resources.get(key) == Some(source)
+            && self.resource_epochs.get(key) == Some(generation))
+            && !self.stopping
+            && self.fixed_image_geometry
+            && self.prepared_source.as_ref() == Some(self.state.root())
+            && self.options.open_details == self.controls.details_open()
+            && self.effective.is_some()
+            && self.committed.as_ref().is_some_and(|(generation, tree)| {
+                *generation == self.state.generation() && tree.viewport == self.options.viewport
+            })
+    }
+
     fn log_scroll_admission(&mut self) -> bool {
         let requested = std::mem::take(&mut self.scroll_reuse);
         if !requested {
@@ -1892,6 +1946,8 @@ impl BmuxProgram {
             display_size,
         ) {
             // Preserve negative admission until explicit retry or source change.
+            // A rejected decode is not a successful paint-only completion.
+            self.resource_paint_only = false;
             log::warn!("image decode rejected: {error}");
         } else {
             if let Some((width, height, _)) = self.graphics.rgba(&key) {
@@ -2437,11 +2493,27 @@ impl BmuxProgram {
     }
 }
 
+// Unrepresentable allocations must not be refitted from a truncated rectangle.
+fn image_allocation(bounds: layout::CellRect) -> Option<bmux_tui::image::ImageBounds> {
+    Some(bmux_tui::image::ImageBounds {
+        x: i32::try_from(bounds.x).ok()?,
+        y: i32::try_from(bounds.y).ok()?,
+        width: u16::try_from(bounds.width).ok()?,
+        height: u16::try_from(bounds.height).ok()?,
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    static LEAF_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Program for BmuxProgram {
     type Message = Message;
     type Error = Error;
 
     fn update(&mut self, event: RuntimeEvent<Message>) -> Result<Update<Message>, Error> {
+        let pending_scroll_resource = self.scroll_reuse && self.pending_scroll_resource(&event);
         self.scroll_reuse = !self.geometry_dirty
             && matches!(
                 &event,
@@ -2505,9 +2577,10 @@ impl Program for BmuxProgram {
                     ..
                 })
             );
-            if let RuntimeEvent::Message(message) = event {
-                self.message(message)?;
-            }
+            self.complete_paint_event(
+                event,
+                pending_scroll_resource && previous_context == self.resource_context,
+            )?;
             return Ok(self.drive(Update::redraw()));
         }
         let pointer_move = matches!(
@@ -3446,6 +3519,479 @@ mod runtime_regressions {
                 Ok(HostResponse::Bytes(encoded.into_inner())),
             )
             .unwrap();
+    }
+
+    fn pending_wheel_program() -> BmuxProgram {
+        use hyperchad_transformer::Number;
+        use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow};
+        let mut program = program();
+        program.resize(Size::new(80, 24));
+        program.set_graphics_available(true);
+        let root = Container {
+            direction: LayoutDirection::Column,
+            children: vec![
+                Container {
+                    str_id: Some("scroll".into()),
+                    width: Some(Number::Integer(640)),
+                    height: Some(Number::Integer(320)),
+                    overflow_y: LayoutOverflow::Scroll,
+                    children: (0..100)
+                        .map(|index| Container {
+                            width: Some(Number::Integer(640)),
+                            height: Some(Number::Integer(32)),
+                            children: vec![Container {
+                                element: Element::Text {
+                                    value: format!("Album {index}"),
+                                },
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                },
+                Container {
+                    width: Some(Number::Integer(640)),
+                    height: Some(Number::Integer(48)),
+                    children: vec![Container {
+                        width: Some(Number::Integer(32)),
+                        height: Some(Number::Integer(32)),
+                        ..artwork_image("footer-cover", "/footer.webp", false)
+                    }],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        program.apply_view(View::from(root), None).unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        program.pending.clear();
+        program
+            .update(RuntimeEvent::Terminal(Event::Mouse(
+                bmux_tui::event::MouseEvent::new(
+                    MouseEventKind::ScrollDown,
+                    bmux_tui::geometry::Point::new(10, 5),
+                ),
+            )))
+            .unwrap();
+        assert!(program.scroll_reuse);
+        program
+    }
+
+    fn footer_bytes() -> Vec<u8> {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            2,
+            2,
+            image::Rgba([91, 113, 157, 255]),
+        ))
+        .write_to(&mut encoded, image::ImageFormat::WebP)
+        .unwrap();
+        encoded.into_inner()
+    }
+
+    fn complete_pending_footer(program: &mut BmuxProgram, epoch: u64, bytes: Vec<u8>) {
+        program
+            .update(RuntimeEvent::Message(Message::Completed {
+                generation: epoch,
+                work: Completion::Resource {
+                    key: "footer-cover".into(),
+                    source: "/footer.webp".into(),
+                },
+                result: Ok(HostResponse::Bytes(bytes)),
+            }))
+            .unwrap();
+    }
+
+    #[test]
+    fn pending_wheel_resource_matches_full_layout_without_measurement() {
+        let mut program = pending_wheel_program();
+        let epoch = program.resource_epochs["footer-cover"];
+        complete_pending_footer(&mut program, epoch, footer_bytes());
+        assert!(
+            program.scroll_reuse,
+            "current bounded completion must retain wheel intent"
+        );
+        LEAF_MEASUREMENTS.with(|count| count.set(0));
+        program.prepare().unwrap();
+        assert_eq!(LEAF_MEASUREMENTS.with(std::cell::Cell::get), 0);
+        let projected_tree = program.candidate.as_ref().unwrap().clone();
+        let projected = format!("{:?}", program.candidate);
+        let mut buffer =
+            bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+        let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+        program.paint(&mut PaintCx::new(&mut frame));
+        assert_eq!(frame.images().len(), 1);
+        let images = format!("{:?}", frame.images());
+        let cells = format!("{buffer:?}");
+        program.commit_prepared();
+        // Force the ordinary full baseline, not another reprojection.
+        program.geometry_dirty = true;
+        program.scroll_reuse = false;
+        program.resource_paint_only = false;
+        LEAF_MEASUREMENTS.with(|count| count.set(0));
+        program.prepare().unwrap();
+        assert!(LEAF_MEASUREMENTS.with(std::cell::Cell::get) > 0);
+        assert_eq!(format!("{:?}", program.candidate), projected);
+        for y in 0..24 {
+            for x in 0..80 {
+                assert_eq!(
+                    projected_tree.hit_test(x, y).map(|node| &node.key),
+                    program
+                        .candidate
+                        .as_ref()
+                        .unwrap()
+                        .hit_test(x, y)
+                        .map(|node| &node.key)
+                );
+            }
+        }
+        let mut baseline =
+            bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+        let mut frame = bmux_tui::frame::Frame::new(&mut baseline);
+        program.paint(&mut PaintCx::new(&mut frame));
+        assert_eq!(format!("{:?}", frame.images()), images);
+        assert_eq!(format!("{baseline:?}"), cells);
+        assert_eq!(program.resource_epochs["footer-cover"], epoch);
+        assert!(program.graphics.rgba("footer-cover").is_some());
+    }
+
+    #[test]
+    fn pending_wheel_resource_rejects_invalidating_changes() {
+        for case in 0..12 {
+            let mut program = pending_wheel_program();
+            let mut epoch = program.resource_epochs["footer-cover"];
+            match case {
+                0 => program.resize(Size::new(120, 40)),
+                1 => {
+                    program
+                        .apply_view(View::from(Container::default()), None)
+                        .unwrap();
+                }
+                2 => {
+                    program
+                        .update(RuntimeEvent::Terminal(Event::Mouse(
+                            bmux_tui::event::MouseEvent::new(
+                                MouseEventKind::Move,
+                                bmux_tui::geometry::Point::new(1, 1),
+                            ),
+                        )))
+                        .unwrap();
+                }
+                3 => epoch = epoch.wrapping_add(1),
+                4 => {
+                    program.state.mark_changed().unwrap();
+                }
+                5 => program.fixed_image_geometry = false,
+                6 => program.resource_context = Some(123),
+                8 => {
+                    program.options.open_details.insert("changed".into(), true);
+                }
+                9 => {
+                    program
+                        .resources
+                        .insert("footer-cover".into(), "/changed.webp".into());
+                }
+                10 => {
+                    program
+                        .update(RuntimeEvent::Terminal(Event::Mouse(
+                            bmux_tui::event::MouseEvent::new(
+                                MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+                                bmux_tui::geometry::Point::new(1, 1),
+                            ),
+                        )))
+                        .unwrap();
+                }
+                11 => program.stopping = true,
+                _ => {}
+            }
+            complete_pending_footer(
+                &mut program,
+                epoch,
+                if case == 7 { vec![0] } else { footer_bytes() },
+            );
+            assert!(
+                !program.scroll_reuse,
+                "case {case} must invalidate pending intent"
+            );
+        }
+        let mut program = pending_wheel_program();
+        program
+            .update(RuntimeEvent::Message(Message::Completed {
+                generation: program.resource_epochs["footer-cover"],
+                work: Completion::Resource {
+                    key: "footer-cover".into(),
+                    source: "/footer.webp".into(),
+                },
+                result: Err(std::io::Error::other("failed").into()),
+            }))
+            .unwrap();
+        assert!(!program.scroll_reuse);
+    }
+
+    fn assert_visible_source_pixels(image: &bmux_tui::image::ImagePlacement, x: i64, y: i64) {
+        let bmux_tui::image::ImagePayload::Pixels {
+            bytes,
+            width,
+            height,
+            ..
+        } = &image.payload
+        else {
+            panic!("expected patterned source pixels");
+        };
+        let fit = image.pixel_rect(11.0, 23.0);
+        // Unclipped reference: 128-square source fitted to 12x6 host cells.
+        // Source crop coordinates must agree for every displayed pixel, not
+        // merely the destination's bounding rectangle.
+        for py in u32::from(image.destination.y) * 23..u32::from(image.destination.bottom()) * 23 {
+            for px in u32::from(image.destination.x) * 11..u32::from(image.destination.right()) * 11
+            {
+                let actual = (
+                    (f64::from(px) - fit.x) * f64::from(*width) / fit.width,
+                    (f64::from(py) - fit.y) * f64::from(*height) / fit.height,
+                );
+                let expected = (
+                    f64::from(i32::try_from(x).unwrap()).mul_add(-11.0, f64::from(px)) * 128.0
+                        / 132.0,
+                    (f64::from(py) - f64::from(i32::try_from(y).unwrap()).mul_add(23.0, 3.0))
+                        * 128.0
+                        / 132.0,
+                );
+                assert_eq!(actual, expected);
+                if (0.0..128.0).contains(&actual.0) && (0.0..128.0).contains(&actual.1) {
+                    let sample = |point: (f64, f64)| {
+                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                        let index = (point.1.floor() as usize * 128 + point.0.floor() as usize) * 4;
+                        &bytes[index..index + 4]
+                    };
+                    assert_eq!(sample(actual), sample(expected));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn signed_image_allocation_survives_terminal_and_header_clipping() {
+        let mut program = program();
+        program.set_graphics_available(true);
+        program
+            .apply_view(
+                View::from(artwork_image("cover", "/cover.webp", false)),
+                None,
+            )
+            .unwrap();
+        complete_artwork(&mut program, "cover", "/cover.webp");
+        let pixels: Vec<u8> = (0_u8..128)
+            .flat_map(|row| (0_u8..128).flat_map(move |col| [row, col, row ^ col, 255]))
+            .collect();
+        program
+            .graphics
+            .register_rgba("cover", 128, 128, pixels)
+            .unwrap();
+        program.prepare().unwrap();
+        for (x, y, clip_y) in [(20, 2, 0), (20, -1, 0), (-2, 2, 0), (-2, -1, 3), (20, 0, 3)] {
+            let tree = program.candidate.as_mut().unwrap();
+            let node = tree
+                .nodes
+                .iter_mut()
+                .find(|node| node.key == "cover")
+                .unwrap();
+            node.content_bounds = layout::CellRect::new(x, y, 12, 6);
+            node.clip = layout::CellRect::new(0, clip_y, 80, 24);
+            let before = format!("{tree:?}");
+            let hits: Vec<_> = (0..24)
+                .flat_map(|cy| (0..80).map(move |cx| (cx, cy)))
+                .map(|(cx, cy)| tree.hit_test(cx, cy).map(|node| node.key.clone()))
+                .collect();
+            let mut buffer =
+                bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+            let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+            program.paint(&mut PaintCx::new(&mut frame));
+            let ImageContribution::Present(image) = &frame.images()[0] else {
+                panic!("expected image");
+            };
+            let allocation = image.allocation.unwrap();
+            assert_eq!(
+                (
+                    i64::from(allocation.x),
+                    i64::from(allocation.y),
+                    allocation.width,
+                    allocation.height
+                ),
+                (x, y, 12, 6)
+            );
+            let fit = image.pixel_rect(11.0, 23.0);
+            assert_eq!(
+                (fit.width, fit.height),
+                (132.0, 132.0),
+                "clipping must never refit the source"
+            );
+            assert!(allocation.covers(image.destination));
+            assert_visible_source_pixels(image, x, y);
+            let tree = program.candidate.as_ref().unwrap();
+            assert_eq!(
+                format!("{tree:?}"),
+                before,
+                "paint must not move text or geometry"
+            );
+            let after: Vec<_> = (0..24)
+                .flat_map(|cy| (0..80).map(move |cx| (cx, cy)))
+                .map(|(cx, cy)| tree.hit_test(cx, cy).map(|node| node.key.clone()))
+                .collect();
+            assert_eq!(after, hits);
+        }
+    }
+
+    #[test]
+    fn image_allocation_rejects_overflow_and_offscreen_is_not_painted() {
+        for bounds in [
+            layout::CellRect::new(i64::MIN, 0, 12, 6),
+            layout::CellRect::new(i64::MAX, 0, 12, 6),
+            layout::CellRect::new(0, i64::MIN, 12, 6),
+            layout::CellRect::new(0, i64::MAX, 12, 6),
+            layout::CellRect::new(0, 0, u64::MAX, 6),
+            layout::CellRect::new(0, 0, 12, u64::MAX),
+        ] {
+            assert!(image_allocation(bounds).is_none());
+        }
+        assert_eq!(
+            image_allocation(layout::CellRect::new(0, 0, 12, 6))
+                .unwrap()
+                .x,
+            0
+        );
+        let mut program = program();
+        program.set_graphics_available(true);
+        program
+            .apply_view(
+                View::from(artwork_image("cover", "/cover.webp", false)),
+                None,
+            )
+            .unwrap();
+        complete_artwork(&mut program, "cover", "/cover.webp");
+        for bounds in [
+            layout::CellRect::new(-12, 0, 12, 6),
+            layout::CellRect::new(0, -6, 12, 6),
+            layout::CellRect::new(80, 0, 12, 6),
+            layout::CellRect::new(0, 24, 12, 6),
+            layout::CellRect::new(0, 0, 0, 6),
+            layout::CellRect::new(0, 0, 12, 0),
+        ] {
+            program.prepare().unwrap();
+            let node = program
+                .candidate
+                .as_mut()
+                .unwrap()
+                .nodes
+                .iter_mut()
+                .find(|node| node.key == "cover")
+                .unwrap();
+            node.content_bounds = bounds;
+            node.clip = layout::CellRect::new(0, 0, 80, 24);
+            let mut buffer =
+                bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+            let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+            program.paint(&mut PaintCx::new(&mut frame));
+            assert!(frame.images().is_empty(), "offscreen/empty {bounds:?}");
+        }
+    }
+
+    #[test]
+    fn footer_completion_is_present_on_next_paint_and_retained_with_same_key() {
+        use hyperchad_transformer::Number;
+        use hyperchad_transformer_models::Position;
+
+        for (width, height) in [(80, 24), (120, 40), (140, 60)] {
+            let mut program = program();
+            program.set_graphics_available(true);
+            program.options.viewport = Size::new(width, height);
+            let mut cover = artwork_image("footer-cover", "/footer.webp", false);
+            cover.width = Some(Number::Integer(32));
+            cover.height = Some(Number::Integer(32));
+            program
+                .apply_view(
+                    View::from(Container {
+                        children: vec![Container {
+                            str_id: Some("footer".into()),
+                            position: Some(Position::Fixed),
+                            bottom: Some(Number::Integer(0)),
+                            width: Some(Number::Integer(640)),
+                            height: Some(Number::Integer(48)),
+                            children: vec![cover],
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }),
+                    None,
+                )
+                .unwrap();
+            program.prepare().unwrap();
+            assert!(program.graphics.rgba("footer-cover").is_none());
+            assert!(
+                program.pending.iter().any(
+                    |work| matches!(work, Work::Resource { key, .. } if key == "footer-cover")
+                )
+            );
+            let mut buffer =
+                bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, width, height));
+            let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+            program.paint(&mut PaintCx::new(&mut frame));
+            assert!(
+                frame.images().is_empty(),
+                "pending is not a ready placement"
+            );
+            program.commit_prepared();
+            let geometry = format!("{:?}", program.committed);
+            let epoch = program.resource_epochs["footer-cover"];
+            let mut encoded = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+                2,
+                2,
+                image::Rgba([91, 113, 157, 255]),
+            ))
+            .write_to(&mut encoded, image::ImageFormat::WebP)
+            .unwrap();
+            program.pending.clear();
+            program
+                .update(RuntimeEvent::Message(Message::Completed {
+                    generation: epoch,
+                    work: Completion::Resource {
+                        key: "footer-cover".into(),
+                        source: "/footer.webp".into(),
+                    },
+                    result: Ok(HostResponse::Bytes(encoded.into_inner())),
+                }))
+                .unwrap();
+            let pixels = program.graphics.rgba("footer-cover").unwrap().2.to_vec();
+            let mut previous = None;
+            for _ in 0..2 {
+                program.prepare().unwrap();
+                let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+                program.paint(&mut PaintCx::new(&mut frame));
+                assert_eq!(
+                    frame.images().len(),
+                    1,
+                    "ready footer must paint immediately"
+                );
+                let placement = format!("{:?}", frame.images());
+                if let Some(previous) = &previous {
+                    assert_eq!(
+                        &placement, previous,
+                        "same-key next paint must retain placement"
+                    );
+                }
+                previous = Some(placement);
+                program.commit_prepared();
+                assert_eq!(format!("{:?}", program.committed), geometry);
+                assert_eq!(program.resource_epochs["footer-cover"], epoch);
+                assert_eq!(program.graphics.rgba("footer-cover").unwrap().2, pixels);
+                assert!(
+                    program.pending.is_empty(),
+                    "ready resource must not refetch"
+                );
+            }
+        }
     }
 
     #[test]
