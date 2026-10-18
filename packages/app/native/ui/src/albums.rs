@@ -622,8 +622,15 @@ fn encode_query_value(value: &str) -> String {
 
 /// Renders one demand-driven album page for terminal clients.
 ///
-/// Each explicit click replaces its own button with another page of cards and
-/// at most one successor button. Scrolling never schedules additional requests.
+/// Each revealed sentinel replaces itself with another page of cards and at most
+/// one successor sentinel. The renderer schedules requests near the viewport;
+/// off-screen pages do not eagerly load the remaining library. The button also
+/// permits keyboard/click retry after failure (the terminal renderer maps its
+/// activation to the revealed route and deduplicates in-flight requests).
+///
+/// Empty pages with a continuation still advance by the server's page limit, or
+/// one if that limit is zero. A successor is omitted only at the end of results
+/// or when no larger offset can be represented.
 #[must_use]
 pub fn albums_list_page(
     state: &State,
@@ -637,7 +644,7 @@ pub fn albums_list_page(
         return container! {};
     };
     let limit = albums.limit().clamp(1, 100);
-    let offset = albums.offset().saturating_add(albums.limit());
+    let offset = albums.offset().saturating_add(albums.limit().max(1));
     let sources = encode_query_value(&filtered_sources_to_string(filtered_sources));
     let search = encode_query_value(search);
     let next = format!(
@@ -656,15 +663,15 @@ pub fn albums_list_page(
     );
     container! {
         (show_albums(&connection.api_url, albums.iter(), size))
-        @if albums.has_more() {
+        @if albums.has_more() && offset > albums.offset() {
             button
-                width=(size)
-                height=50
+                width=(size.max(1))
+                height=30
                 hx-get=(next)
-                hx-trigger="click"
+                hx-trigger="revealed"
                 hx-swap="this"
             {
-                "Load next " (limit) " albums"
+                "Auto-load more albums / retry"
             }
         }
     }
@@ -1059,9 +1066,9 @@ pub fn load_albums(
                 (build_query('?', &[
                     ("limit", "100"),
                     ("size", &size.to_string()),
-                    ("sources", &filtered_sources_to_string(filtered_sources)),
+                    ("sources", &encode_query_value(&filtered_sources_to_string(filtered_sources))),
                     ("sort", &sort.to_string()),
-                    ("search", search),
+                    ("search", &encode_query_value(search)),
                 ]))
             }
             hx-trigger="load"

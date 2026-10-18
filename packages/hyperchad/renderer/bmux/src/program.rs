@@ -26,6 +26,9 @@ use crate::{
     state::ViewState,
 };
 
+#[path = "revealed.rs"]
+mod revealed;
+
 /// Ordered renderer messages. Producers must use the bounded facade admission path.
 // Keep the public producer contract stable; admission bounds message count and payload bytes.
 #[allow(clippy::large_enum_variant)]
@@ -141,6 +144,7 @@ pub struct BmuxProgram {
     responsive: BTreeMap<String, ResponsiveTrigger>,
     background: Option<Color>,
     styles_changed: bool,
+    revealed_routes: revealed::RevealedRoutes,
     loaded_routes: BTreeMap<String, hyperchad_transformer_models::Route>,
     resource_paint_only: bool,
     fixed_image_geometry: bool,
@@ -220,6 +224,7 @@ impl BmuxProgram {
             responsive: BTreeMap::new(),
             background: None,
             styles_changed: false,
+            revealed_routes: revealed::RevealedRoutes::default(),
             loaded_routes: BTreeMap::new(),
             resource_paint_only: false,
             fixed_image_geometry: false,
@@ -263,7 +268,8 @@ impl BmuxProgram {
         self.options.viewport = size;
     }
 
-    /// Prepare authoritative geometry; no output, actions or committed input changes occur.
+    /// Prepare authoritative geometry and admit newly revealed route requests.
+    /// No output or committed input changes occur.
     ///
     /// # Errors
     /// * Returns layout limit, invalid geometry or canvas resource errors.
@@ -284,6 +290,7 @@ impl BmuxProgram {
             self.controls.prepare(&tree);
             self.candidate = Some(tree);
             self.geometry_dirty = false;
+            self.schedule_revealed();
             self.schedule_resources()?;
             let elapsed_us = started.elapsed().as_micros();
             log::debug!("bmux prepare scroll-reuse elapsed_us={elapsed_us} full_layouts=0");
@@ -300,6 +307,7 @@ impl BmuxProgram {
             && tree.viewport == self.options.viewport
         {
             self.candidate = Some(tree.clone());
+            self.schedule_revealed();
             self.schedule_resources()?;
             log::debug!(
                 "bmux prepare resource-only elapsed_us={}",
@@ -352,9 +360,11 @@ impl BmuxProgram {
         self.fixed_image_geometry = fixed_image_geometry;
         self.prepared_source = Some(self.state.root().clone());
         self.geometry_dirty = false;
+        self.revealed_routes.refresh_candidates(&effective);
         self.effective = Some(effective);
         self.candidate = Some(tree);
         let resources_started = Instant::now();
+        self.schedule_revealed();
         self.schedule_resources()?;
         log::debug!(
             "bmux prepare elapsed_us={} layout_us={layout_us} resources_us={}",
@@ -719,6 +729,7 @@ impl BmuxProgram {
                 .filter(|(key, epoch)| self.node_epochs.get(key) == Some(epoch))
                 .cloned();
             self.node_epochs.clear();
+            self.revealed_routes.clear();
             if let Some((key, epoch)) = retained_mutation {
                 self.node_epochs.insert(key, epoch);
             }
@@ -1093,6 +1104,20 @@ impl BmuxProgram {
         self.apply_targets(&view, vec![target.map(str::to_owned)], &strategy)
     }
 
+    fn image_source_index(&self) -> BTreeMap<String, String> {
+        let mut sources = BTreeMap::new();
+        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            if let Element::Image {
+                source: Some(source),
+                ..
+            } = &node.element
+            {
+                sources.insert(layout::node_key(node, path), source.clone());
+            }
+        });
+        sources
+    }
+
     fn apply_targets(
         &mut self,
         view: &View,
@@ -1128,18 +1153,10 @@ impl BmuxProgram {
         }
         self.state = next;
         self.geometry_dirty = true;
-        let mut image_sources = BTreeMap::new();
-        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
-            if let Element::Image {
-                source: Some(source),
-                ..
-            } = &node.element
-            {
-                image_sources.insert(layout::node_key(node, path), source.clone());
-            }
-        });
+        let image_sources = self.image_source_index();
         for key in &report.lifecycle_removed {
             self.restored_immediate.remove(key);
+            self.revealed_routes.remove(key);
             self.completed_loads.remove(key);
             self.loaded_routes.remove(key);
             // Document lifetimes reset event/request ownership, not immutable image
@@ -1176,6 +1193,7 @@ impl BmuxProgram {
             self.node_epochs.remove(key);
         }
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            self.revealed_routes.register_chain(node, path);
             self.node_epochs
                 .entry(layout::node_key(node, path))
                 .or_insert(report.generation);
@@ -1399,22 +1417,7 @@ impl BmuxProgram {
         value: Option<String>,
         geometry: Option<&LayoutTree>,
     ) -> Result<(), Error> {
-        // Do not format event payloads: named events may contain application data.
-        let event_kind = match &kind {
-            EventKind::Click => "Click",
-            EventKind::ClickOutside => "ClickOutside",
-            EventKind::MouseDown => "MouseDown",
-            EventKind::KeyDown => "KeyDown",
-            EventKind::Hover => "Hover",
-            EventKind::Change => "Change",
-            EventKind::Resize => "Resize",
-            EventKind::Immediate => "Immediate",
-            EventKind::Named(_) => "Named",
-            EventKind::Http(_) => "Http",
-            EventKind::Submit => "Submit",
-            EventKind::Reset => "Reset",
-        };
-        log::debug!("bmux action dispatch key={key:?} kind={event_kind}");
+        log_action_dispatch(key, &kind);
         // Presented paths are valid only for the exact document generation.
         // Lifecycle geometry is freshly built from the current document.
         let indexed = geometry
@@ -1444,6 +1447,14 @@ impl BmuxProgram {
         };
         let Some(node) = at_path(self.state.root(), &path) else {
             return Ok(());
+        };
+        let kind = if matches!(kind, EventKind::Click)
+            && matches!(node.route.as_ref(), Some(hyperchad_transformer_models::Route::Get { trigger, .. }) if trigger.as_deref() == Some("revealed"))
+        {
+            self.revealed_routes.reset_burst(key);
+            EventKind::Named("revealed".into())
+        } else {
+            kind
         };
         // Reject no-op events before building full geometry/form/selector maps.
         if !accepts_event(node, &kind) {
@@ -1489,16 +1500,28 @@ impl BmuxProgram {
                 })
                 .collect();
         }
-        let effects = self.actions.dispatch(
-            self.state.root_mut(),
-            &context,
-            &self.controls.action_values(),
-        )?;
-        self.effects(effects)?;
+        self.dispatch_context(key, &context)?;
         if let Some(route) = automatic_route {
             self.loaded_routes.insert(key.to_owned(), route);
         }
         Ok(())
+    }
+
+    fn dispatch_context(&mut self, key: &str, context: &EventContext) -> Result<(), Error> {
+        let effects = match self.actions.dispatch(
+            self.state.root_mut(),
+            context,
+            &self.controls.action_values(),
+        ) {
+            Ok(effects) => effects,
+            Err(error) if matches!(&context.kind, EventKind::Named(name) if name == "revealed") => {
+                self.revealed_routes.finish(key, false);
+                log::warn!("revealed route dispatch failed: {error}");
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
+        };
+        self.effects(effects)
     }
 
     fn http_event(
@@ -1564,26 +1587,40 @@ impl BmuxProgram {
                         })?;
                     }
                 }
-                Effect::Request(request) => {
+                Effect::Request(mut request) => {
+                    if !self.admit_revealed(&mut request) {
+                        continue;
+                    }
                     log::debug!(
                         "bmux request effect method={} source={:?}",
                         request.method,
                         request.source.key
                     );
-                    self.http_event(&request, crate::actions::HttpPhase::Before, None)?;
-                    self.enqueue(Work::Host {
-                        generation: self
-                            .node_epochs
-                            .get(&request.source.key)
-                            .copied()
-                            .unwrap_or(request.source.generation),
-                        completion: if request.method == "GET" {
-                            Completion::Read(request.clone())
-                        } else {
-                            Completion::Request(request.clone())
-                        },
-                        request: Box::new(HostRequest::Http(Box::new(request))),
-                    })?;
+                    let revealed = revealed::RevealedRoutes::owns(&request);
+                    let key = request.source.key.clone();
+                    let admission = (|| {
+                        self.http_event(&request, crate::actions::HttpPhase::Before, None)?;
+                        self.enqueue(Work::Host {
+                            generation: self
+                                .node_epochs
+                                .get(&request.source.key)
+                                .copied()
+                                .unwrap_or(request.source.generation),
+                            completion: if request.method == "GET" {
+                                Completion::Read(request.clone())
+                            } else {
+                                Completion::Request(request.clone())
+                            },
+                            request: Box::new(HostRequest::Http(Box::new(request))),
+                        })
+                    })();
+                    if let Err(error) = admission {
+                        if !revealed {
+                            return Err(error);
+                        }
+                        self.revealed_routes.finish(&key, false);
+                        log::warn!("revealed route admission failed: {error}");
+                    }
                 }
                 Effect::Log { level, message } => log::info!("HyperChad {level:?}: {message}"),
                 Effect::Focus { source, focused } => {
@@ -1833,6 +1870,28 @@ impl BmuxProgram {
         Ok(())
     }
 
+    fn normalize_route_result(
+        &self,
+        work: &Completion,
+        result: Result<HostResponse, Error>,
+    ) -> Result<HostResponse, Error> {
+        match result {
+            Ok(HostResponse::Route { status, .. } | HostResponse::Http { status, .. })
+                if !(200..400).contains(&status)
+                    && matches!(work, Completion::Read(request) if revealed::RevealedRoutes::owns(request)) =>
+            {
+                Err(std::io::Error::other(format!("revealed route HTTP status {status}")).into())
+            }
+            Ok(HostResponse::Route { view, body, .. }) => {
+                if body.len() > self.shared.config.max_text_bytes {
+                    return Err(std::io::Error::other("host response exceeds byte limit").into());
+                }
+                Ok(view.map_or(HostResponse::Complete, HostResponse::View))
+            }
+            other => other,
+        }
+    }
+
     fn complete(
         &mut self,
         generation: u64,
@@ -1857,6 +1916,7 @@ impl BmuxProgram {
             Completion::File { key } => self.node_epochs.get(key) == Some(&generation),
             Completion::Request(request) | Completion::Read(request) => {
                 self.node_epochs.get(&request.source.key) == Some(&generation)
+                    && self.revealed_current(request)
             }
             Completion::Other => generation == self.state.generation(),
         };
@@ -1878,25 +1938,27 @@ impl BmuxProgram {
             } else {
                 false
             };
-            if !resumed {
-                self.complete_http_lifecycle(&work, &result)?;
+            if !resumed && let Err(error) = self.complete_http_lifecycle(&work, &result) {
+                if let Completion::Read(request) = &work
+                    && revealed::RevealedRoutes::owns(request)
+                {
+                    self.complete_revealed(request, Err(error));
+                    return Ok(());
+                }
+                return Err(error);
             }
-            result = match result {
-                Ok(HostResponse::Route {
-                    view: Some(view),
-                    body,
-                    ..
-                }) if body.len() <= self.shared.config.max_text_bytes => {
-                    Ok(HostResponse::View(view))
-                }
-                Ok(HostResponse::Route {
-                    view: None, body, ..
-                }) if body.len() <= self.shared.config.max_text_bytes => Ok(HostResponse::Complete),
-                Ok(HostResponse::Route { .. }) => {
-                    Err(std::io::Error::other("host response exceeds byte limit").into())
-                }
-                other => other,
-            };
+            if let Completion::Read(request) = &work
+                && !self.revealed_current(request)
+            {
+                return Ok(());
+            }
+            result = self.normalize_route_result(&work, result);
+            if let Completion::Read(request) = &work
+                && revealed::RevealedRoutes::owns(request)
+            {
+                self.complete_revealed(request, result);
+                return Ok(());
+            }
             match (work, result) {
                 (Completion::Resource { key, source }, Ok(HostResponse::Bytes(bytes)))
                     if self.resources.get(&key) == Some(&source) =>
@@ -2158,6 +2220,7 @@ impl BmuxProgram {
         self.completed_loads.clear();
         self.resumed_loads.clear();
         self.loaded_routes.clear();
+        self.revealed_routes.reset_document();
         self.controls = Controls::new();
         self.actions = ActionEngine::new(self.state.generation(), ActionLimits::default());
         self.hover = None;
@@ -2903,6 +2966,25 @@ fn event_target_path(root: &Container, path: &[usize], kind: &EventKind) -> Opti
             ))
         .then(|| candidate.to_vec())
     })
+}
+
+fn log_action_dispatch(key: &str, kind: &EventKind) {
+    // Never format event payloads: named events may contain application data.
+    let name = match kind {
+        EventKind::Click => "Click",
+        EventKind::ClickOutside => "ClickOutside",
+        EventKind::MouseDown => "MouseDown",
+        EventKind::KeyDown => "KeyDown",
+        EventKind::Hover => "Hover",
+        EventKind::Change => "Change",
+        EventKind::Resize => "Resize",
+        EventKind::Immediate => "Immediate",
+        EventKind::Named(_) => "Named",
+        EventKind::Http(_) => "Http",
+        EventKind::Submit => "Submit",
+        EventKind::Reset => "Reset",
+    };
+    log::debug!("bmux action dispatch key={key:?} kind={name}");
 }
 
 fn accepts_event(node: &Container, kind: &EventKind) -> bool {

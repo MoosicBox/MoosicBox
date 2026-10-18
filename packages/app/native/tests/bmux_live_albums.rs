@@ -51,6 +51,99 @@ async fn app_view(router: &hyperchad::router::Router, path: &str) -> Container {
     view.primary.unwrap()
 }
 
+// Exercise real app routes against the same read-only server query. This checks
+// fragments and their successor contract, not renderer viewport dispatch.
+async fn assert_live_album_page(
+    router: &hyperchad::router::Router,
+    client: &switchy::http::Client,
+    endpoint: &str,
+    path: &str,
+) -> (moosicbox_paging::Page<ApiAlbum>, Option<String>) {
+    use hyperchad::transformer::models::{Route, SwapStrategy};
+    let request = RouteRequest::from_path(path, Default::default());
+    let response = client
+        .get(&format!("{endpoint}/menu/albums"))
+        .query_param("moosicboxProfile", "master")
+        .query_param(
+            "offset",
+            request.query.get("offset").map_or("0", String::as_str),
+        )
+        .query_param("limit", &request.query["limit"])
+        .query_param("sort", &request.query["sort"])
+        .query_param_opt("sources", request.query.get("sources").map(String::as_str))
+        .query_param_opt("search", request.query.get("search").map(String::as_str))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success(), "real page query: {path}");
+    let page: moosicbox_paging::Page<ApiAlbum> = response.json().await.unwrap();
+    let root = app_view(router, path).await;
+    let links = visit(&root, &|node| {
+        href(node).is_some_and(|url| url.contains("albumId="))
+    });
+    let expected = page
+        .iter()
+        .flat_map(|album| {
+            let url = moosicbox_app_native_ui::albums::album_page_url(
+                &album.album_id.to_string(),
+                false,
+                Some(&album.api_source),
+                None,
+                None,
+                None,
+            );
+            [url.clone(), url]
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        links
+            .iter()
+            .map(|node| href(node).unwrap())
+            .collect::<Vec<_>>(),
+        expected,
+        "complete ordered page identities, including source: {path}"
+    );
+    let routes = visit(&root, &|node| node.route.is_some());
+    assert_eq!(
+        routes.len(),
+        usize::from(page.has_more()),
+        "one sentinel, none at end: {path}"
+    );
+    let next = routes.first().map(|sentinel| {
+        assert!(matches!(sentinel.element, Element::Button { .. }));
+        assert_eq!(sentinel.height, Some(30.into()));
+        let Some(Route::Get {
+            route,
+            trigger,
+            strategy,
+            ..
+        }) = &sentinel.route
+        else {
+            panic!("expected a next-page GET: {path}")
+        };
+        assert_eq!(trigger.as_deref(), Some("revealed"));
+        assert_eq!(strategy, &SwapStrategy::This);
+        let next_request = RouteRequest::from_path(route, Default::default());
+        for key in ["limit", "size", "sort", "sources", "search"] {
+            assert_eq!(
+                next_request
+                    .query
+                    .get(key)
+                    .map(String::as_str)
+                    .unwrap_or(""),
+                request.query.get(key).map(String::as_str).unwrap_or(""),
+                "retain {key}: {path}"
+            );
+        }
+        assert_eq!(
+            next_request.query["offset"],
+            (page.offset() + page.limit()).to_string()
+        );
+        route.clone()
+    });
+    (page, next)
+}
+
 #[test]
 fn album_card_artist_and_album_links_preserve_provider_identity() {
     moosicbox_app_native::register_api_sources();
@@ -103,7 +196,7 @@ fn album_card_artist_and_album_links_preserve_provider_identity() {
 }
 
 #[test]
-fn terminal_album_pagination_requires_click_and_retains_filters() {
+fn terminal_album_pagination_reveals_one_successor_and_retains_filters() {
     use hyperchad::transformer::models::{Route, SwapStrategy};
     use moosicbox_music_models::{AlbumSort, TrackApiSource};
     moosicbox_app_native::register_api_sources();
@@ -114,12 +207,23 @@ fn terminal_album_pagination_requires_click_and_retains_filters() {
         }),
         ..Default::default()
     };
-    for (offset, total, has_next) in [
-        (0_u32, 2006_u32, true),
-        (100, 2006, true),
-        (2000, 2006, false),
+    let sources = TrackApiSource::all();
+    let source_filter = sources
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    for (offset, total, limit, has_next) in [
+        (0_u32, 0_u32, 100_u32, false),
+        (0, 100, 100, false),
+        (0, 2006, 100, true),
+        (100, 2006, 100, true),
+        (2000, 2006, 100, false),
+        (0, 7, 3, true),
+        (3, 7, 3, true),
+        (6, 7, 3, false),
     ] {
-        let count = (total - offset).min(100);
+        let count = (total - offset).min(limit);
         let page = moosicbox_paging::Page::WithTotal {
             items: (0..count)
                 .map(|index| ApiAlbum {
@@ -128,16 +232,16 @@ fn terminal_album_pagination_requires_click_and_retains_filters() {
                 })
                 .collect(),
             offset,
-            limit: 100,
+            limit,
             total,
         };
         let root: Container = moosicbox_app_native_ui::albums::albums_list_page(
             &state,
             &page,
-            &[TrackApiSource::Local],
+            sources,
             AlbumSort::NameDesc,
             200,
-            "A & B+é",
+            "A & B+é?=/#",
         )
         .into();
         let requests = visit(&root, &|node| node.route.is_some());
@@ -158,6 +262,8 @@ fn terminal_album_pagination_requires_click_and_retains_filters() {
         );
         if has_next {
             assert!(matches!(requests[0].element, Element::Button { .. }));
+            assert_eq!(requests[0].width, Some(200.into()));
+            assert_eq!(requests[0].height, Some(30.into()));
             let Some(Route::Get {
                 route,
                 trigger,
@@ -167,19 +273,156 @@ fn terminal_album_pagination_requires_click_and_retains_filters() {
             else {
                 panic!("GET next page")
             };
-            assert_eq!(trigger.as_deref(), Some("click"));
+            assert_eq!(trigger.as_deref(), Some("revealed"));
             assert_eq!(strategy, &SwapStrategy::This);
             let request = RouteRequest::from_path(route, hyperchad::router::RequestInfo::default());
             for (key, expected) in [
-                ("offset", (offset + 100).to_string()),
-                ("limit", "100".into()),
+                ("offset", (offset + limit).to_string()),
+                ("limit", limit.to_string()),
                 ("size", "200".into()),
-                ("sources", "LOCAL".into()),
+                ("sources", source_filter.clone()),
                 ("sort", AlbumSort::NameDesc.to_string()),
-                ("search", "A & B+é".into()),
+                ("search", "A & B+é?=/#".into()),
             ] {
                 assert_eq!(request.query.get(key), Some(&expected), "preserve {key}");
             }
+        }
+    }
+}
+
+#[test]
+fn terminal_album_sentinel_handles_unknown_totals_and_initial_search_encoding() {
+    use hyperchad::transformer::models::{Route, SwapStrategy};
+    use moosicbox_music_models::AlbumSort;
+    let state = moosicbox_app_native_ui::state::State {
+        connection: Some(Connection {
+            name: "Offline pagination".into(),
+            api_url: "http://example.invalid".into(),
+        }),
+        ..Default::default()
+    };
+    for has_more in [true, false] {
+        let page = moosicbox_paging::Page::WithHasMore {
+            items: vec![ApiAlbum::default()],
+            offset: 7,
+            limit: 1,
+            has_more,
+        };
+        let root: Container = moosicbox_app_native_ui::albums::albums_list_page(
+            &state,
+            &page,
+            &[],
+            AlbumSort::NameAsc,
+            0,
+            "",
+        )
+        .into();
+        let routes = visit(&root, &|node| node.route.is_some());
+        assert_eq!(routes.len(), usize::from(has_more));
+        if has_more {
+            assert_eq!(
+                routes[0].width,
+                Some(1.into()),
+                "sentinel always has positive area"
+            );
+            assert_eq!(routes[0].height, Some(30.into()));
+            let Some(Route::Get {
+                route,
+                trigger,
+                strategy,
+                ..
+            }) = &routes[0].route
+            else {
+                panic!("next-page GET")
+            };
+            assert_eq!(trigger.as_deref(), Some("revealed"));
+            assert_eq!(strategy, &SwapStrategy::This);
+            let request = RouteRequest::from_path(route, Default::default());
+            assert_eq!(request.query["offset"], "8");
+            assert_eq!(request.query["limit"], "1");
+            assert!(!request.query.contains_key("sources"));
+            assert!(!request.query.contains_key("search"));
+        }
+    }
+    let search = "A & B+é?=/#";
+    let root: Container =
+        moosicbox_app_native_ui::albums::load_albums(64, AlbumSort::NameAsc, &[], search).into();
+    let routes = visit(&root, &|node| node.route.is_some());
+    assert_eq!(
+        routes.len(),
+        1,
+        "only initial grid load, no eager successor"
+    );
+    let Some(Route::Get { route, trigger, .. }) = &routes[0].route else {
+        panic!("initial grid GET")
+    };
+    assert_eq!(trigger.as_deref(), Some("load"));
+    let request = RouteRequest::from_path(route, Default::default());
+    assert_eq!(request.query["search"], search);
+}
+
+#[test]
+fn terminal_empty_album_pages_advance_without_discarding_continuations() {
+    use hyperchad::transformer::models::{Route, SwapStrategy};
+    use moosicbox_music_models::AlbumSort;
+    let state = moosicbox_app_native_ui::state::State {
+        connection: Some(Connection {
+            name: "Empty pagination".into(),
+            api_url: "http://example.invalid".into(),
+        }),
+        ..Default::default()
+    };
+    // Empty pages can be valid (for example after server-side filtering).
+    // Never retry the same URL forever, nor silently discard has_more.
+    for (offset, limit, has_more, expected) in [
+        (0, 0, true, Some(1)),
+        (0, 7, true, Some(7)),
+        (7, 0, true, Some(8)),
+        (7, 7, true, Some(14)),
+        (0, 0, false, None),
+        (0, 7, false, None),
+        (u32::MAX - 1, 7, true, Some(u32::MAX)),
+        (u32::MAX, 7, true, None),
+    ] {
+        let page = moosicbox_paging::Page::WithHasMore {
+            items: vec![],
+            offset,
+            limit,
+            has_more,
+        };
+        let root: Container = moosicbox_app_native_ui::albums::albums_list_page(
+            &state,
+            &page,
+            &[],
+            AlbumSort::NameAsc,
+            64,
+            "",
+        )
+        .into();
+        let routes = visit(&root, &|node| node.route.is_some());
+        assert_eq!(routes.len(), usize::from(expected.is_some()));
+        if let Some(expected) = expected {
+            assert!(matches!(routes[0].element, Element::Button { .. }));
+            let mut label = String::new();
+            text(routes[0], &mut label);
+            assert!(
+                label.contains("retry"),
+                "manual retry must have a visible label"
+            );
+            let Some(Route::Get {
+                route,
+                trigger,
+                strategy,
+                ..
+            }) = &routes[0].route
+            else {
+                panic!("empty-page continuation GET")
+            };
+            assert_eq!(trigger.as_deref(), Some("revealed"));
+            assert_eq!(strategy, &SwapStrategy::This);
+            let request = RouteRequest::from_path(route, Default::default());
+            assert_eq!(request.query["offset"], expected.to_string());
+            assert_eq!(request.query["limit"], limit.clamp(1, 100).to_string());
         }
     }
 }
@@ -368,7 +611,7 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
             let start = std::time::Instant::now();
             let content = router
                 .navigate(RouteRequest::from_path(
-                    "/albums-list-start?limit=2000&size=64&sort=name-asc",
+                    "/albums-list-start?limit=2000&size=64&sort=name",
                     Default::default(),
                 ))
                 .await
@@ -390,7 +633,7 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
             assert!(matches!(
                 &pagination[0].route,
                 Some(hyperchad::transformer::models::Route::Get { trigger, route, .. })
-                    if trigger.as_deref() == Some("click") && route.contains("offset=100") && route.contains("limit=100")
+                    if trigger.as_deref() == Some("revealed") && route.contains("offset=100") && route.contains("limit=100")
             ));
             eprintln!("Live album fragment loaded in {:?}", start.elapsed());
             fn artwork(node: &Container) -> Option<String> {
@@ -412,6 +655,65 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
         // rendered directly from the oracle response. Never activate the connection:
         // that would register players / open a WebSocket on the real server.
         let client = switchy::http::Client::builder().build().unwrap();
+        // Follow real successor fragments, without eagerly draining the library.
+        // Use canonical Display spelling: the accepted alias name-asc normalizes to name.
+        let first_path = "/albums-list-start?limit=2&size=64&sort=name";
+        let (first, mut next) = assert_live_album_page(&router, &client, &endpoint, first_path).await;
+        let total = first.total().expect("real library reports a total");
+        assert!(total > 6, "live fixture must support at least three pages");
+        let mut identities = std::collections::BTreeSet::new();
+        for album in first.iter() {
+            assert!(identities.insert((album.api_source.to_string(), album.album_id.to_string())));
+        }
+        for _ in 0..2 {
+            let path = next.expect("fixture has another real page");
+            let (page, successor) = assert_live_album_page(&router, &client, &endpoint, &path).await;
+            for album in page.iter() {
+                assert!(identities.insert((album.api_source.to_string(), album.album_id.to_string())),
+                    "successive pages must not repeat album identities");
+            }
+            next = successor;
+        }
+        assert_eq!(identities.len(), 6);
+        let (last, successor) = assert_live_album_page(&router, &client, &endpoint,
+            &format!("{first_path}&offset={}", total - 1)).await;
+        assert_eq!(last.iter().count(), 1);
+        assert!(successor.is_none());
+        let (empty, successor) = assert_live_album_page(&router, &client, &endpoint,
+            &format!("{first_path}&offset={total}")).await;
+        assert_eq!(empty.iter().count(), 0);
+        assert!(successor.is_none());
+
+        // Restart from a filtered grid using the production initial-load URL.
+        let search = &first.iter().next().unwrap().title;
+        for sources in [vec![], vec![moosicbox_music_models::TrackApiSource::Local]] {
+            let skeleton: Container = moosicbox_app_native_ui::albums::load_albums(
+                64, moosicbox_music_models::AlbumSort::NameDesc, &sources, search,
+            ).into();
+            let loads = visit(&skeleton, &|node| node.route.is_some());
+            assert_eq!(loads.len(), 1);
+            let Some(hyperchad::transformer::models::Route::Get { route, .. }) = &loads[0].route else {
+                panic!("initial album load")
+            };
+            let path = route.replace("limit=100", "limit=2");
+            let request = RouteRequest::from_path(&path, Default::default());
+            assert_eq!(&request.query["search"], search);
+            let (filtered, next) = assert_live_album_page(&router, &client, &endpoint, &path).await;
+            if sources.is_empty() {
+                assert!(filtered.iter().next().is_some(), "title search must find its real album");
+            }
+            if let Some(next) = next {
+                let _ = assert_live_album_page(&router, &client, &endpoint, &next).await;
+            }
+            let total = filtered.total().expect("filtered library reports a total");
+            let (empty, next) = assert_live_album_page(&router, &client, &endpoint,
+                &format!("{path}&offset={total}")).await;
+            assert_eq!(empty.iter().count(), 0);
+            assert!(next.is_none(), "filtered end must not load unfiltered albums");
+        }
+
+        eprintln!("Live pagination assertions passed: real successor pages, ordered identities, end-of-results, search/source filters. Detail assertions follow; overall test is not yet complete.");
+
         let albums = get_json(
             &client,
             &format!("{endpoint}/menu/albums?moosicboxProfile=master&offset=0&limit=5&sort=name"),
@@ -469,8 +771,12 @@ fn live_albums_load_while_websocket_is_connecting_or_reconnecting() {
                 let artist_url = format!("/artists?artistId={}&source={}", album.artist_id, album.api_source);
                 assert!(!visit(&detail, &|node| href(node) == Some(artist_url.as_str())).is_empty());
                 if album.contains_cover {
+                    // Match the image helper's rounded 1.33x request resolution,
+                    // using the public layout size (terminal and GUI differ).
+                    let size = u32::from(moosicbox_app_native_ui::ALBUM_ART_SIZE);
+                    let request_size = u16::try_from((size * 133 + 50) / 100).unwrap();
                     let cover = moosicbox_app_native_ui::albums::album_cover_url_from_album(
-                        &endpoint, &album, 266, 266,
+                        &endpoint, &album, request_size, request_size,
                     );
                     assert!(!visit(&detail, &|node| matches!(
                         &node.element, Element::Image { source: Some(source), .. } if source == &cover
