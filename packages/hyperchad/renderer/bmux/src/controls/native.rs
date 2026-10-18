@@ -141,11 +141,17 @@ impl Control {
                         label: &self.spec.label,
                     });
                 }
-                Box::new(ButtonComponent::new(
-                    key.to_owned(),
-                    &self.spec.label,
-                    state,
-                ))
+                Box::new(
+                    ButtonComponent::new(key.to_owned(), &self.spec.label, state).styles(
+                        bmux_tui_components::button::ButtonStyles {
+                            focused: Style::new()
+                                .fg(bmux_tui::style::Color::Rgb(20, 20, 20))
+                                .bg(bmux_tui::style::Color::Rgb(160, 210, 255))
+                                .add_modifier(bmux_tui::style::Modifier::BOLD),
+                            ..Default::default()
+                        },
+                    ),
+                )
             }
             NativeState::Details(_) | NativeState::Hidden => {
                 Box::new(Empty(LayoutId::from(key.to_owned())))
@@ -194,8 +200,22 @@ struct Editor<'a> {
 
 impl Editor<'_> {
     fn native<'a>(&'a self, state: &'a RefCell<TextInputState>) -> TextInputComponent<'a, 'a> {
+        // Defaults remain readable on the app's dark surface; focus is visible
+        // even in terminals whose native cursor is not displayed by an embedding host.
+        let style = Style::new()
+            .fg(bmux_tui::style::Color::Rgb(238, 238, 238))
+            .bg(if self.focused {
+                bmux_tui::style::Color::Rgb(45, 65, 85)
+            } else {
+                bmux_tui::style::Color::Rgb(40, 40, 40)
+            })
+            .add_modifier(bmux_tui::style::Modifier::UNDERLINE);
         TextInputComponent::new(self.id.clone(), state, &self.policy)
-            .placeholder(self.placeholder, Style::new())
+            .style(style)
+            .placeholder(
+                self.placeholder,
+                style.add_modifier(bmux_tui::style::Modifier::DIM),
+            )
             .focused(self.focused)
     }
 
@@ -236,6 +256,39 @@ impl Component for Editor<'_> {
             self.native(&self.masked()).paint(layout, cx);
         } else {
             self.native(self.state).paint(layout, cx);
+        }
+        // Also paint a block caret: embedded terminal hosts may suppress the
+        // hardware cursor, but editing must still have a visible insertion point.
+        if self.focused
+            && let Some((x, y)) = cx.logical_cursor()
+        {
+            let state = self.state.borrow();
+            let value = state.buffer().text();
+            let symbol = if self.secret {
+                if state.buffer().cursor_byte_index() < value.len() {
+                    "*"
+                } else {
+                    " "
+                }
+            } else {
+                value[state.buffer().cursor_byte_index()..]
+                    .graphemes(true)
+                    .next()
+                    .filter(|symbol| !symbol.chars().any(char::is_control))
+                    .unwrap_or(" ")
+            };
+            cx.fill(
+                bmux_tui::paint::LocalRect::new(
+                    i32::try_from(x).unwrap_or(i32::MAX),
+                    i64::try_from(y).unwrap_or(i64::MAX),
+                    1,
+                    1,
+                ),
+                symbol,
+                Style::new()
+                    .fg(bmux_tui::style::Color::Rgb(20, 20, 20))
+                    .bg(bmux_tui::style::Color::Rgb(238, 238, 238)),
+            );
         }
     }
 

@@ -12,6 +12,45 @@ fn node(id: &str, element: Element) -> Container {
 }
 
 #[test]
+fn focused_editor_paints_visible_cursor_and_contrasting_input_chrome() {
+    let root = node(
+        "url",
+        Element::Input {
+            input: Input::Text {
+                value: Some("http://localhost:8500".into()),
+                placeholder: None,
+            },
+            name: Some("api-url".into()),
+            autofocus: None,
+        },
+    );
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    prepare(&mut controls, "url", 40, 1);
+    controls.focus(Some("url"));
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 1));
+    let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+    controls.paint("url", &mut PaintCx::new(&mut frame));
+    assert!(
+        frame.cursor().is_some_and(|cursor| cursor.visible),
+        "focused input must request a terminal caret"
+    );
+    assert!(
+        buffer
+            .cells()
+            .iter()
+            .any(|cell| { cell.style.bg == Some(bmux_tui::style::Color::Rgb(238, 238, 238)) }),
+        "focused editor must paint a visible block caret for embedded hosts"
+    );
+    assert!(
+        buffer
+            .cells()
+            .iter()
+            .any(|cell| cell.style.bg == Some(bmux_tui::style::Color::Rgb(45, 65, 85)))
+    );
+}
+
+#[test]
 fn multirow_button_wraps_complete_library_action_without_native_chrome() {
     use crate::layout::{DefaultLeafMeasure, LayoutOptions, layout};
     let mut button = node(

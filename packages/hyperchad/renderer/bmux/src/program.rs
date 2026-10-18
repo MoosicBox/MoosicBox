@@ -64,10 +64,24 @@ pub enum Message {
 /// Correlation metadata; contains no resource bytes or file authorization grants.
 #[derive(Debug, Clone)]
 pub enum Completion {
-    Resource { key: String, source: String },
-    File { key: String },
+    Resource {
+        key: String,
+        source: String,
+    },
+    File {
+        key: String,
+    },
     Request(crate::actions::RequestEffect),
+    /// Read-only load effects use a separate bounded lane from user mutations.
+    Read(crate::actions::RequestEffect),
     Other,
+}
+
+struct ReadInFlight {
+    key: String,
+    epoch: u64,
+    request_id: Option<String>,
+    cancel: tokio::sync::watch::Sender<bool>,
 }
 
 enum Work {
@@ -105,6 +119,9 @@ pub struct BmuxProgram {
     resource_active: usize,
     quitting: bool,
     stopping: bool,
+    active_local_mutation: Option<(String, u64)>,
+    read_active: usize,
+    read_aborts: Vec<ReadInFlight>,
     active_abort: Option<(Option<String>, tokio::sync::watch::Sender<bool>)>,
     resources: BTreeMap<String, String>,
     resource_epochs: BTreeMap<String, u64>,
@@ -184,6 +201,9 @@ impl BmuxProgram {
             resource_active: 0,
             quitting: false,
             stopping: false,
+            active_local_mutation: None,
+            read_active: 0,
+            read_aborts: Vec::new(),
             active_abort: None,
             resources: BTreeMap::new(),
             resource_epochs: BTreeMap::new(),
@@ -674,10 +694,20 @@ impl BmuxProgram {
             self.history_back.set_context(context);
             self.history_forward.set_context(context);
             self.navigation_pending = None;
+            let retained_mutation = self
+                .active_local_mutation
+                .as_ref()
+                .filter(|(key, epoch)| self.node_epochs.get(key) == Some(epoch))
+                .cloned();
             self.node_epochs.clear();
+            if let Some((key, epoch)) = retained_mutation {
+                self.node_epochs.insert(key, epoch);
+            }
             self.pending
                 .retain(|work| matches!(work, Work::Resource { .. }));
-            if let Some((_, cancel)) = &self.active_abort {
+            if self.active_local_mutation.is_none()
+                && let Some((_, cancel)) = &self.active_abort
+            {
                 let _ = cancel.send(true);
             }
             self.restored_immediate.clear();
@@ -712,11 +742,7 @@ impl BmuxProgram {
         self.pending.remove(next)
     }
 
-    fn drive(&mut self, mut update: Update<Message>) -> Update<Message> {
-        if self.quitting {
-            update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
-            return update;
-        }
+    fn observe_resources(&mut self, update: &mut Update<Message>) {
         let resource_key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-resource-context");
         if self.stopping || self.shared.config.resource_context.is_none() {
             if let Some(registered) = self.resource_observer.take() {
@@ -744,6 +770,37 @@ impl BmuxProgram {
             // once so unrelated redraws cannot keep restarting the poll interval.
             self.resource_observer = Some(resource_key);
         }
+    }
+
+    fn abort_reads(&self, id: &str) {
+        for read in &self.read_aborts {
+            if read.request_id.as_deref() == Some(id) {
+                let _ = read.cancel.send(true);
+            }
+        }
+    }
+
+    fn cancel_stale_reads(&mut self) {
+        // Discard read-only requests whose source was replaced or invalidated.
+        // Their cooperative abort frees bounded read capacity without cancelling
+        // an ordered mutation or accepting stale response content.
+        self.read_aborts.retain(|read| {
+            if self.stopping || self.node_epochs.get(&read.key) != Some(&read.epoch) {
+                let _ = read.cancel.send(true);
+                false
+            } else {
+                read.cancel.receiver_count() > 0
+            }
+        });
+    }
+
+    fn drive(&mut self, mut update: Update<Message>) -> Update<Message> {
+        self.cancel_stale_reads();
+        if self.quitting {
+            update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
+            return update;
+        }
+        self.observe_resources(&mut update);
         let timer_key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-actions");
         if let Some(deadline) = self.actions.next_deadline() {
             let delay = std::time::Duration::from_millis(deadline.saturating_sub(self.now_ms()));
@@ -759,7 +816,12 @@ impl BmuxProgram {
         } else {
             update.cancelled_subscriptions.push(timer_key);
         }
-        if self.stopping && !self.active && self.resource_active == 0 && self.pending.is_empty() {
+        if self.stopping
+            && !self.active
+            && self.read_active == 0
+            && self.resource_active == 0
+            && self.pending.is_empty()
+        {
             update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
         }
         // Navigation hands intent to the application's independent router. Do not
@@ -803,14 +865,32 @@ impl BmuxProgram {
         {
             update.commands.push(self.start_work(work));
         }
+        if let Some(index) = self.pending.iter().position(|work| {
+            matches!(
+                work,
+                Work::Host {
+                    completion: Completion::Read(_),
+                    ..
+                }
+            )
+        }) && self.read_active < 4
+            && let Some(work) = self.pending.remove(index)
+        {
+            update.commands.push(self.start_work(work));
+        }
         if self.active {
             return update;
         }
-        let Some(index) = self
-            .pending
-            .iter()
-            .position(|work| !matches!(work, Work::Resource { .. }))
-        else {
+        let Some(index) = self.pending.iter().position(|work| {
+            !matches!(
+                work,
+                Work::Resource { .. }
+                    | Work::Host {
+                        completion: Completion::Read(_),
+                        ..
+                    }
+            )
+        }) else {
             return update;
         };
         let Some(work) = self.pending.remove(index) else {
@@ -820,13 +900,61 @@ impl BmuxProgram {
         update
     }
 
-    fn start_work(&mut self, work: Work) -> Command<Message> {
-        let resource = matches!(&work, Work::Resource { .. });
+    fn track_work(
+        &mut self,
+        work: &Work,
+        completion: &Completion,
+        generation: u64,
+        resource: bool,
+        abort_tx: tokio::sync::watch::Sender<bool>,
+    ) {
+        let read = matches!(
+            work,
+            Work::Host {
+                completion: Completion::Read(_),
+                ..
+            }
+        );
         if resource {
             self.resource_active += 1;
+        } else if read {
+            self.read_active += 1;
         } else {
             self.active = true;
         }
+        let request_id = match completion {
+            Completion::Request(request) => request.request_id.clone(),
+            _ => None,
+        };
+        if let Completion::Read(request) = completion {
+            self.read_aborts.push(ReadInFlight {
+                key: request.source.key.clone(),
+                epoch: generation,
+                request_id: request.request_id.clone(),
+                cancel: abort_tx,
+            });
+        } else if !resource {
+            // Saving the connection advances its own resource epoch. Do not cancel
+            // that local mutation halfway through persistence/activation.
+            self.active_local_mutation = match work {
+                Work::Host {
+                    completion: Completion::Request(request),
+                    generation,
+                    ..
+                } if request.method != "GET"
+                    && request.url.starts_with('/')
+                    && !request.url.starts_with("//") =>
+                {
+                    Some((request.source.key.clone(), *generation))
+                }
+                _ => None,
+            };
+            self.active_abort = Some((request_id, abort_tx));
+        }
+    }
+
+    fn start_work(&mut self, work: Work) -> Command<Message> {
+        let resource = matches!(&work, Work::Resource { .. });
         let host = self.shared.config.host.clone();
         let custom = self.shared.request_action.clone();
         let max_bytes = self.shared.config.graphics.max_encoded_bytes;
@@ -839,13 +967,13 @@ impl BmuxProgram {
             self.pending.len()
         );
         let (abort_tx, mut abort_rx) = tokio::sync::watch::channel(false);
-        let request_id = match &timeout_completion {
-            Completion::Request(request) => request.request_id.clone(),
-            _ => None,
-        };
-        if !resource {
-            self.active_abort = Some((request_id, abort_tx));
-        }
+        self.track_work(
+            &work,
+            &timeout_completion,
+            timeout_generation,
+            resource,
+            abort_tx,
+        );
         Command::concurrent(async move {
             let operation = async move {
                 let (generation, completion, result) = match work {
@@ -1307,7 +1435,11 @@ impl BmuxProgram {
                             .get(&request.source.key)
                             .copied()
                             .unwrap_or(request.source.generation),
-                        completion: Completion::Request(request.clone()),
+                        completion: if request.method == "GET" {
+                            Completion::Read(request.clone())
+                        } else {
+                            Completion::Request(request.clone())
+                        },
                         request: Box::new(HostRequest::Http(Box::new(request))),
                     })?;
                 }
@@ -1462,7 +1594,7 @@ impl BmuxProgram {
             Ok(HostResponse::Route { headers, .. }) => Some(headers.clone()),
             _ => None,
         };
-        if let Completion::Request(request) = work {
+        if let Completion::Request(request) | Completion::Read(request) = work {
             let (phase, status) = match result {
                 Ok(HostResponse::Http { status, .. } | HostResponse::Route { status, .. }) => (
                     if *status < 400 {
@@ -1567,8 +1699,11 @@ impl BmuxProgram {
     ) -> Result<(), Error> {
         if matches!(&work, Completion::Resource { .. }) {
             self.resource_active = self.resource_active.saturating_sub(1);
+        } else if matches!(&work, Completion::Read(_)) {
+            self.read_active = self.read_active.saturating_sub(1);
         } else {
             self.active = false;
+            self.active_local_mutation = None;
             self.active_abort = None;
         }
         self.revalidate_resource_context()?;
@@ -1578,7 +1713,7 @@ impl BmuxProgram {
                     && self.resource_epochs.get(key) == Some(&generation)
             }
             Completion::File { key } => self.node_epochs.get(key) == Some(&generation),
-            Completion::Request(request) => {
+            Completion::Request(request) | Completion::Read(request) => {
                 self.node_epochs.get(&request.source.key) == Some(&generation)
             }
             Completion::Other => generation == self.state.generation(),
@@ -1586,7 +1721,7 @@ impl BmuxProgram {
         let class = match &work {
             Completion::Resource { .. } => "resource",
             Completion::File { .. } => "file",
-            Completion::Request(_) => "http",
+            Completion::Request(_) | Completion::Read(_) => "http",
             Completion::Other => "other",
         };
         log::debug!(
@@ -1595,7 +1730,7 @@ impl BmuxProgram {
             self.pending.len()
         );
         if current {
-            let resumed = if let Completion::Request(request) = &work {
+            let resumed = if let Completion::Request(request) | Completion::Read(request) = &work {
                 self.resumed_loads
                     .remove(&(request.source.key.clone(), request.source.generation))
             } else {
@@ -1630,10 +1765,16 @@ impl BmuxProgram {
                     let outcome = self.controls.set_files(&key, files);
                     self.control_events(outcome.events)?;
                 }
-                (Completion::Request(request), Ok(HostResponse::View(view))) => {
+                (
+                    Completion::Request(request) | Completion::Read(request),
+                    Ok(HostResponse::View(view)),
+                ) => {
                     self.complete_request_view(&request, view, resumed)?;
                 }
-                (Completion::Request(request), Ok(HostResponse::Complete)) => {
+                (
+                    Completion::Request(request) | Completion::Read(request),
+                    Ok(HostResponse::Complete),
+                ) => {
                     if self.completed_load_route(&request).is_some() {
                         self.completed_loads.insert(request.source.key);
                     }
@@ -2026,6 +2167,7 @@ impl BmuxProgram {
                 }
             }
             Message::AbortRequest(id) => {
+                self.abort_reads(&id);
                 if let Some((active, cancel)) = &self.active_abort
                     && active.as_ref() == Some(&id)
                 {
@@ -2034,7 +2176,7 @@ impl BmuxProgram {
                 let mut cancelled = Vec::new();
                 self.pending.retain(|work| {
                     if let Work::Host {
-                        completion: Completion::Request(request),
+                        completion: Completion::Request(request) | Completion::Read(request),
                         ..
                     } = work
                         && request.request_id.as_ref() == Some(&id)
@@ -2301,7 +2443,7 @@ const fn work_class(work: &Work) -> &'static str {
     match work {
         Work::Resource { .. } => "resource",
         Work::Host {
-            completion: Completion::Request(_),
+            completion: Completion::Request(_) | Completion::Read(_),
             ..
         } => "http",
         Work::Host {
@@ -2803,7 +2945,7 @@ mod runtime_regressions {
         assert!(program.pending.iter().any(|work| matches!(
             work,
             Work::Host {
-                completion: Completion::Request(_),
+                completion: Completion::Request(_) | Completion::Read(_),
                 ..
             }
         )));
@@ -3236,7 +3378,7 @@ mod runtime_regressions {
             .iter()
             .find_map(|work| {
                 if let Work::Host {
-                    completion: Completion::Request(request),
+                    completion: Completion::Request(request) | Completion::Read(request),
                     ..
                 } = work
                 {
@@ -3258,7 +3400,7 @@ mod runtime_regressions {
             .iter()
             .filter_map(|work| {
                 if let Work::Host {
-                    completion: Completion::Request(request),
+                    completion: Completion::Request(request) | Completion::Read(request),
                     ..
                 } = work
                 {
@@ -4129,7 +4271,7 @@ mod runtime_regressions {
             .unwrap();
         assert_eq!(program.pending.len(), 1);
         assert!(
-            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request), .. })
+            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request) | Completion::Read(request), .. })
             if request.url == "/settings/scan-settings")
         );
         program.pending.clear();
@@ -4142,7 +4284,7 @@ mod runtime_regressions {
             .unwrap();
         assert_eq!(program.pending.len(), 1);
         assert!(
-            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request), .. })
+            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request) | Completion::Read(request), .. })
             if request.url == "/settings/new")
         );
         program.pending.clear();
@@ -4208,7 +4350,7 @@ mod runtime_regressions {
         let mut requests = Vec::new();
         while let Some(Work::Host {
             generation,
-            completion: Completion::Request(request),
+            completion: Completion::Request(request) | Completion::Read(request),
             ..
         }) = program.pending.pop_front()
         {
@@ -4402,11 +4544,23 @@ mod runtime_regressions {
         let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
         program.paint(&mut PaintCx::new(&mut frame));
         assert!(buffer.cells().iter().any(|cell| cell.symbol == "S"));
+        assert!(
+            buffer
+                .cells()
+                .iter()
+                .any(|cell| { cell.style.bg == Some(bmux_tui::style::Color::Rgb(40, 40, 40)) }),
+            "native inputs must contrast with the application background"
+        );
         for cell in buffer.cells() {
-            assert_eq!(
-                cell.style.bg,
-                Some(bmux_tui::style::Color::Rgb(24, 26, 27)),
-                "{}",
+            assert!(
+                matches!(
+                    cell.style.bg,
+                    Some(
+                        bmux_tui::style::Color::Rgb(24, 26, 27)
+                            | bmux_tui::style::Color::Rgb(40, 40, 40)
+                    )
+                ),
+                "unexpected transparent or unrelated background for {}",
                 cell.symbol
             );
         }
@@ -4496,7 +4650,7 @@ mod runtime_regressions {
         assert!(program.pending.iter().any(|work| matches!(
             work,
             Work::Host {
-                completion: Completion::Request(_),
+                completion: Completion::Request(_) | Completion::Read(_),
                 ..
             }
         )));

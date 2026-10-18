@@ -129,6 +129,53 @@ def run(executable, artifacts):
             )
             settings_recovery = time.monotonic() - started
             assert settings_recovery < 3, "local Settings navigation was not prompt"
+
+            def persisted_url():
+                with sqlite3.connect(db) as persistence:
+                    row = persistence.execute(
+                        "SELECT value FROM state WHERE key='CONNECTIONS'"
+                    ).fetchone()
+                return json.loads(row[0])[0]["api_url"] if row else None
+
+            endpoint = connection["api_url"]
+            for activation, edited in (
+                ("enter", endpoint.replace("127.0.0.1", "localhost")),
+                ("click", endpoint),
+            ):
+                current = persisted_url()
+                click(current)
+                os.write(master, b"\x1b[H")
+                for _ in range(4):
+                    pump()
+                for _ in current:
+                    os.write(master, b"\x1b[3~")
+                    pump()
+                pump()
+                os.write(master, edited.encode())
+                wait(lambda: edited in screen.text(), "edited URL not visible")
+                if activation == "enter":
+                    os.write(master, b"\r")
+                else:
+                    x, y = screen.locate("Save", 1)
+                    os.write(
+                        master, f"\x1b[<0;{x+2};{y+1}M\x1b[<0;{x+2};{y+1}m".encode()
+                    )
+                wait(
+                    lambda: persisted_url() == edited,
+                    f"{activation} did not persist URL",
+                    3,
+                )
+                click("Home")
+                wait(
+                    lambda: screen.locate("Albums") and "API URL:" not in screen.text(),
+                    "Home missing",
+                )
+                os.write(master, b"\x1b[<0;18;2M\x1b[<0;18;2m")
+                wait(
+                    lambda: edited in screen.text(),
+                    "reopened Settings lost saved URL",
+                    3,
+                )
             click("Downloads")
             wait(
                 lambda: any(
