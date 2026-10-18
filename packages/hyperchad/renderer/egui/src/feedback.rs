@@ -20,6 +20,13 @@ use crate::{
 
 type ProductionPainter = WidgetPainter<FormsAdapter, ImageResources, CanvasAdapter>;
 
+#[cfg(feature = "feedback")]
+#[derive(PartialEq, Eq)]
+enum ObservationBootstrap {
+    Uninitialized,
+    Initialized,
+}
+
 /// Explicit native capture contract. No capture occurs unless configured.
 #[derive(Clone, Debug)]
 pub struct CaptureOptions {
@@ -56,6 +63,14 @@ pub struct FeedbackApp<C: EguiCalc + Clone + Send + Sync> {
     previous_geometry: BTreeMap<String, egui::Rect>,
     stable: bool,
     capture: Option<NativeCapture>,
+    #[cfg(feature = "feedback")]
+    interaction: Option<crate::interaction::Interaction>,
+    #[cfg(feature = "feedback")]
+    interaction_capture: Option<crate::interaction::CaptureRequest>,
+    #[cfg(feature = "feedback")]
+    interaction_initialized: ObservationBootstrap,
+    #[cfg(feature = "feedback")]
+    interaction_frame: u64,
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
@@ -104,6 +119,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
             previous_geometry: BTreeMap::new(),
             stable: false,
             capture: None,
+            #[cfg(feature = "feedback")]
+            interaction: None,
+            #[cfg(feature = "feedback")]
+            interaction_capture: None,
+            #[cfg(feature = "feedback")]
+            interaction_initialized: ObservationBootstrap::Uninitialized,
+            #[cfg(feature = "feedback")]
+            interaction_frame: 0,
         }
     }
 
@@ -255,6 +278,202 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
         self.update_capture(ctx);
     }
 
+    #[cfg(feature = "feedback")]
+    fn observation_state(
+        &mut self,
+        ctx: &egui::Context,
+        window_id: u64,
+    ) -> crate::interaction::State {
+        use crate::interaction::{Pending, State};
+        let (nodes, focused_key) = self.observation_nodes(ctx);
+        let document = self.app.document();
+        let size = ctx.content_rect().size() * ctx.pixels_per_point();
+        State {
+            version: 1,
+            nonce: String::new(),
+            pid: std::process::id(),
+            window_id,
+            revision: self.app.observation_revision(),
+            frame: self.interaction_frame,
+            route: self.current_url.clone(),
+            ready: self.stable
+                && self.resources_ready
+                && self.app.projection_ready()
+                && !ctx.has_pending_images()
+                && self.pending_route_admission.is_none(),
+            diagnostics: self.app.diagnostics.clone(),
+            pending: Pending {
+                routes: document.pending_requests()
+                    + usize::from(self.pending_route_admission.is_some()),
+                resources: self.previous_scene.as_ref().map_or(1, |scene| {
+                    scene.pending.len() + scene.unobserved.len() + scene.stale.len()
+                }),
+            },
+            client_pixels: [observation_dimension(size.x), observation_dimension(size.y)],
+            focused_key,
+            nodes,
+        }
+    }
+
+    #[cfg(feature = "feedback")]
+    fn observation_nodes(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> (BTreeMap<String, crate::interaction::Node>, Option<String>) {
+        use crate::interaction::Node;
+        use hyperchad_transformer::Element;
+        let document = self.app.document();
+        let identity = |key| {
+            document
+                .stamp(key)
+                .map(|stamp| format!("{:?}:{}", stamp.key, stamp.generation))
+        };
+        let ppp = ctx.pixels_per_point();
+        let mut focused_key = None;
+        let mut nodes = BTreeMap::new();
+        for key in document.keys() {
+            let Some(stamp) = document.stamp(key) else {
+                continue;
+            };
+            let Some(container) = document.get(key) else {
+                continue;
+            };
+            let Some(node_key) = identity(key) else {
+                continue;
+            };
+            let geometry = self.app.geometry().and_then(|snapshot| snapshot.node(key));
+            let rect = geometry
+                .and_then(crate::geometry::NodeGeometry::visible_bounds)
+                .filter(|_| self.app.observation_visible(key, &self.painter))
+                .map(|rect| rect.intersect(ctx.content_rect()))
+                .filter(egui::Rect::is_positive);
+            let control_focus = self
+                .painter
+                .forms_mut()
+                .focus_id(stamp)
+                .is_ok_and(|id| ctx.memory(|memory| memory.has_focus(id)));
+            let response_focus = self
+                .app
+                .interactions
+                .iter()
+                .any(|output| output.stamp == stamp && output.output.response.has_focus());
+            if rect.is_some() && (control_focus || response_focus) {
+                focused_key = Some(node_key.clone());
+            }
+            let value = observation_value(self.painter.forms_mut(), stamp, container);
+            let (name, disabled) = observation_control_metadata(container);
+            nodes.insert(
+                node_key,
+                Node {
+                    generation: stamp.generation,
+                    parent: document.parent(key).and_then(identity),
+                    id: container.str_id.clone(),
+                    tag: container.element.tag_display_str().to_ascii_lowercase(),
+                    name,
+                    href: if let Element::Anchor { href, .. } = &container.element {
+                        href.clone()
+                    } else {
+                        None
+                    },
+                    text: observation_text(container),
+                    visible: rect.is_some(),
+                    enabled: !disabled,
+                    rect_pixels: rect.map(|rect| {
+                        [
+                            rect.min.x * ppp,
+                            rect.min.y * ppp,
+                            rect.width() * ppp,
+                            rect.height() * ppp,
+                        ]
+                    }),
+                    value,
+                    scroll_pixels: geometry.map_or([0.0; 2], |geometry| {
+                        [
+                            geometry.scroll_offset.x * ppp,
+                            geometry.scroll_offset.y * ppp,
+                        ]
+                    }),
+                    scroll_max_pixels: geometry.map_or([0.0; 2], |geometry| {
+                        [geometry.scroll_max.x * ppp, geometry.scroll_max.y * ppp]
+                    }),
+                },
+            );
+        }
+        (nodes, focused_key)
+    }
+
+    /// Render and observe one native frame; screenshot authority belongs to this exact frame.
+    #[cfg(feature = "feedback")]
+    pub(crate) fn native_frame(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        if let Err(error) = self.native_interaction_frame(ctx, frame) {
+            self.app.diagnostics.push(error.clone());
+            log::error!("native interaction failed: {error}");
+            self.app.fail_native_host(ctx, error);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    #[cfg(feature = "feedback")]
+    fn native_interaction_frame(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+    ) -> Result<(), String> {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if self.interaction_initialized == ObservationBootstrap::Uninitialized {
+            self.interaction_initialized = ObservationBootstrap::Initialized;
+            let wake = ctx.clone();
+            self.interaction =
+                crate::interaction::Interaction::from_env(std::sync::Arc::new(move || {
+                    wake.request_repaint();
+                }))?;
+            if self.interaction.is_some() && self.capture.is_some() {
+                return Err("simple screenshot and interaction capture cannot run together".into());
+            }
+        }
+        if let (Some(interaction), Some(request)) =
+            (&mut self.interaction, &self.interaction_capture)
+        {
+            let events = ctx.input(|input| input.events.clone());
+            for event in events {
+                if interaction.complete_screenshot(request, &event)? {
+                    self.interaction_capture = None;
+                    break;
+                }
+            }
+        }
+        self.frame(ctx);
+        self.interaction_frame = self
+            .interaction_frame
+            .checked_add(1)
+            .ok_or("interaction frame exhausted")?;
+        if self.interaction.is_none() {
+            return Ok(());
+        }
+        let window_id = match frame
+            .window_handle()
+            .map_err(|error| error.to_string())?
+            .as_raw()
+        {
+            RawWindowHandle::Xlib(handle) => handle.window,
+            RawWindowHandle::Xcb(handle) => u64::from(handle.window.get()),
+            _ => return Err("native interaction requires an actual X11 window".into()),
+        };
+        let state = self.observation_state(ctx, window_id);
+        let interaction = self.interaction.as_mut().ok_or("interaction disappeared")?;
+        if let Some(request) = interaction.poll(state)? {
+            ctx.send_viewport_cmd(request.screenshot_command(ctx.viewport_id()));
+            self.interaction_capture = Some(request);
+        }
+        if interaction.needs_frame() {
+            ctx.request_repaint();
+        }
+        if interaction.finished() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        Ok(())
+    }
+
     fn update_scene_readiness(&mut self) -> bool {
         let required_images = self.app.scene_images(&self.painter);
         let scene = self
@@ -392,11 +611,23 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
             for event in routing.terminal_events(self.app.document(), &prepared) {
                 if let Err(error) = self.app.dispatch_host_event(ctx, event) {
                     self.app.diagnostics.push(error);
+                    routing.cancel_prepared(self.app.document_mut(), &prepared);
+                    // Consume the cancelled completion exactly once to retire its
+                    // coordinator slot/ticket, never its response or metadata.
+                    let _ = routing.complete(self.app.document_mut(), prepared);
+                    self.routing = Some(routing);
+                    return;
                 }
             }
+            let has_primary = prepared.has_primary();
             if let Some(completion) = routing.complete(self.app.document_mut(), prepared) {
                 match completion.outcome {
                     Ok(crate::routing::NativeOutcome::Applied(mutation)) => {
+                        if has_primary
+                            && completion.context.trigger == crate::routing::Trigger::Navigation
+                        {
+                            self.current_url.clone_from(&completion.context.path);
+                        }
                         if mutation.response != hyperchad_renderer::ResponseMetadata::default() {
                             self.app.response_effects.push(mutation.response.clone());
                         }
@@ -571,34 +802,6 @@ impl NativeCapture {
         }))
     }
 
-    #[cfg(feature = "feedback")]
-    pub(crate) fn required_geometry_ready(
-        &self,
-        ctx: &egui::Context,
-        geometry: &BTreeMap<String, egui::Rect>,
-    ) -> bool {
-        !self.options.required_ids.is_empty()
-            && self.options.required_ids.iter().all(|id| {
-                geometry.get(id).is_some_and(|rect| {
-                    rect.is_finite()
-                        && rect.is_positive()
-                        && ctx.content_rect().contains_rect(*rect)
-                })
-            })
-    }
-
-    #[cfg(feature = "feedback")]
-    pub(crate) fn failed(&self) -> Option<&str> {
-        self.result
-            .as_ref()
-            .and_then(|result| result.as_ref().err().map(String::as_str))
-            .or_else(|| {
-                self.result
-                    .is_none()
-                    .then_some("window closed before screenshot completed")
-            })
-    }
-
     pub(crate) fn frame(
         &mut self,
         ctx: &egui::Context,
@@ -693,8 +896,96 @@ impl NativeCapture {
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for FeedbackApp<C> {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.frame(ctx);
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        #[cfg(feature = "feedback")]
+        self.native_frame(ctx, frame);
+        #[cfg(not(feature = "feedback"))]
+        {
+            let _ = frame;
+            self.frame(ctx);
+        }
+    }
+}
+
+#[cfg(feature = "feedback")]
+fn observation_control_metadata(container: &Container) -> (Option<String>, bool) {
+    use hyperchad_transformer::Element;
+    let name = match &container.element {
+        Element::Input { name, .. }
+        | Element::Select { name, .. }
+        | Element::Textarea { name, .. } => name.clone(),
+        _ => None,
+    };
+    let disabled = matches!(
+        &container.element,
+        Element::Select {
+            disabled: Some(true),
+            ..
+        }
+    ) || container
+        .data
+        .get("disabled")
+        .is_some_and(|value| value != "false");
+    (name, disabled)
+}
+
+#[cfg(feature = "feedback")]
+fn observation_dimension(value: f32) -> u32 {
+    // Invalid dimensions become zero and are rejected by protocol validation.
+    // Parsing the bounded integral representation avoids saturating float casts.
+    if !value.is_finite() || !(1.0..=16384.0).contains(&value) {
+        return 0;
+    }
+    format!("{value:.0}").parse().unwrap_or(0)
+}
+
+#[cfg(feature = "feedback")]
+fn observation_value(
+    forms: &FormsAdapter,
+    stamp: crate::document::ElementStamp,
+    container: &Container,
+) -> crate::interaction::ExportValue {
+    use hyperchad_transformer::{Element, Input};
+    let secret = matches!(
+        &container.element,
+        Element::Input {
+            input: Input::Password { .. } | Input::Hidden { .. } | Input::File,
+            ..
+        }
+    );
+    crate::interaction::ExportValue::read(secret, || match forms.current_value(stamp).ok()? {
+        crate::events::EventValue::String(value) => Some(value),
+        crate::events::EventValue::Bool(value) => Some(value.to_string()),
+        crate::events::EventValue::Array(values) => {
+            let strings: Vec<_> = values
+                .into_iter()
+                .filter_map(|value| {
+                    if let crate::events::EventValue::String(value) = value {
+                        Some(value)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            serde_json::to_string(&strings).ok()
+        }
+        _ => None,
+    })
+}
+
+#[cfg(feature = "feedback")]
+fn observation_text(container: &Container) -> String {
+    use hyperchad_transformer::Element;
+    // Never serialize controls or their authored values to derive accessible text.
+    match &container.element {
+        Element::Input { .. } | Element::Select { .. } | Element::Textarea { .. } => String::new(),
+        Element::Raw { value } | Element::Text { value } => value.clone(),
+        _ => container
+            .children
+            .iter()
+            .map(observation_text)
+            .collect::<Vec<_>>()
+            .join(" "),
     }
 }
 
@@ -867,6 +1158,12 @@ mod tests {
     #[derive(Clone)]
     struct NoLayout;
     impl hyperchad_transformer::layout::Calc for NoLayout {
+        fn try_calc(
+            &self,
+            _: &mut Container,
+        ) -> Result<bool, hyperchad_transformer::layout::LayoutError> {
+            Ok(false)
+        }
         fn calc(&self, _: &mut Container) -> bool {
             false
         }
@@ -943,6 +1240,131 @@ mod tests {
             host.painter.resources_mut().snapshot().entries.len(),
             4,
             "excluded entries remain observable"
+        );
+    }
+
+    #[cfg(feature = "feedback")]
+    #[test]
+    fn observation_reports_current_generation_and_redacts_password_before_export() {
+        use hyperchad_transformer::{Element, Input};
+        let root = Container {
+            id: 1,
+            calculated_width: Some(100.0),
+            calculated_height: Some(100.0),
+            children: vec![Container {
+                id: 2,
+                str_id: Some("password".into()),
+                element: Element::Input {
+                    input: Input::Password {
+                        value: Some("DO_NOT_EXPORT".into()),
+                        placeholder: None,
+                    },
+                    name: Some("password".into()),
+                    autofocus: None,
+                },
+                calculated_width: Some(80.0),
+                calculated_height: Some(20.0),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut host = FeedbackApp::new(root, NoLayout);
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(100.0, 100.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                host.frame(ctx);
+                let state = host.observation_state(ctx, 123);
+                assert_eq!(state.window_id, 123);
+                let password = state
+                    .nodes
+                    .values()
+                    .find(|node| node.id.as_deref() == Some("password"))
+                    .unwrap();
+                assert_eq!(password.value, crate::interaction::ExportValue::default());
+                assert!(password.parent.is_some());
+                assert!(
+                    !serde_json::to_string(&state)
+                        .unwrap()
+                        .contains("DO_NOT_EXPORT")
+                );
+            },
+        );
+    }
+
+    #[cfg(feature = "feedback")]
+    #[test]
+    fn observation_snapshot_preserves_raw_text_and_nested_literal_unicode() {
+        use hyperchad_transformer::Element;
+        let leaf = |id, element| Container {
+            id,
+            str_id: Some(format!("text-{id}")),
+            element,
+            calculated_width: Some(80.0),
+            calculated_height: Some(20.0),
+            ..Default::default()
+        };
+        let root = Container {
+            id: 1,
+            str_id: Some("root".into()),
+            calculated_width: Some(100.0),
+            calculated_height: Some(100.0),
+            children: vec![
+                leaf(
+                    2,
+                    Element::Raw {
+                        value: "Raw <>& café".into(),
+                    },
+                ),
+                Container {
+                    id: 3,
+                    str_id: Some("nested".into()),
+                    children: vec![leaf(
+                        4,
+                        Element::Text {
+                            value: "Text <>& 音楽 🎵".into(),
+                        },
+                    )],
+                    calculated_width: Some(80.0),
+                    calculated_height: Some(20.0),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let mut host = FeedbackApp::new(root, NoLayout);
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(100.0, 100.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                host.frame(ctx);
+                let state = host.observation_state(ctx, 123);
+                let text = |id| {
+                    state
+                        .nodes
+                        .values()
+                        .find(|node| node.id.as_deref() == Some(id))
+                        .unwrap()
+                        .text
+                        .as_str()
+                };
+                assert_eq!(text("text-2"), "Raw <>& café");
+                assert_eq!(text("text-4"), "Text <>& 音楽 🎵");
+                assert_eq!(text("nested"), "Text <>& 音楽 🎵");
+                assert_eq!(text("root"), "Raw <>& café Text <>& 音楽 🎵");
+            },
         );
     }
 
@@ -1105,6 +1527,202 @@ mod tests {
             host.app.diagnostics
         );
         assert!(host.app.diagnostics[0].contains("stale"));
+    }
+
+    fn complete_navigation_for_test(
+        view: hyperchad_renderer::View,
+        stale: bool,
+        failed: bool,
+    ) -> FeedbackApp<NoLayout> {
+        use crate::routing::{RequestContext, Routing, Trigger};
+        use hyperchad_transformer::models::{Selector, SwapStrategy};
+        use std::future::Future;
+        let ctx = egui::Context::default();
+        let mut host = FeedbackApp::new(
+            Container {
+                id: 1,
+                ..Default::default()
+            },
+            NoLayout,
+        );
+        let _ = ctx.run(egui::RawInput::default(), |ctx| host.frame(ctx));
+        let source = host
+            .app
+            .document()
+            .stamp(host.app.document().root_keys()[0])
+            .unwrap();
+        let (mut routing, worker) = Routing::new(2, 1024, std::sync::Arc::new(|| {})).unwrap();
+        let mut request = RequestContext::get(
+            source,
+            "/settings",
+            Selector::SelfTarget,
+            SwapStrategy::This,
+        )
+        .unwrap();
+        request.trigger = Trigger::Navigation;
+        routing.submit(host.app.document_mut(), request).unwrap();
+        let router = hyperchad_router::Router::new().with_route(
+            if failed { "/other" } else { "/settings" },
+            move |_| {
+                let view = view.clone();
+                async move { view }
+            },
+        );
+        let mut work = Box::pin(worker.run(router));
+        assert!(
+            work.as_mut()
+                .poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+                .is_pending()
+        );
+        host.app.route_boundary = routing.try_take();
+        assert!(host.app.route_boundary.is_some());
+        if stale {
+            host.app
+                .document_mut()
+                .apply_view(
+                    hyperchad_renderer::View::from(Container {
+                        id: 8,
+                        ..Default::default()
+                    }),
+                    crate::document::ViewOrigin::Navigation,
+                )
+                .unwrap();
+        }
+        host.routing = Some(routing);
+        host.poll_routes(&ctx);
+        host
+    }
+
+    #[test]
+    fn navigation_route_changes_only_after_primary_commit() {
+        let view = hyperchad_renderer::View::from(Container {
+            id: 9,
+            ..Default::default()
+        });
+        let committed = complete_navigation_for_test(view.clone(), false, false);
+        assert_eq!(committed.current_url, "/settings");
+        assert_eq!(
+            committed
+                .app
+                .document()
+                .get(committed.app.document().root_keys()[0])
+                .unwrap()
+                .id,
+            9
+        );
+        let stale = complete_navigation_for_test(view, true, false);
+        assert_eq!(stale.current_url, "/");
+        let failed = complete_navigation_for_test(hyperchad_renderer::View::default(), false, true);
+        assert_eq!(failed.current_url, "/");
+        assert_ne!(failed.app.diagnostics.len(), 0);
+        let fragment_only =
+            complete_navigation_for_test(hyperchad_renderer::View::default(), false, false);
+        assert_eq!(fragment_only.current_url, "/");
+    }
+
+    #[test]
+    fn composite_navigation_commits_primary_despite_missing_fragment_diagnostic() {
+        let view = hyperchad_renderer::View {
+            primary: Some(Container {
+                id: 9,
+                str_id: Some("new-target".into()),
+                ..Default::default()
+            }),
+            fragments: vec![hyperchad_renderer::ReplaceContainer {
+                selector: hyperchad_transformer::models::Selector::Id("new-target".into()),
+                container: Container {
+                    id: 10,
+                    ..Default::default()
+                },
+            }],
+            ..Default::default()
+        };
+        let host = complete_navigation_for_test(view, false, false);
+        assert_eq!(host.current_url, "/settings");
+    }
+
+    #[test]
+    fn terminal_dispatch_failure_cancels_response_and_consumes_boundary_once() {
+        use crate::routing::{RequestContext, Routing};
+        use hyperchad_transformer::models::{Selector, SwapStrategy};
+        use std::future::Future;
+        let ctx = egui::Context::default();
+        let mut host = FeedbackApp::new(
+            Container {
+                id: 1,
+                calculated_width: Some(100.0),
+                calculated_height: Some(100.0),
+                ..Container::default()
+            },
+            NoLayout,
+        );
+        let _ = ctx.run(egui::RawInput::default(), |ctx| host.frame(ctx));
+        let source = host
+            .app
+            .document()
+            .stamp(host.app.document().root_keys()[0])
+            .unwrap();
+        let (mut routing, worker) = Routing::new(1, 65536, std::sync::Arc::new(|| {})).unwrap();
+        routing
+            .submit(
+                host.app.document_mut(),
+                RequestContext::get(source, "/result", Selector::SelfTarget, SwapStrategy::This)
+                    .unwrap(),
+            )
+            .unwrap();
+        let router = hyperchad_router::Router::new().with_route("/result", |_| async {
+            hyperchad_renderer::View::from(Container {
+                id: 9,
+                ..Container::default()
+            })
+        });
+        let mut work = Box::pin(worker.run(router));
+        assert!(
+            work.as_mut()
+                .poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+                .is_pending()
+        );
+        host.app.route_boundary = routing.try_take();
+        host.routing = Some(routing);
+        host.app.reset_event_router_for_test();
+        host.poll_routes(&ctx);
+        assert!(host.app.route_boundary.is_none());
+        assert_eq!(
+            host.app
+                .document()
+                .get(host.app.document().root_keys()[0])
+                .unwrap()
+                .id,
+            1
+        );
+        assert_eq!(
+            host.app.response_effects,
+            [] as [hyperchad_renderer::ResponseMetadata; 0]
+        );
+        assert_ne!(host.app.diagnostics, [] as [String; 0]);
+        let count = host.app.diagnostics.len();
+        host.poll_routes(&ctx);
+        assert_eq!(host.app.diagnostics.len(), count);
+        let source = host
+            .app
+            .document()
+            .stamp(host.app.document().root_keys()[0])
+            .unwrap();
+        let mut routing = host.routing.take().unwrap();
+        assert!(
+            routing
+                .prepare(
+                    host.app.document_mut(),
+                    RequestContext::get(
+                        source,
+                        "/result",
+                        Selector::SelfTarget,
+                        SwapStrategy::This
+                    )
+                    .unwrap()
+                )
+                .is_ok()
+        );
     }
 
     #[test]

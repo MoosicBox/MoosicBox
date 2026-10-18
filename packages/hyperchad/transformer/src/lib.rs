@@ -3024,6 +3024,13 @@ pub struct Container {
     /// Calculated font size in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub calculated_font_size: Option<f32>,
+    /// Logical wrap width used for the text node's committed measured geometry.
+    ///
+    /// Positive infinity represents intrinsic, unbounded measurement. `None`
+    /// means no authoritative text measurement is available. This is transient
+    /// layout metadata, not an authored attribute.
+    #[cfg(feature = "layout")]
+    pub calculated_text_wrap_width: Option<f32>,
     /// Right scrollbar offset in pixels (requires `layout` feature).
     #[cfg(feature = "layout")]
     pub scrollbar_right: Option<f32>,
@@ -5738,6 +5745,9 @@ impl Container {
     /// Returns a [`TableIter`] that provides iterators over the table's heading row (if present)
     /// and body rows. Each row iterator yields individual cell containers.
     ///
+    /// Body groups and direct rows are accumulated in source order; heading
+    /// groups are accumulated separately without replacing earlier groups.
+    ///
     /// # Panics
     ///
     /// Will panic if `Element` is not a table
@@ -5748,52 +5758,30 @@ impl Container {
     {
         moosicbox_assert::assert_or_panic!(self.element == Element::Table, "Not a table");
 
-        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b Self>>>> = None;
-        let mut headings: Option<Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>>>> =
-            None;
-        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>> + 'b> =
-            Box::new(std::iter::empty());
-
+        let mut headings_builder: Vec<Box<dyn Iterator<Item = &'b Self>>> = Vec::new();
+        let mut rows_builder: Vec<Box<dyn Iterator<Item = &'b Self>>> = Vec::new();
+        let mut has_head = false;
         for element in &self.children {
-            match &element.element {
-                Element::THead => {
-                    headings =
-                        Some(Box::new(element.children.iter().map(|x| {
-                            Box::new(x.children.iter()) as Box<dyn Iterator<Item = &Self>>
-                        }))
-                            as Box<
-                                dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>> + 'b,
-                            >);
-                }
-                Element::TBody => {
-                    rows =
-                        Box::new(element.children.iter().map(|x| {
-                            Box::new(x.children.iter()) as Box<dyn Iterator<Item = &Self>>
-                        }))
-                            as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b Self>>>>;
-                }
-                Element::TR => {
-                    if let Some(builder) = &mut rows_builder {
-                        builder
-                            .push(Box::new(element.children.iter())
-                                as Box<dyn Iterator<Item = &'b Self>>);
+            match element.element {
+                Element::THead | Element::TBody => {
+                    let builder = if element.element == Element::THead {
+                        has_head = true;
+                        &mut headings_builder
                     } else {
-                        rows_builder
-                            .replace(vec![Box::new(element.children.iter())
-                                as Box<dyn Iterator<Item = &'b Self>>]);
+                        &mut rows_builder
+                    };
+                    for row in &element.children {
+                        builder.push(Box::new(row.children.iter()));
                     }
                 }
-                _ => {
-                    panic!("Invalid table element: {element}");
-                }
+                Element::TR => rows_builder.push(Box::new(element.children.iter())),
+                _ => panic!("Invalid table element: {element}"),
             }
         }
-
-        if let Some(rows_builder) = rows_builder {
-            rows = Box::new(rows_builder.into_iter());
+        TableIter {
+            headings: has_head.then(|| Box::new(headings_builder.into_iter()) as _),
+            rows: Box::new(rows_builder.into_iter()),
         }
-
-        TableIter { headings, rows }
     }
 
     /// Creates a mutable iterator over table rows and heading cells.
@@ -5831,55 +5819,37 @@ impl Container {
     {
         moosicbox_assert::assert_or_panic!(self.element == Element::Table, "Not a table");
 
-        let mut rows_builder: Option<Vec<Box<dyn Iterator<Item = &'b mut Self>>>> = None;
-        let mut headings: Option<
-            Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b>,
-        > = None;
-        let mut rows: Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b> =
-            Box::new(std::iter::empty());
-
+        let mut headings_builder: Vec<Box<dyn Iterator<Item = &'b mut Self>>> = Vec::new();
+        let mut rows_builder: Vec<Box<dyn Iterator<Item = &'b mut Self>>> = Vec::new();
+        let mut has_head = false;
         for container in &mut self.children {
-            if let Some(observer) = &mut observer {
-                match container.element {
-                    Element::THead | Element::TBody | Element::TR => {
-                        observer(container);
-                    }
-                    _ => {}
-                }
+            if matches!(
+                container.element,
+                Element::THead | Element::TBody | Element::TR
+            ) && let Some(observer) = &mut observer
+            {
+                observer(container);
             }
             match container.element {
-                Element::THead => {
-                    headings = Some(Box::new(container.children.iter_mut().map(|x| {
-                        Box::new(x.children.iter_mut()) as Box<dyn Iterator<Item = &mut Self>>
-                    }))
-                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>> + 'b>);
-                }
-                Element::TBody => {
-                    rows = Box::new(container.children.iter_mut().map(|x| {
-                        Box::new(x.children.iter_mut()) as Box<dyn Iterator<Item = &mut Self>>
-                    }))
-                        as Box<dyn Iterator<Item = Box<dyn Iterator<Item = &'b mut Self>>>>;
-                }
-                Element::TR => {
-                    if let Some(builder) = &mut rows_builder {
-                        builder.push(Box::new(container.children.iter_mut())
-                            as Box<dyn Iterator<Item = &'b mut Self>>);
+                Element::THead | Element::TBody => {
+                    let builder = if container.element == Element::THead {
+                        has_head = true;
+                        &mut headings_builder
                     } else {
-                        rows_builder.replace(vec![Box::new(container.children.iter_mut())
-                            as Box<dyn Iterator<Item = &'b mut Self>>]);
+                        &mut rows_builder
+                    };
+                    for row in &mut container.children {
+                        builder.push(Box::new(row.children.iter_mut()));
                     }
                 }
-                _ => {
-                    panic!("Invalid table container: {container}");
-                }
+                Element::TR => rows_builder.push(Box::new(container.children.iter_mut())),
+                _ => panic!("Invalid table container: {container}"),
             }
         }
-
-        if let Some(rows_builder) = rows_builder {
-            rows = Box::new(rows_builder.into_iter());
+        TableIterMut {
+            headings: has_head.then(|| Box::new(headings_builder.into_iter()) as _),
+            rows: Box::new(rows_builder.into_iter()),
         }
-
-        TableIterMut { headings, rows }
     }
 }
 

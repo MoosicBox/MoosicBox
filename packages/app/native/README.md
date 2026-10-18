@@ -99,11 +99,15 @@ The default build includes multiple UI backends. You can enable specific backend
 cargo run --features "egui-wgpu"
 ```
 
-Additional Egui variants:
+Additional Egui graphics backend:
 
-- `egui-glow` - OpenGL backend
-- `egui-v1` - Legacy HyperChad egui renderer implementation (original, overcomplicated)
-- `egui-v2` - New HyperChad egui renderer implementation (work in progress, simplified)
+- `egui-glow` - OpenGL backend for the same canonical HyperChad renderer
+
+There is one egui engine; version-selection features have been removed. Use
+`--no-default-features --features "dev,egui-glow,x11"` for the focused Linux
+OpenGL application configuration. Accessibility currently compiles both winit
+platform backends through upstream AccessKit defaults; selecting `x11` or
+`wayland` is not a guarantee of dependency-level platform isolation.
 
 #### FLTK (Lightweight)
 

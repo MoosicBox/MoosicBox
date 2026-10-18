@@ -7954,6 +7954,7 @@ version = "0.5.0"
 dependencies = [
  "async-trait",
  "eframe",
+ "egui-wgpu",
  "egui_extras",
  "flume 0.12.0",
  "futures-util",
@@ -7963,21 +7964,14 @@ dependencies = [
  "hyperchad_router",
  "hyperchad_transformer",
  "image",
- "itertools 0.14.0",
  "log 0.4.33",
- "moosicbox_app_native_image",
- "moosicbox_assert",
- "moosicbox_logging",
- "profiling",
- "puffin",
- "puffin_http",
+ "raw-window-handle",
  "rfd 0.17.2",
+ "serde",
+ "serde_json",
  "switchy_async",
- "switchy_env",
  "switchy_http",
  "test-log",
- "tracing-subscriber",
- "tracy-client",
 ]
 
 [[package]]
@@ -16170,19 +16164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sctk-adwaita"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6277f0217056f77f1d8f49f2950ac6c278c0d607c45f5ee99328d792ede24ec"
-dependencies = [
- "ab_glyph",
- "log 0.4.33",
- "memmap2",
- "smithay-client-toolkit 0.19.2",
- "tiny-skia",
-]
-
-[[package]]
 name = "seahash"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -22820,7 +22801,6 @@ dependencies = [
  "raw-window-handle",
  "redox_syscall 0.4.1",
  "rustix 0.38.44",
- "sctk-adwaita",
  "smithay-client-toolkit 0.19.2",
  "smol_str 0.2.2",
  "tracing",

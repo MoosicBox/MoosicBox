@@ -440,10 +440,14 @@ impl EventRouter {
             self.capture = None;
         }
         self.gestures.retain(|_, gesture| {
-            gesture
-                .path
-                .iter()
-                .all(|key| geometry.node(*key).is_some_and(|node| node.visible))
+            // visibility:hidden is inherited but explicitly visible descendants
+            // remain targets. Ancestors need geometry, not their own visibility.
+            let target = gesture
+                .pointer
+                .native_widget
+                .or_else(|| gesture.path.first().copied());
+            gesture.path.iter().all(|key| geometry.node(*key).is_some())
+                && target.is_none_or(|key| geometry.node(key).is_some_and(|node| node.visible))
         });
         for &key in &self.order {
             let Some(node) = geometry.node(key) else {
@@ -528,6 +532,7 @@ impl EventRouter {
                     |target| Self::path(geometry, target),
                 );
                 let mut out = self.nearest(
+                    geometry,
                     &path,
                     &ActionTrigger::KeyDown,
                     &EventValue::String(key.key.clone()),
@@ -595,11 +600,13 @@ impl EventRouter {
                 Ok(Vec::new())
             }
             WidgetEventKind::Change(value) => Ok(self.nearest(
+                geometry,
                 &Self::path(geometry, widget.source.key),
                 &ActionTrigger::Change,
                 &value,
             )),
             WidgetEventKind::Activate { gesture: None } => Ok(self.nearest(
+                geometry,
                 &Self::path(geometry, widget.source.key),
                 &ActionTrigger::Click,
                 &EventValue::Null,
@@ -664,7 +671,12 @@ impl EventRouter {
             self.last_gesture = Some(pointer.gesture);
             self.position = Some(pointer.position);
             let mut out = self.hover(geometry, Some(pointer.position));
-            out.extend(self.nearest(&path, &ActionTrigger::MouseDown, &EventValue::Null));
+            out.extend(self.nearest(
+                geometry,
+                &path,
+                &ActionTrigger::MouseDown,
+                &EventValue::Null,
+            ));
             for event in &mut out {
                 event.pointer = Some(pointer);
             }
@@ -709,7 +721,12 @@ impl EventRouter {
         gesture.path = click_path.unwrap_or_default();
         gesture.pointer = pointer;
         gesture.released = true;
-        out.extend(self.nearest(&gesture.path, &ActionTrigger::Click, &EventValue::Null));
+        out.extend(self.nearest(
+            geometry,
+            &gesture.path,
+            &ActionTrigger::Click,
+            &EventValue::Null,
+        ));
         out.extend(self.outside(&gesture, geometry));
         if pointer.native_widget.is_some() {
             // Retain only for an optional native command acknowledgement.
@@ -773,9 +790,10 @@ impl EventRouter {
         geometry: &GeometrySnapshot<ElementKey>,
         position: Option<Pos2>,
     ) -> Vec<UiEvent> {
-        let next = position
+        let mut next = position
             .and_then(|point| geometry.hit_test(point, |_| true))
             .map_or_else(Vec::new, |key| Self::path(geometry, key));
+        next.retain(|key| geometry.node(*key).is_some_and(|node| node.visible));
         let mut out = Vec::new();
         for &key in &self.hovered {
             if !next.contains(&key) {
@@ -818,11 +836,15 @@ impl EventRouter {
 
     fn nearest(
         &self,
+        geometry: &GeometrySnapshot<ElementKey>,
         path: &[ElementKey],
         trigger: &ActionTrigger,
         value: &EventValue,
     ) -> Vec<UiEvent> {
         for &key in path {
+            if !geometry.node(key).is_some_and(|node| node.visible) {
+                continue;
+            }
             let events = self.at(key, trigger, EventPhase::Fire, value);
             if !events.is_empty() {
                 return events;
@@ -1432,6 +1454,21 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].value, EventValue::String("é".into()));
         assert_eq!(events[0].keyboard.as_ref(), Some(&keyboard));
+        keyboard.composing = true;
+        assert!(
+            router
+                .route(&document, &geometry, InputEvent::Key(keyboard.clone()))
+                .unwrap()
+                .is_empty()
+        );
+        keyboard.composing = false;
+        assert_eq!(
+            router
+                .route(&document, &geometry, InputEvent::Key(keyboard.clone()))
+                .unwrap()
+                .len(),
+            1
+        );
         keyboard.pressed = false;
         assert!(
             router
@@ -1961,6 +1998,131 @@ mod tests {
                 .unwrap_err(),
             EventError::InvalidGesture
         );
+    }
+
+    fn hidden_parent_fixture() -> Document {
+        let mut button = node(
+            "button",
+            0.0,
+            0.0,
+            30.0,
+            30.0,
+            vec![ActionTrigger::Click, ActionTrigger::Hover],
+            vec![],
+        );
+        button.visibility = Some(hyperchad_transformer::models::Visibility::Visible);
+        let mut parent = node(
+            "parent",
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            vec![
+                ActionTrigger::Click,
+                ActionTrigger::MouseDown,
+                ActionTrigger::Hover,
+            ],
+            vec![button],
+        );
+        parent.visibility = Some(hyperchad_transformer::models::Visibility::Hidden);
+        document(parent)
+    }
+
+    #[test]
+    fn explicit_visible_button_keeps_multiframe_gesture_under_hidden_parent() {
+        let document = hidden_parent_fixture();
+        let (mut router, initial) = setup(&document);
+        let owner = key(&document, "button");
+        let parent = key(&document, "parent");
+        assert!(!initial.node(parent).unwrap().visible);
+        assert!(initial.node(owner).unwrap().visible);
+        let pressed = router
+            .route(
+                &document,
+                &initial,
+                pointer(1, true, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        assert_eq!(pressed.len(), 1);
+        assert_eq!(pressed[0].trigger, ActionTrigger::Hover);
+        assert_eq!(pressed[0].source.key, owner);
+        router.end_input_batch();
+        let next_frame = geometry(&document, &BTreeMap::new());
+        assert!(
+            router
+                .refresh_geometry(&document, &next_frame)
+                .unwrap()
+                .is_empty()
+        );
+        let released = router
+            .route(
+                &document,
+                &next_frame,
+                pointer(1, false, 10.0, 10.0, Some(owner)),
+            )
+            .unwrap();
+        assert_eq!(released.len(), 1);
+        assert_eq!(released[0].trigger, ActionTrigger::Click);
+        assert_eq!(released[0].source.key, owner);
+        let activation = InputEvent::Widget(WidgetEvent {
+            source: document.stamp(owner).unwrap(),
+            kind: WidgetEventKind::Activate { gesture: Some(1) },
+        });
+        assert!(
+            router
+                .route(&document, &next_frame, activation.clone())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            router
+                .route(&document, &next_frame, activation)
+                .unwrap_err(),
+            EventError::InvalidGesture
+        );
+        assert_eq!(
+            router.focus(&document, &next_frame, Some(parent), false),
+            Err(EventError::IneligibleTarget)
+        );
+    }
+
+    #[test]
+    fn hidden_subtree_or_inherited_visibility_still_cancels_multiframe_gesture() {
+        let document = hidden_parent_fixture();
+        let owner = key(&document, "button");
+        for suppress_subtree in [false, true] {
+            let (mut router, initial) = setup(&document);
+            router
+                .route(
+                    &document,
+                    &initial,
+                    pointer(1, true, 10.0, 10.0, Some(owner)),
+                )
+                .unwrap();
+            router.end_input_batch();
+            let mut roots = document.roots().to_vec();
+            if suppress_subtree {
+                // Authored hidden and projected display:none both remove the subtree.
+                roots[0].hidden = Some(true);
+            } else {
+                // Without an explicit visible override the child inherits hidden.
+                roots[0].children[0].visibility = None;
+            }
+            let suppressed = geometry_roots(&document, &roots, &BTreeMap::new());
+            assert!(!suppressed.node(owner).is_some_and(|node| node.visible));
+            router.refresh_geometry(&document, &suppressed).unwrap();
+            assert!(router.gestures.is_empty());
+            assert_eq!(
+                router
+                    .route(
+                        &document,
+                        &suppressed,
+                        pointer(1, false, 10.0, 10.0, Some(owner))
+                    )
+                    .unwrap_err(),
+                EventError::InvalidGesture
+            );
+        }
     }
 
     #[test]

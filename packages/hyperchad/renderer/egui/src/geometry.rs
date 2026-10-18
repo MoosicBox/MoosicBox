@@ -996,8 +996,12 @@ mod tests {
 
         struct NoText;
         impl FontMetrics for NoText {
-            fn measure_text(&self, _: &str, _: f32, _: f32) -> FontMetricsBounds {
-                FontMetricsBounds { rows: Vec::new() }
+            fn measure_text(
+                &self,
+                _: &hyperchad_transformer::layout::font::TextMeasureRequest<'_>,
+            ) -> Result<FontMetricsBounds, hyperchad_transformer::layout::font::TextMeasureError>
+            {
+                Ok(FontMetricsBounds { rows: Vec::new() })
             }
         }
         let defaults = CalculatorDefaults {

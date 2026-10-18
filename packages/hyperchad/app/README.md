@@ -293,7 +293,7 @@ The following features are enabled by default:
 
 ### Additional Features
 
-- **`egui`**, **`egui-glow`**, **`egui-v1`**, **`egui-v2`**: Egui renderer variants
+- **`egui`**, **`egui-glow`**, **`egui-wgpu`**: One native egui renderer with selectable graphics backends
 - **`actions`**, **`sse`**: Server-sent events and action support
 - **`web-server`**, **`web-server-actix`**, **`web-server-simulator`**: Web server variants
 - **`wayland`**, **`x11`**: Linux display server support

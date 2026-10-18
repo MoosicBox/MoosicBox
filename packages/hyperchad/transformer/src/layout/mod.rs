@@ -243,12 +243,78 @@ pub fn set_scrollbar_size(size: u16) {
     SCROLLBAR_SIZE.store(size, std::sync::atomic::Ordering::SeqCst);
 }
 
+/// A root-relative structural diagnostic from checked layout.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LayoutError {
+    /// Child indices from the calculation root to the offending container.
+    pub path: Vec<usize>,
+    /// The failed layout condition.
+    pub kind: LayoutErrorKind,
+}
+
+/// Axis of a table span attribute.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TableSpanAxis {
+    /// The `rows` attribute.
+    Row,
+    /// The `columns` attribute.
+    Column,
+}
+
+/// Checked layout failures. Callers must not publish geometry after an error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LayoutErrorKind {
+    /// The implementation has not opted into checked layout.
+    CheckedLayoutUnsupported,
+    /// A span is not a positive, finite, integral unitless value.
+    InvalidTableSpan {
+        /// Attribute axis.
+        axis: TableSpanAxis,
+    },
+    /// A table exceeds bounded grid or span allocation limits.
+    TableBudgetExceeded,
+    /// A table contains an invalid section, row, or cell.
+    InvalidTableStructure,
+    /// Styled text measurement failed at this structural path.
+    TextMeasurement(font::TextMeasureError),
+    /// Invalid checked dimensions, including non-finite or missing root bounds.
+    InvalidGeometry,
+}
+
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "layout error at {:?}: {:?}", self.path, self.kind)
+    }
+}
+
+impl std::error::Error for LayoutError {}
+
 /// Trait for types that can perform layout calculations on containers.
 pub trait Calc {
     /// Performs layout calculation on the given container.
     ///
     /// Returns `true` if the layout changed, `false` otherwise.
     fn calc(&self, container: &mut Container) -> bool;
+
+    /// Performs checked layout. Geometry must not be consumed after an error.
+    ///
+    /// Errors can leave partially updated calculated fields in the working
+    /// tree. Callers must discard geometry on `Err`; no rollback is promised.
+    ///
+    /// Implementations must explicitly delegate or implement validation; the
+    /// default never invokes unchecked legacy layout.
+    ///
+    /// # Errors
+    ///
+    /// * Returns [`LayoutErrorKind::CheckedLayoutUnsupported`] by default.
+    /// * Implementations may report structural, budget, or geometry failures.
+    fn try_calc(&self, _container: &mut Container) -> Result<bool, LayoutError> {
+        Err(LayoutError {
+            path: Vec::new(),
+            kind: LayoutErrorKind::CheckedLayoutUnsupported,
+        })
+    }
 }
 
 /// Represents a rectangular region with position and dimensions.

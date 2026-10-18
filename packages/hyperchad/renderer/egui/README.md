@@ -4,6 +4,13 @@ Native desktop UI renderer for HyperChad using the egui immediate mode GUI frame
 
 ## Overview
 
+One canonical backend owns the mutable document and interaction state on the UI
+thread. HyperChad remains the layout authority; asynchronous producers deliver
+ordered commands, and one persistent action handler processes events. Import
+`hyperchad_renderer_egui::{EguiRenderer, EguiRenderRunner}` and retain
+`layout::EguiCalc` for calculator integration. The legacy engines and their
+version-selection flags are removed, not retained as compatibility facades.
+
 The HyperChad Egui Renderer provides:
 
 - **Native Desktop UI**: Render HyperChad components as native desktop applications
@@ -34,7 +41,7 @@ The HyperChad Egui Renderer provides:
 - **Action System**: Comprehensive action framework with effects
 - **State Management**: Component state and data binding
 - **Navigation**: Route handling and page navigation
-- **Canvas Support**: Canvas rendering for graphics (available in v1 renderer)
+- **Canvas Support**: Retained canvas commands, clear/replay and projected clipping
 
 ### Performance Features
 
@@ -371,8 +378,8 @@ Handle::current().spawn(async move {
 
 ### Canvas Rendering
 
-**Note**: Canvas rendering is implemented in the v1 renderer only. The v2 renderer has canvas
-rendering stubbed but not yet implemented.
+Canvas commands are retained in the UI-owned document and painted through the
+same production geometry and clipping path as native widgets.
 
 ```rust
 use hyperchad_renderer::canvas::{CanvasUpdate, CanvasAction, Pos};
@@ -400,11 +407,23 @@ renderer.render_canvas(canvas_update).await?;
 - **`x11`**: Enable X11 support on Linux
 - **`profiling`**: Enable performance profiling support
 - **`profiling-puffin`**: Enable puffin profiler integration
-- **`profiling-tracing`**: Enable tracing profiler integration
+- **`profiling-tracing`**: Retain shared profiling feature selection; no local subscriber is installed
 - **`profiling-tracy`**: Enable Tracy profiler integration
 - **`debug`**: Enable debug rendering features (enabled by default)
-- **`v1`**: Use v1 renderer implementation (enabled by default) - Full-featured renderer with complete canvas support, comprehensive action handling, and mature viewport management. This is the production-ready implementation (~3800 lines).
-- **`v2`**: Use v2 renderer implementation (enabled by default) - Refactored renderer with modular action handling using the new `ActionHandler` API from `hyperchad_actions`. This version uses simplified, more maintainable code architecture (~1000 lines). Canvas rendering and some advanced features are stubbed but not yet fully implemented. When both features are enabled, v2 takes precedence.
+
+When both graphics features are enabled, Wgpu is selected deterministically.
+Use `--no-default-features --features feedback,glow,x11` (or the corresponding
+Wgpu/Wayland configuration) for focused validation. The default configuration
+includes Wgpu, X11 and Wayland. Accessibility remains enabled: upstream
+`accesskit_winit` defaults compile both winit platform backends even when only one
+platform feature is requested. Renderer feature isolation does not imply platform
+isolation.
+
+Native acceptance to date is Linux/X11. Wayland native smoke has not run; the
+opt-in interaction protocol requires an actual X11 window ID and XTEST. A Wgpu
+application artifact has passed native interaction acceptance, but its adapter
+identity was not logged. These are not cross-platform or hardware-adapter claims.
+Post-cutover tests, strict lint and fresh-binary native reacceptance remain pending.
 
 ## Performance Considerations
 
@@ -436,5 +455,6 @@ This renderer is designed for:
 
 - **Mobile Support**: Not designed for mobile platforms
 - **Web Deployment**: Cannot run in web browsers
-- **Immediate Mode**: UI state must be managed externally
+- **State Ownership**: Document and interaction state are owned by the UI thread;
+  producers submit commands rather than mutating the frame concurrently
 - **Memory Usage**: Higher memory usage due to immediate mode architecture

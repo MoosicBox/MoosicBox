@@ -707,39 +707,51 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
 ///
 /// * [`RouteError::UnsupportedMethod`] if the request method is not GET
 /// * [`RouteError::AppState`] if fails to retrieve connections from the app state
-pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> {
+/// * [`RouteError::Reqwest`] if music API settings cannot be retrieved
+///
+/// Returns the primary page and its settings fragment as one response so the
+/// fragment cannot be applied before the page creates its target.
+pub async fn settings_route(req: RouteRequest) -> Result<Content, RouteError> {
     if !matches!(req.method, Method::Get) {
         return Err(RouteError::UnsupportedMethod);
     }
 
     let state = convert_state(&STATE).await;
-
-    switchy::unsync::task::spawn({
-        let state = state.clone();
-        async move {
-            let mut container = settings_music_api_settings_markup(&state).await.unwrap();
-            container.str_id = Some("settings-music-api-settings-section".to_string());
-            let renderer = RENDERER.get().unwrap();
-            renderer
-                .render(View::builder().with_fragment(container).build())
-                .await?;
-
-            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-        }
-    });
+    let settings_fragment = settings_music_api_settings_markup(&state).await?;
 
     let connections = STATE.get_connections().await?;
     let current_connection = STATE.get_current_connection().await?;
     let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
 
-    Ok(moosicbox_app_native_ui::settings::settings(
+    let primary: Container = moosicbox_app_native_ui::settings::settings(
         &state,
         &connection_name,
         &connections,
         current_connection.as_ref(),
         &[],
     )
-    .into())
+    .into();
+    settings_page_response(primary, settings_fragment)
+}
+
+fn settings_page_response(
+    mut primary: Container,
+    mut settings_fragment: Container,
+) -> Result<Content, RouteError> {
+    let section = settings_fragment
+        .find_element_by_str_id_mut("settings-music-api-settings-section")
+        .map(std::mem::take)
+        .ok_or_else(|| {
+            RouteError::RouteFailed("resolved settings are missing their music API section".into())
+        })?;
+    let target = primary
+        .find_element_by_str_id_mut("settings-music-api-settings-section")
+        .ok_or_else(|| {
+            RouteError::RouteFailed("settings page is missing its music API section".into())
+        })?;
+    *target = section;
+
+    Ok(Content::builder().with_primary(primary).build())
 }
 
 #[derive(Deserialize)]
@@ -1040,6 +1052,45 @@ mod tests {
                 handle_route_result::<Content>(Err(RouteError::BackendUnavailable(status)));
             assert!(result.is_ok());
         }
+    }
+
+    #[test]
+    fn settings_response_contains_resolved_section_in_primary() {
+        let target_id = "settings-music-api-settings-section";
+        let primary = Container {
+            children: vec![Container {
+                str_id: Some(target_id.to_owned()),
+                ..Container::default()
+            }],
+            ..Container::default()
+        };
+        let resolved = Container {
+            str_id: Some(target_id.to_owned()),
+            children: vec![Container {
+                str_id: Some("resolved-settings".to_owned()),
+                ..Container::default()
+            }],
+            ..Container::default()
+        };
+        let Content::View(view) = settings_page_response(primary, vec![resolved].into()).unwrap()
+        else {
+            panic!("settings response must be a view");
+        };
+        assert!(view.fragments.is_empty());
+        let primary = view.primary.unwrap();
+        assert!(
+            primary
+                .find_element_by_str_id("resolved-settings")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn settings_response_rejects_missing_section_without_detached_effects() {
+        assert!(matches!(
+            settings_page_response(Container::default(), Container::default()),
+            Err(RouteError::RouteFailed(_))
+        ));
     }
 
     #[test]

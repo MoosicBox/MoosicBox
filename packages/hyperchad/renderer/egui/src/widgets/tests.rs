@@ -284,11 +284,13 @@ fn raw_source_is_literal_native_text_without_angle_or_entity_heuristics() {
         let mut painter =
             WidgetPainter::new(Adapter::default(), Adapter::default(), Adapter::default());
         painter.reconcile(&document, &[]).unwrap();
+        let mut calculated = authored.clone();
+        calculated.calculated_text_wrap_width = Some(geometry(stamp).content_box.width());
         let output = context.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 assert!(
                     painter
-                        .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
+                        .paint_node(ui, stamp, &authored, &calculated, &geometry(stamp))
                         .unwrap()
                         .is_some()
                 );
@@ -331,6 +333,8 @@ fn production_html_raw_labels_emit_visible_white_glyph_meshes() {
                         b: 255,
                         a: None,
                     });
+                    calculated.calculated_text_wrap_width =
+                        Some(geometry(stamp).content_box.width());
                     calculated.calculated_font_size = Some(20.0);
                     let mut projected = geometry(stamp);
                     let offset = egui::vec2(0.0, f32::from(u16::try_from(index).unwrap()) * 45.0);

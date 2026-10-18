@@ -886,6 +886,8 @@ fn container_fields_strategy() -> BoxedStrategy<Container> {
                 #[cfg(feature = "layout")]
                 calculated_font_size: None,
                 #[cfg(feature = "layout")]
+                calculated_text_wrap_width: None,
+                #[cfg(feature = "layout")]
                 scrollbar_right: None,
                 #[cfg(feature = "layout")]
                 scrollbar_bottom: None,

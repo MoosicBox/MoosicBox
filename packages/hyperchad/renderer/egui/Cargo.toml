@@ -19,45 +19,37 @@ group = "hyperchad"
 [dependencies]
 hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
 hyperchad_color = { workspace = true, features = ["egui"] }
-hyperchad_renderer = { workspace = true, features = [
-    "canvas",
-    "viewport-immediate",
-] }
+hyperchad_renderer = { workspace = true, features = ["canvas"] }
 hyperchad_router = { workspace = true }
 hyperchad_transformer = { workspace = true, features = [
     "html",
     "layout-offset",
     "logic",
 ] }
-moosicbox_app_native_image = { workspace = true }
-moosicbox_assert = { workspace = true }
-moosicbox_logging = { workspace = true, features = ["macros"] }
 switchy_async = { workspace = true, features = ["time", "tokio"] }
-switchy_env = { workspace = true, features = ["std"] }
 switchy_http = { workspace = true, features = ["reqwest", "stream"] }
 
 async-trait = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [
     "__screenshot",
-    "default",
+    "accesskit",
+    "default_fonts",
+    "web_screen_reader",
 ] }
-egui_extras = { workspace = true, features = ["image", "svg"] }
-flume = { workspace = true }
-futures-util = { workspace = true }
-image = { workspace = true, features = ["png", "webp"] }
-itertools = { workspace = true }
-log = { workspace = true }
-profiling = { workspace = true, optional = true }
-puffin = { workspace = true, optional = true }
-puffin_http = { workspace = true, optional = true }
-rfd = { workspace = true, features = ["wayland", "xdg-portal"] }
-tracing-subscriber = { workspace = true, optional = true }
-tracy-client = { workspace = true, default-features = false, optional = true, features = [
-    "enable",
-] }
+# Enable the already-used GPU backend defaults without eframe's renderer/window defaults.
+egui-wgpu         = { workspace = true, optional = true }
+egui_extras       = { workspace = true, features = ["image", "svg"] }
+flume             = { workspace = true }
+futures-util      = { workspace = true }
+image             = { workspace = true, features = ["png", "webp"] }
+log               = { workspace = true }
+raw-window-handle = { workspace = true, optional = true, features = ["std"] }
+rfd               = { workspace = true, features = ["wayland", "xdg-portal"] }
+serde             = { workspace = true, optional = true, features = ["derive"] }
+serde_json        = { workspace = true, optional = true }
 
 [features]
-default = ["debug", "v1", "v2", "wgpu"]
+default = ["debug", "wayland", "wgpu", "x11"]
 
 fail-on-warnings = [
     "hyperchad_actions/fail-on-warnings",
@@ -65,41 +57,31 @@ fail-on-warnings = [
     "hyperchad_renderer/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
     "hyperchad_transformer/fail-on-warnings",
-    "moosicbox_app_native_image/fail-on-warnings",
-    "moosicbox_assert/fail-on-warnings",
-    "moosicbox_logging/fail-on-warnings",
     "switchy_async/fail-on-warnings",
-    "switchy_env/fail-on-warnings",
     "switchy_http/fail-on-warnings",
 ]
 
 glow = ["eframe/glow"]
-wgpu = ["eframe/wgpu"]
+wgpu = ["dep:egui-wgpu", "eframe/wgpu", "egui-wgpu/default"]
 
 wayland = ["eframe/wayland"]
 x11     = ["eframe/x11"]
 
-profiling = ["dep:profiling", "hyperchad_transformer/profiling"]
+profiling = ["hyperchad_transformer/profiling"]
 profiling-puffin = [
-    "dep:puffin",
-    "dep:puffin_http",
     "hyperchad_renderer/profiling-puffin",
     "hyperchad_transformer/profiling-puffin",
     "profiling",
 ]
-profiling-tracing = ["dep:tracing-subscriber", "profiling"]
+profiling-tracing = ["profiling"]
 profiling-tracy = [
-    "dep:tracy-client",
     "hyperchad_renderer/profiling-tracy",
     "hyperchad_transformer/profiling-tracy",
     "profiling",
 ]
 
 debug    = []
-feedback = ["v2"]
-
-v1 = []
-v2 = []
+feedback = ["dep:raw-window-handle", "dep:serde", "dep:serde_json"]
 
 [dev-dependencies]
 test-log = { workspace = true }

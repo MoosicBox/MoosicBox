@@ -5,8 +5,12 @@
 
 use std::sync::Arc;
 
+use crate::text_layout::{FontRegistry, request_job};
 use eframe::egui;
-use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds, FontMetricsRow};
+use hyperchad_transformer::layout::font::{
+    FontMetrics, FontMetricsBounds, FontMetricsRow, TextFontFamily, TextFontWeight,
+    TextMeasureError, TextMeasureRequest,
+};
 
 /// Font metrics in logical document units, not physical pixels or glyph ink.
 #[derive(Clone)]
@@ -22,43 +26,52 @@ impl EguiFontMetrics {
         Self { ctx }
     }
 
-    /// Shapes the exact galley used for measurement, ready for `Painter::galley`.
-    ///
-    /// Uses the current default font family because the shared `FontMetrics`
-    /// contract only carries size. Size and wrap width are logical points;
-    /// native pixels-per-point must not be multiplied into either argument.
-    /// Paint this galley at the snapshot's content origin (and apply document
-    /// zoom consistently). Do not reshape with a widget's default font/wrapping.
-    /// Egui's font cache owns reuse and invalidation on font/DPI changes.
+    /// Shapes compatibility text without changing its whitespace. New styled
+    /// consumers should use [`Self::layout_request`].
     ///
     /// # Panics
-    /// * Panics if called before egui has initialized fonts for a pass.
+    /// * Invalid dimensions or fonts not initialized for an egui pass.
     #[must_use]
     pub fn layout_text(&self, text: &str, size: f32, wrap_width: f32) -> Arc<egui::Galley> {
-        self.ctx.fonts_mut(|fonts| {
-            let mut job = egui::text::LayoutJob::simple(
-                text.to_owned(),
-                egui::FontId {
-                    size,
-                    ..Default::default()
-                },
-                egui::Color32::WHITE,
-                wrap_width,
-            );
-            // Egui's GUI-output rounding independently rounds row widths and
-            // floors/clamps the aggregate galley width to the wrap constraint.
-            // That can make max(row.width) differ from galley.rect.width().
-            // HyperChad needs the actual logical row union, not this widget
-            // allocation approximation. Glyph pixel snapping remains enabled.
-            job.round_output_to_gui = false;
-            fonts.layout_job(job)
+        self.layout_request(&TextMeasureRequest {
+            text,
+            family: TextFontFamily::CompatibilityDefault,
+            weight: TextFontWeight::CompatibilityDefault,
+            size,
+            wrap_width,
+            whitespace: Some(hyperchad_transformer::models::WhiteSpace::PreserveWrap),
         })
+        .expect("compatibility text shaping failed")
+    }
+
+    /// Shapes the exact styled logical galley used by native painting.
+    ///
+    /// # Errors
+    /// * Invalid dimensions or unavailable authored face/weight.
+    ///
+    /// # Panics
+    /// * Fonts have not been initialized by an active egui pass.
+    pub fn layout_request(
+        &self,
+        request: &TextMeasureRequest<'_>,
+    ) -> Result<Arc<egui::Galley>, TextMeasureError> {
+        let registry = FontRegistry::for_context(&self.ctx);
+        let job = request_job(&registry, request)?;
+        Ok(self.ctx.fonts_mut(|fonts| fonts.layout_job(job)))
     }
 }
 
 impl FontMetrics for EguiFontMetrics {
-    fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
-        from_galley(&self.layout_text(text, size, wrap_width))
+    fn compatibility_weight(&self) -> Option<u16> {
+        FontRegistry::for_context(&self.ctx).compatibility_weight()
+    }
+
+    fn measure_text(
+        &self,
+        request: &TextMeasureRequest<'_>,
+    ) -> Result<FontMetricsBounds, TextMeasureError> {
+        self.layout_request(request)
+            .map(|galley| from_galley(&galley))
     }
 }
 
@@ -88,6 +101,24 @@ fn from_galley(galley: &egui::Galley) -> FontMetricsBounds {
 mod tests {
     use super::*;
 
+    fn measure(
+        metrics: &EguiFontMetrics,
+        text: &str,
+        size: f32,
+        wrap_width: f32,
+    ) -> FontMetricsBounds {
+        metrics
+            .measure_text(&TextMeasureRequest {
+                text,
+                family: TextFontFamily::CompatibilityDefault,
+                weight: TextFontWeight::CompatibilityDefault,
+                size,
+                wrap_width,
+                whitespace: Some(hyperchad_transformer::models::WhiteSpace::PreserveWrap),
+            })
+            .unwrap()
+    }
+
     fn with_fonts(test: impl FnOnce(EguiFontMetrics)) {
         let context = egui::Context::default();
         context.begin_pass(egui::RawInput::default());
@@ -96,9 +127,38 @@ mod tests {
     }
 
     #[test]
+    fn bundled_light_measurement_matches_shared_paint_job() {
+        with_fonts(|metrics| {
+            let families = ["Ubuntu Light".to_owned()];
+            let request = TextMeasureRequest {
+                text: " a\n  b\u{a0}c ",
+                family: TextFontFamily::Authored(&families),
+                weight: TextFontWeight::Absolute(300),
+                size: 17.375,
+                wrap_width: 40.0,
+                whitespace: Some(hyperchad_transformer::models::WhiteSpace::PreserveWrap),
+            };
+            let measured = metrics.measure_text(&request).unwrap();
+            let registry = FontRegistry::for_context(&metrics.ctx);
+            let job = request_job(&registry, &request).unwrap();
+            let painted = metrics.ctx.fonts_mut(|fonts| fonts.layout_job(job));
+            assert!((measured.width() - painted.rect.width()).abs() < 0.001);
+            assert!((measured.height() - painted.rect.height()).abs() < 0.001);
+            let unavailable = TextMeasureRequest {
+                weight: TextFontWeight::Absolute(700),
+                ..request
+            };
+            assert!(matches!(
+                metrics.measure_text(&unavailable),
+                Err(TextMeasureError::UnsupportedStyle { .. })
+            ));
+        });
+    }
+
+    #[test]
     fn whitespace_has_advance_and_line_height_without_ink() {
         with_fonts(|metrics| {
-            let measured = metrics.measure_text("   ", 16.0, f32::INFINITY);
+            let measured = measure(&metrics, "   ", 16.0, f32::INFINITY);
             let galley = metrics.layout_text("   ", 16.0, f32::INFINITY);
             assert!(measured.width() > 0.0);
             assert!(measured.height() > 0.0);
@@ -113,7 +173,7 @@ mod tests {
         with_fonts(|metrics| {
             for text in ["a\n\nb", "a\n", "\n", ""] {
                 let galley = metrics.layout_text(text, 16.0, f32::INFINITY);
-                let measured = metrics.measure_text(text, 16.0, f32::INFINITY);
+                let measured = measure(&metrics, text, 16.0, f32::INFINITY);
                 assert_eq!(measured.rows.len(), galley.rows.len());
                 assert!((measured.height() - galley.rect.height()).abs() < 0.001);
                 assert!(measured.rows.iter().all(|r| r.height > 0.0));
@@ -128,7 +188,7 @@ mod tests {
                 let first = metrics.layout_text(text, 16.0, 45.0);
                 let second = metrics.layout_text(text, 16.0, 45.0);
                 assert!(Arc::ptr_eq(&first, &second));
-                let measured = metrics.measure_text(text, 16.0, 45.0);
+                let measured = measure(&metrics, text, 16.0, 45.0);
                 assert!((measured.width() - first.rect.width()).abs() < 0.001);
                 assert!((measured.height() - first.rect.height()).abs() < 0.001);
             }
@@ -138,10 +198,10 @@ mod tests {
     #[test]
     fn font_height_does_not_depend_on_glyph_ink() {
         with_fonts(|metrics| {
-            let height = metrics.measure_text("A", 16.0, f32::INFINITY).height();
+            let height = measure(&metrics, "A", 16.0, f32::INFINITY).height();
             for text in [".", "g", " "] {
                 assert_eq!(
-                    metrics.measure_text(text, 16.0, f32::INFINITY).height(),
+                    measure(&metrics, text, 16.0, f32::INFINITY).height(),
                     height
                 );
             }

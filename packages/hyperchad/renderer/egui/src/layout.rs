@@ -9,29 +9,47 @@ use hyperchad_transformer::{Container, layout::Calc};
 
 use crate::geometry::{GeometryError, GeometryViewport};
 
+/// Failure to seed a viewport or complete checked shared layout.
+#[derive(Debug, PartialEq, Eq)]
+pub enum LayoutError {
+    /// Invalid viewport geometry.
+    Viewport(GeometryError),
+    /// Shared checked calculator failure, retaining its path and kind.
+    Calculation(hyperchad_transformer::layout::LayoutError),
+}
+
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Viewport(error) => error.fmt(f),
+            Self::Calculation(error) => error.fmt(f),
+        }
+    }
+}
+impl std::error::Error for LayoutError {}
+
 /// Seeds the root from the viewport and runs one `HyperChad` calculator pass.
 ///
-/// The returned boolean has exactly `Calc::calc` semantics; it is not a promise
+/// The returned boolean has exactly `Calc::try_calc` semantics; it is not a promise
 /// of nested-layout convergence. Callers own invalidation and subsequent passes.
 /// No egui cursor, panel, widget allocation, or DPI conversion participates.
 /// Responsive/runtime styles must already have been applied to `tree`.
 ///
 /// # Errors
-/// * Returns `GeometryError::InvalidViewport` for invalid viewport/zoom input.
-///
-/// # Panics
-/// * Propagates calculator panics for unsupported shared layout or missing inputs.
+/// * Returns `LayoutError::Viewport` for invalid viewport/zoom input.
+/// * Returns `LayoutError::Calculation` for unsupported checked calculators or
+///   shared structural, budget, and geometry errors.
 pub fn calculate_layout(
     calculator: &impl Calc,
     tree: &mut Container,
     viewport: GeometryViewport,
-) -> Result<bool, GeometryError> {
-    let size = viewport.logical_size()?;
+) -> Result<bool, LayoutError> {
+    let size = viewport.logical_size().map_err(LayoutError::Viewport)?;
     tree.calculated_x = Some(0.0);
     tree.calculated_y = Some(0.0);
     tree.calculated_width = Some(size.x);
     tree.calculated_height = Some(size.y);
-    Ok(calculator.calc(tree))
+    calculator.try_calc(tree).map_err(LayoutError::Calculation)
 }
 
 /// Layout calculation trait for egui renderer.
@@ -53,6 +71,12 @@ mod tests {
     struct Probe(Cell<usize>);
 
     impl Calc for Probe {
+        fn try_calc(
+            &self,
+            tree: &mut Container,
+        ) -> Result<bool, hyperchad_transformer::layout::LayoutError> {
+            Ok(self.calc(tree))
+        }
         fn calc(&self, tree: &mut Container) -> bool {
             self.0.set(self.0.get() + 1);
             assert_eq!(tree.calculated_width, Some(100.0));
@@ -85,7 +109,7 @@ mod tests {
         };
         assert_eq!(
             calculate_layout(&probe, &mut tree, viewport),
-            Err(GeometryError::InvalidViewport)
+            Err(LayoutError::Viewport(GeometryError::InvalidViewport))
         );
         assert_eq!(probe.0.get(), 0);
         assert_eq!(tree.calculated_width, None);

@@ -23,12 +23,22 @@ impl EguiCalc for FixtureCalc {
 
 impl Calc for FixtureCalc {
     fn calc(&self, container: &mut Container) -> bool {
+        self.try_calc(container).expect("fixture checked layout")
+    }
+
+    fn try_calc(
+        &self,
+        container: &mut Container,
+    ) -> Result<bool, hyperchad_transformer::layout::LayoutError> {
+        let context = self
+            .0
+            .clone()
+            .ok_or_else(|| hyperchad_transformer::layout::LayoutError {
+                path: Vec::new(),
+                kind: hyperchad_transformer::layout::LayoutErrorKind::CheckedLayoutUnsupported,
+            })?;
         Calculator::new(
-            EguiFontMetrics::new(
-                self.0
-                    .clone()
-                    .expect("production must initialize calculator context"),
-            ),
+            EguiFontMetrics::new(context),
             CalculatorDefaults {
                 font_size: 14.0,
                 font_margin_top: 0.0,
@@ -53,7 +63,7 @@ impl Calc for FixtureCalc {
                 h6_font_margin_bottom: 0.0,
             },
         )
-        .calc(container)
+        .try_calc(container)
     }
 }
 

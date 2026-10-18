@@ -69,7 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .with_resizable(false),
             ..Default::default()
         },
-        Box::new(move |_cc| {
+        Box::new(move |cc| {
+            hyperchad_renderer_egui::backend::configure_exact_hit_testing(&cc.egui_ctx);
             let mut app = FeedbackApp::new(view, driver::FixtureCalc::default());
             if let Some(capture) = capture {
                 app = app.with_capture(capture);

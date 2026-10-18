@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "phases": [
+    {"op": "assert", "expect": {"route": "/"}},
+    {"op": "capture"},
+    {"op": "click", "selector": {"tag": "anchor", "href": "/settings"}},
+    {"op": "assert", "expect": {"route": "/settings"}},
+    {"op": "assert", "expect": {"selector": {"id": "settings-music-api-settings-section"}}},
+    {"op": "assert", "expect": {"selector": {"tag": "input", "name": "name"}, "visible": true, "value": ""}},
+    {"op": "capture"},
+    {"op": "click", "selector": {"tag": "input", "name": "name"}},
+    {"op": "assert", "expect": {"selector": {"tag": "input", "name": "name"}, "focused": true, "value": ""}},
+    {"op": "key", "key": "Ctrl+A"},
+    {"op": "text", "text": "c15-temporary-unsaved"},
+    {"op": "assert", "expect": {"selector": {"tag": "input", "name": "name"}, "focused": true, "value": "c15-temporary-unsaved"}},
+    {"op": "capture"},
+    {"op": "key", "key": "Tab"},
+    {"op": "assert", "expect": {"selector": {"tag": "input", "name": "name"}, "focused": false, "value": "c15-temporary-unsaved"}},
+    {"op": "capture"},
+    {"op": "click", "selector": {"tag": "anchor", "href": "/", "text": "Home"}},
+    {"op": "assert", "expect": {"route": "/"}},
+    {"op": "capture"},
+    {"op": "click", "selector": {"tag": "anchor", "href": "/settings"}},
+    {"op": "assert", "expect": {"route": "/settings"}},
+    {"op": "assert", "expect": {"selector": {"id": "settings-music-api-settings-section"}}},
+    {"op": "assert", "expect": {"selector": {"tag": "input", "name": "name"}, "visible": true, "value": ""}},
+    {"op": "capture"}
+  ]
+}

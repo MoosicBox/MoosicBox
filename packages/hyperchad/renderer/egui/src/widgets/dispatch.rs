@@ -102,6 +102,7 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
         document: &Document,
         roots: &mut [Container],
     ) -> Result<(), String> {
+        self.calculated_text_paths.clear();
         Self::prepare_layout(self, document, roots)
     }
 
@@ -119,6 +120,29 @@ impl<F: WidgetAdapter, R: WidgetAdapter, C: WidgetAdapter> FramePainter for Widg
         if geometry.key != stamp.key {
             return Err("widget identity does not match geometry".to_owned());
         }
+        let mut path = if let Some(parent) = geometry.parent {
+            self.calculated_text_paths
+                .get(&parent)
+                .cloned()
+                .ok_or("calculated editor ancestor was not prepared")?
+        } else {
+            Vec::new()
+        };
+        let mut style_node = calculated.clone();
+        style_node.children.clear();
+        path.push(style_node);
+        if matches!(
+            &calculated.element,
+            Element::Input {
+                input: hyperchad_transformer::Input::Text { .. }
+                    | hyperchad_transformer::Input::Password { .. },
+                ..
+            } | Element::Textarea { .. }
+        ) {
+            let references: Vec<_> = path.iter().collect();
+            self.forms.set_calculated_text_path(stamp, &references)?;
+        }
+        self.calculated_text_paths.insert(stamp.key, path);
         let own = calculated.calculated_opacity.unwrap_or(1.0);
         if !own.is_finite() {
             return Err("nonfinite native widget opacity".to_owned());

@@ -615,7 +615,10 @@ dialoguer = "0.12.0"
 # 1.4.3+ currently require yanked zip 6; keep fresh registry resolution working.
 duckdb = { version = "=1.4.2", default-features = false }
 eframe = { version = "0.33.3", default-features = false }
-egui = { version = "0.33.3", default-features = false }
+egui   = { version = "0.33.3", default-features = false }
+# Approved compatibility exception: crates.io latest stable is 0.37.0 (verified
+# 2026-10-17); match eframe 0.33.3's existing egui-wgpu/wgpu stack without upgrading it.
+egui-wgpu = { version = "0.33.3", default-features = false }
 egui_extras = { version = "0.33.3", default-features = false }
 enum-as-inner = "0.7.0"
 env_logger = "0.11.11"
@@ -716,6 +719,7 @@ quote = "1.0.47"
 rand = "0.10.2"
 rangemap = "1.7.1"
 ratatui = "0.30.2"
+raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = { version = "1.12.0", default-features = false }
 rb = "0.4.1"
 rcgen = "0.14.8"

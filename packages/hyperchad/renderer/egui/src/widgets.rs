@@ -33,6 +33,18 @@ use crate::{
 /// not arrange or recursively paint `HyperChad` children. Identity is `stamp.key`;
 /// asynchronous completion must additionally validate the complete stamp.
 pub trait WidgetAdapter {
+    /// Install the current calculated root-to-editor ancestry before painting.
+    ///
+    /// # Errors
+    /// * Rejects text editors when their adapter does not support calculated typography.
+    fn set_calculated_text_path(
+        &mut self,
+        _source: ElementStamp,
+        _path: &[&Container],
+    ) -> Result<(), String> {
+        Err("calculated editor typography adapter unavailable".into())
+    }
+
     /// Retire removed generations and reconcile retained native state.
     ///
     /// # Errors
@@ -173,6 +185,7 @@ pub struct WidgetPainter<F, R, C> {
     suppressed: std::collections::BTreeSet<ElementKey>,
     native_children: std::collections::BTreeSet<ElementKey>,
     list_markers: std::collections::BTreeMap<ElementKey, String>,
+    calculated_text_paths: std::collections::BTreeMap<ElementKey, Vec<Container>>,
     text_styles: std::collections::BTreeMap<ElementKey, text::TextStyle>,
     opacity: std::collections::BTreeMap<ElementKey, f32>,
 }
@@ -234,6 +247,7 @@ impl<F, R, C> WidgetPainter<F, R, C> {
             suppressed: std::collections::BTreeSet::new(),
             native_children: std::collections::BTreeSet::new(),
             list_markers: std::collections::BTreeMap::new(),
+            calculated_text_paths: std::collections::BTreeMap::new(),
             text_styles: std::collections::BTreeMap::new(),
             opacity: std::collections::BTreeMap::new(),
         }

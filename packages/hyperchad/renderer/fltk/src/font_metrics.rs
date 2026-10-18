@@ -2,7 +2,9 @@
 //!
 //! Provides font measurement capabilities for layout calculations in the FLTK renderer.
 
-use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds};
+use hyperchad_transformer::layout::font::{
+    FontMetrics, FontMetricsBounds, TextMeasureError, TextMeasureRequest,
+};
 
 /// Font metrics implementation for FLTK rendering.
 ///
@@ -11,11 +13,17 @@ use hyperchad_transformer::layout::font::{FontMetrics, FontMetricsBounds};
 pub struct FltkFontMetrics;
 
 impl FontMetrics for FltkFontMetrics {
-    /// Measures text dimensions for layout calculation.
+    /// Reports unavailable native measurement rather than inventing geometry.
     ///
-    /// Currently returns empty bounds as text measurement is not yet implemented
-    /// for the FLTK renderer. Layout calculations use default font metrics instead.
-    fn measure_text(&self, _text: &str, _size: f32, _wrap_width: f32) -> FontMetricsBounds {
-        FontMetricsBounds { rows: vec![] }
+    /// # Errors
+    /// * Native styled measurement is not yet implemented for FLTK.
+    fn measure_text(
+        &self,
+        _request: &TextMeasureRequest<'_>,
+    ) -> Result<FontMetricsBounds, TextMeasureError> {
+        Err(TextMeasureError::Backend {
+            message: "FLTK MetricsUnavailable: checked native text measurement is not implemented"
+                .to_owned(),
+        })
     }
 }

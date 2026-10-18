@@ -183,15 +183,15 @@ mod egui {
             let fallback = router.routes.read().expect("router routes lock").clone();
             #[cfg(feature = "static-routes")]
             let fallback = {
-                let mut routes = fallback;
-                routes.extend(
+                let mut fallback_routes = fallback;
+                fallback_routes.extend(
                     router
                         .static_routes
                         .read()
                         .expect("router static routes lock")
                         .clone(),
                 );
-                routes
+                fallback_routes
             };
             let paths: Vec<RoutePath> = assets
                 .iter()
@@ -220,9 +220,9 @@ mod egui {
                         .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
                 })
             }));
-            let mut routes = router.routes.write().expect("router routes lock");
+            let mut registered_routes = router.routes.write().expect("router routes lock");
             for path in paths.into_iter().rev() {
-                routes.insert(0, (path, handler.clone()));
+                registered_routes.insert(0, (path, handler.clone()));
             }
         }
 
@@ -283,7 +283,7 @@ mod egui {
                     }
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {
                         match asset.not_found_behavior.unwrap_or(missing) {
-                            AssetNotFoundBehavior::Fallthrough => continue,
+                            AssetNotFoundBehavior::Fallthrough => {}
                             AssetNotFoundBehavior::NotFound => {
                                 return Err(io::Error::new(
                                     io::ErrorKind::NotFound,
@@ -730,7 +730,7 @@ mod egui {
     pub struct EguiCalculator(pub Option<Arc<Calculator<EguiFontMetrics>>>);
 
     /// Type alias for the egui renderer with custom calculator.
-    pub type EguiRenderer = hyperchad_renderer_egui::backend::EguiRenderer<EguiCalculator>;
+    pub type EguiRenderer = hyperchad_renderer_egui::EguiRenderer<EguiCalculator>;
 
     impl hyperchad_renderer::transformer::layout::Calc for EguiCalculator {
         /// Calculates layout for a container using egui font metrics.
@@ -740,6 +740,29 @@ mod egui {
         /// * If the calculator has not been initialized with an egui context
         fn calc(&self, container: &mut hyperchad_router::Container) -> bool {
             self.0.as_ref().unwrap().calc(container)
+        }
+
+        /// Calculates checked layout without publishing failed geometry.
+        ///
+        /// # Errors
+        ///
+        /// * Returns checked-layout unsupported before context initialization.
+        /// * Propagates structural, budget, and geometry errors from the calculator.
+        fn try_calc(
+            &self,
+            container: &mut hyperchad_router::Container,
+        ) -> Result<bool, hyperchad_renderer::transformer::layout::LayoutError> {
+            use hyperchad_renderer::transformer::layout::{LayoutError, LayoutErrorKind};
+
+            self.0.as_ref().map_or_else(
+                || {
+                    Err(LayoutError {
+                        path: Vec::new(),
+                        kind: LayoutErrorKind::CheckedLayoutUnsupported,
+                    })
+                },
+                |calculator| calculator.try_calc(container),
+            )
         }
     }
 
@@ -869,8 +892,8 @@ mod egui {
                 self.runtime_handle(),
             );
             let calculator = EguiCalculator(None);
-            let renderer = hyperchad_renderer_egui::backend::EguiRenderer::new(
-                router.clone(),
+            let renderer = hyperchad_renderer_egui::EguiRenderer::new(
+                router,
                 #[cfg(feature = "logic")]
                 action_tx,
                 resize_tx,
@@ -879,6 +902,39 @@ mod egui {
             );
 
             self.build_egui(renderer)
+        }
+    }
+
+    #[cfg(test)]
+    mod checked_layout_tests {
+        use hyperchad_renderer::transformer::layout::{Calc, LayoutErrorKind};
+
+        use super::*;
+
+        #[test]
+        fn uninitialized_calculator_rejects_checked_layout() {
+            let mut container = hyperchad_router::Container::default();
+            let error = EguiCalculator(None).try_calc(&mut container).unwrap_err();
+            assert_eq!(error.kind, LayoutErrorKind::CheckedLayoutUnsupported);
+            assert_eq!(error.path, [] as [usize; 0]);
+        }
+
+        #[test]
+        fn initialized_calculator_forwards_checked_layout_errors() {
+            let calculator = hyperchad_renderer_egui::layout::EguiCalc::with_context(
+                EguiCalculator(None),
+                egui::Context::default(),
+            );
+            let mut container = hyperchad_router::Container {
+                element: hyperchad_renderer::transformer::Element::Table,
+                children: vec![hyperchad_router::Container {
+                    element: hyperchad_renderer::transformer::Element::Div,
+                    ..hyperchad_router::Container::default()
+                }],
+                ..hyperchad_router::Container::default()
+            };
+            let error = calculator.try_calc(&mut container).unwrap_err();
+            assert_eq!(error.kind, LayoutErrorKind::InvalidTableStructure);
         }
     }
 }

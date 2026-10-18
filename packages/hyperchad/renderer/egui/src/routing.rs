@@ -358,6 +358,19 @@ pub struct PreparedCompletion {
     cancellation: Arc<Cancellation>,
 }
 
+impl PreparedCompletion {
+    /// Whether the successful native response contains an authored primary view.
+    ///
+    /// This is response shape, not permission to commit navigation. Capture before
+    /// `complete`; update the current URL only when that completion returns `Applied`
+    /// and its context trigger is `Navigation`. Stale/cancelled/failed responses,
+    /// redirects and HEAD metadata must never commit a URL based on this flag alone.
+    #[must_use]
+    pub fn has_primary(&self) -> bool {
+        matches!(&self.message.result, Ok(Some(Content::View(view))) if view.primary.is_some())
+    }
+}
+
 impl std::fmt::Debug for PreparedCompletion {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -584,6 +597,28 @@ impl Routing {
         let Some(pending) = self.pending.get(&id) else {
             return false;
         };
+        pending.cancellation.cancel();
+        document.cancel_request(&pending.ticket);
+        true
+    }
+
+    /// Cancel exactly the completion whose lifecycle delivery failed.
+    ///
+    /// Checks coordinator authority as well as ID; foreign or consumed completions
+    /// return false without changing any request. The host must still consume the
+    /// owned value with `complete`, which returns `Cancelled` and releases its slot
+    /// without applying document or response effects. Repeated cancellation is safe.
+    pub fn cancel_prepared(
+        &mut self,
+        document: &mut Document,
+        prepared: &PreparedCompletion,
+    ) -> bool {
+        let Some(pending) = self.pending.get(&prepared.message.id) else {
+            return false;
+        };
+        if !Arc::ptr_eq(&pending.cancellation, &prepared.cancellation) {
+            return false;
+        }
         pending.cancellation.cancel();
         document.cancel_request(&pending.ticket);
         true
@@ -1811,6 +1846,97 @@ mod tests {
     }
 
     #[test]
+    fn authentic_primary_shape_only_commits_successful_primary_navigation() {
+        for case in [
+            "primary",
+            "fragment",
+            "failed",
+            "stale",
+            "cancelled",
+            "redirect",
+            "local",
+            "head",
+        ] {
+            let (mut document, source) = fixture();
+            let (mut routing, worker) = coordinator();
+            let router = Router::new().with_route_result("/local", move |_| async move {
+                if case == "failed" {
+                    return Err(std::io::Error::other("fixture handler failure"));
+                }
+                let mut view = if case == "fragment" {
+                    View {
+                        fragments: vec![hyperchad_renderer::ReplaceContainer {
+                            selector: Selector::Id("root".into()),
+                            container: Container {
+                                str_id: Some("fragment-root".into()),
+                                ..Container::default()
+                            },
+                        }],
+                        ..View::default()
+                    }
+                } else {
+                    View::from(Container {
+                        str_id: Some("primary-root".into()),
+                        ..Container::default()
+                    })
+                };
+                if case == "redirect" {
+                    view.response.navigation =
+                        Some(ResponseNavigation::Internal("/redirect".into()));
+                }
+                Ok(view)
+            });
+            let mut context = request(source);
+            context.trigger = if case == "local" {
+                Trigger::Route
+            } else {
+                Trigger::Navigation
+            };
+            if case == "head" {
+                context.method = Method::Head;
+            }
+            routing.submit(&mut document, context).unwrap();
+            let mut work = Box::pin(worker.run(router));
+            pump(work.as_mut());
+            let prepared = routing.try_take().unwrap();
+            let has_primary = prepared.has_primary();
+            assert_eq!(
+                has_primary,
+                !matches!(case, "fragment" | "failed"),
+                "{case}"
+            );
+            if case == "stale" {
+                document
+                    .apply_view(View::from(Container::default()), ViewOrigin::Navigation)
+                    .unwrap();
+            } else if case == "cancelled" {
+                assert!(routing.cancel_prepared(&mut document, &prepared));
+            }
+            // This is B's exact URL commit predicate, not a root-change heuristic.
+            let completion = routing.complete(&mut document, prepared).unwrap();
+            let commits_url = has_primary
+                && completion.context.trigger == Trigger::Navigation
+                && matches!(&completion.outcome, Ok(NativeOutcome::Applied(_)));
+            assert_eq!(commits_url, case == "primary", "{case}");
+            match case {
+                "primary" | "fragment" | "local" => {
+                    assert!(matches!(completion.outcome, Ok(NativeOutcome::Applied(_))));
+                }
+                "failed" => assert!(matches!(completion.outcome, Err(RoutingError::Handler(_)))),
+                "stale" => assert!(matches!(completion.outcome, Err(RoutingError::Stale))),
+                "cancelled" => assert!(matches!(completion.outcome, Err(RoutingError::Cancelled))),
+                "redirect" => assert!(matches!(
+                    completion.outcome,
+                    Ok(NativeOutcome::Redirected(_))
+                )),
+                "head" => assert!(matches!(completion.outcome, Ok(NativeOutcome::NoContent))),
+                _ => unreachable!(),
+            }
+            assert_eq!(routing.pending.len(), 0);
+        }
+    }
+
+    #[test]
     fn prepared_completion_debug_redacts_success_payload_and_handler_errors() {
         let cancellation = Arc::new(Cancellation {
             cancelled: AtomicBool::new(false),
@@ -1849,6 +1975,69 @@ mod tests {
     }
 
     #[test]
+    fn failed_lifecycle_cancels_only_its_prepared_request_and_consumes_without_effects() {
+        let (mut document, source) = fixture();
+        let (mut routing, worker) = coordinator();
+        let router = Router::new().with_route("/local", |_| async {
+            let mut view = View::from(Container {
+                str_id: Some("forbidden".into()),
+                ..Container::default()
+            });
+            view.response.navigation = Some(ResponseNavigation::Internal("/forbidden".into()));
+            view.response
+                .cookies
+                .push(hyperchad_renderer::ResponseCookie::secure(
+                    "secret",
+                    "never-apply",
+                ));
+            view
+        });
+        let failed_id = routing.submit(&mut document, request(source)).unwrap();
+        let failed_ticket = routing.pending[&failed_id].ticket.clone();
+        let mut other = request(source);
+        other.scope = "independent".into();
+        let other_id = routing.submit(&mut document, other).unwrap();
+        let other_ticket = routing.pending[&other_id].ticket.clone();
+        let mut work = Box::pin(worker.run(router));
+        pump(work.as_mut());
+        let prepared = routing.try_take().unwrap();
+        assert!(routing.cancel_prepared(&mut document, &prepared));
+        assert!(routing.cancel_prepared(&mut document, &prepared));
+        assert!(!document.request_is_current(&failed_ticket));
+        assert!(document.request_is_current(&other_ticket));
+        assert!(
+            !routing.pending[&other_id]
+                .cancellation
+                .cancelled
+                .load(Ordering::Acquire)
+        );
+        let replay = PreparedCompletion {
+            message: ResultMessage {
+                id: failed_id,
+                result: Ok(None),
+            },
+            cancellation: prepared.cancellation.clone(),
+        };
+        let completion = routing.complete(&mut document, prepared).unwrap();
+        assert!(!routing.cancel_prepared(&mut document, &replay));
+        assert!(routing.complete(&mut document, replay).is_none());
+        assert_eq!(completion.id, failed_id);
+        assert!(matches!(completion.outcome, Err(RoutingError::Cancelled)));
+        assert!(!routing.pending.contains_key(&failed_id));
+        assert_eq!(document.roots()[0].str_id.as_deref(), Some("root"));
+        assert_eq!(document.select(&Selector::Id("forbidden".into()), None), []);
+        // The independent request still reaches policy validation, not cancellation.
+        let completion = routing.try_complete(&mut document).unwrap();
+        assert_eq!(completion.id, other_id);
+        assert!(matches!(
+            completion.outcome,
+            Err(RoutingError::CookieStoreRequired)
+        ));
+        assert_eq!(routing.pending.len(), 0);
+        assert!(!document.request_is_current(&other_ticket));
+    }
+
+    #[test]
     fn prepared_completion_retains_capacity_and_cannot_cross_coordinator_authority() {
         let (mut document, source) = fixture();
         let (mut other_document, other_source) = fixture();
@@ -1870,6 +2059,9 @@ mod tests {
             Err(RoutingError::QueueFull)
         );
         assert!(other.terminal_events(&other_document, &prepared).is_empty());
+        assert!(!other.cancel_prepared(&mut other_document, &prepared));
+        assert!(document.request_is_current(&routing.pending[&id].ticket));
+        assert!(other_document.request_is_current(&other.pending[&other_id].ticket));
         // Moving a completion to the wrong owner must not consume that owner's job.
         assert!(other.complete(&mut other_document, prepared).is_none());
         assert!(matches!(

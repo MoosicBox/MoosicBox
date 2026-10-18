@@ -10,6 +10,12 @@
 //! `activate_button` once; `take_actions` supplies captured Submit payloads to the
 //! routing orchestrator. Reset is already applied and is only a notification.
 //! Never collect submission values from authored defaults or encode transport here.
+//!
+//! Exact pointer bounds also require the frame host to set egui's global
+//! `interaction.interact_radius` to zero before `begin_pass`. Native hit candidates
+//! are selected from last-frame geometry at pass start; the default five-point
+//! nearest-widget search can otherwise activate a control outside its clipped box.
+//! A per-control paint-time style override cannot correct that frame-start search.
 
 pub mod native_files;
 pub use native_files::{FileLimits, FileServiceError, NativeFileService};
@@ -17,7 +23,12 @@ pub use native_files::{FileLimits, FileServiceError, NativeFileService};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use crate::text_layout::{FontRegistry, request_job};
 use eframe::egui::{self, Id, Key, Sense, WidgetInfo, WidgetType};
+use hyperchad_transformer::layout::font::{
+    TextFontFamily, TextFontWeight, TextMeasureRequest, resolve_text_weight,
+};
+use hyperchad_transformer::models::{FontWeight, WhiteSpace};
 use hyperchad_transformer::{Container, Element, Input};
 
 use super::WidgetAdapter;
@@ -122,7 +133,86 @@ struct Spec {
     choices: Vec<Choice>,
 }
 
+#[derive(Clone, Default)]
+struct EditorStyle {
+    families: Option<Vec<String>>,
+    weights: Vec<FontWeight>,
+    whitespace: Option<WhiteSpace>,
+    color: Option<hyperchad_color::Color>,
+    authored_size: bool,
+    calculated_path: bool,
+}
+
+impl EditorStyle {
+    fn inherited(document: &Document, mut key: ElementKey) -> Self {
+        let mut ancestors = Vec::new();
+        loop {
+            ancestors.push(key);
+            let Some(parent) = document.parent(key) else {
+                break;
+            };
+            key = parent;
+        }
+        let mut style = Self::default();
+        for key in ancestors.into_iter().rev() {
+            let Some(node) = document.get(key) else {
+                continue;
+            };
+            style.apply(node);
+        }
+        style
+    }
+
+    fn apply(&mut self, node: &Container) {
+        if let Some(families) = &node.font_family {
+            self.families = Some(families.clone());
+        }
+        if let Some(weight) = node.font_weight {
+            self.weights.push(weight);
+        }
+        self.whitespace = node.white_space.or(self.whitespace);
+        self.color = node.color.or(self.color);
+        self.authored_size |= node.font_size.is_some();
+    }
+
+    fn job(
+        &self,
+        registry: &FontRegistry,
+        text: &str,
+        size: f32,
+        width: f32,
+        whitespace: WhiteSpace,
+    ) -> Result<egui::text::LayoutJob, String> {
+        let weight = self
+            .weights
+            .iter()
+            .try_fold(
+                TextFontWeight::CompatibilityDefault,
+                |inherited, authored| {
+                    resolve_text_weight(*authored, inherited, registry.compatibility_weight())
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        request_job(
+            registry,
+            &TextMeasureRequest {
+                text,
+                family: self.families.as_deref().map_or(
+                    TextFontFamily::CompatibilityDefault,
+                    TextFontFamily::Authored,
+                ),
+                weight,
+                size,
+                wrap_width: width,
+                whitespace: Some(whitespace),
+            },
+        )
+        .map_err(|error| error.to_string())
+    }
+}
+
 struct Field {
+    style: EditorStyle,
     stamp: ElementStamp,
     spec: Spec,
     value: Value,
@@ -216,6 +306,54 @@ impl FormsAdapter {
     #[must_use]
     pub fn take_changes(&mut self) -> Vec<FormChange> {
         std::mem::take(&mut self.changes)
+    }
+
+    /// Supply the actual calculated root-to-control style path for this frame.
+    /// Call after reconciliation and before `paint_node` when responsive ancestor
+    /// typography differs from authored state. The last entry is this control.
+    ///
+    /// # Errors
+    /// * The control stamp is stale/missing, the path is empty, or its last node
+    ///   is not the same kind of control as the reconciled field.
+    pub fn set_calculated_text_path(
+        &mut self,
+        source: ElementStamp,
+        path: &[&Container],
+    ) -> Result<(), String> {
+        let field = self
+            .fields
+            .get_mut(&source.key)
+            .filter(|field| field.stamp == source)
+            .ok_or("editor style source is stale or missing")?;
+        let last = path.last().ok_or("editor style path is empty")?;
+        let matches = matches!(
+            (&last.element, field.spec.kind),
+            (Element::Textarea { .. }, ControlKind::Textarea)
+                | (
+                    Element::Input {
+                        input: Input::Text { .. },
+                        ..
+                    },
+                    ControlKind::Text
+                )
+                | (
+                    Element::Input {
+                        input: Input::Password { .. },
+                        ..
+                    },
+                    ControlKind::Password
+                )
+        );
+        if !matches {
+            return Err("editor style path must end at its text control".into());
+        }
+        let mut style = EditorStyle::default();
+        for node in path {
+            style.apply(node);
+        }
+        style.calculated_path = true;
+        field.style = style;
+        Ok(())
     }
 
     /// Return the authoritative native focus ID after checking the full stamp.
@@ -671,6 +809,14 @@ fn specification(document: &Document, key: ElementKey, container: &Container) ->
 }
 
 impl WidgetAdapter for FormsAdapter {
+    fn set_calculated_text_path(
+        &mut self,
+        source: ElementStamp,
+        path: &[&Container],
+    ) -> Result<(), String> {
+        Self::set_calculated_text_path(self, source, path)
+    }
+
     fn reconcile(
         &mut self,
         document: &Document,
@@ -715,7 +861,9 @@ impl WidgetAdapter for FormsAdapter {
                 ),
                 _ => unreachable!(),
             };
+            let style = EditorStyle::inherited(document, key);
             let field = self.fields.entry(key).or_insert_with(|| Field {
+                style: style.clone(),
                 stamp,
                 value: spec.initial.clone(),
                 spec: spec.clone(),
@@ -731,6 +879,7 @@ impl WidgetAdapter for FormsAdapter {
                 editor_revision: 0,
                 pending: None,
             });
+            field.style = style;
             field.reconcile(stamp, spec);
             field.name = name;
             field.form = enclosing_form(document, key);
@@ -780,9 +929,24 @@ impl WidgetAdapter for FormsAdapter {
         ui: &mut egui::Ui,
         stamp: ElementStamp,
         authored: &Container,
-        _calculated: &Container,
+        calculated: &Container,
         geometry: &NodeGeometry<ElementKey>,
     ) -> Result<NodeOutput, String> {
+        // Native controls may have intrinsic minima larger than E's allocated
+        // box. The local UI confines paint and registered pointer geometry;
+        // it never measures/reflows any HyperChad descendants.
+        let mut slot = ui.new_child(
+            egui::UiBuilder::new()
+                .id(("hyperchad-form-slot", stamp.key))
+                .max_rect(geometry.content_box)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+        );
+        slot.set_clip_rect(
+            ui.clip_rect()
+                .intersect(geometry.paint_clip)
+                .intersect(geometry.content_box),
+        );
+        let ui = &mut slot;
         if matches!(authored.element, Element::Option { .. }) {
             return self.paint_option(ui, stamp, geometry);
         }
@@ -811,19 +975,12 @@ impl WidgetAdapter for FormsAdapter {
         let mut changed_value = None;
         let mut response = match &mut field.value {
             Value::Text(_) => {
-                let (response, value) = paint_text(ui, field, authored, rect);
+                let (response, value) = paint_text(ui, field, authored, calculated, geometry)?;
                 changed_value = value;
                 response
             }
             Value::Checked(checked) => {
-                let response = ui
-                    .scope_builder(egui::UiBuilder::new().id(id), |ui| {
-                        ui.add_enabled_ui(!field.disabled, |ui| {
-                            ui.put(rect, egui::Checkbox::new(&mut *checked, &field.label))
-                        })
-                        .inner
-                    })
-                    .inner;
+                let response = paint_checkbox(ui, id, rect, checked, &field.label, field.disabled);
                 if response.changed() {
                     changed_value = Some(checked.to_string());
                 }
@@ -838,6 +995,11 @@ impl WidgetAdapter for FormsAdapter {
                 &mut self.file_requests,
             )?,
         };
+        response.rect = response.rect.intersect(rect);
+        response.interact_rect = response
+            .interact_rect
+            .intersect(ui.clip_rect())
+            .intersect(rect);
         field.native_id = Some(response.id);
         response = label_and_focus(ui, field, response, rect);
         if response.clicked() {
@@ -896,6 +1058,95 @@ impl WidgetAdapter for FormsAdapter {
             .count()
     }
 }
+
+#[cfg(test)]
+mod calculated_style_dispatch_tests {
+    use super::*;
+    use crate::document::ViewOrigin;
+    use hyperchad_renderer::View;
+
+    fn set_path<C: WidgetAdapter>(
+        adapter: &mut C,
+        source: ElementStamp,
+        path: &[&Container],
+    ) -> Result<(), String> {
+        adapter.set_calculated_text_path(source, path)
+    }
+
+    #[test]
+    fn generic_adapter_forwards_calculated_style_and_validation_errors() {
+        let mut document = Document::new();
+        let control = Container {
+            id: 2,
+            element: Element::Input {
+                input: Input::Text {
+                    value: Some("inherited".into()),
+                    placeholder: None,
+                },
+                name: None,
+                autofocus: None,
+            },
+            ..Container::default()
+        };
+        document
+            .apply_view(
+                View {
+                    primary: Some(Container {
+                        id: 1,
+                        font_weight: Some(FontWeight::Bold),
+                        children: vec![control.clone()],
+                        ..Container::default()
+                    }),
+                    ..View::default()
+                },
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let source = document.stamp(document.numeric_matches(2)[0]).unwrap();
+        let mut forms = FormsAdapter::new();
+        forms.reconcile(&document, &[]).unwrap();
+        let mut calculated_parent = document.roots()[0].clone();
+        calculated_parent.font_family = Some(vec!["Ubuntu Light".into()]);
+        calculated_parent.font_weight = Some(FontWeight::Light);
+        set_path(&mut forms, source, &[&calculated_parent, &control]).unwrap();
+        let style = &forms.fields[&source.key].style;
+        assert!(style.calculated_path);
+        let job = style
+            .job(
+                &FontRegistry::compatibility(),
+                "inherited",
+                24.0,
+                f32::INFINITY,
+                WhiteSpace::Normal,
+            )
+            .unwrap();
+        assert_eq!(
+            job.sections[0].format.font_id,
+            FontRegistry::compatibility()
+                .resolve(Some(&["Ubuntu Light".into()]), Some(300), 24.0)
+                .unwrap()
+        );
+        let expired_source = ElementStamp {
+            generation: source.generation + 1,
+            ..source
+        };
+        for (stamp, path) in [
+            (expired_source, vec![&calculated_parent, &control]),
+            (source, vec![]),
+            (source, vec![&calculated_parent]),
+        ] {
+            let expected = FormsAdapter::set_calculated_text_path(&mut forms, stamp, &path);
+            assert!(expected.is_err());
+            assert_eq!(set_path(&mut forms, stamp, &path), expected);
+        }
+    }
+}
+
+#[cfg(test)]
+mod allocation_tests;
+
+#[cfg(test)]
+mod typography_tests;
 
 #[cfg(test)]
 mod tests;
@@ -983,6 +1234,34 @@ impl FormsAdapter {
     }
 }
 
+fn paint_checkbox(
+    ui: &mut egui::Ui,
+    id: Id,
+    rect: egui::Rect,
+    checked: &mut bool,
+    label: &str,
+    disabled: bool,
+) -> egui::Response {
+    ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
+        let side = rect.width().min(rect.height()).max(0.0);
+        let spacing = ui.spacing_mut();
+        spacing.interact_size = egui::Vec2::splat(side);
+        spacing.icon_width = side;
+        spacing.icon_width_inner = side * 0.75;
+        spacing.button_padding = egui::Vec2::ZERO;
+        let response = ui
+            .add_enabled_ui(!disabled, |ui| {
+                ui.put(rect, egui::Checkbox::without_text(&mut *checked))
+            })
+            .inner;
+        // The accessible name does not consume shared child layout space.
+        response
+            .widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, !disabled, *checked, label));
+        response
+    })
+    .inner
+}
+
 fn prepare_editor(context: &egui::Context, id: Id, revision: u64) {
     let revision_id = id.with("revision");
     let previous = context.data_mut(|data| data.get_temp::<u64>(revision_id));
@@ -996,15 +1275,62 @@ fn paint_text(
     ui: &mut egui::Ui,
     field: &mut Field,
     authored: &Container,
-    rect: egui::Rect,
-) -> (egui::Response, Option<String>) {
+    calculated: &Container,
+    geometry: &NodeGeometry<ElementKey>,
+) -> Result<(egui::Response, Option<String>), String> {
+    let rect = geometry.content_box;
+    let mut style = field.style.clone();
+    style.families = calculated.font_family.clone().or(style.families);
+    style.whitespace = calculated.white_space.or(style.whitespace);
+    style.color = calculated.color.or(style.color);
+    if !style.calculated_path && calculated.font_weight != authored.font_weight {
+        if authored.font_weight.is_some() {
+            style.weights.pop();
+        }
+        if let Some(weight) = calculated.font_weight {
+            style.weights.push(weight);
+        }
+    }
+    let size = calculated
+        .calculated_font_size
+        .or_else(|| (!style.authored_size).then_some(14.0))
+        .ok_or("editor requires calculated inherited font size")?
+        * geometry.transform.scale;
+    let registry = FontRegistry::for_context(ui.ctx());
+    let multiline = field.spec.kind == ControlKind::Textarea;
+    let whitespace = style.whitespace.unwrap_or_default();
+    let mut template = style.job(
+        &registry,
+        "",
+        size,
+        if multiline {
+            rect.width()
+        } else {
+            f32::INFINITY
+        },
+        whitespace,
+    )?;
+    let font = template.sections[0].format.font_id.clone();
+    let foreground = style
+        .color
+        .map_or_else(|| ui.visuals().text_color(), super::paint::color);
+    template.sections[0].format.color = foreground;
+    let password = field.spec.kind == ControlKind::Password;
+    let mut layouter = |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, width: f32| {
+        let mut job = template.clone();
+        job.text = editor_display(buffer.as_str(), whitespace, password);
+        job.sections[0].byte_range = 0..job.text.len();
+        if multiline && whitespace != WhiteSpace::Preserve {
+            job.wrap.max_width = width;
+        }
+        ui.fonts_mut(|fonts| fonts.layout_job(job))
+    };
     let id = field.id();
     prepare_editor(ui.ctx(), id, field.editor_revision);
     let Value::Text(value) = &mut field.value else {
         unreachable!()
     };
     let mut changed_value = None;
-    let password = field.spec.kind == ControlKind::Password;
     let placeholder = match &authored.element {
         Element::Input {
             input: Input::Text { placeholder, .. } | Input::Password { placeholder, .. },
@@ -1023,10 +1349,16 @@ fn paint_text(
             ui.put(
                 rect,
                 editor
+                    .font(font)
+                    .layouter(&mut layouter)
+                    .text_color(foreground)
                     .id(id)
                     .password(password)
                     .interactive(!field.readonly)
                     .hint_text(placeholder)
+                    .margin(egui::Margin::ZERO)
+                    .min_size(rect.size())
+                    .desired_rows(1)
                     .desired_width(rect.width()),
             )
         })
@@ -1035,7 +1367,36 @@ fn paint_text(
     if response.changed() {
         changed_value = Some(value.clone());
     }
-    (response, changed_value)
+    Ok((response, changed_value))
+}
+
+/// Preserve one galley character per buffer character. Collapsed ASCII whitespace
+/// is represented by zero-advance, nonbreaking glyphs, never removed from the
+/// editor buffer: egui's Unicode cursor indices remain authoritative. NBSP stays.
+fn editor_display(text: &str, whitespace: WhiteSpace, password: bool) -> String {
+    if password {
+        return std::iter::repeat_n(
+            egui::epaint::text::PASSWORD_REPLACEMENT_CHAR,
+            text.chars().count(),
+        )
+        .collect();
+    }
+    if whitespace != WhiteSpace::Normal {
+        return text.to_owned();
+    }
+    let mut previous_space = false;
+    text.chars()
+        .map(|character| {
+            let space = matches!(character, ' ' | '\t' | '\n' | '\r' | '\u{000c}');
+            let rendered = if space {
+                if previous_space { '\u{2060}' } else { ' ' }
+            } else {
+                character
+            };
+            previous_space = space;
+            rendered
+        })
+        .collect()
 }
 
 fn paint_select(

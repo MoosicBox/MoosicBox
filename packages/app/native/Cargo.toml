@@ -20,6 +20,11 @@ name              = "moosicbox_app_native"
 path              = "src/main.rs"
 required-features = []
 
+[[example]]
+name              = "egui_acceptance"
+path              = "examples/egui_acceptance.rs"
+required-features = ["egui-glow", "x11"]
+
 [package.metadata.bundle]
 category          = "Music"
 copyright         = "Copyright (c) Braden Steffaniak 2025. All rights reserved."
@@ -50,6 +55,7 @@ hyperchad = { workspace = true, features = [
     "router",
     "router-form",
     "router-serde",
+    "router-static-routes",
     "transformer",
 ] }
 moosicbox_app_models = { workspace = true, features = ["music-api-api"] }
@@ -157,8 +163,6 @@ _sse = [
 
 egui = ["_calculated_canvas", "hyperchad/renderer-egui"]
 egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
-egui-v1 = ["egui", "hyperchad/renderer-egui-v1"]
-egui-v2 = ["egui", "hyperchad/renderer-egui-v2"]
 egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]
 fltk = ["_calculated_canvas", "hyperchad/renderer-fltk"]
 html = ["_canvas", "hyperchad/renderer-html"]

@@ -9,7 +9,850 @@ use paste::paste;
 
 use crate::Container;
 
-use super::{Calc, font::FontMetrics};
+use super::font::{
+    FontMetricsBounds, TextFontFamily, TextFontWeight, TextMeasureError, TextMeasureRequest,
+};
+use super::{Calc, LayoutError, LayoutErrorKind, TableSpanAxis, font::FontMetrics};
+
+fn reset_text_wrap_metadata(root: &mut Container) {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        node.calculated_text_wrap_width = None;
+        stack.extend(node.children.iter_mut());
+    }
+}
+
+#[derive(Clone)]
+struct TextStyle {
+    family: Option<std::rc::Rc<Vec<String>>>,
+    weight: TextFontWeight,
+    whitespace: Option<hyperchad_transformer_models::WhiteSpace>,
+    size: f32,
+    path: Vec<usize>,
+}
+
+// One style/path index per calculation; no Container cloning and no mutation of
+// authored styles. Node addresses are stable throughout these layout passes.
+struct TextMeasurements<'a, F: FontMetrics> {
+    metrics: &'a F,
+    styles: std::collections::BTreeMap<usize, TextStyle>,
+    failure: std::cell::RefCell<Option<LayoutError>>,
+}
+
+impl<'a, F: FontMetrics> TextMeasurements<'a, F> {
+    fn new(
+        metrics: &'a F,
+        root: &Container,
+        defaults: CalculatorDefaults,
+    ) -> Result<Self, LayoutError> {
+        let mut styles = std::collections::BTreeMap::new();
+        let initial = TextStyle {
+            family: None,
+            weight: TextFontWeight::CompatibilityDefault,
+            whitespace: None,
+            size: defaults.font_size,
+            path: Vec::new(),
+        };
+        let vw = root.calculated_width.unwrap_or_default();
+        let vh = root.calculated_height.unwrap_or_default();
+        let mut stack = vec![(root, initial)];
+        while let Some((node, mut style)) = stack.pop() {
+            if let Some(family) = &node.font_family {
+                style.family = Some(std::rc::Rc::new(family.clone()));
+            }
+            if let Some(weight) = node.font_weight {
+                style.weight = super::font::resolve_text_weight(
+                    weight,
+                    style.weight,
+                    metrics.compatibility_weight(),
+                )
+                .map_err(|source| LayoutError {
+                    path: style.path.clone(),
+                    kind: LayoutErrorKind::TextMeasurement(source),
+                })?;
+            }
+            if let Some(whitespace) = node.white_space {
+                style.whitespace = Some(whitespace);
+            }
+            if let Some(size) = &node.font_size {
+                style.size = size.calc(style.size, vw, vh);
+            } else if let crate::Element::Heading { size } = node.element {
+                style.size = match size {
+                    crate::HeaderSize::H1 => defaults.h1_font_size,
+                    crate::HeaderSize::H2 => defaults.h2_font_size,
+                    crate::HeaderSize::H3 => defaults.h3_font_size,
+                    crate::HeaderSize::H4 => defaults.h4_font_size,
+                    crate::HeaderSize::H5 => defaults.h5_font_size,
+                    crate::HeaderSize::H6 => defaults.h6_font_size,
+                };
+            }
+            for (index, child) in node.children.iter().enumerate().rev() {
+                let mut inherited = style.clone();
+                inherited.path.push(index);
+                stack.push((child, inherited));
+            }
+            styles.insert(std::ptr::from_ref(node).addr(), style);
+        }
+        Ok(Self {
+            metrics,
+            styles,
+            failure: std::cell::RefCell::new(None),
+        })
+    }
+
+    fn measure(
+        &self,
+        node: &Container,
+        text: &str,
+        width: f32,
+    ) -> Result<FontMetricsBounds, LayoutError> {
+        let style = &self.styles[&std::ptr::from_ref(node).addr()];
+        let request = TextMeasureRequest {
+            text,
+            family: style
+                .family
+                .as_ref()
+                .map_or(TextFontFamily::CompatibilityDefault, |names| {
+                    TextFontFamily::Authored(names)
+                }),
+            weight: style.weight,
+            size: style.size,
+            wrap_width: width,
+            whitespace: style.whitespace,
+        };
+        let fail = |source| LayoutError {
+            path: style.path.clone(),
+            kind: LayoutErrorKind::TextMeasurement(source),
+        };
+        if !request.size.is_finite()
+            || request.size <= 0.0
+            || request.wrap_width.is_nan()
+            || request.wrap_width < 0.0
+        {
+            return Err(fail(TextMeasureError::InvalidRequest {
+                message: "text size must be positive and finite; wrap width must be nonnegative"
+                    .into(),
+            }));
+        }
+        let bounds = self.metrics.measure_text(&request).map_err(fail)?;
+        if bounds.rows.iter().any(|row| {
+            !row.width.is_finite() || !row.height.is_finite() || row.width < 0.0 || row.height < 0.0
+        }) || !bounds.height().is_finite()
+        {
+            return Err(fail(TextMeasureError::Backend {
+                message: "non-finite or negative logical text bounds".into(),
+            }));
+        }
+        Ok(bounds)
+    }
+
+    // Shared content-only control policy. Native chrome must fit the allocated
+    // box; these are logical font units, not backend widget minimum sizes.
+    fn control_size(&self, node: &Container) -> Result<Option<(f32, f32)>, LayoutError> {
+        use crate::{Element, Input, Number};
+        let style = &self.styles[&std::ptr::from_ref(node).addr()];
+        let count = |value: Option<&Number>, default: f32| -> Result<f32, LayoutError> {
+            let value = match value {
+                None => default,
+                Some(value @ (Number::Integer(_) | Number::Real(_))) => value.calc(0.0, 0.0, 0.0),
+                _ => {
+                    return Err(LayoutError {
+                        path: style.path.clone(),
+                        kind: LayoutErrorKind::TextMeasurement(TextMeasureError::InvalidRequest {
+                            message:
+                                "control rows/columns must be positive integral unitless counts"
+                                    .into(),
+                        }),
+                    });
+                }
+            };
+            if !value.is_finite() || value <= 0.0 || value.fract() != 0.0 {
+                return Err(LayoutError {
+                    path: style.path.clone(),
+                    kind: LayoutErrorKind::TextMeasurement(TextMeasureError::InvalidRequest {
+                        message: "control rows/columns must be positive integral unitless counts"
+                            .into(),
+                    }),
+                });
+            }
+            Ok(value)
+        };
+        let (columns, rows) = match &node.element {
+            Element::Input {
+                input: Input::Hidden { .. },
+                ..
+            } => return Ok(Some((0.0, 0.0))),
+            Element::Input {
+                input: Input::Checkbox { .. },
+                ..
+            } => return Ok(Some((style.size, style.size))),
+            Element::Input {
+                input: Input::Text { .. } | Input::Password { .. },
+                ..
+            } => (20.0, 1.0),
+            Element::Textarea { rows, cols, .. } => {
+                (count(cols.as_ref(), 20.0)?, count(rows.as_ref(), 2.0)?)
+            }
+            // Select/file chrome has no approved shared policy. Do not pretend
+            // these controls are text editors; explicit authored sizes remain.
+            _ => return Ok(None),
+        };
+        if node.width.is_some() && node.height.is_some() {
+            return Ok(None);
+        }
+        let bounds = self.measure(node, "0", f32::INFINITY)?;
+        let width = bounds.width() * columns;
+        let height = bounds.height() * rows;
+        if !width.is_finite() || !height.is_finite() {
+            return Err(LayoutError {
+                path: style.path.clone(),
+                kind: LayoutErrorKind::InvalidGeometry,
+            });
+        }
+        Ok(Some((width, height)))
+    }
+
+    fn record(&self, error: LayoutError) {
+        let mut failure = self.failure.borrow_mut();
+        if failure.is_none() {
+            *failure = Some(error);
+        }
+    }
+
+    fn check(&self) -> Result<(), LayoutError> {
+        self.failure.borrow_mut().take().map_or(Ok(()), Err)
+    }
+
+    fn failed(&self) -> bool {
+        self.failure.borrow().is_some()
+    }
+}
+
+// Table tracks are solved in the shared passes, before text reflow and ancestor
+// allocation. Paths (never IDs) identify cells, including duplicate-ID trees.
+mod table_layout {
+    use std::collections::BTreeSet;
+
+    use super::{Container, FontMetrics, LayoutError, LayoutErrorKind, TableSpanAxis};
+    use crate::{Element, Number};
+
+    // Bound each axis at 1024, grid slots at 65536, and cumulative grid
+    // slots at 262144 per checked calculation. Reject, never truncate spans.
+    const MAX_TRACKS: usize = 1024;
+    const MAX_SLOTS: usize = 65_536;
+    const MAX_TOTAL_SLOTS: usize = 262_144;
+
+    struct Cell {
+        path: Vec<usize>,
+        row: usize,
+        column: usize,
+        rows: usize,
+        columns: usize,
+    }
+
+    struct Grid {
+        rows: Vec<Vec<usize>>,
+        cells: Vec<Cell>,
+        columns: usize,
+        slots: usize,
+    }
+
+    fn error(path: &[usize], kind: LayoutErrorKind) -> LayoutError {
+        LayoutError {
+            path: path.to_vec(),
+            kind,
+        }
+    }
+
+    fn span(
+        value: Option<&Number>,
+        axis: TableSpanAxis,
+        path: &[usize],
+    ) -> Result<usize, LayoutError> {
+        let invalid = || error(path, LayoutErrorKind::InvalidTableSpan { axis });
+        let value = match value {
+            None => return Ok(1),
+            Some(Number::Integer(value)) if *value > 0 => {
+                usize::try_from(*value).map_err(|_| invalid())?
+            }
+            Some(Number::Real(value))
+                if value.is_finite() && *value > 0.0 && value.fract() == 0.0 =>
+            {
+                // Check the allocation bound before the conversion, including on
+                // platforms where usize cannot represent every finite f32.
+                if *value > track_count(MAX_TRACKS) {
+                    return Err(error(path, LayoutErrorKind::TableBudgetExceeded));
+                }
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                {
+                    *value as usize
+                }
+            }
+            _ => return Err(invalid()),
+        };
+        if value > MAX_TRACKS {
+            return Err(error(path, LayoutErrorKind::TableBudgetExceeded));
+        }
+        Ok(value)
+    }
+
+    fn at<'a>(mut root: &'a Container, path: &[usize]) -> &'a Container {
+        for index in path {
+            root = &root.children[*index];
+        }
+        root
+    }
+
+    fn at_mut<'a>(mut root: &'a mut Container, path: &[usize]) -> &'a mut Container {
+        for index in path {
+            root = &mut root.children[*index];
+        }
+        root
+    }
+
+    fn cell_spans(cell: &Container, path: &[usize]) -> Result<(usize, usize), LayoutError> {
+        match &cell.element {
+            Element::TH { rows, columns } | Element::TD { rows, columns } => Ok((
+                span(rows.as_ref(), TableSpanAxis::Row, path)?,
+                span(columns.as_ref(), TableSpanAxis::Column, path)?,
+            )),
+            _ => Err(error(path, LayoutErrorKind::InvalidTableStructure)),
+        }
+    }
+
+    fn grid(table: &Container) -> Result<Grid, LayoutError> {
+        let mut rows = Vec::new();
+        let mut group_ends = Vec::new();
+        for (index, child) in table.children.iter().enumerate() {
+            match child.element {
+                Element::TR => {
+                    if !child.is_hidden() {
+                        rows.push(vec![index]);
+                    }
+                }
+                Element::THead | Element::TBody => {
+                    if group_ends.last().copied().unwrap_or_default() < rows.len() {
+                        group_ends.push(rows.len());
+                    }
+                    for (row_index, row) in child.children.iter().enumerate() {
+                        if row.element != Element::TR {
+                            return Err(error(
+                                &[index, row_index],
+                                LayoutErrorKind::InvalidTableStructure,
+                            ));
+                        }
+                        if !child.is_hidden() && !row.is_hidden() {
+                            rows.push(vec![index, row_index]);
+                        }
+                        if rows.len() > MAX_TRACKS {
+                            return Err(error(
+                                &[index, row_index],
+                                LayoutErrorKind::TableBudgetExceeded,
+                            ));
+                        }
+                    }
+                    group_ends.push(rows.len());
+                }
+                _ => return Err(error(&[index], LayoutErrorKind::InvalidTableStructure)),
+            }
+            if rows.len() > MAX_TRACKS {
+                return Err(error(&[index], LayoutErrorKind::TableBudgetExceeded));
+            }
+        }
+        group_ends.push(rows.len());
+        if rows.len() > MAX_TRACKS {
+            return Err(error(&[], LayoutErrorKind::TableBudgetExceeded));
+        }
+        let mut cells = Vec::new();
+        let mut occupied = BTreeSet::new();
+        let mut columns = 0;
+        for (row_index, path) in rows.iter().enumerate() {
+            let row = at(table, path);
+            let end = *group_ends
+                .iter()
+                .find(|end| **end > row_index)
+                .unwrap_or(&rows.len());
+            let mut column = 0;
+            for (index, cell) in row.children.iter().enumerate() {
+                let mut path = path.clone();
+                path.push(index);
+                let (row_span, column_span) = cell_spans(cell, &path)?;
+                if cell.is_hidden() {
+                    continue;
+                }
+                if row_index + row_span > end {
+                    return Err(error(&path, LayoutErrorKind::InvalidTableStructure));
+                }
+                while column < MAX_TRACKS
+                    && (column..column + column_span).any(|x| occupied.contains(&(row_index, x)))
+                {
+                    column += 1;
+                }
+                if column + column_span > MAX_TRACKS
+                    || occupied.len() + row_span * column_span > MAX_SLOTS
+                {
+                    return Err(error(&path, LayoutErrorKind::TableBudgetExceeded));
+                }
+                for y in row_index..row_index + row_span {
+                    for x in column..column + column_span {
+                        occupied.insert((y, x));
+                    }
+                }
+                cells.push(Cell {
+                    path,
+                    row: row_index,
+                    column,
+                    rows: row_span,
+                    columns: column_span,
+                });
+                column += column_span;
+                columns = columns.max(column);
+            }
+        }
+        let slots = rows.len() * columns;
+        if slots > MAX_SLOTS {
+            return Err(error(&[], LayoutErrorKind::TableBudgetExceeded));
+        }
+        Ok(Grid {
+            rows,
+            cells,
+            columns,
+            slots,
+        })
+    }
+
+    pub(super) fn preflight(root: &Container) -> Result<(), LayoutError> {
+        let mut stack = vec![(root, Vec::new())];
+        let mut slots = 0usize;
+        while let Some((node, path)) = stack.pop() {
+            if let Element::TH { rows, columns } | Element::TD { rows, columns } = &node.element {
+                span(rows.as_ref(), TableSpanAxis::Row, &path)?;
+                span(columns.as_ref(), TableSpanAxis::Column, &path)?;
+            }
+            if node.element == Element::Table {
+                let grid = grid(node).map_err(|mut diagnostic| {
+                    let mut full_path = path.clone();
+                    full_path.extend(diagnostic.path);
+                    diagnostic.path = full_path;
+                    diagnostic
+                })?;
+                slots += grid.slots;
+                if slots > MAX_TOTAL_SLOTS {
+                    return Err(error(&path, LayoutErrorKind::TableBudgetExceeded));
+                }
+            }
+            for (index, child) in node.children.iter().enumerate().rev() {
+                // Validate structure even in hidden rows/sections.
+                if node.element == Element::TR
+                    && !matches!(child.element, Element::TH { .. } | Element::TD { .. })
+                {
+                    let mut path = path;
+                    path.push(index);
+                    return Err(error(&path, LayoutErrorKind::InvalidTableStructure));
+                }
+                let mut path = path.clone();
+                path.push(index);
+                stack.push((child, path));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn reset_table_measurements(root: &mut Container) {
+        let mut stack = vec![(root, false)];
+        while let Some((node, inside)) = stack.pop() {
+            let inside = inside || node.element == Element::Table;
+            if inside {
+                node.calculated_preferred_width = None;
+                node.calculated_preferred_height = None;
+                node.calculated_child_min_width = None;
+                node.calculated_child_min_height = None;
+                node.calculated_min_width = None;
+                node.calculated_max_width = None;
+                node.calculated_min_height = None;
+                node.calculated_max_height = None;
+                node.calculated_margin_left = None;
+                node.calculated_margin_right = None;
+                node.calculated_margin_top = None;
+                node.calculated_margin_bottom = None;
+                node.calculated_padding_left = None;
+                node.calculated_padding_right = None;
+                node.calculated_padding_top = None;
+                node.calculated_padding_bottom = None;
+                node.calculated_font_size = None;
+            }
+            for child in &mut node.children {
+                stack.push((child, inside));
+            }
+        }
+    }
+
+    pub(super) fn geometry(root: &Container) -> Vec<[Option<f32>; 4]> {
+        let mut result = Vec::new();
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            result.push([
+                node.calculated_width,
+                node.calculated_height,
+                node.calculated_x,
+                node.calculated_y,
+            ]);
+            stack.extend(node.children.iter());
+        }
+        result
+    }
+
+    pub(super) fn validate_geometry(root: &Container) -> Result<(), LayoutError> {
+        let mut stack = vec![(root, Vec::new())];
+        while let Some((node, path)) = stack.pop() {
+            if [node.calculated_width, node.calculated_height]
+                .into_iter()
+                .flatten()
+                .any(|value| value < 0.0)
+            {
+                return Err(error(&path, LayoutErrorKind::InvalidGeometry));
+            }
+            if [
+                node.calculated_width,
+                node.calculated_height,
+                node.calculated_x,
+                node.calculated_y,
+            ]
+            .into_iter()
+            .flatten()
+            .any(|value| !value.is_finite())
+            {
+                return Err(error(&path, LayoutErrorKind::InvalidGeometry));
+            }
+            for (index, child) in node.children.iter().enumerate().rev() {
+                let mut path = path.clone();
+                path.push(index);
+                stack.push((child, path));
+            }
+        }
+        Ok(())
+    }
+
+    // Non-flex column flow keeps tables at measured row height and gives the
+    // remaining allocation to ordinary unsized siblings. Do not stretch table
+    // rows, discard measured sibling content, or change authored dimensions.
+    pub(super) fn allocate_sibling_heights(parent: &mut Container) {
+        use hyperchad_transformer_models::LayoutDirection;
+        if parent.direction != LayoutDirection::Column
+            || parent.is_flex_container()
+            || !parent
+                .relative_positioned_elements()
+                .any(|child| child.element == Element::Table)
+        {
+            return;
+        }
+        let eligible = |child: &Container| {
+            child.element != Element::Table && child.height.is_none() && !child.is_span()
+        };
+        let count = parent
+            .relative_positioned_elements()
+            .filter(|child| eligible(child))
+            .count();
+        if count == 0 {
+            return;
+        }
+        let used: f32 = parent
+            .relative_positioned_elements()
+            .map(|child| child.bounding_calculated_height().unwrap_or_default())
+            .sum();
+        let children = parent.relative_positioned_elements().count();
+        #[allow(clippy::cast_precision_loss)]
+        let gaps =
+            parent.calculated_row_gap.unwrap_or_default() * children.saturating_sub(1) as f32;
+        let surplus = (parent.calculated_height.unwrap_or_default() - used - gaps).max(0.0);
+        if surplus == 0.0 {
+            return;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let increment = surplus / count as f32;
+        for child in parent
+            .relative_positioned_elements_mut()
+            .filter(|child| eligible(child))
+        {
+            child.calculated_height = Some(child.calculated_height.unwrap_or_default() + increment);
+        }
+    }
+
+    pub(super) const fn structural(node: &Container) -> bool {
+        matches!(
+            node.element,
+            Element::Table | Element::THead | Element::TBody | Element::TR
+        )
+    }
+
+    fn horizontal_box(node: &Container) -> f32 {
+        node.padding_x().unwrap_or_default()
+            + node.margin_x().unwrap_or_default()
+            + node.scrollbar_right.unwrap_or_default()
+    }
+
+    fn vertical_box(node: &Container) -> f32 {
+        node.padding_y().unwrap_or_default()
+            + node.margin_y().unwrap_or_default()
+            + node.scrollbar_bottom.unwrap_or_default()
+    }
+
+    fn track_count(count: usize) -> f32 {
+        f32::from(u16::try_from(count).expect("bounded table track count"))
+    }
+
+    // Equal increments satisfy spanning constraints without depending on cell IDs.
+    fn satisfy(tracks: &mut [f32], start: usize, count: usize, minimum: f32) {
+        let tracks = &mut tracks[start..start + count];
+        let deficit = minimum - tracks.iter().sum::<f32>();
+        if deficit > 0.0 {
+            let increment = deficit / track_count(count);
+            for track in tracks {
+                *track += increment;
+            }
+        }
+    }
+
+    fn minimum_width<F: FontMetrics>(
+        node: &Container,
+        measurements: &super::TextMeasurements<'_, F>,
+        vw: f32,
+        vh: f32,
+    ) -> Result<f32, LayoutError> {
+        if node.is_hidden() {
+            return Ok(0.0);
+        }
+        let content = match &node.element {
+            Element::Raw { value } | Element::Text { value } => {
+                let mut width = 0.0_f32;
+                let style = &measurements.styles[&std::ptr::from_ref(node).addr()];
+                if style.whitespace == Some(hyperchad_transformer_models::WhiteSpace::Preserve) {
+                    width = measurements.measure(node, value, f32::INFINITY)?.width();
+                } else {
+                    for word in value.split_whitespace() {
+                        width = width.max(measurements.measure(node, word, f32::INFINITY)?.width());
+                    }
+                }
+                width
+            }
+            Element::Table => node.calculated_child_min_width.unwrap_or_default(),
+            _ => {
+                let mut width = 0.0_f32;
+                for child in node.relative_positioned_elements() {
+                    let child_width = minimum_width(child, measurements, vw, vh)?;
+                    if node.element == Element::TR
+                        || node.direction == hyperchad_transformer_models::LayoutDirection::Row
+                    {
+                        width += child_width;
+                    } else {
+                        width = width.max(child_width);
+                    }
+                }
+                width
+            }
+        };
+        let authored = node
+            .width
+            .as_ref()
+            .and_then(Number::as_fixed)
+            .map_or(0.0, |n| n.calc(0.0, vw, vh));
+        Ok(content
+            .max(authored)
+            .max(node.calculated_min_width.unwrap_or_default())
+            + horizontal_box(node))
+    }
+
+    // Generic preferred dimensions already include this container's box
+    // additions; authored dimensions describe its content box.
+    fn columns<F: FontMetrics>(
+        table: &Container,
+        grid: &Grid,
+        measurements: &super::TextMeasurements<'_, F>,
+        vw: f32,
+        vh: f32,
+    ) -> Result<(Vec<f32>, Vec<f32>), LayoutError> {
+        let mut minima = vec![0.0; grid.columns];
+        let mut preferred = vec![0.0; grid.columns];
+        // Non-spanning constraints first makes the result independent of whether
+        // a spanning heading precedes or follows an ordinary body row.
+        for spanning in [false, true] {
+            for cell in &grid.cells {
+                if (cell.columns > 1) != spanning {
+                    continue;
+                }
+                let node = at(table, &cell.path);
+                let authored = node.width.as_ref().map_or(0.0, |n| {
+                    n.calc(table.calculated_width.unwrap_or_default(), vw, vh)
+                });
+                let min_constraint = node.min_width.as_ref().map_or(0.0, |n| {
+                    n.calc(table.calculated_width.unwrap_or_default(), vw, vh)
+                });
+                let min = minimum_width(node, measurements, vw, vh)?
+                    .max(authored.max(min_constraint) + horizontal_box(node));
+                let desired = node
+                    .calculated_preferred_width
+                    .unwrap_or_default()
+                    .max(authored + horizontal_box(node));
+                satisfy(&mut minima, cell.column, cell.columns, min);
+                satisfy(&mut preferred, cell.column, cell.columns, desired.max(min));
+            }
+        }
+        for (preferred, minimum) in preferred.iter_mut().zip(&minima) {
+            *preferred = preferred.max(*minimum);
+        }
+        Ok((minima, preferred))
+    }
+
+    pub(super) fn intrinsic<F: FontMetrics>(
+        table: &mut Container,
+        measurements: &super::TextMeasurements<'_, F>,
+        vw: f32,
+        vh: f32,
+    ) -> Result<(), LayoutError> {
+        if table.element != Element::Table {
+            return Ok(());
+        }
+        let grid = grid(table).expect("table preflight");
+        let (minima, preferred) = columns(table, &grid, measurements, vw, vh)?;
+        table.calculated_child_min_width = Some(minima.iter().sum());
+        table.calculated_preferred_width = Some(preferred.iter().sum());
+        Ok(())
+    }
+
+    pub(super) fn distribute(tracks: &mut [f32], minima: &[f32], available: f32) {
+        if tracks.is_empty() {
+            return;
+        }
+        let total = tracks.iter().sum::<f32>();
+        if available >= total {
+            let increment = (available - total) / track_count(tracks.len());
+            for track in tracks {
+                *track += increment;
+            }
+        } else {
+            // Equal deficit with saturated minima. When minima exceed the box,
+            // retain the larger track sum: the authored overflow mode handles it.
+            let mut deficit = total - available;
+            for _ in 0..tracks.len() {
+                let count = tracks
+                    .iter()
+                    .zip(minima)
+                    .filter(|(track, min)| **track > **min)
+                    .count();
+                if count == 0 || deficit <= 0.0 {
+                    break;
+                }
+                let share = deficit / track_count(count);
+                for (track, min) in tracks.iter_mut().zip(minima) {
+                    let reduction = (*track - *min).max(0.0).min(share);
+                    *track -= reduction;
+                    deficit -= reduction;
+                }
+            }
+        }
+    }
+
+    pub(super) fn widths<F: FontMetrics>(
+        table: &mut Container,
+        measurements: &super::TextMeasurements<'_, F>,
+        vw: f32,
+        vh: f32,
+    ) -> Result<(), LayoutError> {
+        let grid = grid(table).expect("table preflight");
+        let (minima, mut tracks) = columns(table, &grid, measurements, vw, vh)?;
+        distribute(
+            &mut tracks,
+            &minima,
+            table.calculated_width.unwrap_or_default(),
+        );
+        let width = tracks.iter().sum::<f32>();
+        for child in &mut table.children {
+            if matches!(child.element, Element::THead | Element::TBody) {
+                child.calculated_width = Some((width - horizontal_box(child)).max(0.0));
+            }
+        }
+        for path in &grid.rows {
+            let row = at_mut(table, path);
+            row.calculated_width = Some((width - horizontal_box(row)).max(0.0));
+        }
+        for cell in &grid.cells {
+            let outer = tracks[cell.column..cell.column + cell.columns]
+                .iter()
+                .sum::<f32>();
+            let node = at_mut(table, &cell.path);
+            node.calculated_width = Some((outer - horizontal_box(node)).max(0.0));
+            node.calculated_x = Some(tracks[..cell.column].iter().sum());
+        }
+        Ok(())
+    }
+
+    pub(super) fn heights(table: &mut Container, vw: f32, vh: f32) {
+        let grid = grid(table).expect("table preflight");
+        let mut tracks = vec![0.0; grid.rows.len()];
+        for (index, path) in grid.rows.iter().enumerate() {
+            let row = at(table, path);
+            tracks[index] = row
+                .height
+                .as_ref()
+                .map_or(0.0, |n| {
+                    n.calc(table.calculated_height.unwrap_or_default(), vw, vh)
+                })
+                .max(row.calculated_min_height.unwrap_or_default())
+                + vertical_box(row);
+        }
+        for spanning in [false, true] {
+            for cell in &grid.cells {
+                if (cell.rows > 1) != spanning {
+                    continue;
+                }
+                let node = at(table, &cell.path);
+                let authored = node.height.as_ref().map_or(0.0, |n| {
+                    n.calc(table.calculated_height.unwrap_or_default(), vw, vh)
+                });
+                let height = node
+                    .calculated_preferred_height
+                    .unwrap_or_default()
+                    .max(authored + vertical_box(node))
+                    .max(node.calculated_min_height.unwrap_or_default() + vertical_box(node));
+                satisfy(&mut tracks, cell.row, cell.rows, height);
+            }
+        }
+        let mut section_offsets = vec![0.0; table.children.len()];
+        for (index, path) in grid.rows.iter().enumerate() {
+            let row = at_mut(table, path);
+            row.calculated_height = Some((tracks[index] - vertical_box(row)).max(0.0));
+            row.calculated_preferred_height = row.calculated_height;
+            row.calculated_child_min_height = row.calculated_height;
+            row.calculated_x = Some(0.0);
+            row.calculated_y = Some(if path.len() == 1 {
+                tracks[..index].iter().sum()
+            } else {
+                section_offsets[path[0]]
+            });
+            section_offsets[path[0]] += tracks[index];
+        }
+        let mut offset = 0.0;
+        for (index, child) in table.children.iter_mut().enumerate() {
+            if matches!(child.element, Element::THead | Element::TBody) {
+                child.calculated_x = Some(0.0);
+                child.calculated_y = Some(offset);
+                child.calculated_height =
+                    Some((section_offsets[index] - vertical_box(child)).max(0.0));
+                child.calculated_preferred_height = child.calculated_height;
+                child.calculated_child_min_height = child.calculated_height;
+            }
+            offset += section_offsets[index];
+        }
+        for cell in &grid.cells {
+            let height = tracks[cell.row..cell.row + cell.rows].iter().sum::<f32>();
+            let node = at_mut(table, &cell.path);
+            node.calculated_height = Some((height - vertical_box(node)).max(0.0));
+            node.calculated_y = Some(0.0);
+        }
+        table.calculated_preferred_height = Some(tracks.iter().sum());
+        table.calculated_child_min_height = table.calculated_preferred_height;
+    }
+}
 
 /// Default styling values for text elements.
 #[derive(Debug, Clone, Copy)]
@@ -107,31 +950,71 @@ macro_rules! update_changed {
 impl<F: FontMetrics> Calc for Calculator<F> {
     #[allow(clippy::let_and_return, clippy::cognitive_complexity)]
     fn calc(&self, container: &mut Container) -> bool {
+        self.try_calc(container)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn try_calc(&self, container: &mut Container) -> Result<bool, LayoutError> {
+        table_layout::preflight(container)?;
+        if container.calculated_width.is_none() || container.calculated_height.is_none() {
+            return Err(LayoutError {
+                path: Vec::new(),
+                kind: LayoutErrorKind::InvalidGeometry,
+            });
+        }
+        table_layout::validate_geometry(container)?;
+        let before = table_layout::geometry(container);
+        let measurements = TextMeasurements::new(&self.font_metrics, container, self.defaults)?;
+        table_layout::reset_table_measurements(container);
+        reset_text_wrap_metadata(container);
         log::trace!("calc: container={container}");
 
-        time!("calc", {
+        let changed = time!("calc", {
             let arena = time!("arena", Bump::new());
             let context = arena.alloc(Container::default());
             let bfs = time!("bfs", container.bfs());
-            time!("calc_widths", self.calc_widths(&bfs, container));
+            time!(
+                "calc_widths",
+                self.calc_widths_measured(&bfs, container, &measurements)
+            );
+            measurements.check()?;
             time!(
                 "calc_margin_and_padding",
                 self.calc_margin_and_padding(&bfs, container)
             );
-            time!("flex_width", self.flex_width(&bfs, container));
-            time!("wrap_horizontal", self.wrap_horizontal(&bfs, container));
-            time!("calc_heights", self.calc_heights(&bfs, container));
-            time!("flex_height", self.flex_height(&bfs, container));
+            time!(
+                "flex_width",
+                Self::flex_width_measured(&bfs, container, &measurements)
+            );
+            measurements.check()?;
+            time!(
+                "wrap_horizontal",
+                Self::wrap_horizontal_measured(&bfs, container, &measurements)
+            );
+            measurements.check()?;
+            time!(
+                "calc_heights",
+                self.calc_heights_measured(&bfs, container, &measurements)
+            );
+            measurements.check()?;
+            time!(
+                "flex_height",
+                Self::flex_height_measured(&bfs, container, &measurements)
+            );
+            measurements.check()?;
             time!(
                 "position_elements",
                 self.position_elements(&arena, &bfs, container, context)
             )
-        })
+        });
+        table_layout::validate_geometry(container)?;
+        Ok(changed || before != table_layout::geometry(container))
     }
 }
 
 macro_rules! calc_size_on_axis {
     (
+        $measurements:ident,
         $label:tt,
         $self:ident,
         $bfs:ident,
@@ -189,6 +1072,7 @@ macro_rules! calc_size_on_axis {
                 context
             },
             |parent, context| {
+                if $measurements.failed() { return; }
                 let mut min_size = 0.0;
                 let mut preferred_size = 0.0;
 
@@ -217,6 +1101,10 @@ macro_rules! calc_size_on_axis {
                         paste!(child.[<calculated_min_ $size>]) = Some(size);
                     }
 
+                    let intrinsic_control = match $measurements.control_size(child) {
+                        Ok(size) => size,
+                        Err(error) => { $measurements.record(error); return; }
+                    };
                     let (mut min, mut preferred) = if let Some(size) = child.$size.as_ref().and_then(Number::as_fixed) {
                         let new_size = size.calc(0.0, view_width, view_height);
 
@@ -224,11 +1112,10 @@ macro_rules! calc_size_on_axis {
                         (Some(new_size), new_size)
                     } else if let (LayoutDirection::Row, crate::Element::Raw { value } | crate::Element::Text { value }) = (LayoutDirection::$axis, &child.element) {
                         log::trace!("{LABEL}: measuring text={value}");
-                        let bounds = $self.font_metrics.measure_text(
-                            value,
-                            context.calculated_font_size.expect("Missing calculated_font_size"),
-                            f32::INFINITY
-                        );
+                        let bounds = match $measurements.measure(child, value, f32::INFINITY) {
+                            Ok(bounds) => bounds,
+                            Err(error) => { $measurements.record(error); return; }
+                        };
                         log::trace!("{LABEL}: measured bounds={bounds:?}");
                         let width = bounds.width();
                         let height = bounds.height();
@@ -236,8 +1123,16 @@ macro_rules! calc_size_on_axis {
                         child.calculated_width = Some(width);
                         child.calculated_height = Some(height);
                         child.calculated_preferred_height = Some(height);
+                        child.calculated_text_wrap_width = Some(f32::INFINITY);
 
                         (None, width)
+                    } else if child.$size.is_none() && intrinsic_control.is_some() {
+                        let (width, height) = intrinsic_control.expect("checked control intrinsic size");
+                        let size = if stringify!($size) == "width" { width } else { height };
+                        paste!(child.[<calculated_ $size>]) = Some(size);
+                        // Editor columns are a preferred width, not a hard
+                        // minimum that would force narrow ancestors to overflow.
+                        (Some(if stringify!($size) == "width" { 0.0 } else { size }), size)
                     } else if let Some(size) = paste!(child.[<calculated_preferred_ $size>]) {
                         paste!(child.[<calculated_ $size>]) = Some(size);
                         (paste!(child.[<calculated_child_min_ $size>]), size)
@@ -367,12 +1262,20 @@ macro_rules! calc_size_on_axis {
 
                 paste!(parent.[<calculated_child_min_ $size>]) = Some(min_size);
                 paste!(parent.[<calculated_preferred_ $size>]) = Some(preferred_size);
+                if parent.element == crate::Element::Table {
+                    if stringify!($size) == "width" {
+                        if let Err(error) = $crate::layout::calc::table_layout::intrinsic(parent, $measurements, view_width, view_height) { $measurements.record(error); }
+                    } else {
+                        $crate::layout::calc::table_layout::heights(parent, view_width, view_height);
+                    }
+                }
             });
     }};
 }
 
 macro_rules! flex_on_axis {
     (
+        $measurements:ident,
         $label:tt,
         $bfs:ident,
         $container:ident,
@@ -418,6 +1321,16 @@ macro_rules! flex_on_axis {
                 }
             },
             |parent, relative_container| {
+                if $measurements.failed() { return; }
+                if $crate::layout::calc::table_layout::structural(parent) {
+                    if parent.element == crate::Element::Table && stringify!($size) == "width" {
+                        if let Err(error) = $crate::layout::calc::table_layout::widths(parent, $measurements, view_width, view_height) { $measurements.record(error); }
+                    }
+                    return;
+                }
+                if stringify!($size) == "height" {
+                    $crate::layout::calc::table_layout::allocate_sibling_heights(parent);
+                }
                 let direction = parent.direction;
                 let container_size = paste!(parent.[<calculated_ $size>]).expect("Missing container size");
 
@@ -746,6 +1659,7 @@ macro_rules! flex_on_axis {
                                             }
                                         } else if let Some(min) = paste!(child.[<calculated_child_min_ $size>]) {
                                             if new_size < min
+                                                && !(child.element == crate::Element::Table && stringify!($size) == "width")
                                                 && paste!(child.[<calculated_max_ $size>]).is_none_or(|x| min < x)
                                                 && paste!(child.[<calculated_min_ $size>]).is_none_or(|x| min > x)
                                             {
@@ -832,6 +1746,7 @@ macro_rules! flex_on_axis {
 
 macro_rules! wrap_on_axis {
     (
+        $measurements:ident,
         $label:tt,
         $axis:ident,
         $bfs:ident,
@@ -855,10 +1770,12 @@ macro_rules! wrap_on_axis {
             let view_height = $container.calculated_height.expect("Missing view_height");
 
             $bfs.traverse_mut($container, |parent| {
+                if $measurements.failed() { return; }
                 let container_width = parent.calculated_width.expect("Missing parent calculated_width");
 
                 for child in &mut parent.children {
                     $each_child(child, container_width, view_width, view_height);
+                    if $measurements.failed() { return; }
                 }
 
                 if !matches!(parent.$overflow, LayoutOverflow::Wrap { .. }) {
@@ -1021,8 +1938,31 @@ mod pass_widths {
         /// Calculates widths for all containers in the tree.
         ///
         /// Performs font size calculation and fixed property calculation for width-related properties.
+        ///
+        /// # Panics
+        ///
+        /// * Panics with a layout diagnostic if styled text measurement fails.
+        /// * Panics if required calculated dimensions are missing.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn calc_widths(&self, bfs: &BfsPaths, container: &mut Container) {
+            let measurements = crate::layout::calc::TextMeasurements::new(
+                &self.font_metrics,
+                container,
+                self.defaults,
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+            self.calc_widths_measured(bfs, container, &measurements);
+            measurements
+                .check()
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        pub(super) fn calc_widths_measured(
+            &self,
+            bfs: &BfsPaths,
+            container: &mut Container,
+            measurements: &crate::layout::calc::TextMeasurements<'_, F>,
+        ) {
             let each_parent = |container: &mut Container,
                                view_width,
                                view_height,
@@ -1041,6 +1981,7 @@ mod pass_widths {
             };
 
             calc_size_on_axis!(
+                measurements,
                 "calc_widths",
                 self,
                 bfs,
@@ -1141,9 +2082,32 @@ mod pass_flex_width {
         /// Applies flexbox layout calculations for width on the horizontal axis.
         ///
         /// Distributes available width among flex children based on their flex properties.
+        ///
+        /// # Panics
+        ///
+        /// * Panics with a layout diagnostic if styled text measurement fails.
+        /// * Panics if required calculated dimensions are missing.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn flex_width(&self, bfs: &BfsPaths, container: &mut Container) {
+            let measurements = crate::layout::calc::TextMeasurements::new(
+                &self.font_metrics,
+                container,
+                self.defaults,
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+            Self::flex_width_measured(bfs, container, &measurements);
+            measurements
+                .check()
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        pub(super) fn flex_width_measured(
+            bfs: &BfsPaths,
+            container: &mut Container,
+            measurements: &crate::layout::calc::TextMeasurements<'_, F>,
+        ) {
             flex_on_axis!(
+                measurements,
                 "flex_width",
                 bfs,
                 container,
@@ -1175,6 +2139,23 @@ mod pass_wrap_horizontal {
         /// * If any of the required container properties are missing
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn wrap_horizontal(&self, bfs: &BfsPaths, container: &mut Container) {
+            let measurements = crate::layout::calc::TextMeasurements::new(
+                &self.font_metrics,
+                container,
+                self.defaults,
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+            Self::wrap_horizontal_measured(bfs, container, &measurements);
+            measurements
+                .check()
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        pub(super) fn wrap_horizontal_measured(
+            bfs: &BfsPaths,
+            container: &mut Container,
+            measurements: &crate::layout::calc::TextMeasurements<'_, F>,
+        ) {
             let each_child =
                 |container: &mut Container, container_width, _view_width, _view_height| {
                     let (Element::Raw { value } | Element::Text { value }) = &container.element
@@ -1190,14 +2171,16 @@ mod pass_wrap_horizontal {
                         return;
                     }
 
-                    let font_size = container.calculated_font_size.expect("Missing font_size");
-
                     log::trace!(
                         "wrap_horizontal: measuring text={value} container_width={container_width}"
                     );
-                    let bounds = self
-                        .font_metrics
-                        .measure_text(value, font_size, container_width);
+                    let bounds = match measurements.measure(container, value, container_width) {
+                        Ok(bounds) => bounds,
+                        Err(error) => {
+                            measurements.record(error);
+                            return;
+                        }
+                    };
                     log::trace!("wrap_horizontal: measured bounds={bounds:?}");
                     let new_width = bounds.width();
                     let new_height = bounds.height();
@@ -1207,10 +2190,19 @@ mod pass_wrap_horizontal {
                     container.calculated_width = Some(new_width);
                     container.calculated_preferred_height = Some(new_height);
                     container.calculated_height = Some(new_height);
+                    container.calculated_text_wrap_width = Some(container_width);
                 };
 
             wrap_on_axis!(
-                "wrap", Row, bfs, container, width, overflow_x, column_gap, each_child,
+                measurements,
+                "wrap",
+                Row,
+                bfs,
+                container,
+                width,
+                overflow_x,
+                column_gap,
+                each_child,
             );
         }
     }
@@ -1226,9 +2218,33 @@ mod pass_heights {
         /// Calculates heights for all containers in the tree.
         ///
         /// Performs height calculations for all containers based on their content and layout properties.
+        ///
+        /// # Panics
+        ///
+        /// * Panics with a layout diagnostic if styled text measurement fails.
+        /// * Panics if required calculated dimensions are missing.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn calc_heights(&self, bfs: &BfsPaths, container: &mut Container) {
+            let measurements = crate::layout::calc::TextMeasurements::new(
+                &self.font_metrics,
+                container,
+                self.defaults,
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+            self.calc_heights_measured(bfs, container, &measurements);
+            measurements
+                .check()
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        pub(super) fn calc_heights_measured(
+            &self,
+            bfs: &BfsPaths,
+            container: &mut Container,
+            measurements: &crate::layout::calc::TextMeasurements<'_, F>,
+        ) {
             calc_size_on_axis!(
+                measurements,
                 "calc_heights",
                 self,
                 bfs,
@@ -1258,9 +2274,32 @@ mod pass_flex_height {
         /// Applies flexbox layout calculations for height on the vertical axis.
         ///
         /// Distributes available height among flex children based on their flex properties.
+        ///
+        /// # Panics
+        ///
+        /// * Panics with a layout diagnostic if styled text measurement fails.
+        /// * Panics if required calculated dimensions are missing.
         #[cfg_attr(feature = "profiling", profiling::function)]
         pub fn flex_height(&self, bfs: &BfsPaths, container: &mut Container) {
+            let measurements = crate::layout::calc::TextMeasurements::new(
+                &self.font_metrics,
+                container,
+                self.defaults,
+            )
+            .unwrap_or_else(|error| panic!("{error}"));
+            Self::flex_height_measured(bfs, container, &measurements);
+            measurements
+                .check()
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        pub(super) fn flex_height_measured(
+            bfs: &BfsPaths,
+            container: &mut Container,
+            measurements: &crate::layout::calc::TextMeasurements<'_, F>,
+        ) {
             flex_on_axis!(
+                measurements,
                 "flex_height",
                 bfs,
                 container,
@@ -1345,6 +2384,7 @@ mod pass_positioning {
                     }
                 },
                 |parent, relative_container| {
+                    if crate::layout::calc::table_layout::structural(parent) { return; }
                     let is_top_level = std::ptr::eq(std::ptr::from_ref(parent), root_ptr);
                     let direction = parent.direction;
                     let justify_content = parent.justify_content.unwrap_or_default();
@@ -1882,7 +2922,18 @@ mod test {
 
     #[cfg_attr(feature = "profiling", profiling::all_functions)]
     impl FontMetrics for DefaultFontMetrics {
-        fn measure_text(&self, text: &str, size: f32, wrap_width: f32) -> FontMetricsBounds {
+        fn measure_text(
+            &self,
+            request: &crate::layout::font::TextMeasureRequest<'_>,
+        ) -> Result<FontMetricsBounds, crate::layout::font::TextMeasureError> {
+            let text = request.text;
+            let size = request.size;
+            let wrap_width =
+                if request.whitespace == Some(hyperchad_transformer_models::WhiteSpace::Preserve) {
+                    f32::INFINITY
+                } else {
+                    request.wrap_width
+                };
             let mut rows = vec![];
             #[allow(clippy::cast_precision_loss)]
             let mut width = text.len() as f32 * size;
@@ -1903,7 +2954,7 @@ mod test {
                 });
             }
 
-            FontMetricsBounds { rows }
+            Ok(FontMetricsBounds { rows })
         }
     }
 
@@ -2128,11 +3179,517 @@ mod test {
         }
     }
 
+    #[test_log::test]
+    fn text_wrap_metadata_tracks_committed_constraint_and_resets() {
+        let mut root: Container = html! { div { "aa aa aa" } }
+            .into_string()
+            .try_into()
+            .unwrap();
+        root.calculated_width = Some(200.0);
+        root.calculated_height = Some(100.0);
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        pretty_assertions::assert_eq!(
+            root.children[0].children[0].calculated_text_wrap_width,
+            Some(f32::INFINITY)
+        );
+        root.calculated_width = Some(56.0);
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        pretty_assertions::assert_eq!(
+            root.children[0].children[0].calculated_text_wrap_width,
+            Some(56.0)
+        );
+        root.calculated_width = Some(200.0);
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        pretty_assertions::assert_eq!(
+            root.children[0].children[0].calculated_text_wrap_width,
+            Some(f32::INFINITY)
+        );
+        super::reset_text_wrap_metadata(&mut root);
+        pretty_assertions::assert_eq!(
+            root.children[0].children[0].calculated_text_wrap_width,
+            None
+        );
+    }
+
+    fn control_fixture() -> Container {
+        Container {
+            children: vec![Container {
+                children: vec![Container {
+                    element: Element::Input {
+                        input: crate::Input::Text {
+                            value: None,
+                            placeholder: None,
+                        },
+                        name: Some("name".into()),
+                        autofocus: None,
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(100.0),
+            ..Default::default()
+        }
+    }
+
+    #[test_log::test]
+    fn empty_control_intrinsics_fit_narrow_parent_and_recalculate() {
+        let mut root = control_fixture();
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        let input = &root.children[0].children[0];
+        pretty_assertions::assert_eq!(input.calculated_height, Some(14.0));
+        assert!(
+            input
+                .calculated_width
+                .is_some_and(|width| width > 0.0 && width <= 100.0)
+        );
+        let before = super::table_layout::geometry(&root);
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        pretty_assertions::assert_eq!(before, super::table_layout::geometry(&root));
+        root.calculated_width = Some(50.0);
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        assert!(
+            root.children[0].children[0]
+                .calculated_width
+                .is_some_and(|width| width > 0.0 && width <= 50.0)
+        );
+    }
+
+    #[test_log::test]
+    fn control_intrinsics_preserve_explicit_zero_percent_and_padding() {
+        let mut root = control_fixture();
+        let input = &mut root.children[0].children[0];
+        input.width = Some(Number::Integer(0));
+        input.height = Some(Number::Integer(0));
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        pretty_assertions::assert_eq!(root.children[0].children[0].calculated_width, Some(0.0));
+        pretty_assertions::assert_eq!(root.children[0].children[0].calculated_height, Some(0.0));
+        let input = &mut root.children[0].children[0];
+        input.width = Some(Number::IntegerPercent(50));
+        input.height = None;
+        input.padding_left = Some(Number::Integer(2));
+        input.padding_right = Some(Number::Integer(2));
+        crate::layout::Calc::try_calc(&CALCULATOR, &mut root).unwrap();
+        assert!(
+            root.children[0].children[0]
+                .calculated_width
+                .is_some_and(|width| width > 0.0 && width <= 50.0)
+        );
+        pretty_assertions::assert_eq!(root.children[0].children[0].calculated_height, Some(14.0));
+    }
+
+    struct RejectControlMetrics;
+    impl FontMetrics for RejectControlMetrics {
+        fn measure_text(
+            &self,
+            _: &crate::layout::font::TextMeasureRequest<'_>,
+        ) -> Result<FontMetricsBounds, crate::layout::font::TextMeasureError> {
+            Err(crate::layout::font::TextMeasureError::Backend {
+                message: "control metrics failed".into(),
+            })
+        }
+    }
+
+    #[test_log::test]
+    fn control_intrinsic_metrics_failure_keeps_structural_path() {
+        let mut root = control_fixture();
+        let calculator = Calculator::new(RejectControlMetrics, CALCULATOR.defaults);
+        let error = crate::layout::Calc::try_calc(&calculator, &mut root).unwrap_err();
+        pretty_assertions::assert_eq!(error.path, vec![0, 0]);
+        assert!(matches!(
+            error.kind,
+            crate::layout::LayoutErrorKind::TextMeasurement(_)
+        ));
+    }
+
+    struct RejectStyle;
+    impl FontMetrics for RejectStyle {
+        fn measure_text(
+            &self,
+            request: &crate::layout::font::TextMeasureRequest<'_>,
+        ) -> Result<FontMetricsBounds, crate::layout::font::TextMeasureError> {
+            use crate::layout::font::{TextFontFamily, TextFontWeight, TextMeasureError};
+            assert!(
+                matches!(request.family, TextFontFamily::Authored(names) if names == ["Explicit"])
+            );
+            assert!(matches!(request.weight, TextFontWeight::Absolute(700)));
+            Err(TextMeasureError::UnsupportedStyle {
+                message: "test authored style rejected".into(),
+            })
+        }
+    }
+
+    #[test_log::test]
+    fn styled_measurement_inherits_explicit_provenance_and_reports_path() {
+        let mut root = Container {
+            font_family: Some(vec!["Explicit".into()]),
+            font_weight: Some(hyperchad_transformer_models::FontWeight::Bold),
+            children: vec![Container {
+                children: vec![Container {
+                    element: Element::Raw {
+                        value: "text".into(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            calculated_width: Some(100.0),
+            calculated_height: Some(100.0),
+            ..Default::default()
+        };
+        let calculator = Calculator::new(RejectStyle, CALCULATOR.defaults);
+        let error = crate::layout::Calc::try_calc(&calculator, &mut root).unwrap_err();
+        pretty_assertions::assert_eq!(error.path, vec![0, 0]);
+        assert!(matches!(
+            error.kind,
+            crate::layout::LayoutErrorKind::TextMeasurement(
+                crate::layout::font::TextMeasureError::UnsupportedStyle { .. }
+            )
+        ));
+    }
+
+    struct RejectWord;
+    impl FontMetrics for RejectWord {
+        fn measure_text(
+            &self,
+            request: &crate::layout::font::TextMeasureRequest<'_>,
+        ) -> Result<FontMetricsBounds, crate::layout::font::TextMeasureError> {
+            use crate::layout::font::TextMeasureError;
+            if request.text == "two" {
+                return Err(TextMeasureError::Backend {
+                    message: "minimum measurement failed".into(),
+                });
+            }
+            DefaultFontMetrics.measure_text(request)
+        }
+    }
+
+    #[test_log::test]
+    fn table_minimum_measurement_error_is_not_replaced_with_zero() {
+        let mut root: Container = html! { table { tr { td { "one two" } } } }
+            .into_string()
+            .try_into()
+            .unwrap();
+        root.calculated_width = Some(100.0);
+        root.calculated_height = Some(100.0);
+        let calculator = Calculator::new(RejectWord, CALCULATOR.defaults);
+        let error = crate::layout::Calc::try_calc(&calculator, &mut root).unwrap_err();
+        pretty_assertions::assert_eq!(error.path, vec![0, 0, 0, 0]);
+        assert!(matches!(
+            error.kind,
+            crate::layout::LayoutErrorKind::TextMeasurement(_)
+        ));
+    }
+
     mod table {
         use super::*;
+        use crate::layout::Calc;
+
+        fn fixture(markup: String, width: f32) -> Container {
+            let mut root: Container = markup.try_into().unwrap();
+            root.calculated_width = Some(width);
+            root.calculated_height = Some(300.0);
+            root
+        }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
+        fn constrained_track_deficit_and_surplus_are_deterministic() {
+            let mut tracks = vec![40.0, 30.0];
+            crate::layout::calc::table_layout::distribute(&mut tracks, &[20.0, 10.0], 100.0);
+            pretty_assertions::assert_eq!(tracks, vec![55.0, 45.0]);
+            crate::layout::calc::table_layout::distribute(&mut tracks, &[40.0, 10.0], 55.0);
+            pretty_assertions::assert_eq!(tracks, vec![40.0, 15.0]);
+            crate::layout::calc::table_layout::distribute(&mut tracks, &[40.0, 10.0], 20.0);
+            pretty_assertions::assert_eq!(tracks, vec![40.0, 10.0]);
+        }
+
+        #[test_log::test]
+        fn row_spans_reserve_slots_and_measure_combined_height() {
+            let mut root = fixture(
+                html! { table {
+                    tbody {
+                        tr { td sx-height=(40) {} td sx-height=(10) {} }
+                        tr { td sx-height=(10) {} }
+                    }
+                } }
+                .into_string(),
+                100.0,
+            );
+            root.children[0].children[0].children[0].children[0].element = Element::TD {
+                rows: Some(Number::Integer(2)),
+                columns: None,
+            };
+            CALCULATOR.try_calc(&mut root).unwrap();
+            let body = &root.children[0].children[0];
+            pretty_assertions::assert_eq!(
+                body.children[0].children[0].calculated_height,
+                Some(40.0)
+            );
+            pretty_assertions::assert_eq!(body.children[1].children[0].calculated_x, Some(50.0));
+            pretty_assertions::assert_eq!(body.children[1].calculated_y, Some(20.0));
+            pretty_assertions::assert_eq!(body.calculated_height, Some(40.0));
+        }
+
+        #[test_log::test]
+        fn row_span_cannot_cross_body_boundary() {
+            let mut root = fixture(
+                html! { table {
+                    tbody { tr { td {} } }
+                    tbody { tr { td {} } }
+                } }
+                .into_string(),
+                100.0,
+            );
+            root.children[0].children[0].children[0].children[0].element = Element::TD {
+                rows: Some(Number::Integer(2)),
+                columns: None,
+            };
+            let error = CALCULATOR.try_calc(&mut root).unwrap_err();
+            pretty_assertions::assert_eq!(error.path, vec![0, 0, 0, 0]);
+            pretty_assertions::assert_eq!(
+                error.kind,
+                crate::layout::LayoutErrorKind::InvalidTableStructure
+            );
+        }
+
+        #[test_log::test]
+        fn repeated_empty_table_calculation_is_stable() {
+            let mut root = fixture(html! { table {} }.into_string(), 100.0);
+            CALCULATOR.try_calc(&mut root).unwrap();
+            let before = crate::layout::calc::table_layout::geometry(&root);
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(
+                before,
+                crate::layout::calc::table_layout::geometry(&root)
+            );
+            pretty_assertions::assert_eq!(root.children[0].calculated_height, Some(0.0));
+        }
+
+        #[test_log::test]
+        fn hidden_rows_do_not_advance_table_sections() {
+            let mut root = fixture(
+                html! { table {
+                    tbody { tr { td { "a" } } tr { td sx-height=(100) {} } }
+                    tbody { tr { td { "c" } } }
+                } }
+                .into_string(),
+                100.0,
+            );
+            root.children[0].children[0].children[1].hidden = Some(true);
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[0].children[1].calculated_y, Some(14.0));
+            pretty_assertions::assert_eq!(root.children[0].calculated_height, Some(28.0));
+        }
+
+        #[test_log::test]
+        fn nested_table_measurement_propagates_to_following_sibling() {
+            let mut root = fixture(
+                html! {
+                    table { tr { td { table { tr { td sx-height=(30) {} } } } } }
+                    div sx-height=(10) {}
+                }
+                .into_string(),
+                100.0,
+            );
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[1].calculated_y, Some(30.0));
+            pretty_assertions::assert_eq!(
+                root.children[0].children[0].children[0].calculated_height,
+                Some(30.0)
+            );
+        }
+
+        struct Legacy;
+        impl Calc for Legacy {
+            fn calc(&self, _: &mut Container) -> bool {
+                panic!("unchecked entry must not run")
+            }
+        }
+
+        #[test_log::test]
+        fn checked_legacy_implementation_is_explicitly_unsupported() {
+            let error = Legacy.try_calc(&mut Container::default()).unwrap_err();
+            pretty_assertions::assert_eq!(
+                error.kind,
+                crate::layout::LayoutErrorKind::CheckedLayoutUnsupported
+            );
+        }
+
+        #[test_log::test]
+        fn checked_invalid_spans_fail_before_mutation() {
+            for value in [
+                Number::Integer(0),
+                Number::Integer(-1),
+                Number::Real(1.5),
+                Number::Real(f32::NAN),
+                Number::Real(f32::INFINITY),
+                Number::IntegerPercent(2),
+            ] {
+                let mut root = fixture(html! { table { tr { td {} } } }.into_string(), 100.0);
+                root.children[0].children[0].children[0].element = Element::TD {
+                    rows: None,
+                    columns: Some(value),
+                };
+                let before = crate::layout::calc::table_layout::geometry(&root);
+                let error = CALCULATOR.try_calc(&mut root).unwrap_err();
+                pretty_assertions::assert_eq!(error.path, vec![0, 0, 0]);
+                pretty_assertions::assert_eq!(
+                    error.kind,
+                    crate::layout::LayoutErrorKind::InvalidTableSpan {
+                        axis: crate::layout::TableSpanAxis::Column
+                    }
+                );
+                pretty_assertions::assert_eq!(
+                    before,
+                    crate::layout::calc::table_layout::geometry(&root)
+                );
+            }
+        }
+
+        #[test_log::test]
+        #[should_panic(expected = "InvalidTableSpan")]
+        fn legacy_calc_panics_with_checked_diagnostic() {
+            let mut root = fixture(html! { table { tr { td {} } } }.into_string(), 100.0);
+            root.children[0].children[0].children[0].element = Element::TD {
+                rows: Some(Number::Integer(0)),
+                columns: None,
+            };
+            CALCULATOR.calc(&mut root);
+        }
+
+        #[test_log::test]
+        fn checked_invalid_table_structure_has_root_relative_path() {
+            let mut root = fixture(
+                html! { div { table { tr { td {} } } } }.into_string(),
+                100.0,
+            );
+            root.children[0].children[0].children[0].children[0].element = Element::Div;
+            let error = CALCULATOR.try_calc(&mut root).unwrap_err();
+            pretty_assertions::assert_eq!(error.path, vec![0, 0, 0, 0]);
+            pretty_assertions::assert_eq!(
+                error.kind,
+                crate::layout::LayoutErrorKind::InvalidTableStructure
+            );
+        }
+
+        #[test_log::test]
+        fn checked_span_budget_is_bounded() {
+            let mut root = fixture(html! { table { tr { td {} } } }.into_string(), 100.0);
+            root.children[0].children[0].children[0].element = Element::TD {
+                rows: None,
+                columns: Some(Number::Integer(1025)),
+            };
+            pretty_assertions::assert_eq!(
+                CALCULATOR.try_calc(&mut root).unwrap_err().kind,
+                crate::layout::LayoutErrorKind::TableBudgetExceeded
+            );
+        }
+
+        #[test_log::test]
+        fn multiple_bodies_and_direct_rows_survive_both_iterators() {
+            let mut root = fixture(
+                html! { table {
+                    tbody { tr { td { "a" } } }
+                    tr { td { "b" } }
+                    tbody { tr { td { "c" } } }
+                } }
+                .into_string(),
+                100.0,
+            );
+            let table = &mut root.children[0];
+            pretty_assertions::assert_eq!(table.table_iter().rows.count(), 3);
+            let mut observed = 0;
+            for row in table
+                .table_iter_mut_with_observer(Some(|_: &mut Container| observed += 1))
+                .rows
+            {
+                for cell in row {
+                    cell.calculated_width = Some(17.0);
+                }
+            }
+            pretty_assertions::assert_eq!(observed, 3);
+            assert!(
+                table
+                    .table_iter()
+                    .rows
+                    .flatten()
+                    .all(|cell| cell.calculated_width == Some(17.0))
+            );
+            CALCULATOR.try_calc(&mut root).unwrap();
+            let table = &root.children[0];
+            pretty_assertions::assert_eq!(table.table_iter().rows.count(), 3);
+            pretty_assertions::assert_eq!(table.children[2].calculated_y, Some(28.0));
+        }
+
+        #[test_log::test]
+        fn empty_padded_cell_has_zero_content_height() {
+            let mut root = fixture(
+                html! { table { thead { tr { th sx-padding-x=(10) sx-padding-y=(15) {} } } } }
+                    .into_string(),
+                100.0,
+            );
+            CALCULATOR.try_calc(&mut root).unwrap();
+            let cell = &root.children[0].children[0].children[0].children[0];
+            pretty_assertions::assert_eq!(cell.calculated_width, Some(80.0));
+            pretty_assertions::assert_eq!(cell.calculated_height, Some(0.0));
+            pretty_assertions::assert_eq!(cell.bounding_calculated_height(), Some(30.0));
+        }
+
+        #[test_log::test]
+        fn spans_share_tracks_and_duplicate_ids_are_not_identity() {
+            let mut root = fixture(
+                html! { table {
+                    tr { td { "a" } td { "b" } }
+                    tr { td { "c" } }
+                } }
+                .into_string(),
+                100.0,
+            );
+            root.children[0].children[1].children[0].element = Element::TD {
+                rows: None,
+                columns: Some(Number::Real(2.0)),
+            };
+            CALCULATOR.try_calc(&mut root).unwrap();
+            let table = &root.children[0];
+            pretty_assertions::assert_eq!(
+                table.children[0].children[0].calculated_width,
+                Some(50.0)
+            );
+            pretty_assertions::assert_eq!(table.children[0].children[1].calculated_x, Some(50.0));
+            pretty_assertions::assert_eq!(
+                table.children[1].children[0].calculated_width,
+                Some(100.0)
+            );
+            pretty_assertions::assert_eq!(table.children[1].calculated_y, Some(14.0));
+        }
+
+        #[test_log::test]
+        fn resize_and_content_changes_remeasure_table_and_following_sibling() {
+            let mut root = fixture(
+                html! {
+                    table { tr { td { "aa aa aa" } } }
+                    div sx-height=(10) {}
+                }
+                .into_string(),
+                112.0,
+            );
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[1].calculated_y, Some(14.0));
+            root.calculated_width = Some(56.0);
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[1].calculated_y, Some(28.0));
+            root.calculated_width = Some(112.0);
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[1].calculated_y, Some(14.0));
+            root.children[0].children[0].children[0].children[0].element = Element::Raw {
+                value: String::new(),
+            };
+            CALCULATOR.try_calc(&mut root).unwrap();
+            pretty_assertions::assert_eq!(root.children[1].calculated_y, Some(0.0));
+        }
+
+        #[test_log::test]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes() {
             let mut container = Container {
@@ -2293,9 +3850,9 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes_and_expand_to_fill_width() {
+            // P4 policy correction: Equal surplus increments preserve the intrinsic column-width difference.
             let mut container = Container {
                 children: vec![Container {
                     element: Element::Table,
@@ -2387,7 +3944,7 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(55.0),
                                         calculated_height: Some(20.0),
                                         ..container.children[0].children[0].children[0].clone()
                                     },
@@ -2399,7 +3956,7 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(45.0),
                                         calculated_height: Some(20.0),
                                         ..container.children[0].children[0].children[1].clone()
                                     },
@@ -2418,7 +3975,7 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(55.0),
                                         calculated_height: Some(40.0),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
@@ -2430,7 +3987,7 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(45.0),
                                         calculated_height: Some(40.0),
                                         ..container.children[0].children[1].children[1].clone()
                                     },
@@ -2450,9 +4007,9 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells() {
+            // P4 policy correction: Equal surplus increments preserve the intrinsic column-width difference.
             let mut container = Container {
                 children: vec![Container {
                     element: Element::Table,
@@ -2536,12 +4093,12 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(60.0),
                                         calculated_height: Some(10.0),
                                         ..container.children[0].children[0].children[0].clone()
                                     },
                                     Container {
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(40.0),
                                         calculated_height: Some(10.0),
                                         ..container.children[0].children[0].children[1].clone()
                                     },
@@ -2553,7 +4110,7 @@ mod test {
                             Container {
                                 children: vec![
                                     Container {
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(60.0),
                                         calculated_height: Some(30.0),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
@@ -2565,7 +4122,7 @@ mod test {
                                                 [0]
                                             .clone()
                                         }],
-                                        calculated_width: Some(50.0),
+                                        calculated_width: Some(40.0),
                                         calculated_height: Some(30.0),
                                         ..container.children[0].children[1].children[1].clone()
                                     },
@@ -2585,10 +4142,10 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes_and_auto_size_unsized_cells_when_all_are_unsized()
          {
+            // P4 policy correction: Empty content has zero intrinsic height; there is no default 25px cell.
             let mut container = Container {
                 children: vec![Container {
                     element: Element::Table,
@@ -2659,30 +4216,30 @@ mod test {
                                     Container {
                                         children: vec![Container {
                                             calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_height: Some(0.0),
                                             ..container.children[0].children[0].children[0].children
                                                 [0]
                                             .clone()
                                         }],
                                         calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_height: Some(0.0),
                                         ..container.children[0].children[0].children[0].clone()
                                     },
                                     Container {
                                         children: vec![Container {
                                             calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_height: Some(0.0),
                                             ..container.children[0].children[0].children[1].children
                                                 [0]
                                             .clone()
                                         }],
                                         calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_height: Some(0.0),
                                         ..container.children[0].children[0].children[1].clone()
                                     },
                                 ],
                                 calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
+                                calculated_height: Some(0.0),
                                 ..container.children[0].children[0].clone()
                             },
                             Container {
@@ -2690,35 +4247,35 @@ mod test {
                                     Container {
                                         children: vec![Container {
                                             calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_height: Some(0.0),
                                             ..container.children[0].children[1].children[0].children
                                                 [0]
                                             .clone()
                                         }],
                                         calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_height: Some(0.0),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
                                     Container {
                                         children: vec![Container {
                                             calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_height: Some(0.0),
                                             ..container.children[0].children[1].children[1].children
                                                 [0]
                                             .clone()
                                         }],
                                         calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_height: Some(0.0),
                                         ..container.children[0].children[1].children[1].clone()
                                     },
                                 ],
                                 calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
+                                calculated_height: Some(0.0),
                                 ..container.children[0].children[1].clone()
                             },
                         ],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(25.0 + 25.0),
+                        calculated_height: Some(0.0 + 0.0),
                         ..container.children[0].clone()
                     }],
                     ..container
@@ -2727,9 +4284,9 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes_and_auto_size_raw_data() {
+            // P4 policy correction: Test metrics measure "test" at 56x14. Unbreakable minima overflow the 100px allocation.
             let mut container: Container = html! {
                 table {
                     tr {
@@ -2763,21 +4320,21 @@ mod test {
                                         children: container.children[0].children[0].children[0]
                                             .children
                                             .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_width: Some(56.0),
+                                        calculated_height: Some(14.0),
                                         ..container.children[0].children[0].children[0].clone()
                                     },
                                     Container {
                                         children: container.children[0].children[0].children[1]
                                             .children
                                             .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_width: Some(56.0),
+                                        calculated_height: Some(14.0),
                                         ..container.children[0].children[0].children[1].clone()
                                     },
                                 ],
-                                calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
+                                calculated_width: Some(112.0),
+                                calculated_height: Some(14.0),
                                 ..container.children[0].children[0].clone()
                             },
                             Container {
@@ -2786,26 +4343,26 @@ mod test {
                                         children: container.children[0].children[1].children[0]
                                             .children
                                             .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_width: Some(56.0),
+                                        calculated_height: Some(14.0),
                                         ..container.children[0].children[1].children[0].clone()
                                     },
                                     Container {
                                         children: container.children[0].children[1].children[1]
                                             .children
                                             .clone(),
-                                        calculated_width: Some(50.0),
-                                        calculated_height: Some(25.0),
+                                        calculated_width: Some(56.0),
+                                        calculated_height: Some(14.0),
                                         ..container.children[0].children[1].children[1].clone()
                                     },
                                 ],
-                                calculated_width: Some(100.0),
-                                calculated_height: Some(25.0),
+                                calculated_width: Some(112.0),
+                                calculated_height: Some(14.0),
                                 ..container.children[0].children[1].clone()
                             },
                         ],
                         calculated_width: Some(100.0),
-                        calculated_height: Some(25.0 + 25.0),
+                        calculated_height: Some(14.0 + 14.0),
                         ..container.children[0].clone()
                     }],
                     ..container
@@ -2814,9 +4371,9 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         #[allow(clippy::too_many_lines)]
         fn calc_can_calc_table_column_and_row_sizes_with_tbody() {
+            // P4 policy correction: Test metrics measure "test" at 56x14. Unbreakable minima overflow the 100px allocation.
             let mut container = Container {
                 children: vec![Container {
                     element: Element::Table,
@@ -2914,8 +4471,8 @@ mod test {
                                                 .children[0]
                                                 .children
                                                 .clone(),
-                                            calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_width: Some(56.0),
+                                            calculated_height: Some(14.0),
                                             ..container.children[0].children[0].children[0].children
                                                 [0]
                                             .clone()
@@ -2925,15 +4482,15 @@ mod test {
                                                 .children[1]
                                                 .children
                                                 .clone(),
-                                            calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_width: Some(56.0),
+                                            calculated_height: Some(14.0),
                                             ..container.children[0].children[0].children[0].children
                                                 [1]
                                             .clone()
                                         },
                                     ],
-                                    calculated_width: Some(100.0),
-                                    calculated_height: Some(25.0),
+                                    calculated_width: Some(112.0),
+                                    calculated_height: Some(14.0),
                                     ..container.children[0].children[0].children[0].clone()
                                 },
                                 Container {
@@ -2943,8 +4500,8 @@ mod test {
                                                 .children[0]
                                                 .children
                                                 .clone(),
-                                            calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_width: Some(56.0),
+                                            calculated_height: Some(14.0),
                                             ..container.children[0].children[0].children[1].children
                                                 [0]
                                             .clone()
@@ -2954,20 +4511,22 @@ mod test {
                                                 .children[1]
                                                 .children
                                                 .clone(),
-                                            calculated_width: Some(50.0),
-                                            calculated_height: Some(25.0),
+                                            calculated_width: Some(56.0),
+                                            calculated_height: Some(14.0),
                                             ..container.children[0].children[0].children[1].children
                                                 [1]
                                             .clone()
                                         },
                                     ],
-                                    calculated_width: Some(100.0),
-                                    calculated_height: Some(25.0),
+                                    calculated_width: Some(112.0),
+                                    calculated_height: Some(14.0),
                                     ..container.children[0].children[0].children[1].clone()
                                 },
                             ],
-                            calculated_width: Some(100.0),
-                            calculated_height: Some(25.0 + 25.0),
+                            // The body follows overflowing 56px columns, not
+                            // the table's narrower 100px allocation box.
+                            calculated_width: Some(112.0),
+                            calculated_height: Some(14.0 + 14.0),
                             ..container.children[0].children[0].clone()
                         }],
                         ..container.children[0].clone()
@@ -2978,7 +4537,6 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_td_height_correctly() {
             let mut container: Container = html! {
                 table {
@@ -3009,7 +4567,6 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_tr_height_correctly() {
             let mut container: Container = html! {
                 table {
@@ -3040,7 +4597,6 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_height_correctly() {
             let mut container: Container = html! {
                 table {
@@ -3085,7 +4641,6 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_overflow_y_squash_calculates_table_sibling_element_height_correctly() {
             let mut container: Container = html! {
                 div {}
@@ -3117,6 +4672,13 @@ mod test {
 
             CALCULATOR.calc(&mut container);
             log::trace!("container:\n{container}");
+            pretty_assertions::assert_eq!(container.children[1].calculated_y, Some(10.0));
+            let before = crate::layout::calc::table_layout::geometry(&container);
+            CALCULATOR.try_calc(&mut container).unwrap();
+            pretty_assertions::assert_eq!(
+                before,
+                crate::layout::calc::table_layout::geometry(&container)
+            );
 
             compare_containers(
                 &container,
@@ -3138,7 +4700,6 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_overflow_y_expand_calculates_table_sibling_element_height_correctly() {
             let mut container: Container = html! {
                 div {}
@@ -3169,6 +4730,13 @@ mod test {
 
             CALCULATOR.calc(&mut container);
             log::trace!("container:\n{container}");
+            pretty_assertions::assert_eq!(container.children[1].calculated_y, Some(10.0));
+            let before = crate::layout::calc::table_layout::geometry(&container);
+            CALCULATOR.try_calc(&mut container).unwrap();
+            pretty_assertions::assert_eq!(
+                before,
+                crate::layout::calc::table_layout::geometry(&container)
+            );
 
             compare_containers(
                 &container,
@@ -3190,8 +4758,8 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_column_widths_the_same_across_headers_and_body() {
+            // P4 policy correction: Intrinsic outer tracks 34/300 receive equal 449px surplus; body padding remains inside tracks.
             let mut container: Container = html! {
                 table {
                     thead {
@@ -3234,13 +4802,13 @@ mod test {
                                 children: vec![Container {
                                     children: vec![
                                         Container {
-                                            calculated_width: Some(616.0),
+                                            calculated_width: Some(483.0),
                                             ..container.children[0].children[0].children[0].children
                                                 [0]
                                             .clone()
                                         },
                                         Container {
-                                            calculated_width: Some(616.0),
+                                            calculated_width: Some(749.0),
                                             ..container.children[0].children[0].children[0].children
                                                 [1]
                                             .clone()
@@ -3254,13 +4822,13 @@ mod test {
                                 children: vec![Container {
                                     children: vec![
                                         Container {
-                                            calculated_width: Some(596.0),
+                                            calculated_width: Some(463.0),
                                             ..container.children[0].children[1].children[0].children
                                                 [0]
                                             .clone()
                                         },
                                         Container {
-                                            calculated_width: Some(596.0),
+                                            calculated_width: Some(729.0),
                                             ..container.children[0].children[1].children[0].children
                                                 [1]
                                             .clone()
@@ -3279,8 +4847,8 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_th_sizes_with_padding_taken_into_account() {
+            // P4 policy correction: Padding contributes 30px outer height, not fictitious 25px content.
             let mut container: Container = html! {
                 table {
                     thead {
@@ -3308,7 +4876,7 @@ mod test {
                             children: vec![Container {
                                 children: vec![Container {
                                     calculated_width: Some(1212.0),
-                                    calculated_height: Some(25.0),
+                                    calculated_height: Some(0.0),
                                     ..container.children[0].children[0].children[0].children[0]
                                         .clone()
                                 }],
@@ -3324,8 +4892,8 @@ mod test {
         }
 
         #[test_log::test]
-        #[ignore = "Unimplemented"]
         fn calc_calculates_table_td_sizes_with_padding_taken_into_account() {
+            // P4 policy correction: Padding contributes 30px outer height, not fictitious 25px content.
             let mut container: Container = html! {
                 table {
                     tr {
@@ -3350,7 +4918,7 @@ mod test {
                         children: vec![Container {
                             children: vec![Container {
                                 calculated_width: Some(1212.0),
-                                calculated_height: Some(25.0),
+                                calculated_height: Some(0.0),
                                 ..container.children[0].children[0].children[0].clone()
                             }],
                             ..container.children[0].children[0].clone()
@@ -6867,7 +8435,17 @@ mod test {
     #[test_log::test]
     fn calc_horizontal_sibling_left_raw_still_divides_the_unsized_width() {
         let metrics = DefaultFontMetrics;
-        let text_width = metrics.measure_text("test", 14.0, f32::INFINITY).width();
+        let text_width = metrics
+            .measure_text(&crate::layout::font::TextMeasureRequest {
+                text: "test",
+                family: crate::layout::font::TextFontFamily::CompatibilityDefault,
+                weight: crate::layout::font::TextFontWeight::CompatibilityDefault,
+                size: 14.0,
+                wrap_width: f32::INFINITY,
+                whitespace: None,
+            })
+            .unwrap()
+            .width();
 
         let mut container = Container {
             children: vec![

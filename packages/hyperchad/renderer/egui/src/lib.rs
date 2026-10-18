@@ -6,8 +6,9 @@
 //!
 //! # Features
 //!
-//! * **v1** - Version 1 renderer implementation (enabled by default)
-//! * **v2** - Version 2 renderer implementation (enabled by default)
+//! One native backend owns document and interaction state on the UI thread;
+//! asynchronous producers submit ordered commands without blocking frames.
+//!
 //! * **wgpu** - Use wgpu backend for rendering (enabled by default)
 //! * **glow** - Use OpenGL backend for rendering
 //! * **wayland** - Enable Wayland support on Linux
@@ -43,33 +44,17 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-/// Version 1 of the egui renderer implementation.
-///
-/// This module provides the first generation egui-based renderer for `HyperChad`.
-/// It includes the core renderer types and implements the `Renderer` trait for
-/// rendering `HyperChad` UI elements using egui.
-#[cfg(feature = "v1")]
-pub mod v1;
-
-#[cfg(all(feature = "v1", not(feature = "v2")))]
-pub use v1::*;
-
-/// Version 2 of the egui renderer implementation.
-///
-/// This module provides the second generation egui-based renderer for `HyperChad`.
-/// It includes improved rendering capabilities and updated implementations of the
-/// `Renderer` trait for rendering `HyperChad` UI elements using egui.
-#[cfg(any(feature = "v2", not(feature = "v1")))]
-pub mod v2;
-
-#[cfg(any(feature = "v2", not(feature = "v1")))]
-pub use v2::*;
+/// The native document renderer and its event-loop runner.
+pub use backend::{EguiRenderRunner, EguiRenderer};
 
 /// Font metrics utilities for text measurement.
 ///
 /// This module provides egui-specific implementations of font metrics,
 /// enabling text measurement and layout calculations using egui's font system.
 pub mod font_metrics;
+
+/// Immutable font registry and shared measurement/painting resolver.
+pub mod text_layout;
 
 /// Layout calculation traits and utilities.
 ///
@@ -81,7 +66,7 @@ pub use eframe;
 
 /// Persistent shared-handler action execution.
 pub mod action_runtime;
-/// Replacement UI-owned frame core, not yet selected as the public renderer.
+/// UI-owned document frame core and canonical native renderer.
 pub mod backend;
 /// Retained canvas command application and painting.
 pub mod canvas;
@@ -102,3 +87,24 @@ pub mod widgets;
 
 /// Production frame host and opt-in screenshot inspection.
 pub mod feedback;
+
+/// Opt-in native observation and correlated screenshot protocol.
+#[cfg(feature = "feedback")]
+pub mod interaction;
+
+#[cfg(test)]
+mod facade_tests {
+    #[test]
+    fn canonical_root_types_are_backend_types() {
+        use std::any::TypeId;
+
+        assert_eq!(
+            TypeId::of::<crate::EguiRenderer<()>>(),
+            TypeId::of::<crate::backend::EguiRenderer<()>>()
+        );
+        assert_eq!(
+            TypeId::of::<crate::EguiRenderRunner<()>>(),
+            TypeId::of::<crate::backend::EguiRenderRunner<()>>()
+        );
+    }
+}
