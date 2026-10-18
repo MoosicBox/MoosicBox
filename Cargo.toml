@@ -849,13 +849,13 @@ criterion = { version = "0.8.2", default-features = false, features = [
 ] }
 
 [patch.crates-io]
-# TEMPORARY: user-authorized local bmux image-cache validation; remove before release.
-bmux_image          = { path = "/hdd/GitHub/bmux/packages/image" }
-bmux_keyboard       = { path = "/hdd/GitHub/bmux/packages/keyboard" }
-bmux_text_edit      = { path = "/hdd/GitHub/bmux/packages/text-edit" }
-bmux_tui            = { path = "/hdd/GitHub/bmux/packages/tui" }
-bmux_tui_components = { path = "/hdd/GitHub/bmux/packages/tui-components" }
-bmux_tui_runtime    = { path = "/hdd/GitHub/bmux/packages/tui-runtime" }
+# Keep the renderer stack on one published bmux Git revision.
+bmux_image          = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+bmux_keyboard       = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+bmux_text_edit      = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+bmux_tui            = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+bmux_tui_components = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+bmux_tui_runtime    = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
 # actix-files             = { git = "https://github.com/actix/actix-web" }
 # actix-http              = { git = "https://github.com/actix/actix-web" }
 # actix-http-test         = { git = "https://github.com/actix/actix-web" }
