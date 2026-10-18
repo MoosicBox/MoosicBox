@@ -338,8 +338,8 @@
             ++ extraPackages
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
               pkgs.clang
-              pkgs.darwin.apple_sdk.frameworks.Metal
-              pkgs.darwin.apple_sdk.frameworks.MetalKit
+              # Modern Nixpkgs supplies frameworks through the complete Apple SDK.
+              pkgs.apple-sdk
             ];
 
             shellHook = ''
