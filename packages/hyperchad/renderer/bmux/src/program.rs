@@ -390,11 +390,14 @@ impl BmuxProgram {
                     .bg(bmux_tui::style::Color::Rgb(color.r, color.g, color.b)),
             );
         }
-        crate::presentation::paint_text(tree, &self.controls, cx);
         for node in &tree.nodes {
             if !node.visible {
                 continue;
             }
+            // Paint each node completely before advancing to the next layer.
+            // A later overlay must cover earlier controls and image fallbacks,
+            // not just the text/background pass.
+            crate::presentation::paint_node_text(node, &self.controls, cx);
             cx.with_style(node.style.style, |cx| {
                 self.controls.paint(&node.key, cx);
             });
@@ -5483,6 +5486,80 @@ mod runtime_regressions {
             .unwrap();
         assert_ne!(program.resource_epochs["logo"], epoch);
         assert!(program.graphics.rgba("logo").is_none());
+    }
+
+    #[test]
+    fn opaque_overlay_occludes_underlying_controls_and_image_fallbacks() {
+        use hyperchad_transformer::{Number, models::Position};
+
+        let mut program = program();
+        program.set_graphics_available(false);
+        let overlay_color = hyperchad_color::Color::from_hex("#223344");
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        Container {
+                            element: Element::Input {
+                                autofocus: None,
+                                name: None,
+                                input: hyperchad_transformer::Input::Text {
+                                    value: Some("UNDERLYING".into()),
+                                    placeholder: None,
+                                },
+                            },
+                            ..Default::default()
+                        },
+                        Container {
+                            element: Element::Image {
+                                source: Some("/missing.svg".into()),
+                                alt: Some("UNDERLYING".into()),
+                                fit: None,
+                                source_set: None,
+                                sizes: None,
+                                loading: None,
+                            },
+                            ..Default::default()
+                        },
+                        Container {
+                            position: Some(Position::Fixed),
+                            left: Some(Number::Integer(0)),
+                            top: Some(Number::Integer(0)),
+                            width: Some(Number::IntegerPercent(100)),
+                            height: Some(Number::IntegerPercent(100)),
+                            background: Some(overlay_color),
+                            padding_left: Some(Number::Integer(16)),
+                            padding_top: Some(Number::Integer(16)),
+                            overflow_y: hyperchad_transformer_models::LayoutOverflow::Auto,
+                            children: vec![Container {
+                                element: Element::Raw {
+                                    value: "Modal".into(),
+                                },
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        let mut buffer =
+            bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+        let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+        program.paint(&mut PaintCx::new(&mut frame));
+        assert!(buffer.cells().iter().any(|cell| cell.symbol == "M"));
+        assert!(
+            buffer.cells().iter().all(|cell| cell.symbol != "U"),
+            "underlying controls and fallback images must not paint over the modal"
+        );
+        assert!(
+            buffer.cells().iter().all(|cell| {
+                cell.style.bg == Some(bmux_tui::style::Color::Rgb(0x22, 0x33, 0x44))
+            })
+        );
     }
 
     #[test]

@@ -329,16 +329,29 @@ impl EmbeddedSurface {
 }
 
 /// Paint only the authoritative layout's preformatted text; no geometry is recomputed.
+#[cfg(test)]
 pub(crate) fn paint_text(
     tree: &crate::layout::LayoutTree,
     controls: &crate::controls::Controls,
     cx: &mut PaintCx<'_, '_>,
 ) {
     for node in &tree.nodes {
-        if !node.visible {
-            continue;
-        }
-        let clip = node.text_clip.terminal();
+        paint_node_text(node, controls, cx);
+    }
+}
+
+pub(crate) fn paint_node_text(
+    node: &crate::layout::ResolvedNode,
+    controls: &crate::controls::Controls,
+    cx: &mut PaintCx<'_, '_>,
+) {
+    if !node.visible {
+        return;
+    }
+    if node.style.style.bg.is_some() {
+        // Backgrounds cover the border box, including padding; only ancestors
+        // clip them. The node's own overflow clip applies to its content.
+        let clip = node.clip.terminal();
         cx.with_child(
             0,
             0,
@@ -350,52 +363,61 @@ pub(crate) fn paint_text(
             ),
             |cx| {
                 let bounds = node.bounds;
-                if node.style.style.bg.is_some() {
-                    cx.fill(
+                cx.fill(
+                    LocalRect::new(
+                        i32::try_from(bounds.x).unwrap_or(if bounds.x < 0 {
+                            i32::MIN
+                        } else {
+                            i32::MAX
+                        }),
+                        bounds.y,
+                        u16::try_from(bounds.width).unwrap_or(u16::MAX),
+                        u16::try_from(bounds.height).unwrap_or(u16::MAX),
+                    ),
+                    " ",
+                    node.style.style,
+                );
+            },
+        );
+    }
+    let clip = node.text_clip.terminal();
+    cx.with_child(
+        0,
+        0,
+        LocalRect::new(
+            i32::from(clip.x),
+            i64::from(clip.y),
+            clip.width,
+            clip.height,
+        ),
+        |cx| {
+            for fragment in &node.text {
+                if fragment.visible {
+                    cx.write_line(
                         LocalRect::new(
-                            i32::try_from(bounds.x).unwrap_or(if bounds.x < 0 {
+                            i32::try_from(fragment.bounds.x).unwrap_or(if fragment.bounds.x < 0 {
                                 i32::MIN
                             } else {
                                 i32::MAX
                             }),
-                            bounds.y,
-                            u16::try_from(bounds.width).unwrap_or(u16::MAX),
-                            u16::try_from(bounds.height).unwrap_or(u16::MAX),
+                            fragment.bounds.y,
+                            u16::try_from(fragment.bounds.width).unwrap_or(u16::MAX),
+                            1,
                         ),
-                        " ",
-                        node.style.style,
+                        &bmux_tui::text::Line::from_spans(vec![bmux_tui::text::Span::styled(
+                            fragment.text.clone(),
+                            fragment
+                                .sources
+                                .iter()
+                                .fold(fragment.style, |style, source| {
+                                    controls.inline_style(&source.path, style)
+                                }),
+                        )]),
                     );
                 }
-                for fragment in &node.text {
-                    if fragment.visible {
-                        cx.write_line(
-                            LocalRect::new(
-                                i32::try_from(fragment.bounds.x).unwrap_or(
-                                    if fragment.bounds.x < 0 {
-                                        i32::MIN
-                                    } else {
-                                        i32::MAX
-                                    },
-                                ),
-                                fragment.bounds.y,
-                                u16::try_from(fragment.bounds.width).unwrap_or(u16::MAX),
-                                1,
-                            ),
-                            &bmux_tui::text::Line::from_spans(vec![bmux_tui::text::Span::styled(
-                                fragment.text.clone(),
-                                fragment
-                                    .sources
-                                    .iter()
-                                    .fold(fragment.style, |style, source| {
-                                        controls.inline_style(&source.path, style)
-                                    }),
-                            )]),
-                        );
-                    }
-                }
-            },
-        );
-    }
+            }
+        },
+    );
 }
 
 #[cfg(test)]
