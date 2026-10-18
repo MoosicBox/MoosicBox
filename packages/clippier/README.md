@@ -1098,6 +1098,11 @@ The same progress is repeated before rate-limit/network retry sleeps; retries do
 not advance the queue. The denominator is the upload queue after any enabled
 preflight filtering, and excludes `publish = false` packages.
 
+Clippier's own registry GET requests retry connection/request failures, timeouts,
+and transient HTTP 408/500/502/503/504 responses up to three times (1s, 2s, 4s),
+separately from the 429 budget. Failed lookups never count as unpublished versions.
+Exhaustion reports the URL and final cause; permanent HTTP errors are not retried.
+
 Transient registry `config.json` connection failures and dependency-download transport
 failures explicitly reported by Cargo as failing to prepare the package for upload
 retry up to three times (1s, 2s, 4s). Ambiguous transport failures during an upload are not blindly

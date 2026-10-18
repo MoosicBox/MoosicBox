@@ -101,7 +101,9 @@ fn client() -> crate::publish::RegistryClient {
 async fn http_status_errors_and_declared_oversize_are_rejected_before_creating_artifact() {
     let directory = tempfile::tempdir().unwrap();
     let destination = directory.path().join("published.crate");
-    for status in ["404 Not Found", "500 Internal Server Error"] {
+    // Permanent status errors are rejected without retrying; transient 5xx
+    // recovery/exhaustion is covered by the registry transport tests.
+    for status in ["404 Not Found", "403 Forbidden"] {
         let server = HttpArtifact::raw(
             format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                 .into_bytes(),

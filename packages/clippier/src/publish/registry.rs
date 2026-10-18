@@ -125,6 +125,40 @@ impl RegistryClient {
         Ok(exists)
     }
 
+    // These are idempotent registry reads, never publication uploads. Keep a
+    // separate transport budget so failures do not consume the 429 budget.
+    async fn send_with_retry(&self, url: &str) -> Result<reqwest::Response, BoxError> {
+        for attempt in 0..=3 {
+            let response = self.http.get(url).send().await;
+            let reason = match response {
+                Ok(response)
+                    if !matches!(response.status().as_u16(), 408 | 500 | 502 | 503 | 504) =>
+                {
+                    return Ok(response);
+                }
+                Ok(response) => format!("HTTP {}", response.status()),
+                Err(error) if error.is_connect() || error.is_timeout() || error.is_request() => {
+                    format!("{error:#}")
+                }
+                Err(error) => return Err(error.into()),
+            };
+            if attempt == 3 {
+                return Err(format!(
+                    "Failed to query {url}: exhausted 3 registry transport retries: {reason}"
+                )
+                .into());
+            }
+            let wait = Duration::from_secs(1 << attempt);
+            eprintln!(
+                "Registry request failed: {url}: {reason}; retrying in {}s ({}/3)",
+                wait.as_secs(),
+                attempt + 1
+            );
+            tokio::time::sleep(wait).await;
+        }
+        unreachable!("retry loop always returns")
+    }
+
     #[allow(clippy::significant_drop_tightening)] // Hold the gate through cooldowns and all retry attempts.
     pub(super) async fn get(&self, url: &str) -> Result<reqwest::Response, BoxError> {
         // Serialize API reads and share cooldowns across all lookup types, rather
@@ -143,7 +177,7 @@ impl RegistryClient {
                 )
                 .await;
             }
-            let response = self.http.get(url).send().await?;
+            let response = self.send_with_retry(url).await?;
             state.last_request = Some(Instant::now());
             state.cooldown = Duration::ZERO;
             if response.status() != reqwest::StatusCode::TOO_MANY_REQUESTS {

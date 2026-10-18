@@ -26,6 +26,46 @@ fn server(responses: Vec<String>) -> (String, thread::JoinHandle<()>) {
     });
     (url, task)
 }
+#[switchy_async::test]
+async fn registry_send_failure_recovers_without_caching_a_missing_version() {
+    let (url, task) = server(vec![
+        String::new(), // Close the connection before sending response headers.
+        reply("200 OK", "", "{\"vers\":\"1.0.0\"}\n"),
+    ]);
+    let client = RegistryClient::for_test(0);
+    assert!(client.version_at(&url, "1.0.0").await.unwrap());
+    task.join().unwrap();
+    assert!(client.version_at(&url, "1.0.0").await.unwrap());
+}
+
+#[switchy_async::test]
+async fn registry_transport_exhaustion_is_bounded_and_does_not_poison_cache() {
+    let (url, task) = server(vec![String::new(); 4]);
+    let client = RegistryClient::for_test(0);
+    let error = client.version_at(&url, "1.0.0").await.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("exhausted 3 registry transport retries"),
+        "{error}"
+    );
+    assert!(error.to_string().contains(&url));
+    task.join().unwrap();
+    assert!(client.state.lock().await.exists.is_empty());
+    assert!(client.state.lock().await.exhausted.is_none());
+}
+
+#[switchy_async::test]
+async fn registry_transient_server_error_retries_but_not_as_a_rate_limit() {
+    let (url, task) = server(vec![
+        reply("503 Service Unavailable", "", ""),
+        reply("200 OK", "", "{}"),
+    ]);
+    let client = RegistryClient::for_test(0);
+    assert!(client.exists(&url, false).await.unwrap());
+    task.join().unwrap();
+}
+
 fn reply(status: &str, headers: &str, body: &str) -> String {
     format!(
         "HTTP/1.1 {status}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
