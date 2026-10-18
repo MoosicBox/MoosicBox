@@ -44,7 +44,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc, LazyLock,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -347,6 +347,24 @@ impl ConnectionConfig {
         &self.profile
     }
 
+    /// Returns the current bearer credential. Never include it in logs or cache keys.
+    #[expect(clippy::must_use_candidate, reason = "Option is already must_use")]
+    pub fn api_token(&self) -> Option<&str> {
+        self.api_token.as_deref()
+    }
+
+    /// Returns the client identity used for authenticated artwork requests.
+    #[expect(clippy::must_use_candidate, reason = "Option is already must_use")]
+    pub fn client_id(&self) -> Option<&str> {
+        self.client_id.as_deref()
+    }
+
+    /// Returns the current signature credential. Never include it in logs or cache keys.
+    #[expect(clippy::must_use_candidate, reason = "Option is already must_use")]
+    pub fn signature_token(&self) -> Option<&str> {
+        self.signature_token.as_deref()
+    }
+
     /// Returns the stable connection identifier.
     #[must_use]
     pub fn connection_id(&self) -> &str {
@@ -471,6 +489,9 @@ pub struct AppState {
     pub connection_status: Arc<RwLock<ConnectionStatus>>,
     /// Monotonically increasing identifier used to invalidate stale connection tasks.
     pub connection_generation: Arc<AtomicU64>,
+    resource_publication: Arc<switchy_async::sync::Mutex<()>>,
+    resource_epoch: Arc<AtomicU64>,
+    resource_publication_incomplete: Arc<AtomicBool>,
     /// Join handles for output/player/fetch work owned by the active generation.
     pub connection_task_handles: ConnectionTasks,
     /// `MoosicBox` API server URL
@@ -657,6 +678,35 @@ impl AppState {
         self.connection_generation.load(Ordering::SeqCst)
     }
 
+    /// Returns the current artwork authorization epoch without exposing credentials.
+    #[must_use]
+    pub fn resource_context_epoch(&self) -> u64 {
+        self.resource_epoch.load(Ordering::SeqCst)
+    }
+
+    /// Takes a coherent copy of the current endpoint, profile and artwork credentials.
+    /// Returns `None` while a connection is absent or a cancelled publication is incomplete.
+    pub async fn connection_resource_snapshot(&self) -> Option<ConnectionConfig> {
+        let _publication = self.resource_publication.lock().await;
+        if self.resource_publication_incomplete.load(Ordering::SeqCst) {
+            return None;
+        }
+        let mut config = self.connection_config.read().await.clone()?;
+        let id = self.connection_id.read().await.clone()?;
+        let url = self.api_url.read().await.clone()?;
+        let profile = self.profile.read().await.clone()?;
+        if id != config.connection_id || url != config.api_url {
+            return None;
+        }
+        config.profile = profile;
+        config.client_id.clone_from(&*self.client_id.read().await);
+        config.api_token.clone_from(&*self.api_token.read().await);
+        config
+            .signature_token
+            .clone_from(&*self.signature_token.read().await);
+        Some(config)
+    }
+
     /// Returns whether `generation` still owns the active connection lifecycle.
     #[must_use]
     pub fn is_active_connection_generation(&self, generation: u64) -> bool {
@@ -683,11 +733,17 @@ impl AppState {
     /// * If existing connection resources cannot be closed
     /// * If connection-dependent startup cannot be scheduled
     pub async fn activate_connection(&self, config: ConnectionConfig) -> Result<(), AppStateError> {
+        self.resource_publication_incomplete
+            .store(true, Ordering::SeqCst);
+        self.resource_epoch.fetch_add(1, Ordering::SeqCst);
         self.connection_generation.fetch_add(1, Ordering::SeqCst);
         self.close_ws_connection().await?;
         self.cancel_connection_tasks().await;
         *self.connection_status.write().await = ConnectionStatus::Connecting;
-        *self.connection_config.write().await = Some(config.clone());
+        {
+            let _publication = self.resource_publication.lock().await;
+            *self.connection_config.write().await = Some(config.clone());
+        }
         Self::configure_remote_music_apis(&config);
 
         self.set_state(UpdateAppState {
@@ -789,6 +845,9 @@ impl AppState {
     ///
     /// * If closing the active WebSocket connection fails
     pub async fn disconnect(&self) -> Result<(), AppStateError> {
+        self.resource_publication_incomplete
+            .store(true, Ordering::SeqCst);
+        self.resource_epoch.fetch_add(1, Ordering::SeqCst);
         self.connection_generation.fetch_add(1, Ordering::SeqCst);
         *self.connection_status.write().await = ConnectionStatus::ShuttingDown;
         self.close_ws_connection().await?;
@@ -2176,6 +2235,26 @@ impl AppState {
             listener(&state).await;
         }
 
+        let resource_publication = self.resource_publication.lock().await;
+        let publication_was_incomplete =
+            self.resource_publication_incomplete.load(Ordering::SeqCst);
+        let complete_resource_publication = state.connection_id.is_some()
+            && state.api_url.is_some()
+            && state.profile.is_some()
+            && state.api_token.is_some()
+            && state.client_id.is_some()
+            && state.signature_token.is_some();
+        let changes_resource_context = state.connection_id.is_some()
+            || state.api_url.is_some()
+            || state.profile.is_some()
+            || state.api_token.is_some()
+            || state.client_id.is_some()
+            || state.signature_token.is_some();
+        if changes_resource_context {
+            self.resource_publication_incomplete
+                .store(true, Ordering::SeqCst);
+            self.resource_epoch.fetch_add(1, Ordering::SeqCst);
+        }
         let mut updated_connection_details = false;
 
         if let Some(state_connection_id) = &state.connection_id {
@@ -2345,6 +2424,15 @@ impl AppState {
             }
         }
 
+        if changes_resource_context {
+            self.resource_publication_incomplete.store(
+                publication_was_incomplete && !complete_resource_publication,
+                Ordering::SeqCst,
+            );
+            self.resource_epoch.fetch_add(1, Ordering::SeqCst);
+        }
+        drop(resource_publication);
+
         if let Some(state_playback_target) = &state.playback_target {
             (*self.current_playback_target.write().await).clone_from(state_playback_target);
         }
@@ -2480,6 +2568,8 @@ impl AppState {
 
     async fn fetch_signature_token(&self) -> Result<(), AppStateError> {
         if self.signature_token.read().await.is_none() {
+            let resource_epoch = self.resource_context_epoch();
+            let generation = self.connection_generation();
             let response = self
                 .api_proxy_post("auth/signature-token".to_string(), None, None)
                 .await?;
@@ -2489,6 +2579,14 @@ impl AppState {
                 .as_str()
                 .ok_or_else(|| AppStateError::unknown("Invalid token"))?
                 .to_string();
+            let _publication = self.resource_publication.lock().await;
+            if resource_epoch != self.resource_context_epoch()
+                || generation != self.connection_generation()
+                || self.resource_publication_incomplete.load(Ordering::SeqCst)
+            {
+                return Ok(());
+            }
+            self.resource_epoch.fetch_add(1, Ordering::SeqCst);
             let mut signature_token = self.signature_token.write().await;
 
             *signature_token = Some(token);
@@ -2529,6 +2627,56 @@ impl AppState {
 mod tests {
     use super::*;
     use moosicbox_session::models::{ApiSession, ApiSessionPlaylist};
+
+    #[switchy_async::test]
+    async fn resource_snapshot_tracks_current_credentials_and_rejects_partial_publication() {
+        let state = AppState::new();
+        *state.connection_config.write().await =
+            Some(ConnectionConfig::new("http://localhost:8080", "master", "one").unwrap());
+        *state.connection_id.write().await = Some("one".into());
+        *state.api_url.write().await = Some("http://localhost:8080".into());
+        *state.profile.write().await = Some("other-profile".into());
+        *state.api_token.write().await = Some("credential".into());
+        *state.client_id.write().await = Some("client".into());
+        *state.signature_token.write().await = Some("signature".into());
+        let snapshot = state.connection_resource_snapshot().await.unwrap();
+        assert_eq!(snapshot.profile(), "other-profile");
+        assert_eq!(snapshot.api_token(), Some("credential"));
+        assert_eq!(snapshot.client_id(), Some("client"));
+        assert_eq!(snapshot.signature_token(), Some("signature"));
+        state
+            .resource_publication_incomplete
+            .store(true, Ordering::SeqCst);
+        assert!(state.connection_resource_snapshot().await.is_none());
+        let epoch = state.resource_context_epoch();
+        state
+            .set_state(UpdateAppState {
+                profile: Some(Some("other-profile".into())),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(state.resource_context_epoch() > epoch);
+        assert!(state.connection_resource_snapshot().await.is_none());
+        state
+            .set_state(UpdateAppState {
+                connection_id: Some(Some("one".into())),
+                api_url: Some(Some("http://localhost:8080".into())),
+                profile: Some(Some("other-profile".into())),
+                api_token: Some(Some("credential".into())),
+                client_id: Some(Some("client".into())),
+                signature_token: Some(Some("signature".into())),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(state.connection_resource_snapshot().await.is_some());
+        state
+            .resource_publication_incomplete
+            .store(false, Ordering::SeqCst);
+        *state.api_url.write().await = Some("http://other.example".into());
+        assert!(state.connection_resource_snapshot().await.is_none());
+    }
 
     fn create_test_session(session_id: u64, name: &str) -> ApiSession {
         ApiSession {

@@ -43,6 +43,7 @@ hyperchad_transformer = { workspace = true, features = [
 hyperchad_transformer_models = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 log = { workspace = true }
+resvg = { workspace = true }
 serde_json = { workspace = true }
 switchy_async = { workspace = true, features = ["tokio"] }
 thiserror = { workspace = true }

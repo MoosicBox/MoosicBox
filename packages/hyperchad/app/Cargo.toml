@@ -42,8 +42,10 @@ switchy = { workspace = true, features = [
 switchy_env = { workspace = true }
 
 async-trait = { workspace = true }
+cap-std     = { workspace = true, optional = true }
 clap        = { workspace = true }
 flume       = { workspace = true }
+libc        = { workspace = true, optional = true }
 log         = { workspace = true }
 open        = { workspace = true }
 serde_json  = { workspace = true }
@@ -85,7 +87,7 @@ fail-on-warnings = [
     "switchy_env/fail-on-warnings",
 ]
 
-bmux = ["dep:hyperchad_renderer_bmux", "logic"]
+bmux = ["dep:cap-std", "dep:hyperchad_renderer_bmux", "dep:libc", "logic"]
 bmux-images = ["bmux", "hyperchad_renderer_bmux/all-protocols"]
 egui = ["dep:hyperchad_renderer_egui", "logic"]
 egui-glow = ["egui", "hyperchad_renderer_egui/glow"]

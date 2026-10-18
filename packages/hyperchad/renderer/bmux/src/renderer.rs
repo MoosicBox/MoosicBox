@@ -78,6 +78,8 @@ pub struct BmuxConfig {
     pub runtime: bmux_tui_runtime::RuntimeConfig,
     pub graphics: GraphicsLimits,
     pub host: HostCallbacks,
+    /// Opaque application identity for resource-cache isolation. Increment when authorization changes.
+    pub resource_context: Option<Arc<dyn Fn() -> u64 + Send + Sync>>,
     pub max_nodes: usize,
     pub max_depth: usize,
     pub max_text_bytes: usize,
@@ -96,6 +98,7 @@ impl Default for BmuxConfig {
             runtime: bmux_tui_runtime::RuntimeConfig::default(),
             graphics: GraphicsLimits::default(),
             host: HostCallbacks::default(),
+            resource_context: None,
             max_nodes: 20_000,
             max_depth: 128,
             max_text_bytes: 4 * 1024 * 1024,

@@ -41,7 +41,21 @@ use hyperchad_actions::{
 };
 use hyperchad_color::Color;
 use hyperchad_transformer::{Container, Element};
-use hyperchad_transformer_models::{ElementTarget, LinkTarget, Selector, SwapStrategy, Visibility};
+use hyperchad_transformer_models::{
+    ElementTarget, LinkTarget, Route, Selector, SwapStrategy, Visibility,
+};
+
+/// Whether native defaults need a load event before presentation, including hidden nodes.
+pub(crate) fn has_load_route(node: &Container) -> bool {
+    matches!(
+        &node.route,
+        Some(Route::Get { trigger, .. }
+            | Route::Post { trigger, .. }
+            | Route::Put { trigger, .. }
+            | Route::Delete { trigger, .. }
+            | Route::Patch { trigger, .. }) if trigger.as_deref() == Some("load")
+    )
+}
 
 /// Checked identity of an event source. Paths are child indices relative to the root.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -322,6 +336,8 @@ struct Owner {
 struct Timing {
     last: u64,
     unique: bool,
+    // Nested effects share the top-level immediate definition's lifecycle.
+    immediate_definition: Option<ActionEffect>,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Style {
@@ -389,6 +405,7 @@ pub struct ActionEngine {
     clock: u64,
     sequence: u64,
     timing: BTreeMap<Owner, Timing>,
+    loaded_routes: BTreeMap<String, Route>,
     styles: BTreeMap<String, StyledNode>,
     variables: BTreeMap<(String, String), eval::Datum>,
     registrations: BTreeMap<Owner, Registration>,
@@ -409,6 +426,7 @@ impl ActionEngine {
             clock: 0,
             sequence: 0,
             timing: BTreeMap::new(),
+            loaded_routes: BTreeMap::new(),
             styles: BTreeMap::new(),
             variables: BTreeMap::new(),
             registrations: BTreeMap::new(),
@@ -561,6 +579,13 @@ impl ActionEngine {
         removed: &BTreeSet<String>,
     ) -> Result<(), ActionError> {
         let index = selectors::index(root, &self.limits)?;
+        self.loaded_routes.retain(|key, route| {
+            !removed.contains(key)
+                && index
+                    .get(key)
+                    .and_then(|path| selectors::at(root, path))
+                    .is_some_and(|node| node.route.as_ref() == Some(route))
+        });
         let rebind = |source: &mut Source| {
             if removed.contains(&source.key) {
                 return false;
@@ -574,7 +599,22 @@ impl ActionEngine {
         };
         self.timing = std::mem::take(&mut self.timing)
             .into_iter()
-            .filter_map(|(mut owner, timing)| rebind(&mut owner.source).then_some((owner, timing)))
+            .filter_map(|(mut owner, timing)| {
+                if !rebind(&mut owner.source) {
+                    return None;
+                }
+                if let Some(definition) = &timing.immediate_definition {
+                    let action = selectors::at(root, &owner.source.path)
+                        .and_then(|node| owner.action.first().and_then(|i| node.actions.get(*i)));
+                    if !action.is_some_and(|action| {
+                        matches!(action.trigger, ActionTrigger::Immediate)
+                            && &action.effect == definition
+                    }) {
+                        return None;
+                    }
+                }
+                Some((owner, timing))
+            })
             .collect();
         self.registrations = std::mem::take(&mut self.registrations)
             .into_iter()
@@ -784,6 +824,13 @@ impl<'a> Work<'a> {
             Timing {
                 last: self.event.now_ms,
                 unique: effect.unique == Some(true),
+                immediate_definition: if matches!(self.event.kind, EventKind::Immediate) {
+                    selectors::at(self.root, &owner.source.path)
+                        .and_then(|node| owner.action.first().and_then(|i| node.actions.get(*i)))
+                        .map(|action| action.effect.clone())
+                } else {
+                    None
+                },
             },
         );
         self.run(

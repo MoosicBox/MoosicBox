@@ -206,14 +206,14 @@ pub mod bmux {
             let router = self.router.clone().ok_or(BuilderError::MissingRouter)?;
             #[cfg(feature = "assets")]
             let config = super::bmux_host::attach_assets(config, self.static_asset_routes.clone());
-            let config = super::bmux_host::attach(config, router.clone());
+            let config = super::bmux_host::attach_on(config, router.clone(), self.runtime_handle());
             let renderer = BmuxRenderer::new(config, action_tx, resize_tx);
             let mut app = self.build(renderer.clone())?;
             app.runtime_handle()
                 .map_err(|_| BuilderError::MissingRuntime)?
                 .spawn(async move {
                     while let Some(url) = renderer.wait_for_navigation().await {
-                        if let Err(error) = router.navigate(url).await {
+                        if let Err(error) = router.navigate_send(url).await {
                             log::error!("terminal navigation failed: {error:?}");
                         }
                     }

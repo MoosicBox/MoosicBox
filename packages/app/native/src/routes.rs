@@ -943,7 +943,9 @@ pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Cont
 async fn settings_music_api_settings_markup(state: &State) -> Result<Container, RouteError> {
     let mut music_api_settings: Vec<MusicApiSettings> = vec![];
 
-    if let Some(connection) = &state.connection {
+    if let Some(connection) = &state.connection
+        && !connection.api_url.trim().is_empty()
+    {
         let host = &connection.api_url;
 
         let music_apis: Page<ApiMusicApi> = CLIENT
@@ -1034,6 +1036,17 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
 mod tests {
     use super::*;
     use moosicbox_app_models::ConnectionStatus;
+
+    #[switchy::unsync::test]
+    async fn music_api_settings_fragment_keeps_a_single_target_identity() {
+        fn count(container: &Container) -> usize {
+            usize::from(container.str_id.as_deref() == Some("settings-music-api-settings-section"))
+                + container.children.iter().map(count).sum::<usize>()
+        }
+        let state = moosicbox_app_native_ui::state::State::default();
+        let container = settings_music_api_settings_markup(&state).await.unwrap();
+        assert_eq!(count(&container), 1);
+    }
 
     #[test]
     fn test_handle_route_result_converts_backend_unavailable_to_content() {

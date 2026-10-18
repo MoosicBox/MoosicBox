@@ -486,7 +486,7 @@ pub(super) fn plain_size(
 impl<M: LeafMeasure> Engine<'_, M> {
     pub(super) fn inline_nodes<'a>(
         sources: &[InlineSource<'a>],
-        fragments: &[InlineFragment],
+        fragments: &mut Vec<InlineFragment>,
         skip: Option<&[usize]>,
     ) -> Vec<Draft<'a>> {
         fn build<'a>(
@@ -520,6 +520,28 @@ impl<M: LeafMeasure> Engine<'_, M> {
                 })
                 .map(|(index, _)| build(index, sources, fragments, (bounds.x, bounds.y)))
                 .collect();
+            let text = if matches!(source.source.element, Element::Anchor { .. }) {
+                fragments
+                    .iter()
+                    .filter(|fragment| {
+                        inline_anchor_owner(sources, fragment) == Some(source.path.as_slice())
+                    })
+                    .cloned()
+                    .map(|mut fragment| {
+                        fragment.bounds = fragment.bounds.translated(-bounds.x, -bounds.y);
+                        fragment
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            // Inline metadata shares the formatting context's background. Painting
+            // it again after the context's glyphs erases links and styled spans.
+            let mut style = source.style.clone();
+            style.style.bg = source
+                .source
+                .background
+                .map(|color| Color::Rgb(color.r, color.g, color.b));
             Draft {
                 source: source.source,
                 path: source.path.clone(),
@@ -529,15 +551,15 @@ impl<M: LeafMeasure> Engine<'_, M> {
                 extents: LogicalSize::new(bounds.width, bounds.height),
                 margin: Edges::default(),
                 children,
-                text: Vec::new(),
+                text,
                 regions: regions
                     .into_iter()
                     .map(|rect| rect.translated(-bounds.x, -bounds.y))
                     .collect(),
-                style: source.style.clone(),
+                style,
             }
         }
-        sources
+        let nodes = sources
             .iter()
             .enumerate()
             .filter(|(_, source)| {
@@ -548,6 +570,28 @@ impl<M: LeafMeasure> Engine<'_, M> {
                 skip == Some(parent) || !sources.iter().any(|other| other.path == parent)
             })
             .map(|(index, _)| build(index, sources, fragments, (0, 0)))
-            .collect()
+            .collect();
+        fragments.retain(|fragment| {
+            inline_anchor_owner(sources, fragment).is_none_or(|owner| skip == Some(owner))
+        });
+        nodes
     }
+}
+
+// The deepest anchor owns a glyph; its metadata descendants never repaint it.
+fn inline_anchor_owner<'a>(
+    sources: &'a [InlineSource<'_>],
+    fragment: &InlineFragment,
+) -> Option<&'a [usize]> {
+    sources
+        .iter()
+        .filter(|source| {
+            matches!(source.source.element, Element::Anchor { .. })
+                && fragment
+                    .sources
+                    .iter()
+                    .any(|range| range.path.starts_with(&source.path))
+        })
+        .max_by_key(|source| source.path.len())
+        .map(|source| source.path.as_slice())
 }

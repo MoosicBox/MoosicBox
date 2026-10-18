@@ -299,7 +299,24 @@ impl Work<'_> {
             }
         });
         if let Some(route) = route {
-            self.route(route, Vec::new(), self.event.source.clone())?;
+            // Automatic load is once per retained source and exact route definition.
+            // Named events (including an explicit "load") remain repeatable.
+            let automatic = matches!(self.event.kind, EventKind::Immediate);
+            let key = &self.event.source.key;
+            if !automatic || self.engine.loaded_routes.get(key) != Some(route) {
+                if automatic
+                    && !self.engine.loaded_routes.contains_key(key)
+                    && self.engine.loaded_routes.len() >= self.engine.limits.max_entries
+                {
+                    return Err(ActionError::Limit("loaded routes"));
+                }
+                self.route(route, Vec::new(), self.event.source.clone())?;
+                if automatic {
+                    self.engine
+                        .loaded_routes
+                        .insert(self.event.source.key.clone(), route.clone());
+                }
+            }
         }
         if !matches!(self.event.kind, EventKind::Click) {
             return Ok(());

@@ -1,5 +1,81 @@
 use super::*;
 use hyperchad_actions::{Action, Target};
+
+fn immediate(name: &str) -> Action {
+    Action {
+        trigger: ActionTrigger::Immediate,
+        effect: ActionType::Custom {
+            action: name.into(),
+        }
+        .into(),
+    }
+}
+
+fn dispatch_immediate(
+    engine: &mut ActionEngine,
+    root: &mut Container,
+    path: &[usize],
+    generation: u64,
+) -> Vec<Effect> {
+    let mut event = context(root, path, generation, generation);
+    event.kind = EventKind::Immediate;
+    engine.dispatch(root, &event, &FormValues::new()).unwrap()
+}
+
+#[test]
+fn immediate_definition_is_once_per_node_incarnation_not_document_generation() {
+    let mut root = node("root");
+    let mut source = node("source");
+    source.actions.push(immediate("initial"));
+    root.children.push(source);
+    let mut engine = ActionEngine::default();
+    assert_eq!(dispatch_immediate(&mut engine, &mut root, &[0], 0).len(), 1);
+    root.children.insert(0, node("sibling"));
+    engine.reconcile(&root, 1).unwrap();
+    assert!(dispatch_immediate(&mut engine, &mut root, &[1], 1).is_empty());
+    root.children[0].actions.push(immediate("new sibling"));
+    engine.reconcile(&root, 2).unwrap();
+    assert_eq!(dispatch_immediate(&mut engine, &mut root, &[0], 2).len(), 1);
+    assert!(dispatch_immediate(&mut engine, &mut root, &[1], 2).is_empty());
+    root.children[1].actions[0] = immediate("changed");
+    engine.reconcile(&root, 3).unwrap();
+    assert!(
+        matches!(dispatch_immediate(&mut engine, &mut root, &[1], 3).as_slice(),
+        [Effect::Custom { action, .. }] if action == "changed")
+    );
+    engine
+        .reconcile_removed(&root, 4, &BTreeSet::from(["source".into()]))
+        .unwrap();
+    assert_eq!(dispatch_immediate(&mut engine, &mut root, &[1], 4).len(), 1);
+    assert!(dispatch_immediate(&mut engine, &mut root, &[1], 4).is_empty());
+}
+
+#[test]
+fn changed_immediate_definition_resets_nested_effect_admission() {
+    let mut root = node("source");
+    let nested: ActionEffect = ActionType::Custom {
+        action: "nested".into(),
+    }
+    .into();
+    root.actions.push(Action {
+        trigger: ActionTrigger::Immediate,
+        effect: ActionType::MultiEffect(vec![nested.clone()]).into(),
+    });
+    let mut engine = ActionEngine::default();
+    assert_eq!(dispatch_immediate(&mut engine, &mut root, &[], 0).len(), 1);
+    root.actions[0].effect = ActionType::MultiEffect(vec![
+        nested,
+        ActionType::Custom {
+            action: "added".into(),
+        }
+        .into(),
+    ])
+    .into();
+    engine.reconcile(&root, 1).unwrap();
+    assert_eq!(dispatch_immediate(&mut engine, &mut root, &[], 1).len(), 2);
+    assert!(dispatch_immediate(&mut engine, &mut root, &[], 1).is_empty());
+}
+
 fn node(id: &str) -> Container {
     Container {
         str_id: Some(id.into()),

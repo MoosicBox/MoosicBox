@@ -33,6 +33,8 @@ use moosicbox_music_models::ApiSource;
 
 pub mod actions;
 mod events;
+#[cfg(feature = "bmux")]
+pub mod renderer_bmux;
 mod routes;
 #[cfg(feature = "_canvas")]
 pub mod visualization;

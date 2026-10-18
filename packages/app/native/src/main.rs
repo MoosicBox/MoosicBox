@@ -207,6 +207,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("app_native: setting up routes");
 
     log::debug!("app_native: creating app");
+    #[cfg(feature = "bmux")]
+    let app = app.build_bmux_with_config(moosicbox_app_native::renderer_bmux::config())?;
+    #[cfg(not(feature = "bmux"))]
     let app = app.build_default()?;
 
     moosicbox_assert::assert_or_panic!(

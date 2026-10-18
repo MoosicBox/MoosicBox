@@ -1,10 +1,9 @@
-//! Terminal-app local transport. This adapter never opens files, launches a browser, or
-//! performs network IO. One `attach` call creates one isolated, in-memory local-origin jar.
+//! Terminal-app local transport. Network and browser operations require explicit user policy.
+//! One `attach` call creates one isolated, in-memory local-origin jar.
 //!
-//! Parent wiring: call `attach(config, router.clone())` exactly once when building a renderer.
-//! With `assets`, call `attach_assets` before `attach` for exact in-memory registrations.
-//! File/directory registrations require the parent's explicit bounded filesystem host policy.
-//! No asset wrapper accesses the filesystem, including for canonicalization or metadata.
+//! Parent wiring: call `attach_on(config, router.clone(), app_runtime)` exactly once.
+//! With `assets`, call `attach_assets` before `attach` for registered static assets.
+//! Filesystem assets are read on blocking workers through confined directory capabilities.
 //! Cookie notifications are forwarded to the user's host policy, not consumed as permission
 //! to persist remote cookies. Only cookies returned by this adapter's local routes enter its jar.
 
@@ -26,21 +25,46 @@ const MAX_COOKIES: usize = 256;
 const MAX_COOKIE_BYTES: usize = 4096;
 const URI_HEADER: &str = "x-hyperchad-request-target";
 
+#[cfg(test)]
+#[path = "bmux_host/runtime_tests.rs"]
+mod runtime_tests;
+
 /// Install app-local route transport, retaining the explicit user callback for every operation
 /// outside that scope. Requests are executed once, never via `navigate_send`'s broadcast channel.
 /// The runtime retains source/target/strategy/correlation from the original `RequestEffect`.
+#[cfg(test)]
 #[must_use]
-pub(super) fn attach(mut config: BmuxConfig, router: Router) -> BmuxConfig {
+pub(super) fn attach(config: BmuxConfig, router: Router) -> BmuxConfig {
+    attach_on(config, router, switchy::unsync::runtime::Handle::current())
+}
+
+/// Bind native route execution to the application's explicitly configured runtime.
+#[must_use]
+pub(super) fn attach_on(
+    mut config: BmuxConfig,
+    router: Router,
+    runtime: switchy::unsync::runtime::Handle,
+) -> BmuxConfig {
     let previous = config.host.request.take();
+    // Native handlers and their pooled IO belong to the app runtime, not bmux's
+    // private terminal executor. Retain explicit ownership across that boundary.
     let jar = Arc::new(Mutex::new(CookieJar::default()));
     let max_bytes = config.max_text_bytes;
     config.host = HostCallbacks {
         request: Some(Arc::new(move |operation| {
             let previous = previous.clone();
             let router = router.clone();
+            let runtime = runtime.clone();
             let jar = jar.clone();
             Box::pin(async move {
                 if let HostRequest::Http(request) = &operation {
+                    // Diagnostic fields deliberately exclude query, body, headers, and the base
+                    // URL. Debug formatting escapes controls before anything reaches a log sink.
+                    let logged_path = diagnostic_path(&request.url);
+                    let diagnostic_method = request.method.parse::<Method>().ok();
+                    log::debug!(
+                        "bmux local bridge received method={diagnostic_method:?} path={logged_path:?}"
+                    );
                     // A local callback must not resolve host-authorized file capabilities. Delegate
                     // the entire request intact, never replay it locally after host execution.
                     let files = matches!(&request.body, RequestBody::Multipart(parts) if parts.iter().any(|p| matches!(p,FormPart::File { .. })));
@@ -48,9 +72,36 @@ pub(super) fn attach(mut config: BmuxConfig, router: Router) -> BmuxConfig {
                         let path = uri.split('?').next().unwrap_or(&uri);
                         if let Some(handler) = router.get_route_func(path) {
                             let route_request = prepare(request, &uri, &jar, max_bytes)?;
-                            let result = handler(route_request)
-                                .await
-                                .map_err(|error| failure(error.to_string()))?;
+                            log::debug!(
+                                "bmux local bridge dispatch method={:?} path={:?}",
+                                route_request.method,
+                                diagnostic_path(path)
+                            );
+                            let task = runtime.spawn(async move {
+                                // RouteFunc's boxed error is not Send. Map it before the
+                                // result crosses back to the terminal executor.
+                                handler(route_request)
+                                    .await
+                                    .map_err(|error| failure(error.to_string()))
+                            });
+                            let abort = task.abort_handle();
+                            let mut cancel = CancelRoute(Some(Box::new(move || abort.abort())));
+                            let result = task.await.map_err(|error| {
+                                failure(format!("local route task failed: {error}"))
+                            })?;
+                            cancel.0 = None;
+                            let result = result.map_err(|error| {
+                                // Keep the source error in the existing return channel, not in
+                                // this diagnostic: upstream errors can contain credentialed URLs.
+                                log::debug!(
+                                    "bmux local bridge handler failed method={diagnostic_method:?} path={:?}",
+                                    diagnostic_path(path)
+                                );
+                                failure(format!(
+                                    "local route method={diagnostic_method:?} path={:?} failed: {error}",
+                                    diagnostic_path(path)
+                                ))
+                            })?;
                             return response(result, &uri, &jar, max_bytes);
                         }
                     }
@@ -75,43 +126,38 @@ pub(super) fn attach(mut config: BmuxConfig, router: Router) -> BmuxConfig {
     config
 }
 
-/// Serve exact registered in-memory assets, leaving filesystem registrations and unknown
-/// resources to the explicit host policy. Call before `attach`; no registration causes IO.
-/// Request and configured renderer byte limits are both enforced before copying bytes.
+#[cfg(feature = "assets")]
+#[path = "bmux_host/assets.rs"]
+mod assets;
+
+/// Serve explicitly registered static assets with bounded, confined filesystem reads.
+/// Call before `attach`; unregistered resources retain the explicit host callback.
 #[cfg(feature = "assets")]
 #[must_use]
 pub(super) fn attach_assets(
     mut config: BmuxConfig,
     assets: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
 ) -> BmuxConfig {
-    use hyperchad_renderer::assets::AssetPathTarget;
     let previous = config.host.request.take();
     let max_config_bytes = config.max_text_bytes;
-    let assets = Arc::new(assets);
+    let assets = Arc::new(assets::Assets::new(assets));
     config.host.request = Some(Arc::new(move |operation| {
         let previous = previous.clone();
         let assets = assets.clone();
         Box::pin(async move {
             if let HostRequest::Resource { source, max_bytes } = &operation
                 && let Some(path) = asset_path(source)?
+                && let Some(response) = assets
+                    .load(&path, (*max_bytes).min(max_config_bytes))
+                    .await?
             {
-                // First exact registered memory route wins, matching registration order.
-                for asset in assets.iter() {
-                    if let AssetPathTarget::FileContents(bytes) = &asset.target
-                        && asset_path(&asset.route)?.as_deref() == Some(path.as_str())
-                    {
-                        if bytes.len() > (*max_bytes).min(max_config_bytes) {
-                            return Err(failure("registered memory asset exceeds byte limit"));
-                        }
-                        return Ok(HostResponse::Bytes(bytes.to_vec()));
-                    }
-                }
+                return Ok(response);
             }
             if let Some(callback) = previous {
                 callback(operation).await
             } else {
                 Err(failure(
-                    "resource requires explicit host callback; file/directory registrations are not read by the local transport",
+                    "unregistered resource requires an explicit host callback",
                 ))
             }
         })
@@ -170,6 +216,34 @@ fn asset_path(source: &str) -> Result<Option<String>, Error> {
         return Err(failure("asset traversal or control character"));
     }
     Ok(Some(decoded))
+}
+
+/// Aborting the terminal request must not detach a live application handler.
+/// This guard also runs on effect deadline, source invalidation, and shutdown.
+struct CancelRoute(Option<Box<dyn FnOnce() + Send>>);
+
+impl Drop for CancelRoute {
+    fn drop(&mut self) {
+        if let Some(abort) = self.0.take() {
+            abort();
+        }
+    }
+}
+
+/// Restrict diagnostics to bounded local paths. Never print authorities/userinfo, queries,
+/// fragments, or malformed references supplied by an external host.
+fn diagnostic_path(url: &str) -> &str {
+    let path = url.split(['?', '#']).next().unwrap_or_default();
+    if path.starts_with('/')
+        && !path.starts_with("//")
+        && path.len() <= 4096
+        && !path.chars().any(char::is_control)
+        && !path.contains('\\')
+    {
+        path
+    } else {
+        "<nonlocal-or-invalid>"
+    }
 }
 
 fn failure(message: impl Into<String>) -> Error {
@@ -629,7 +703,6 @@ mod tests {
     #[cfg(feature = "assets")]
     #[switchy_async::test]
     async fn asset_fallback_is_explicit_and_receives_original_request_once() {
-        use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
         let calls = Arc::new(Mutex::new(Vec::new()));
         let seen = calls.clone();
         let mut config = BmuxConfig::default();
@@ -637,19 +710,7 @@ mod tests {
             seen.lock().unwrap().push(request);
             Box::pin(async { Ok(HostResponse::Complete) })
         }));
-        let assets = vec![
-            memory_asset(),
-            StaticAssetRoute {
-                route: "/file".into(),
-                target: AssetPathTarget::File("/not-opened-by-test".into()),
-                not_found_behavior: None,
-            },
-            StaticAssetRoute {
-                route: "/directory".into(),
-                target: AssetPathTarget::Directory("/not-opened-by-test".into()),
-                not_found_behavior: None,
-            },
-        ];
+        let assets = vec![memory_asset()];
         let callback = attach_assets(config, assets).host.request.unwrap();
         for path in [
             "/unknown?original=1",
@@ -690,6 +751,40 @@ mod tests {
             HostResponse::Bytes(_)
         ));
         assert_eq!(calls.lock().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn route_diagnostics_exclude_credentials_queries_and_invalid_urls() {
+        assert_eq!(
+            diagnostic_path("/settings/new-connection?token=secret#fragment"),
+            "/settings/new-connection"
+        );
+        for url in [
+            "https://user:secret@example.com/settings?token=secret",
+            "//user:secret@example.com/path",
+            "relative?token=secret",
+            "/bad\npath",
+        ] {
+            assert_eq!(diagnostic_path(url), "<nonlocal-or-invalid>");
+        }
+    }
+
+    #[switchy_async::test]
+    async fn local_handler_failure_identifies_route_without_query_or_body() {
+        let router = Router::new().with_route_result("/submit", |_request: RouteRequest| async {
+            Err::<Content, _>(std::io::Error::other("builder error"))
+        });
+        let callback = attach(BmuxConfig::default(), router).host.request.unwrap();
+        let mut request = request(RequestBody::UrlEncoded("token=body-secret".into()));
+        request.url = "/submit?token=query-secret".into();
+        let error = match callback(HostRequest::Http(Box::new(request))).await {
+            Err(error) => error.to_string(),
+            Ok(_) => panic!("failing local handler unexpectedly succeeded"),
+        };
+        assert!(error.contains("/submit"));
+        assert!(error.contains("builder error"));
+        assert!(!error.contains("query-secret"));
+        assert!(!error.contains("body-secret"));
     }
 
     #[test]

@@ -23,14 +23,75 @@ let app = builder
 ```
 
 `build_default_bmux`/`build_bmux_with_config` attach local router transport and,
-with the `assets` feature, exact registered in-memory static assets.
+with the `assets` feature, explicitly registered static assets (memory contents or
+bounded registered file/directory readers).
 `build_bmux(renderer)` accepts an already configured renderer; it does not install
 that transport on your behalf. Static-output generation is unsupported.
+
+## Actual native-app acceptance (not fixture certification)
+
+The acceptance lane adds independent tests without changing production policy:
+
+```sh
+cargo test -p moosicbox_app_native --no-default-features --features bmux --test bmux_actual_app
+cargo test -p hyperchad_renderer_bmux --test native_assets
+python3 packages/app/native/tests/test_bmux_pty_acceptance.py
+python3 packages/app/native/tests/bmux_pty_acceptance.py \
+  /absolute/path/to/moosicbox_app_native --protocol kitty --artifacts /tmp/bmux-native-kitty
+# Repeat with --protocol text, --protocol sixel, and --protocol iterm2.
+# These emulate capabilities and decode artifacts; no physical-terminal claim.
+```
+
+The PTY script never builds. Supply a separately built real native executable; it
+records its SHA-256. It starts `serve` with fresh HOME/XDG directories, an allowlisted
+environment, no inherited app configuration, and an ephemeral loopback-only mock.
+It reconstructs terminal cells, navigates the actual Settings link by keyboard,
+creates/edits/saves/selects a connection by mouse, navigates Albums, checks mock
+artwork fetches and decoded Kitty RGBA quadrants (or Sixel/iTerm2 pixel colors),
+resizes, and checks clean shutdown
+and terminal-mode restoration. It saves terminal bytes, final cells, mock requests,
+artifact metadata, and isolated app logs. The VT recorder is a deliberately limited
+acceptance model, not a complete terminal emulator or screenshot comparison.
+
+`bmux_actual_app` uses the production default builder, real home/settings handlers,
+in-memory SQLite, local form transport, registered PNG/SVG assets, and the native
+artwork policy with a real local TCP resource server. `native_assets` checks all
+45 shipped SVGs, nontransparent/white icon pixels, exact PNG fixture pixels, and
+clipped image placement/allocation. These tests do not certify audio playback,
+provider authentication, arbitrary browser scripting, or a full production server.
+Native Settings `hx-*` connection forms and app custom actions are required native
+workflows, not browser-only unsupported forms.
+
+Current checked suites pass: full renderer (179 unit tests, 10 integration tests,
+1 doctest), native tests including actual-app host integration, 25 focused bridge
+checks including runtime ownership/cancellation, and the coherent resource-snapshot
+regression. Strict `cargo clippy --all-targets -- -D warnings` passes for the renderer
+and for native with `--no-default-features --features bmux`.
+
+The actual-executable PTY audit passes all four emulated protocols (Kitty, text,
+Sixel, iTerm2), with unchanged normal 15-second waits, against SHA-256
+`31c3cf59ec044baabc5e08185b5a04fe430b8ace08b68376fb539a2476fc39bf`.
+This covers home/sidebar glyphs, keyboard Settings navigation, connection creation,
+editing/saving/selection, actual Albums HTTP response and artwork, resize, clean
+shutdown and terminal restoration. Kitty checks ordered quadrant pixels in the
+presenter's resampled/padded RGBA texture and white sidebar icon placements;
+Sixel/iTerm2 decode artwork colors and sidebar placements; text checks absence of
+graphics. Assertions wait for artwork presentation, not just request receipt or an
+earlier icon. Evidence is under
+`/tmp/bmux-complete-acceptance-{kitty,text,sixel,iterm2}-app-runtime` on the audit machine.
+
+The real loading Albums tree contains 115 image nodes but only 15 unique sources,
+including 100 identical placeholders. Ordered semantic effects now bypass queued
+resource work; fragment replacement removes stale placeholder jobs. Local native
+route handlers run on their owning app runtime, not the terminal executor. These
+fix the previously reproduced image-backlog delay and cross-runtime HTTP hang.
+This is focused actual-app acceptance of the named artifact, not physical-terminal,
+playback, provider-authentication, production-service or later-source certification.
 
 The actual MoosicBox native application has a `bmux` feature and initial `/` route:
 
 ```sh
-cargo run -p moosicbox_app_native --no-default-features --features bmux
+cargo run -p moosicbox_app_native --no-default-features --features bmux -- serve
 ```
 
 This selects the real application, not the fixture below. It still needs the

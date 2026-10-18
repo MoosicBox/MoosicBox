@@ -22,6 +22,8 @@ use bmux_tui::{
 };
 use hyperchad_renderer::canvas::{CanvasAction, CanvasUpdate, Pos};
 
+mod svg;
+
 /// Resource and work budgets. Zero budgets deliberately disable the operation.
 #[derive(Debug, Clone, Copy)]
 pub struct GraphicsLimits {
@@ -387,6 +389,11 @@ impl GraphicsStore {
         policy.authorize(source)?;
         if encoded.len() > self.limits.max_encoded_bytes {
             return Err(GraphicsError::Limit);
+        }
+        // Raster magic remains authoritative; unknown XML-like input goes
+        // through the strict static SVG parser, never a resource resolver.
+        if image::guess_format(encoded).is_err() {
+            return self.decode_svg(key, encoded);
         }
         let reader = || {
             let mut reader = image::ImageReader::new(Cursor::new(encoded))

@@ -2,6 +2,160 @@ use super::*;
 use hyperchad_transformer::Input;
 use hyperchad_transformer_models::Route;
 
+fn load_node(key: &str, url: &str) -> Container {
+    Container {
+        str_id: Some(key.into()),
+        hidden: Some(true),
+        route: Some(Route::Get {
+            route: url.into(),
+            trigger: Some("load".into()),
+            target: Selector::SelfTarget,
+            strategy: SwapStrategy::This,
+        }),
+        ..Container::default()
+    }
+}
+
+fn load_at(
+    engine: &mut ActionEngine,
+    root: &mut Container,
+    path: Vec<usize>,
+    generation: u64,
+    kind: EventKind,
+) -> Result<Vec<Effect>, ActionError> {
+    let event = EventContext::new(Source::at(root, path, generation)?, kind, generation);
+    engine.dispatch(root, &event, &FormValues::new())
+}
+
+#[test]
+fn retained_hidden_load_routes_do_not_loop_on_sibling_partials() {
+    for url in ["/settings/scan-settings", "https://example.test/settings"] {
+        let mut root = Container {
+            children: vec![load_node("load", url)],
+            ..Container::default()
+        };
+        assert!(has_load_route(&root.children[0]));
+        let mut engine = ActionEngine::default();
+        assert!(matches!(
+            load_at(&mut engine, &mut root, vec![0], 0, EventKind::Immediate)
+                .unwrap()
+                .as_slice(),
+            [Effect::Request(_)]
+        ));
+        for generation in 1..4 {
+            root.children
+                .push(load_node(&format!("new-{generation}"), url));
+            engine.reconcile(&root, generation).unwrap();
+            assert!(
+                load_at(
+                    &mut engine,
+                    &mut root,
+                    vec![0],
+                    generation,
+                    EventKind::Immediate
+                )
+                .unwrap()
+                .is_empty()
+            );
+            assert!(matches!(
+                load_at(
+                    &mut engine,
+                    &mut root,
+                    vec![usize::try_from(generation).unwrap()],
+                    generation,
+                    EventKind::Immediate
+                )
+                .unwrap()
+                .as_slice(),
+                [Effect::Request(_)]
+            ));
+        }
+        // A keyed source moving to another path retains its load lifecycle.
+        root.children.swap(0, 1);
+        engine.reconcile(&root, 4).unwrap();
+        assert!(
+            load_at(&mut engine, &mut root, vec![1], 4, EventKind::Immediate)
+                .unwrap()
+                .is_empty()
+        );
+        // Explicit events can retry; only automatic load is deduplicated.
+        for _ in 0..2 {
+            assert!(matches!(
+                load_at(
+                    &mut engine,
+                    &mut root,
+                    vec![1],
+                    4,
+                    EventKind::Named("load".into())
+                )
+                .unwrap()
+                .as_slice(),
+                [Effect::Request(_)]
+            ));
+        }
+        root.children[1].route = load_node("load", "/changed").route;
+        engine.reconcile(&root, 5).unwrap();
+        assert_eq!(
+            load_at(&mut engine, &mut root, vec![1], 5, EventKind::Immediate)
+                .unwrap()
+                .len(),
+            1
+        );
+        engine
+            .reconcile_removed(&root, 6, &BTreeSet::from(["load".into()]))
+            .unwrap();
+        assert_eq!(
+            load_at(&mut engine, &mut root, vec![1], 6, EventKind::Immediate)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+}
+
+#[test]
+fn load_admission_failure_is_not_recorded_as_success() {
+    let mut root = load_node("load", "/settings");
+    let mut engine = ActionEngine::new(
+        0,
+        ActionLimits {
+            max_entries: 0,
+            ..ActionLimits::default()
+        },
+    );
+    assert!(load_at(&mut engine, &mut root, vec![], 0, EventKind::Immediate).is_err());
+    assert!(engine.loaded_routes.is_empty());
+    engine.limits = ActionLimits::default();
+    assert_eq!(
+        load_at(&mut engine, &mut root, vec![], 0, EventKind::Immediate)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        load_at(&mut engine, &mut root, vec![], 0, EventKind::Immediate)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn resize_routes_remain_repeatable() {
+    let mut root = load_node("resize", "/resize");
+    if let Some(Route::Get { trigger, .. }) = &mut root.route {
+        *trigger = Some("resize".into());
+    }
+    let mut engine = ActionEngine::default();
+    for _ in 0..2 {
+        assert_eq!(
+            load_at(&mut engine, &mut root, vec![], 0, EventKind::Resize)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+}
+
 fn root() -> Container {
     Container {
         str_id: Some("form".into()),

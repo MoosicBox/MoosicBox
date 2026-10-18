@@ -833,7 +833,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
             draft.extents = result.size;
             draft.text = result.fragments;
             // The formatting-context node itself is already represented here.
-            draft.children = Self::inline_nodes(&result.sources, &draft.text, Some(path));
+            draft.children = Self::inline_nodes(&result.sources, &mut draft.text, Some(path));
         } else {
             self.flow(&mut draft, content_size, depth)?;
         }
@@ -1122,8 +1122,8 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     Placed::Block(child)
                 }
                 FlowItem::Inline { group, .. } => {
-                    let result = inline::format(&group, item_width, &draft.style, self.options);
-                    let children = Self::inline_nodes(&result.sources, &result.fragments, None);
+                    let mut result = inline::format(&group, item_width, &draft.style, self.options);
+                    let children = Self::inline_nodes(&result.sources, &mut result.fragments, None);
                     Placed::Inline {
                         size: result.size,
                         text: result.fragments,

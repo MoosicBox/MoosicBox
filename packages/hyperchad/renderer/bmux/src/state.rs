@@ -14,6 +14,78 @@ use crate::layout::node_key;
 
 type Path = Vec<usize>;
 
+#[cfg(test)]
+mod lifecycle_provenance_tests {
+    use super::*;
+
+    #[test]
+    fn unrelated_anonymous_sources_retain_lifetimes_but_not_control_compatibility() {
+        let root = Container {
+            children: vec![
+                Container {
+                    str_id: Some("connections".into()),
+                    ..Default::default()
+                },
+                Container::default(),
+                Container::default(),
+            ],
+            ..Default::default()
+        };
+        let mut state = ViewState::from_root(root).unwrap();
+        let report = state
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("connections".into()),
+                    children: vec![Container::default()],
+                    ..Default::default()
+                }),
+                Some("connections"),
+            )
+            .unwrap();
+        assert!(
+            report.removed.contains("@1"),
+            "control identity remains conservative"
+        );
+        assert!(!report.lifecycle_removed.contains("@1"));
+        assert!(!report.lifecycle_removed.contains("@2"));
+        assert!(report.lifecycle_removed.contains("connections"));
+        let report = state
+            .apply_view(View::from(Container::default()), Some("@1"))
+            .unwrap();
+        assert!(
+            report.lifecycle_removed.contains("@1"),
+            "identical anonymous replacement is a new source"
+        );
+        assert!(!report.lifecycle_removed.contains("@2"));
+    }
+
+    #[test]
+    fn structural_shifts_invalidate_anonymous_but_rebind_explicit_sources() {
+        let mut state = ViewState::from_root(Container {
+            children: vec![
+                Container::default(),
+                Container {
+                    str_id: Some("keyed".into()),
+                    children: vec![Container::default()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        })
+        .unwrap();
+        let report = state
+            .apply_response(
+                View::from(Container::default()),
+                Some("@0"),
+                SwapStrategy::BeforeBegin,
+            )
+            .unwrap();
+        assert!(report.lifecycle_removed.contains("@0"));
+        assert!(report.lifecycle_removed.contains("@1/0"));
+        assert!(!report.lifecycle_removed.contains("keyed"));
+    }
+}
+
 /// A failed application leaves both tree and generation unchanged.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ApplyError {
@@ -108,6 +180,9 @@ pub struct ApplyReport {
     pub inserted: BTreeSet<String>,
     /// Deleted or reset identities.
     pub removed: BTreeSet<String>,
+    /// Sources actually replaced/deleted or anonymous paths shifted by a swap.
+    /// Unlike control compatibility, unrelated anonymous sibling edits do not reset these.
+    pub lifecycle_removed: BTreeSet<String>,
     /// Identities compatible with their previous state.
     pub retained: BTreeSet<String>,
     /// Reconciliation instructions for every new-tree stateful control.
@@ -307,11 +382,13 @@ impl ViewState {
         let old = index(&self.root)?;
         let mut candidate = self.root.clone();
         let mut replaced = Vec::<Path>::new();
+        let mut lifecycle_removed = BTreeSet::new();
         let mut anchor = Some(resolve_trigger(&candidate, target)?);
         for fragment in view.fragments {
             index(&fragment.container)?;
             let paths = select(&candidate, &fragment.selector, anchor.as_deref())?;
             for path in outermost(paths).into_iter().rev() {
+                invalidate_lifecycles(&candidate, &path, false, &mut lifecycle_removed)?;
                 replaced.push(path.clone());
                 *at_mut(&mut candidate, &path).ok_or_else(|| missing(&fragment.selector))? =
                     fragment.container.clone();
@@ -330,6 +407,7 @@ impl ViewState {
         for selector in view.delete_selectors {
             let paths = select(&candidate, &selector, anchor.as_deref())?;
             for path in outermost(paths).into_iter().rev() {
+                invalidate_lifecycles(&candidate, &path, true, &mut lifecycle_removed)?;
                 replaced.push(path.clone());
                 delete(&mut candidate, &path);
                 adjust_anchor(&mut anchor, &path);
@@ -339,6 +417,7 @@ impl ViewState {
         apply_primary(
             &mut candidate,
             &mut replaced,
+            &mut lifecycle_removed,
             anchor.as_deref(),
             (strategy, view.primary),
         )?;
@@ -357,6 +436,7 @@ impl ViewState {
         let mut report = ApplyReport {
             generation,
             response: view.response,
+            lifecycle_removed,
             ..ApplyReport::default()
         };
         for (key, path) in &new {
@@ -374,31 +454,62 @@ impl ViewState {
             } else {
                 report.inserted.insert(key.clone());
             }
-            if let Some(current) = control_metadata(node) {
-                let previous = previous.and_then(control_metadata);
-                let external_value =
-                    if !compatible || previous.as_ref().is_none_or(|p| p.value != current.value) {
-                        current.value.clone()
-                    } else {
-                        None
-                    };
-                report.controls.push(ControlUpdate {
-                    key: key.clone(),
-                    compatible,
-                    previous,
-                    current,
-                    external_value,
-                });
-            }
+            record_control_update(&mut report, key, node, previous, compatible);
         }
         report.removed.extend(
             old.keys()
                 .filter(|key| !report.retained.contains(*key))
                 .cloned(),
         );
+        reconcile_lifecycle_identities(&self.root, &candidate, &old, &new, &mut report);
         self.root = candidate;
         self.generation = generation;
         Ok(report)
+    }
+}
+
+fn record_control_update(
+    report: &mut ApplyReport,
+    key: &str,
+    node: &Container,
+    previous: Option<&Container>,
+    compatible: bool,
+) {
+    if let Some(current) = control_metadata(node) {
+        let previous = previous.and_then(control_metadata);
+        let external_value =
+            if !compatible || previous.as_ref().is_none_or(|p| p.value != current.value) {
+                current.value.clone()
+            } else {
+                None
+            };
+        report.controls.push(ControlUpdate {
+            key: key.to_owned(),
+            compatible,
+            previous,
+            current,
+            external_value,
+        });
+    }
+}
+
+fn reconcile_lifecycle_identities(
+    before: &Container,
+    after: &Container,
+    old: &BTreeMap<String, Path>,
+    new: &BTreeMap<String, Path>,
+    report: &mut ApplyReport,
+) {
+    for (key, path) in old {
+        if new
+            .get(key)
+            .and_then(|path| at(after, path))
+            .is_none_or(|node| {
+                at(before, path).is_none_or(|before| !compatible_nodes(before, node))
+            })
+        {
+            report.lifecycle_removed.insert(key.clone());
+        }
     }
 }
 
@@ -415,15 +526,90 @@ fn has_anonymous_replacements(
     })
 }
 
+// Collect exact current source keys before a mutation. Anonymous nodes in shifted
+// sibling subtrees cannot transfer identity; explicit IDs can rebind by key.
+fn invalidate_shifted_lifecycles(
+    root: &Container,
+    slot: &[usize],
+    removed: &mut BTreeSet<String>,
+) -> Result<(), ApplyError> {
+    let Some((&offset, parent)) = slot.split_last() else {
+        return Ok(());
+    };
+    for (key, path) in index(root)? {
+        if path.len() > parent.len()
+            && path.starts_with(parent)
+            && path[parent.len()] >= offset
+            && at(root, &path).is_some_and(|node| !has_identity(node))
+        {
+            removed.insert(key);
+        }
+    }
+    Ok(())
+}
+
+fn invalidate_lifecycles(
+    root: &Container,
+    boundary: &[usize],
+    shifts: bool,
+    removed: &mut BTreeSet<String>,
+) -> Result<(), ApplyError> {
+    for (key, path) in index(root)? {
+        if path.starts_with(boundary) {
+            removed.insert(key);
+        }
+    }
+    if shifts {
+        invalidate_shifted_lifecycles(root, boundary, removed)?;
+    }
+    Ok(())
+}
+
+fn invalidate_primary_lifecycles(
+    candidate: &Container,
+    path: &[usize],
+    strategy: &SwapStrategy,
+    removed: &mut BTreeSet<String>,
+) -> Result<(), ApplyError> {
+    match strategy {
+        SwapStrategy::This | SwapStrategy::Delete => {
+            invalidate_lifecycles(candidate, path, *strategy == SwapStrategy::Delete, removed)?;
+        }
+        SwapStrategy::Children => {
+            for (key, child) in index(candidate)? {
+                if child.len() > path.len() && child.starts_with(path) {
+                    removed.insert(key);
+                }
+            }
+        }
+        SwapStrategy::AfterBegin => {
+            let mut slot = path.to_vec();
+            slot.push(0);
+            invalidate_shifted_lifecycles(candidate, &slot, removed)?;
+        }
+        SwapStrategy::BeforeBegin | SwapStrategy::AfterEnd => {
+            let mut slot = path.to_vec();
+            if *strategy == SwapStrategy::AfterEnd {
+                *slot.last_mut().ok_or(ApplyError::RootSiblingInsertion)? += 1;
+            }
+            invalidate_shifted_lifecycles(candidate, &slot, removed)?;
+        }
+        SwapStrategy::BeforeEnd | SwapStrategy::None => {}
+    }
+    Ok(())
+}
+
 fn apply_primary(
     candidate: &mut Container,
     replaced: &mut Vec<Path>,
+    lifecycle_removed: &mut BTreeSet<String>,
     anchor: Option<&[usize]>,
     swap: (SwapStrategy, Option<Container>),
 ) -> Result<(), ApplyError> {
     let (strategy, primary) = swap;
     if strategy == SwapStrategy::Delete || (primary.is_some() && strategy != SwapStrategy::None) {
         let path = anchor.ok_or_else(|| ApplyError::MissingTarget("deleted trigger".into()))?;
+        invalidate_primary_lifecycles(candidate, path, &strategy, lifecycle_removed)?;
         match strategy {
             SwapStrategy::This => {
                 let primary = primary.expect("primary checked");

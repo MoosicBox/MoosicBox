@@ -47,6 +47,8 @@ pub enum Message {
         work: Completion,
         result: Result<HostResponse, Error>,
     },
+    /// Wake resource invalidation after an opaque authorization epoch changes.
+    ResourceContextChanged,
     /// Advance debounced/delayed action state using the program's monotonic clock.
     Advance,
 }
@@ -92,6 +94,10 @@ pub struct BmuxProgram {
     active_abort: Option<(Option<String>, tokio::sync::watch::Sender<bool>)>,
     resources: BTreeMap<String, String>,
     resource_epochs: BTreeMap<String, u64>,
+    resource_serial: u64,
+    resource_context: Option<u64>,
+    resource_scan_counts: Option<(usize, usize)>,
+    resource_observer: Option<bmux_tui_runtime::SubscriptionKey>,
     node_epochs: BTreeMap<String, u64>,
     key_chord: Vec<hyperchad_actions::Key>,
     http_headers: Option<BTreeMap<String, String>>,
@@ -142,6 +148,10 @@ impl BmuxProgram {
             active_abort: None,
             resources: BTreeMap::new(),
             resource_epochs: BTreeMap::new(),
+            resource_serial: 0,
+            resource_context: None,
+            resource_scan_counts: None,
+            resource_observer: None,
             node_epochs: BTreeMap::new(),
             key_chord: Vec::new(),
             http_headers: None,
@@ -179,6 +189,7 @@ impl BmuxProgram {
     /// # Errors
     /// * Returns layout limit, invalid geometry or canvas resource errors.
     pub fn prepare(&mut self) -> Result<(), Error> {
+        self.revalidate_resource_context()?;
         self.options.open_details = self.controls.details_open();
         let mut effective = self.state.root().clone();
         resolve_responsive(&mut effective, &self.responsive, self.options.viewport);
@@ -327,7 +338,149 @@ impl BmuxProgram {
         Ok(())
     }
 
+    // Resource identity is independent of document generations: context changes and
+    // explicit retries can occur without any document mutation.
+    fn schedule_resource(&mut self, key: String, source: String) -> Result<(), Error> {
+        let serial = self
+            .resource_serial
+            .checked_add(1)
+            .ok_or_else(|| std::io::Error::other("resource serial exhausted"))?;
+        self.pending.retain(|work| {
+            !matches!(work,
+            Work::Resource { key: queued, .. } if queued == &key)
+        });
+        self.enqueue(Work::Resource {
+            key: key.clone(),
+            source: source.clone(),
+            generation: serial,
+        })?;
+        self.resource_serial = serial;
+        self.graphics.remove(&key);
+        self.resources.insert(key.clone(), source);
+        self.resource_epochs.insert(key, serial);
+        Ok(())
+    }
+
+    fn schedule_resources(&mut self) -> Result<(), Error> {
+        let mut images = Vec::new();
+        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            if let Element::Image {
+                source: Some(source),
+                ..
+            } = &node.element
+            {
+                images.push((layout::node_key(node, path), source.clone()));
+            }
+        });
+        let counts = (
+            images.len(),
+            images
+                .iter()
+                .map(|(_, source)| source)
+                .collect::<BTreeSet<_>>()
+                .len(),
+        );
+        if self.resource_scan_counts != Some(counts) {
+            log::debug!(
+                "bmux resource scan images={} unique_sources={}",
+                counts.0,
+                counts.1
+            );
+            self.resource_scan_counts = Some(counts);
+        }
+        let present: BTreeSet<_> = images.iter().map(|(key, _)| key.clone()).collect();
+        self.resources.retain(|key, _| present.contains(key));
+        self.resource_epochs.retain(|key, _| present.contains(key));
+        self.pending.retain(|work| match work {
+            Work::Resource {
+                key,
+                source,
+                generation,
+            } => {
+                self.resources.get(key) == Some(source)
+                    && self.resource_epochs.get(key) == Some(generation)
+            }
+            _ => true,
+        });
+        for (key, source) in images {
+            if self.resources.get(&key) != Some(&source) {
+                self.schedule_resource(key, source)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn revalidate_resource_context(&mut self) -> Result<(), Error> {
+        let context = self
+            .shared
+            .config
+            .resource_context
+            .as_ref()
+            .map(|context| context());
+        if context != self.resource_context {
+            log::debug!(
+                "bmux resource context changed cached_nodes={} queued_resources={}",
+                self.resources.len(),
+                self.pending
+                    .iter()
+                    .filter(|work| matches!(work, Work::Resource { .. }))
+                    .count()
+            );
+            self.resource_scan_counts = None;
+            // Purge successes and failures together; neither may cross authorization
+            // contexts even when the source string is unchanged. In-flight work keeps
+            // running, but its unique serial can no longer install a completion.
+            for key in self.resources.keys() {
+                self.graphics.remove(key);
+            }
+            self.resources.clear();
+            self.resource_epochs.clear();
+            self.pending
+                .retain(|work| !matches!(work, Work::Resource { .. }));
+            self.resource_context = context;
+        }
+        self.schedule_resources()
+    }
+
+    fn next_work(&mut self) -> Option<Work> {
+        // Ordered semantic effects must not wait behind decorative asset loads.
+        // Preserve FIFO within both classes and never preempt in-flight work.
+        let next = self
+            .pending
+            .iter()
+            .position(|work| !matches!(work, Work::Resource { .. }))
+            .unwrap_or(0);
+        self.pending.remove(next)
+    }
+
     fn drive(&mut self, mut update: Update<Message>) -> Update<Message> {
+        let resource_key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-resource-context");
+        if self.stopping || self.shared.config.resource_context.is_none() {
+            if let Some(registered) = self.resource_observer.take() {
+                update.cancelled_subscriptions.push(registered);
+            } else {
+                update.cancelled_subscriptions.push(resource_key);
+            }
+        } else if self.resource_observer.is_none()
+            && let Some(context) = self.shared.config.resource_context.clone()
+        {
+            let observed = self.resource_context.unwrap_or_else(|| context());
+            update.subscriptions.push(bmux_tui_runtime::Subscription::new(
+                resource_key.clone(),
+                move |sender| observe_resource_context(
+                    context,
+                    observed,
+                    || tokio::time::sleep(std::time::Duration::from_millis(250)),
+                    move || {
+                        let sender = sender.clone();
+                        async move { sender.send(Message::ResourceContextChanged).await.is_ok() }
+                    },
+                ),
+            ));
+            // Runtime replaces, rather than deduplicates, repeated keys. Register
+            // once so unrelated redraws cannot keep restarting the poll interval.
+            self.resource_observer = Some(resource_key);
+        }
         let timer_key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-actions");
         if let Some(deadline) = self.actions.next_deadline() {
             let delay = std::time::Duration::from_millis(deadline.saturating_sub(self.now_ms()));
@@ -349,7 +502,7 @@ impl BmuxProgram {
         if self.active {
             return update;
         }
-        let Some(work) = self.pending.pop_front() else {
+        let Some(work) = self.next_work() else {
             return update;
         };
         update.commands.push(self.start_work(work));
@@ -365,6 +518,11 @@ impl BmuxProgram {
         let current_generation = self.state.generation();
         let timeout = self.shared.config.effect_timeout;
         let (timeout_generation, timeout_completion) = work_correlation(&work, current_generation);
+        let class = work_class(&work);
+        log::debug!(
+            "bmux work start class={class} generation={timeout_generation} pending={}",
+            self.pending.len()
+        );
         let (abort_tx, mut abort_rx) = tokio::sync::watch::channel(false);
         let request_id = match &timeout_completion {
             Completion::Request(request) => request.request_id.clone(),
@@ -492,6 +650,7 @@ impl BmuxProgram {
             if let Some(report) = &mut report {
                 let report: &mut crate::state::ApplyReport = report;
                 report.removed.extend(current.removed);
+                report.lifecycle_removed.extend(current.lifecycle_removed);
                 report.inserted.extend(current.inserted);
                 report.retained.extend(current.retained);
                 report.controls = current.controls;
@@ -500,20 +659,29 @@ impl BmuxProgram {
                 report = Some(current);
             }
         }
-        let Some(report) = report else {
+        let Some(mut report) = report else {
             return Ok(());
         };
         crate::admission::validate_tree(next.root(), &self.shared.config)?;
+        // Canonical keyed no-op transactions preserve their state generation.
+        // A renderer replacement still starts new source lifetimes; give those
+        // sources a fresh epoch so prior request completions cannot target them.
+        if report.generation == self.state.generation() && !report.lifecycle_removed.is_empty() {
+            report.generation = next.mark_changed()?;
+        }
         self.state = next;
-        for key in &report.removed {
+        for key in &report.lifecycle_removed {
             self.graphics.remove(key);
             self.resources.remove(key);
             self.resource_epochs.remove(key);
         }
         self.controls.reconcile_report(self.state.root(), &report);
-        self.actions
-            .reconcile_removed(self.state.root(), report.generation, &report.removed)?;
-        for key in &report.removed {
+        self.actions.reconcile_removed(
+            self.state.root(),
+            report.generation,
+            &report.lifecycle_removed,
+        )?;
+        for key in &report.lifecycle_removed {
             self.node_epochs.remove(key);
         }
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
@@ -521,32 +689,7 @@ impl BmuxProgram {
                 .entry(layout::node_key(node, path))
                 .or_insert(report.generation);
         });
-        let mut images = Vec::new();
-        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
-            if let Element::Image {
-                source: Some(source),
-                ..
-            } = &node.element
-            {
-                images.push((layout::node_key(node, path), source.clone()));
-            }
-        });
-        let present: BTreeSet<_> = images.iter().map(|(key, _)| key.clone()).collect();
-        self.resources.retain(|key, _| present.contains(key));
-        for (key, source) in images {
-            if self.resources.get(&key) == Some(&source) {
-                continue;
-            }
-            self.graphics.remove(&key);
-            self.resources.insert(key.clone(), source.clone());
-            self.resource_epochs
-                .insert(key.clone(), self.state.generation());
-            self.enqueue(Work::Resource {
-                key,
-                source,
-                generation: self.state.generation(),
-            })?;
-        }
+        self.revalidate_resource_context()?;
         if !report.response.cookies.is_empty() {
             self.enqueue(Work::Host {
                 request: Box::new(HostRequest::Cookies(report.response.cookies.clone())),
@@ -578,14 +721,17 @@ impl BmuxProgram {
         let mut keys = Vec::new();
         let mut has_immediate = false;
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
-            has_immediate |= node.actions.iter().any(|action| {
-                matches!(action.trigger, hyperchad_actions::ActionTrigger::Immediate)
-            });
+            has_immediate |= crate::actions::has_load_route(node)
+                || node.actions.iter().any(|action| {
+                    matches!(action.trigger, hyperchad_actions::ActionTrigger::Immediate)
+                });
             keys.push(layout::node_key(node, path));
         });
-        // Immediate actions run before first presentation, but still require current
+        // Lifecycle actions run before presentation, but still require current
         // document geometry. This layout is not published for pointer hit testing.
-        let immediate_tree = if has_immediate && matches!(kind, EventKind::Immediate) {
+        let lifecycle_tree = if (has_immediate && matches!(kind, EventKind::Immediate))
+            || matches!(kind, EventKind::Resize)
+        {
             let mut options = self.options.clone();
             options.open_details = self.controls.details_open();
             let mut effective = self.state.root().clone();
@@ -603,7 +749,7 @@ impl BmuxProgram {
                 &key,
                 kind.clone(),
                 value.map(str::to_owned),
-                immediate_tree.as_ref(),
+                lifecycle_tree.as_ref(),
             )?;
         }
         Ok(())
@@ -620,6 +766,22 @@ impl BmuxProgram {
         value: Option<String>,
         geometry: Option<&LayoutTree>,
     ) -> Result<(), Error> {
+        // Do not format event payloads: named events may contain application data.
+        let event_kind = match &kind {
+            EventKind::Click => "Click",
+            EventKind::ClickOutside => "ClickOutside",
+            EventKind::MouseDown => "MouseDown",
+            EventKind::KeyDown => "KeyDown",
+            EventKind::Hover => "Hover",
+            EventKind::Change => "Change",
+            EventKind::Resize => "Resize",
+            EventKind::Immediate => "Immediate",
+            EventKind::Named(_) => "Named",
+            EventKind::Http(_) => "Http",
+            EventKind::Submit => "Submit",
+            EventKind::Reset => "Reset",
+        };
+        log::debug!("bmux action dispatch key={key:?} kind={event_kind}");
         let mut found = None;
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
             if layout::node_key(node, path) == key {
@@ -739,6 +901,11 @@ impl BmuxProgram {
                     }
                 }
                 Effect::Request(request) => {
+                    log::debug!(
+                        "bmux request effect method={} source={:?}",
+                        request.method,
+                        request.source.key
+                    );
                     self.http_event(&request, crate::actions::HttpPhase::Before, None)?;
                     self.enqueue(Work::Host {
                         generation: self
@@ -833,24 +1000,56 @@ impl BmuxProgram {
             let Some(node) = tree.get(key) else {
                 break;
             };
+            let Some(source) = at_path(self.state.root(), &node.path) else {
+                break;
+            };
+            let scrollable = |overflow| {
+                matches!(
+                    overflow,
+                    hyperchad_transformer_models::LayoutOverflow::Auto
+                        | hyperchad_transformer_models::LayoutOverflow::Scroll
+                )
+            };
             let viewport = node.content_bounds;
-            let offset = self
-                .options
-                .scroll_offsets
-                .entry(key.clone())
-                .or_insert(node.scroll_offset);
-            let dy = if bounds.y < viewport.y {
-                bounds.y - viewport.y
-            } else {
-                (bounds.bottom() - viewport.bottom()).max(0)
+            let reveal_axis = |(start, end): (i64, i64),
+                               (visible_start, visible_end): (i64, i64),
+                               current: u64,
+                               (extent, visible): (u64, u64),
+                               enabled: bool| {
+                if !enabled {
+                    return (0, 0);
+                }
+                let delta = if start < visible_start {
+                    start - visible_start
+                } else {
+                    (end - visible_end).max(0)
+                };
+                let next = current
+                    .saturating_add_signed(delta)
+                    .min(extent.saturating_sub(visible));
+                let applied = i64::try_from(next).unwrap_or(i64::MAX)
+                    - i64::try_from(current).unwrap_or(i64::MAX);
+                (next, applied)
             };
-            let dx = if bounds.x < viewport.x {
-                bounds.x - viewport.x
-            } else {
-                (bounds.right() - viewport.right()).max(0)
-            };
-            offset.y = offset.y.saturating_add_signed(dy);
-            offset.x = offset.x.saturating_add_signed(dx);
+            let (x, dx) = reveal_axis(
+                (bounds.x, bounds.right()),
+                (viewport.x, viewport.right()),
+                node.scroll_offset.x,
+                (node.content_extents.width, viewport.width),
+                scrollable(source.overflow_x),
+            );
+            let (y, dy) = reveal_axis(
+                (bounds.y, bounds.bottom()),
+                (viewport.y, viewport.bottom()),
+                node.scroll_offset.y,
+                (node.content_extents.height, viewport.height),
+                scrollable(source.overflow_y),
+            );
+            if scrollable(source.overflow_x) || scrollable(source.overflow_y) {
+                self.options
+                    .scroll_offsets
+                    .insert(key.clone(), layout::ScrollOffset { x, y });
+            }
             bounds = bounds.translated(-dx, -dy);
             parent.clone_from(&node.parent_key);
         }
@@ -948,6 +1147,7 @@ impl BmuxProgram {
     ) -> Result<(), Error> {
         self.active = false;
         self.active_abort = None;
+        self.revalidate_resource_context()?;
         let current = match &work {
             Completion::Resource { key, source } => {
                 self.resources.get(key) == Some(source)
@@ -959,6 +1159,17 @@ impl BmuxProgram {
             }
             Completion::Other => generation == self.state.generation(),
         };
+        let class = match &work {
+            Completion::Resource { .. } => "resource",
+            Completion::File { .. } => "file",
+            Completion::Request(_) => "http",
+            Completion::Other => "other",
+        };
+        log::debug!(
+            "bmux work complete class={class} generation={generation} current={current} success={} pending={}",
+            result.is_ok(),
+            self.pending.len()
+        );
         if current {
             self.complete_http_lifecycle(&work, &result)?;
             result = match result {
@@ -1128,19 +1339,7 @@ impl BmuxProgram {
                     ..
                 }) = self.state.find_node(&key)
                 {
-                    let source = source.clone();
-                    let epoch = self
-                        .resource_epochs
-                        .get(&key)
-                        .copied()
-                        .unwrap_or_else(|| self.state.generation());
-                    self.enqueue(Work::Resource {
-                        key: key.clone(),
-                        source: source.clone(),
-                        generation: epoch,
-                    })?;
-                    self.resources.insert(key.clone(), source);
-                    self.resource_epochs.insert(key, epoch);
+                    self.schedule_resource(key, source.clone())?;
                 }
             }
             Message::AbortRequest(id) => {
@@ -1167,6 +1366,7 @@ impl BmuxProgram {
                     self.http_event(&request, crate::actions::HttpPhase::After, None)?;
                 }
             }
+            Message::ResourceContextChanged => {}
             Message::Shutdown => self.stopping = true,
             Message::InputFailed(error) => return Err(std::io::Error::other(error).into()),
             Message::View(view, target) => self.apply_view(view, target.as_deref())?,
@@ -1211,8 +1411,8 @@ impl BmuxProgram {
             self.key_chord.clear();
         }
         if let Event::Resize(size) = event {
-            self.broadcast(&EventKind::Resize, None)?;
             self.resize(*size);
+            self.broadcast(&EventKind::Resize, None)?;
             // Resize is latest-only state: a full app callback queue must not block input.
             let _ = self
                 .shared
@@ -1274,6 +1474,24 @@ impl Program for BmuxProgram {
     type Error = Error;
 
     fn update(&mut self, event: RuntimeEvent<Message>) -> Result<Update<Message>, Error> {
+        let context_wake = matches!(
+            &event,
+            RuntimeEvent::Message(Message::ResourceContextChanged)
+        );
+        if context_wake && self.stopping {
+            return Ok(self.drive(Update::none()));
+        }
+        let previous_context = self.resource_context;
+        self.revalidate_resource_context()?;
+        if context_wake {
+            // A normal update may have already observed the epoch before this
+            // queued wake arrived. Do not repaint redundantly in that case.
+            return Ok(self.drive(if previous_context == self.resource_context {
+                Update::none()
+            } else {
+                Update::redraw()
+            }));
+        }
         let before = self.state.root().clone();
         let generation_before = self.state.generation();
         match event {
@@ -1301,6 +1519,48 @@ impl Program for BmuxProgram {
         _report: bmux_tui_runtime::PresentReport,
     ) -> Update<Message> {
         self.drive(Update::none())
+    }
+}
+
+// Generic clock/notification boundaries make the observer deterministic in tests
+// without adding a timer-testing feature or exposing credentials to the worker.
+async fn observe_resource_context<Wait, Tick, Notify, Sent>(
+    context: Arc<dyn Fn() -> u64 + Send + Sync>,
+    mut observed: u64,
+    mut wait: Wait,
+    mut notify: Notify,
+) where
+    Wait: FnMut() -> Tick,
+    Tick: std::future::Future<Output = ()>,
+    Notify: FnMut() -> Sent,
+    Sent: std::future::Future<Output = bool>,
+{
+    loop {
+        wait().await;
+        let current = context();
+        if current != observed {
+            if !notify().await {
+                return;
+            }
+            observed = current;
+        }
+    }
+}
+
+const fn work_class(work: &Work) -> &'static str {
+    match work {
+        Work::Resource { .. } => "resource",
+        Work::Host {
+            completion: Completion::Request(_),
+            ..
+        } => "http",
+        Work::Host {
+            completion: Completion::File { .. },
+            ..
+        } => "file",
+        Work::Host { .. } => "host-other",
+        Work::Custom(..) => "custom",
+        Work::Navigate(_) => "navigation",
     }
 }
 
@@ -1694,7 +1954,21 @@ mod runtime_regressions {
                 })
             };
             let source = "https://example.test/a";
-            program.apply_view(image(source), None).unwrap();
+            program
+                .apply_view(
+                    View::from(Container {
+                        children: vec![
+                            image(source).primary.unwrap(),
+                            Container {
+                                str_id: Some("sibling".into()),
+                                ..Default::default()
+                            },
+                        ],
+                        ..Default::default()
+                    }),
+                    None,
+                )
+                .unwrap();
             program.pending.clear();
             let generation = program.resource_epochs["image"];
             program
@@ -1712,10 +1986,24 @@ mod runtime_regressions {
                 Some(source)
             );
             assert!(program.graphics.rgba("image").is_none());
-            for _ in 0..10 {
-                program.apply_view(image(source), None).unwrap();
+            for index in 0..10 {
+                program
+                    .apply_response(
+                        View::from(Container {
+                            children: vec![Container {
+                                str_id: Some(format!("refresh-{index}")),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        }),
+                        Some("sibling"),
+                        hyperchad_transformer_models::SwapStrategy::Children,
+                    )
+                    .unwrap();
                 assert!(program.pending.is_empty());
+                assert_eq!(program.resource_epochs["image"], generation);
             }
+            assert_failed_resource_replacement(&mut program, image(source), source, generation);
             let update = program
                 .update(RuntimeEvent::Message(Message::RetryResource(
                     "image".into(),
@@ -1729,6 +2017,34 @@ mod runtime_regressions {
                 matches!(program.pending.back(), Some(Work::Resource { source, .. }) if source.ends_with("/b"))
             );
         }
+    }
+
+    fn assert_failed_resource_replacement(
+        program: &mut BmuxProgram,
+        image: View,
+        source: &str,
+        previous_generation: u64,
+    ) {
+        // Replacement creates a new incarnation even with an identical source.
+        program.apply_view(image, Some("image")).unwrap();
+        let generation = program.resource_epochs["image"];
+        assert_ne!(generation, previous_generation);
+        assert_eq!(program.pending.len(), 1);
+        assert!(
+            matches!(program.pending.pop_front(), Some(Work::Resource { source: queued, generation: epoch, .. }) if queued == source && epoch == generation)
+        );
+        program
+            .complete(
+                generation,
+                Completion::Resource {
+                    key: "image".into(),
+                    source: source.into(),
+                },
+                Err(std::io::Error::other("replacement denied").into()),
+            )
+            .unwrap();
+        program.schedule_resources().unwrap();
+        assert!(program.pending.is_empty());
     }
 
     #[test]
@@ -1761,6 +2077,644 @@ mod runtime_regressions {
             .unwrap();
         assert_eq!(program.state.find_node("a").unwrap().children.len(), 1);
         assert_eq!(program.state.find_node("b").unwrap().children.len(), 1);
+    }
+
+    #[test]
+    fn focus_reveal_scrolls_main_not_sidebar_or_non_scrollable_wrappers() {
+        use hyperchad_transformer::Number;
+        use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow};
+        for width in [80, 140] {
+            let mut program = program();
+            program.resize(Size::new(width, 60));
+            let sized = |key: &str, width: i64, height: i64| Container {
+                str_id: Some(key.into()),
+                width: Some(Number::Integer(width * 8)),
+                height: Some(Number::Integer(height * 16)),
+                ..Default::default()
+            };
+            let mut sidebar = sized("sidebar", 30, 55);
+            sidebar.children.push(Container {
+                str_id: Some("home".into()),
+                element: Element::Anchor {
+                    href: Some("/".into()),
+                    target: None,
+                },
+                children: vec![Container {
+                    element: Element::Text {
+                        value: "Home".into(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+            let mut form = sized("form", 40, 90);
+            form.children = vec![
+                sized("spacer", 1, 80),
+                Container {
+                    element: Element::Input {
+                        name: Some("url".into()),
+                        input: hyperchad_transformer::Input::Text {
+                            value: None,
+                            placeholder: None,
+                        },
+                        autofocus: None,
+                    },
+                    ..sized("url", 40, 2)
+                },
+            ];
+            let mut main = sized("main", i64::from(width) - 30, 55);
+            main.overflow_y = LayoutOverflow::Auto;
+            main.children.push(form);
+            let mut row = sized("row", i64::from(width), 55);
+            row.direction = LayoutDirection::Row;
+            row.children = vec![sidebar, main];
+            let mut root = sized("root", i64::from(width), 60);
+            root.children.push(row);
+            program.apply_view(View::from(root), None).unwrap();
+            program.prepare().unwrap();
+            program.commit_prepared();
+            let home = program
+                .committed
+                .as_ref()
+                .unwrap()
+                .1
+                .get("home")
+                .unwrap()
+                .bounds;
+            program.reveal("url");
+            assert!(program.options.scroll_offsets["main"].y > 0);
+            for key in ["root", "row", "sidebar", "form"] {
+                assert!(
+                    !program.options.scroll_offsets.contains_key(key),
+                    "non-scrollable {key}"
+                );
+            }
+            program.prepare().unwrap();
+            program.commit_prepared();
+            let tree = &program.committed.as_ref().unwrap().1;
+            assert_eq!(tree.get("home").unwrap().bounds, home);
+            let input = tree.get("url").unwrap();
+            assert!(input.bounds.y >= tree.get("main").unwrap().content_bounds.y);
+            assert!(input.bounds.bottom() <= tree.get("main").unwrap().content_bounds.bottom());
+            program.reveal("home");
+            program.prepare().unwrap();
+            program.commit_prepared();
+            assert_eq!(
+                program
+                    .committed
+                    .as_ref()
+                    .unwrap()
+                    .1
+                    .get("home")
+                    .unwrap()
+                    .bounds,
+                home
+            );
+        }
+    }
+
+    #[test]
+    fn sidebar_list_anchor_glyphs_survive_inherited_background_painting() {
+        let mut program = program();
+        let link = |label: &str| Container {
+            element: Element::ListItem,
+            children: vec![Container {
+                str_id: Some(label.into()),
+                element: Element::Anchor {
+                    href: Some(format!("/{label}")),
+                    target: None,
+                },
+                children: vec![Container {
+                    element: Element::Text {
+                        value: label.into(),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    background: Some(Color::try_from_hex("#111111").unwrap()),
+                    children: vec![Container {
+                        element: Element::Aside,
+                        children: vec![Container {
+                            element: Element::UnorderedList,
+                            children: vec![link("Home"), link("Albums")],
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        for label in ["Home", "Albums"] {
+            let node = program.candidate.as_ref().unwrap().get(label).unwrap();
+            assert_eq!(
+                node.text
+                    .iter()
+                    .map(|fragment| fragment.text.as_str())
+                    .collect::<String>(),
+                label
+            );
+            assert_ne!(node.hit_regions, [] as [layout::CellRect; 0]);
+            assert!(node.style.style.bg.is_none());
+        }
+        let mut terminal = bmux_tui::terminal::Terminal::new(
+            Vec::new(),
+            bmux_tui::geometry::Rect::new(0, 0, 80, 24),
+        );
+        terminal.draw(|cx| program.paint(cx)).unwrap();
+        let output = String::from_utf8_lossy(terminal.writer());
+        assert!(
+            output.contains("Home"),
+            "sidebar Home glyphs must be painted"
+        );
+        assert!(
+            output.contains("Albums"),
+            "sidebar Albums glyphs must be painted"
+        );
+    }
+
+    #[test]
+    fn image_only_anchor_keeps_image_alt_and_interaction_geometry() {
+        let mut program = program();
+        program.set_graphics_available(false);
+        program
+            .apply_view(
+                View::from(Container {
+                    background: Some(Color::try_from_hex("#111111").unwrap()),
+                    children: vec![Container {
+                        str_id: Some("image-link".into()),
+                        element: Element::Anchor {
+                            href: Some("/settings".into()),
+                            target: None,
+                        },
+                        children: vec![Container {
+                            str_id: Some("icon".into()),
+                            element: Element::Image {
+                                source: None,
+                                alt: Some("Settings icon".into()),
+                                fit: None,
+                                source_set: None,
+                                sizes: None,
+                                loading: None,
+                            },
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        let tree = program.candidate.as_ref().unwrap();
+        assert!(tree.get("image-link").unwrap().bounds.width > 0);
+        assert!(tree.get("icon").unwrap().bounds.width > 0);
+        let mut terminal = bmux_tui::terminal::Terminal::new(
+            Vec::new(),
+            bmux_tui::geometry::Rect::new(0, 0, 80, 24),
+        );
+        terminal.draw(|cx| program.paint(cx)).unwrap();
+        assert!(String::from_utf8_lossy(terminal.writer()).contains("Settings icon"));
+    }
+
+    #[test]
+    fn resize_actions_use_new_geometry_without_publishing_hit_test_layout() {
+        use hyperchad_actions::{
+            Action, ActionTrigger, ActionType,
+            logic::{CalcValue, Value},
+        };
+        let mut program = program();
+        program.resize(Size::new(40, 20));
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("visualization".into()),
+                    width: Some(hyperchad_transformer::Number::IntegerPercent(100)),
+                    actions: vec![Action {
+                        trigger: ActionTrigger::Resize,
+                        effect: ActionType::Parameterized {
+                            action: Box::new(ActionType::Custom {
+                                action: "width".into(),
+                            }),
+                            value: Value::Calc(CalcValue::WidthPx {
+                                target: hyperchad_transformer_models::ElementTarget::SelfTarget,
+                            }),
+                        }
+                        .into(),
+                    }],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        let committed_width = program.committed.as_ref().unwrap().1.nodes[0].bounds.width;
+        assert_eq!(committed_width, 40);
+        program.terminal(&Event::Resize(Size::new(80, 20))).unwrap();
+        let Some(Work::Custom(name, Some(Value::Real(width)))) = program.pending.front() else {
+            panic!("resize must enqueue the width action");
+        };
+        assert_eq!(name, "width");
+        assert!(
+            (*width - 640.0).abs() < f32::EPSILON,
+            "resize width: {width}"
+        );
+        assert_eq!(
+            program.committed.as_ref().unwrap().1.nodes[0].bounds.width,
+            committed_width
+        );
+    }
+
+    #[test]
+    fn settings_load_routes_survive_repeated_sibling_responses_without_refetch() {
+        use hyperchad_transformer_models::Route;
+        let mut program = program();
+        let section = |id: &str, url: &str| Container {
+            str_id: Some(id.into()),
+            hidden: Some(true),
+            route: Some(Route::Get {
+                route: url.into(),
+                trigger: Some("load".into()),
+                target: hyperchad_transformer_models::Selector::SelfTarget,
+                strategy: hyperchad_transformer_models::SwapStrategy::This,
+            }),
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        section("scan", "/settings/scan-settings"),
+                        section("music", "https://example.test/settings/music-api-settings"),
+                        Container {
+                            str_id: Some("sibling".into()),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        assert_eq!(program.pending.len(), 2);
+        program.pending.clear();
+        for _ in 0..3 {
+            program
+                .apply_response(
+                    View::from(Container::default()),
+                    Some("sibling"),
+                    hyperchad_transformer_models::SwapStrategy::Children,
+                )
+                .unwrap();
+            assert!(program.pending.is_empty());
+        }
+        program
+            .apply_view(
+                View::from(section("scan", "/settings/scan-settings")),
+                Some("scan"),
+            )
+            .unwrap();
+        assert_eq!(program.pending.len(), 1);
+        assert!(
+            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request), .. })
+            if request.url == "/settings/scan-settings")
+        );
+        program.pending.clear();
+        program
+            .apply_response(
+                View::from(section("new", "/settings/new")),
+                Some("sibling"),
+                hyperchad_transformer_models::SwapStrategy::Children,
+            )
+            .unwrap();
+        assert_eq!(program.pending.len(), 1);
+        assert!(
+            matches!(program.pending.front(), Some(Work::Host { completion: Completion::Request(request), .. })
+            if request.url == "/settings/new")
+        );
+        program.pending.clear();
+        program
+            .apply_response(
+                View::from(Container::default()),
+                Some("sibling"),
+                hyperchad_transformer_models::SwapStrategy::BeforeEnd,
+            )
+            .unwrap();
+        assert!(program.pending.is_empty());
+    }
+
+    fn anonymous_settings_program() -> BmuxProgram {
+        use hyperchad_transformer_models::{Route, Selector, SwapStrategy};
+        let load = |name: &str| Container {
+            route: Some(Route::Get {
+                route: format!("/settings/{name}"),
+                trigger: Some("load".into()),
+                target: Selector::SelfTarget,
+                strategy: SwapStrategy::This,
+            }),
+            ..Default::default()
+        };
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        Container {
+                            str_id: Some("settings-connections".into()),
+                            children: vec![Container {
+                                element: Element::Button { r#type: None },
+                                route: Some(Route::Post {
+                                    route: "/settings/new-connection".into(),
+                                    trigger: None,
+                                    target: Selector::Id("settings-connections".into()),
+                                    strategy: SwapStrategy::This,
+                                }),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        },
+                        load("download-settings"),
+                        load("scan-settings"),
+                        load("music-api-settings"),
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        assert_eq!(program.pending.len(), 3);
+        program
+    }
+
+    #[test]
+    fn anonymous_settings_loads_and_queued_post_survive_sibling_responses() {
+        let mut program = anonymous_settings_program();
+        let music_source = program.state.find_node("@3").unwrap().clone();
+        program.dispatch("@0/0", EventKind::Click, None).unwrap();
+        assert_eq!(program.pending.len(), 4);
+        let mut requests = Vec::new();
+        while let Some(Work::Host {
+            generation,
+            completion: Completion::Request(request),
+            ..
+        }) = program.pending.pop_front()
+        {
+            requests.push((generation, request));
+        }
+        assert_eq!(requests.len(), 4);
+        let source_epochs = program.node_epochs.clone();
+        for (index, (generation, request)) in requests.iter().enumerate() {
+            assert_eq!(
+                program.node_epochs[&request.source.key], *generation,
+                "queued request must remain current after preceding sibling responses"
+            );
+            let response = if index < 3 {
+                Container {
+                    children: vec![Container {
+                        element: Element::Text {
+                            value: format!("loaded-{index}"),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }
+            } else {
+                Container {
+                    str_id: Some("settings-connections".into()),
+                    children: vec![Container {
+                        str_id: Some("created-form".into()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }
+            };
+            program
+                .complete(
+                    *generation,
+                    Completion::Request(request.clone()),
+                    Ok(HostResponse::View(View::from(response))),
+                )
+                .unwrap();
+            assert!(
+                program.pending.is_empty(),
+                "completed sibling must not restart other anonymous loads"
+            );
+            for (_, queued) in &requests[index + 1..] {
+                assert_eq!(
+                    program.node_epochs[&queued.source.key],
+                    source_epochs[&queued.source.key]
+                );
+            }
+        }
+        assert!(program.state.find_node("created-form").is_some());
+        // A genuine replacement restarts this source, but the previous request
+        // incarnation can no longer replace the new source's content.
+        let (old_epoch, old_request) = &requests[2];
+        program
+            .apply_view(View::from(music_source), Some("@3"))
+            .unwrap();
+        assert_eq!(program.pending.len(), 1);
+        assert_ne!(program.node_epochs["@3"], *old_epoch);
+        program.pending.clear();
+        program
+            .complete(
+                *old_epoch,
+                Completion::Request(old_request.clone()),
+                Ok(HostResponse::View(View::from(Container {
+                    str_id: Some("stale-response".into()),
+                    ..Default::default()
+                }))),
+            )
+            .unwrap();
+        assert!(program.state.find_node("stale-response").is_none());
+        assert!(program.pending.is_empty());
+    }
+
+    #[test]
+    fn anonymous_image_sibling_partials_preserve_rgba_and_single_queued_resource() {
+        let mut program = program();
+        let image = Container {
+            element: Element::Image {
+                source: Some("/art".into()),
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        image,
+                        Container {
+                            str_id: Some("sibling".into()),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        let epoch = program.resource_epochs["@0"];
+        program
+            .graphics
+            .register_rgba("@0", 1, 1, vec![1, 2, 3, 255])
+            .unwrap();
+        // Keep an actual HTTP request behind the image while siblings change.
+        program
+            .apply_view(
+                View::from(Container {
+                    route: Some(hyperchad_transformer_models::Route::Get {
+                        route: "/load".into(),
+                        trigger: Some("load".into()),
+                        target: hyperchad_transformer_models::Selector::SelfTarget,
+                        strategy: hyperchad_transformer_models::SwapStrategy::This,
+                    }),
+                    str_id: Some("sibling".into()),
+                    ..Default::default()
+                }),
+                Some("sibling"),
+            )
+            .unwrap();
+        for index in 0..5 {
+            program
+                .apply_response(
+                    View::from(Container {
+                        children: vec![Container {
+                            str_id: Some(format!("fragment-{index}")),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    }),
+                    Some("sibling"),
+                    hyperchad_transformer_models::SwapStrategy::Children,
+                )
+                .unwrap();
+            assert_eq!(program.resource_epochs["@0"], epoch);
+            assert_eq!(
+                program.graphics.rgba("@0"),
+                Some((1, 1, &[1, 2, 3, 255][..]))
+            );
+            assert_eq!(
+                program
+                    .pending
+                    .iter()
+                    .filter(|work| matches!(work, Work::Resource { .. }))
+                    .count(),
+                1
+            );
+        }
+        assert!(program.pending.iter().any(|work| matches!(
+            work,
+            Work::Host {
+                completion: Completion::Request(_),
+                ..
+            }
+        )));
+        program.pending.clear();
+        program.schedule_resources().unwrap();
+        assert!(program.pending.is_empty());
+        assert_eq!(
+            program.graphics.rgba("@0"),
+            Some((1, 1, &[1, 2, 3, 255][..]))
+        );
+    }
+
+    #[test]
+    fn semantic_effects_bypass_image_backlog_preserving_each_fifo() {
+        let mut program = program();
+        program
+            .schedule_resource("first".into(), "/one".into())
+            .unwrap();
+        program.pending.push_back(Work::Navigate("/first".into()));
+        program
+            .schedule_resource("second".into(), "/two".into())
+            .unwrap();
+        program.pending.push_back(Work::Navigate("/second".into()));
+        assert!(matches!(program.next_work(), Some(Work::Navigate(url)) if url == "/first"));
+        assert!(matches!(program.next_work(), Some(Work::Navigate(url)) if url == "/second"));
+        assert!(matches!(program.next_work(), Some(Work::Resource { key, .. }) if key == "first"));
+        assert!(matches!(program.next_work(), Some(Work::Resource { key, .. }) if key == "second"));
+        assert!(program.next_work().is_none());
+    }
+
+    #[test]
+    fn stale_queued_resources_are_coalesced_and_removed() {
+        let mut program = program();
+        program
+            .schedule_resource("obsolete".into(), "/first".into())
+            .unwrap();
+        program
+            .schedule_resource("obsolete".into(), "/second".into())
+            .unwrap();
+        assert_eq!(program.pending.len(), 1);
+        program.schedule_resources().unwrap();
+        assert!(program.pending.is_empty());
+    }
+
+    #[test]
+    fn identical_keyed_immediate_replacement_starts_a_new_lifecycle() {
+        use hyperchad_actions::{Action, ActionTrigger, ActionType};
+        let source = || Container {
+            str_id: Some("immediate".into()),
+            actions: vec![Action {
+                trigger: ActionTrigger::Immediate,
+                effect: ActionType::Custom {
+                    action: "mounted".into(),
+                }
+                .into(),
+            }],
+            ..Default::default()
+        };
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        source(),
+                        Container {
+                            str_id: Some("sibling".into()),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        assert!(
+            matches!(program.pending.pop_front(), Some(Work::Custom(name, _)) if name == "mounted")
+        );
+        let previous_epoch = program.node_epochs["immediate"];
+        program
+            .apply_view(View::from(source()), Some("immediate"))
+            .unwrap();
+        assert!(program.node_epochs["immediate"] > previous_epoch);
+        assert!(
+            matches!(program.pending.pop_front(), Some(Work::Custom(name, _)) if name == "mounted")
+        );
+        program
+            .apply_response(
+                View::from(Container::default()),
+                Some("sibling"),
+                hyperchad_transformer_models::SwapStrategy::Children,
+            )
+            .unwrap();
+        assert!(program.pending.is_empty());
     }
 
     #[test]
@@ -1805,6 +2759,187 @@ mod runtime_regressions {
         assert!(program.apply_view(View::from(root), None).is_err());
         assert_eq!(*program.state.root(), before);
         assert_eq!(program.state.generation(), generation);
+    }
+
+    #[tokio::test]
+    async fn idle_resource_observer_wakes_only_on_epoch_change_and_cancels_on_shutdown() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let epoch = Arc::new(AtomicU64::new(1));
+        let callback_epoch = Arc::clone(&epoch);
+        let callback: Arc<dyn Fn() -> u64 + Send + Sync> =
+            Arc::new(move || callback_epoch.load(Ordering::SeqCst));
+        let (actions, _) = flume::bounded(8);
+        let (resize, _) = flume::bounded(8);
+        let mut program = BmuxProgram::new(
+            BmuxConfig {
+                resource_context: Some(Arc::clone(&callback)),
+                ..BmuxConfig::default()
+            },
+            actions,
+            resize,
+        );
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("art".into()),
+                    element: Element::Image {
+                        source: Some("/same".into()),
+                        alt: None,
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.pending.clear();
+        program
+            .graphics
+            .register_rgba("art", 1, 1, vec![255, 0, 0, 255])
+            .unwrap();
+        let old_serial = program.resource_epochs["art"];
+        let update = program.drive(Update::none());
+        assert_eq!(update.subscriptions.len(), 1);
+        assert_eq!(update.invalidation, bmux_tui_runtime::Invalidation::None);
+        // A redraw/presentation must not replace the running observer task.
+        assert!(program.drive(Update::none()).subscriptions.is_empty());
+        let ticks = AtomicU64::new(0);
+        let mut notifications = 0;
+        observe_resource_context(
+            callback,
+            1,
+            || {
+                let tick = ticks.fetch_add(1, Ordering::SeqCst) + 1;
+                assert!(
+                    tick <= 3,
+                    "observer must exit when notification admission closes"
+                );
+                if tick == 3 {
+                    epoch.store(2, Ordering::SeqCst);
+                }
+                std::future::ready(())
+            },
+            || {
+                notifications += 1;
+                let update = program
+                    .update(RuntimeEvent::Message(Message::ResourceContextChanged))
+                    .unwrap();
+                assert_eq!(update.invalidation, bmux_tui_runtime::Invalidation::Redraw);
+                assert_eq!(update.commands.len(), 1, "idle wake must drive the reload");
+                assert!(update.subscriptions.is_empty());
+                assert!(program.graphics.rgba("art").is_none());
+                assert!(program.resource_epochs["art"] > old_serial);
+                // Simulate a duplicate queued wake: no redundant frame.
+                let unchanged = program
+                    .update(RuntimeEvent::Message(Message::ResourceContextChanged))
+                    .unwrap();
+                assert_eq!(unchanged.invalidation, bmux_tui_runtime::Invalidation::None);
+                std::future::ready(false)
+            },
+        )
+        .await;
+        assert_eq!(ticks.load(Ordering::SeqCst), 3);
+        assert_eq!(notifications, 1, "unchanged polls must not notify/redraw");
+        let update = program
+            .update(RuntimeEvent::Message(Message::Shutdown))
+            .unwrap();
+        let key = bmux_tui_runtime::SubscriptionKey::new("hyperchad-resource-context");
+        assert!(update.cancelled_subscriptions.contains(&key));
+        assert!(update.subscriptions.is_empty());
+        assert!(program.resource_observer.is_none());
+        epoch.store(3, Ordering::SeqCst);
+        let serial = program.resource_epochs["art"];
+        let late = program
+            .update(RuntimeEvent::Message(Message::ResourceContextChanged))
+            .unwrap();
+        assert_eq!(late.invalidation, bmux_tui_runtime::Invalidation::None);
+        assert_eq!(program.resource_epochs["art"], serial);
+        let mut no_callback = super::runtime_regressions::program();
+        let disabled = no_callback.drive(Update::none());
+        assert!(disabled.subscriptions.is_empty());
+        assert!(disabled.cancelled_subscriptions.contains(&key));
+    }
+
+    #[test]
+    fn resource_context_change_invalidates_decoded_pending_and_inflight_identity() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let epoch = Arc::new(AtomicU64::new(1));
+        let callback_epoch = Arc::clone(&epoch);
+        let (actions, _) = flume::bounded(8);
+        let (resize, _) = flume::bounded(8);
+        let mut program = BmuxProgram::new(
+            BmuxConfig {
+                resource_context: Some(Arc::new(move || callback_epoch.load(Ordering::SeqCst))),
+                ..BmuxConfig::default()
+            },
+            actions,
+            resize,
+        );
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("art".into()),
+                    element: Element::Image {
+                        source: Some("/same?moosicboxProfile=master".into()),
+                        alt: None,
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        let old_serial = program.resource_epochs["art"];
+        let document_generation = program.state.generation();
+        program
+            .graphics
+            .register_rgba("art", 1, 1, vec![255, 0, 0, 255])
+            .unwrap();
+        epoch.store(2, Ordering::SeqCst);
+        program.prepare().unwrap();
+        assert!(program.graphics.rgba("art").is_none());
+        assert_eq!(program.pending.len(), 1);
+        let new_serial = program.resource_epochs["art"];
+        assert!(new_serial > old_serial);
+        assert_eq!(program.state.generation(), document_generation);
+        program
+            .complete(
+                old_serial,
+                Completion::Resource {
+                    key: "art".into(),
+                    source: "/same?moosicboxProfile=master".into(),
+                },
+                Ok(HostResponse::Bytes(vec![0])),
+            )
+            .unwrap();
+        assert!(program.graphics.rgba("art").is_none());
+        assert_eq!(program.resource_epochs["art"], new_serial);
+        // Failed/successful attempts are stable within the context, but a fresh
+        // context must retry even the identical source after an earlier failure.
+        program.pending.clear();
+        program
+            .complete(
+                new_serial,
+                Completion::Resource {
+                    key: "art".into(),
+                    source: "/same?moosicboxProfile=master".into(),
+                },
+                Err(std::io::Error::other("denied").into()),
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        assert!(program.pending.is_empty());
+        epoch.store(3, Ordering::SeqCst);
+        program
+            .update(RuntimeEvent::Message(Message::Advance))
+            .unwrap();
+        assert!(program.resource_epochs["art"] > new_serial);
     }
 
     #[test]
