@@ -12,6 +12,7 @@ pub mod actions;
 pub mod admission;
 pub mod controls;
 pub mod graphics;
+pub mod history;
 pub mod layout;
 pub mod presentation;
 pub mod program;

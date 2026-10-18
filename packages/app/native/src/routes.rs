@@ -79,6 +79,9 @@ pub enum RouteError {
     /// An error occurred in the application state.
     #[error(transparent)]
     AppState(#[from] AppStateError),
+    /// Failed to parse an album API source from a string.
+    #[error(transparent)]
+    FromStringApiSource(#[from] moosicbox_music_models::FromStringApiSourceError),
     /// Failed to parse a track API source from a string.
     #[error(transparent)]
     TryFromStringTrackApiSource(#[from] TryFromStringTrackApiSourceError),
@@ -156,6 +159,8 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
         return Err(RouteError::MissingQueryParam("limit"));
     };
     let limit = limit.parse::<u32>()?;
+    #[cfg(feature = "bmux")]
+    let limit = limit.clamp(1, 100);
     let Some(size) = req.query.get("size") else {
         return Err(RouteError::MissingQueryParam("size"));
     };
@@ -186,23 +191,19 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
     let connection = require_ready_connection(&state)?;
     let host = &connection.api_url;
 
+    let sources = filtered_sources
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
     let response = CLIENT
-        .get(&format!(
-            "{host}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-            if filtered_sources.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    "&sources={}",
-                    filtered_sources
-                        .iter()
-                        .map(ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
-            },
-            search.map_or_else(String::new, |search| format!("&search={search}"))
-        ))
+        .get(&format!("{host}/menu/albums"))
+        .query_param("moosicboxProfile", PROFILE)
+        .query_param("offset", &offset.to_string())
+        .query_param("limit", &limit.to_string())
+        .query_param("sort", &sort.to_string())
+        .query_param_opt("sources", (!sources.is_empty()).then_some(sources.as_str()))
+        .query_param_opt("search", search.map(String::as_str))
         .send()
         .await?;
 
@@ -216,7 +217,12 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    Ok(moosicbox_app_native_ui::albums::albums_list_start(
+    #[cfg(feature = "bmux")]
+    let render_page = moosicbox_app_native_ui::albums::albums_list_page;
+    #[cfg(not(feature = "bmux"))]
+    let render_page = moosicbox_app_native_ui::albums::albums_list_start;
+
+    Ok(render_page(
         &state,
         &albums,
         &filtered_sources,
@@ -435,6 +441,17 @@ pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteErr
     Ok(moosicbox_app_native_ui::playback_sessions::playback_sessions(host, &sessions).into())
 }
 
+fn album_music_api(
+    source: &ApiSource,
+) -> Result<std::sync::Arc<Box<dyn moosicbox_music_api::MusicApi>>, RouteError> {
+    PROFILES
+        .get(PROFILE)
+        .and_then(|apis| apis.get(source))
+        .ok_or_else(|| {
+            RouteError::MusicApi(moosicbox_music_api::Error::MusicApiNotFound(source.clone()))
+        })
+}
+
 /// Handles displaying either a specific album or the albums list.
 ///
 /// If an `albumId` query parameter is provided, displays the album details page.
@@ -457,8 +474,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             .query
             .get("source")
             .map(TryFrom::try_from)
-            .transpose()
-            .unwrap()
+            .transpose()?
             .unwrap_or_default();
 
         let version_source: Option<TrackApiSource> = req
@@ -482,9 +498,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
         if req.query.get("full").map(String::as_str) == Some("true") {
             let state = convert_state(&STATE).await;
             let album_id = album_id.into();
-            let api = PROFILES.get(PROFILE).unwrap().get(&source).ok_or_else(|| {
-                RouteError::MusicApi(moosicbox_music_api::Error::MusicApiNotFound(source.clone()))
-            })?;
+            let api = album_music_api(&source)?;
             let album = api
                 .album(&album_id)
                 .await?

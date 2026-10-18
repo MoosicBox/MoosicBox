@@ -1,7 +1,7 @@
 //! Standalone terminal ownership and cancellation-safe runtime orchestration.
 
 use std::{
-    io,
+    io::{self, BufWriter, Write},
     sync::{Arc, Mutex},
 };
 
@@ -18,6 +18,56 @@ use crate::{
     program::{BmuxProgram, Message},
     renderer::{Error, Shared},
 };
+
+// Buffer protocol fragments, not whole frames. Unlike BufWriter's default Drop,
+// never retry a failed frame after protocol cleanup or terminal restoration.
+struct FrameWriter<W: Write> {
+    inner: Option<BufWriter<W>>,
+}
+
+impl<W: Write> FrameWriter<W> {
+    fn new(writer: W) -> Self {
+        Self {
+            inner: Some(BufWriter::with_capacity(64 * 1024, writer)),
+        }
+    }
+
+    fn discard_pending(&mut self) {
+        let (writer, _) = self.inner.take().expect("owned frame writer").into_parts();
+        self.inner = Some(BufWriter::with_capacity(64 * 1024, writer));
+    }
+}
+
+impl<W: Write> Write for FrameWriter<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let result = self
+            .inner
+            .as_mut()
+            .expect("owned frame writer")
+            .write(bytes);
+        if result.is_err() {
+            self.discard_pending();
+        }
+        result
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let result = self.inner.as_mut().expect("owned frame writer").flush();
+        if result.is_err() {
+            self.discard_pending();
+        }
+        result
+    }
+}
+
+impl<W: Write> Drop for FrameWriter<W> {
+    fn drop(&mut self) {
+        if let Some(buffer) = self.inner.take() {
+            // Explicit presenter flush owns publication; Drop must not publish.
+            let _ = buffer.into_parts();
+        }
+    }
+}
 
 /// Single-use standalone runner. Terminal ownership never belongs to renderer clones.
 pub struct BmuxRenderRunner {
@@ -87,11 +137,13 @@ async fn run_terminal(
     let size = terminal_size()?;
     let mut program = BmuxProgram::from_shared(Arc::clone(&shared));
     program.resize(size);
+    let (writer, timing) = crate::presentation::TimedWriter::new(io::stdout());
     let terminal = Terminal::new(
-        io::stdout(),
+        FrameWriter::new(writer),
         bmux_tui::geometry::Rect::new(0, 0, size.width, size.height),
     );
-    let presenter = BmuxPresenter::new(terminal, &shared.config);
+    let mut presenter = BmuxPresenter::new(terminal, &shared.config);
+    presenter.set_writer_timing(timing);
     let (runtime, handle) = Runtime::new(program, presenter, shared.config.runtime);
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
     let mut ingress_stop = stop_rx.clone();
@@ -183,6 +235,97 @@ async fn run_terminal(
 mod tests {
     use super::*;
     use bmux_keyboard::{KeyCode, KeyStroke, Modifiers};
+
+    #[derive(Default)]
+    struct OutputProbe {
+        bytes: Vec<u8>,
+        writes: usize,
+        flushes: usize,
+        fail_after: Option<usize>,
+        fail_flush: bool,
+    }
+
+    impl Write for OutputProbe {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            let count = self.fail_after.map_or(bytes.len(), |limit| {
+                limit.saturating_sub(self.bytes.len()).min(bytes.len())
+            });
+            if count == 0 {
+                return Err(io::Error::other("test partial write"));
+            }
+            self.bytes.extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            if self.fail_flush {
+                return Err(io::Error::other("test flush"));
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn frame_buffer_preserves_bytes_flush_boundary_and_bounded_capacity() {
+        let mut probe = OutputProbe::default();
+        {
+            let mut output = FrameWriter::new(&mut probe);
+            for _ in 0..2000 {
+                output.write_all(b"\x1b[1;2Hpixel").unwrap();
+            }
+            let buffer = output.inner.as_ref().unwrap();
+            assert!(buffer.get_ref().bytes.is_empty());
+            assert_eq!(buffer.capacity(), 64 * 1024);
+            output.flush().unwrap();
+            let inner = output.inner.as_ref().unwrap().get_ref();
+            assert_eq!(inner.bytes, b"\x1b[1;2Hpixel".repeat(2000));
+            assert_eq!(inner.writes, 1);
+            assert_eq!(inner.flushes, 1);
+            output.write_all(&vec![b'x'; 128 * 1024]).unwrap();
+            output.flush().unwrap();
+        }
+        assert_eq!(
+            probe.bytes.len(),
+            b"\x1b[1;2Hpixel".len() * 2000 + 128 * 1024
+        );
+    }
+
+    #[test]
+    fn failed_buffer_is_not_replayed_during_cleanup_or_drop() {
+        let mut probe = OutputProbe {
+            fail_after: Some(3),
+            ..OutputProbe::default()
+        };
+        {
+            let mut output = FrameWriter::new(&mut probe);
+            output.write_all(b"failed-frame").unwrap();
+            assert!(output.flush().is_err());
+            output.inner.as_mut().unwrap().get_mut().fail_after = None;
+            output.write_all(b"cleanup").unwrap();
+            output.flush().unwrap();
+            // Even an unflushed tail must never escape after terminal restoration.
+            output.write_all(b"discard-on-drop").unwrap();
+        }
+        assert_eq!(probe.bytes, b"faicleanup");
+    }
+
+    #[test]
+    fn underlying_flush_failure_propagates_without_duplicate_output() {
+        let mut probe = OutputProbe {
+            fail_flush: true,
+            ..OutputProbe::default()
+        };
+        {
+            let mut output = FrameWriter::new(&mut probe);
+            output.write_all(b"frame").unwrap();
+            assert!(output.flush().is_err());
+            output.inner.as_mut().unwrap().get_mut().fail_flush = false;
+            output.write_all(b"cleanup").unwrap();
+            output.flush().unwrap();
+        }
+        assert_eq!(probe.bytes, b"framecleanup");
+    }
 
     #[test]
     fn quit_chords_are_reserved_only_with_control() {

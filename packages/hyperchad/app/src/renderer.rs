@@ -154,10 +154,53 @@ mod bmux_host;
 #[cfg(feature = "bmux")]
 pub mod bmux {
     use async_trait::async_trait;
-    use hyperchad_renderer_bmux::{BmuxRenderer, renderer::BmuxConfig};
-    use hyperchad_router::Router;
+    use hyperchad_renderer::{Content, View};
+    use hyperchad_renderer_bmux::{
+        BmuxRenderer,
+        renderer::{BmuxConfig, NavigationRequest},
+    };
+    use hyperchad_router::{RequestInfo, RouteRequest, Router};
 
     use crate::{App, AppBuilder, BuilderError, Cleaner, Error, Generator};
+
+    // Renderer links carry URLs, whereas Navigation::from(String) treats its
+    // input as an already-separated path. Parse before handing intent to Router.
+    fn navigation_request(url: &str) -> RouteRequest {
+        RouteRequest::from_path(url, RequestInfo::default())
+    }
+
+    enum NavigationOutcome {
+        Completed(Option<Box<View>>),
+        Superseded(Option<NavigationRequest>),
+    }
+
+    async fn resolve_navigation(
+        router: &Router,
+        url: &str,
+        next: impl std::future::Future<Output = Option<NavigationRequest>>,
+    ) -> NavigationOutcome {
+        // Do not use navigate_send: its shared render channel cannot retain the
+        // request identity and may install an obsolete document before completion.
+        let mut navigation = Box::pin(router.navigate(navigation_request(url)));
+        switchy::unsync::select! {
+            result = &mut navigation => {
+                let view = match result {
+                    Ok(Some(Content::View(view))) => Some(view),
+                    Ok(None) => None,
+                    Ok(Some(_)) => {
+                        log::warn!("terminal navigation returned non-document content: {url}");
+                        None
+                    }
+                    Err(error) => {
+                        log::error!("terminal navigation failed url={url}: {error:?}");
+                        None
+                    }
+                };
+                NavigationOutcome::Completed(view)
+            }
+            next = next => NavigationOutcome::Superseded(next),
+        }
+    }
 
     #[async_trait]
     impl Generator for BmuxRenderer {
@@ -173,6 +216,99 @@ pub mod bmux {
     impl Cleaner for BmuxRenderer {
         async fn clean(&self, _output: Option<String>) -> Result<(), Error> {
             Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_routes_path_and_preserves_album_query() {
+            let router = Router::new().with_route("/albums", |request| async move {
+                assert_eq!(request.path, "/albums");
+                assert_eq!(
+                    request.query.get("albumId").map(String::as_str),
+                    Some("1339")
+                );
+                assert_eq!(
+                    request.query.get("source").map(String::as_str),
+                    Some("Library")
+                );
+                View::from(hyperchad_renderer::transformer::Container::default())
+            });
+            assert!(matches!(
+                resolve_navigation(
+                    &router,
+                    "/albums?albumId=1339&source=Library",
+                    std::future::pending(),
+                )
+                .await,
+                NavigationOutcome::Completed(Some(_)),
+            ));
+            assert!(
+                matches!(
+                    resolve_navigation(
+                        &router,
+                        "/albums-other?albumId=1339&source=Library",
+                        std::future::pending(),
+                    )
+                    .await,
+                    NavigationOutcome::Completed(None),
+                ),
+                "query parsing must not weaken exact route matching"
+            );
+            assert!(
+                router.receiver.try_recv().is_err(),
+                "correlated routes must not publish through the uncorrelated render channel"
+            );
+        }
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_non_document_does_not_commit() {
+            let router =
+                Router::new().with_route("/raw", |_| async { "not a document".to_string() });
+            assert!(matches!(
+                resolve_navigation(&router, "/raw", std::future::pending()).await,
+                NavigationOutcome::Completed(None),
+            ));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_new_request_cancels_pending_route() {
+            struct Cancelled(std::sync::Arc<std::sync::atomic::AtomicBool>);
+            impl Drop for Cancelled {
+                fn drop(&mut self) {
+                    self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let (started_tx, started_rx) = flume::bounded(1);
+            let marker = std::sync::Arc::clone(&cancelled);
+            let router = Router::new().with_route("/slow", move |_| {
+                let marker = std::sync::Arc::clone(&marker);
+                let started_tx = started_tx.clone();
+                async move {
+                    let _guard = Cancelled(marker);
+                    started_tx.send(()).unwrap();
+                    std::future::pending::<View>().await
+                }
+            });
+            let outcome = resolve_navigation(&router, "/slow?albumId=1339", async {
+                started_rx.recv_async().await.unwrap();
+                Some(NavigationRequest {
+                    id: 2,
+                    url: "/albums?albumId=47&source=Library".into(),
+                })
+            })
+            .await;
+            assert!(matches!(
+                outcome,
+                NavigationOutcome::Superseded(Some(NavigationRequest { id: 2, .. }))
+            ));
+            assert!(
+                cancelled.load(std::sync::atomic::Ordering::SeqCst),
+                "superseded route future must be dropped"
+            );
         }
     }
 
@@ -213,19 +349,30 @@ pub mod bmux {
                 .map_err(|_| BuilderError::MissingRuntime)?
                 .spawn(async move {
                     let mut next = renderer.wait_for_navigation().await;
-                    while let Some(url) = next {
-                        // A newer navigation supersedes a stalled route GET. Never
-                        // make Settings or Home wait for an unreachable server.
-                        let navigation = router.navigate_send(url);
-                        let mut navigation = Box::pin(navigation);
-                        next = switchy::unsync::select! {
-                            result = &mut navigation => {
-                                if let Err(error) = result {
-                                    log::error!("terminal navigation failed: {error:?}");
+                    while let Some(request) = next {
+                        next = match resolve_navigation(
+                            &router,
+                            &request.url,
+                            renderer.wait_for_navigation(),
+                        )
+                        .await
+                        {
+                            NavigationOutcome::Completed(view) => {
+                                if let Err(error) = renderer
+                                    .complete_navigation(
+                                        request.id,
+                                        request.url,
+                                        view.map(|view| *view),
+                                    )
+                                    .await
+                                {
+                                    log::error!("terminal navigation completion failed: {error:?}");
                                 }
                                 renderer.wait_for_navigation().await
                             }
-                            next = renderer.wait_for_navigation() => next,
+                            // Dropping resolve_navigation cancels the old route future.
+                            // No uncorrelated content was sent to the shared channel.
+                            NavigationOutcome::Superseded(next) => next,
                         };
                     }
                     Ok::<_, Error>(())

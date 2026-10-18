@@ -435,6 +435,102 @@ pub fn layout(
     Ok(tree)
 }
 
+/// Reproject one changed scrollport using committed geometry. Positioned
+/// descendants require normal layout; callers must prove unchanged source and sizing.
+pub(crate) fn reproject_scroll(
+    root: &Container,
+    tree: &LayoutTree,
+    offsets: &BTreeMap<String, ScrollOffset>,
+) -> Option<LayoutTree> {
+    let mut changed = None;
+    for node in &tree.nodes {
+        let requested = offsets.get(&node.key).copied().unwrap_or_default();
+        let source = source_at(root, &node.path)?;
+        let next = ScrollOffset {
+            x: if scrollable(source.overflow_x) {
+                requested.x.min(
+                    node.content_extents
+                        .width
+                        .saturating_sub(node.content_bounds.width),
+                )
+            } else {
+                0
+            },
+            y: if scrollable(source.overflow_y) {
+                requested.y.min(
+                    node.content_extents
+                        .height
+                        .saturating_sub(node.content_bounds.height),
+                )
+            } else {
+                0
+            },
+        };
+        if next != node.scroll_offset {
+            if changed.is_some() {
+                return None;
+            }
+            changed = Some((node.path.clone(), next, node.scroll_offset));
+        }
+    }
+    let (path, next, previous) = changed?;
+    for node in &tree.nodes {
+        if node.path.starts_with(&path)
+            && node.path != path
+            && matches!(
+                source_at(root, &node.path)?.position.unwrap_or_default(),
+                Position::Fixed | Position::Sticky | Position::Absolute
+            )
+        {
+            return None;
+        }
+    }
+    let dx = signed(previous.x) - signed(next.x);
+    let dy = signed(previous.y) - signed(next.y);
+    let mut result = tree.clone();
+    for index in 0..result.nodes.len() {
+        if !result.nodes[index].path.starts_with(&path) {
+            continue;
+        }
+        let is_scrollport = result.nodes[index].path == path;
+        let inherited = result.nodes[index]
+            .parent_key
+            .as_ref()
+            .and_then(|key| result.get(key))
+            .map(|parent| parent.text_clip);
+        let node = &mut result.nodes[index];
+        if is_scrollport {
+            node.scroll_offset = next;
+        } else {
+            node.bounds = node.bounds.translated(dx, dy);
+            node.content_bounds = node.content_bounds.translated(dx, dy);
+            for region in &mut node.hit_regions {
+                *region = region.translated(dx, dy);
+            }
+            node.clip = inherited?;
+        }
+        node.text_origin.0 += dx;
+        node.text_origin.1 += dy;
+        for fragment in &mut node.text {
+            fragment.bounds = fragment.bounds.translated(dx, dy);
+        }
+        let source = source_at(root, &node.path)?;
+        node.text_clip = node.clip;
+        if clips(source.overflow_x) {
+            node.text_clip = clip_axis(node.text_clip, node.content_bounds, true);
+        }
+        if clips(source.overflow_y) {
+            node.text_clip = clip_axis(node.text_clip, node.content_bounds, false);
+        }
+    }
+    Some(result)
+}
+
+fn source_at<'a>(root: &'a Container, path: &[usize]) -> Option<&'a Container> {
+    path.iter()
+        .try_fold(root, |node, index| node.children.get(*index))
+}
+
 /// Collect scrollable overflow from authoritative, unscrolled placement. This
 /// includes positioned descendants through static ancestors, stops each axis at
 /// clipping boundaries, and never propagates viewport-fixed subtrees.
@@ -854,7 +950,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
             // The formatting-context node itself is already represented here.
             draft.children = Self::inline_nodes(&result.sources, &mut draft.text, Some(path));
         } else {
-            self.flow(&mut draft, content_size, depth)?;
+            self.flow(&mut draft, content_size, requested_height.is_some(), depth)?;
         }
         if width.is_none() && forced_width.is_none() && !native_leaf(node) {
             draft.content.width = draft.extents.width.clamp(min_width, max_width);
@@ -996,6 +1092,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
         &self,
         draft: &mut Draft<'a>,
         available: LogicalSize,
+        definite_height: bool,
         depth: usize,
     ) -> Result<(), LayoutError> {
         let source = draft.source;
@@ -1133,7 +1230,19 @@ impl<M: LeafMeasure> Engine<'_, M> {
                             } else {
                                 Some(force.min(widths[index].saturating_sub(margin.horizontal())))
                             },
-                            None,
+                            // Only a definite, single-line row establishes a cross-axis
+                            // constraint here. An auto-height row must first measure its
+                            // contents; otherwise nested rows inherit viewport height.
+                            if row
+                                && !wrap
+                                && definite_height
+                                && draft.source.align_items.is_none()
+                                && source.height.is_none()
+                            {
+                                Some(available.height.saturating_sub(margin.vertical()))
+                            } else {
+                                None
+                            },
                             &draft.style,
                             depth + 1,
                         )?
@@ -1141,7 +1250,18 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     Placed::Block(child)
                 }
                 FlowItem::Inline { group, .. } => {
-                    let mut result = inline::format(&group, item_width, &draft.style, self.options);
+                    // Intrinsic row measurement is not an inline line-box
+                    // allocation. Constrain normal text to the remaining row
+                    // space so word wrapping occurs before clipping/painting.
+                    // Scroll containers retain their horizontal content extent;
+                    // whitespace/ellipsis policy remains the formatter's job.
+                    let inline_width = if row && !wrap && !scrollable(source.overflow_x) {
+                        item_width.min(available.width.saturating_sub(x))
+                    } else {
+                        item_width
+                    };
+                    let mut result =
+                        inline::format(&group, inline_width, &draft.style, self.options);
                     let children = Self::inline_nodes(&result.sources, &mut result.fragments, None);
                     Placed::Inline {
                         size: result.size,
@@ -1162,6 +1282,28 @@ impl<M: LeafMeasure> Engine<'_, M> {
                 line_height = line_height.max(size.height);
             } else {
                 y += size.height + gap_y;
+            }
+        }
+        // Auto-height rows stretch to their measured line, not the enclosing
+        // viewport. Explicit alignment opts out, as do explicit child heights.
+        if row && !wrap && !definite_height && source.align_items.is_none() {
+            for item in &mut all {
+                if let Placed::Block(child) = item
+                    && child.source.height.is_none()
+                    && child.outer_height() != line_height
+                {
+                    *child = self
+                        .node(
+                            child.source,
+                            &child.path,
+                            available,
+                            Some(child.rect.width),
+                            Some(line_height.saturating_sub(child.margin.vertical())),
+                            &draft.style,
+                            depth + 1,
+                        )?
+                        .expect("visible row child");
+                }
             }
         }
         if !row && !wrap && !vertical_wrap {
@@ -1231,23 +1373,41 @@ impl<M: LeafMeasure> Engine<'_, M> {
                 *px = cross_offset(source.align_items, available.width, size.width);
             }
         } else {
+            // Grid tracks are shared across rows, including an incomplete last
+            // row. Ordinary wrapping still justifies each line independently.
+            let grid_columns = lines.iter().map(Vec::len).max().unwrap_or(0);
+            let grid_used = lines
+                .iter()
+                .map(|line| {
+                    line.iter()
+                        .map(|(index, _, _)| all[*index].size().width)
+                        .sum::<u64>()
+                        + gap_x * line.len().saturating_sub(1) as u64
+                })
+                .max()
+                .unwrap_or(0);
             for line in &mut lines {
                 let used = line
                     .iter()
                     .map(|(index, _, _)| all[*index].size().width)
                     .sum::<u64>()
                     + gap_x * line.len().saturating_sub(1) as u64;
-                let height = line
-                    .iter()
-                    .map(|(index, _, _)| all[*index].size().height)
-                    .max()
-                    .unwrap_or(0);
+                let height = if row && !wrap && definite_height {
+                    available.height
+                } else {
+                    line.iter()
+                        .map(|(index, _, _)| all[*index].size().height)
+                        .max()
+                        .unwrap_or(0)
+                };
+                let count = if grid { grid_columns } else { line.len() };
                 let (start, spacing) = distribution(
                     source.justify_content,
-                    available.width.saturating_sub(used),
-                    line.len(),
+                    available
+                        .width
+                        .saturating_sub(if grid { grid_used } else { used }),
+                    count,
                 );
-                let count = line.len();
                 for (ordinal, (index, px, py)) in line.iter_mut().enumerate() {
                     *px += start + distributed(spacing, ordinal, count.saturating_sub(1));
                     *py += cross_offset(source.align_items, height, all[*index].size().height);
@@ -1894,19 +2054,31 @@ const fn hidden(node: &Container) -> bool {
 const fn out_of_flow(node: &Container) -> bool {
     matches!(node.position, Some(Position::Absolute | Position::Fixed))
 }
-const fn native_leaf(node: &Container) -> bool {
+pub(crate) fn composite_button(node: &Container) -> bool {
+    fn has_image(node: &Container) -> bool {
+        matches!(node.element, Element::Image { .. }) || node.children.iter().any(has_image)
+    }
+    matches!(node.element, Element::Button { .. })
+        && (node.children.iter().any(has_image)
+            // Multi-row terminal buttons can render their complete source label
+            // with normal inline wrapping instead of one-line native [] chrome.
+            || (!node.children.is_empty()
+                && matches!(node.height, Some(Number::Integer(height)) if height >= 32)))
+}
+
+fn native_leaf(node: &Container) -> bool {
     matches!(
         node.element,
         Element::Input { .. }
-            | Element::Button { .. }
             | Element::Select { .. }
             | Element::Textarea { .. }
             | Element::Image { .. }
-    ) || (node.children.is_empty()
-        && !matches!(
-            node.element,
-            Element::Text { .. } | Element::Raw { .. } | Element::Span | Element::Anchor { .. }
-        ))
+    ) || (matches!(node.element, Element::Button { .. }) && !composite_button(node))
+        || (node.children.is_empty()
+            && !matches!(
+                node.element,
+                Element::Text { .. } | Element::Raw { .. } | Element::Span | Element::Anchor { .. }
+            ))
 }
 fn is_inline(node: &Container) -> bool {
     matches!(
@@ -2077,6 +2249,124 @@ fn redistribute(
             break;
         }
         remaining -= used;
+    }
+}
+
+#[cfg(test)]
+mod scroll_reprojection_tests {
+    use super::*;
+
+    fn album_document() -> Container {
+        let albums = (0..100)
+            .map(|index| Container {
+                str_id: Some(format!("album-{index}")),
+                width: Some(Number::Integer(160)),
+                height: Some(Number::Integer(160)),
+                children: vec![Container {
+                    element: Element::Text {
+                        value: format!("Album {index}: a title that wraps"),
+                    },
+                    ..Container::default()
+                }],
+                ..Container::default()
+            })
+            .collect();
+        Container {
+            children: vec![
+                Container {
+                    str_id: Some("scroll".into()),
+                    width: Some(Number::Integer(640)),
+                    height: Some(Number::Integer(320)),
+                    overflow_y: LayoutOverflow::Scroll,
+                    children: albums,
+                    ..Container::default()
+                },
+                Container {
+                    str_id: Some("fixed-player".into()),
+                    position: Some(Position::Fixed),
+                    height: Some(Number::Integer(32)),
+                    ..Container::default()
+                },
+            ],
+            ..Container::default()
+        }
+    }
+
+    #[test]
+    fn hundred_album_scroll_matches_complete_reflow() {
+        let root = album_document();
+        let mut options = LayoutOptions::default();
+        options.viewport = Size::new(100, 40);
+        let mut retained = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+        for offset in [3, 6, 30, 200, 99999, 6, 0] {
+            options
+                .scroll_offsets
+                .insert("scroll".into(), ScrollOffset { x: 0, y: offset });
+            let projected = reproject_scroll(&root, &retained, &options.scroll_offsets).unwrap();
+            let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            // Debug includes all geometry, text fragments, hit regions, styles,
+            // source paths, keys, clips and paint order, not just border bounds.
+            assert_eq!(format!("{projected:?}"), format!("{full:?}"));
+            retained = projected;
+        }
+    }
+
+    #[test]
+    fn nested_scroll_images_and_fixed_sibling_match_reflow() {
+        let mut root = album_document();
+        let mut nested = root.children[0].clone();
+        nested.str_id = Some("nested".into());
+        nested.width = Some(Number::Integer(1280));
+        nested.height = Some(Number::Integer(640));
+        nested.overflow_x = LayoutOverflow::Scroll;
+        nested.children[0].children.push(Container {
+            element: Element::Image {
+                source: Some("/real-cover.png".into()),
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+            width: Some(Number::Integer(96)),
+            height: Some(Number::Integer(96)),
+            ..Container::default()
+        });
+        root.children[0].overflow_x = LayoutOverflow::Scroll;
+        root.children[0].children = vec![nested];
+        let mut options = LayoutOptions {
+            viewport: Size::new(100, 40),
+            ..LayoutOptions::default()
+        };
+        let mut retained = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+        for (key, x, y) in [
+            ("nested", 0, 5),
+            ("scroll", 3, 4),
+            ("nested", 0, 30),
+            ("scroll", 99999, 99999),
+            ("scroll", 0, 0),
+            ("nested", 0, 0),
+        ] {
+            options
+                .scroll_offsets
+                .insert(key.into(), ScrollOffset { x, y });
+            let projected = reproject_scroll(&root, &retained, &options.scroll_offsets).unwrap();
+            let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            assert_eq!(format!("{projected:?}"), format!("{full:?}"));
+            retained = projected;
+        }
+    }
+
+    #[test]
+    fn positioned_scroll_descendants_require_reflow() {
+        for position in [Position::Fixed, Position::Sticky, Position::Absolute] {
+            let mut root = album_document();
+            root.children[0].children[0].position = Some(position);
+            let options = LayoutOptions::default();
+            let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
+            assert!(reproject_scroll(&root, &tree, &offsets).is_none());
+        }
     }
 }
 

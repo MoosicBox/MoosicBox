@@ -21,11 +21,18 @@ pub(super) enum Kind {
     Summary,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ButtonContent {
+    NativeLabel,
+    CompositeChildren,
+}
+
 // No Debug: `external` can contain a password.
 #[derive(Clone)]
 pub(super) struct Spec {
     pub kind: Kind,
     pub label: String,
+    pub button_content: ButtonContent,
     pub placeholder: String,
     pub external: Option<String>,
     pub checked: bool,
@@ -62,7 +69,7 @@ impl Spec {
 
 pub(super) fn text(node: &Container) -> String {
     let mut result = match &node.element {
-        Element::Text { value } => value.clone(),
+        Element::Text { value } | Element::Raw { value } => value.clone(),
         // Raw markup is never interpreted as terminal control sequences.
         _ => String::new(),
     };
@@ -112,6 +119,11 @@ fn walk(
     let mut spec = Spec {
         kind: Kind::Button,
         label: text(node),
+        button_content: if crate::layout::composite_button(node) {
+            ButtonContent::CompositeChildren
+        } else {
+            ButtonContent::NativeLabel
+        },
         placeholder: String::new(),
         external: None,
         checked: false,

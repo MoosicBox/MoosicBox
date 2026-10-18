@@ -25,6 +25,84 @@ import termios
 import threading
 import time
 import zlib
+from functools import lru_cache
+from urllib.parse import parse_qs, urlsplit
+
+
+def album_page(album, count, offset=0, limit=30):
+    """Honor server pagination, including empty pages beyond the library end."""
+    if count < 0 or offset < 0 or not 0 < limit <= 10000:
+        raise ValueError("invalid album pagination")
+    return {
+        "items": [
+            dict(
+                album,
+                albumId=index + 1,
+                title=(
+                    album["title"] if index == 0 else f"Library Album {index + 1:05d}"
+                ),
+            )
+            for index in range(offset, min(count, offset + limit))
+        ],
+        "offset": offset,
+        "limit": limit,
+        "total": count,
+        "hasMore": offset + limit < count,
+    }
+
+
+@lru_cache(maxsize=8)
+def artwork_fixture(identity=1, size=512):
+    """Real-size compressed synthetic raster, NOT a photographic benchmark.
+
+    Eight distinct deterministic textures exercise decode/resample/transmission.
+    Solid outer quadrant patches retain the original decoded-pixel assertions;
+    the textured center prevents a giant flat PNG from disguising codec costs.
+    Generate before starting the app so fixture construction isn't server time.
+    """
+    if not 64 <= size <= 2048:
+        raise ValueError("artwork size must be 64..2048")
+    colors = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255))
+    rows = bytearray()
+    state = identity + 1
+    for y in range(size):
+        rows.append(0)
+        for x in range(size):
+            color = colors[(2 if y >= size // 2 else 0) + (x >= size // 2)]
+            if size // 4 <= x < 3 * size // 4 and size // 4 <= y < 3 * size // 4:
+                state = (1664525 * state + 1013904223) & 0xFFFFFFFF
+                color = ((state >> 24), (state >> 16) & 255, (state >> 8) & 255)
+            rows.extend((*color, 255))
+
+    def chunk(kind, data):
+        return (
+            struct.pack("!I", len(data))
+            + kind
+            + data
+            + struct.pack("!I", zlib.crc32(kind + data))
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack("!2I5B", size, size, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def is_artwork(width, height, pixels):
+    """Recognize decoded fixture pixels, not an escape marker or transfer count."""
+    if width < 8 or height < 8 or len(pixels) != width * height * 4:
+        return False
+    samples = (
+        (width // 8, height // 8),
+        (7 * width // 8, height // 8),
+        (width // 8, 7 * height // 8),
+        (7 * width // 8, 7 * height // 8),
+    )
+    return b"".join(
+        pixels[(y * width + x) * 4 : (y * width + x) * 4 + 4] for x, y in samples
+    ) == bytes((255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255))
 
 
 def png_fixture():
@@ -320,6 +398,11 @@ class Mock(http.server.ThreadingHTTPServer):
     def __init__(self):
         super().__init__(("127.0.0.1", 0), Handler)
         self.requests = []
+        self.album_count = 1
+        self.hold_websocket = False
+        self.artwork_size = 0  # Existing importers retain tiny-fixture behavior.
+        self.artworks = ()
+        self.pages = []
         self.stopping = threading.Event()
 
 
@@ -364,7 +447,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     break
             return
         if "/files/" in self.path:
-            body, content_type = png_fixture(), "image/png"
+            match = re.search(r"/files/albums/(\d+)/", self.path)
+            if match and self.server.artworks:
+                body = self.server.artworks[
+                    (int(match[1]) - 1) % len(self.server.artworks)
+                ]
+            else:
+                body = png_fixture()
+            content_type = "image/png"
         else:
             path = self.path.split("?")[0]
             # Explicit minimal connection metadata. Unexpected endpoints fail;
@@ -397,12 +487,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "/config/connection-id": "bmux-acceptance",
                 "/config/profiles": ["master"],
                 "/music-api": page([]),
-                "/menu/albums": page(
-                    [
-                        dict(album, albumId=index + 1)
-                        for index in range(self.server.album_count)
-                    ]
-                ),
+                "/menu/albums": None,  # Construct only the requested page below.
                 "/menu/artists": page([]),
                 "/session/sessions": page([]),
                 "/audio-zone/audio-zones": [],
@@ -410,6 +495,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "/downloader/download-locations": page([]),
                 "/scan/scan-paths": [],
             }
+            if path == "/menu/albums":
+                query = parse_qs(urlsplit(self.path).query)
+                try:
+                    result = album_page(
+                        album,
+                        self.server.album_count,
+                        int(query.get("offset", ["0"])[0]),
+                        int(query.get("limit", ["30"])[0]),
+                    )
+                except ValueError:
+                    self.send_error(400, "invalid pagination")
+                    return
+                objects[path] = result
+                self.server.pages.append(
+                    {key: value for key, value in result.items() if key != "items"}
+                )
             if path not in objects:
                 self.send_error(404, "unmocked endpoint")
                 return
@@ -441,6 +542,28 @@ def run(args):
     mock = Mock()
     mock.album_count = args.album_count
     mock.hold_websocket = args.hold_websocket
+    mock.artwork_size = args.artwork_size
+    if args.artwork_size:
+        mock.artworks = tuple(artwork_fixture(i, args.artwork_size) for i in range(8))
+    metadata.update(
+        album_count=mock.album_count,
+        artwork={
+            "synthetic": True,
+            "size": args.artwork_size or 2,
+            "variants": len(mock.artworks) or 1,
+            "compressed_bytes": [len(body) for body in mock.artworks],
+        },
+        measurements={
+            "clock": "monotonic; host PTY observation (not terminal display acknowledgement)",
+            "complete_visible_cover_set_ms": None,
+            "cached_return_ms": None,
+            "note": "No complete-set/return claim; tiny fixtures are correctness-only. Synthetic PTY observations include Python parser overhead and are not app-only latency.",
+            "screen_parser_ms": 0.0,
+            "screen_parser_max_batch_ms": 0.0,
+        },
+    )
+    measurements = metadata["measurements"]
+    album_start = None
     thread = threading.Thread(target=mock.serve_forever, daemon=True)
     thread.start()
     master, slave = pty.openpty()
@@ -477,7 +600,12 @@ def run(args):
                 start_new_session=True,
             )
 
+            image_cursor = graphics_cursor = 0
+            decoded_artwork = set()
+            observed_placements = set()
+
             def pump():
+                nonlocal image_cursor, graphics_cursor
                 if select.select([master], [], [], 0.05)[0]:
                     try:
                         data = os.read(master, 262144)
@@ -487,7 +615,50 @@ def run(args):
                         else:
                             raise
                     recording.extend(data)
+                    parse_started = time.monotonic()
                     screen.feed(data)
+                    parse_ms = (time.monotonic() - parse_started) * 1000
+                    measurements["screen_parser_ms"] += parse_ms
+                    measurements["screen_parser_max_batch_ms"] = max(
+                        measurements["screen_parser_max_batch_ms"], parse_ms
+                    )
+                    if album_start is not None and args.artwork_size:
+                        now = (time.monotonic() - album_start) * 1000
+                        if "Acceptance Quadrants" in screen.text():
+                            measurements.setdefault("first_album_text_ms", now)
+                        for parameters, pixels, _ in screen.images[image_cursor:]:
+                            width, height = int(parameters.get("s", 0)), int(
+                                parameters.get("v", 0)
+                            )
+                            if parameters.get("f") == "32" and is_artwork(
+                                width, height, pixels
+                            ):
+                                # Require a textured center: the tiny icon fixture has
+                                # identical quadrant colors but cannot qualify here.
+                                center = pixels[
+                                    ((height // 2) * width + width // 2) * 4 :
+                                ][:4]
+                                if center not in (
+                                    b"\xff\0\0\xff",
+                                    b"\0\xff\0\xff",
+                                    b"\0\0\xff\xff",
+                                    b"\xff" * 4,
+                                ):
+                                    decoded_artwork.add(parameters.get("i"))
+                        for parameters, x, y in screen.graphics[graphics_cursor:]:
+                            if (
+                                parameters.get("a") in ("p", "T")
+                                and parameters.get("i") in decoded_artwork
+                                and 36 <= x < screen.width
+                                and 0 <= y < screen.height
+                            ):
+                                observed_placements.add(parameters.get("i"))
+                                measurements.setdefault(
+                                    "first_decoded_album_placement_ms", now
+                                )
+                        image_cursor, graphics_cursor = len(screen.images), len(
+                            screen.graphics
+                        )
                 assert (
                     process.poll() is None
                 ), f"app exited early ({process.returncode})"
@@ -561,6 +732,7 @@ def run(args):
                 if screen.locate("Albums"):
                     break
                 send(b"\x1b[Z")
+            album_start = time.monotonic()
             click("Albums", offset=1)
             wait(
                 lambda: "Acceptance Quadrants" in screen.text(),
@@ -692,7 +864,50 @@ def run(args):
                 assert (
                     not screen.images and not screen.other_images
                 ), "text terminal unexpectedly received graphics"
-            send(b"\x11")
+            if args.stress_scrolls:
+                assert (
+                    args.protocol == "kitty" and args.artwork_size
+                ), "stress needs real-size Kitty artwork"
+                wait(
+                    lambda: "first_decoded_album_placement_ms" in measurements,
+                    "no decoded real-size artwork placement",
+                    timeout=15,
+                )
+                samples = []
+                for _ in range(args.stress_scrolls):
+                    before = tuple(tuple(row) for row in screen.cells)
+                    started = time.monotonic()
+                    os.write(master, b"\x1b[<65;100;35M")
+                    deadline = started + 2
+                    changed = False
+                    while time.monotonic() < deadline:
+                        pump()
+                        if tuple(tuple(row) for row in screen.cells) != before:
+                            changed = True
+                            break
+                    samples.append(
+                        (time.monotonic() - started) * 1000 if changed else None
+                    )
+                observed = sorted(value for value in samples if value is not None)
+                measurements["scroll_text_change_ms"] = samples
+                measurements["scroll_timeouts"] = samples.count(None)
+                measurements["scroll_text_change_p95_ms"] = (
+                    observed[max(0, (95 * len(observed) + 99) // 100 - 1)]
+                    if observed and None not in samples
+                    else None
+                )
+                measurements["scroll_over_250ms"] = sum(
+                    value is None or value > 250 for value in samples
+                )
+                measurements["scroll_note"] = (
+                    "First changed text cells, not full-frame/cover-set completion; 50ms poll resolution. "
+                    "Background paint can confound causality; unchanged text can mean a scroll boundary. "
+                    "This is a diagnostic observation, NOT accepted input p95."
+                )
+            quit_started = time.monotonic()
+            # Normal send() insists the app stays alive; a successful quit must
+            # instead drain without running that early-exit assertion.
+            os.write(master, b"\x11")
             deadline = time.monotonic() + 10
             while process.poll() is None and time.monotonic() < deadline:
                 if select.select([master], [], [], 0.1)[0]:
@@ -700,11 +915,19 @@ def run(args):
                         recording.extend(os.read(master, 262144))
                     except OSError:
                         break
-            assert process.wait(timeout=2) == 0, "unclean app shutdown"
+            try:
+                assert process.wait(timeout=2) == 0, "unclean app shutdown"
+            finally:
+                measurements["quit_ms"] = (time.monotonic() - quit_started) * 1000
+                measurements["quit_exited"] = process.poll() is not None
+                measurements["quit_within_1s"] = (
+                    measurements["quit_exited"] and measurements["quit_ms"] <= 1000
+                )
             assert termios.tcgetattr(slave) == original, "terminal modes not restored"
             assert b"\x1b[?1049l" in recording, "alternate screen not restored"
             metadata["result"] = "passed"
         finally:
+            metadata.setdefault("result", "failed")
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
                 try:
@@ -717,7 +940,7 @@ def run(args):
             (artifacts / "requests.json").write_text(
                 json.dumps(mock.requests, indent=2)
             )
-            if isinstance(metadata.get("result"), str):
+            if metadata.get("result") == "passed":
                 metadata["checks"] = [
                     "home",
                     "keyboard-settings-link",
@@ -729,6 +952,8 @@ def run(args):
                     "resize",
                     "terminal-restoration",
                 ]
+            metadata["pagination"] = mock.pages
+            measurements["terminal_output_bytes"] = len(recording)
             (artifacts / "artifact.json").write_text(json.dumps(metadata, indent=2))
             for file in Path(home).rglob("*.log"):
                 # Isolated app logs only; no host configuration is read.
@@ -757,8 +982,27 @@ def main():
         help="leave WebSocket handshake pending while testing HTTP browsing",
     )
     parser.add_argument("--album-count", type=int, default=1)
+    parser.add_argument(
+        "--artwork-size",
+        type=int,
+        default=512,
+        help="synthetic PNG side length 64..2048; 0 retains tiny correctness fixture",
+    )
+    parser.add_argument(
+        "--stress-scrolls",
+        type=int,
+        default=0,
+        help="measure actual changed screen text after each wheel event (Kitty only)",
+    )
     parser.add_argument("--artifacts", required=True)
-    run(parser.parse_args())
+    args = parser.parse_args()
+    if args.album_count < 1 or args.stress_scrolls < 0:
+        parser.error("album-count must be positive and stress-scrolls nonnegative")
+    if args.artwork_size and not 64 <= args.artwork_size <= 2048:
+        parser.error("artwork-size must be 0 or 64..2048")
+    if args.stress_scrolls and (args.protocol != "kitty" or not args.artwork_size):
+        parser.error("stress-scrolls requires Kitty and real-size artwork")
+    run(args)
 
 
 if __name__ == "__main__":

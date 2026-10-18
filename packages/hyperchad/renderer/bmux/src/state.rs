@@ -366,6 +366,9 @@ impl ViewState {
     /// container; insertion strategies insert that container at the named edge.
     /// `Delete` removes the target even when the response has no primary.
     /// `This` and insertion/children strategies do nothing without a primary.
+    /// A primary marked as a fragment contributes sibling nodes, never its synthetic
+    /// envelope. Explicit containers are inserted intact. Root fragments retain one
+    /// canonical synthetic root. Empty insertion fragments are no-ops.
     /// Metadata is returned intact. Root deletion restores the safe empty root.
     /// No-op responses do not advance the generation.
     ///
@@ -382,12 +385,14 @@ impl ViewState {
         let old = index(&self.root)?;
         let mut candidate = self.root.clone();
         let mut replaced = Vec::<Path>::new();
+        let mut affected = Vec::<(Path, bool)>::new();
         let mut lifecycle_removed = BTreeSet::new();
         let mut anchor = Some(resolve_trigger(&candidate, target)?);
         for fragment in view.fragments {
             index(&fragment.container)?;
             let paths = select(&candidate, &fragment.selector, anchor.as_deref())?;
             for path in outermost(paths).into_iter().rev() {
+                affected.push((path.clone(), false));
                 invalidate_lifecycles(&candidate, &path, false, &mut lifecycle_removed)?;
                 replaced.push(path.clone());
                 *at_mut(&mut candidate, &path).ok_or_else(|| missing(&fragment.selector))? =
@@ -407,6 +412,10 @@ impl ViewState {
         for selector in view.delete_selectors {
             let paths = select(&candidate, &selector, anchor.as_deref())?;
             for path in outermost(paths).into_iter().rev() {
+                affected.push((
+                    path[..path.len().saturating_sub(1)].to_vec(),
+                    !path.is_empty(),
+                ));
                 invalidate_lifecycles(&candidate, &path, true, &mut lifecycle_removed)?;
                 replaced.push(path.clone());
                 delete(&mut candidate, &path);
@@ -414,18 +423,29 @@ impl ViewState {
             }
             index(&candidate)?;
         }
+        if let Some(scope) = primary_affected_scope(
+            view.primary.as_ref(),
+            view.primary_is_fragment,
+            &strategy,
+            anchor.as_deref(),
+        ) {
+            affected.push(scope);
+        }
         apply_primary(
             &mut candidate,
             &mut replaced,
             &mut lifecycle_removed,
             anchor.as_deref(),
-            (strategy, view.primary),
+            (strategy, view.primary, view.primary_is_fragment),
         )?;
         let new = index(&candidate)?;
         // Replacing identical anonymous content still invalidates that identity;
         // a metadata-only/no-swap response is not a tree mutation.
         let anonymous_reset = has_anonymous_replacements(&candidate, &new, &replaced);
-        let changed = candidate != self.root || anonymous_reset;
+        let tree_changed = affected_changed(&self.root, &candidate, &affected);
+        let changed = tree_changed || anonymous_reset;
+        let anonymous_children_unchanged =
+            anonymous_forest_unchanged(&self.root, &candidate, &affected, tree_changed);
         let generation = if changed {
             self.generation
                 .checked_add(1)
@@ -447,7 +467,11 @@ impl ViewState {
                 compatible_nodes(before, node)
                     && (has_identity(node)
                         || (!replaced.iter().any(|p| path.starts_with(p))
-                            && anonymous_unchanged(&self.root, &candidate, path)))
+                            && if path.is_empty() {
+                                !tree_changed
+                            } else {
+                                anonymous_children_unchanged
+                            }))
             });
             if compatible {
                 report.retained.insert(key.clone());
@@ -456,12 +480,7 @@ impl ViewState {
             }
             record_control_update(&mut report, key, node, previous, compatible);
         }
-        report.removed.extend(
-            old.keys()
-                .filter(|key| !report.retained.contains(*key))
-                .cloned(),
-        );
-        reconcile_lifecycle_identities(&self.root, &candidate, &old, &new, &mut report);
+        record_removed_identities(&self.root, &candidate, &old, &new, &mut report);
         self.root = candidate;
         self.generation = generation;
         Ok(report)
@@ -491,6 +510,23 @@ fn record_control_update(
             external_value,
         });
     }
+}
+
+// Control compatibility and lifecycle provenance have different removal rules;
+// finalize both against the validated before/after indexes before publication.
+fn record_removed_identities(
+    before: &Container,
+    after: &Container,
+    old: &BTreeMap<String, Path>,
+    new: &BTreeMap<String, Path>,
+    report: &mut ApplyReport,
+) {
+    report.removed.extend(
+        old.keys()
+            .filter(|key| !report.retained.contains(*key))
+            .cloned(),
+    );
+    reconcile_lifecycle_identities(before, after, old, new, report);
 }
 
 fn reconcile_lifecycle_identities(
@@ -604,46 +640,96 @@ fn apply_primary(
     replaced: &mut Vec<Path>,
     lifecycle_removed: &mut BTreeSet<String>,
     anchor: Option<&[usize]>,
-    swap: (SwapStrategy, Option<Container>),
+    swap: (SwapStrategy, Option<Container>, bool),
 ) -> Result<(), ApplyError> {
-    let (strategy, primary) = swap;
+    let (strategy, primary, is_fragment) = swap;
     if strategy == SwapStrategy::Delete || (primary.is_some() && strategy != SwapStrategy::None) {
         let path = anchor.ok_or_else(|| ApplyError::MissingTarget("deleted trigger".into()))?;
+        if strategy != SwapStrategy::Delete
+            && let Some(primary) = &primary
+        {
+            index(primary)?;
+        }
+        let nodes = primary
+            .map(|primary| {
+                if is_fragment {
+                    primary.children
+                } else {
+                    vec![primary]
+                }
+            })
+            .unwrap_or_default();
+        // Empty insertion fragments are true no-ops, not lifecycle resets.
+        if nodes.is_empty()
+            && matches!(
+                strategy,
+                SwapStrategy::BeforeBegin
+                    | SwapStrategy::AfterBegin
+                    | SwapStrategy::BeforeEnd
+                    | SwapStrategy::AfterEnd
+            )
+        {
+            if path.is_empty()
+                && matches!(strategy, SwapStrategy::BeforeBegin | SwapStrategy::AfterEnd)
+            {
+                return Err(ApplyError::RootSiblingInsertion);
+            }
+            return Ok(());
+        }
         invalidate_primary_lifecycles(candidate, path, &strategy, lifecycle_removed)?;
+        if strategy == SwapStrategy::This && !path.is_empty() && nodes.len() != 1 {
+            invalidate_shifted_lifecycles(candidate, path, lifecycle_removed)?;
+        }
         match strategy {
+            SwapStrategy::This if !path.is_empty() => {
+                let (&slot, parent) = path.split_last().expect("non-root target");
+                let siblings = &mut at_mut(candidate, parent)
+                    .ok_or_else(|| ApplyError::MissingTarget("primary parent".into()))?
+                    .children;
+                let count = nodes.len();
+                siblings.splice(slot..=slot, nodes);
+                for index in slot..slot + count {
+                    let mut inserted = parent.to_vec();
+                    inserted.push(index);
+                    replaced.push(inserted);
+                }
+            }
             SwapStrategy::This => {
-                let primary = primary.expect("primary checked");
-                index(&primary)?;
                 replaced.push(path.to_vec());
-                *at_mut(candidate, path)
-                    .ok_or_else(|| ApplyError::MissingTarget("primary trigger".into()))? = primary;
+                // A document fragment still needs one canonical root. Explicit
+                // containers retain their identity and all layout attributes.
+                *candidate = if is_fragment {
+                    Container::from(nodes)
+                } else {
+                    nodes.into_iter().next().expect("primary checked")
+                };
             }
             SwapStrategy::Children | SwapStrategy::AfterBegin | SwapStrategy::BeforeEnd => {
-                let primary = primary.expect("primary checked");
-                index(&primary)?;
                 let node = at_mut(candidate, path)
                     .ok_or_else(|| ApplyError::MissingTarget("primary trigger".into()))?;
                 match strategy {
                     SwapStrategy::Children => {
-                        node.children = vec![primary];
-                        let mut child = path.to_vec();
-                        child.push(0);
-                        replaced.push(child);
+                        node.children = nodes;
+                        for index in 0..node.children.len() {
+                            let mut child = path.to_vec();
+                            child.push(index);
+                            replaced.push(child);
+                        }
                     }
-                    SwapStrategy::AfterBegin => node.children.insert(0, primary),
-                    SwapStrategy::BeforeEnd => node.children.push(primary),
+                    SwapStrategy::AfterBegin => {
+                        node.children.splice(0..0, nodes);
+                    }
+                    SwapStrategy::BeforeEnd => node.children.extend(nodes),
                     _ => unreachable!(),
                 }
             }
             SwapStrategy::BeforeBegin | SwapStrategy::AfterEnd => {
                 let (&slot, parent) = path.split_last().ok_or(ApplyError::RootSiblingInsertion)?;
-                let primary = primary.expect("primary checked");
-                index(&primary)?;
                 let offset = usize::from(strategy == SwapStrategy::AfterEnd);
                 at_mut(candidate, parent)
                     .ok_or_else(|| ApplyError::MissingTarget("primary parent".into()))?
                     .children
-                    .insert(slot + offset, primary);
+                    .splice(slot + offset..slot + offset, nodes);
             }
             SwapStrategy::Delete => {
                 replaced.push(path.to_vec());
@@ -653,6 +739,208 @@ fn apply_primary(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod primary_fragment_tests {
+    use super::*;
+
+    fn node(id: &str) -> Container {
+        Container {
+            str_id: Some(id.into()),
+            ..Default::default()
+        }
+    }
+
+    fn initial() -> Container {
+        Container {
+            children: vec![
+                node("left"),
+                Container {
+                    children: vec![node("old")],
+                    ..node("target")
+                },
+                node("right"),
+            ],
+            ..node("root")
+        }
+    }
+
+    const STRATEGIES: [SwapStrategy; 8] = [
+        SwapStrategy::This,
+        SwapStrategy::Children,
+        SwapStrategy::BeforeBegin,
+        SwapStrategy::AfterBegin,
+        SwapStrategy::BeforeEnd,
+        SwapStrategy::AfterEnd,
+        SwapStrategy::Delete,
+        SwapStrategy::None,
+    ];
+
+    #[test]
+    fn fragment_swaps_preserve_order_metadata_and_lifecycles_for_empty_and_multiple_nodes() {
+        for strategy in STRATEGIES {
+            for count in [0, 1, 2] {
+                let mut state = ViewState::from_root(initial()).unwrap();
+                let mut response = View::from(
+                    (0..count)
+                        .map(|i| node(&format!("new-{i}")))
+                        .collect::<Vec<_>>(),
+                );
+                response.response.navigation =
+                    Some(hyperchad_renderer::ResponseNavigation::internal("/next").unwrap());
+                response
+                    .response
+                    .cookies
+                    .push(hyperchad_renderer::ResponseCookie::secure(
+                        "session", "test",
+                    ));
+                let metadata = response.response.clone();
+                let report = state
+                    .apply_response(response, Some("target"), strategy.clone())
+                    .unwrap();
+                assert_eq!(report.response, metadata);
+                let inserted: Vec<_> = (0..count).map(|i| node(&format!("new-{i}"))).collect();
+                let mut expected = initial();
+                match strategy {
+                    SwapStrategy::This => {
+                        expected.children.splice(1..=1, inserted);
+                    }
+                    SwapStrategy::Children => expected.children[1].children = inserted,
+                    SwapStrategy::BeforeBegin => {
+                        expected.children.splice(1..1, inserted);
+                    }
+                    SwapStrategy::AfterEnd => {
+                        expected.children.splice(2..2, inserted);
+                    }
+                    SwapStrategy::AfterBegin => {
+                        expected.children[1].children.splice(0..0, inserted);
+                    }
+                    SwapStrategy::BeforeEnd => expected.children[1].children.extend(inserted),
+                    SwapStrategy::Delete => {
+                        expected.children.remove(1);
+                    }
+                    SwapStrategy::None => {}
+                }
+                assert_eq!(state.root(), &expected, "{strategy:?} count={count}");
+                assert_eq!(
+                    report.lifecycle_removed.contains("target"),
+                    matches!(strategy, SwapStrategy::This | SwapStrategy::Delete)
+                );
+                assert_eq!(
+                    report.lifecycle_removed.contains("old"),
+                    matches!(
+                        strategy,
+                        SwapStrategy::This | SwapStrategy::Children | SwapStrategy::Delete
+                    )
+                );
+                assert!(!report.lifecycle_removed.contains("left"));
+                assert!(!report.lifecycle_removed.contains("right"));
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_default_div_is_never_flattened_by_any_swap() {
+        for strategy in STRATEGIES {
+            let explicit = Container::from(vec![node("inside")]);
+            assert!(!View::from(explicit.clone()).primary_is_fragment);
+            let mut state = ViewState::from_root(initial()).unwrap();
+            state
+                .apply_response(
+                    View::from(explicit.clone()),
+                    Some("target"),
+                    strategy.clone(),
+                )
+                .unwrap();
+            match strategy {
+                SwapStrategy::This | SwapStrategy::BeforeBegin => {
+                    assert_eq!(state.root().children[1], explicit);
+                }
+                SwapStrategy::Children | SwapStrategy::AfterBegin => {
+                    assert_eq!(state.root().children[1].children[0], explicit);
+                }
+                SwapStrategy::BeforeEnd => {
+                    assert_eq!(state.root().children[1].children[1], explicit);
+                }
+                SwapStrategy::AfterEnd => assert_eq!(state.root().children[2], explicit),
+                SwapStrategy::Delete | SwapStrategy::None => {}
+            }
+        }
+    }
+
+    #[test]
+    fn fragment_duplicate_detection_is_atomic_for_internal_and_retained_collisions() {
+        for strategy in STRATEGIES
+            .into_iter()
+            .filter(|s| !matches!(s, SwapStrategy::Delete | SwapStrategy::None))
+        {
+            for nodes in [
+                vec![node("duplicate"), node("duplicate")],
+                vec![node("left")],
+            ] {
+                let root = initial();
+                let mut state = ViewState::from_root(root.clone()).unwrap();
+                let generation = state.generation();
+                assert!(
+                    matches!(
+                        state.apply_response(View::from(nodes), Some("target"), strategy.clone()),
+                        Err(ApplyError::DuplicateIdentity(_))
+                    ),
+                    "{strategy:?}"
+                );
+                assert_eq!(state.root(), &root);
+                assert_eq!(state.generation(), generation);
+            }
+        }
+    }
+
+    #[test]
+    fn document_fragment_root_is_safe_and_root_siblings_remain_rejected() {
+        for nodes in [vec![], vec![node("one")], vec![node("one"), node("two")]] {
+            let mut state = ViewState::from_root(initial()).unwrap();
+            state
+                .apply_response(View::from(nodes.clone()), None, SwapStrategy::This)
+                .unwrap();
+            assert_eq!(state.root(), &Container::from(nodes.clone()));
+            for strategy in [SwapStrategy::BeforeBegin, SwapStrategy::AfterEnd] {
+                let root = state.root().clone();
+                assert_eq!(
+                    state
+                        .apply_response(View::from(nodes.clone()), None, strategy)
+                        .unwrap_err(),
+                    ApplyError::RootSiblingInsertion
+                );
+                assert_eq!(state.root(), &root);
+            }
+        }
+    }
+
+    #[test]
+    fn identical_anonymous_fragment_replacements_reset_every_inserted_lifecycle() {
+        for strategy in [SwapStrategy::This, SwapStrategy::Children] {
+            let mut state = ViewState::from_root(Container {
+                children: vec![Container {
+                    children: vec![Container::default(), Container::default()],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            })
+            .unwrap();
+            let nodes = if strategy == SwapStrategy::This {
+                vec![state.root().children[0].clone()]
+            } else {
+                state.root().children[0].children.clone()
+            };
+            let generation = state.generation();
+            let report = state
+                .apply_response(View::from(nodes), Some("@0"), strategy)
+                .unwrap();
+            assert!(state.generation() > generation);
+            assert!(report.lifecycle_removed.contains("@0/0"));
+            assert!(report.lifecycle_removed.contains("@0/1"));
+        }
+    }
 }
 
 /// Describe state-bearing fields without retaining a stale copy of the tree.
@@ -727,26 +1015,114 @@ fn compatible_nodes(before: &Container, after: &Container) -> bool {
     }
 }
 
-// Structural keys cannot prove the identity of reordered anonymous siblings.
-// Require an unchanged sibling forest at every anonymous node's ancestry;
-// explicit IDs remain transferable even when actions or source metadata change.
-fn anonymous_unchanged(before: &Container, after: &Container, path: &[usize]) -> bool {
-    if path.is_empty() {
-        return before == after;
+// Every non-root anonymous identity historically requires the entire root
+// child forest unchanged. Compute that proof once rather than per descendant.
+fn anonymous_forest_unchanged(
+    before: &Container,
+    after: &Container,
+    affected: &[(Path, bool)],
+    tree_changed: bool,
+) -> bool {
+    if !tree_changed {
+        return true;
     }
-    let mut a = before;
-    let mut b = after;
-    for &i in path {
-        if a.children != b.children {
+    if affected
+        .iter()
+        .all(|(path, children_only)| !path.is_empty() || *children_only)
+    {
+        return false;
+    }
+    before.children == after.children
+}
+
+// Single-node replacement compares that subtree; insertion/deletion compares
+// the containing child forest because sibling indexes can shift.
+fn primary_affected_scope(
+    primary: Option<&Container>,
+    is_fragment: bool,
+    strategy: &SwapStrategy,
+    anchor: Option<&[usize]>,
+) -> Option<(Path, bool)> {
+    if *strategy != SwapStrategy::Delete && (primary.is_none() || *strategy == SwapStrategy::None) {
+        return None;
+    }
+    let path = anchor?;
+    let exact_replacement = *strategy == SwapStrategy::This
+        && primary.is_some_and(|primary| !is_fragment || primary.children.len() == 1);
+    let children_only = matches!(
+        strategy,
+        SwapStrategy::Children | SwapStrategy::AfterBegin | SwapStrategy::BeforeEnd
+    );
+    let scope = if children_only || exact_replacement || path.is_empty() {
+        path.to_vec()
+    } else {
+        path[..path.len() - 1].to_vec()
+    };
+    Some((
+        scope,
+        children_only || (!exact_replacement && !path.is_empty()),
+    ))
+}
+
+// Compare only mutation boundaries. Parent child-list scopes cover index shifts;
+// ancestor scopes subsume earlier paths even when later operations detach them.
+// Compare final state, not intermediate writes, so canceling updates stay no-ops.
+fn affected_changed(before: &Container, after: &Container, affected: &[(Path, bool)]) -> bool {
+    affected.iter().any(|(path, children_only)| {
+        if affected.iter().any(|(ancestor, ancestor_children)| {
+            path.starts_with(ancestor)
+                && (ancestor.len() < path.len() || (!ancestor_children && *children_only))
+        }) {
             return false;
         }
-        let (Some(next_a), Some(next_b)) = (a.children.get(i), b.children.get(i)) else {
-            return false;
+        match (at(before, path), at(after, path)) {
+            (Some(a), Some(b)) => {
+                if *children_only {
+                    a.children != b.children
+                } else {
+                    a != b
+                }
+            }
+            (None, None) => false,
+            _ => true,
+        }
+    })
+}
+
+#[cfg(test)]
+mod affected_scope_regressions {
+    use super::*;
+
+    #[test]
+    fn scoped_comparison_matches_full_tree_for_large_library_edits_and_noops() {
+        let before = Container {
+            children: (0..193)
+                .map(|index| Container {
+                    str_id: Some(format!("album-{index}")),
+                    children: vec![Container::default(); 8],
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
         };
-        a = next_a;
-        b = next_b;
+        let mut after = before.clone();
+        let exact = vec![(vec![190, 3], false)];
+        assert!(!affected_changed(&before, &after, &exact));
+        after.children[190].children[3].hidden = Some(true);
+        assert_eq!(affected_changed(&before, &after, &exact), before != after);
+        // An insertion shifts previously recorded descendants. The parent
+        // forest is authoritative and subsumes that stale descendant scope.
+        after.children[190].children.insert(0, Container::default());
+        let shifted = vec![(vec![190, 3], false), (vec![190], true)];
+        assert_eq!(affected_changed(&before, &after, &shifted), before != after);
+        // Final-state comparison preserves cancelling transactions.
+        after = before.clone();
+        assert!(!affected_changed(&before, &after, &shifted));
+        assert!(!affected_changed(&before, &after, &[]));
+        after.hidden = Some(true);
+        assert!(!affected_changed(&before, &after, &[(vec![], true)]));
+        assert!(affected_changed(&before, &after, &[(vec![], false)]));
     }
-    a == b
 }
 
 fn index(root: &Container) -> Result<BTreeMap<String, Path>, ApplyError> {

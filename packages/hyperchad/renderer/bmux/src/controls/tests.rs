@@ -11,6 +11,135 @@ fn node(id: &str, element: Element) -> Container {
     }
 }
 
+#[test]
+fn multirow_button_wraps_complete_library_action_without_native_chrome() {
+    use crate::layout::{DefaultLeafMeasure, LayoutOptions, layout};
+    let mut button = node(
+        "remove",
+        Element::Button {
+            r#type: Some("button".into()),
+        },
+    );
+    button.direction = hyperchad_transformer::models::LayoutDirection::Row;
+    button.width = Some(hyperchad_transformer::Number::Integer(130));
+    button.height = Some(hyperchad_transformer::Number::Integer(40));
+    button.children = vec![node(
+        "label",
+        Element::Raw {
+            value: "Remove from Library".into(),
+        },
+    )];
+    let root = Container {
+        children: vec![button],
+        ..Default::default()
+    };
+    let tree = layout(&root, &LayoutOptions::default(), &DefaultLeafMeasure).unwrap();
+    let bounds = tree.get("remove").unwrap().content_bounds;
+    let fragments: Vec<_> = tree.nodes.iter().flat_map(|node| &node.text).collect();
+    assert!(
+        fragments
+            .iter()
+            .any(|fragment| fragment.bounds.y > bounds.y),
+        "production row button must actually wrap"
+    );
+    assert!(
+        fragments
+            .iter()
+            .all(|fragment| fragment.bounds.intersection(bounds) == fragment.bounds),
+        "every label fragment stays inside the button box without clipping"
+    );
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    controls.prepare(&tree);
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 24));
+    {
+        let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+        let mut cx = PaintCx::new(&mut frame);
+        crate::presentation::paint_text(&tree, &controls, &mut cx);
+        controls.paint("remove", &mut cx);
+    }
+    let rows: Vec<_> = (0..3)
+        .map(|row| buffer.row_symbols(row).unwrap().trim().to_owned())
+        .collect();
+    assert_eq!(
+        rows.join(" ").split_whitespace().collect::<Vec<_>>(),
+        ["Remove", "from", "Library"]
+    );
+    assert!(
+        !rows.join("").contains('['),
+        "no one-line native label over wrapped source text"
+    );
+    assert!(controls.nodes["remove"].spec.button_content == ButtonContent::CompositeChildren);
+    controls.focus(Some("remove"));
+    let outcome = controls.event(&key(KeyCode::Enter));
+    assert_eq!(
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(event, ControlEvent::Activate { key } if key == "remove"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn composite_button_retains_single_native_keyboard_and_mouse_activation() {
+    use bmux_tui::event::{MouseButton, MouseEvent, MouseEventKind};
+    let mut button = node(
+        "play",
+        Element::Button {
+            r#type: Some("button".into()),
+        },
+    );
+    button.children = vec![
+        node(
+            "icon",
+            Element::Image {
+                source: Some("/public/img/play-button.svg".into()),
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+        ),
+        node(
+            "label",
+            Element::Raw {
+                value: "Play".into(),
+            },
+        ),
+    ];
+    let mut controls = Controls::new();
+    controls.reconcile(&button);
+    assert_eq!(controls.nodes["play"].spec.label, "Play");
+    assert!(controls.nodes["play"].spec.button_content == ButtonContent::CompositeChildren);
+    prepare(&mut controls, "play", 16, 3);
+    controls.focus(Some("play"));
+    for code in [KeyCode::Enter, KeyCode::Space] {
+        let outcome = controls.event(&key(code));
+        assert_eq!(
+            outcome
+                .events
+                .iter()
+                .filter(|event| matches!(event, ControlEvent::Activate { key } if key == "play"))
+                .count(),
+            1
+        );
+    }
+    let mouse = |kind| Event::Mouse(MouseEvent::new(kind, Point::new(2, 0)));
+    let down = controls.event(&mouse(MouseEventKind::Down(MouseButton::Left)));
+    let up = controls.event(&mouse(MouseEventKind::Up(MouseButton::Left)));
+    assert_eq!(
+        down.events
+            .iter()
+            .chain(&up.events)
+            .filter(|event| matches!(event, ControlEvent::Activate { key } if key == "play"))
+            .count(),
+        1
+    );
+}
+
 fn input(id: &str, value: Option<&str>) -> Container {
     node(
         id,

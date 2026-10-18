@@ -287,6 +287,9 @@ pub struct View {
     /// Primary content (swaps to triggering element)
     /// None = fragments-only response
     pub primary: Option<Container>,
+    /// The primary is a synthetic envelope for sibling nodes, not an explicit container.
+    /// Renderers splice its children when applying a targeted response.
+    pub primary_is_fragment: bool,
 
     /// Additional containers to swap by ID
     /// Each container MUST have an `id` attribute
@@ -313,6 +316,7 @@ impl View {
 #[derive(Debug, Default)]
 pub struct ViewBuilder {
     primary: Option<Container>,
+    primary_is_fragment: bool,
     fragments: Vec<ReplaceContainer>,
     delete_selectors: Vec<Selector>,
     response: ResponseMetadata,
@@ -323,12 +327,22 @@ impl ViewBuilder {
     #[must_use]
     pub fn with_primary(mut self, view: impl Into<Container>) -> Self {
         self.primary = Some(view.into());
+        self.primary_is_fragment = false;
+        self
+    }
+
+    /// Set sibling primary nodes without introducing an explicit layout container.
+    #[must_use]
+    pub fn with_primary_fragment(mut self, nodes: Vec<Container>) -> Self {
+        self.primary = Some(nodes.into());
+        self.primary_is_fragment = true;
         self
     }
 
     /// Set the primary view
     pub fn primary(&mut self, view: impl Into<Container>) -> &mut Self {
         self.primary = Some(view.into());
+        self.primary_is_fragment = false;
         self
     }
 
@@ -418,6 +432,7 @@ impl ViewBuilder {
     pub fn build(self) -> View {
         View {
             primary: self.primary,
+            primary_is_fragment: self.primary_is_fragment,
             fragments: self.fragments,
             delete_selectors: self.delete_selectors,
             response: self.response,
@@ -440,6 +455,13 @@ impl ContentBuilder {
     #[must_use]
     pub fn with_primary(mut self, view: impl Into<Container>) -> Self {
         self.builder = self.builder.with_primary(view);
+        self
+    }
+
+    /// Set sibling primary nodes without an explicit layout container.
+    #[must_use]
+    pub fn with_primary_fragment(mut self, nodes: Vec<Container>) -> Self {
+        self.builder = self.builder.with_primary_fragment(nodes);
         self
     }
 
@@ -565,6 +587,7 @@ impl From<Container> for Content {
     fn from(value: Container) -> Self {
         Self::View(Box::new(View {
             primary: Some(value),
+            primary_is_fragment: false,
             fragments: vec![],
             delete_selectors: vec![],
             response: ResponseMetadata::default(),
@@ -574,11 +597,7 @@ impl From<Container> for Content {
 
 impl From<Vec<Container>> for Content {
     fn from(value: Vec<Container>) -> Self {
-        Container {
-            children: value,
-            ..Default::default()
-        }
-        .into()
+        View::from(value).into()
     }
 }
 
@@ -594,6 +613,7 @@ impl<'a> TryFrom<&'a str> for View {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         Ok(Self {
             primary: Some(value.try_into()?),
+            primary_is_fragment: false,
             fragments: vec![],
             delete_selectors: vec![],
             response: ResponseMetadata::default(),
@@ -607,6 +627,7 @@ impl TryFrom<String> for View {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Ok(Self {
             primary: Some(value.try_into()?),
+            primary_is_fragment: false,
             fragments: vec![],
             delete_selectors: vec![],
             response: ResponseMetadata::default(),
@@ -618,6 +639,7 @@ impl From<Container> for View {
     fn from(value: Container) -> Self {
         Self {
             primary: Some(value),
+            primary_is_fragment: false,
             fragments: vec![],
             delete_selectors: vec![],
             response: ResponseMetadata::default(),
@@ -629,6 +651,7 @@ impl From<Vec<Container>> for View {
     fn from(value: Vec<Container>) -> Self {
         Self {
             primary: Some(value.into()),
+            primary_is_fragment: true,
             fragments: vec![],
             delete_selectors: vec![],
             response: ResponseMetadata::default(),
@@ -835,6 +858,65 @@ mod tests {
 
         assert_eq!(replace.selector, Selector::SelfTarget);
         assert_eq!(replace.container.children.len(), 2);
+    }
+
+    #[test]
+    fn primary_fragment_provenance_survives_content_and_builder_conversions() {
+        let nodes = vec![Container::default(), Container::default()];
+        assert!(View::from(nodes.clone()).primary_is_fragment);
+        let Content::View(view) = Content::from(nodes.clone()) else {
+            panic!("expected view")
+        };
+        assert!(view.primary_is_fragment);
+        assert_eq!(view.primary.unwrap().children, nodes);
+        assert!(
+            View::builder()
+                .with_primary_fragment(nodes.clone())
+                .build()
+                .primary_is_fragment
+        );
+        assert!(
+            !View::builder()
+                .with_primary_fragment(nodes.clone())
+                .with_primary(Container::from(nodes.clone()))
+                .build()
+                .primary_is_fragment
+        );
+        let mut builder = View::builder().with_primary_fragment(nodes.clone());
+        builder.primary(Container::default());
+        assert!(!builder.build().primary_is_fragment);
+        let Content::View(view) = Content::builder()
+            .with_primary_fragment(nodes.clone())
+            .build()
+        else {
+            panic!("expected view")
+        };
+        assert!(view.primary_is_fragment);
+        let Content::View(view) = Content::from(Container::from(nodes)) else {
+            panic!("expected view")
+        };
+        assert!(!view.primary_is_fragment);
+        assert!(!View::default().primary_is_fragment);
+    }
+
+    #[test]
+    fn awaited_vector_response_conversion_retains_fragment_provenance() {
+        // Mirrors the router's await-then-TryInto<Content> conversion without a
+        // runtime: this response is immediately ready and needs no I/O driver.
+        let response = async { vec![Container::default(), Container::default()] };
+        let mut response = std::pin::pin!(response);
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        let std::task::Poll::Ready(nodes) =
+            std::future::Future::poll(response.as_mut(), &mut context)
+        else {
+            panic!("immediate response must be ready")
+        };
+        let content: Content = nodes.try_into().unwrap();
+        let Content::View(view) = content else {
+            panic!("expected view")
+        };
+        assert!(view.primary_is_fragment);
+        assert_eq!(view.primary.unwrap().children.len(), 2);
     }
 
     #[test_log::test]

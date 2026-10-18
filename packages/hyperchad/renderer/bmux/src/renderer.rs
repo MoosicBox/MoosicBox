@@ -112,11 +112,18 @@ impl Default for BmuxConfig {
     }
 }
 
+/// Correlated internal navigation intent. The URL is preserved byte-for-byte.
+#[derive(Debug, Clone)]
+pub struct NavigationRequest {
+    pub id: u64,
+    pub url: String,
+}
+
 pub(crate) struct Shared {
     pub config: BmuxConfig,
     pub stopping: std::sync::atomic::AtomicBool,
     pub receiver: Mutex<Option<flume::Receiver<Message>>>,
-    pub navigation_tx: flume::Sender<String>,
+    pub navigation_tx: flume::Sender<NavigationRequest>,
     pub request_action: flume::Sender<(String, Option<Value>)>,
     pub on_resize: flume::Sender<(f32, f32)>,
 }
@@ -126,7 +133,7 @@ pub(crate) struct Shared {
 pub struct BmuxRenderer {
     pub(crate) shared: Arc<Shared>,
     sender: flume::Sender<Message>,
-    navigation: flume::Receiver<String>,
+    navigation: flume::Receiver<NavigationRequest>,
 }
 
 impl BmuxRenderer {
@@ -155,8 +162,26 @@ impl BmuxRenderer {
     }
 
     /// Wait for an internal navigation request for the application's router bridge.
-    pub async fn wait_for_navigation(&self) -> Option<String> {
+    pub async fn wait_for_navigation(&self) -> Option<NavigationRequest> {
         self.navigation.recv_async().await.ok()
+    }
+
+    /// Deliver one correlated route result atomically. None settles a failed or
+    /// empty response without changing the displayed document or history.
+    ///
+    /// # Errors
+    /// * Returns an error if response admission is closed or the view exceeds limits.
+    pub async fn complete_navigation(
+        &self,
+        id: u64,
+        url: String,
+        view: Option<View>,
+    ) -> Result<(), Error> {
+        if let Some(view) = &view {
+            crate::admission::validate_view(view, &self.shared.config)?;
+        }
+        self.admit(Message::NavigationComplete { id, url, view })
+            .await
     }
 
     /// Request an orderly final presentation and shutdown.

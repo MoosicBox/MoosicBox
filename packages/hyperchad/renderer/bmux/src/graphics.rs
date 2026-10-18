@@ -22,6 +22,8 @@ use bmux_tui::{
 };
 use hyperchad_renderer::canvas::{CanvasAction, CanvasUpdate, Pos};
 
+use image::ImageEncoder as _;
+
 mod svg;
 
 /// Resource and work budgets. Zero budgets deliberately disable the operation.
@@ -29,9 +31,9 @@ mod svg;
 pub struct GraphicsLimits {
     /// Maximum width or height in pixels.
     pub max_dimension: u32,
-    /// Maximum bytes of one RGBA resource (also the decoder allocation budget).
+    /// Maximum bytes per decoded resource, including optional native PNG cache.
     pub max_resource_bytes: usize,
-    /// Maximum total resident RGBA bytes.
+    /// Maximum total resident decoded and native PNG bytes.
     pub max_total_bytes: usize,
     /// Maximum resident entries, including canvas state.
     pub max_entries: usize,
@@ -179,6 +181,7 @@ struct Resource {
     width: u32,
     height: u32,
     rgba: Box<[u8]>,
+    png: Option<Vec<u8>>,
     canvas: Option<CanvasState>,
     touched: u64,
 }
@@ -248,7 +251,7 @@ impl GraphicsStore {
             clock: 0,
         }
     }
-    /// Resident RGBA bytes (excludes caller-owned scene payloads).
+    /// Resident decoded and native-PNG bytes (excludes caller-owned scene payloads).
     #[must_use]
     pub const fn resident_bytes(&self) -> usize {
         self.bytes
@@ -274,7 +277,7 @@ impl GraphicsStore {
     /// Remove a resource. Existing caller-owned placements remain valid.
     pub fn remove(&mut self, key: &str) -> bool {
         self.resources.remove(key).is_some_and(|r| {
-            self.bytes -= r.rgba.len();
+            self.bytes -= r.rgba.len() + r.png.as_ref().map_or(0, Vec::len);
             true
         })
     }
@@ -325,8 +328,9 @@ impl GraphicsStore {
     }
     fn insert(&mut self, key: &str, mut resource: Resource) {
         self.remove(key);
+        let resource_bytes = resource.rgba.len() + resource.png.as_ref().map_or(0, Vec::len);
         while self.resources.len() >= self.limits.max_entries
-            || self.bytes > self.limits.max_total_bytes - resource.rgba.len()
+            || self.bytes > self.limits.max_total_bytes - resource_bytes
         {
             let oldest = self
                 .resources
@@ -334,13 +338,18 @@ impl GraphicsStore {
                 .min_by_key(|(_, r)| r.touched)
                 .map(|(k, _)| k.clone());
             if let Some(oldest) = oldest {
+                log::debug!(
+                    "bmux graphics LRU eviction resident_entries={} resident_bytes={} incoming_bytes={resource_bytes}",
+                    self.resources.len(),
+                    self.bytes
+                );
                 self.remove(&oldest);
             } else {
                 break;
             }
         }
         resource.touched = self.tick();
-        self.bytes += resource.rgba.len();
+        self.bytes += resource_bytes;
         self.resources.insert(key.to_owned(), resource);
     }
     /// Register tightly packed straight-alpha RGBA8, replacing an existing key.
@@ -364,12 +373,30 @@ impl GraphicsStore {
                 width,
                 height,
                 rgba: rgba.into_boxed_slice(),
+                png: None,
                 canvas: None,
                 touched: 0,
             },
         );
         Ok(())
     }
+    /// Copy a resident resource, preserving decoded pixels, native PNG and canvas state.
+    /// Uses normal LRU admission; the source may be evicted to admit the copy.
+    /// Copying onto the same key is a no-op. Failure leaves both entries unchanged.
+    ///
+    /// # Errors
+    /// * Returns `InvalidKey` for an invalid destination or `Missing` for an absent source.
+    pub fn clone_resource(&mut self, from: &str, to: &str) -> Result<(), GraphicsError> {
+        self.key(to)?;
+        let resource = self.resources.get(from).ok_or(GraphicsError::Missing)?;
+        if from == to {
+            return Ok(());
+        }
+        let copy = resource.clone();
+        self.insert(to, copy);
+        Ok(())
+    }
+
     /// Authorize and decode bounded encoded bytes. Only the first frame is used.
     ///
     /// # Errors
@@ -385,6 +412,22 @@ impl GraphicsStore {
         policy: &SourcePolicy,
         encoded: &[u8],
     ) -> Result<(), GraphicsError> {
+        self.decode_for_display(key, source, policy, encoded, None)
+    }
+
+    /// Decode an image, limiting SVG rasterization to its intended display size.
+    /// Raster formats preserve their original resolution. SVGs never upscale.
+    ///
+    /// # Errors
+    /// * Returns authorization, codec, dimension and allocation budget errors.
+    pub fn decode_for_display(
+        &mut self,
+        key: &str,
+        source: &GraphicsSource,
+        policy: &SourcePolicy,
+        encoded: &[u8],
+        display_size: Option<(u32, u32)>,
+    ) -> Result<(), GraphicsError> {
         self.key(key)?;
         policy.authorize(source)?;
         if encoded.len() > self.limits.max_encoded_bytes {
@@ -393,7 +436,7 @@ impl GraphicsStore {
         // Raster magic remains authoritative; unknown XML-like input goes
         // through the strict static SVG parser, never a resource resolver.
         if image::guess_format(encoded).is_err() {
-            return self.decode_svg(key, encoded);
+            return self.decode_svg(key, encoded, display_size);
         }
         let reader = || {
             let mut reader = image::ImageReader::new(Cursor::new(encoded))
@@ -413,7 +456,23 @@ impl GraphicsStore {
         let (width, height) = reader()?.into_dimensions().map_err(classify)?;
         self.size(width, height)?;
         let decoded = reader()?.decode().map_err(classify)?;
-        self.register_rgba(key, width, height, decoded.into_rgba8().into_raw())
+        let rgba = decoded.into_rgba8().into_raw();
+        // bmux's Kitty Contain path can retain and fit PNG natively. RGBA
+        // Contain otherwise invokes CPU Lanczos3 and allocates a full cell canvas.
+        // Keep the encoded copy inside the same resource and total byte budgets.
+        let png = native_png(&rgba, width, height, self.limits);
+        self.insert(
+            key,
+            Resource {
+                width,
+                height,
+                rgba: rgba.into_boxed_slice(),
+                png,
+                canvas: None,
+                touched: 0,
+            },
+        );
+        Ok(())
     }
     /// Create/reset a transparent canvas with default black, one-pixel stroke.
     ///
@@ -437,6 +496,7 @@ impl GraphicsStore {
                 width,
                 height,
                 rgba: rgba.into_boxed_slice(),
+                png: None,
                 canvas: Some(CanvasState::default()),
                 touched: 0,
             },
@@ -531,7 +591,9 @@ impl GraphicsStore {
             .get_mut(resource)
             .ok_or(GraphicsError::Missing)?;
         source.touched = touched;
-        let (width, height, bytes) = if fit == GraphicsFit::Cover {
+        let (width, height, bytes) = if fit == GraphicsFit::Contain && source.png.is_some() {
+            (source.width, source.height, Vec::new())
+        } else if fit == GraphicsFit::Cover {
             let aspect =
                 (f64::from(rect.width) / f64::from(rect.height)) * (cell_pixels.0 / cell_pixels.1);
             if !aspect.is_finite() || aspect <= 0.0 {
@@ -569,12 +631,23 @@ impl GraphicsStore {
         };
         Ok(GraphicsPlacement::Image(ImagePlacement {
             key: ImageKey::new(placement_key),
-            payload: ImagePayload::Pixels {
-                bytes,
-                width,
-                height,
-                format: ImagePixelFormat::Rgba8,
-            },
+            payload: source
+                .png
+                .as_ref()
+                .filter(|_| fit == GraphicsFit::Contain)
+                .map_or_else(
+                    || ImagePayload::Pixels {
+                        bytes,
+                        width,
+                        height,
+                        format: ImagePixelFormat::Rgba8,
+                    },
+                    |png| ImagePayload::Png {
+                        bytes: png.clone(),
+                        width,
+                        height,
+                    },
+                ),
             destination: visible,
             allocation: Some(ImageBounds::from(rect)),
             clip: visible,
@@ -586,6 +659,56 @@ impl GraphicsStore {
             lifecycle: ImageLifecycle::Frame,
         }))
     }
+}
+
+// Bounds retained encoder output before allocation. Codec-internal scratch is
+// still image-crate-managed; dimensions and decoded bytes bound its input.
+struct PngWriter {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+
+impl std::io::Write for PngWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+            return Err(std::io::Error::other("native PNG byte budget exceeded"));
+        }
+        self.bytes
+            .try_reserve_exact(bytes.len())
+            .map_err(std::io::Error::other)?;
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn native_png(rgba: &[u8], width: u32, height: u32, limits: GraphicsLimits) -> Option<Vec<u8>> {
+    let limit = limits
+        .max_encoded_bytes
+        .min(limits.max_resource_bytes.saturating_sub(rgba.len()))
+        .min(limits.max_total_bytes.saturating_sub(rgba.len()));
+    // PNG signature/IHDR/IEND alone require 45 bytes, before IDAT overhead.
+    // Avoid even starting the codec for tiny icons or an impossible budget.
+    if width <= 16 || height <= 16 || limit < 57 {
+        return None;
+    }
+    let mut writer = PngWriter {
+        bytes: Vec::new(),
+        limit,
+    };
+    image::codecs::png::PngEncoder::new_with_quality(
+        &mut writer,
+        image::codecs::png::CompressionType::Default,
+        // Lossless prediction and Default compression reduce terminal wire bytes:
+        // the measured 266px cover saved 28% versus Fast for ~4ms encoding work.
+        image::codecs::png::FilterType::Adaptive,
+    )
+    .write_image(rgba, width, height, image::ExtendedColorType::Rgba8)
+    .ok()?;
+    Some(writer.bytes)
 }
 
 fn intersect(a: Rect, b: Rect) -> Rect {
@@ -728,6 +851,293 @@ fn blend(dst: &mut [u8], src: [u8; 4]) {
 mod tests {
     use super::*;
     use hyperchad_renderer::Color;
+
+    #[test]
+    fn decoded_artwork_uses_bounded_native_png_and_releases_both_buffers() {
+        let rgba = vec![123; 64 * 64 * 4];
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(64, 64, rgba.clone()).unwrap())
+            .write_to(&mut encoded, image::ImageFormat::Png)
+            .unwrap();
+        let mut s = store();
+        s.decode(
+            "art",
+            &GraphicsSource::Memory,
+            &SourcePolicy {
+                allow_memory: true,
+                ..Default::default()
+            },
+            encoded.get_ref(),
+        )
+        .unwrap();
+        let GraphicsPlacement::Image(placement) = s
+            .placement(
+                "art",
+                "art-placement",
+                rect(),
+                rect(),
+                GraphicsFit::Contain,
+                (8.0, 16.0),
+                true,
+                "art",
+            )
+            .unwrap()
+        else {
+            panic!("expected native artwork");
+        };
+        let ImagePayload::Png {
+            bytes,
+            width,
+            height,
+        } = placement.payload
+        else {
+            panic!("native Kitty PNG fitting requires encoded payload");
+        };
+        assert_eq!((width, height), (64, 64));
+        assert_eq!(
+            image::load_from_memory(&bytes)
+                .unwrap()
+                .into_rgba8()
+                .into_raw(),
+            rgba
+        );
+        assert_eq!(s.resident_bytes(), rgba.len() + bytes.len());
+        s.clone_resource("art", "alias").unwrap();
+        let GraphicsPlacement::Image(alias) = s
+            .placement(
+                "alias",
+                "alias-placement",
+                rect(),
+                rect(),
+                GraphicsFit::Contain,
+                (8.0, 16.0),
+                true,
+                "alias",
+            )
+            .unwrap()
+        else {
+            panic!("expected alias");
+        };
+        assert_eq!(
+            alias.payload,
+            ImagePayload::Png {
+                bytes: bytes.clone(),
+                width,
+                height
+            }
+        );
+        assert_eq!(s.resident_bytes(), 2 * (rgba.len() + bytes.len()));
+        s.clone_resource("alias", "alias").unwrap();
+        s.remove("alias");
+        s.remove("art");
+        assert_eq!(s.resident_bytes(), 0);
+        let mut bounded = GraphicsStore::new(GraphicsLimits {
+            max_resource_bytes: rgba.len(),
+            max_total_bytes: rgba.len(),
+            ..Default::default()
+        });
+        bounded
+            .decode(
+                "art",
+                &GraphicsSource::Memory,
+                &SourcePolicy {
+                    allow_memory: true,
+                    ..Default::default()
+                },
+                encoded.get_ref(),
+            )
+            .unwrap();
+        let GraphicsPlacement::Image(fallback) = bounded
+            .placement(
+                "art",
+                "fallback",
+                rect(),
+                rect(),
+                GraphicsFit::Contain,
+                (8.0, 16.0),
+                true,
+                "art",
+            )
+            .unwrap()
+        else {
+            panic!("expected bounded fallback");
+        };
+        assert!(matches!(fallback.payload, ImagePayload::Pixels { .. }));
+        assert_eq!(bounded.resident_bytes(), rgba.len());
+    }
+
+    #[test]
+    fn photographic_cover_png_filter_is_lossless_and_reduces_wire_bytes() {
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        use std::time::Instant;
+        // Cover-sized continuous-tone image with an opaque gradient, sharp
+        // title-like bars and partial alpha. No resizing or quantization.
+        let mut rgba = Vec::with_capacity(266 * 266 * 4);
+        for y in 0_u32..266 {
+            for x in 0_u32..266 {
+                let title = (30..230).contains(&x) && (35..48).contains(&y);
+                rgba.extend_from_slice(&[
+                    if title {
+                        240
+                    } else {
+                        u8::try_from(x * 255 / 265).unwrap()
+                    },
+                    if title {
+                        240
+                    } else {
+                        u8::try_from(y * 255 / 265).unwrap()
+                    },
+                    u8::try_from((x + y) * 255 / 530).unwrap(),
+                    if y < 8 { 128 } else { 255 },
+                ]);
+            }
+        }
+        let encode = |compression, filter| {
+            let start = Instant::now();
+            let mut bytes = Vec::new();
+            PngEncoder::new_with_quality(&mut bytes, compression, filter)
+                .write_image(&rgba, 266, 266, image::ExtendedColorType::Rgba8)
+                .unwrap();
+            (bytes, start.elapsed())
+        };
+        let (unfiltered, baseline_time) = encode(CompressionType::Fast, FilterType::NoFilter);
+        let (adaptive, adaptive_time) = encode(CompressionType::Default, FilterType::Adaptive);
+        assert!(
+            adaptive.len() < unfiltered.len() / 2,
+            "adaptive={} baseline={}",
+            adaptive.len(),
+            unfiltered.len()
+        );
+        assert_eq!(
+            image::load_from_memory(&adaptive)
+                .unwrap()
+                .into_rgba8()
+                .as_raw(),
+            &rgba
+        );
+        let actual = native_png(&rgba, 266, 266, GraphicsLimits::default()).unwrap();
+        assert_eq!(actual, adaptive);
+        eprintln!(
+            "cover PNG baseline_bytes={} adaptive_bytes={} baseline_us={} adaptive_us={}",
+            unfiltered.len(),
+            adaptive.len(),
+            baseline_time.as_micros(),
+            adaptive_time.as_micros()
+        );
+    }
+
+    /// Run explicitly in release mode with `MOOSICBOX_PNG_BENCH_COVER` set
+    /// to the downloaded cover used by the live acceptance run.
+    #[test]
+    #[ignore = "requires an actual cover fixture and release-mode timing"]
+    fn native_png_actual_cover_compression_benchmark() {
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        use std::time::Instant;
+
+        let path = std::env::var_os("MOOSICBOX_PNG_BENCH_COVER")
+            .expect("set MOOSICBOX_PNG_BENCH_COVER to the actual cover file");
+        let source = std::fs::read(path).unwrap();
+        let cover = image::load_from_memory(&source).unwrap().into_rgba8();
+        let (width, height) = cover.dimensions();
+        let rgba = cover.as_raw();
+        let limits = GraphicsLimits::default();
+        let limit = limits
+            .max_encoded_bytes
+            .min(limits.max_resource_bytes.saturating_sub(rgba.len()))
+            .min(limits.max_total_bytes.saturating_sub(rgba.len()));
+        let mut timings = [Vec::new(), Vec::new()];
+        let mut sizes = [0; 2];
+        // Alternate order to avoid consistently favoring one encoder's caches.
+        // Decode validation is deliberately outside the timed encode region.
+        for round in 0..13 {
+            for slot in 0..2 {
+                let index = (round + slot) % 2;
+                let compression = if index == 0 {
+                    CompressionType::Fast
+                } else {
+                    CompressionType::Default
+                };
+                let mut writer = PngWriter {
+                    bytes: Vec::new(),
+                    limit,
+                };
+                let start = Instant::now();
+                PngEncoder::new_with_quality(&mut writer, compression, FilterType::Adaptive)
+                    .write_image(rgba, width, height, image::ExtendedColorType::Rgba8)
+                    .unwrap();
+                let elapsed = start.elapsed().as_micros();
+                if round > 0 {
+                    timings[index].push(elapsed);
+                }
+                assert!(writer.bytes.len() <= limit);
+                sizes[index] = writer.bytes.len();
+                let decoded = image::load_from_memory(&writer.bytes).unwrap().into_rgba8();
+                assert_eq!(decoded.dimensions(), (width, height));
+                assert_eq!(decoded.as_raw(), rgba);
+            }
+        }
+        for times in &mut timings {
+            times.sort_unstable();
+        }
+        eprintln!(
+            "actual cover {width}x{height} rgba_bytes={} FastAdaptive bytes={} median_us={} max_us={} DefaultAdaptive bytes={} median_us={} max_us={}",
+            rgba.len(),
+            sizes[0],
+            timings[0][6],
+            timings[0][11],
+            sizes[1],
+            timings[1][6],
+            timings[1][11],
+        );
+    }
+
+    #[test]
+    fn native_png_output_is_bounded_before_append_and_tiny_images_skip_encoding() {
+        use std::io::Write as _;
+        let mut writer = PngWriter {
+            bytes: Vec::new(),
+            limit: 8,
+        };
+        writer.write_all(&[1; 8]).unwrap();
+        assert!(writer.write_all(&[2]).is_err());
+        assert_eq!(writer.bytes, [1; 8]);
+        let rgba = vec![45; 64 * 64 * 4];
+        assert!(
+            native_png(
+                &rgba,
+                64,
+                64,
+                GraphicsLimits {
+                    max_encoded_bytes: 57,
+                    ..Default::default()
+                }
+            )
+            .is_none()
+        );
+        assert!(native_png(&[0; 16 * 16 * 4], 16, 16, GraphicsLimits::default()).is_none());
+        assert!(
+            native_png(
+                &rgba,
+                64,
+                64,
+                GraphicsLimits {
+                    max_resource_bytes: rgba.len(),
+                    ..Default::default()
+                }
+            )
+            .is_none()
+        );
+        let mut s = GraphicsStore::new(GraphicsLimits {
+            max_entries: 1,
+            ..Default::default()
+        });
+        s.register_rgba("a", 1, 1, vec![9; 4]).unwrap();
+        s.clone_resource("a", "b").unwrap();
+        assert!(s.rgba("a").is_none());
+        assert_eq!(s.rgba("b").unwrap().2, &[9; 4]);
+        assert_eq!(s.clone_resource("absent", "b"), Err(GraphicsError::Missing));
+        assert_eq!(s.rgba("b").unwrap().2, &[9; 4]);
+    }
 
     fn store() -> GraphicsStore {
         GraphicsStore::new(GraphicsLimits::default())

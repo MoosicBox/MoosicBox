@@ -347,14 +347,20 @@ pub fn album_page_content(
                 }
             }
             @if let Some(version) = selected_version {
-                div {
-                    div direction=row {
-                        div padding-x=10 height=50 justify-content=center { "#" }
-                        div padding-x=10 height=50 justify-content=center { "Title" }
-                        div padding-x=10 height=50 justify-content=center { "Artist" }
-                        div padding-x=10 height=50 justify-content=center { "Time" }
+                div overflow-x=auto {
+                    table width=100% {
+                        thead {
+                            tr {
+                                th padding-x=10 height=50 text-align=start { "#" }
+                                th padding-x=10 height=50 text-align=start { "Title" }
+                                th padding-x=10 height=50 text-align=start { "Artist" }
+                                th padding-x=10 height=50 text-align=start { "Time" }
+                            }
+                        }
+                        tbody {
+                            (album_page_tracks_table_body_from_state(state, &version))
+                        }
                     }
-                    (album_page_tracks_table_body_from_state(state, &version))
                 }
             }
         }
@@ -363,7 +369,8 @@ pub fn album_page_content(
 
 /// Renders the track list table body for an album version.
 ///
-/// Includes interactive hover effects and playback controls for each track.
+/// Returns semantic table rows for insertion into a `tbody`. Includes interactive
+/// hover effects and playback controls for each track.
 #[must_use]
 pub fn album_page_tracks_table_body(
     version: &ApiAlbumVersion,
@@ -372,8 +379,7 @@ pub fn album_page_tracks_table_body(
     container! {
         @for track in &version.tracks {
             @let current_track = track_id.is_some_and(|x| x == &track.track_id);
-            div
-                direction=row
+            tr
                 border-radius=5
                 data-track-id=(track.track_id)
                 fx-hover=fx {
@@ -397,7 +403,7 @@ pub fn album_page_tracks_table_body(
                 }
                 background=[if current_track { Some("#333") } else { None }]
             {
-                div padding-x=10 height=50 justify-content=center {
+                td padding-x=10 min-height=50 {
                     span
                         .track-number
                         visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
@@ -433,13 +439,13 @@ pub fn album_page_tracks_table_body(
                             src=(public_img!("play-button-white.svg"));
                     }
                 }
-                div padding-x=10 height=50 justify-content=center {
+                td padding-x=10 min-height=50 {
                     (track.title)
                 }
-                div padding-x=10 height=50 justify-content=center {
+                td padding-x=10 min-height=50 {
                     anchor href={"/artists?artistId="(track.artist_id)"&source="(track.api_source)} { (track.artist) }
                 }
-                div padding-x=10 height=50 justify-content=center {
+                td padding-x=10 min-height=50 {
                     (track.duration.into_formatted())
                 }
             }
@@ -599,6 +605,71 @@ pub fn albums_list_start(
     }
 }
 
+fn encode_query_value(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push('%');
+            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX[usize::from(byte & 15)]));
+        }
+    }
+    encoded
+}
+
+/// Renders one demand-driven album page for terminal clients.
+///
+/// Each explicit click replaces its own button with another page of cards and
+/// at most one successor button. Scrolling never schedules additional requests.
+#[must_use]
+pub fn albums_list_page(
+    state: &State,
+    albums: &Page<ApiAlbum>,
+    filtered_sources: &[TrackApiSource],
+    sort: AlbumSort,
+    size: u16,
+    search: &str,
+) -> Containers {
+    let Some(connection) = &state.connection else {
+        return container! {};
+    };
+    let limit = albums.limit().clamp(1, 100);
+    let offset = albums.offset().saturating_add(albums.limit());
+    let sources = encode_query_value(&filtered_sources_to_string(filtered_sources));
+    let search = encode_query_value(search);
+    let next = format!(
+        "/albums-list-start{}",
+        build_query(
+            '?',
+            &[
+                ("offset", &offset.to_string()),
+                ("limit", &limit.to_string()),
+                ("size", &size.to_string()),
+                ("sources", &sources),
+                ("sort", &sort.to_string()),
+                ("search", &search),
+            ]
+        ),
+    );
+    container! {
+        (show_albums(&connection.api_url, albums.iter(), size))
+        @if albums.has_more() {
+            button
+                width=(size)
+                height=50
+                hx-get=(next)
+                hx-trigger="click"
+                hx-swap="this"
+            {
+                "Load next " (limit) " albums"
+            }
+        }
+    }
+}
+
 /// Renders a page of albums without lazy loading setup.
 #[must_use]
 pub fn albums_list(host: &str, albums: &Page<ApiAlbum>, size: u16) -> Containers {
@@ -627,7 +698,11 @@ pub fn album_display(
     );
 
     let details = if show_details {
-        let artist_page_url = artist_page_url(&album.artist_id.to_string());
+        let artist_page_url = format!(
+            "{}&source={}",
+            artist_page_url(&album.artist_id.to_string()),
+            album.api_source,
+        );
 
         container! {
             div align-items=center text-align=center {

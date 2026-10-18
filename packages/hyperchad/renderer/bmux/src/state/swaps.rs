@@ -138,6 +138,7 @@ fn none_ignores_primary_but_applies_fragments_deletes_and_response_metadata() {
     };
     let view = View {
         primary: Some(tree(vec![node("duplicate"), node("duplicate")])),
+        primary_is_fragment: false,
         fragments: vec![hyperchad_renderer::ReplaceContainer {
             selector: Selector::Id("a".into()),
             container: node("updated"),

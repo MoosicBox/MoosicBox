@@ -61,6 +61,37 @@ fn shipped_app_icons_have_intrinsic_sizes_and_visible_pixels() {
 }
 
 #[test]
+fn shipped_player_svg_rasters_fit_display_without_intrinsic_cache_pressure() {
+    let mut store = store();
+    let assets = [
+        include_bytes!("../../../../../app/native/public/img/play-button-white.svg").as_slice(),
+        include_bytes!("../../../../../app/native/public/img/previous-button-white.svg").as_slice(),
+        include_bytes!("../../../../../app/native/public/img/next-button-white.svg").as_slice(),
+    ];
+    for (index, input) in assets.into_iter().enumerate() {
+        let key = format!("icon-{index}");
+        store
+            .decode_for_display(
+                &key,
+                &GraphicsSource::Memory,
+                &SourcePolicy {
+                    allow_memory: true,
+                    ..Default::default()
+                },
+                input,
+                Some((24, 32)),
+            )
+            .unwrap();
+        let (width, height, rgba) = store.rgba(&key).unwrap();
+        assert!(width <= 24 && height <= 32);
+        assert!(rgba.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0));
+        assert!(rgba.as_chunks::<4>().0.contains(&[0, 0, 0, 0]));
+    }
+    assert_eq!(store.resources.len(), 3);
+    assert!(store.bytes <= 3 * 24 * 32 * 4);
+}
+
+#[test]
 fn every_shipped_svg_decodes_with_default_limits() {
     let directory =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../app/native/public/img");
@@ -81,6 +112,29 @@ fn every_shipped_svg_decodes_with_default_limits() {
                     .iter()
                     .any(|pixel| pixel[3] == 255),
                 "{} must contain opaque artwork",
+                path.display()
+            );
+            store
+                .decode_for_display(
+                    "display",
+                    &GraphicsSource::Memory,
+                    &SourcePolicy {
+                        allow_memory: true,
+                        ..Default::default()
+                    },
+                    &input,
+                    Some((24, 32)),
+                )
+                .unwrap_or_else(|error| panic!("{} display: {error}", path.display()));
+            let (width, height, pixels) = store.rgba("display").unwrap();
+            assert!(
+                width <= 24 && height <= 32,
+                "{} display bounds",
+                path.display()
+            );
+            assert!(
+                pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0),
+                "{} display visibility",
                 path.display()
             );
             count += 1;

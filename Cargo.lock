@@ -2490,12 +2490,17 @@ dependencies = [
 [[package]]
 name = "bmux_attach_image_protocol"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f435c1dc0d77ff387100df393c36dcc4bedc00744a37cb59b2937d27ad1f97"
 dependencies = [
- "bmux_codec",
+ "bmux_codec 0.0.1-alpha.4",
  "serde",
  "uuid",
+]
+
+[[package]]
+name = "bmux_codec"
+version = "0.0.1-alpha.4"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -2510,8 +2515,6 @@ dependencies = [
 [[package]]
 name = "bmux_image"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43947f055d3b67b130f1e4ef00e2eba2265b4f8e272657eac2be78b621d3cc11"
 dependencies = [
  "bmux_attach_image_protocol",
  "bmux_ipc",
@@ -2525,11 +2528,9 @@ dependencies = [
 [[package]]
 name = "bmux_ipc"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "787e837183acdd392b776a7c4448c53fa1e679dcf94345d01198c04d6ca6f5bc"
 dependencies = [
  "bmux_attach_image_protocol",
- "bmux_codec",
+ "bmux_codec 0.0.1-alpha.4",
  "libc",
  "serde",
  "serde_json",
@@ -2541,8 +2542,6 @@ dependencies = [
 [[package]]
 name = "bmux_keyboard"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de93f20dbcadcb72deb6688259b3900cf907066d67ab0b8fa341e6013716b070"
 dependencies = [
  "crossterm",
 ]
@@ -2550,8 +2549,6 @@ dependencies = [
 [[package]]
 name = "bmux_text_edit"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1b53ade18940ad85e2fa8fa81d171703d441026df17f76657567c3d92525794"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2561,8 +2558,6 @@ dependencies = [
 [[package]]
 name = "bmux_tui"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bd7f18126d87279922558c039d109f19924b158683c4324281932f56992fdd5"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2578,8 +2573,6 @@ dependencies = [
 [[package]]
 name = "bmux_tui_components"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7e7c19517dcad0bf6c0cafdc579f8b7058a51900413b1e5fbc065e147d6136"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2591,8 +2584,6 @@ dependencies = [
 [[package]]
 name = "bmux_tui_runtime"
 version = "0.0.1-alpha.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c086ddb1d2189a3d1caf726ab11f7616462b1c3b6d28ab7aaf3d41e13d383449"
 dependencies = [
  "bmux_image",
  "bmux_keyboard",
@@ -8357,7 +8348,7 @@ name = "hyperchad_shared_state_models"
 version = "0.5.0"
 dependencies = [
  "base64 0.22.1",
- "bmux_codec",
+ "bmux_codec 0.0.1-alpha.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "moosicbox_assert",
  "serde",
  "thiserror 2.0.19",
@@ -10682,6 +10673,7 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_player",
+ "moosicbox_remote_library",
  "moosicbox_scan_models",
  "moosicbox_session_models",
  "moosicbox_ws",

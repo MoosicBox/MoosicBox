@@ -2,7 +2,8 @@
 
 use std::{
     io::{self, Write},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use bmux_tui::{
@@ -18,8 +19,75 @@ use crate::{
     renderer::{BmuxRenderer, Error},
 };
 
+type TimingHandle = Arc<Mutex<Option<WriterTiming>>>;
+
+#[derive(Default)]
+pub(crate) struct WriterTiming {
+    bytes: usize,
+    writes: usize,
+    flushes: usize,
+    write_time: Duration,
+    max_write: Duration,
+    flush_time: Duration,
+}
+
+/// Transparent writer instrumentation, active only during a debug presentation.
+pub(crate) struct TimedWriter<W> {
+    inner: W,
+    timing: TimingHandle,
+}
+impl<W> TimedWriter<W> {
+    pub(crate) fn new(inner: W) -> (Self, TimingHandle) {
+        let timing = Arc::new(Mutex::new(None));
+        (
+            Self {
+                inner,
+                timing: Arc::clone(&timing),
+            },
+            timing,
+        )
+    }
+}
+impl<W: Write> Write for TimedWriter<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if !log::log_enabled!(log::Level::Debug) {
+            return self.inner.write(bytes);
+        }
+        let start = Instant::now();
+        let result = self.inner.write(bytes);
+        let elapsed = start.elapsed();
+        if let Ok(mut timing) = self.timing.lock()
+            && let Some(timing) = timing.as_mut()
+        {
+            timing.writes += 1;
+            timing.bytes = timing
+                .bytes
+                .saturating_add(result.as_ref().copied().unwrap_or(0));
+            timing.write_time += elapsed;
+            timing.max_write = timing.max_write.max(elapsed);
+        }
+        result
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        if !log::log_enabled!(log::Level::Debug) {
+            return self.inner.flush();
+        }
+        let start = Instant::now();
+        let result = self.inner.flush();
+        let elapsed = start.elapsed();
+        if let Ok(mut timing) = self.timing.lock()
+            && let Some(timing) = timing.as_mut()
+        {
+            timing.flushes += 1;
+            timing.flush_time += elapsed;
+        }
+        result
+    }
+}
+
 /// Presenter which prepares layout before any output and commits it only after flush.
 pub struct BmuxPresenter<W: Write> {
+    timing: Option<TimingHandle>,
     #[cfg(feature = "images")]
     graphics_available: bool,
     #[cfg(feature = "images")]
@@ -55,6 +123,7 @@ impl<W: Write> BmuxPresenter<W> {
                 ..Default::default()
             };
             Self {
+                timing: None,
                 graphics_available: config.enabled && capabilities.any_supported(),
                 inner: bmux_tui_runtime::ImageTerminalPresenter::new(
                     terminal,
@@ -68,12 +137,17 @@ impl<W: Write> BmuxPresenter<W> {
         {
             let _ = policy;
             Self {
+                timing: None,
                 inner: bmux_tui_runtime::TerminalPresenter::new(
                     terminal,
                     paint_program as fn(&mut BmuxProgram, &mut PaintCx<'_, '_>),
                 ),
             }
         }
+    }
+
+    pub(crate) fn set_writer_timing(&mut self, timing: TimingHandle) {
+        self.timing = Some(timing);
     }
 
     /// Release protocol resources before returning the terminal to its owner.
@@ -103,7 +177,35 @@ impl<W: Write> Presenter<BmuxProgram> for BmuxPresenter<W> {
         #[cfg(not(feature = "images"))]
         program.set_graphics_available(false);
         program.prepare()?;
-        match self.inner.present(program) {
+        let measured = log::log_enabled!(log::Level::Debug) && self.timing.is_some();
+        if measured
+            && let Some(timing) = &self.timing
+            && let Ok(mut timing) = timing.lock()
+        {
+            *timing = Some(WriterTiming::default());
+        }
+        let start = measured.then(Instant::now);
+        let result = self.inner.present(program);
+        if let Some(start) = start {
+            let elapsed = start.elapsed();
+            if let Some(timing) = &self.timing
+                && let Ok(mut timing) = timing.lock()
+                && let Some(timing) = timing.take()
+            {
+                log::debug!(
+                    "bmux presenter output present_us={} write_us={} max_write_us={} flush_us={} bytes={} writes={} flushes={} success={}",
+                    elapsed.as_micros(),
+                    timing.write_time.as_micros(),
+                    timing.max_write.as_micros(),
+                    timing.flush_time.as_micros(),
+                    timing.bytes,
+                    timing.writes,
+                    timing.flushes,
+                    result.is_ok()
+                );
+            }
+        }
+        match result {
             Ok(report) => {
                 program.commit_prepared();
                 Ok(report)
@@ -293,5 +395,58 @@ pub(crate) fn paint_text(
                 }
             },
         );
+    }
+}
+
+#[cfg(test)]
+mod writer_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct PartialWriter {
+        bytes: Vec<u8>,
+        fail: bool,
+        flushes: usize,
+    }
+    impl Write for PartialWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.fail {
+                return Err(io::Error::new(io::ErrorKind::BrokenPipe, "test write"));
+            }
+            let count = bytes.len().min(2);
+            self.bytes.extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            if self.fail {
+                return Err(io::Error::other("test flush"));
+            }
+            Ok(())
+        }
+    }
+    #[test]
+    fn timed_writer_preserves_partial_writes_and_write_all() {
+        let (mut writer, _) = TimedWriter::new(PartialWriter::default());
+        assert_eq!(writer.write(b"abcd").unwrap(), 2);
+        writer.write_all(b"efghi").unwrap();
+        writer.flush().unwrap();
+        assert_eq!(writer.inner.bytes, b"abefghi");
+        assert_eq!(writer.inner.flushes, 1);
+    }
+    #[test]
+    fn timed_writer_preserves_write_and_flush_errors() {
+        let (mut writer, _) = TimedWriter::new(PartialWriter {
+            fail: true,
+            ..Default::default()
+        });
+        let error = writer.write(b"payload").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        assert_eq!(error.to_string(), "test write");
+        let error = writer.flush().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert_eq!(error.to_string(), "test flush");
+        assert!(writer.inner.bytes.is_empty());
+        assert_eq!(writer.inner.flushes, 1);
     }
 }

@@ -30,7 +30,7 @@ mod spec;
 #[cfg(test)]
 mod tests;
 
-use spec::{Kind, Spec};
+use spec::{ButtonContent, Kind, Spec};
 
 /// A control value. Secrets are deliberately absent from semantic event payloads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -329,6 +329,31 @@ impl Controls {
         let Some(prepared) = &control.prepared else {
             return false;
         };
+        if control.spec.button_content == ButtonContent::CompositeChildren {
+            // Layout paints the original child text/images. Retain native hit
+            // metadata and state without painting a duplicate flattened label.
+            let visible = prepared.bounds.intersection(prepared.clip);
+            if visible.width == 0 || visible.height == 0 {
+                return false;
+            }
+            cx.push_hit(
+                HitRegion::new(key, visible.terminal())
+                    .role(HitRole::Action)
+                    .focusable(!control.spec.disabled)
+                    .enabled(!control.spec.disabled),
+            );
+            // Text-bearing buttons expose focus through inline_style; never
+            // overwrite the first letter of a wrapped label with an indicator.
+            if self.focused.as_deref() == Some(key) && control.spec.label.is_empty() {
+                cx.set_cell(
+                    i32::try_from(visible.x).unwrap_or(i32::MAX),
+                    visible.y,
+                    "›",
+                    Style::new().add_modifier(Modifier::BOLD),
+                );
+            }
+            return true;
+        }
         if control.spec.kind == Kind::Anchor {
             // Inline formatting owns glyphs and descendant styles; links add
             // interaction metadata only, never chrome or replacement text.
@@ -376,7 +401,8 @@ impl Controls {
     #[must_use]
     pub fn inline_style(&self, source_path: &[usize], mut style: Style) -> Style {
         if let Some(control) = self.focused.as_ref().and_then(|key| self.nodes.get(key))
-            && control.spec.kind == Kind::Anchor
+            && (control.spec.kind == Kind::Anchor
+                || control.spec.button_content == ButtonContent::CompositeChildren)
             && control
                 .prepared
                 .as_ref()

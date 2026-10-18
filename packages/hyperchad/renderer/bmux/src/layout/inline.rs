@@ -45,6 +45,18 @@ impl TextStyle {
         }
         if let Some(color) = node.background {
             result.style.bg = Some(Color::Rgb(color.r, color.g, color.b));
+            // A native button's own background establishes its default content
+            // foreground. Explicit author colors still win. Avoid inheriting
+            // white page text into a white action button.
+            if matches!(node.element, Element::Button { .. }) && node.color.is_none() {
+                let luminance =
+                    299 * u32::from(color.r) + 587 * u32::from(color.g) + 114 * u32::from(color.b);
+                result.style.fg = Some(if luminance >= 128_000 {
+                    Color::Black
+                } else {
+                    Color::White
+                });
+            }
         }
         if let Some(weight) = node.font_weight {
             let bold = matches!(

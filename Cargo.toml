@@ -849,6 +849,13 @@ criterion = { version = "0.8.2", default-features = false, features = [
 ] }
 
 [patch.crates-io]
+# TEMPORARY: user-authorized local bmux image-cache validation; remove before release.
+bmux_image          = { path = "/hdd/GitHub/bmux/packages/image" }
+bmux_keyboard       = { path = "/hdd/GitHub/bmux/packages/keyboard" }
+bmux_text_edit      = { path = "/hdd/GitHub/bmux/packages/text-edit" }
+bmux_tui            = { path = "/hdd/GitHub/bmux/packages/tui" }
+bmux_tui_components = { path = "/hdd/GitHub/bmux/packages/tui-components" }
+bmux_tui_runtime    = { path = "/hdd/GitHub/bmux/packages/tui-runtime" }
 # actix-files             = { git = "https://github.com/actix/actix-web" }
 # actix-http              = { git = "https://github.com/actix/actix-web" }
 # actix-http-test         = { git = "https://github.com/actix/actix-web" }

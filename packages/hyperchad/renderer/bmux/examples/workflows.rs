@@ -88,15 +88,16 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send>> {
     });
     let navigation_renderer = renderer.clone();
     let navigation = runtime.spawn(async move {
-        while let Some(path) = navigation_renderer.wait_for_navigation().await {
-            let page = match path.as_str() {
-                "/dashboard" => Workflow::Dashboard,
-                "/documents" => Workflow::Documents,
-                "/music" | "/albums/first-light" => Workflow::MusicLibrary,
-                _ => continue,
+        while let Some(request) = navigation_renderer.wait_for_navigation().await {
+            let page = match request.url.as_str() {
+                "/dashboard" => Some(Workflow::Dashboard),
+                "/documents" => Some(Workflow::Documents),
+                "/music" | "/albums/first-light" => Some(Workflow::MusicLibrary),
+                _ => None,
             };
+            let view = page.map(|page| View::from(support::document(page)));
             if navigation_renderer
-                .render(View::from(support::document(page)))
+                .complete_navigation(request.id, request.url, view)
                 .await
                 .is_err()
             {

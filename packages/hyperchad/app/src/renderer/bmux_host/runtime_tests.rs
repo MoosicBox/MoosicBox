@@ -1,7 +1,7 @@
 //! Runtime ownership tests use two independent executors on different OS threads.
 
 use super::*;
-use std::{future::Future, task::Poll};
+use std::task::Poll;
 
 fn http() -> HostRequest {
     HostRequest::Http(Box::new(RequestEffect {

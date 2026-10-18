@@ -114,8 +114,9 @@ strum              = { workspace = true }
 thiserror          = { workspace = true }
 
 [dev-dependencies]
-bmux_tui         = { workspace = true }
-bmux_tui_runtime = { workspace = true }
+bmux_tui                 = { workspace = true }
+bmux_tui_runtime         = { workspace = true }
+moosicbox_remote_library = { workspace = true }
 
 [features]
 default = [

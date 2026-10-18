@@ -16,7 +16,12 @@ fn invalid(message: &str) -> GraphicsError {
 }
 
 impl GraphicsStore {
-    pub(super) fn decode_svg(&mut self, key: &str, encoded: &[u8]) -> Result<(), GraphicsError> {
+    pub(super) fn decode_svg(
+        &mut self,
+        key: &str,
+        encoded: &[u8],
+        display_size: Option<(u32, u32)>,
+    ) -> Result<(), GraphicsError> {
         if encoded.len() > MAX_SVG_BYTES {
             return Err(GraphicsError::Limit);
         }
@@ -65,7 +70,21 @@ impl GraphicsStore {
         };
         let tree = usvg::Tree::from_xmltree(&document, &options)
             .map_err(|error| invalid(&error.to_string()))?;
-        let size = tree.size().to_int_size();
+        let intrinsic = tree.size();
+        // Pixel dimensions are already bounded by the renderer; f32 precision
+        // is sufficient for the rasterizer's own f32 coordinate system.
+        #[allow(clippy::cast_precision_loss)]
+        let scale = display_size.map_or(1.0, |(width, height)| {
+            (width.max(1) as f32 / intrinsic.width())
+                .min(height.max(1) as f32 / intrinsic.height())
+                .min(1.0)
+        });
+        let size = usvg::Size::from_wh(
+            (intrinsic.width() * scale).max(1.0),
+            (intrinsic.height() * scale).max(1.0),
+        )
+        .ok_or(GraphicsError::InvalidSize)?
+        .to_int_size();
         let (width, height) = (size.width(), size.height());
         let output_bytes = self.size(width, height)?;
         let mut allocation = u64::try_from(output_bytes).map_err(|_| GraphicsError::Limit)?;
@@ -88,7 +107,7 @@ impl GraphicsStore {
         let mut pixmap = tiny_skia::Pixmap::new(width, height).ok_or(GraphicsError::Limit)?;
         resvg::render(
             &tree,
-            tiny_skia::Transform::identity(),
+            tiny_skia::Transform::from_scale(scale, scale),
             &mut pixmap.as_mut(),
         );
         // tiny-skia stores premultiplied sRGB; bmux expects straight alpha.
