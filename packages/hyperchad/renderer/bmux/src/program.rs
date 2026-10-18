@@ -430,7 +430,22 @@ impl BmuxProgram {
                         continue;
                     };
                     image.allocation = Some(allocation);
-                    cx.push_image(ImageContribution::Present(image));
+                    // Native terminal images are composited separately from cells.
+                    // Paint order alone cannot put a cell background above them.
+                    let regions = image_visible_regions(tree, node);
+                    for region in regions {
+                        let mut part = image.clone();
+                        let visible = region.terminal();
+                        if visible != image.destination {
+                            part.key = bmux_tui::image::ImageKey::new(format!(
+                                "{placement_key}:clip:{}:{}:{}:{}",
+                                visible.x, visible.y, visible.width, visible.height
+                            ));
+                        }
+                        part.destination = visible;
+                        part.clip = visible;
+                        cx.push_image(ImageContribution::Present(part));
+                    }
                 }
                 Ok(GraphicsPlacement::Fallback { rect, text }) => {
                     cx.with_child(
@@ -2497,6 +2512,66 @@ impl BmuxProgram {
 }
 
 // Unrepresentable allocations must not be refitted from a truncated rectangle.
+// Subtract later cell backgrounds from native image placements. Retain the full
+// allocation on every piece so clipping never rescales or shifts the artwork.
+fn image_visible_regions(tree: &LayoutTree, image: &layout::ResolvedNode) -> Vec<layout::CellRect> {
+    let mut regions = vec![image.content_bounds.intersection(image.clip)];
+    for cover in tree.nodes.iter().skip(image.paint_order + 1) {
+        if !cover.visible || cover.style.style.bg.is_none() {
+            continue;
+        }
+        let cover = cover.bounds.intersection(cover.clip);
+        let mut next = Vec::new();
+        for region in regions {
+            let overlap = region.intersection(cover);
+            if overlap.width == 0 || overlap.height == 0 {
+                next.push(region);
+                continue;
+            }
+            for piece in [
+                layout::CellRect::new(
+                    region.x,
+                    region.y,
+                    region.width,
+                    overlap.y.abs_diff(region.y),
+                ),
+                layout::CellRect::new(
+                    region.x,
+                    overlap.bottom(),
+                    region.width,
+                    region.bottom().abs_diff(overlap.bottom()),
+                ),
+                layout::CellRect::new(
+                    region.x,
+                    overlap.y,
+                    overlap.x.abs_diff(region.x),
+                    overlap.height,
+                ),
+                layout::CellRect::new(
+                    overlap.right(),
+                    overlap.y,
+                    region.right().abs_diff(overlap.right()),
+                    overlap.height,
+                ),
+            ] {
+                if piece.width > 0 && piece.height > 0 {
+                    next.push(piece);
+                }
+            }
+            // Bound pathological overlay fragmentation; hide rather than leak
+            // artwork through an opaque foreground when the budget is exhausted.
+            if next.len() > 64 {
+                return Vec::new();
+            }
+        }
+        regions = next;
+        if regions.is_empty() {
+            break;
+        }
+    }
+    regions
+}
+
 fn image_allocation(bounds: layout::CellRect) -> Option<bmux_tui::image::ImageBounds> {
     Some(bmux_tui::image::ImageBounds {
         x: i32::try_from(bounds.x).ok()?,
@@ -3771,6 +3846,102 @@ mod runtime_regressions {
                     assert_eq!(sample(actual), sample(expected));
                 }
             }
+        }
+    }
+
+    #[test]
+    fn native_artwork_is_clipped_around_overlay_and_restored_when_closed() {
+        let mut program = program();
+        program.set_graphics_available(true);
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        artwork_image("cover", "/cover.webp", false),
+                        Container {
+                            str_id: Some("overlay".into()),
+                            background: Some(hyperchad_color::Color::from_hex("#222222")),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        complete_artwork(&mut program, "cover", "/cover.webp");
+        program.prepare().unwrap();
+        let tree = program.candidate.as_mut().unwrap();
+        let image = tree
+            .nodes
+            .iter_mut()
+            .find(|node| node.key == "cover")
+            .unwrap();
+        image.content_bounds = layout::CellRect::new(2, 2, 12, 6);
+        image.clip = layout::CellRect::new(0, 0, 80, 24);
+        let panel = tree
+            .nodes
+            .iter_mut()
+            .find(|node| node.key == "overlay")
+            .unwrap();
+        panel.bounds = layout::CellRect::new(6, 3, 4, 3);
+        panel.clip = layout::CellRect::new(0, 0, 80, 24);
+        for (visible, full_cover) in [(true, false), (true, true), (false, true)] {
+            let tree = program.candidate.as_mut().unwrap();
+            let overlay = tree.nodes.last_mut().unwrap();
+            overlay.visible = visible;
+            if full_cover {
+                overlay.bounds = layout::CellRect::new(0, 0, 80, 24);
+            }
+            let cover = overlay.bounds;
+            let mut buffer =
+                bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+            let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+            program.paint(&mut PaintCx::new(&mut frame));
+            assert_eq!(
+                frame.images().len(),
+                if !visible {
+                    1
+                } else if full_cover {
+                    0
+                } else {
+                    4
+                }
+            );
+            let mut keys = BTreeSet::new();
+            let mut area = 0_u32;
+            for contribution in frame.images() {
+                let ImageContribution::Present(image) = contribution else {
+                    panic!("expected present")
+                };
+                assert!(keys.insert(image.key.as_str()));
+                let rect = image.destination;
+                area += u32::from(rect.width) * u32::from(rect.height);
+                assert_eq!(
+                    image.allocation,
+                    image_allocation(layout::CellRect::new(2, 2, 12, 6))
+                );
+                if visible {
+                    let intersection = layout::CellRect::new(
+                        i64::from(rect.x),
+                        i64::from(rect.y),
+                        u64::from(rect.width),
+                        u64::from(rect.height),
+                    )
+                    .intersection(cover);
+                    assert!(intersection.width == 0 || intersection.height == 0);
+                }
+            }
+            assert_eq!(
+                area,
+                if !visible {
+                    72
+                } else if full_cover {
+                    0
+                } else {
+                    60
+                }
+            );
         }
     }
 
