@@ -2141,6 +2141,43 @@ impl BmuxProgram {
         Ok(())
     }
 
+    fn update_canvas(&mut self, update: &CanvasUpdate) -> Result<(), Error> {
+        // Canvas messages are asynchronous. A connection update can remove the
+        // old canvas (or evict its pixels) before a queued visualization arrives.
+        // Only the current document may authorize recreating its backing resource.
+        if !self
+            .state
+            .find_node(&update.target)
+            .is_some_and(|node| matches!(node.element, Element::Canvas))
+        {
+            return Ok(());
+        }
+        if self.graphics.rgba(&update.target).is_none() {
+            self.prepare()?;
+            let size = self
+                .candidate
+                .as_ref()
+                .and_then(|tree| tree.get(&update.target))
+                .map(|node| (node.content_bounds.width, node.content_bounds.height));
+            self.discard_prepared();
+            let Some((width, height)) = size.filter(|(width, height)| *width > 0 && *height > 0)
+            else {
+                // No drawable surface yet; the next resize/visualization refresh
+                // will populate it. This is not a malformed graphics operation.
+                return Ok(());
+            };
+            if self.graphics.rgba(&update.target).is_none() {
+                self.graphics.create_canvas(
+                    &update.target,
+                    u32::try_from(width.saturating_mul(8))?,
+                    u32::try_from(height.saturating_mul(16))?,
+                )?;
+            }
+        }
+        self.graphics.update_canvas(update)?;
+        Ok(())
+    }
+
     fn message(&mut self, message: Message) -> Result<(), Error> {
         if !matches!(
             &message,
@@ -2206,13 +2243,7 @@ impl BmuxProgram {
                 self.complete_navigation(id, url, view)?;
             }
             Message::View(view, target) => self.apply_unsolicited(view, target.as_deref())?,
-            Message::Canvas(update) => {
-                if self.graphics.rgba(&update.target).is_none() {
-                    self.prepare()?;
-                    self.discard_prepared();
-                }
-                self.graphics.update_canvas(&update)?;
-            }
+            Message::Canvas(update) => self.update_canvas(&update)?,
             Message::Emit(name, value) => {
                 let mut keys = Vec::new();
                 visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
@@ -2797,6 +2828,65 @@ mod runtime_regressions {
                 .iter()
                 .any(|work| { matches!(work, Work::Navigate(url) if url == "/albums?albumId=42") })
         );
+    }
+
+    #[test]
+    fn late_visualization_after_removal_or_zero_size_does_not_crash() {
+        use hyperchad_renderer::canvas::CanvasAction;
+        let mut program = program();
+        let update = || {
+            Message::Canvas(CanvasUpdate {
+                target: "visualization".into(),
+                canvas_actions: vec![CanvasAction::Clear],
+            })
+        };
+        // A live connection can deliver a clear before the corresponding view.
+        program.message(update()).unwrap();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("visualization".into()),
+                    element: Element::Canvas,
+                    width: Some(hyperchad_transformer::Number::Integer(0)),
+                    height: Some(hyperchad_transformer::Number::Integer(0)),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.message(update()).unwrap();
+        program
+            .apply_view(View::from(Container::default()), None)
+            .unwrap();
+        program.message(update()).unwrap();
+    }
+
+    #[test]
+    fn evicted_live_canvas_is_recreated_before_update() {
+        use hyperchad_renderer::canvas::CanvasAction;
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("visualization".into()),
+                    element: Element::Canvas,
+                    width: Some(hyperchad_transformer::Number::Integer(80)),
+                    height: Some(hyperchad_transformer::Number::Integer(16)),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.discard_prepared();
+        program.graphics.remove("visualization");
+        program
+            .message(Message::Canvas(CanvasUpdate {
+                target: "visualization".into(),
+                canvas_actions: vec![CanvasAction::Clear],
+            }))
+            .unwrap();
+        assert!(program.graphics.rgba("visualization").is_some());
     }
 
     fn program() -> BmuxProgram {
