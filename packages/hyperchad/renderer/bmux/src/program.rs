@@ -269,7 +269,8 @@ impl BmuxProgram {
     pub fn prepare(&mut self) -> Result<(), Error> {
         let started = Instant::now();
         self.revalidate_resource_context()?;
-        if std::mem::take(&mut self.scroll_reuse)
+        let scroll_reuse = self.log_scroll_admission();
+        if scroll_reuse
             && self.fixed_image_geometry
             && self.prepared_source.as_ref() == Some(self.state.root())
             && self.options.open_details == self.controls.details_open()
@@ -283,6 +284,8 @@ impl BmuxProgram {
             self.candidate = Some(tree);
             self.geometry_dirty = false;
             self.schedule_resources()?;
+            let elapsed_us = started.elapsed().as_micros();
+            log::debug!("bmux prepare scroll-reuse elapsed_us={elapsed_us} full_layouts=0");
             return Ok(());
         }
         // A bounded image completion cannot alter explicitly sized image boxes.
@@ -1244,6 +1247,73 @@ impl BmuxProgram {
             )?;
         }
         Ok(())
+    }
+
+    fn log_scroll_admission(&mut self) -> bool {
+        let requested = std::mem::take(&mut self.scroll_reuse);
+        if !requested {
+            return false;
+        }
+        let committed = self.committed.as_ref();
+        log::debug!(
+            "bmux scroll admission fixed_images={} source_equal={} details_equal={} committed={} generation_equal={} viewport_equal={} effective={}",
+            self.fixed_image_geometry,
+            self.prepared_source.as_ref() == Some(self.state.root()),
+            self.options.open_details == self.controls.details_open(),
+            committed.is_some(),
+            committed.is_some_and(|(generation, _)| *generation == self.state.generation()),
+            committed.is_some_and(|(_, tree)| tree.viewport == self.options.viewport),
+            self.effective.is_some()
+        );
+        true
+    }
+
+    // Return dispatch/index-pass counts for focused regression instrumentation.
+    fn emit_named(&mut self, name: &str, value: Option<&str>) -> Result<(usize, usize), Error> {
+        let mut keys = Vec::new();
+        let mut paths = BTreeMap::new();
+        visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            let key = layout::node_key(node, path);
+            keys.push(key.clone());
+            paths.insert(key, path.to_vec());
+        });
+        let mut generation = self.state.generation();
+        let mut index_passes = 1;
+        let mut dispatched = 0;
+        for key in keys {
+            if generation != self.state.generation() {
+                paths.clear();
+                visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+                    paths.insert(layout::node_key(node, path), path.to_vec());
+                });
+                generation = self.state.generation();
+                index_passes += 1;
+            }
+            let Some(node) = paths
+                .get(&key)
+                .and_then(|path| at_path(self.state.root(), path))
+            else {
+                continue;
+            };
+            // The first original dispatch retains transaction validation (payload
+            // limits, tree indexing and clock), even for an entirely inert tree.
+            if dispatched != 0
+                && !self
+                    .actions
+                    .named_maintenance_due(self.state.root(), self.now_ms())
+                && !self.actions.accepts_named(&key, node, name)
+            {
+                continue;
+            }
+            self.dispatch(
+                &key,
+                EventKind::Named(name.to_owned()),
+                value.map(str::to_owned),
+            )?;
+            dispatched += 1;
+        }
+        log::debug!("bmux named admission dispatched={dispatched} index_passes={index_passes}");
+        Ok((dispatched, index_passes))
     }
 
     fn dispatch(&mut self, key: &str, kind: EventKind, value: Option<String>) -> Result<(), Error> {
@@ -2259,13 +2329,7 @@ impl BmuxProgram {
             Message::View(view, target) => self.apply_unsolicited(view, target.as_deref())?,
             Message::Canvas(update) => self.update_canvas(&update)?,
             Message::Emit(name, value) => {
-                let mut keys = Vec::new();
-                visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
-                    keys.push(layout::node_key(node, path));
-                });
-                for key in keys {
-                    self.dispatch(&key, EventKind::Named(name.clone()), value.clone())?;
-                }
+                self.emit_named(&name, value.as_deref())?;
             }
             Message::Responsive(name, trigger) => {
                 self.responsive.insert(name, trigger);
@@ -2384,6 +2448,21 @@ impl Program for BmuxProgram {
                 RuntimeEvent::Terminal(Event::Mouse(mouse)) if matches!(mouse.kind,
                     MouseEventKind::ScrollUp | MouseEventKind::ScrollDown | MouseEventKind::ScrollLeft | MouseEventKind::ScrollRight)
             );
+        if let RuntimeEvent::Terminal(Event::Mouse(mouse)) = &event
+            && matches!(
+                mouse.kind,
+                MouseEventKind::ScrollUp
+                    | MouseEventKind::ScrollDown
+                    | MouseEventKind::ScrollLeft
+                    | MouseEventKind::ScrollRight
+            )
+        {
+            log::debug!(
+                "bmux scroll intent reuse={} geometry_dirty={}",
+                self.scroll_reuse,
+                self.geometry_dirty
+            );
+        }
         self.resource_paint_only = false;
         let context_wake = matches!(
             &event,
@@ -2920,6 +2999,39 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn named_admission_large_stale_document_avoids_inert_dispatch_and_indexing() {
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("shell".into()),
+                    children: (0..1508)
+                        .map(|index| Container {
+                            str_id: Some(format!("inert-{index}")),
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.committed = Some((
+            program.state.generation().wrapping_sub(1),
+            program.candidate.take().unwrap(),
+        ));
+        crate::actions::NAMED_WORK_COUNTS.with(|counts| counts.set((0, 0)));
+        assert_eq!(
+            program.emit_named("play-track", Some("payload")).unwrap(),
+            (1, 1)
+        );
+        crate::actions::NAMED_WORK_COUNTS.with(|counts| assert_eq!(counts.get(), (1, 1)));
+        let oversized = "x".repeat(ActionLimits::default().max_value_bytes + 1);
+        assert!(program.emit_named("play-track", Some(&oversized)).is_err());
     }
 
     #[test]

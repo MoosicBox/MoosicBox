@@ -416,7 +416,48 @@ impl Default for ActionEngine {
         Self::new(0, ActionLimits::default())
     }
 }
+#[cfg(test)]
+thread_local! {
+    pub(crate) static NAMED_WORK_COUNTS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
 impl ActionEngine {
+    /// Whether a normal transaction is required for style expiry or recommit.
+    /// This does not advance time or mutate effects; the original dispatch owns that work.
+    #[must_use]
+    pub(crate) fn named_maintenance_due(&self, root: &Container, now_ms: u64) -> bool {
+        self.next_deadline()
+            .is_some_and(|deadline| deadline <= now_ms)
+            || self.styles.values().any(|styled| {
+                selectors::at(root, &styled.source.path)
+                    .is_some_and(|node| Style::read(node) != styled.effective())
+            })
+    }
+
+    /// Whether this source has an exact-name action, registration or route default.
+    /// Re-evaluate for every original source: earlier handlers may change registrations.
+    pub(crate) fn accepts_named(&self, key: &str, node: &Container, name: &str) -> bool {
+        if node.actions.iter().any(
+            |action| matches!(&action.trigger, ActionTrigger::Event(expected) if expected == name),
+        ) || self
+            .registrations
+            .values()
+            .any(|registration| registration.source.key == key && registration.name == name)
+        {
+            return true;
+        }
+        node.route.as_ref().is_some_and(|route| {
+            use hyperchad_transformer_models::Route;
+            let trigger = match route {
+                Route::Get { trigger, .. }
+                | Route::Post { trigger, .. }
+                | Route::Put { trigger, .. }
+                | Route::Patch { trigger, .. }
+                | Route::Delete { trigger, .. } => trigger,
+            };
+            trigger.as_deref() == Some(name)
+        })
+    }
     /// Create a pure engine for one state lane generation.
     #[must_use]
     pub const fn new(generation: u64, limits: ActionLimits) -> Self {
@@ -444,6 +485,13 @@ impl ActionEngine {
         event: &EventContext,
         values: &FormValues,
     ) -> Result<Vec<Effect>, ActionError> {
+        #[cfg(test)]
+        if matches!(event.kind, EventKind::Named(_)) {
+            NAMED_WORK_COUNTS.with(|counts| {
+                let (dispatch, index) = counts.get();
+                counts.set((dispatch + 1, index));
+            });
+        }
         self.validate(root, event)?;
         let mut next = self.clone();
         let mut work = Work::new(root, event, values, &mut next)?;
@@ -706,6 +754,13 @@ impl<'a> Work<'a> {
         values: &'a FormValues,
         engine: &'a mut ActionEngine,
     ) -> Result<Self, ActionError> {
+        #[cfg(test)]
+        if matches!(event.kind, EventKind::Named(_)) {
+            NAMED_WORK_COUNTS.with(|counts| {
+                let (dispatch, index) = counts.get();
+                counts.set((dispatch, index + 1));
+            });
+        }
         let index = selectors::index(root, &engine.limits)?;
         forms::validate_values(values, &engine.limits)?;
         engine.clock = event.now_ms;
@@ -1027,5 +1082,270 @@ impl<'a> Work<'a> {
             styled.layers.sort_by_key(|l| l.order);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod named_admission_tests {
+    use super::*;
+    use hyperchad_actions::Action;
+
+    fn action(trigger: ActionTrigger, action: ActionType) -> Action {
+        Action {
+            trigger,
+            effect: ActionEffect {
+                action,
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
+        }
+    }
+    fn custom(name: &str) -> ActionType {
+        ActionType::Custom {
+            action: name.into(),
+        }
+    }
+    fn named(root: &Container, path: Vec<usize>, generation: u64, now: u64) -> EventContext {
+        EventContext::new(
+            Source::at(root, path, generation).unwrap(),
+            EventKind::Named("load".into()),
+            now,
+        )
+    }
+    fn run(root: &mut Container, engine: &mut ActionEngine, prune: bool, now: u64) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        for path in [vec![], vec![0], vec![1]] {
+            let context = named(root, path.clone(), engine.generation, now);
+            let node = selectors::at(root, &path).unwrap();
+            if !prune
+                || path.is_empty()
+                || engine.named_maintenance_due(root, now)
+                || engine.accepts_named(&context.source.key, node, "load")
+            {
+                effects.extend(engine.dispatch(root, &context, &FormValues::new()).unwrap());
+            }
+        }
+        effects
+    }
+
+    #[test]
+    fn named_admission_dynamic_rebinding_order_defaults_and_namespace_parity() {
+        use hyperchad_transformer_models::Route;
+        let mut root = Container {
+            str_id: Some("root".into()),
+            children: vec![
+                Container {
+                    str_id: Some("listener".into()),
+                    actions: vec![
+                        action(
+                            ActionTrigger::Click,
+                            ActionType::Event {
+                                name: "load".into(),
+                                action: Box::new(custom("retained")),
+                            },
+                        ),
+                        action(ActionTrigger::Event("load".into()), custom("static")),
+                        action(
+                            ActionTrigger::Event("load".into()),
+                            ActionType::Event {
+                                name: "load".into(),
+                                action: Box::new(custom("installed")),
+                            },
+                        ),
+                        action(ActionTrigger::Immediate, custom("must-not-alias")),
+                    ],
+                    ..Default::default()
+                },
+                Container {
+                    str_id: Some("route".into()),
+                    route: Some(Route::Get {
+                        route: "/named".into(),
+                        trigger: Some("load".into()),
+                        target: hyperchad_transformer_models::Selector::default(),
+                        strategy: hyperchad_transformer_models::SwapStrategy::default(),
+                    }),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let mut engine = ActionEngine::default();
+        let click = EventContext::new(Source::at(&root, vec![0], 0).unwrap(), EventKind::Click, 0);
+        engine
+            .dispatch(&mut root, &click, &FormValues::new())
+            .unwrap();
+        // Rebind the dynamically registered keyed source before delivery.
+        root.children.swap(0, 1);
+        engine.reconcile(&root, 1).unwrap();
+        let mut expected_root = root.clone();
+        let mut expected = engine.clone();
+        let effects = run(&mut root, &mut engine, true, 1);
+        let unfiltered = run(&mut expected_root, &mut expected, false, 1);
+        assert_eq!(format!("{effects:?}"), format!("{unfiltered:?}"));
+        assert_eq!(format!("{engine:?}"), format!("{expected:?}"));
+        assert_eq!(root, expected_root);
+        let names: Vec<_> = effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Custom { action, .. } => Some(action.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names, ["static", "retained", "installed"]);
+        assert!(matches!(effects.first(), Some(Effect::Request(_))));
+        // Registrations outlive their declaring AST while the keyed owner is retained.
+        root.children[1].actions.clear();
+        engine.reconcile(&root, 2).unwrap();
+        assert_eq!(root.children[1].actions.len(), 0);
+        assert!(engine.accepts_named("listener", &root.children[1], "load"));
+        let context = named(&root, vec![1], 2, 2);
+        let dynamic = engine
+            .dispatch(&mut root, &context, &FormValues::new())
+            .unwrap();
+        let names: Vec<_> = dynamic
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Custom { action, .. } => Some(action.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(names, ["retained", "installed"]);
+        assert!(!engine.accepts_named("root", &root, "load"));
+        assert!(engine.accepts_named("listener", &root.children[1], "load"));
+        assert!(!engine.accepts_named("listener", &root.children[1], "other"));
+        root.children.remove(1);
+        engine.reconcile(&root, 2).unwrap();
+        assert!(
+            !engine
+                .registrations
+                .values()
+                .any(|r| r.source.key == "listener")
+        );
+    }
+
+    #[test]
+    fn named_admission_get_post_defaults_without_actions_repeat_exact_name() {
+        for route in [
+            Route::Get {
+                route: "/named".into(),
+                trigger: Some("load".into()),
+                target: hyperchad_transformer_models::Selector::default(),
+                strategy: hyperchad_transformer_models::SwapStrategy::default(),
+            },
+            Route::Post {
+                route: "/named".into(),
+                trigger: Some("load".into()),
+                target: hyperchad_transformer_models::Selector::default(),
+                strategy: hyperchad_transformer_models::SwapStrategy::default(),
+            },
+        ] {
+            let mut root = Container {
+                str_id: Some("route".into()),
+                route: Some(route),
+                ..Default::default()
+            };
+            let mut engine = ActionEngine::default();
+            assert_eq!(root.actions.len(), 0);
+            assert!(engine.accepts_named("route", &root, "load"));
+            assert!(!engine.accepts_named("route", &root, "other"));
+            for now in [0, 1] {
+                let context = named(&root, vec![], 0, now);
+                assert!(matches!(
+                    engine
+                        .dispatch(&mut root, &context, &FormValues::new())
+                        .unwrap()
+                        .as_slice(),
+                    [Effect::Request(_)]
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn named_admission_rechecks_registration_installed_before_later_key() {
+        let mut root = Container {
+            str_id: Some("root".into()),
+            children: vec![Container {
+                str_id: Some("later".into()),
+                actions: vec![action(
+                    ActionTrigger::Click,
+                    ActionType::Event {
+                        name: "load".into(),
+                        action: Box::new(custom("new-listener")),
+                    },
+                )],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut engine = ActionEngine::default();
+        assert!(!engine.accepts_named("later", &root.children[0], "load"));
+        // A previous key's host effects may synchronously install registrations.
+        let context =
+            EventContext::new(Source::at(&root, vec![0], 0).unwrap(), EventKind::Click, 0);
+        engine
+            .dispatch(&mut root, &context, &FormValues::new())
+            .unwrap();
+        assert!(engine.accepts_named("later", &root.children[0], "load"));
+        let event = named(&root, vec![0], 0, 1);
+        assert!(
+            matches!(engine.dispatch(&mut root, &event, &FormValues::new()).unwrap().as_slice(), [Effect::Custom { action, .. }] if action == "new-listener")
+        );
+    }
+
+    #[test]
+    fn named_admission_retained_style_expiry_and_timer_parity() {
+        use hyperchad_transformer_models::ElementTarget;
+        let mut hover = action(
+            ActionTrigger::Hover,
+            ActionType::Style {
+                target: ElementTarget::SelfTarget,
+                action: StyleAction::SetDisplay(false),
+            },
+        );
+        hover.effect.delay_off = Some(10);
+        hover.effect.throttle = Some(5);
+        let mut root = Container {
+            str_id: Some("root".into()),
+            actions: vec![hover],
+            children: vec![Container::default(), Container::default()],
+            ..Default::default()
+        };
+        let mut engine = ActionEngine::default();
+        let enter = EventContext::new(Source::at(&root, vec![], 0).unwrap(), EventKind::Hover, 0);
+        engine
+            .dispatch(&mut root, &enter, &FormValues::new())
+            .unwrap();
+        let leave = EventContext::new(Source::at(&root, vec![], 0).unwrap(), EventKind::Hover, 1);
+        engine.release(&mut root, &leave).unwrap();
+        assert_eq!(engine.next_deadline(), Some(11));
+        assert!(
+            !engine.named_maintenance_due(&root, 5),
+            "future expiry permits pruning"
+        );
+        assert!(
+            engine.named_maintenance_due(&root, 11),
+            "due expiry admits every original key"
+        );
+        root.hidden = None;
+        assert!(
+            engine.named_maintenance_due(&root, 5),
+            "external style drift needs recommit even before expiry"
+        );
+        let mut expected_root = root.clone();
+        let mut expected = engine.clone();
+        for now in [5, 11, 12] {
+            let effects = run(&mut root, &mut engine, true, now);
+            let unfiltered = run(&mut expected_root, &mut expected, false, now);
+            assert_eq!(format!("{effects:?}"), format!("{unfiltered:?}"));
+            assert_eq!(format!("{engine:?}"), format!("{expected:?}"));
+            assert_eq!(root, expected_root);
+            assert!(
+                !engine.named_maintenance_due(&root, now),
+                "normal transaction clears due maintenance"
+            );
+        }
+        assert_eq!(root.hidden, None);
     }
 }

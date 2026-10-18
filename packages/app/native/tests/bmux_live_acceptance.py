@@ -749,6 +749,50 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 os.write(master, f"\x1b[<35;{x};{y}M".encode())
                 settle(0.15)
             frame("after-hover")
+            if (
+                kitty_screenshots
+                and os.environ.get("BMUX_VISIBLE_FRAME_SAMPLES") == "1"
+            ):
+                from bmux_visible_frames import FrameSampler
+
+                # Select first-column second-row card in compact terminal UI.
+                # 12 virtual columns x 6 virtual rows of artwork, followed by
+                # metadata: capture both, using observed host cell pixels.
+                cw, ch = width_pixels / columns, height_pixels / rows
+                # Lower portion of the first cover plus its title/artist rows:
+                # fits even 80x24, and excludes the fixed footer on both scroll states.
+                rect = (round(20 * cw), round(7 * ch), round(12 * cw), round(7 * ch))
+                sampler = FrameSampler(os.environ["DISPLAY"])
+                try:
+                    telemetry_before = {
+                        str(p): p.stat().st_size for p in Path(home).rglob("*.log")
+                    }
+                    result = sampler.translated_samples(
+                        lambda direction: os.write(
+                            master, f"\x1b[<{direction};{wheel_x};{wheel_y}M".encode()
+                        ),
+                        rect,
+                        round(3 * ch),
+                        artifacts,
+                    )
+                    telemetry = ""
+                    for path in Path(home).rglob("*.log"):
+                        with path.open("rb") as log:
+                            log.seek(telemetry_before.get(str(path), 0))
+                            telemetry += log.read().decode(errors="replace")
+                    (artifacts / "visible-window-app.log").write_text(telemetry)
+                    result["scroll_reuse_records"] = telemetry.count(
+                        "bmux prepare scroll-reuse"
+                    )
+                    result["telemetry_scope"] = (
+                        "Log byte offsets immediately bracketing exact 16 visible samples"
+                    )
+                    (artifacts / "visible-performance.json").write_text(
+                        json.dumps(result, indent=2)
+                    )
+                    event("visible_frames", **result)
+                finally:
+                    sampler.close()
             check(
                 "hover_album_positions",
                 bool(hover_positions)
@@ -924,6 +968,27 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             cy = y + placement_rows(params) // 2 + 1
             assert 1 <= cx <= columns and 1 <= cy <= rows
             click_started = time.monotonic()
+            back_sampler = None
+            if (
+                kitty_screenshots
+                and os.environ.get("BMUX_VISIBLE_FRAME_SAMPLES") == "1"
+            ):
+                from bmux_visible_frames import FrameSampler
+
+                back_sampler = FrameSampler(os.environ["DISPLAY"])
+                # Matched cover plus its unique API title/metadata, bounded to
+                # the actually visible content above the footer.
+                back_rect = (
+                    round(x * width_pixels / columns),
+                    round(y * height_pixels / rows),
+                    round(int(params["c"]) * width_pixels / columns),
+                    round(
+                        min(placement_rows(params) + 3, rows - 4 - y)
+                        * height_pixels
+                        / rows
+                    ),
+                )
+                _, _, back_pixels, back_stride = back_sampler.grab(back_rect)
             os.write(master, f"\x1b[<0;{cx};{cy}M\x1b[<0;{cx};{cy}m".encode())
             event(
                 "cover_center_click",
@@ -995,7 +1060,22 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             # icon/image completion, and retain API evidence even when Back fails.
             back_request_index = len(gateway.requests)
             back_start = time.monotonic()
-            os.write(master, b"\x1b[1;3D")
+            if back_sampler is not None:
+                try:
+                    event(
+                        "visible_back",
+                        **back_sampler.cached_back(
+                            lambda: os.write(master, b"\x1b[1;3D"),
+                            back_rect,
+                            back_pixels,
+                            back_stride,
+                            artifacts,
+                        ),
+                    )
+                finally:
+                    back_sampler.close()
+            else:
+                os.write(master, b"\x1b[1;3D")
             restored = False
             try:
                 wait(

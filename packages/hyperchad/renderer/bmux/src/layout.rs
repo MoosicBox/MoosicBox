@@ -435,8 +435,8 @@ pub fn layout(
     Ok(tree)
 }
 
-/// Reproject one changed scrollport using committed geometry. Positioned
-/// descendants require normal layout; callers must prove unchanged source and sizing.
+/// Reproject one changed scrollport using committed geometry. Fixed/sticky and
+/// unproven absolute descendants require normal layout; source/sizing must be unchanged.
 pub(crate) fn reproject_scroll(
     root: &Container,
     tree: &LayoutTree,
@@ -468,6 +468,10 @@ pub(crate) fn reproject_scroll(
         };
         if next != node.scroll_offset {
             if changed.is_some() {
+                log::debug!(
+                    "bmux scroll rejection reason=multiple-scrollports key={:.128}",
+                    node.key
+                );
                 return None;
             }
             changed = Some((node.path.clone(), next, node.scroll_offset));
@@ -475,14 +479,28 @@ pub(crate) fn reproject_scroll(
     }
     let (path, next, previous) = changed?;
     for node in &tree.nodes {
-        if node.path.starts_with(&path)
-            && node.path != path
-            && matches!(
-                source_at(root, &node.path)?.position.unwrap_or_default(),
-                Position::Fixed | Position::Sticky | Position::Absolute
-            )
-        {
-            return None;
+        if !node.path.starts_with(&path) || node.path == path {
+            continue;
+        }
+        let source = source_at(root, &node.path)?;
+        match source.position.unwrap_or_default() {
+            Position::Fixed | Position::Sticky => {
+                log::debug!(
+                    "bmux scroll rejection reason=fixed-or-sticky key={:.128}",
+                    node.key
+                );
+                return None;
+            }
+            Position::Absolute if !scrolls_absolute(root, &node.path, &path)? => {
+                log::debug!(
+                    "bmux scroll rejection reason=absolute-dependency key={:.128} fixed_width={} fixed_height={}",
+                    node.key,
+                    matches!(source.width, Some(Number::Integer(_))),
+                    matches!(source.height, Some(Number::Integer(_)))
+                );
+                return None;
+            }
+            _ => {}
         }
     }
     let dx = signed(previous.x) - signed(next.x);
@@ -524,6 +542,126 @@ pub(crate) fn reproject_scroll(
         }
     }
     Some(result)
+}
+
+// A fixed-size overlay can translate only when its positioned containing block
+// moves inside the changed scrollport. Dynamic lengths retain the full reflow path.
+fn scrolls_absolute(root: &Container, node: &[usize], scrollport: &[usize]) -> Option<bool> {
+    let source = source_at(root, node)?;
+    let intrinsic_height = source.height.is_none()
+        && source.bottom.is_none()
+        && intrinsic_scroll_subtree(source, true);
+    if !matches!(source.width, Some(Number::Integer(_)))
+        || !(matches!(source.height, Some(Number::Integer(_))) || intrinsic_height)
+        || [&source.left, &source.right, &source.top, &source.bottom]
+            .into_iter()
+            .any(|length| match length {
+                None | Some(Number::Integer(_) | Number::IntegerPercent(_)) => false,
+                Some(Number::RealPercent(value)) => !value.is_finite(),
+                _ => true,
+            })
+        || [
+            &source.min_width,
+            &source.max_width,
+            &source.min_height,
+            &source.max_height,
+            &source.margin_left,
+            &source.margin_right,
+            &source.margin_top,
+            &source.margin_bottom,
+            &source.padding_left,
+            &source.padding_right,
+            &source.padding_top,
+            &source.padding_bottom,
+        ]
+        .into_iter()
+        .any(|length| !matches!(length, None | Some(Number::Integer(_))))
+    {
+        return Some(false);
+    }
+    let anchor = (0..node.len()).rev().find(|&length| {
+        source_at(root, &node[..length])
+            .is_some_and(|ancestor| ancestor.position.unwrap_or_default() != Position::Static)
+    })?;
+    if anchor <= scrollport.len() {
+        return Some(false);
+    }
+    if intrinsic_height
+        || [&source.left, &source.right, &source.top, &source.bottom]
+            .into_iter()
+            .any(|length| {
+                matches!(
+                    length,
+                    Some(Number::IntegerPercent(_) | Number::RealPercent(_))
+                )
+            })
+    {
+        let containing = source_at(root, &node[..anchor])?;
+        // Percentage insets use the positioned content-box dimensions. Prove
+        // those bases fixed, not merely the overlay's own border-box size.
+        if ![&containing.width, &containing.height]
+            .into_iter()
+            .all(|length| matches!(length, Some(Number::Integer(_))))
+            || [
+                &containing.min_width,
+                &containing.max_width,
+                &containing.min_height,
+                &containing.max_height,
+                &containing.padding_left,
+                &containing.padding_right,
+                &containing.padding_top,
+                &containing.padding_bottom,
+            ]
+            .into_iter()
+            .any(|length| !matches!(length, None | Some(Number::Integer(_))))
+        {
+            return Some(false);
+        }
+    }
+    Some(true)
+}
+
+// Intrinsic height is translation invariant only for a fixed-width, nonflex
+// flow subtree with fixed local lengths and no positioned/scrolling descendants.
+fn intrinsic_scroll_subtree(node: &Container, overlay: bool) -> bool {
+    let fixed = |value: Option<&Number>| match value {
+        None | Some(Number::Integer(_)) => true,
+        Some(Number::Real(value)) => value.is_finite(),
+        _ => false,
+    };
+    (overlay || node.position.unwrap_or_default() == Position::Static)
+        && node.flex.is_none()
+        && !scrollable(node.overflow_x)
+        && !scrollable(node.overflow_y)
+        && [
+            node.width.as_ref(),
+            node.height.as_ref(),
+            node.min_width.as_ref(),
+            node.max_width.as_ref(),
+            node.min_height.as_ref(),
+            node.max_height.as_ref(),
+            node.margin_left.as_ref(),
+            node.margin_right.as_ref(),
+            node.margin_top.as_ref(),
+            node.margin_bottom.as_ref(),
+            node.padding_left.as_ref(),
+            node.padding_right.as_ref(),
+            node.padding_top.as_ref(),
+            node.padding_bottom.as_ref(),
+            node.column_gap.as_ref(),
+            node.row_gap.as_ref(),
+            node.font_size.as_ref(),
+            node.border_left.as_ref().map(|(_, width)| width),
+            node.border_right.as_ref().map(|(_, width)| width),
+            node.border_top.as_ref().map(|(_, width)| width),
+            node.border_bottom.as_ref().map(|(_, width)| width),
+        ]
+        .into_iter()
+        .all(fixed)
+        && node
+            .children
+            .iter()
+            .all(|child| intrinsic_scroll_subtree(child, false))
 }
 
 fn source_at<'a>(root: &'a Container, path: &[usize]) -> Option<&'a Container> {
@@ -2355,6 +2493,286 @@ mod scroll_reprojection_tests {
             assert_eq!(format!("{projected:?}"), format!("{full:?}"));
             retained = projected;
         }
+    }
+
+    fn production_album_controls(index: usize) -> Container {
+        Container {
+            str_id: Some(format!("controls-{index}")),
+            position: Some(Position::Absolute),
+            visibility: Some(Visibility::Hidden),
+            width: Some(Number::Integer(160)),
+            height: Some(Number::Integer(160)),
+            children: [true, false]
+                .into_iter()
+                .map(|left| Container {
+                    str_id: Some(format!("button-{index}-{left}")),
+                    element: Element::Button { r#type: None },
+                    position: Some(Position::Absolute),
+                    width: Some(Number::Integer(40)),
+                    height: Some(Number::Integer(40)),
+                    bottom: Some(Number::RealPercent(5.0)),
+                    left: left.then_some(Number::RealPercent(5.0)),
+                    right: (!left).then_some(Number::RealPercent(5.0)),
+                    children: vec![Container {
+                        str_id: Some(format!("cover-control-{index}-{left}")),
+                        element: Element::Image {
+                            source: Some("/play-button.svg".into()),
+                            alt: None,
+                            fit: None,
+                            source_set: None,
+                            sizes: None,
+                            loading: None,
+                        },
+                        width: Some(Number::Integer(16)),
+                        height: Some(Number::Integer(16)),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn album_absolute_overlays_reproject_with_complete_layout_parity() {
+        for (width, height, menu_hidden) in [(80, 24), (120, 40), (140, 60)]
+            .into_iter()
+            .flat_map(|(width, height)| [false, true].map(|hidden| (width, height, hidden)))
+        {
+            let mut root = album_document();
+            for (index, album) in root.children[0].children.iter_mut().enumerate() {
+                album.position = Some(Position::Relative);
+                album.children.push(Container {
+                    str_id: Some(format!("cover-{index}")),
+                    element: Element::Image {
+                        source: Some("/cover.png".into()),
+                        alt: None,
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    width: Some(Number::Integer(160)),
+                    height: Some(Number::Integer(160)),
+                    ..Default::default()
+                });
+                album.children.push(production_album_controls(index));
+                // Shape of native/ui/src/albums.rs #albums-menu: fixed width,
+                // intrinsic height, percentage top, two columns and bordered rows.
+                album.children.push(Container {
+                    str_id: Some(format!("albums-menu-{index}")),
+                    position: Some(Position::Absolute),
+                    width: Some(Number::Integer(300)),
+                    top: Some(Number::RealPercent(100.0)),
+                    direction: LayoutDirection::Row,
+                    visibility: Some(if menu_hidden {
+                        Visibility::Hidden
+                    } else {
+                        Visibility::Visible
+                    }),
+                    children: ["Album Artist", "Album Title", "Release Date"]
+                        .into_iter()
+                        .map(|label| Container {
+                            border_top: Some((hyperchad_color::Color::BLACK, Number::Real(1.0))),
+                            children: vec![Container {
+                                element: Element::Button { r#type: None },
+                                children: vec![Container {
+                                    element: Element::Text {
+                                        value: label.into(),
+                                    },
+                                    ..Default::default()
+                                }],
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                });
+                album.children.push(Container {
+                    str_id: Some(format!("overlay-{index}")),
+                    position: Some(Position::Absolute),
+                    left: Some(Number::Integer(8)),
+                    top: Some(Number::Integer(16)),
+                    width: Some(Number::Integer(80)),
+                    height: Some(Number::Integer(32)),
+                    children: vec![Container {
+                        element: Element::Text {
+                            value: "Play album".into(),
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                });
+            }
+            let mut options = LayoutOptions {
+                viewport: Size::new(width, height),
+                ..Default::default()
+            };
+            let measurements = std::cell::Cell::new(0);
+            let measure = |node: &Container, constraints| {
+                measurements.set(measurements.get() + 1);
+                DefaultLeafMeasure.measure(node, constraints)
+            };
+            let mut retained = layout(&root, &options, &measure).unwrap();
+            assert!(measurements.get() > 0);
+            for offset in [3, 6, 30, 200, 99999, 6, 0] {
+                options
+                    .scroll_offsets
+                    .insert("scroll".into(), ScrollOffset { x: 0, y: offset });
+                measurements.set(0);
+                let projected = reproject_scroll(&root, &retained, &options.scroll_offsets)
+                    .expect("relative album owns its absolute overlay");
+                assert_eq!(
+                    measurements.get(),
+                    0,
+                    "scroll reuse must not remeasure leaves"
+                );
+                let full = layout(&root, &options, &measure).unwrap();
+                assert!(measurements.get() > 0);
+                assert_eq!(
+                    format!("{projected:?}"),
+                    format!("{full:?}"),
+                    "{width}x{height} offset={offset}"
+                );
+                for y in 0..i64::from(height) {
+                    for x in 0..i64::from(width) {
+                        assert_eq!(
+                            projected.hit_test(x, y).map(|node| &node.key),
+                            full.hit_test(x, y).map(|node| &node.key),
+                            "hit {x},{y} hidden={menu_hidden} offset={offset}"
+                        );
+                    }
+                }
+                let mut graphics =
+                    crate::graphics::GraphicsStore::new(crate::graphics::GraphicsLimits::default());
+                for node in full
+                    .nodes
+                    .iter()
+                    .filter(|node| node.key.starts_with("cover-"))
+                {
+                    graphics
+                        .register_rgba(&node.key, 2, 2, vec![255; 16])
+                        .unwrap();
+                    let placement =
+                        |tree: &LayoutTree, graphics: &mut crate::graphics::GraphicsStore| {
+                            let node = tree.get(&node.key).unwrap();
+                            graphics
+                                .placement(
+                                    &node.key,
+                                    &node.key,
+                                    node.content_bounds.terminal(),
+                                    node.clip.terminal(),
+                                    crate::graphics::GraphicsFit::Contain,
+                                    (8.0, 16.0),
+                                    true,
+                                    "",
+                                )
+                                .unwrap()
+                        };
+                    assert_eq!(
+                        format!("{:?}", placement(&projected, &mut graphics)),
+                        format!("{:?}", placement(&full, &mut graphics))
+                    );
+                }
+                retained = projected;
+            }
+        }
+    }
+
+    #[test]
+    fn intrinsic_menu_requires_moving_fixed_basis_and_static_fixed_lengths() {
+        let mut root = album_document();
+        let album = &mut root.children[0].children[0];
+        album.position = Some(Position::Relative);
+        let mut menu = production_album_controls(0);
+        menu.height = None;
+        menu.children = vec![Container {
+            element: Element::Text {
+                value: "Album Artist".into(),
+            },
+            ..Default::default()
+        }];
+        menu.top = Some(Number::RealPercent(100.0));
+        album.children.push(menu);
+        let path = [0, 0, 1];
+        assert_eq!(scrolls_absolute(&root, &path, &[0]), Some(true));
+        assert_eq!(scrolls_absolute(&root, &path, &[0, 0]), Some(false));
+        root.children[0].children[0].width = Some(Number::IntegerPercent(100));
+        assert_eq!(scrolls_absolute(&root, &path, &[0]), Some(false));
+        root.children[0].children[0].width = Some(Number::Integer(160));
+        for dependency in [0, 1, 2, 3] {
+            let child = &mut root.children[0].children[0].children[1].children[0];
+            match dependency {
+                0 => child.height = Some(Number::RealPercent(50.0)),
+                1 => child.row_gap = Some(Number::RealPercent(5.0)),
+                2 => child.position = Some(Position::Fixed),
+                _ => child.width = Some(Number::Real(f32::INFINITY)),
+            }
+            assert_eq!(scrolls_absolute(&root, &path, &[0]), Some(false));
+            root.children[0].children[0].children[1].children[0] = Container::default();
+        }
+        root.children[0].children[0].children[1].bottom = Some(Number::Integer(0));
+        assert_eq!(scrolls_absolute(&root, &path, &[0]), Some(false));
+    }
+
+    #[test]
+    fn real_percent_insets_require_finite_values_and_preserve_fractional_parity() {
+        for value in [5.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut root = album_document();
+            let album = &mut root.children[0].children[0];
+            album.position = Some(Position::Relative);
+            let mut controls = production_album_controls(0);
+            controls.children[0].left = Some(Number::RealPercent(value));
+            album.children.push(controls);
+            let mut options = LayoutOptions::default();
+            let path = [0, 0, 1, 0];
+            assert_eq!(
+                scrolls_absolute(&root, &path, &[0]),
+                Some(value.is_finite())
+            );
+            if value.is_finite() {
+                let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+                options
+                    .scroll_offsets
+                    .insert("scroll".into(), ScrollOffset { x: 0, y: 3 });
+                let projected = reproject_scroll(&root, &tree, &options.scroll_offsets).unwrap();
+                let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+                assert_eq!(format!("{projected:?}"), format!("{full:?}"));
+            }
+        }
+    }
+
+    #[test]
+    fn percent_insets_with_unproven_containing_dimensions_require_reflow() {
+        let mut root = album_document();
+        let album = &mut root.children[0].children[0];
+        album.position = Some(Position::Relative);
+        let mut controls = production_album_controls(0);
+        controls.width = Some(Number::IntegerPercent(100));
+        album.children.push(controls);
+        let options = LayoutOptions::default();
+        let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+        let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
+        assert!(reproject_scroll(&root, &tree, &offsets).is_none());
+    }
+
+    #[test]
+    fn absolute_scroll_overlay_with_dynamic_size_requires_reflow() {
+        let mut root = album_document();
+        let album = &mut root.children[0].children[0];
+        album.position = Some(Position::Relative);
+        album.children.push(Container {
+            position: Some(Position::Absolute),
+            width: Some(Number::IntegerPercent(100)),
+            height: Some(Number::Integer(32)),
+            ..Default::default()
+        });
+        let options = LayoutOptions::default();
+        let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+        let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
+        assert!(reproject_scroll(&root, &tree, &offsets).is_none());
     }
 
     #[test]

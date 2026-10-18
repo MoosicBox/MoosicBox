@@ -196,6 +196,297 @@ fn actual_albums_shell_confines_scrolling_at_140_by_56() {
 }
 
 #[test]
+fn actual_populated_albums_scroll_reuses_committed_geometry() {
+    use bmux_tui::{
+        event::{Event, MouseEvent, MouseEventKind},
+        geometry::Point,
+    };
+    use bmux_tui_runtime::{Program, RuntimeEvent};
+    use hyperchad::renderer_bmux::{program::BmuxProgram, renderer::BmuxConfig};
+
+    // Observe the normal public prepare path, not a copy of its private guard.
+    // Thread-local capture prevents other parallel tests from supplying evidence.
+    struct PrepareLog;
+    thread_local! {
+        static PREPARES: std::cell::RefCell<Vec<String>> = const {
+            std::cell::RefCell::new(Vec::new())
+        };
+    }
+    impl log::Log for PrepareLog {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.target().starts_with("hyperchad_renderer_bmux")
+        }
+        fn log(&self, record: &log::Record<'_>) {
+            if self.enabled(record.metadata()) {
+                let message = record.args().to_string();
+                if message.starts_with("bmux prepare") || message.starts_with("bmux scroll") {
+                    PREPARES.with(|records| records.borrow_mut().push(message));
+                }
+            }
+        }
+        fn flush(&self) {}
+    }
+    static LOGGER: PrepareLog = PrepareLog;
+    log::set_logger(&LOGGER).expect("isolated integration-test logger");
+    log::set_max_level(log::LevelFilter::Debug);
+    moosicbox_app_native::register_api_sources();
+    use moosicbox_app_native_ui::state::{PlaybackState, PlayerState};
+    let state = State {
+        connection: Some(moosicbox_app_models::Connection {
+            name: "Scroll reuse fixture (no network)".into(),
+            api_url: "http://example.invalid".into(),
+        }),
+        player: PlayerState {
+            playback: Some(PlaybackState {
+                session_id: 1,
+                playing: false,
+                position: 15,
+                seek: 42.0,
+                volume: 0.7,
+                tracks: (0_u64..40)
+                    .map(|index| moosicbox_music_models::api::ApiTrack {
+                        track_id: index.into(),
+                        album_id: index.into(),
+                        title: format!("Long current playlist track title {index}"),
+                        artist: "Production artist".into(),
+                        album: "Production album".into(),
+                        contains_cover: true,
+                        duration: 240.0,
+                        ..Default::default()
+                    })
+                    .collect(),
+            }),
+        },
+        ..State::default()
+    };
+    // Replay the captured API payload without contacting the live server.
+    let response_path = std::env::var("BMUX_ALBUM_RESPONSES").unwrap_or_else(|_| {
+        "/tmp/bmux-visual-48f67fe4/percentage-checkpoint/visible-candidate-80x24/responses.json"
+            .into()
+    });
+    let responses: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(&response_path).expect("recorded Albums response must be available"),
+    )
+    .expect("recorded responses must be JSON");
+    assert_eq!(
+        responses[0][0],
+        "/menu/albums?moosicboxProfile=master&offset=0&limit=100&sort=name"
+    );
+    let recorded = &responses[0][1];
+    let page = Page::WithTotal {
+        items: serde_json::from_value::<Vec<ApiAlbum>>(recorded["items"].clone())
+            .expect("recorded API albums must deserialize"),
+        offset: serde_json::from_value(recorded["offset"].clone()).unwrap(),
+        limit: serde_json::from_value(recorded["limit"].clone()).unwrap(),
+        total: serde_json::from_value(recorded["total"].clone()).unwrap(),
+    };
+    let mut failures = Vec::new();
+    for (width, height, menu_shown) in [(80, 24), (120, 40), (140, 60)]
+        .into_iter()
+        .flat_map(|(width, height)| [false, true].map(|shown| (width, height, shown)))
+    {
+        let mut root: Container = albums::albums(&state, &[], AlbumSort::NameAsc, None).into();
+        fn set_menu_visibility(node: &mut Container, shown: bool) {
+            if node.str_id.as_deref() == Some("albums-menu") {
+                node.visibility = Some(if shown {
+                    hyperchad::transformer::models::Visibility::Visible
+                } else {
+                    hyperchad::transformer::models::Visibility::Hidden
+                });
+            }
+            for child in &mut node.children {
+                set_menu_visibility(child, shown);
+            }
+        }
+        set_menu_visibility(&mut root, menu_shown);
+        let response: View = albums::albums_list_start(
+            &state,
+            &page,
+            &[],
+            AlbumSort::NameAsc,
+            moosicbox_app_native_ui::ALBUM_ART_SIZE,
+            "",
+        )
+        .into();
+        let (actions, _actions_rx) = flume::bounded(8);
+        let (resize, _resize_rx) = flume::bounded(8);
+        let mut program = BmuxProgram::new(
+            BmuxConfig {
+                width,
+                height,
+                ..Default::default()
+            },
+            actions,
+            resize,
+        );
+        program.apply_view(root.into(), None).unwrap();
+        program
+            .apply_response(response, Some("albums"), SwapStrategy::Children)
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        let root = program.state.root();
+        let menu_key = key_for(root, |node| node.str_id.as_deref() == Some("albums-menu"));
+        assert_eq!(
+            menu_key, "albums-menu",
+            "keep actual albums_page_content menu"
+        );
+        let main_key = key_for(root, |node| node.element == Element::Main);
+        let opts = LayoutOptions {
+            viewport: Size::new(width, height),
+            ..Default::default()
+        };
+        let tree = layout(root, &opts, &program.controls.measurer(root)).unwrap();
+        let main = tree.get(&main_key).unwrap();
+        let menu = tree
+            .get("albums-menu")
+            .expect("real hidden menu in authoritative geometry");
+        eprintln!(
+            "{width}x{height}: first production menu key={} path={:?} main_path={:?} menu_size={:?}",
+            menu.key, menu.path, main.path, menu.bounds
+        );
+        assert!(
+            menu.path.starts_with(&main.path),
+            "actual menu remains in main scroll subtree"
+        );
+        assert!(main.content_extents.height > main.content_bounds.height);
+        let pointer = Point::new(
+            u16::try_from(main.content_bounds.x + 2).unwrap(),
+            u16::try_from(main.content_bounds.y + 8).unwrap(),
+        );
+        let mut dynamic_images = Vec::new();
+        fn inspect_images(node: &Container, path: &mut Vec<usize>, output: &mut Vec<String>) {
+            if matches!(node.element, Element::Image { .. })
+                && (!matches!(node.width, Some(hyperchad::transformer::Number::Integer(_)))
+                    || !matches!(
+                        node.height,
+                        Some(hyperchad::transformer::Number::Integer(_))
+                    ))
+            {
+                output.push(format!(
+                    "{} width={:?} height={:?}",
+                    node_key(node, path),
+                    node.width,
+                    node.height
+                ));
+            }
+            for (index, child) in node.children.iter().enumerate() {
+                path.push(index);
+                inspect_images(child, path, output);
+                path.pop();
+            }
+        }
+        inspect_images(root, &mut Vec::new(), &mut dynamic_images);
+        let mut positioned = Vec::new();
+        fn inspect_positioned(node: &Container, path: &mut Vec<usize>, output: &mut Vec<String>) {
+            if matches!(
+                node.position,
+                Some(hyperchad::transformer::models::Position::Absolute)
+            ) {
+                let value = format!(
+                    "size={:?}/{:?} insets={:?}/{:?}/{:?}/{:?} minmax={:?}/{:?}/{:?}/{:?} margin={:?}/{:?}/{:?}/{:?} padding={:?}/{:?}/{:?}/{:?}",
+                    node.width,
+                    node.height,
+                    node.left,
+                    node.right,
+                    node.top,
+                    node.bottom,
+                    node.min_width,
+                    node.max_width,
+                    node.min_height,
+                    node.max_height,
+                    node.margin_left,
+                    node.margin_right,
+                    node.margin_top,
+                    node.margin_bottom,
+                    node.padding_left,
+                    node.padding_right,
+                    node.padding_top,
+                    node.padding_bottom
+                );
+                if !output.contains(&value) {
+                    output.push(value);
+                }
+            }
+            for (index, child) in node.children.iter().enumerate() {
+                path.push(index);
+                inspect_positioned(child, path, output);
+                path.pop();
+            }
+        }
+        inspect_positioned(root, &mut Vec::new(), &mut positioned);
+        eprintln!("{width}x{height} actual Absolute shapes: {positioned:#?}");
+        for (step, direction) in [
+            MouseEventKind::ScrollDown,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::ScrollUp,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::ScrollDown,
+            MouseEventKind::ScrollUp,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            PREPARES.with(|records| records.borrow_mut().clear());
+            program
+                .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                    direction, pointer,
+                ))))
+                .unwrap();
+            program.prepare().unwrap();
+            let records = PREPARES.with(|records| records.borrow().clone());
+            eprintln!(
+                "{width}x{height} menu_shown={menu_shown} step={step}: diagnostic chain={records:?}"
+            );
+            if !records
+                .iter()
+                .any(|line| line.contains("scroll-reuse") && line.contains("full_layouts=0"))
+            {
+                failures.push(format!(
+                    "{width}x{height} menu_shown={menu_shown} step={step}: {records:?}; first menu key={} path={:?}; dynamic images={dynamic_images:?}",
+                    menu.key, menu.path
+                ));
+            }
+            // A second prepare without a new scroll intent must take the fresh
+            // full-reflow path, retaining exactly the same document and offsets.
+            fn presentation(program: &mut BmuxProgram, width: u16, height: u16) -> String {
+                use bmux_tui::{buffer::Buffer, frame::Frame, geometry::Rect, paint::PaintCx};
+                let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
+                let metadata = {
+                    let mut frame = Frame::new(&mut buffer);
+                    program.paint(&mut PaintCx::new(&mut frame));
+                    format!("{:?}/{:?}", frame.hits().regions(), frame.images())
+                };
+                format!("{:?}/{metadata}", buffer.cells())
+            }
+            let reused = presentation(&mut program, width, height);
+            PREPARES.with(|records| records.borrow_mut().clear());
+            program.prepare().unwrap();
+            let full_records = PREPARES.with(|records| records.borrow().clone());
+            assert!(
+                full_records.iter().any(|line| line.contains("layout_us="))
+                    && !full_records
+                        .iter()
+                        .any(|line| line.contains("scroll-reuse")),
+                "comparator must execute fresh full reflow: {full_records:?}"
+            );
+            assert_eq!(
+                reused,
+                presentation(&mut program, width, height),
+                "full-frame text/style/hit/image parity {width}x{height} menu_shown={menu_shown} step={step}"
+            );
+            program.commit_prepared();
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "production scroll reuse rejected:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn actual_albums_shell_is_stable_at_common_terminal_sizes() {
     for (width, height, columns) in [(80, 24, 4), (120, 40, 7), (140, 60, 9)] {
         assert_album_shell(width, height, columns);
