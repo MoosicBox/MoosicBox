@@ -849,13 +849,13 @@ criterion = { version = "0.8.2", default-features = false, features = [
 ] }
 
 [patch.crates-io]
-# Keep the renderer stack on one published bmux Git revision.
-bmux_image          = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
-bmux_keyboard       = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
-bmux_text_edit      = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
-bmux_tui            = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
-bmux_tui_components = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
-bmux_tui_runtime    = { git = "https://github.com/BSteffaniak/bmux.git", rev = "2315bbf0e4e423f66f292efdac2952feebd3b8b6" }
+# Follow bmux master; Cargo.lock records the resolved commit.
+bmux_image          = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
+bmux_keyboard       = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
+bmux_text_edit      = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
+bmux_tui            = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
+bmux_tui_components = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
+bmux_tui_runtime    = { git = "https://github.com/BSteffaniak/bmux.git", branch = "master" }
 # actix-files             = { git = "https://github.com/actix/actix-web" }
 # actix-http              = { git = "https://github.com/actix/actix-web" }
 # actix-http-test         = { git = "https://github.com/actix/actix-web" }
