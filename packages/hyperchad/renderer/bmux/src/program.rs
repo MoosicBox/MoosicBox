@@ -513,6 +513,32 @@ impl BmuxProgram {
         if self.stopping && !self.active && self.pending.is_empty() {
             update.lifecycle = bmux_tui_runtime::Lifecycle::Exit;
         }
+        // Navigation hands intent to the application's independent router. Do not
+        // serialize it behind in-flight HTTP requests or decorative asset loads.
+        // Its completion must not release the ordered host-effect lane.
+        let mut navigations = Vec::new();
+        while let Some(index) = self
+            .pending
+            .iter()
+            .position(|work| matches!(work, Work::Navigate(_)))
+        {
+            let Some(Work::Navigate(url)) = self.pending.remove(index) else {
+                unreachable!()
+            };
+            navigations.push(url);
+        }
+        if !navigations.is_empty() {
+            let navigation = self.shared.navigation_tx.clone();
+            update.commands.push(Command::concurrent(async move {
+                for url in navigations {
+                    if navigation.send_async(url).await.is_err() {
+                        log::warn!("application navigation bridge closed");
+                        break;
+                    }
+                }
+                Some(Message::Advance)
+            }));
+        }
         if self.active {
             return update;
         }
@@ -1819,6 +1845,23 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn navigation_dispatches_while_ordered_host_work_is_busy() {
+        let mut program = program();
+        program.active = true;
+        program.pending.push_back(Work::Navigate("/albums".into()));
+        program
+            .pending
+            .push_back(Work::Navigate("/settings".into()));
+        let update = program.drive(Update::none());
+        assert_eq!(update.commands.len(), 1);
+        assert!(
+            program.active,
+            "navigation must not release the ordered effect lane"
+        );
+        assert!(program.pending.is_empty());
     }
 
     #[test]

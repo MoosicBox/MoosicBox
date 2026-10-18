@@ -241,6 +241,27 @@ pub fn init() -> Router {
     router
 }
 
+/// Registers source identities supported by local integrations or remote bmux libraries.
+///
+/// # Panics
+///
+/// * If the global API source registry is poisoned
+pub fn register_api_sources() {
+    let _ = ApiSource::register_library();
+
+    // Remote libraries can contain provider metadata even when this terminal
+    // client has no local provider integration. Register their domain identities
+    // before decoding remote album versions and source mappings.
+    #[cfg(any(feature = "tidal", feature = "bmux"))]
+    ApiSource::register("Tidal", "Tidal");
+
+    #[cfg(any(feature = "qobuz", feature = "bmux"))]
+    ApiSource::register("Qobuz", "Qobuz");
+
+    #[cfg(any(feature = "yt", feature = "bmux"))]
+    ApiSource::register("Yt", "YouTube Music");
+}
+
 /// Initializes the application state with persistence and event listeners.
 ///
 /// # Errors
@@ -253,17 +274,7 @@ pub fn init() -> Router {
 pub async fn init_app_state(
     state: moosicbox_app_state::AppState,
 ) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {
-    let _ = ApiSource::register_library();
-
-    #[cfg(feature = "tidal")]
-    ApiSource::register("Tidal", "Tidal");
-
-    #[cfg(feature = "qobuz")]
-    ApiSource::register("Qobuz", "Qobuz");
-
-    #[cfg(feature = "yt")]
-    ApiSource::register("Yt", "YouTube Music");
-
+    register_api_sources();
     let persistence_db = moosicbox_config::get_profile_dir_path(AppType::App, PROFILE)
         .map(|x| x.join("persistence.db"))
         .unwrap();

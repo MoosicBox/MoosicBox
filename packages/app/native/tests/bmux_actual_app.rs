@@ -56,9 +56,15 @@ impl ResourceServer {
                     };
                     let request = String::from_utf8_lossy(&buffer[..count]).into_owned();
                     let artwork = request.starts_with("GET /files/albums/1/64x64?");
+                    let albums = request.starts_with("GET /menu/albums?");
                     requests.lock().unwrap().push(request);
                     let (status, body): (&str, &[u8]) = if artwork {
                         ("200 OK", ARTWORK)
+                    } else if albums {
+                        (
+                            "200 OK",
+                            br#"{"items":[],"offset":0,"limit":1,"total":0,"hasMore":false}"#,
+                        )
                     } else {
                         ("404 Not Found", b"")
                     };
@@ -328,6 +334,23 @@ fn actual_home_settings_connection_forms_and_registered_icons() {
         ))
         .await
         .unwrap();
+        // Exercise HTTP fragments independently of WebSocket readiness; a slow or
+        // reconnecting socket must not strand the one-shot load placeholder.
+        for status in [
+            moosicbox_app_models::ConnectionStatus::Connecting,
+            moosicbox_app_models::ConnectionStatus::Reconnecting { attempt: 1 },
+        ] {
+            *moosicbox_app_native::STATE.connection_status.write().await = status;
+            let response = router
+                .navigate(hyperchad::router::RouteRequest::from_path(
+                    "/albums-list-start?limit=1&size=64&sort=name-asc",
+                    Default::default(),
+                ))
+                .await
+                .unwrap();
+            let view = content_view(response);
+            assert!(view.primary.is_some());
+        }
         let albums = content_view(router.navigate("/albums").await.unwrap());
         dump_navigation(albums.primary.as_ref().unwrap(), "albums-route");
         let artwork_request = moosicbox_app_native::renderer_bmux::config()

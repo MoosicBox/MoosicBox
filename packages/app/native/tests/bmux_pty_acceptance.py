@@ -335,6 +335,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.path.split("?")[0] == "/ws"
             and self.headers.get("Upgrade", "").lower() == "websocket"
         ):
+            if self.server.hold_websocket:
+                # Keep HTTP usable but never finish the socket handshake. Albums
+                # must not depend on Ready, even on the executable path.
+                self.server.stopping.wait(40)
+                return
             key = self.headers["Sec-WebSocket-Key"]
             accept = base64.b64encode(
                 hashlib.sha1(
@@ -429,6 +434,7 @@ def run(args):
     }
     print(json.dumps(metadata), flush=True)
     mock = Mock()
+    mock.hold_websocket = args.hold_websocket
     thread = threading.Thread(target=mock.serve_forever, daemon=True)
     thread.start()
     master, slave = pty.openpty()
@@ -738,6 +744,11 @@ def main():
     parser.add_argument("executable")
     parser.add_argument(
         "--protocol", choices=("text", "kitty", "sixel", "iterm2"), default="kitty"
+    )
+    parser.add_argument(
+        "--hold-websocket",
+        action="store_true",
+        help="leave WebSocket handshake pending while testing HTTP browsing",
     )
     parser.add_argument("--artifacts", required=True)
     run(parser.parse_args())

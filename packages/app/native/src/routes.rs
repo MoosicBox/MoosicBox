@@ -103,9 +103,14 @@ pub fn handle_route_result<T: Into<Content>>(
 fn require_ready_connection(
     state: &State,
 ) -> Result<&moosicbox_app_models::Connection, RouteError> {
+    // HTTP browsing/settings requests do not depend on the WebSocket handshake.
+    // A load-triggered fragment can otherwise become a permanent "Connecting"
+    // placeholder even when the HTTP server is already serving the library.
     if !matches!(
         state.connection_status,
         moosicbox_app_models::ConnectionStatus::Ready
+            | moosicbox_app_models::ConnectionStatus::Connecting
+            | moosicbox_app_models::ConnectionStatus::Reconnecting { .. }
     ) {
         return Err(RouteError::BackendUnavailable(
             state.connection_status.clone(),
@@ -1103,6 +1108,46 @@ mod tests {
         assert!(matches!(
             settings_page_response(Container::default(), Container::default()),
             Err(RouteError::RouteFailed(_))
+        ));
+    }
+
+    #[test]
+    fn http_connection_requires_configuration_but_not_websocket_readiness() {
+        let mut state = State {
+            connection: Some(Connection {
+                name: "Remote".into(),
+                api_url: "http://127.0.0.1:8500".into(),
+            }),
+            ..Default::default()
+        };
+        for status in [
+            ConnectionStatus::Connecting,
+            ConnectionStatus::Ready,
+            ConnectionStatus::Reconnecting { attempt: 1 },
+        ] {
+            state.connection_status = status;
+            assert!(require_ready_connection(&state).is_ok());
+        }
+        for status in [
+            ConnectionStatus::Unconfigured,
+            ConnectionStatus::StartingBackend,
+            ConnectionStatus::AuthenticationRequired,
+            ConnectionStatus::Failed {
+                message: "denied".into(),
+            },
+            ConnectionStatus::ShuttingDown,
+        ] {
+            state.connection_status = status;
+            assert!(matches!(
+                require_ready_connection(&state),
+                Err(RouteError::BackendUnavailable(_))
+            ));
+        }
+        state.connection_status = ConnectionStatus::Connecting;
+        state.connection = None;
+        assert!(matches!(
+            require_ready_connection(&state),
+            Err(RouteError::MissingConnection)
         ));
     }
 
