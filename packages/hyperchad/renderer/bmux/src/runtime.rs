@@ -3,6 +3,7 @@
 use std::{
     io::{self, BufWriter, Write},
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use bmux_tui::{
@@ -128,6 +129,91 @@ const fn is_quit_event(event: &Event) -> bool {
             && matches!(key.key, bmux_keyboard::KeyCode::Char('c' | 'C' | 'q' | 'Q')))
 }
 
+// These spans end at runtime FIFO admission, not Program::update or presentation.
+// The managed reader's internal queue precedes observed_at and is not measured here.
+// Admission wait includes task scheduling and diagnostic logging, not just capacity wait.
+fn input_admission_spans(
+    observed_at: Instant,
+    enqueue_at: Instant,
+    delivered_at: Instant,
+) -> Option<(std::time::Duration, std::time::Duration)> {
+    Some((
+        enqueue_at.checked_duration_since(observed_at)?,
+        delivered_at.checked_duration_since(enqueue_at)?,
+    ))
+}
+
+async fn forward_terminal_input(
+    shared: Arc<Shared>,
+    handle: bmux_tui_runtime::RuntimeHandle<Message>,
+    mut input_stop: tokio::sync::watch::Receiver<bool>,
+) {
+    let mut reader = ManagedTerminalInput::start(64);
+    let origin = Instant::now();
+    let mut sequence = Some(0_u64);
+    loop {
+        tokio::select! {
+            biased;
+            _ = input_stop.changed() => break,
+            event = reader.recv() => {
+                let event = match event {
+                    Some(Ok(Some(event))) => event,
+                    Some(Ok(None)) => continue,
+                    Some(Err(error)) => {
+                        let _ = handle.send(Message::InputFailed(error.to_string())).await;
+                        break;
+                    }
+                    None => {
+                        let _ = handle.send(Message::Shutdown).await;
+                        break;
+                    }
+                };
+                let observed_at = log::log_enabled!(log::Level::Debug).then(Instant::now);
+                sequence = sequence.and_then(|value| value.checked_add(1));
+                if is_quit_event(&event) {
+                    shared.stopping.store(true, std::sync::atomic::Ordering::Release);
+                    let _ = handle.send(Message::Quit).await;
+                    break;
+                }
+                // Keep all input ordered: coalescing resize past a click changes meaning.
+                let oversized = matches!(&event, Event::Paste(text) if text.len() > shared.config.max_event_bytes);
+                if oversized { continue; }
+                let enqueue_at = observed_at.map(|observed_at| {
+                    let enqueue_at = Instant::now();
+                    log::debug!(
+                        "bmux input admission_attempt sequence={sequence:?} observed_us={} enqueue_us={}",
+                        observed_at.duration_since(origin).as_micros(),
+                        enqueue_at.duration_since(origin).as_micros(),
+                    );
+                    enqueue_at
+                });
+                tokio::select! {
+                    biased;
+                    _ = input_stop.changed() => {
+                        if enqueue_at.is_some() {
+                            log::debug!("bmux input admission_cancelled sequence={sequence:?}");
+                        }
+                        break;
+                    },
+                    result = handle.send_terminal(event) => {
+                        if let (Some(observed_at), Some(enqueue_at)) = (observed_at, enqueue_at) {
+                            let delivered_at = Instant::now();
+                            let spans = input_admission_spans(observed_at, enqueue_at, delivered_at);
+                            log::debug!(
+                                "bmux input admission_result sequence={sequence:?} accepted={} completion_us={} pre_enqueue_and_wait={spans:?}",
+                                result.is_ok(),
+                                delivered_at.duration_since(origin).as_micros(),
+                            );
+                        }
+                        if result.is_err() { break; }
+                    },
+                }
+            }
+        }
+    }
+    reader.shutdown().await;
+}
+
 async fn run_terminal(
     shared: Arc<Shared>,
     receiver: flume::Receiver<Message>,
@@ -164,44 +250,7 @@ async fn run_terminal(
             }
         }
     });
-    let mut input_stop = stop_rx;
-    let input = tokio::spawn(async move {
-        let mut reader = ManagedTerminalInput::start(64);
-        loop {
-            tokio::select! {
-                biased;
-                _ = input_stop.changed() => break,
-                event = reader.recv() => {
-                    let event = match event {
-                        Some(Ok(Some(event))) => event,
-                        Some(Ok(None)) => continue,
-                        Some(Err(error)) => {
-                            let _ = handle.send(Message::InputFailed(error.to_string())).await;
-                            break;
-                        }
-                        None => {
-                            let _ = handle.send(Message::Shutdown).await;
-                            break;
-                        }
-                    };
-                    if is_quit_event(&event) {
-                        shared.stopping.store(true, std::sync::atomic::Ordering::Release);
-                        let _ = handle.send(Message::Quit).await;
-                        break;
-                    }
-                    // Keep all input ordered: coalescing resize past a click changes meaning.
-                    let oversized = matches!(&event, Event::Paste(text) if text.len() > shared.config.max_event_bytes);
-                    if oversized { continue; }
-                    tokio::select! {
-                        biased;
-                        _ = input_stop.changed() => break,
-                        result = handle.send_terminal(event) => if result.is_err() { break; },
-                    }
-                }
-            }
-        }
-        reader.shutdown().await;
-    });
+    let input = tokio::spawn(forward_terminal_input(shared, handle, stop_rx));
     let result = Box::pin(runtime.run()).await;
     let _ = stop_tx.send(true);
     let ingress_result = ingress.await;
@@ -235,6 +284,22 @@ async fn run_terminal(
 mod tests {
     use super::*;
     use bmux_keyboard::{KeyCode, KeyStroke, Modifiers};
+
+    #[test]
+    fn input_admission_spans_separate_pre_enqueue_from_admission_wait() {
+        use std::time::Duration;
+
+        let observed = Instant::now();
+        let enqueue = observed + Duration::from_millis(3);
+        let delivered = enqueue + Duration::from_millis(17);
+        assert_eq!(
+            input_admission_spans(observed, enqueue, delivered),
+            Some((Duration::from_millis(3), Duration::from_millis(17)))
+        );
+        // Invalid/missing chronology must not become a zero-duration sample.
+        assert_eq!(input_admission_spans(enqueue, observed, delivered), None);
+        assert_eq!(input_admission_spans(observed, delivered, enqueue), None);
+    }
 
     /// Exercises the real runtime admission/scheduling path, unlike the direct
     /// `BmuxProgram::update` performance fixture. All input is admitted from the

@@ -338,6 +338,9 @@ class PtyDrain:
         self.error = None
         self.telemetry = QueueTelemetry()
         self.byte_offset = 0
+        self.parsed_byte_offset = 0
+        self.observed_byte_offset = 0
+        self.parse_completions = []
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.parse_queue = queue.Queue()
         self.mirror_queue = queue.Queue()
@@ -352,9 +355,15 @@ class PtyDrain:
                     return
                 received, data, begin, end = item
                 self.screen.feed(data)
-                if self.observe:
-                    self.observe(received)
                 finished = time.monotonic()
+                self.parsed_byte_offset = end
+                completion = dict(
+                    begin=begin, end=end, received=received, parse_completed=finished
+                )
+                self.parse_completions.append(completion)
+                if self.observe:
+                    self.observe(completion)
+                self.observed_byte_offset = end
                 self.parsed.append((received, finished))
                 self.telemetry.record("parse_finish", begin, end, finished)
         except Exception as error:
@@ -447,6 +456,7 @@ def album_positions(screen, payloads):
         matches = [
             (match.start(), row)
             for row, line in enumerate(lines)
+            if title in line
             for match in re.finditer(r"(?<!\w)" + re.escape(title) + r"(?!\w)", line)
         ]
         if len(matches) == 1 and matches[0][0] >= 18:
@@ -542,6 +552,17 @@ def exact_sidebar_target(text, label, main_bottom):
     return targets[0] if len(targets) == 1 else None
 
 
+def ready_sidebar_target(screen, label, main_bottom):
+    """Resolve coordinates only from a complete scene with a live uploaded icon.
+
+    The caller must hold the parser lock through resolution and input write.
+    This is terminal-scene readiness, not WebSocket/application Ready.
+    """
+    if not screen.scene_ready() or not screen.gear_ready():
+        return None
+    return exact_sidebar_target(screen.text(), label, main_bottom)
+
+
 def album_click_candidates(screen, payloads, card_columns=None):
     """Resolve exact displayed title/artist pairs uniquely across ALL loaded IDs."""
     albums = {}
@@ -627,6 +648,22 @@ def detail_metadata_matches(text, title, artist, main_left=18, footer_rows=4):
     return False
 
 
+def current_detail_state(screen, album, tracks):
+    """Require a complete current heading and selected album track row."""
+    with screen.lock:
+        if not screen.scene_ready():
+            return False
+        text = screen.text()
+        if not detail_metadata_matches(text, album["title"], album["artist"]):
+            return False
+        lines = [line[18:].strip() for line in text.splitlines()[:-4]]
+        return any(
+            re.search(r"^\d+\s+" + re.escape(track["title"]) + r"(?:\s|$)", line)
+            for track in tracks.values()
+            for line in lines
+        )
+
+
 def albums_moved_up(before, after):
     """Require upward movement of the SAME album, not unrelated frame churn.
 
@@ -655,18 +692,20 @@ def clock_anchor():
     return {"monotonic_before_ns": before, "wall_ns": wall, "monotonic_after_ns": after}
 
 
-def classify_wheel_observations(before, observations, sent, until):
+def classify_wheel_observations(
+    before, observations, sent, until, *, observer_backlog=False, receipt_times=None
+):
     """Classify same-identity motion without treating lost overlap as success.
 
-    Receipt times are PTY drain times, not application admission or physical
-    presentation. Empty/clipped/disjoint labels leave latency inconclusive; they
-    must remain missing samples in the acceptance calculation. Stale receipts
-    never establish a response to this input.
+    These timestamps describe complete parsed-state observations, not host
+    presentation. Original receipts separately exclude pre-input output parsed
+    late. Late observations and lost/clipped identities remain missing samples.
     """
     fresh = [
         (received, positions)
         for received, positions in observations
         if sent <= received <= until
+        and (receipt_times is None or receipt_times.get(received, -1) >= sent)
     ]
     matched = next(
         (
@@ -678,6 +717,8 @@ def classify_wheel_observations(before, observations, sent, until):
     )
     if matched is not None:
         status = "matched"
+    elif observer_backlog:
+        status = "observer_backlog"
     elif not fresh:
         status = "no_response_observed"
     elif not before or any(
@@ -688,7 +729,7 @@ def classify_wheel_observations(before, observations, sent, until):
         status = "no_upward_movement_observed"
     return {
         "status": status,
-        "matched_received": matched,
+        "matched_observed": matched,
         "seconds": matched - sent if matched is not None else None,
     }
 
@@ -1212,6 +1253,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
     first_cover = None
     album_clicked = None
     observations = []
+    observation_receipts = {}
     image_received = {}
     drain = None
     decode_pool = concurrent.futures.ProcessPoolExecutor(
@@ -1220,13 +1262,19 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
     decode_jobs = []
     measuring_input = False
 
-    def observe(received):
-        # This callback is cheap; PNG decoding and disk I/O stay off the drain.
+    def observe(completion):
+        # Keep the original receipt separate from parser/state observation time.
         with screen.lock:
             for index in range(len(image_received), len(screen.images)):
-                image_received[index] = received
+                image_received[index] = completion["parse_completed"]
             positions = album_positions(screen, list(gateway.payloads))
-        observations.append((received, positions))
+            complete_scene = screen.scene_ready()
+        observed = time.monotonic()
+        completion["state_observed"] = observed
+        completion["scene_ready"] = complete_scene
+        if complete_scene:
+            observation_receipts[observed] = completion["received"]
+            observations.append((observed, positions))
 
     def event(kind, **data):
         events.append({"t": time.monotonic() - started, "kind": kind, **data})
@@ -1380,13 +1428,32 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 structure_seconds <= 0.3,
                 f"Cold structure {structure_seconds:.3f}s exceeds 300ms",
             )
-            # Startup can replace the initial navigation layout after its first
-            # text arrives. Do not click coordinates from that transient frame.
-            # Structure timing above remains measured from initial appearance;
-            # cover timing below starts only after the actual navigation click.
-            settle(0.3)
+
+            # Resolve again under the parser lock and write before that scene can
+            # be replaced. No album request or fabricated WS Ready is required.
+            def click_ready_albums():
+                nonlocal albums_start
+                with screen.lock:
+                    target = ready_sidebar_target(screen, "Albums", rows - 4)
+                    if target is None:
+                        return False
+                    x, y = target
+                    albums_start = time.monotonic()
+                    os.write(
+                        master,
+                        f"\x1b[<0;{x + 1};{y + 1}M\x1b[<0;{x + 1};{y + 1}m".encode(),
+                    )
+                    event(
+                        "click",
+                        label="Albums",
+                        x=x,
+                        y=y,
+                        scene_sequence=screen.completed_frames,
+                    )
+                    return True
+
             albums_start = time.monotonic()
-            click("Albums")
+            wait(click_ready_albums, "complete current Albums scene with active icon")
             frame("initial-shell")
             try:
                 wait(
@@ -1594,16 +1661,35 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 while time.monotonic() < until:
                     pump()
                     observation = classify_wheel_observations(
-                        before, list(observations), sent, until
+                        before,
+                        list(observations),
+                        sent,
+                        until,
+                        receipt_times=observation_receipts,
                     )
-                    if observation["matched_received"] is not None:
+                    if observation["matched_observed"] is not None:
                         break
                 fresh = [
                     (received, positions)
                     for received, positions in list(observations)
                     if sent <= received <= until
                 ]
-                observation = classify_wheel_observations(before, fresh, sent, until)
+                observation = classify_wheel_observations(
+                    before,
+                    fresh,
+                    sent,
+                    until,
+                    observer_backlog=(
+                        drain.observed_byte_offset < drain.byte_offset
+                        or any(
+                            record["received"] <= until
+                            and record.get("state_observed", float("inf")) > until
+                            for record in drain.parse_completions
+                            if record["received"] >= sent
+                        )
+                    ),
+                    receipt_times=observation_receipts,
+                )
                 samples.append(observation["seconds"])
                 log_after = {
                     str(p): p.stat().st_size for p in Path(home).rglob("*.log")
@@ -1618,20 +1704,34 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                     input_seconds=sent - started,
                     input_wall_before_monotonic=sent_wall,
                     write_completed_monotonic=write_completed,
-                    matched_received_seconds=(
-                        observation["matched_received"] - started
-                        if observation["matched_received"] is not None
+                    matched_observed_seconds=(
+                        observation["matched_observed"] - started
+                        if observation["matched_observed"] is not None
                         else None
                     ),
                     observations=[
-                        {"received_seconds": received - started, "positions": positions}
+                        {
+                            "state_observed_seconds": received - started,
+                            "original_receipt_seconds": observation_receipts[received]
+                            - started,
+                            "positions": positions,
+                        }
                         for received, positions in fresh
                     ],
                     log_byte_ranges={
                         path: [log_before.get(path, 0), size]
                         for path, size in log_after.items()
                     },
-                    metric="input write start to matching PTY drain receipt; not admission/presentation",
+                    metric="input write start to complete parsed state observation; not host visibility",
+                    parser_completed_bytes=drain.parsed_byte_offset,
+                    observer_completed_bytes=drain.observed_byte_offset,
+                    received_bytes=drain.byte_offset,
+                    parser_completions=[
+                        dict(record)
+                        for record in drain.parse_completions
+                        if record["parse_completed"] >= sent
+                        and record["received"] <= until
+                    ],
                     before_positions=before,
                     after_positions=album_positions(screen, list(gateway.payloads)),
                 )
@@ -1818,12 +1918,22 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 ),
                 "Detail metadata does not match clicked album",
             )
-            wait(lambda: bool(seen_tracks), "rendered real track titles", 5)
+            expected_detail_tracks = {}
+            for path, payload in list(gateway.payloads):
+                if urllib.parse.parse_qs(urllib.parse.urlsplit(path).query).get(
+                    "albumId"
+                ) == [selected_id]:
+                    expected_detail_tracks.update(tracks_in(payload))
+            wait(
+                lambda: current_detail_state(
+                    screen, album_clicked, expected_detail_tracks
+                ),
+                "current complete selected album detail identity and tracks",
+                5,
+            )
             check(
                 "detail_metadata_rendered",
-                detail_metadata_matches(
-                    screen.text(), album_clicked["title"], album_clicked["artist"]
-                ),
+                current_detail_state(screen, album_clicked, expected_detail_tracks),
                 "Clicked album title/artist missing from detail frame",
             )
             frame("details")
@@ -2000,6 +2110,9 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                     "received": [
                         (received - started, size) for received, size in drain.received
                     ],
+                    "parse_completions": drain.parse_completions,
+                    "parser_completed_bytes": drain.parsed_byte_offset,
+                    "observer_completed_bytes": drain.observed_byte_offset,
                     "parse_lag_seconds": [
                         parsed - received for received, parsed in drain.parsed
                     ],
@@ -2023,6 +2136,139 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
 
 
 class SafetyTests(unittest.TestCase):
+    def test_sidebar_requires_latest_complete_scene_and_uploaded_active_icon(self):
+        screen = LockedScreen()
+        upload = b"\x1b_Ga=t,f=32,s=1,v=1,i=3;/////w==\x1b\\"
+        placement = b"\x1b[2;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\"
+        screen.feed(b"\x1b[?2026h\x1b[7;4HAlbums" + placement)
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"\x1b[?2026l")
+        # A placement command without image data is not a painted icon.
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(upload)
+        self.assertEqual(ready_sidebar_target(screen, "Albums", 56), (6, 6))
+        screen.feed(b"\x1b[?2026h\x1b[7;1H\x1b[2K\x1b[10;4HAlbums")
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"\x1b[?2026l")
+        self.assertEqual(ready_sidebar_target(screen, "Albums", 56), (6, 9))
+        screen.feed(b"\x1b_Ga=d,d=i,i=3;\x1b\\")
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(placement)
+        self.assertIsNotNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"\x1b_Ga=d,d=I,i=3;\x1b\\" + placement)
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+
+    def test_sidebar_rejects_wrong_substring_ambiguous_and_pending_scene(self):
+        screen = LockedScreen()
+        screen.feed(
+            b"\x1b_Ga=t,f=32,s=1,v=1,i=3;/////w==\x1b\\"
+            b"\x1b[?2026h\x1b[2;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\"
+            b"\x1b[7;4HNotAlbums\x1b[?2026l"
+        )
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"\x1b[7;1H\x1b[2K\x1b[7;4HAlbums\x1b[8;4HAlbums")
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"\x1b[8;1H\x1b[2K\x1b[")
+        self.assertIsNone(ready_sidebar_target(screen, "Albums", 56))
+        screen.feed(b"1;1H")
+        self.assertEqual(ready_sidebar_target(screen, "Albums", 56), (6, 6))
+
+    def test_wheel_requires_correlated_identity_motion_not_changed_text(self):
+        before = {"album-1": (20, 12)}
+        for observations in (
+            [],
+            [(11, before)],
+            [(11, {"other-album": (20, 11)})],
+            [(9, {"album-1": (20, 11)})],
+        ):
+            self.assertIsNone(
+                classify_wheel_observations(before, observations, 10, 12)["seconds"]
+            )
+        matched = classify_wheel_observations(
+            before, [(11, {"album-1": (20, 11)})], 10, 12
+        )
+        self.assertEqual(matched["seconds"], 1)
+
+    def test_parser_completion_keeps_receipt_and_byte_ranges_separate(self):
+        completions = []
+        drain = PtyDrain(99, LockedScreen(), bytearray(), observe=completions.append)
+        drain.parse_queue.put((10.01, b"\x1b[?2026h\x1b[?2026l", 100, 116))
+        drain.parse_queue.put(None)
+        with mock.patch.object(time, "monotonic", return_value=16.0):
+            drain.parse()
+        self.assertEqual(drain.parsed_byte_offset, 116)
+        self.assertEqual(drain.observed_byte_offset, 116)
+        self.assertEqual(
+            completions[0],
+            dict(begin=100, end=116, received=10.01, parse_completed=16.0),
+        )
+        result = classify_wheel_observations(
+            {"a": (20, 10)},
+            [(16.0, {"a": (20, 7)})],
+            10,
+            11,
+            receipt_times={16.0: 10.01},
+            observer_backlog=True,
+        )
+        self.assertIsNone(result["seconds"])
+        self.assertEqual(result["status"], "observer_backlog")
+        timely = classify_wheel_observations(
+            {"a": (20, 10)},
+            [(10.2, {"a": (20, 7)})],
+            10,
+            11,
+            receipt_times={10.2: 10.01},
+        )
+        self.assertAlmostEqual(timely["seconds"], 0.2)
+        self.assertGreater(timely["seconds"], 0.1)
+        stale = classify_wheel_observations(
+            {"a": (20, 10)},
+            [(10.1, {"a": (20, 7)})],
+            10,
+            11,
+            receipt_times={10.1: 9.9},
+        )
+        self.assertIsNone(stale["seconds"])
+
+    def test_detail_requires_current_heading_and_selected_track_row(self):
+        screen = LockedScreen()
+        album = dict(title="Selected Album", artist="Selected Artist")
+        tracks = {"1": dict(title="Selected Track")}
+        screen.feed(
+            b"\x1b[?2026h\x1b[5;21HSelected Album"
+            b"\x1b[6;21HSelected Artist\x1b[?2026l"
+        )
+        self.assertFalse(current_detail_state(screen, album, tracks))
+        screen.feed(b"\x1b[8;21H1  Unrelated Track")
+        self.assertFalse(current_detail_state(screen, album, tracks))
+        screen.feed(b"\x1b[?2026h\x1b[8;21H1  Selected Track ")
+        self.assertFalse(current_detail_state(screen, album, tracks))
+        screen.feed(b"\x1b[?2026l")
+        self.assertTrue(current_detail_state(screen, album, tracks))
+        screen.feed(b"\x1b[5;21HWrong Album   ")
+        self.assertFalse(current_detail_state(screen, album, tracks))
+
+    def test_album_matcher_regex_work_tracks_candidate_lines_not_library_size(self):
+        screen = LockedScreen()
+        screen.feed(b"\x1b[5;21HUnique Album 42")
+        payloads = [
+            (
+                "/menu/albums",
+                {
+                    "items": [
+                        dict(albumId=index, title=f"Unique Album {index}")
+                        for index in range(100)
+                    ]
+                },
+            )
+        ]
+        original = re.finditer
+        with mock.patch.object(re, "finditer", wraps=original) as matches:
+            positions = album_positions(screen, payloads)
+        self.assertEqual(positions, {"42": (20, 4)})
+        # Only substring candidates reach regex; formerly all 100 * 60 lines did.
+        self.assertEqual(matches.call_count, 2)
+
     def test_allowlist(self):
         for target in (
             "/health",

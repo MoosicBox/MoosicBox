@@ -343,10 +343,35 @@ class WheelObservationTests(unittest.TestCase):
             source.index('"hover_album_positions"'),
             source.index("sampler.translated_samples("),
         )
-        self.assertLess(
-            source.index("albums_start = time.monotonic()"),
-            source.index('click("Albums")'),
+        import ast
+        import textwrap
+
+        tree = ast.parse(textwrap.dedent(source))
+        click = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "click_ready_albums"
         )
+        writes = [
+            node
+            for node in ast.walk(click)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "os"
+            and node.func.attr == "write"
+        ]
+        starts = [
+            node
+            for node in ast.walk(click)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(t, ast.Name) and t.id == "albums_start" for t in node.targets
+            )
+        ]
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(len(starts), 1)
+        self.assertLess(starts[0].lineno, writes[0].lineno)
 
     def test_short_title_is_not_a_digit_inside_release_year(self):
         from bmux_live_acceptance import album_click_candidates, album_positions

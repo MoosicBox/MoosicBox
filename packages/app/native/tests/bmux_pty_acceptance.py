@@ -240,6 +240,7 @@ class Screen:
         self.in_frame = False
         self.completed_frames = 0
         self.placements = {}
+        self.image_payloads = {}
 
     def scene_ready(self):
         """Only complete synchronized scenes can supply input coordinates.
@@ -261,6 +262,7 @@ class Screen:
         """Require the actual current gear placement, not decoded image history.
 
         >>> screen = Screen()
+        >>> screen.feed(b'\\x1b_Ga=t,f=32,s=1,v=1,i=3;/////w==\\x1b\\\\')
         >>> screen.feed(b'\\x1b[?2026h\\x1b[2;18H\\x1b_Ga=p,i=3,p=3,c=3,r=1;\\x1b\\\\')
         >>> screen.gear_ready()
         False
@@ -276,6 +278,7 @@ class Screen:
             and y <= 1 < y + int(params.get("r", 0))
             and x == 17
             and y == 1
+            and self.image_payloads.get(params.get("i"), False)
             for params, x, y in self.placements.values()
         )
 
@@ -312,6 +315,11 @@ class Screen:
                             if key[0] != params.get("i")
                             or (params.get("p") is not None and key[1] != params["p"])
                         }
+                    if params.get("d", "a").isupper():
+                        if deletion == "a":
+                            self.image_payloads.clear()
+                        elif deletion == "i":
+                            self.image_payloads.pop(params.get("i"), None)
                 identity = params.get("i", "_")
                 # Chunk continuations may omit identity and metadata.
                 if not params.get("i") and self.transfers:
@@ -329,6 +337,27 @@ class Screen:
                         if old.get("o") == "z":
                             encoded = zlib.decompress(encoded)
                         self.images.append((old, encoded, position))
+                        width, height = int(old.get("s", 0)), int(old.get("v", 0))
+                        # Readiness needs only a small icon, never decode covers
+                        # on the PTY parser thread.
+                        valid = False
+                        if 0 < width <= 64 and 0 < height <= 64:
+                            if old.get("f") == "100":
+                                decoded_width, decoded_height, pixels = decode_png(
+                                    encoded
+                                )
+                                valid = (decoded_width, decoded_height) == (
+                                    width,
+                                    height,
+                                ) and any(pixels[3::4])
+                            else:
+                                channels = {"24": 3, "32": 4}.get(old.get("f"), 0)
+                                valid = (
+                                    channels > 0
+                                    and len(encoded) == width * height * channels
+                                    and (channels == 3 or any(encoded[3::4]))
+                                )
+                        self.image_payloads[identity] = valid
                 self.pending = data[end + 2 :]
             elif data.startswith((b"\x1b]", b"\x1bP", b"\x1b_")):
                 end = data.find(b"\x1b\\", 2)

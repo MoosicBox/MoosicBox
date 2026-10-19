@@ -67,6 +67,25 @@ class RecorderTests(unittest.TestCase):
         self.assertEqual(screen.other_images[1][0], "sixel")
         self.assertEqual(screen.other_images[1][2], (4, 3))
 
+    def test_gear_rejects_transparent_wrong_position_and_deleted_payload(self):
+        screen = Screen()
+        screen.feed(
+            b"\x1b_Ga=t,f=32,s=1,v=1,i=3;////AA==\x1b\\"
+            b"\x1b[?2026h\x1b[2;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\"
+            b"\x1b[?2026l"
+        )
+        self.assertFalse(screen.gear_ready())
+        screen.feed(b"\x1b_Ga=t,f=32,s=1,v=1,i=3;/////w==\x1b\\")
+        self.assertTrue(screen.gear_ready())
+        screen.feed(b"\x1b[3;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\")
+        self.assertFalse(screen.gear_ready())
+        screen.feed(b"\x1b[2;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\")
+        self.assertTrue(screen.gear_ready())
+        screen.feed(b"\x1b_Ga=d,d=A;\x1b\\")
+        self.assertFalse(screen.gear_ready())
+        screen.feed(b"\x1b[2;18H\x1b_Ga=p,i=3,p=3,c=3,r=1;\x1b\\")
+        self.assertFalse(screen.gear_ready())
+
     def test_fixture_has_exact_opaque_quadrants(self):
         png = ACCEPTANCE["png_fixture"]()
         self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")

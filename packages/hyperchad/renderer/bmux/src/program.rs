@@ -795,6 +795,8 @@ impl BmuxProgram {
     }
 
     fn schedule_resources(&mut self) -> Result<(), Error> {
+        #[cfg(test)]
+        count_resource_scan(1, 0);
         let started = Instant::now();
         let result = self.schedule_resources_inner();
         self.performance.resource_us += elapsed_us(started);
@@ -839,8 +841,8 @@ impl BmuxProgram {
             self.resource_epochs.retain(|key, _| present.contains(key));
             self.resource_loaded.retain(|key| present.contains(key));
         }
-        self.resource_sources
-            .retain(|key, _| self.graphics.rgba(key).is_some());
+        // Resident aliases are checked against graphics at lookup time. One final
+        // sweep also catches entries evicted by alias insertion below.
         let visible: BTreeSet<_> = if let Some(projection) = &projection {
             self.performance.resource_visited += projection.visible_nodes().len();
             projection
@@ -921,8 +923,11 @@ impl BmuxProgram {
             }
         }
         self.resource_visible = visible;
-        self.resource_sources
-            .retain(|key, _| self.graphics.rgba(key).is_some());
+        self.resource_sources.retain(|key, _| {
+            #[cfg(test)]
+            count_resource_scan(0, 1);
+            self.graphics.rgba(key).is_some()
+        });
         Ok(())
     }
 
@@ -1016,8 +1021,9 @@ impl BmuxProgram {
             self.pending
                 .retain(|work| !matches!(work, Work::Resource { .. }));
             self.resource_context = context;
+            return self.schedule_resources();
         }
-        self.schedule_resources()
+        Ok(())
     }
 
     #[cfg(test)]
@@ -1384,6 +1390,8 @@ impl BmuxProgram {
         targets: Vec<Option<String>>,
         strategy: &hyperchad_transformer_models::SwapStrategy,
     ) -> Result<(), Error> {
+        #[cfg(test)]
+        HISTORY_APPLY_WORK.with(|work| work.set(work.get() + 1));
         validate_view(view, &self.shared.config)?;
         let mut next = self.state.clone();
         let mut report = None;
@@ -1458,7 +1466,9 @@ impl BmuxProgram {
                 .entry(layout::node_key(node, path))
                 .or_insert(report.generation);
         });
+        // Changed document content needs admission even in the same context.
         self.revalidate_resource_context()?;
+        self.schedule_resources()?;
         if !report.response.cookies.is_empty() {
             self.enqueue(Work::Host {
                 request: Box::new(HostRequest::Cookies(report.response.cookies.clone())),
@@ -2313,7 +2323,13 @@ impl BmuxProgram {
         // A completion can precede geometry after navigation. Do not rasterize
         // a small UI icon at an 800/1707px intrinsic size in that window.
         let display_size = display_size.or(Some((64, 64)));
-        if let Err(error) = self.graphics.decode_for_display(
+        // Synchronous wall time only: excludes fetch, input latency and presentation.
+        // Do not read the clock or format diagnostics when debug logging is disabled.
+        let decode_started = log::log_enabled!(log::Level::Debug).then(|| {
+            log::debug!("bmux resource decode start encoded_bytes={}", bytes.len());
+            Instant::now()
+        });
+        let decoded = self.graphics.decode_for_display(
             &key,
             &crate::graphics::GraphicsSource::Memory,
             &crate::graphics::SourcePolicy {
@@ -2322,7 +2338,16 @@ impl BmuxProgram {
             },
             bytes,
             display_size,
-        ) {
+        );
+        if let Some(started) = decode_started {
+            log::debug!(
+                "bmux resource decode end elapsed_us={} encoded_bytes={} success={}",
+                elapsed_us(started),
+                bytes.len(),
+                decoded.is_ok()
+            );
+        }
+        if let Err(error) = decoded {
             // Preserve negative admission until explicit retry or source change.
             // A rejected decode is not a successful paint-only completion.
             self.resource_paint_only = false;
@@ -2436,16 +2461,34 @@ impl BmuxProgram {
                     Some(node.key.clone())
                 }
             });
+        if log::log_enabled!(log::Level::Debug) {
+            log::debug!(
+                "bmux pointer route kind={:?} hit={hit:?} pressed={:?} release_matches={}",
+                mouse.kind,
+                self.pressed,
+                hit == self.pressed
+            );
+        }
         match mouse.kind {
             MouseEventKind::Down(_) => {
                 self.pressed.clone_from(&hit);
                 if let Some(key) = hit {
-                    self.dispatch(&key, EventKind::MouseDown, None)?;
+                    let result = self.dispatch(&key, EventKind::MouseDown, None);
+                    log::debug!(
+                        "bmux pointer dispatch event=mouse-down key={key:?} success={}",
+                        result.is_ok()
+                    );
+                    result?;
                 }
             }
             MouseEventKind::Up(_) if hit == self.pressed.take() => {
                 if let Some(key) = hit {
-                    self.dispatch(&key, EventKind::Click, None)?;
+                    let result = self.dispatch(&key, EventKind::Click, None);
+                    log::debug!(
+                        "bmux pointer dispatch event=click key={key:?} success={}",
+                        result.is_ok()
+                    );
+                    result?;
                 }
             }
             MouseEventKind::Move if hit != self.hover => {
@@ -2550,6 +2593,7 @@ impl BmuxProgram {
                 path.pop();
             }
         }
+        let started = log::log_enabled!(log::Level::Debug).then(Instant::now);
         self.revalidate_resource_context()?;
         let snapshot = if forward {
             self.history_forward.pop(self.resource_context)
@@ -2561,6 +2605,7 @@ impl BmuxProgram {
             return Ok(());
         };
         self.cache_current(!forward);
+        let snapshot_us = started.map(elapsed_us);
         let crate::history::DocumentSnapshotParts {
             url,
             mut root,
@@ -2569,6 +2614,7 @@ impl BmuxProgram {
             completed_loads,
         } = snapshot.into_parts();
         restore_details(&mut root, &mut Vec::new(), &details);
+        let details_us = started.map(elapsed_us);
         self.invalidate_document_work();
         // Clear first so even repeated explicit IDs acquire fresh generations.
         // Neither intermediate nor restored trees replay load/immediate effects.
@@ -2581,10 +2627,22 @@ impl BmuxProgram {
         })();
         self.restoring_history = false;
         result?;
+        let apply_us = started.map(elapsed_us);
         self.location = url;
         self.history_document_valid = true;
         self.completed_loads = completed_loads;
-        self.resume_history_loads()
+        let result = self.resume_history_loads();
+        if let Some(started) = started {
+            log::debug!(
+                "bmux history restore cumulative snapshot_us={} details_us={} apply_us={} resume_us={} success={}",
+                snapshot_us.unwrap_or(0),
+                details_us.unwrap_or(0),
+                apply_us.unwrap_or(0),
+                elapsed_us(started),
+                result.is_ok()
+            );
+        }
+        result
     }
 
     fn resume_history_loads(&mut self) -> Result<(), Error> {
@@ -2789,7 +2847,36 @@ impl BmuxProgram {
         Ok(())
     }
 
+    fn log_pointer_event(&self, mouse: bmux_tui::event::MouseEvent, phase: &str, success: bool) {
+        if !log::log_enabled!(log::Level::Debug) {
+            return;
+        }
+        let hit = self
+            .committed_hit(i64::from(mouse.position.x), i64::from(mouse.position.y))
+            .map(|node| node.key.as_str());
+        log::debug!(
+            "bmux pointer phase={phase} kind={:?} x={} y={} committed_generation={:?} current_generation={} hit={hit:?} pressed={:?} native_capture=unavailable success={success}",
+            mouse.kind,
+            mouse.position.x,
+            mouse.position.y,
+            self.committed.as_ref().map(|(generation, _)| *generation),
+            self.state.generation(),
+            self.pressed
+        );
+    }
+
     fn terminal(&mut self, event: &Event) -> Result<(), Error> {
+        if let Event::Mouse(mouse) = event {
+            self.log_pointer_event(*mouse, "before-controls", true);
+        }
+        let result = self.terminal_inner(event);
+        if let Event::Mouse(mouse) = event {
+            self.log_pointer_event(*mouse, "after-dispatch", result.is_ok());
+        }
+        result
+    }
+
+    fn terminal_inner(&mut self, event: &Event) -> Result<(), Error> {
         self.resource_paint_only = false;
         if !matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Move) {
             self.geometry_dirty = true;
@@ -2811,6 +2898,11 @@ impl BmuxProgram {
             .as_ref()
             .is_some_and(|(generation, _)| *generation != self.state.generation())
         {
+            if matches!(event, Event::Mouse(_)) {
+                log::debug!(
+                    "bmux pointer outcome=stale-committed-generation controls_invoked=false"
+                );
+            }
             return Ok(());
         }
         self.restore_committed_controls();
@@ -2861,6 +2953,15 @@ impl BmuxProgram {
             }
         }
         let result = self.controls.event(event);
+        if matches!(event, Event::Mouse(_)) && log::log_enabled!(log::Level::Debug) {
+            log::debug!(
+                "bmux pointer controls consumed={} redraw={} relayout={} control_events={}",
+                result.consumed,
+                result.redraw,
+                result.relayout,
+                result.events.len()
+            );
+        }
         self.geometry_dirty |= result.redraw || result.relayout || !result.events.is_empty();
         self.control_events(result.events)?;
         if result.consumed {
@@ -2948,6 +3049,17 @@ fn image_allocation(bounds: layout::CellRect) -> Option<bmux_tui::image::ImageBo
 #[cfg(test)]
 thread_local! {
     static LEAF_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    // Scheduling calls and resident-source retain predicates, across update/prepare.
+    static RESOURCE_SCAN_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    static HISTORY_APPLY_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn count_resource_scan(calls: usize, predicates: usize) {
+    RESOURCE_SCAN_WORK.with(|work| {
+        let previous = work.get();
+        work.set((previous.0 + calls, previous.1 + predicates));
+    });
 }
 
 impl Program for BmuxProgram {
@@ -3606,6 +3718,57 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn unchanged_context_scroll_counts_global_resident_scans_outside_visible_work() {
+        use bmux_tui::{event::MouseEvent, geometry::Point};
+
+        let mut program = program();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        // Detached artwork is intentionally retained by the existing bounded LRU.
+        // No document images, requests, decodes or presentation timing are involved.
+        for index in 0..128 {
+            let key = format!("resident-{index}");
+            program
+                .graphics
+                .register_rgba(&key, 1, 1, vec![0, 0, 0, 255])
+                .unwrap();
+            program
+                .resource_sources
+                .insert(key, format!("/resident-{index}.png"));
+        }
+        assert_eq!(program.graphics.len(), 128);
+        assert_eq!(program.resource_sources.len(), 128);
+        let context = program.resource_context;
+        RESOURCE_SCAN_WORK.with(|work| work.set((0, 0)));
+
+        let update = program
+            .update(RuntimeEvent::Terminal(Event::Mouse(MouseEvent::new(
+                MouseEventKind::ScrollDown,
+                Point::new(0, 0),
+            ))))
+            .unwrap();
+        assert_eq!(update.invalidation, bmux_tui_runtime::Invalidation::Redraw);
+        assert_eq!(program.resource_context, context);
+        RESOURCE_SCAN_WORK.with(|work| assert_eq!(work.get(), (0, 0)));
+
+        program.prepare().unwrap();
+        // Warm unchanged context must not schedule before candidate preparation.
+        // A single final sweep still observes public graphics-store mutations.
+        RESOURCE_SCAN_WORK.with(|work| assert_eq!(work.get(), (1, 128)));
+        assert_eq!(program.image_sources().nodes, []);
+        assert_eq!(program.resource_sources.len(), 128);
+        assert!(program.pending.is_empty());
+
+        // Public graphics mutation must still be observed by the remaining sweep.
+        assert!(program.graphics.remove("resident-0"));
+        RESOURCE_SCAN_WORK.with(|work| work.set((0, 0)));
+        program.prepare().unwrap();
+        RESOURCE_SCAN_WORK.with(|work| assert_eq!(work.get(), (1, 128)));
+        assert_eq!(program.resource_sources.len(), 127);
+        assert!(!program.resource_sources.contains_key("resident-0"));
     }
 
     #[test]
@@ -4826,10 +4989,8 @@ mod runtime_regressions {
             .unwrap()
             .visible_nodes()
             .len();
-        assert_eq!(
-            program.performance.resource_visited,
-            committed_count + next_count
-        );
+        assert!(committed_count > 0);
+        assert_eq!(program.performance.resource_visited, next_count);
         assert_eq!(program.performance.retained_nodes, next_count);
         assert_eq!(program.resource_visible, visible);
         program.commit_prepared();
@@ -5107,6 +5268,30 @@ mod runtime_regressions {
             assert!(program.pending.is_empty());
             assert_eq!(program.resource_epochs["art"], serial);
         }
+    }
+
+    #[test]
+    fn cached_back_replacement_counts_two_document_applications() {
+        let mut program = program();
+        program.location = "/before".into();
+        let root = Container {
+            str_id: Some("shared".into()),
+            children: vec![Container {
+                str_id: Some("child".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        program.apply_view(View::from(root.clone()), None).unwrap();
+        program.cache_current(false);
+        program.location = "/after".into();
+        let generation = program.state.generation();
+        HISTORY_APPLY_WORK.with(|work| work.set(0));
+        program.restore_history(false).unwrap();
+        assert_eq!(program.state.root(), &root);
+        assert!(program.state.generation() > generation);
+        assert_eq!(program.node_epochs["shared"], program.state.generation());
+        HISTORY_APPLY_WORK.with(|work| assert_eq!(work.get(), 2));
     }
 
     #[test]
