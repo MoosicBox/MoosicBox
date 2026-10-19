@@ -111,12 +111,12 @@ def run(executable, artifacts):
                 raise AssertionError(description + "\n" + screen.text())
 
             def click(label):
-                wait(lambda: screen.locate(label), "missing " + label)
-                x, y = screen.locate(label)
+                wait(lambda: screen.locate_ready(label), "missing " + label)
+                x, y = screen.locate_ready(label)
                 os.write(master, f"\x1b[<0;{x+2};{y+1}M\x1b[<0;{x+2};{y+1}m".encode())
 
             wait(lambda: screen.locate("Albums"), "startup navigation missing")
-            wait(lambda: bool(screen.images), "startup icons missing")
+            wait(screen.gear_ready, "startup gear placement missing")
             # Click the actual gear image in this fixed 140x60 viewport. This
             # exercises nested image -> anchor targeting, not just keyboard focus.
             started = time.monotonic()

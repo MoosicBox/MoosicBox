@@ -42,15 +42,34 @@ struct Motion {
     offsets: Vec<(String, layout::ScrollOffset)>,
 }
 
+fn projected_node<'a>(
+    tree: &'a layout::LayoutTree,
+    projection: Option<&layout::ViewportProjection>,
+    key: &str,
+) -> Option<std::borrow::Cow<'a, layout::ResolvedNode>> {
+    projection.map_or_else(
+        || tree.get(key).map(std::borrow::Cow::Borrowed),
+        |projection| projection.geometry_node(key).map(std::borrow::Cow::Owned),
+    )
+}
+
 impl Chain {
-    fn observe_motion(&mut self, node: &layout::ResolvedNode, tree: &layout::LayoutTree) {
+    fn observe_motion(
+        &mut self,
+        node: &layout::ResolvedNode,
+        tree: &layout::LayoutTree,
+        projection: Option<&layout::ViewportProjection>,
+    ) {
         let mut offsets = Vec::new();
-        let mut parent = node.parent_key.as_ref();
-        while let Some(ancestor) = parent.and_then(|key| tree.get(key)) {
+        let mut parent = node.parent_key.clone();
+        while let Some(ancestor) = parent
+            .as_deref()
+            .and_then(|key| projected_node(tree, projection, key))
+        {
             if ancestor.scroll_offset != layout::ScrollOffset::default() {
                 offsets.push((ancestor.key.clone(), ancestor.scroll_offset));
             }
-            parent = ancestor.parent_key.as_ref();
+            parent.clone_from(&ancestor.parent_key);
         }
         let motion = Motion {
             viewport: tree.viewport,
@@ -249,15 +268,23 @@ impl BmuxProgram {
         let Some(tree) = self.candidate.take() else {
             return;
         };
-        self.schedule_revealed_in(&tree);
+        let started = std::time::Instant::now();
+        let projection = self.candidate_projection.clone();
+        self.schedule_revealed_in(&tree, projection.as_ref());
+        self.performance.reveal_us += super::elapsed_us(started);
         self.candidate = Some(tree);
     }
 
-    fn schedule_revealed_in(&mut self, tree: &layout::LayoutTree) {
+    fn schedule_revealed_in(
+        &mut self,
+        tree: &layout::LayoutTree,
+        projection: Option<&layout::ViewportProjection>,
+    ) {
         let mut ready = Vec::new();
         let candidates = std::mem::take(&mut self.revealed_routes.candidates);
         for (key, route) in &candidates {
-            let Some(node) = tree.get(key) else {
+            self.performance.reveal_visited += 1;
+            let Some(node) = projected_node(tree, projection, key) else {
                 if let Some(entry) = self.revealed_routes.entries.get_mut(key) {
                     entry.near = false;
                 }
@@ -267,7 +294,7 @@ impl BmuxProgram {
                 continue;
             };
             let chain = self.revealed_routes.chains.entry(chain_id).or_default();
-            chain.observe_motion(node, tree);
+            chain.observe_motion(&node, tree, projection);
             if chain.admissions >= 4 {
                 continue;
             }
@@ -277,10 +304,13 @@ impl BmuxProgram {
                 .copied()
                 .unwrap_or_else(|| self.state.generation());
             let mut visible = node.visible;
-            let mut parent = node.parent_key.as_ref();
-            while let Some(ancestor) = parent.and_then(|key| tree.get(key)) {
+            let mut parent = node.parent_key.clone();
+            while let Some(ancestor) = parent
+                .as_deref()
+                .and_then(|key| projected_node(tree, projection, key))
+            {
                 visible &= ancestor.visible;
-                parent = ancestor.parent_key.as_ref();
+                parent.clone_from(&ancestor.parent_key);
             }
             if self.revealed_routes.observe(
                 &node.key,
@@ -399,7 +429,7 @@ mod tests {
     use hyperchad_transformer_models::{
         LayoutDirection, LayoutOverflow, Route, Selector, SwapStrategy,
     };
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, sync::Arc};
 
     fn sentinel(url: &str) -> Container {
         Container {
@@ -450,6 +480,7 @@ mod tests {
         let node = program
             .candidate
             .as_mut()
+            .map(Arc::make_mut)
             .unwrap()
             .nodes
             .iter_mut()
@@ -695,6 +726,7 @@ mod tests {
         let root = program
             .candidate
             .as_mut()
+            .map(Arc::make_mut)
             .unwrap()
             .nodes
             .first_mut()
@@ -786,6 +818,7 @@ mod tests {
             program
                 .candidate
                 .as_mut()
+                .map(Arc::make_mut)
                 .unwrap()
                 .nodes
                 .iter_mut()
@@ -804,6 +837,7 @@ mod tests {
             program
                 .candidate
                 .as_mut()
+                .map(Arc::make_mut)
                 .unwrap()
                 .nodes
                 .iter_mut()
@@ -1005,12 +1039,32 @@ mod tests {
         program
             .options
             .scroll_offsets
-            .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 10 });
+            .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 6 });
         program.prepare().unwrap();
+        let projection = program.candidate_projection.as_ref().unwrap();
+        assert!(
+            projection
+                .visible_nodes()
+                .iter()
+                .all(|node| node.key != "@0/1")
+        );
+        let sentinel = projection.geometry_node("@0/1").unwrap();
+        let full = layout::layout(
+            program.effective.as_ref().unwrap(),
+            &program.options,
+            &layout::DefaultLeafMeasure,
+        )
+        .unwrap();
+        let baseline = full.get("@0/1").unwrap();
+        assert_eq!(sentinel.bounds, baseline.bounds);
+        assert_eq!(sentinel.clip, baseline.clip);
+        assert!(sentinel.bounds.y >= sentinel.clip.bottom());
+        assert!(near_viewport(sentinel.bounds, sentinel.clip));
         assert_eq!(program.pending.len(), 1);
         program.pending.clear();
         program.revealed_routes.clear();
-        let tree = program.candidate.as_mut().unwrap();
+        program.candidate_projection = None;
+        let tree = Arc::make_mut(program.candidate.as_mut().unwrap());
         tree.nodes
             .iter_mut()
             .find(|node| node.key == "scroll")

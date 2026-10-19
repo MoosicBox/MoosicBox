@@ -105,26 +105,72 @@ enum Work {
 #[derive(Default)]
 struct ImageSources {
     nodes: Vec<(String, String, bool)>,
+    by_key: BTreeMap<String, usize>,
     keys: BTreeSet<String>,
     unique_sources: usize,
+}
+
+fn elapsed_us(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX)
+}
+
+/// Diagnostic work and wall-clock timing for the most recent preparation attempt.
+/// Failed candidates are not committed-frame evidence. Times are microseconds.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PerformanceSnapshot {
+    /// Full layout attempts during this preparation, including failed attempts.
+    pub full_layouts: usize,
+    /// Whether this candidate uses retained viewport projection.
+    pub projection_used: bool,
+    /// Observed sequence for this attempt.
+    pub sequence: u64,
+    /// Observed project us for this attempt.
+    pub project_us: u64,
+    /// Observed controls us for this attempt.
+    pub controls_us: u64,
+    /// Observed reveal us for this attempt.
+    pub reveal_us: u64,
+    /// Observed resource us for this attempt.
+    pub resource_us: u64,
+    /// Observed paint us for this attempt.
+    pub paint_us: u64,
+    /// Observed project visited for this attempt.
+    pub project_visited: usize,
+    /// Observed retained nodes for this attempt.
+    pub retained_nodes: usize,
+    /// Observed controls visited for this attempt.
+    pub controls_visited: usize,
+    /// Observed reveal visited for this attempt.
+    pub reveal_visited: usize,
+    /// Observed resource visited for this attempt.
+    pub resource_visited: usize,
+    /// Observed paint visited for this attempt.
+    pub paint_visited: usize,
 }
 
 /// Sole owner of mutable renderer state. Presentation candidates are not input authority.
 // Scheduler lane occupancy, lifecycle and terminal capability are independent flags.
 #[allow(clippy::struct_excessive_bools)]
 pub struct BmuxProgram {
+    performance: PerformanceSnapshot,
     shared: Arc<Shared>,
     pub state: ViewState,
     pub controls: Controls,
     pub graphics: GraphicsStore,
     actions: ActionEngine,
     options: LayoutOptions,
-    candidate: Option<LayoutTree>,
+    candidate: Option<Arc<LayoutTree>>,
+    candidate_projection: Option<layout::ViewportProjection>,
+    retained_layout: Option<layout::RetainedLayout>,
+    committed_retained: Option<layout::RetainedLayout>,
+    baseline_pending: bool,
+    committed_projection: Option<layout::ViewportProjection>,
+    committed_resource_context: Option<u64>,
     effective: Option<Container>,
     prepared_source: Option<SourceSnapshot>,
     image_sources_cache: Option<(SourceSnapshot, Arc<ImageSources>)>,
     scroll_reuse: bool,
-    committed: Option<(u64, LayoutTree)>,
+    committed: Option<(u64, Arc<LayoutTree>)>,
     pending: VecDeque<Work>,
     active: bool,
     resource_active: usize,
@@ -200,10 +246,17 @@ impl BmuxProgram {
             shared,
             state: ViewState::new(),
             controls: Controls::new(),
+            performance: PerformanceSnapshot::default(),
             graphics,
             actions: ActionEngine::new(0, ActionLimits::default()),
             options,
             candidate: None,
+            candidate_projection: None,
+            retained_layout: None,
+            committed_retained: None,
+            baseline_pending: false,
+            committed_projection: None,
+            committed_resource_context: None,
             effective: None,
             prepared_source: None,
             image_sources_cache: None,
@@ -260,6 +313,12 @@ impl BmuxProgram {
         }
     }
 
+    /// Return diagnostics for the most recent prepare/paint attempt.
+    #[must_use]
+    pub const fn performance_snapshot(&self) -> PerformanceSnapshot {
+        self.performance
+    }
+
     #[must_use]
     pub fn config(&self) -> &BmuxConfig {
         &self.shared.config
@@ -288,22 +347,51 @@ impl BmuxProgram {
     ///
     /// # Errors
     /// * Returns layout limit, invalid geometry or canvas resource errors.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "prepare admission and full baseline publication share transactional state"
+    )]
     pub fn prepare(&mut self) -> Result<(), Error> {
+        self.performance = PerformanceSnapshot {
+            sequence: self.performance.sequence.wrapping_add(1),
+            ..PerformanceSnapshot::default()
+        };
         let started = Instant::now();
         self.revalidate_resource_context()?;
         let scroll_reuse = self.log_scroll_admission();
+        let mut projection_work = layout::ProjectionWork::default();
         if scroll_reuse
+            && !self.baseline_pending
             && self.fixed_image_geometry
             && self.prepared_source_is_current()
             && self.options.open_details == self.controls.details_open()
             && let Some((generation, tree)) = &self.committed
             && *generation == self.state.generation()
             && tree.viewport == self.options.viewport
-            && let Some(root) = &self.effective
-            && let Some(tree) = layout::reproject_scroll(root, tree, &self.options.scroll_offsets)
+            && self.effective.is_some()
+            && let Some(retained) = &self.committed_retained
+            && let Some(projection) = {
+                let (candidate, work) = self.committed_projection.as_ref().map_or_else(
+                    || retained.project_counted(&self.options.scroll_offsets),
+                    |projection| projection.reproject_counted(&self.options.scroll_offsets),
+                );
+                projection_work = work;
+                candidate
+            }
         {
-            self.controls.prepare(&tree);
-            self.candidate = Some(tree);
+            self.performance.projection_used = true;
+            self.performance.project_us = elapsed_us(started);
+            self.performance.project_visited = projection_work.spatial_entries
+                + projection_work.scrollports
+                + projection_work.geometry_nodes;
+            self.performance.retained_nodes = projection.visible_nodes().len();
+            let controls_started = Instant::now();
+            self.controls.prepare_projection(&projection);
+            self.performance.controls_us += elapsed_us(controls_started);
+            self.performance.controls_visited += projection.visible_nodes().len();
+            self.candidate = Some(Arc::clone(tree));
+            self.candidate_projection = Some(projection);
+            self.retained_layout = self.committed_retained.clone();
             self.geometry_dirty = false;
             self.schedule_revealed();
             self.schedule_resources()?;
@@ -311,10 +399,14 @@ impl BmuxProgram {
             log::debug!("bmux prepare scroll-reuse elapsed_us={elapsed_us} full_layouts=0");
             return Ok(());
         }
+        self.performance.project_visited += projection_work.spatial_entries
+            + projection_work.scrollports
+            + projection_work.geometry_nodes;
         // A bounded image completion cannot alter explicitly sized image boxes.
         // Reuse only committed geometry of this exact document; input/view/context
         // changes reset this permission before any presentation is prepared.
         if std::mem::take(&mut self.resource_paint_only)
+            && !self.baseline_pending
             && self.fixed_image_geometry
             && self.prepared_source_is_current()
             && !self.geometry_dirty
@@ -322,7 +414,16 @@ impl BmuxProgram {
             && *generation == self.state.generation()
             && tree.viewport == self.options.viewport
         {
-            self.candidate = Some(tree.clone());
+            self.candidate = Some(Arc::clone(tree));
+            self.candidate_projection = self.committed_projection.clone();
+            self.performance.retained_nodes = self
+                .candidate_projection
+                .as_ref()
+                .map_or(tree.nodes.len(), |projection| {
+                    projection.visible_nodes().len()
+                });
+            self.performance.projection_used = self.candidate_projection.is_some();
+            self.retained_layout = self.committed_retained.clone();
             self.schedule_revealed();
             self.schedule_resources()?;
             log::debug!(
@@ -331,6 +432,7 @@ impl BmuxProgram {
             );
             return Ok(());
         }
+        self.baseline_pending = true;
         self.options.open_details = self.controls.details_open();
         let mut effective = self.state.root().clone();
         resolve_responsive(&mut effective, &self.responsive, self.options.viewport);
@@ -354,7 +456,9 @@ impl BmuxProgram {
                 .unwrap_or_else(|| controls.measure(node, constraints))
         };
         let layout_started = Instant::now();
-        let tree = layout::layout(root, &self.options, &measure)?;
+        let result = layout::layout(root, &self.options, &measure);
+        self.performance.full_layouts += 1;
+        let tree = result?;
         let layout_us = layout_started.elapsed().as_micros();
         drop(controls);
         let mut canvases = Vec::new();
@@ -374,12 +478,21 @@ impl BmuxProgram {
             self.discard_prepared();
             return Err(error.into());
         }
+        self.performance.project_us = elapsed_us(layout_started);
+        self.performance.project_visited += tree.nodes.len();
+        self.performance.retained_nodes = tree.nodes.len();
+        let controls_started = Instant::now();
         self.controls.prepare(&tree);
+        self.performance.controls_us += elapsed_us(controls_started);
+        self.performance.controls_visited += tree.nodes.len();
         self.fixed_image_geometry = fixed_image_geometry;
         self.prepared_source = Some(self.state.source_snapshot());
         self.geometry_dirty = false;
         self.revealed_routes.refresh_candidates(&effective);
         self.effective = Some(effective);
+        let tree = Arc::new(tree);
+        self.retained_layout = Some(layout::RetainedLayout::new(Arc::clone(&tree)));
+        self.candidate_projection = None;
         self.candidate = Some(tree);
         let resources_started = Instant::now();
         self.schedule_revealed();
@@ -394,6 +507,12 @@ impl BmuxProgram {
 
     /// Paint only a previously prepared layout into a local, host-clipped context.
     pub fn paint(&mut self, cx: &mut PaintCx<'_, '_>) {
+        let started = Instant::now();
+        self.paint_inner(cx);
+        self.performance.paint_us += elapsed_us(started);
+    }
+
+    fn paint_inner(&mut self, cx: &mut PaintCx<'_, '_>) {
         self.presentation_started = Some(Instant::now());
         let base_style = self
             .background
@@ -410,6 +529,11 @@ impl BmuxProgram {
         let Some(tree) = &self.candidate else {
             return;
         };
+        let nodes = self.candidate_projection.as_ref().map_or(
+            tree.nodes.as_slice(),
+            layout::ViewportProjection::visible_nodes,
+        );
+        self.performance.paint_visited += nodes.len();
         if let Some(color) = self.background {
             cx.fill(
                 bmux_tui::paint::LocalRect::new(0, 0, tree.viewport.width, tree.viewport.height),
@@ -420,8 +544,7 @@ impl BmuxProgram {
         }
         // Index only on-screen opaque backgrounds once per frame. Images must
         // respect later layers, but need not scan every off-screen document node.
-        let occluders: Vec<_> = tree
-            .nodes
+        let occluders: Vec<_> = nodes
             .iter()
             .filter(|node| node.visible && node.style.style.bg.is_some())
             .filter_map(|node| {
@@ -429,7 +552,7 @@ impl BmuxProgram {
                 (bounds.width > 0 && bounds.height > 0).then_some((node.paint_order, bounds))
             })
             .collect();
-        for node in &tree.nodes {
+        for node in nodes {
             if !node.visible {
                 continue;
             }
@@ -527,15 +650,70 @@ impl BmuxProgram {
         }
         if let Some(tree) = self.candidate.take() {
             self.committed = Some((self.state.generation(), tree));
+            self.committed_projection = self.candidate_projection.take();
+            self.committed_resource_context = self.resource_context;
+            self.committed_retained = self.retained_layout.clone();
+            self.baseline_pending = false;
         }
     }
 
     /// Discard failed preparation and restore committed control event geometry.
     pub fn discard_prepared(&mut self) {
         self.presentation_started = None;
+        if let Some(candidate) = &self.candidate
+            && let Some((_, committed)) = &self.committed
+            && !Arc::ptr_eq(candidate, committed)
+        {
+            // A failed baseline replacement may have rebuilt Tab eligibility;
+            // restore that baseline before applying its committed projection.
+            self.controls.prepare(committed);
+        }
         self.candidate = None;
-        if let Some((_, tree)) = &self.committed {
+        self.candidate_projection = None;
+        self.retained_layout = self.committed_retained.clone();
+        self.restore_committed_controls();
+    }
+
+    fn restore_committed_controls(&mut self) {
+        if let Some(projection) = &self.committed_projection {
+            self.controls.prepare_projection(projection);
+        } else if let Some((_, tree)) = &self.committed {
             self.controls.prepare(tree);
+        }
+    }
+
+    fn committed_node(&self, key: &str) -> Option<std::borrow::Cow<'_, layout::ResolvedNode>> {
+        if let Some(projection) = &self.committed_projection {
+            projection.geometry_node(key).map(std::borrow::Cow::Owned)
+        } else {
+            self.committed
+                .as_ref()?
+                .1
+                .get(key)
+                .map(std::borrow::Cow::Borrowed)
+        }
+    }
+
+    fn current_node(&self, key: &str) -> Option<std::borrow::Cow<'_, layout::ResolvedNode>> {
+        if self.candidate.is_some() {
+            if let Some(projection) = &self.candidate_projection {
+                projection.geometry_node(key).map(std::borrow::Cow::Owned)
+            } else {
+                self.candidate
+                    .as_ref()?
+                    .get(key)
+                    .map(std::borrow::Cow::Borrowed)
+            }
+        } else {
+            self.committed_node(key)
+        }
+    }
+
+    fn committed_hit(&self, x: i64, y: i64) -> Option<&layout::ResolvedNode> {
+        if let Some(projection) = &self.committed_projection {
+            projection.hit_test(x, y)
+        } else {
+            self.committed.as_ref()?.1.hit_test(x, y)
         }
     }
 
@@ -599,6 +777,11 @@ impl BmuxProgram {
             }
         });
         let images = Arc::new(ImageSources {
+            by_key: images
+                .iter()
+                .enumerate()
+                .map(|(index, (key, _, _))| (key.clone(), index))
+                .collect(),
             keys: images.iter().map(|(key, _, _)| key.clone()).collect(),
             unique_sources: images
                 .iter()
@@ -612,6 +795,33 @@ impl BmuxProgram {
     }
 
     fn schedule_resources(&mut self) -> Result<(), Error> {
+        let started = Instant::now();
+        let result = self.schedule_resources_inner();
+        self.performance.resource_us += elapsed_us(started);
+        result
+    }
+
+    // A committed projection remains resource geometry after its candidate is
+    // consumed by commit. Never apply it to a changed source/viewport/context or
+    // to an uncommitted full baseline replacement.
+    fn resource_projection(&self) -> Option<&layout::ViewportProjection> {
+        if self.candidate.is_some() {
+            return self.candidate_projection.as_ref();
+        }
+        if self.baseline_pending
+            || !self.prepared_source_is_current()
+            || self.committed_resource_context != self.resource_context
+            || self.options.open_details != self.controls.details_open()
+            || !self.committed.as_ref().is_some_and(|(generation, tree)| {
+                *generation == self.state.generation() && tree.viewport == self.options.viewport
+            })
+        {
+            return None;
+        }
+        self.committed_projection.as_ref()
+    }
+
+    fn schedule_resources_inner(&mut self) -> Result<(), Error> {
         let images = self.image_sources();
         let counts = (images.nodes.len(), images.unique_sources);
         if self.resource_scan_counts != Some(counts) {
@@ -623,40 +833,46 @@ impl BmuxProgram {
             self.resource_scan_counts = Some(counts);
         }
         let present = &images.keys;
-        self.resources.retain(|key, _| present.contains(key));
-        self.resource_epochs.retain(|key, _| present.contains(key));
-        self.resource_loaded.retain(|key| present.contains(key));
+        let projection = self.resource_projection().cloned();
+        if projection.is_none() {
+            self.resources.retain(|key, _| present.contains(key));
+            self.resource_epochs.retain(|key, _| present.contains(key));
+            self.resource_loaded.retain(|key| present.contains(key));
+        }
         self.resource_sources
             .retain(|key, _| self.graphics.rgba(key).is_some());
-        let visible: BTreeSet<_> = images
-            .nodes
-            .iter()
-            .filter(|(key, _, _)| {
-                // Eager means load as soon as displayed, not load hidden menus
-                // and every offscreen placeholder into the resident graphics LRU.
-                self.candidate
-                    .as_ref()
-                    .or_else(|| {
-                        self.committed
-                            .as_ref()
-                            .filter(|(generation, _)| *generation == self.state.generation())
-                            .map(|(_, tree)| tree)
+        let visible: BTreeSet<_> = if let Some(projection) = &projection {
+            self.performance.resource_visited += projection.visible_nodes().len();
+            projection
+                .visible_nodes()
+                .iter()
+                .filter(|node| {
+                    images.keys.contains(&node.key)
+                        && node.visible
+                        && node.bounds.intersection(node.clip).width > 0
+                        && node.bounds.intersection(node.clip).height > 0
+                })
+                .map(|node| node.key.clone())
+                .collect()
+        } else {
+            self.performance.resource_visited += images.nodes.len();
+            images
+                .nodes
+                .iter()
+                .filter(|(key, _, _)| {
+                    self.current_node(key).is_some_and(|node| {
+                        node.visible
+                            && node.bounds.intersection(node.clip).width > 0
+                            && node.bounds.intersection(node.clip).height > 0
                     })
-                    .is_some_and(|tree| {
-                        tree.get(key).is_some_and(|node| {
-                            node.visible
-                                && node.bounds.intersection(node.clip).width > 0
-                                && node.bounds.intersection(node.clip).height > 0
-                        })
-                    })
-            })
-            .map(|(key, _, _)| key.clone())
-            .collect();
+                })
+                .map(|(key, _, _)| key.clone())
+                .collect()
+        };
         self.prune_resource_queue(&visible);
-        for (key, source, _) in images
-            .nodes
+        for (key, source, _) in visible
             .iter()
-            .filter(|(key, _, _)| visible.contains(key))
+            .filter_map(|key| images.by_key.get(key).map(|&index| &images.nodes[index]))
         {
             let key = key.clone();
             let source = source.clone();
@@ -1454,6 +1670,10 @@ impl BmuxProgram {
         self.dispatch_with_geometry(key, kind, value, None)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "preserve complete event geometry for admitted semantic actions"
+    )]
     fn dispatch_with_geometry(
         &mut self,
         key: &str,
@@ -1467,7 +1687,7 @@ impl BmuxProgram {
         let indexed = geometry
             .or_else(|| {
                 self.committed.as_ref().and_then(|(generation, tree)| {
-                    (*generation == self.state.generation()).then_some(tree)
+                    (*generation == self.state.generation()).then_some(tree.as_ref())
                 })
             })
             .and_then(|tree| tree.get(key))
@@ -1512,9 +1732,40 @@ impl BmuxProgram {
         context.value = value;
         context.keys.clone_from(&self.key_chord);
         context.location.clone_from(&self.location);
-        if let Some(tree) = geometry.or_else(|| self.committed.as_ref().map(|(_, tree)| tree)) {
-            context.geometry = tree
-                .nodes
+        if let Some(tree) =
+            geometry.or_else(|| self.committed.as_ref().map(|(_, tree)| tree.as_ref()))
+        {
+            let projected_geometry: Vec<_> = if geometry.is_none() {
+                self.committed_projection
+                    .as_ref()
+                    .map(|projection| {
+                        tree.nodes
+                            .iter()
+                            .filter_map(|node| projection.geometry_node(&node.key))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else if self.candidate_projection.is_some()
+                && geometry.is_some_and(|geometry| {
+                    self.candidate
+                        .as_ref()
+                        .is_some_and(|candidate| std::ptr::eq(geometry, candidate.as_ref()))
+                })
+            {
+                let projection = self.candidate_projection.as_ref().unwrap();
+                tree.nodes
+                    .iter()
+                    .filter_map(|node| projection.geometry_node(&node.key))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let geometry_nodes = if projected_geometry.is_empty() {
+                tree.nodes.as_slice()
+            } else {
+                projected_geometry.as_slice()
+            };
+            context.geometry = geometry_nodes
                 .iter()
                 .map(|node| {
                     (
@@ -1747,16 +1998,16 @@ impl BmuxProgram {
     }
 
     fn reveal(&mut self, key: &str) {
-        let Some((_, tree)) = &self.committed else {
+        if self.committed.is_none() {
             return;
-        };
-        let Some(target) = tree.get(key) else {
+        }
+        let Some(target) = self.committed_node(key) else {
             return;
         };
         let mut bounds = target.bounds;
         let mut parent = target.parent_key.clone();
         while let Some(key) = parent.as_ref() {
-            let Some(node) = tree.get(key) else {
+            let Some(node) = self.committed_node(key).map(std::borrow::Cow::into_owned) else {
                 break;
             };
             let Some(source) = at_path(self.state.root(), &node.path) else {
@@ -2050,10 +2301,7 @@ impl BmuxProgram {
     // entries to the source-reuse index. Failure retains negative admission.
     fn complete_resource(&mut self, key: String, source: String, bytes: &[u8]) {
         let display_size = self
-            .candidate
-            .as_ref()
-            .or_else(|| self.committed.as_ref().map(|(_, tree)| tree))
-            .and_then(|tree| tree.get(&key))
+            .current_node(&key)
             .filter(|node| node.content_bounds.width > 0 && node.content_bounds.height > 0)
             .map(|node| {
                 (
@@ -2109,8 +2357,11 @@ impl BmuxProgram {
     }
 
     fn scroll_pointer(&mut self, mouse: bmux_tui::event::MouseEvent) {
-        if let Some((_, tree)) = &self.committed {
-            let mut node = tree.hit_test(i64::from(mouse.position.x), i64::from(mouse.position.y));
+        if self.committed.is_some() {
+            let mut node = self
+                .committed_hit(i64::from(mouse.position.x), i64::from(mouse.position.y))
+                .map(|node| node.key.clone())
+                .and_then(|key| self.committed_node(&key).map(std::borrow::Cow::into_owned));
             while let Some(current) = node {
                 let vertical = matches!(
                     mouse.kind,
@@ -2148,7 +2399,11 @@ impl BmuxProgram {
                     *value = value.saturating_add_signed(delta).min(extent - visible);
                     break;
                 }
-                node = current.parent_key.as_ref().and_then(|key| tree.get(key));
+                node = current
+                    .parent_key
+                    .as_ref()
+                    .and_then(|key| self.committed_node(key))
+                    .map(std::borrow::Cow::into_owned);
             }
         }
     }
@@ -2165,11 +2420,7 @@ impl BmuxProgram {
             return Ok(());
         }
         let hit = self
-            .committed
-            .as_ref()
-            .and_then(|(_, tree)| {
-                tree.hit_test(i64::from(mouse.position.x), i64::from(mouse.position.y))
-            })
+            .committed_hit(i64::from(mouse.position.x), i64::from(mouse.position.y))
             .and_then(|node| {
                 if mouse.kind == MouseEventKind::Move {
                     // Hover belongs to the actionable ancestor, not whichever
@@ -2199,10 +2450,7 @@ impl BmuxProgram {
             }
             MouseEventKind::Move if hit != self.hover => {
                 if let Some(previous) = self.hover.take()
-                    && let Some(node) = self
-                        .committed
-                        .as_ref()
-                        .and_then(|(_, tree)| tree.get(&previous))
+                    && let Some(node) = self.committed_node(&previous)
                 {
                     let source = Source::at(
                         self.state.root(),
@@ -2278,6 +2526,9 @@ impl BmuxProgram {
         self.key_chord.clear();
         self.candidate = None;
         self.committed = None;
+        self.committed_projection = None;
+        self.candidate_projection = None;
+        self.retained_layout = None;
         self.geometry_dirty = true;
     }
 
@@ -2562,9 +2813,7 @@ impl BmuxProgram {
         {
             return Ok(());
         }
-        if let Some((_, tree)) = &self.committed {
-            self.controls.prepare(tree);
-        }
+        self.restore_committed_controls();
         if let Event::Key(key) = event {
             if key.modifiers.alt
                 && !key.modifiers.ctrl
@@ -3807,6 +4056,10 @@ mod runtime_regressions {
     }
 
     fn pending_wheel_program() -> BmuxProgram {
+        pending_wheel_program_pages(1)
+    }
+
+    fn pending_wheel_program_pages(pages: usize) -> BmuxProgram {
         use hyperchad_transformer::Number;
         use hyperchad_transformer_models::{LayoutDirection, LayoutOverflow};
         let mut program = program();
@@ -3820,7 +4073,7 @@ mod runtime_regressions {
                     width: Some(Number::Integer(640)),
                     height: Some(Number::Integer(320)),
                     overflow_y: LayoutOverflow::Scroll,
-                    children: (0..100)
+                    children: (0..pages * 100)
                         .map(|index| Container {
                             width: Some(Number::Integer(640)),
                             height: Some(Number::Integer(32)),
@@ -3864,6 +4117,98 @@ mod runtime_regressions {
         program
     }
 
+    #[test]
+    fn warm_projection_program_path_is_viewport_bound_and_transactional() {
+        let mut work = Vec::new();
+        for pages in [1, 3, 10] {
+            let mut program = pending_wheel_program_pages(pages);
+            let baseline = Arc::clone(&program.committed.as_ref().unwrap().1);
+            program.prepare().unwrap();
+            assert!(program.candidate_projection.is_some());
+            assert!(Arc::ptr_eq(&baseline, program.candidate.as_ref().unwrap()));
+            let first = program.candidate_projection.as_ref().unwrap().clone();
+            let mut buffer =
+                bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
+            program.paint(&mut PaintCx::new(&mut bmux_tui::frame::Frame::new(
+                &mut buffer,
+            )));
+            let snapshot = program.performance_snapshot();
+            eprintln!("warm program pages={pages} work={snapshot:?}");
+            work.push(snapshot);
+            program.commit_prepared();
+            let committed = format!("{:?}", program.committed_node("scroll"));
+            program
+                .options
+                .scroll_offsets
+                .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 6 });
+            program.scroll_reuse = true;
+            program.prepare().unwrap();
+            assert_ne!(
+                program
+                    .candidate_projection
+                    .as_ref()
+                    .unwrap()
+                    .geometry_node("scroll")
+                    .unwrap()
+                    .scroll_offset,
+                first.geometry_node("scroll").unwrap().scroll_offset
+            );
+            program.discard_prepared();
+            assert_eq!(committed, format!("{:?}", program.committed_node("scroll")));
+            assert!(program.candidate_projection.is_none());
+            assert!(Arc::ptr_eq(
+                &baseline,
+                &program.committed.as_ref().unwrap().1
+            ));
+        }
+        assert_eq!(work[0].paint_visited, work[2].paint_visited);
+        assert_eq!(work[0].controls_visited, work[2].controls_visited);
+        assert_eq!(work[0].resource_visited, work[2].resource_visited);
+        assert!(work[2].project_visited < work[0].project_visited * 3);
+    }
+
+    #[test]
+    fn failed_full_baseline_then_wheel_retries_same_generation_without_reuse() {
+        let mut program = pending_wheel_program();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        let baseline = Arc::clone(&program.committed.as_ref().unwrap().1);
+        let generation = program.state.generation();
+        let old_scene = format!("{:?}", program.committed_node("scroll"));
+        // Model a same-generation intrinsic/metrics replacement, without changing
+        // viewport or source identity (which would independently reject reuse).
+        program.options.metrics.cell_width = 16.0;
+        program.scroll_reuse = false;
+        program.resource_paint_only = false;
+        program.prepare().unwrap();
+        assert!(program.baseline_pending);
+        assert!(!Arc::ptr_eq(&baseline, program.candidate.as_ref().unwrap()));
+        let desired = format!("{:?}", program.candidate.as_ref().unwrap().get("scroll"));
+        program.discard_prepared();
+        assert_eq!(program.state.generation(), generation);
+        assert_eq!(old_scene, format!("{:?}", program.committed_node("scroll")));
+        program.scroll_reuse = true;
+        program.prepare().unwrap();
+        assert!(
+            program.candidate_projection.is_none(),
+            "failed replacement must not authorize warm reuse"
+        );
+        assert_eq!(
+            desired,
+            format!("{:?}", program.candidate.as_ref().unwrap().get("scroll"))
+        );
+        assert!(Arc::ptr_eq(
+            &baseline,
+            &program.committed.as_ref().unwrap().1
+        ));
+        program.commit_prepared();
+        assert!(!program.baseline_pending);
+        assert!(!Arc::ptr_eq(
+            &baseline,
+            &program.committed.as_ref().unwrap().1
+        ));
+    }
+
     fn footer_bytes() -> Vec<u8> {
         let mut encoded = std::io::Cursor::new(Vec::new());
         image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
@@ -3901,8 +4246,7 @@ mod runtime_regressions {
         LEAF_MEASUREMENTS.with(|count| count.set(0));
         program.prepare().unwrap();
         assert_eq!(LEAF_MEASUREMENTS.with(std::cell::Cell::get), 0);
-        let projected_tree = program.candidate.as_ref().unwrap().clone();
-        let projected = format!("{:?}", program.candidate);
+        let projected_tree = program.candidate_projection.as_ref().unwrap().clone();
         let mut buffer =
             bmux_tui::buffer::Buffer::empty(bmux_tui::geometry::Rect::new(0, 0, 80, 24));
         let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
@@ -3918,7 +4262,12 @@ mod runtime_regressions {
         LEAF_MEASUREMENTS.with(|count| count.set(0));
         program.prepare().unwrap();
         assert!(LEAF_MEASUREMENTS.with(std::cell::Cell::get) > 0);
-        assert_eq!(format!("{:?}", program.candidate), projected);
+        for node in &program.candidate.as_ref().unwrap().nodes {
+            assert_eq!(
+                format!("{:?}", projected_tree.node(&node.key).unwrap()),
+                format!("{node:?}")
+            );
+        }
         for y in 0..24 {
             for x in 0..80 {
                 assert_eq!(
@@ -4106,7 +4455,7 @@ mod runtime_regressions {
             .unwrap();
         complete_artwork(&mut program, "cover", "/cover.webp");
         program.prepare().unwrap();
-        let tree = program.candidate.as_mut().unwrap();
+        let tree = Arc::make_mut(program.candidate.as_mut().unwrap());
         let image = tree
             .nodes
             .iter_mut()
@@ -4122,7 +4471,7 @@ mod runtime_regressions {
         panel.bounds = layout::CellRect::new(6, 3, 4, 3);
         panel.clip = layout::CellRect::new(0, 0, 80, 24);
         for (visible, full_cover) in [(true, false), (true, true), (false, true)] {
-            let tree = program.candidate.as_mut().unwrap();
+            let tree = Arc::make_mut(program.candidate.as_mut().unwrap());
             let overlay = tree.nodes.last_mut().unwrap();
             overlay.visible = visible;
             if full_cover {
@@ -4201,7 +4550,7 @@ mod runtime_regressions {
         program.prepare().unwrap();
         let mut placement_identity = None;
         for (x, y, clip_y) in [(20, 2, 0), (20, -1, 0), (-2, 2, 0), (-2, -1, 3), (20, 0, 3)] {
-            let tree = program.candidate.as_mut().unwrap();
+            let tree = Arc::make_mut(program.candidate.as_mut().unwrap());
             let node = tree
                 .nodes
                 .iter_mut()
@@ -4301,6 +4650,7 @@ mod runtime_regressions {
             let node = program
                 .candidate
                 .as_mut()
+                .map(Arc::make_mut)
                 .unwrap()
                 .nodes
                 .iter_mut()
@@ -4411,6 +4761,133 @@ mod runtime_regressions {
                 );
             }
         }
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exercise committed-scene resource selection through one complete visibility/invalidation lifecycle"
+    )]
+    fn committed_projection_resource_revalidation_stays_local_and_preserves_transitions() {
+        use hyperchad_transformer::Number;
+        use hyperchad_transformer_models::LayoutOverflow;
+        let mut program = program();
+        let root = Container {
+            str_id: Some("scroll".into()),
+            width: Some(Number::Integer(640)),
+            height: Some(Number::Integer(320)),
+            overflow_y: LayoutOverflow::Scroll,
+            children: (0..100)
+                .map(|index| Container {
+                    width: Some(Number::Integer(640)),
+                    height: Some(Number::Integer(160)),
+                    children: vec![Container {
+                        width: Some(Number::Integer(64)),
+                        height: Some(Number::Integer(64)),
+                        ..artwork_image(
+                            &format!("art-{index}"),
+                            &format!("/cover-{index}.webp"),
+                            true,
+                        )
+                    }],
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        program.apply_view(View::from(root), None).unwrap();
+        program.prepare().unwrap();
+        complete_artwork(&mut program, "art-0", "/cover-0.webp");
+        let serial = program.resource_epochs["art-0"];
+        program.commit_prepared();
+        program
+            .options
+            .scroll_offsets
+            .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 3 });
+        program.scroll_reuse = true;
+        program.prepare().unwrap();
+        program.commit_prepared();
+        assert!(program.candidate_projection.is_none());
+        let committed_count = program
+            .committed_projection
+            .as_ref()
+            .unwrap()
+            .visible_nodes()
+            .len();
+        assert!(program.resource_projection().is_some());
+        // Revalidation runs before next candidate exists: it must not scan 100
+        // images or cancel/re-admit the committed viewport's queued artwork.
+        let visible = program.resource_visible.clone();
+        program.scroll_reuse = true;
+        program.prepare().unwrap();
+        let next_count = program
+            .candidate_projection
+            .as_ref()
+            .unwrap()
+            .visible_nodes()
+            .len();
+        assert_eq!(
+            program.performance.resource_visited,
+            committed_count + next_count
+        );
+        assert_eq!(program.performance.retained_nodes, next_count);
+        assert_eq!(program.resource_visible, visible);
+        program.commit_prepared();
+        program.graphics.remove("art-0");
+        program
+            .options
+            .scroll_offsets
+            .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 200 });
+        program.scroll_reuse = true;
+        program.prepare().unwrap();
+        assert!(!program.resource_visible.contains("art-0"));
+        let departed = program.resource_visible.clone();
+        assert!(
+            program
+                .pending
+                .iter()
+                .any(|work| matches!(work, Work::Resource { key, .. } if departed.contains(key)))
+        );
+        program.commit_prepared();
+        program
+            .options
+            .scroll_offsets
+            .insert("scroll".into(), layout::ScrollOffset { x: 0, y: 3 });
+        program.scroll_reuse = true;
+        program.prepare().unwrap();
+        assert!(program.resource_visible.contains("art-0"));
+        assert!(
+            program.resource_epochs["art-0"] > serial,
+            "evicted artwork must reload on reentry"
+        );
+        assert!(
+            program
+                .pending
+                .iter()
+                .all(|work| !matches!(work, Work::Resource { key, .. } if departed.contains(key)))
+        );
+        program.commit_prepared();
+        // Changed context/viewport/source cannot borrow the old projection.
+        program.resource_context = Some(77);
+        assert!(program.resource_projection().is_none());
+        program.resource_context = None;
+        program.options.viewport.width += 1;
+        assert!(program.resource_projection().is_none());
+        program.options.viewport.width -= 1;
+        program
+            .apply_view(View::from(Container::default()), None)
+            .unwrap();
+        assert!(program.resource_projection().is_none());
+        program.prepare().unwrap();
+        assert!(program.resources.is_empty());
+        assert!(program.resource_epochs.is_empty());
+        assert!(program.resource_visible.is_empty());
+        assert!(
+            program
+                .pending
+                .iter()
+                .all(|work| !matches!(work, Work::Resource { .. }))
+        );
     }
 
     #[test]

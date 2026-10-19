@@ -197,6 +197,333 @@ fn dump_navigation(root: &hyperchad::transformer::Container, phase: &str) {
     visit(root, &mut Vec::new(), &tree, phase);
 }
 
+/// Production UI, without the native route singleton, persistence, or network.
+/// Commands returned from input are inspected and deliberately never executed.
+#[test]
+fn production_settings_exact_mouse_targets_activate() {
+    // Exact mouse geometry regression; keyboard activation is not tested here.
+    use bmux_tui::{
+        buffer::Buffer,
+        event::{Event, MouseButton, MouseEvent, MouseEventKind},
+        frame::Frame,
+        geometry::{Point, Rect, Size},
+        paint::PaintCx,
+    };
+    use bmux_tui_runtime::PresentReport;
+    use hyperchad::renderer_bmux::{
+        controls::{ControlEvent, Controls},
+        presentation::EmbeddedSurface,
+        renderer::{BmuxConfig, BmuxRenderer},
+    };
+
+    fn commit(surface: &mut EmbeddedSurface) -> Buffer {
+        let ticket = surface.prepare(Size::new(140, 60)).unwrap();
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 140, 60));
+        let mut frame = Frame::new(&mut buffer);
+        surface
+            .paint(ticket, &mut PaintCx::new(&mut frame))
+            .unwrap();
+        // Never run resource/read commands: this test owns no external effects.
+        drop(surface.commit(ticket, PresentReport::default()).unwrap());
+        buffer
+    }
+
+    let root: hyperchad::transformer::Container = moosicbox_app_native_ui::settings::settings(
+        &moosicbox_app_native_ui::state::State::default(),
+        "MoosicBox",
+        &[],
+        None,
+        &[],
+    )
+    .into();
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    let tree = layout(
+        &root,
+        &LayoutOptions {
+            viewport: Size::new(140, 60),
+            ..LayoutOptions::default()
+        },
+        &controls.measurer(&root),
+    )
+    .unwrap();
+    fn find(
+        node: &hyperchad::transformer::Container,
+        path: &mut Vec<usize>,
+        found: &mut Vec<(String, String)>,
+    ) {
+        let key = hyperchad::renderer_bmux::layout::node_key(node, path);
+        if matches!(&node.element, hyperchad::transformer::Element::Anchor { href: Some(href), .. } if href == "/settings")
+        {
+            found.push(("gear".into(), key.clone()));
+        }
+        if matches!(node.element, hyperchad::transformer::Element::Button { .. })
+            && has_text(node, "New Connection")
+        {
+            found.push(("new".into(), key));
+        }
+        for (index, child) in node.children.iter().enumerate() {
+            path.push(index);
+            find(child, path, found);
+            path.pop();
+        }
+    }
+    let mut targets = Vec::new();
+    find(&root, &mut Vec::new(), &mut targets);
+    assert_eq!(targets.len(), 2);
+    let mut outcomes = Vec::new();
+    for (label, key) in targets {
+        let point = if label == "gear" {
+            Point::new(17, 1)
+        } else {
+            Point::new(80, 11)
+        };
+        let node = tree.get(&key).unwrap();
+        eprintln!(
+            "{label}: key={key} bounds={:?} content={:?} clip={:?} regions={:?} top={:?}",
+            node.bounds,
+            node.content_bounds,
+            node.clip,
+            node.hit_regions,
+            tree.hit_test(i64::from(point.x), i64::from(point.y))
+                .map(|hit| &hit.key)
+        );
+        controls.prepare(&tree);
+        controls.focus(None);
+        let down = controls.event(&Event::Mouse(MouseEvent::new(
+            MouseEventKind::Down(MouseButton::Left),
+            point,
+        )));
+        let up = controls.event(&Event::Mouse(MouseEvent::new(
+            MouseEventKind::Up(MouseButton::Left),
+            point,
+        )));
+        eprintln!("{label}: direct down={:?} up={:?}", down.events, up.events);
+        let focus = controls.focus(Some(&key));
+        eprintln!("{label}: programmatic focus={:?}", focus.events);
+
+        let (action_tx, _action_rx) = flume::unbounded();
+        let (resize_tx, _resize_rx) = flume::unbounded();
+        let renderer = BmuxRenderer::new(BmuxConfig::default(), action_tx, resize_tx);
+        let mut surface = renderer.into_embedded().unwrap();
+        surface
+            .program
+            .apply_view(View::from(root.clone()), None)
+            .unwrap();
+        commit(&mut surface);
+        let down_update = surface
+            .event(Event::Mouse(MouseEvent::new(
+                MouseEventKind::Down(MouseButton::Left),
+                point,
+            )))
+            .unwrap();
+        // Match the PTY harness: a frame may be committed between down and up.
+        commit(&mut surface);
+        let up_update = surface
+            .event(Event::Mouse(MouseEvent::new(
+                MouseEventKind::Up(MouseButton::Left),
+                point,
+            )))
+            .unwrap();
+        eprintln!(
+            "{label}: embedded down_commands={} up_commands={} focused={:?}",
+            down_update.commands.len(),
+            up_update.commands.len(),
+            surface.program.controls.focused()
+        );
+        assert!(
+            !down_update.commands.is_empty(),
+            "initial resource work is deferred"
+        );
+        assert_eq!(
+            up_update.commands.len(),
+            if label == "gear" { 2 } else { 1 }
+        );
+        assert_eq!(surface.program.controls.focused(), Some(key.as_str()));
+        outcomes.push((label, key.clone(), up.events.iter().any(|event| matches!(event, ControlEvent::Activate { key: activated } if activated == &key)) || up.events.iter().any(|event| matches!(event, ControlEvent::Navigate { .. }))));
+    }
+    // Diagnose both production Save controls with one real connection, without
+    // routing requests or changing persistent application state.
+    let connection = moosicbox_app_models::Connection {
+        name: "New connection".into(),
+        api_url: "http://127.0.0.1:1".into(),
+    };
+    let connected: hyperchad::transformer::Container = moosicbox_app_native_ui::settings::settings(
+        &moosicbox_app_native_ui::state::State::default(),
+        "MoosicBox",
+        std::slice::from_ref(&connection),
+        Some(&connection),
+        &[],
+    )
+    .into();
+    let mut connected_controls = Controls::new();
+    connected_controls.reconcile(&connected);
+    let connected_tree = layout(
+        &connected,
+        &LayoutOptions {
+            viewport: Size::new(140, 60),
+            ..LayoutOptions::default()
+        },
+        &connected_controls.measurer(&connected),
+    )
+    .unwrap();
+    fn dump_saves(
+        node: &hyperchad::transformer::Container,
+        path: &mut Vec<usize>,
+        tree: &hyperchad::renderer_bmux::layout::LayoutTree,
+        controls: &Controls,
+    ) -> usize {
+        let mut count = 0;
+        if matches!(node.element, hyperchad::transformer::Element::Button { .. })
+            && has_text(node, "Save")
+        {
+            count += 1;
+            let key = hyperchad::renderer_bmux::layout::node_key(node, path);
+            let resolved = tree.get(&key).unwrap();
+            let bounds = resolved.content_bounds;
+            let native = controls
+                .measure(
+                    &key,
+                    bmux_tui::component::Constraints::new(
+                        bounds.width,
+                        bounds.width,
+                        bounds.height,
+                        Some(bounds.height),
+                    ),
+                )
+                .unwrap();
+            eprintln!(
+                "SAVE {key} bounds={:?} content={:?} clip={:?} regions={:?} native={native:?} painted={:?}",
+                resolved.bounds,
+                bounds,
+                resolved.clip,
+                resolved.hit_regions,
+                bounds.intersection(resolved.clip)
+            );
+            let mut parent = resolved.parent_key.as_deref();
+            while let Some(parent_key) = parent {
+                let ancestor = tree.get(parent_key).unwrap();
+                eprintln!(
+                    "  ancestor {parent_key} content={:?} extents={:?} clip={:?}",
+                    ancestor.content_bounds, ancestor.content_extents, ancestor.clip
+                );
+                parent = ancestor.parent_key.as_deref();
+            }
+            assert_eq!(native.width, bounds.width);
+            assert_eq!(native.height, bounds.height);
+        }
+        for (index, child) in node.children.iter().enumerate() {
+            path.push(index);
+            count += dump_saves(child, path, tree, controls);
+            path.pop();
+        }
+        count
+    }
+    assert_eq!(
+        dump_saves(
+            &connected,
+            &mut Vec::new(),
+            &connected_tree,
+            &connected_controls
+        ),
+        2
+    );
+    fn row(buffer: &Buffer, y: u16) -> String {
+        (125..137)
+            .map(|x| buffer.get(Point::new(x, y)).unwrap().symbol.as_str())
+            .collect()
+    }
+    connected_controls.prepare(&connected_tree);
+    let mut standalone = Buffer::empty(Rect::new(0, 0, 140, 60));
+    {
+        let mut frame = Frame::new(&mut standalone);
+        for node in &connected_tree.nodes {
+            connected_controls.paint(&node.key, &mut PaintCx::new(&mut frame));
+        }
+    }
+    let (action_tx, _action_rx) = flume::unbounded();
+    let (resize_tx, _resize_rx) = flume::unbounded();
+    let mut painted_surface = BmuxRenderer::new(BmuxConfig::default(), action_tx, resize_tx)
+        .into_embedded()
+        .unwrap();
+    painted_surface
+        .program
+        .apply_view(View::from(connected), None)
+        .unwrap();
+    let embedded = commit(&mut painted_surface);
+    eprintln!(
+        "SAVE paint standalone={:?} embedded={:?}",
+        row(&standalone, 4),
+        row(&embedded, 4)
+    );
+    // Standalone native controls deliberately omit later source backgrounds.
+    // The shared fixed search button is painted after the top Save and covers
+    // its suffix. This asserts layer ordering, not real-app Settings acceptance.
+    let cover = connected_tree
+        .nodes
+        .iter()
+        .find(|node| node.key == "search-button")
+        .unwrap();
+    let mut cover_source = painted_surface.program.state.root();
+    for &index in &cover.path {
+        cover_source = &cover_source.children[index];
+    }
+    assert_eq!(
+        cover_source.position,
+        Some(hyperchad::transformer::models::Position::Fixed)
+    );
+    let background = cover_source.background.unwrap();
+    assert_eq!((background.r, background.g, background.b), (255, 255, 255));
+    assert_eq!(
+        cover.bounds,
+        hyperchad::renderer_bmux::layout::CellRect {
+            x: 130,
+            y: 1,
+            width: 7,
+            height: 5
+        }
+    );
+    let save = connected_tree.get("@0/0/1/0/0/0/0/1").unwrap();
+    assert!(cover.paint_order > save.paint_order);
+    assert!(row(&standalone, 4).contains("[ Save ]"));
+    for x in 125..137 {
+        let point = Point::new(x, 4);
+        let cell = embedded.get(point).unwrap();
+        if cover.bounds.contains(i64::from(x), 4) {
+            assert_eq!(cell.symbol, " ");
+            assert_eq!(
+                cell.style.bg,
+                Some(bmux_tui::style::Color::Rgb(255, 255, 255))
+            );
+        } else {
+            assert_eq!(cell.symbol, standalone.get(point).unwrap().symbol);
+        }
+    }
+    // Native Settings uses get_connection_name().unwrap_or_default(); a fresh
+    // app has None, so also exercise the actual empty initial display value.
+    let initial: hyperchad::transformer::Container = moosicbox_app_native_ui::settings::settings(
+        &moosicbox_app_native_ui::state::State::default(),
+        "",
+        std::slice::from_ref(&connection),
+        Some(&connection),
+        &[],
+    )
+    .into();
+    painted_surface
+        .program
+        .apply_view(View::from(initial), None)
+        .unwrap();
+    let actual_initial = commit(&mut painted_surface);
+    eprintln!("SAVE paint empty-initial={:?}", row(&actual_initial, 4));
+    assert_eq!(row(&actual_initial, 4), row(&embedded, 4));
+    for (label, key, mouse) in outcomes {
+        assert!(
+            mouse,
+            "production {label} {key}: exact painted mouse target must activate too"
+        );
+    }
+}
+
 #[test]
 fn actual_home_settings_connection_forms_and_registered_icons() {
     let runtime = switchy::unsync::runtime::Builder::new().build().unwrap();

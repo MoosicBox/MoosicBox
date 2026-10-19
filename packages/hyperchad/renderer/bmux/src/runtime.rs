@@ -236,6 +236,244 @@ mod tests {
     use super::*;
     use bmux_keyboard::{KeyCode, KeyStroke, Modifiers};
 
+    /// Exercises the real runtime admission/scheduling path, unlike the direct
+    /// `BmuxProgram::update` performance fixture. All input is admitted from the
+    /// first presenter call, after real geometry has been committed.
+    #[tokio::test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "self-contained deterministic runtime fixture, presenter and admission assertions"
+    )]
+    async fn runtime_mixed_flood_preserves_click_targets_wheels_and_frame_progress() {
+        use bmux_tui::{
+            event::{MouseButton, MouseEvent, MouseEventKind},
+            geometry::{Point, Rect, Size},
+        };
+        use bmux_tui_runtime::{
+            LatestSendOutcome, PresentReport, Presenter, ResetReason, RuntimeConfig, RuntimeHandle,
+        };
+        use hyperchad_actions::{Action, ActionTrigger, ActionType};
+        use hyperchad_renderer::View;
+        use hyperchad_transformer::{
+            Container, Number,
+            models::{LayoutDirection, LayoutOverflow},
+        };
+
+        const ROUNDS: usize = 32;
+        const APPLICATION_MESSAGES: usize = 64;
+        const INPUT_EVENTS: usize = ROUNDS * 5;
+
+        struct FloodPresenter {
+            inner: BmuxPresenter<Vec<u8>>,
+            handle: flume::Receiver<RuntimeHandle<Message>>,
+            admitted: Option<RuntimeHandle<Message>>,
+            terminal_progress: Vec<u64>,
+            sizes: Vec<Size>,
+        }
+
+        impl Presenter<BmuxProgram> for FloodPresenter {
+            type Error = Error;
+
+            fn resize(&mut self, size: Size) {
+                self.sizes.push(size);
+                self.inner.resize(size);
+            }
+
+            fn reset(&mut self, reason: ResetReason) {
+                self.inner.reset(reason);
+            }
+
+            fn present(&mut self, program: &mut BmuxProgram) -> Result<PresentReport, Error> {
+                let report = self.inner.present(program)?;
+                if self.admitted.is_none() {
+                    let handle = self.handle.try_recv().expect("handle installed before run");
+                    // A bounded application flood competes with the independent
+                    // terminal FIFO. Neither application work nor latest resize
+                    // admission may reorder clicks around individual wheels.
+                    for _ in 0..APPLICATION_MESSAGES {
+                        assert!(handle.try_send(Message::Background(None)).is_ok());
+                    }
+                    for round in 0..ROUNDS {
+                        for kind in [
+                            MouseEventKind::Down(MouseButton::Left),
+                            MouseEventKind::Up(MouseButton::Left),
+                            MouseEventKind::ScrollDown,
+                            MouseEventKind::Down(MouseButton::Left),
+                            MouseEventKind::Up(MouseButton::Left),
+                        ] {
+                            handle
+                                .try_send_terminal(Event::Mouse(MouseEvent::new(
+                                    kind,
+                                    Point::new(1, 1),
+                                )))
+                                .unwrap();
+                        }
+                        assert_eq!(
+                            handle
+                                .send_latest_terminal(Event::Resize(Size::new(
+                                    81 + u16::try_from(round).unwrap(),
+                                    24,
+                                )))
+                                .unwrap(),
+                            if round == 0 {
+                                LatestSendOutcome::Inserted
+                            } else {
+                                LatestSendOutcome::Replaced
+                            }
+                        );
+                    }
+                    assert!(
+                        handle
+                            .send_latest_terminal(Event::Mouse(MouseEvent::new(
+                                MouseEventKind::ScrollDown,
+                                Point::new(1, 1),
+                            )))
+                            .is_err(),
+                        "wheel input must not be admitted to the coalescing lane"
+                    );
+                    self.admitted = Some(handle);
+                }
+                self.terminal_progress
+                    .push(self.admitted.as_ref().unwrap().stats().terminal_processed);
+                Ok(report)
+            }
+        }
+
+        let config = crate::renderer::BmuxConfig::default();
+        let (action_tx, action_rx) = flume::unbounded();
+        let (resize_tx, _resize_rx) = flume::unbounded();
+        let mut program = BmuxProgram::new(config.clone(), action_tx, resize_tx);
+        program.resize(Size::new(80, 24));
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("scroll".into()),
+                    direction: LayoutDirection::Column,
+                    overflow_y: LayoutOverflow::Scroll,
+                    width: Some(Number::Integer(640)),
+                    height: Some(Number::Integer(384)),
+                    children: (0..256)
+                        .map(|row| Container {
+                            str_id: Some(format!("row-{row}")),
+                            width: Some(Number::Integer(640)),
+                            height: Some(Number::Integer(16)),
+                            actions: vec![Action {
+                                trigger: ActionTrigger::Click,
+                                effect: ActionType::Custom {
+                                    action: format!("row-{row}"),
+                                }
+                                .into(),
+                            }],
+                            ..Container::default()
+                        })
+                        .collect(),
+                    ..Container::default()
+                }),
+                None,
+            )
+            .unwrap();
+        let (handle_tx, handle_rx) = flume::bounded(1);
+        let presenter = FloodPresenter {
+            inner: BmuxPresenter::new(Terminal::new(Vec::new(), Rect::new(0, 0, 80, 24)), &config),
+            handle: handle_rx,
+            admitted: None,
+            terminal_progress: Vec::new(),
+            sizes: Vec::new(),
+        };
+        let (runtime, handle) = Runtime::new(
+            program,
+            presenter,
+            RuntimeConfig {
+                reliable_capacity: APPLICATION_MESSAGES + 8,
+                terminal_capacity: INPUT_EVENTS,
+                messages_per_turn: 1,
+                frame_interval: None,
+                ..RuntimeConfig::default()
+            },
+        );
+        handle_tx.send(handle.clone()).unwrap();
+        // Start through a ready turn rather than the runtime's blocking receive
+        // branch, so admission counters cover the entire subsequent flood.
+        assert!(handle.try_send(Message::Background(None)).is_ok());
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let observed_actions = observed.clone();
+        let diagnostics = handle.clone();
+        let observe = async move {
+            let mut actions = Vec::new();
+            for _ in 0..ROUNDS * 2 {
+                let action = action_rx.recv_async().await.unwrap().0;
+                observed_actions.lock().unwrap().push(action.clone());
+                actions.push(action);
+            }
+            // Synchronize on effects, not a sleep or guessed runtime duration.
+            // Graceful shutdown lets the last custom completion settle.
+            handle.send(Message::Shutdown).await.unwrap();
+            (actions, action_rx)
+        };
+        // Timeout is solely a deadlock guard: correctness/progress is checked
+        // below in events and scheduler turns, never milliseconds.
+        let (output, (actions, action_rx)) = Box::pin(tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            async { tokio::join!(Box::pin(runtime.run()), observe) },
+        ))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "runtime flood stalled: {:?}; actions={:?}",
+                diagnostics.stats(),
+                observed.lock().unwrap()
+            )
+        });
+        let output = output.unwrap_or_else(|error| match error {
+            RuntimeError::Program { error, .. } | RuntimeError::Presenter { error, .. } => {
+                panic!("headless runtime failed: {error}")
+            }
+        });
+        let expected: Vec<_> = (0..ROUNDS)
+            .flat_map(|round| {
+                [
+                    format!("row-{}", 1 + round * 3),
+                    format!("row-{}", 4 + round * 3),
+                ]
+            })
+            .collect();
+        assert_eq!(
+            actions, expected,
+            "clicks must straddle every individual wheel in FIFO order"
+        );
+        assert!(
+            action_rx.is_empty(),
+            "no duplicate clicks may remain after shutdown"
+        );
+        assert_eq!(
+            output.stats.terminal_processed,
+            u64::try_from(INPUT_EVENTS + 1).unwrap()
+        );
+        assert_eq!(
+            output.stats.latest_replaced,
+            u64::try_from(ROUNDS - 1).unwrap()
+        );
+        assert_eq!(output.stats.terminal_rejected, 0);
+        assert_eq!(output.stats.reliable_rejected, 0);
+        assert_eq!(output.stats.latest_rejected, 0);
+        assert_eq!(output.stats.terminal_high_water, INPUT_EVENTS);
+        assert!(
+            output.stats.reliable_processed >= u64::try_from(APPLICATION_MESSAGES + 1).unwrap()
+        );
+        assert!(output.stats.scheduler_budget_exhausted > 0);
+        assert_eq!(output.presenter.sizes.last(), Some(&Size::new(112, 24)));
+        let progress = &output.presenter.terminal_progress;
+        assert_eq!(progress.first(), Some(&0));
+        assert_eq!(progress.last(), Some(&output.stats.terminal_processed));
+        assert!(
+            progress
+                .windows(2)
+                .all(|pair| pair[1] >= pair[0] && pair[1] - pair[0] <= 1),
+            "a one-message turn must present before admitting the next terminal event"
+        );
+        assert!(output.stats.frames_presented >= u64::try_from(INPUT_EVENTS + 1).unwrap());
+    }
+
     #[derive(Default)]
     struct OutputProbe {
         bytes: Vec<u8>,

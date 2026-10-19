@@ -1688,7 +1688,7 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
             def current_display_positions():
                 columns_now = [
                     (x, int(params.get("c", 0)))
-                    for params, x, y in current_active_placements(screen.graphics)
+                    for params, x, y in current_cover_placements(list(screen.graphics))
                     if params.get("a") in ("p", "T")
                     and x >= 18
                     and int(params.get("c", 0)) >= 4

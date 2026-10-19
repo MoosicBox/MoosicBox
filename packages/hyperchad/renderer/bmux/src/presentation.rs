@@ -186,6 +186,25 @@ impl<W: Write> Presenter<BmuxProgram> for BmuxPresenter<W> {
         }
         let start = measured.then(Instant::now);
         let result = self.inner.present(program);
+        let stages = program.performance_snapshot();
+        log::debug!(
+            "bmux stages sequence={} project_us={} controls_us={} reveal_us={} resource_us={} paint_us={} project_visited={} retained_nodes={} controls_visited={} reveal_visited={} resource_visited={} paint_visited={} full_layouts={} projection_used={} success={}",
+            stages.sequence,
+            stages.project_us,
+            stages.controls_us,
+            stages.reveal_us,
+            stages.resource_us,
+            stages.paint_us,
+            stages.project_visited,
+            stages.retained_nodes,
+            stages.controls_visited,
+            stages.reveal_visited,
+            stages.resource_visited,
+            stages.paint_visited,
+            stages.full_layouts,
+            stages.projection_used,
+            result.is_ok(),
+        );
         if let Some(start) = start {
             let elapsed = start.elapsed();
             if let Some(timing) = &self.timing

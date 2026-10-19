@@ -19,7 +19,10 @@ use hyperchad_transformer::models::{
 use hyperchad_transformer::{Container, Element, Input, Number};
 
 mod inline;
+mod projection;
 mod table;
+
+pub use projection::{ProjectionWork, RetainedLayout, ViewportProjection};
 
 pub use inline::{InlineFragment, SourceRange, TextStyle};
 
@@ -252,6 +255,7 @@ struct ScrollNode {
     // A positioned dependency is either forbidden or requires an anchor
     // strictly inside the changed scrollport. None means ordinary flow.
     dependency: Option<usize>,
+    fixed: bool,
 }
 
 impl ScrollIndex {
@@ -291,6 +295,7 @@ impl ScrollIndex {
                     scroll: Axes::new(scroll_x, scroll_y),
                     clip: Axes::new(clips(source.overflow_x), clips(source.overflow_y)),
                     dependency,
+                    fixed: source.position == Some(Position::Fixed),
                 };
                 if scroll_x || scroll_y {
                     index.scrollports.push(ordinal);
@@ -623,6 +628,7 @@ pub fn layout(
 
 /// Reproject one changed scrollport using committed geometry. Fixed/sticky and
 /// unproven absolute descendants require normal layout; source/sizing must be unchanged.
+#[cfg(test)]
 pub(crate) fn reproject_scroll(
     _root: &Container,
     tree: &LayoutTree,
@@ -3160,6 +3166,127 @@ mod scroll_reprojection_tests {
     }
 
     #[test]
+    fn retained_projection_matches_full_geometry_and_viewport_hits() {
+        let mut root = album_document();
+        let mut nested = root.children[0].clone();
+        nested.str_id = Some("nested".into());
+        nested.width = Some(Number::Integer(1280));
+        nested.height = Some(Number::Integer(640));
+        nested.overflow_x = LayoutOverflow::Scroll;
+        for child in &mut nested.children {
+            child.str_id = None;
+        }
+        root.children[0].children.insert(0, nested);
+        let mut options = LayoutOptions {
+            viewport: Size::new(100, 40),
+            ..Default::default()
+        };
+        let initial = Arc::new(layout(&root, &options, &DefaultLeafMeasure).unwrap());
+        let retained = RetainedLayout::new(Arc::clone(&initial));
+        let mut projection = retained.project(&options.scroll_offsets).unwrap();
+        for (port, x, y) in [
+            ("scroll", 0, 3),
+            ("nested", 4, 5),
+            ("scroll", 0, 200),
+            ("nested", 9, 12),
+            ("scroll", 0, 0),
+        ] {
+            options
+                .scroll_offsets
+                .insert(port.into(), ScrollOffset { x, y });
+            let previous = projection.clone();
+            projection = projection.reproject(&options.scroll_offsets).unwrap();
+            let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            for node in &full.nodes {
+                assert_eq!(
+                    format!("{:?}", projection.node(&node.key).unwrap()),
+                    format!("{node:?}"),
+                    "node {}",
+                    node.key
+                );
+            }
+            for y in 0..40 {
+                for x in 0..100 {
+                    assert_eq!(
+                        projection.hit_test(x, y).map(|node| &node.key),
+                        full.hit_test(x, y).map(|node| &node.key),
+                        "cell {x},{y}"
+                    );
+                }
+            }
+            for node in projection.visible_nodes() {
+                let complete = projection.node(&node.key).unwrap();
+                assert_eq!(node.bounds, complete.bounds);
+                assert_eq!(node.clip, complete.clip);
+                assert_eq!(node.text_clip, complete.text_clip);
+                assert_eq!(node.children.len(), 0);
+                for fragment in &node.text {
+                    assert!(
+                        complete
+                            .text
+                            .iter()
+                            .any(|other| format!("{fragment:?}") == format!("{other:?}"))
+                    );
+                }
+            }
+            // Preparing a successor leaves the preceding candidate untouched.
+            assert_eq!(
+                format!("{:?}", previous.node("scroll")),
+                format!("{:?}", previous.clone().node("scroll"))
+            );
+        }
+        assert_eq!(
+            initial.get("scroll").unwrap().scroll_offset,
+            ScrollOffset::default()
+        );
+    }
+
+    #[test]
+    fn retained_projection_fixed_viewport_scaling_and_offscreen_focus() {
+        let mut counts = Vec::new();
+        for pages in [1, 3, 10] {
+            let mut root = album_document();
+            let prototype = root.children[0].children[0].clone();
+            root.children[0].children = (0..pages * 100)
+                .map(|index| {
+                    let mut child = prototype.clone();
+                    child.str_id = Some(format!("album-{index}"));
+                    child
+                })
+                .collect();
+            let mut options = LayoutOptions {
+                viewport: Size::new(100, 40),
+                ..Default::default()
+            };
+            let tree = Arc::new(layout(&root, &options, &DefaultLeafMeasure).unwrap());
+            let retained = RetainedLayout::new(tree);
+            options
+                .scroll_offsets
+                .insert("scroll".into(), ScrollOffset { x: 0, y: 30 });
+            let projection = retained.project(&options.scroll_offsets).unwrap();
+            let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            let key = format!("album-{}", pages * 100 - 1);
+            assert_eq!(
+                format!("{:?}", projection.node(&key)),
+                format!("{:?}", full.get(&key))
+            );
+            assert!(
+                projection
+                    .visible_nodes()
+                    .iter()
+                    .all(|node| node.key != key)
+            );
+            let work = projection.work();
+            eprintln!("retained pages={pages} work={work:?}");
+            counts.push(work);
+        }
+        assert_eq!(counts[0].projected_nodes, counts[2].projected_nodes);
+        assert_eq!(counts[0].projected_fragments, counts[2].projected_fragments);
+        assert_eq!(counts[0].projected_regions, counts[2].projected_regions);
+        assert!(counts[2].spatial_entries < counts[0].spatial_entries * 3);
+    }
+
+    #[test]
     fn hundred_album_scroll_matches_complete_reflow() {
         let root = album_document();
         let mut options = LayoutOptions {
@@ -3509,6 +3636,105 @@ mod scroll_reprojection_tests {
         let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
         let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
         assert!(reproject_scroll(&root, &tree, &offsets).is_none());
+    }
+
+    #[test]
+    fn retained_projection_indexes_large_text_owners() {
+        let mut work = Vec::new();
+        for pages in [1, 3, 10] {
+            let root = Container {
+                str_id: Some("scroll".into()),
+                width: Some(Number::Integer(640)),
+                height: Some(Number::Integer(320)),
+                overflow_y: LayoutOverflow::Scroll,
+                children: vec![Container {
+                    str_id: Some("long-text".into()),
+                    element: Element::Text {
+                        value: "long text owner wrapping across rows ".repeat(pages * 100),
+                    },
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            let mut options = LayoutOptions {
+                viewport: Size::new(100, 40),
+                ..Default::default()
+            };
+            let initial = Arc::new(layout(&root, &options, &DefaultLeafMeasure).unwrap());
+            let retained = RetainedLayout::new(initial);
+            options
+                .scroll_offsets
+                .insert("scroll".into(), ScrollOffset { x: 0, y: 10 });
+            let projection = retained.project(&options.scroll_offsets).unwrap();
+            let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            for node in &full.nodes {
+                let cached = projection
+                    .visible_nodes()
+                    .iter()
+                    .find(|cached| cached.key == node.key);
+                let text: Vec<_> = node
+                    .text
+                    .iter()
+                    .filter(|fragment| {
+                        let bounds = fragment.bounds.intersection(node.text_clip);
+                        bounds.width > 0 && bounds.height > 0
+                    })
+                    .collect();
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        cached.map(|node| &node.text).cloned().unwrap_or_default()
+                    ),
+                    format!("{text:?}")
+                );
+            }
+            work.push(projection.work());
+        }
+        assert_eq!(work[0].projected_fragments, work[2].projected_fragments);
+        assert!(work[2].spatial_entries < work[0].spatial_entries * 3);
+    }
+
+    #[test]
+    fn retained_projection_positioned_admission_and_candidate_isolation() {
+        for position in [Position::Fixed, Position::Sticky, Position::Absolute] {
+            let mut root = album_document();
+            root.children[0].children[0].position = Some(position);
+            let options = LayoutOptions::default();
+            let tree = Arc::new(layout(&root, &options, &DefaultLeafMeasure).unwrap());
+            let retained = RetainedLayout::new(Arc::clone(&tree));
+            let projection = retained.project(&options.scroll_offsets).unwrap();
+            let before = format!("{:?}", projection.node("scroll"));
+            let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
+            let (rejected, work) = projection.reproject_counted(&offsets);
+            assert!(rejected.is_none());
+            assert_eq!(work.scrollports, 1);
+            assert_eq!(work.spatial_entries, 0);
+            assert_eq!(before, format!("{:?}", projection.node("scroll")));
+            assert_eq!(
+                tree.get("scroll").unwrap().scroll_offset,
+                ScrollOffset::default()
+            );
+        }
+        for root in [album_overlay_document(false), album_overlay_document(true)] {
+            let mut options = LayoutOptions::default();
+            let tree = Arc::new(layout(&root, &options, &DefaultLeafMeasure).unwrap());
+            let retained = RetainedLayout::new(Arc::clone(&tree));
+            options
+                .scroll_offsets
+                .insert("scroll".into(), ScrollOffset { x: 0, y: 3 });
+            let projection = retained.project(&options.scroll_offsets);
+            let baseline = reproject_scroll_baseline(&root, &tree, &options.scroll_offsets);
+            assert_eq!(projection.is_some(), baseline.is_some());
+            if let Some(projection) = projection {
+                let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+                for node in &full.nodes {
+                    assert_eq!(
+                        format!("{:?}", projection.node(&node.key).unwrap()),
+                        format!("{node:?}")
+                    );
+                }
+            }
+        }
     }
 
     #[test]

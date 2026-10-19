@@ -3,6 +3,14 @@
 //! Run with --ignored --nocapture after obtaining the compiler slot. Build with
 //! the normal bmux image features; use release for comparisons. Optional
 //! `BMUX_PERF_ARTIFACTS` names a NEW directory for per-case terminal streams.
+//! Each `pages-N-MODE.init.bin` contains initial output and all warm-up output;
+//! replay it before `pages-N-MODE.bin`. Metadata locators are relative to that
+//! new directory (null when not saved). `prefix_bytes` is the init length;
+//! `byte_range` stays delta-relative and `stream_byte_range` includes the prefix.
+//! `BMUX_PERF_SOURCE_ID` and `BMUX_PERF_BUILD_ID` are coordinator-supplied
+//! provenance (including dirty source/dependency identity and build flags).
+//! Missing identity is reported as null, never inferred from a stale HEAD.
+//! Sink timings below measure only in-memory copies/locks, NOT PTY blocking.
 //! Compare the exact same 64 wheel inputs, not a time-limited input generator.
 //! Cold = terminal-resident-cold: freshly decoded in-memory resources + fresh
 //! presenter, NOT cold asynchronous fetch/network/decode. Warm = the same
@@ -25,7 +33,7 @@ use std::{
 
 use bmux_tui::{
     event::{Event, MouseEvent, MouseEventKind},
-    geometry::{Point, Rect},
+    geometry::{Point, Rect, Size},
     terminal::Terminal,
 };
 use bmux_tui_runtime::{Presenter, Program, RuntimeEvent};
@@ -50,20 +58,30 @@ struct Output {
     bytes: Vec<u8>,
     writes: usize,
     flushes: usize,
+    write_ns: u128,
+    max_write_ns: u128,
+    flush_ns: u128,
 }
 
 #[derive(Clone, Default)]
 struct MemoryWriter(Arc<Mutex<Output>>);
 impl Write for MemoryWriter {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let started = Instant::now();
         let mut output = self.0.lock().unwrap();
         output.bytes.extend_from_slice(bytes);
         output.writes += 1;
+        let elapsed = started.elapsed().as_nanos();
+        output.write_ns += elapsed;
+        output.max_write_ns = output.max_write_ns.max(elapsed);
         drop(output);
         Ok(bytes.len())
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.0.lock().unwrap().flushes += 1;
+        let started = Instant::now();
+        let mut output = self.0.lock().unwrap();
+        output.flushes += 1;
+        output.flush_ns += started.elapsed().as_nanos();
         Ok(())
     }
 }
@@ -219,6 +237,18 @@ fn run_case(
             presenter.present(&mut program).unwrap();
         }
     }
+    // Preserve the complete initialization history, including warm-up graphics
+    // residency, before resetting measured offsets. Prefix + delta reconstructs
+    // the stream; existing .bin files and byte_range remain delta-relative.
+    let (prefix_bytes, prefix_locator) = {
+        let output = writer.0.lock().unwrap();
+        let locator = artifacts.map(|path| {
+            let name = format!("pages-{pages}-{mode}.init.bin");
+            fs::write(path.join(&name), &output.bytes).unwrap();
+            name
+        });
+        (output.bytes.len(), locator)
+    };
     // All cases now start at the same top scroll position. No parser is
     // running: event/presenter time cannot include Python parser backlog.
     *writer.0.lock().unwrap() = Output::default();
@@ -226,6 +256,14 @@ fn run_case(
         "{}",
         serde_json::json!({
             "fixture": "production_albums_v1", "pages": pages, "albums": pages * 100,
+            "source_id": std::env::var("BMUX_PERF_SOURCE_ID").ok(),
+            "build_id": std::env::var("BMUX_PERF_BUILD_ID").ok(),
+            "trace_id": "wheel-v1-32-down-32-up-105-20",
+            "prefix_locator": prefix_locator,
+            "prefix_bytes": prefix_bytes,
+            "delta_locator": artifacts.map(|_| format!("pages-{pages}-{mode}.bin")),
+            "stream_offset_semantics": "byte_range_delta_relative_stream_byte_range_prefix_inclusive",
+            "sink_timing_semantics": "in_memory_copy_and_lock_not_output_blocking",
             "mode": mode, "nodes": nodes, "registered_images": if images {keys.len()} else {0},
             "decode_us": decode_us, "initial_prepare_present_us": initial_us,
             "wheel_count": STEPS * 2, "wheel_point": [105, 20],
@@ -235,22 +273,56 @@ fn run_case(
         })
     );
     for index in 0..STEPS * 2 {
-        let before = writer.0.lock().unwrap().bytes.len();
+        let (before, writes_before, flushes_before, write_ns_before, flush_ns_before) = {
+            let mut output = writer.0.lock().unwrap();
+            output.max_write_ns = 0;
+            (
+                output.bytes.len(),
+                output.writes,
+                output.flushes,
+                output.write_ns,
+                output.flush_ns,
+            )
+        };
         let started = Instant::now();
         wheel(&mut program, index);
         let update_us = started.elapsed().as_micros();
         let started = Instant::now();
         presenter.present(&mut program).unwrap();
         let prepare_present_us = started.elapsed().as_micros();
-        let end = writer.0.lock().unwrap().bytes.len();
+        // Public diagnostic value API only: no layout/ABI/serde assumptions.
+        // Read after presentation so this attempt includes paint work.
+        let performance = program.performance_snapshot();
+        let output = writer.0.lock().unwrap();
+        let end = output.bytes.len();
         eprintln!(
             "{}",
             serde_json::json!({
                 "pages": pages, "mode": mode, "frame": index,
                 "direction": if index < STEPS {"down"} else {"up"},
                 "update_us": update_us, "prepare_present_us": prepare_present_us,
+                "sequence": performance.sequence,
+                "full_layouts": performance.full_layouts,
+                "projection_used": performance.projection_used,
+                "project_us": performance.project_us,
+                "controls_us": performance.controls_us,
+                "reveal_us": performance.reveal_us,
+                "resource_us": performance.resource_us,
+                "paint_us": performance.paint_us,
+                "project_visited": performance.project_visited,
+                "retained_nodes": performance.retained_nodes,
+                "controls_visited": performance.controls_visited,
+                "reveal_visited": performance.reveal_visited,
+                "resource_visited": performance.resource_visited,
+                "paint_visited": performance.paint_visited,
                 "byte_range": [before, end],
+                "stream_byte_range": [prefix_bytes + before, prefix_bytes + end],
                 "bytes": end - before,
+                "writes": output.writes - writes_before,
+                "flushes": output.flushes - flushes_before,
+                "sink_write_ns": output.write_ns - write_ns_before,
+                "sink_max_write_ns": output.max_write_ns,
+                "sink_flush_ns": output.flush_ns - flush_ns_before,
             })
         );
     }
@@ -264,6 +336,245 @@ fn run_case(
         .unwrap();
     }
     presenter.cleanup().unwrap();
+}
+
+/// Exact real-paint oracle, separate from timing. Same-size resize deliberately
+/// invalidates reuse on the comparator through the public geometry API.
+/// Action hit targets remain covered by renderer-internal projection tests;
+/// BmuxProgram does not expose its authoritative hit-test scene publicly.
+#[test]
+#[ignore = "expensive full-layout oracle; needs compiler slot and coherent sources"]
+fn production_fixed_trace_cells_and_images_match_full_layout() {
+    moosicbox_app_native::register_api_sources();
+    for pages in [1, 3, 10] {
+        for mode in ["text", "cold", "warm"] {
+            let root = fixture(pages);
+            let mut keys = BTreeSet::new();
+            walk(&root, &mut Vec::new(), &mut |node, path| {
+                if matches!(node.element, Element::Image { .. }) {
+                    keys.insert(node_key(node, path));
+                }
+            });
+            let mut allowed_keys = BTreeSet::new();
+            walk(&root, &mut Vec::new(), &mut |node, path| {
+                if matches!(node.element, Element::Image { .. } | Element::Canvas) {
+                    allowed_keys.insert(node_key(node, path));
+                }
+            });
+            let make_program = || {
+                let mut config = BmuxConfig {
+                    width: 140,
+                    height: 40,
+                    max_nodes: 200_000,
+                    graphics_enabled: mode != "text",
+                    image_protocol: if mode == "text" {
+                        ImageProtocol::Disabled
+                    } else {
+                        ImageProtocol::Kitty
+                    },
+                    ..Default::default()
+                };
+                config.graphics.max_entries = keys.len() + 128;
+                config.graphics.max_total_bytes = 256 * 1024 * 1024;
+                let (actions, _action_rx) = flume::unbounded();
+                let (resizes, _resize_rx) = flume::unbounded();
+                let mut program = BmuxProgram::new(config, actions, resizes);
+                program.apply_view(View::from(root.clone()), None).unwrap();
+                if mode != "text" {
+                    let policy = SourcePolicy {
+                        allow_memory: true,
+                        ..Default::default()
+                    };
+                    for key in &keys {
+                        program
+                            .graphics
+                            .decode(key, &GraphicsSource::Memory, &policy, ARTWORK)
+                            .unwrap();
+                    }
+                }
+                program.set_graphics_available(mode != "text");
+                program
+            };
+            let mut candidate = make_program();
+            let mut baseline = make_program();
+            let mut actual = Terminal::new(Vec::new(), Rect::new(0, 0, 140, 40));
+            let mut expected = Terminal::new(Vec::new(), Rect::new(0, 0, 140, 40));
+            let mut actual_namespace = None;
+            let mut expected_namespace = None;
+            let cycles = if mode == "warm" { 2 } else { 1 };
+            for step in 0..=STEPS * 2 * cycles {
+                if step > 0 {
+                    let index = (step - 1) % (STEPS * 2);
+                    wheel(&mut candidate, index);
+                    wheel(&mut baseline, index);
+                }
+                baseline.resize(Size::new(140, 40));
+                candidate.prepare().unwrap();
+                baseline.prepare().unwrap();
+                assert_eq!(
+                    baseline.performance_snapshot().full_layouts,
+                    1,
+                    "same-size resize must force ordinary full layout"
+                );
+                assert!(
+                    !baseline.performance_snapshot().projection_used,
+                    "full-layout comparator unexpectedly used projection"
+                );
+                actual.draw(|cx| candidate.paint(cx)).unwrap();
+                expected.draw(|cx| baseline.paint(cx)).unwrap();
+                candidate.commit_prepared();
+                baseline.commit_prepared();
+                assert_eq!(
+                    actual.retained_buffer(),
+                    expected.retained_buffer(),
+                    "glyph/style/width continuation mismatch pages={pages} mode={mode} step={step}"
+                );
+                let actual_images =
+                    logical_images(actual.images(), &mut actual_namespace, &allowed_keys);
+                let expected_images =
+                    logical_images(expected.images(), &mut expected_namespace, &allowed_keys);
+                assert!(
+                    actual_images == expected_images,
+                    "image snapshot mismatch pages={pages} mode={mode} step={step}:\n{}",
+                    image_difference_summary(&actual_images, &expected_images)
+                );
+                if mode != "text" {
+                    assert!(!actual.images().is_empty(), "oracle must paint real images");
+                }
+                // Byte streams are not the oracle and must not grow across the
+                // expensive full-layout trace. Retained cells stay intact.
+                actual.writer_mut().clear();
+                expected.writer_mut().clear();
+            }
+        }
+    }
+}
+
+// Pin once per independently constructed program, never once per frame. Only
+// the owner prefix is normalized; the full ordered contribution remains exact.
+fn logical_images(
+    images: &[bmux_tui::image::ImageContribution],
+    namespace: &mut Option<String>,
+    source_keys: &BTreeSet<String>,
+) -> Vec<bmux_tui::image::ImageContribution> {
+    use bmux_tui::image::{ImageContribution, ImageKey};
+
+    images
+        .iter()
+        .map(|image| {
+            let mut image = image.clone();
+            let present = matches!(&image, ImageContribution::Present(_));
+            let key = match &mut image {
+                ImageContribution::Present(placement) => &mut placement.key,
+                ImageContribution::Remove(key) => key,
+            };
+            let (owner, logical) = key
+                .as_str()
+                .split_once(':')
+                .expect("image must have owner namespace");
+            let serial = owner
+                .strip_prefix("hyperchad-")
+                .expect("unexpected image owner");
+            assert!(
+                !serial.is_empty() && serial.bytes().all(|byte| byte.is_ascii_digit()),
+                "invalid image owner namespace"
+            );
+            let prefix = format!("{owner}:");
+            if let Some(pinned) = namespace.as_ref() {
+                assert_eq!(pinned, &prefix, "per-program image namespace changed");
+            } else {
+                assert!(present, "cannot authenticate owner from removal");
+                assert!(
+                    source_keys.contains(logical),
+                    "first image must match registered fixture source"
+                );
+                *namespace = Some(prefix);
+            }
+            // Fragment suffixes are retained verbatim, never stripped/renumbered.
+            assert!(
+                source_keys.contains(logical)
+                    || logical
+                        .rsplit_once(":fragment:")
+                        .is_some_and(|(source, part)| source_keys.contains(source)
+                            && !part.is_empty()
+                            && part.bytes().all(|byte| byte.is_ascii_digit())),
+                "image key does not belong to the fixture: owner={owner:?} logical={logical:?}"
+            );
+            *key = ImageKey::new(logical);
+            image
+        })
+        .collect()
+}
+
+#[test]
+fn logical_image_comparison_preserves_identity_and_owner_stability() {
+    use bmux_tui::image::{ImageContribution, ImageKey};
+
+    let keys = BTreeSet::from(["@0/1".to_owned(), "@0/2".to_owned()]);
+    let mut owner = Some("hyperchad-7:".to_owned());
+    let input = vec![ImageContribution::Remove(ImageKey::new(
+        "hyperchad-7:@0/1:fragment:2",
+    ))];
+    let normalized = logical_images(&input, &mut owner, &keys);
+    assert_eq!(
+        normalized,
+        vec![ImageContribution::Remove(ImageKey::new("@0/1:fragment:2"))]
+    );
+    assert_eq!(owner.as_deref(), Some("hyperchad-7:"));
+    for invalid in [
+        "hyperchad-8:@0/1",
+        "hyperchad-7:@0/9",
+        "hyperchad-7:@0/1:fragment:x",
+        "bogus:@0/1",
+    ] {
+        let input = vec![ImageContribution::Remove(ImageKey::new(invalid))];
+        assert!(
+            std::panic::catch_unwind(|| {
+                logical_images(&input, &mut Some("hyperchad-7:".to_owned()), &keys)
+            })
+            .is_err(),
+            "invalid identity accepted: {invalid}"
+        );
+    }
+}
+
+fn image_difference_summary(
+    actual: &[bmux_tui::image::ImageContribution],
+    expected: &[bmux_tui::image::ImageContribution],
+) -> String {
+    use bmux_tui::image::ImageContribution;
+
+    let describe = |image: Option<&ImageContribution>| match image {
+        Some(ImageContribution::Present(image)) => format!(
+            "key={:?} dst={:?} clip={:?} allocation={:?} fit={:?} lifecycle={:?} {}",
+            image.key,
+            image.destination,
+            image.clip,
+            image.allocation,
+            image.fit,
+            image.lifecycle,
+            payload_summary(&image.payload),
+        ),
+        other => format!("{other:?}"),
+    };
+    let mut differences = vec![format!(
+        "contributions actual={} expected={}",
+        actual.len(),
+        expected.len()
+    )];
+    for index in 0..actual.len().max(expected.len()) {
+        if actual.get(index) != expected.get(index) {
+            differences.push(format!(
+                "index={index} actual=[{}] expected=[{}]",
+                describe(actual.get(index)),
+                describe(expected.get(index))
+            ));
+            if differences.len() == 9 {
+                break;
+            }
+        }
+    }
+    differences.join("\n")
 }
 
 fn payload_summary(payload: &bmux_tui::image::ImagePayload) -> String {
@@ -346,12 +657,47 @@ fn assert_same_images(
     );
 }
 
+fn image_snapshot(
+    program: &mut BmuxProgram,
+    terminal: &mut Terminal<Vec<u8>>,
+) -> BTreeMap<bmux_tui::image::ImageKey, bmux_tui::image::ImagePlacement> {
+    use bmux_tui::image::ImageContribution;
+
+    program.prepare().unwrap();
+    terminal.draw(|cx| program.paint(cx)).unwrap();
+    program.commit_prepared();
+    let mut snapshot = BTreeMap::new();
+    for contribution in terminal.images() {
+        if let ImageContribution::Present(image) = contribution {
+            assert!(image.destination.width > 0 && image.destination.height > 0);
+            assert_eq!(
+                image.destination.intersection(image.clip),
+                image.destination
+            );
+            assert_eq!(
+                image.destination.intersection(Rect::new(0, 0, 140, 40)),
+                image.destination
+            );
+            if let Some(bounds) = image.allocation {
+                assert!(bounds.covers(image.destination));
+            }
+            assert!(
+                snapshot.insert(image.key.clone(), image.clone()).is_none(),
+                "duplicate image identity in a frame"
+            );
+        }
+    }
+    assert!(
+        !snapshot.is_empty(),
+        "real production images must be submitted"
+    );
+    snapshot
+}
+
 /// Small non-timing contract: the same warmed wheel trace must preserve image
 /// identities and bounds, independently of the ignored wall-time matrix.
 #[test]
 fn production_initial_and_warm_wheel_image_contract() {
-    use bmux_tui::image::ImageContribution;
-
     moosicbox_app_native::register_api_sources();
     let root = fixture(1);
     let config = BmuxConfig {
@@ -396,35 +742,7 @@ fn production_initial_and_warm_wheel_image_contract() {
             wheel(&mut program, if frame % 2 == 1 { 0 } else { STEPS });
             wheels += 1;
         }
-        program.prepare().unwrap();
-        terminal.draw(|cx| program.paint(cx)).unwrap();
-        program.commit_prepared();
-        let mut snapshot = BTreeMap::new();
-        for contribution in terminal.images() {
-            if let ImageContribution::Present(image) = contribution {
-                assert!(image.destination.width > 0 && image.destination.height > 0);
-                assert_eq!(
-                    image.destination.intersection(image.clip),
-                    image.destination
-                );
-                assert_eq!(
-                    image.destination.intersection(Rect::new(0, 0, 140, 40)),
-                    image.destination
-                );
-                if let Some(bounds) = image.allocation {
-                    assert!(bounds.covers(image.destination));
-                }
-                assert!(
-                    snapshot.insert(image.key.clone(), image.clone()).is_none(),
-                    "duplicate image identity in a frame"
-                );
-            }
-        }
-        assert!(
-            !snapshot.is_empty(),
-            "real production images must be submitted"
-        );
-        snapshots.push(snapshot);
+        snapshots.push(image_snapshot(&mut program, &mut terminal));
     }
     assert_eq!(wheels, 4);
     assert_same_images(
@@ -440,5 +758,39 @@ fn production_initial_and_warm_wheel_image_contract() {
     assert!(
         snapshots[1] != snapshots[2],
         "wheel must move actual image geometry"
+    );
+
+    // Bounded synchronous burst + prepare barrier. This exercises actual
+    // Program::update accumulation, not runtime queue admission/coalescing.
+    // Compare at both direction barriers: a dropped down/up pair must not be
+    // hidden by checking only the final return to the top.
+    let start = image_snapshot(&mut program, &mut terminal);
+    for _ in 0..8 {
+        wheel(&mut program, 0);
+        let _ = image_snapshot(&mut program, &mut terminal);
+    }
+    let paced_down = image_snapshot(&mut program, &mut terminal);
+    for _ in 0..8 {
+        wheel(&mut program, STEPS);
+        let _ = image_snapshot(&mut program, &mut terminal);
+    }
+    assert_same_images(
+        &start,
+        &image_snapshot(&mut program, &mut terminal),
+        "paced trace failed to return to initial geometry",
+    );
+    for _ in 0..8 {
+        wheel(&mut program, 0);
+    }
+    let burst_down = image_snapshot(&mut program, &mut terminal);
+    assert_same_images(&paced_down, &burst_down, "burst dropped wheel movement");
+    assert!(start != burst_down, "burst must move actual image geometry");
+    for _ in 0..8 {
+        wheel(&mut program, STEPS);
+    }
+    assert_same_images(
+        &start,
+        &image_snapshot(&mut program, &mut terminal),
+        "burst return barrier changed geometry",
     );
 }

@@ -237,6 +237,47 @@ class Screen:
         self.images = []
         self.graphics = []
         self.other_images = []
+        self.in_frame = False
+        self.completed_frames = 0
+        self.placements = {}
+
+    def scene_ready(self):
+        """Only complete synchronized scenes can supply input coordinates.
+
+        >>> screen = Screen()
+        >>> screen.feed(b'\\x1b[?2026h\\x1b[2;3HSave')
+        >>> screen.locate_ready('Save') is None
+        True
+        >>> screen.feed(b'\\x1b[?2026l')
+        >>> screen.locate_ready('Save')
+        (2, 1)
+        """
+        return self.completed_frames > 0 and not self.in_frame and not self.pending
+
+    def locate_ready(self, label, occurrence=0):
+        return self.locate(label, occurrence) if self.scene_ready() else None
+
+    def gear_ready(self):
+        """Require the actual current gear placement, not decoded image history.
+
+        >>> screen = Screen()
+        >>> screen.feed(b'\\x1b[?2026h\\x1b[2;18H\\x1b_Ga=p,i=3,p=3,c=3,r=1;\\x1b\\\\')
+        >>> screen.gear_ready()
+        False
+        >>> screen.feed(b'\\x1b[?2026l')
+        >>> screen.gear_ready()
+        True
+        >>> screen.feed(b'\\x1b_Ga=d,d=i,i=3;\\x1b\\\\')
+        >>> screen.gear_ready()
+        False
+        """
+        return self.scene_ready() and any(
+            x <= 17 < x + int(params.get("c", 0))
+            and y <= 1 < y + int(params.get("r", 0))
+            and x == 17
+            and y == 1
+            for params, x, y in self.placements.values()
+        )
 
     def feed(self, data):
         self.pending += data
@@ -253,6 +294,24 @@ class Screen:
                     if "=" in part
                 )
                 self.graphics.append((dict(params), self.x, self.y))
+                action = params.get("a")
+                if action == "p":
+                    self.placements[(params.get("i"), params.get("p"))] = (
+                        dict(params),
+                        self.x,
+                        self.y,
+                    )
+                elif action == "d":
+                    deletion = params.get("d", "a").lower()
+                    if deletion == "a":
+                        self.placements.clear()
+                    elif deletion == "i":
+                        self.placements = {
+                            key: value
+                            for key, value in self.placements.items()
+                            if key[0] != params.get("i")
+                            or (params.get("p") is not None and key[1] != params["p"])
+                        }
                 identity = params.get("i", "_")
                 # Chunk continuations may omit identity and metadata.
                 if not params.get("i") and self.transfers:
@@ -316,6 +375,11 @@ class Screen:
                     for value in args.lstrip(b"?><=").split(b";")
                 ]
                 n = values[0] or 1
+                if args == b"?2026" and final == b"h":
+                    self.in_frame = True
+                elif args == b"?2026" and final == b"l":
+                    self.in_frame = False
+                    self.completed_frames += 1
                 if final in (b"H", b"f"):
                     self.y = (values[0] or 1) - 1
                     self.x = (values[1] if len(values) > 1 else 1) - 1
@@ -678,10 +742,10 @@ def run(args):
 
             def click(label, occurrence=0, offset=0):
                 wait(
-                    lambda: screen.locate(label, occurrence),
+                    lambda: screen.locate_ready(label, occurrence),
                     "missing hit target: " + label,
                 )
-                x, y = screen.locate(label, occurrence)
+                x, y = screen.locate_ready(label, occurrence)
                 x += offset
                 send(f"\x1b[<0;{x + 1};{y + 1}M".encode())
                 send(f"\x1b[<0;{x + 1};{y + 1}m".encode())
@@ -695,6 +759,10 @@ def run(args):
             wait(
                 lambda: "New Connection" in screen.text(),
                 "Settings keyboard navigation did not paint destination",
+            )
+            wait(
+                lambda: screen.locate_ready("New Connection"),
+                "Settings scene not committed",
             )
             click("New Connection", offset=2)
             wait(lambda: "API URL:" in screen.text(), "native POST fragment failed")

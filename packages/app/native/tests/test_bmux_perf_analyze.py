@@ -1,11 +1,18 @@
 """Tiny offline analyzer regressions: no executable, Cargo, PTY or HTTP calls."""
 
 import base64
+import json
 import tempfile
 from pathlib import Path
 import unittest
 
-from bmux_perf_analyze import KittyAnalyzer, replay_profile, stage_metrics
+from bmux_perf_analyze import (
+    KittyAnalyzer,
+    fixture_metrics,
+    replay_profile,
+    stage_metrics,
+    work_metrics,
+)
 
 
 def apc(header, data=b""):
@@ -132,6 +139,312 @@ class StageTests(unittest.TestCase):
         self.assertEqual(
             result["prepare"], dict(samples=20, p50_ms=10, p95_ms=19, max_ms=20)
         )
+
+
+class WorkTests(unittest.TestCase):
+    def test_counts_are_not_ms_and_missing_is_not_zero(self):
+        result = work_metrics(
+            [
+                "DEBUG bmux work visited_nodes=100 scroll_candidates=2",
+                "DEBUG bmux work visited_nodes=200 scroll_candidates=0",
+                "DEBUG bmux input drained=8 pending=0 barrier_seq=64",
+                "DEBUG bmux work visited_nodes=-1 action_candidates=4oops",
+                "DEBUG unrelated pending=999 visited_nodes=999",
+            ]
+        )
+        self.assertEqual(
+            result["work.visited_nodes"], dict(samples=2, p50=100, p95=200, max=200)
+        )
+        self.assertEqual(result["input.pending"]["max"], 0)
+        self.assertEqual(result["input.barrier_seq"]["max"], 64)
+        self.assertEqual(result["work.action_candidates"]["samples"], 0)
+        self.assertIsNone(result["work.revealed_nodes"]["max"])
+
+    def test_exact_program_stage_contract_and_raw_work(self):
+        line = (
+            "DEBUG bmux stages sequence=9 project_us=100 controls_us=200 "
+            "reveal_us=300 resource_us=400 paint_us=500 project_visited=10 "
+            "retained_nodes=8 controls_visited=7 reveal_visited=6 "
+            "resource_visited=5 paint_visited=4"
+        )
+        timings = stage_metrics([line])
+        for name, expected in (
+            ("project", 0.1),
+            ("controls", 0.2),
+            ("reveal", 0.3),
+            ("resource", 0.4),
+            ("paint", 0.5),
+        ):
+            self.assertEqual(timings[name]["p95_ms"], expected)
+        counts = work_metrics([line])
+        for name, expected in (
+            ("project_visited", 10),
+            ("retained_nodes", 8),
+            ("controls_visited", 7),
+            ("reveal_visited", 6),
+            ("resource_visited", 5),
+            ("paint_visited", 4),
+        ):
+            self.assertEqual(counts[f"stages.{name}"]["max"], expected)
+
+    def test_nested_stage_times_do_not_change_existing_distributions(self):
+        result = stage_metrics(
+            [
+                "bmux prepare elapsed_us=2000 layout_us=1000 resources_us=300",
+                "bmux prepare resource-only elapsed_us=400",
+                "bmux presenter output present_us=5000 write_us=100 max_write_us=80 flush_us=20",
+            ]
+        )
+        self.assertEqual(result["prepare"]["p50_ms"], 2)
+        self.assertEqual(result["layout"]["p50_ms"], 1)
+        self.assertEqual(result["resources"]["p50_ms"], 0.3)
+        self.assertEqual(result["write"]["p50_ms"], 0.1)
+        self.assertEqual(result["max_write"]["p50_ms"], 0.08)
+        self.assertEqual(result["resource_only"]["p50_ms"], 0.4)
+
+
+class FixtureTests(unittest.TestCase):
+    def matrix(self):
+        records = []
+        for pages in (1, 3, 10):
+            for mode in ("text", "cold", "warm"):
+                identity = dict(pages=pages, mode=mode)
+                records.append(
+                    dict(
+                        identity,
+                        fixture="production_albums_v1",
+                        source_id="dirty-source-sha256",
+                        build_id="release-locked-dependencies",
+                        wheel_count=64,
+                        wheel_point=[105, 20],
+                        viewport=[140, 40],
+                        sink="in_memory_no_parser",
+                    )
+                )
+                for frame in range(64):
+                    records.append(
+                        dict(
+                            identity,
+                            frame=frame,
+                            direction="down" if frame < 32 else "up",
+                            update_us=1,
+                            prepare_present_us=2,
+                            byte_range=[frame * 10, (frame + 1) * 10],
+                            bytes=10,
+                        )
+                    )
+        return records
+
+    def analyze(self, records):
+        return fixture_metrics(
+            ["test harness diagnostic", "[]", "null"] + [json.dumps(r) for r in records]
+        )
+
+    def test_complete_matrix_is_structure_not_product_acceptance(self):
+        result = self.analyze(self.matrix())
+        self.assertTrue(result["structure_valid"])
+        self.assertTrue(result["provenance_complete"])
+        self.assertEqual(len(result["cases"]), 9)
+        self.assertEqual(
+            result["acceptance"], "not_evaluated_geometry_and_runtime_evidence_required"
+        )
+
+    def test_fallback_missing_unknown_not_zero(self):
+        result = self.analyze(self.matrix())["cases"]["1/warm"]["fallback"]
+        self.assertFalse(result["complete"])
+        self.assertIsNone(result["full_layout_frames"])
+        self.assertIsNone(result["zero_full_layout_frames"])
+        self.assertIsNone(result["projection_frames"])
+        self.assertIsNone(result["all_frames_projected_without_full_layout"])
+
+    def test_fallback_requires_all_64_frames_not_good_p95(self):
+        records = self.matrix()
+        for record in records:
+            if "frame" in record:
+                record.update(full_layouts=0, projection_used=True)
+        result = self.analyze(records)["cases"]["1/warm"]["fallback"]
+        self.assertTrue(result["all_frames_projected_without_full_layout"])
+        self.assertEqual(result["zero_full_layout_frames"], 64)
+        self.assertEqual(result["projection_frames"], 64)
+        frame = next(
+            record
+            for record in records
+            if record.get("mode") == "warm" and "frame" in record
+        )
+        frame.update(full_layouts=1, projection_used=False)
+        result = self.analyze(records)["cases"]["1/warm"]["fallback"]
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["full_layout_frames"], 1)
+        self.assertEqual(result["full_layouts"], 1)
+        self.assertEqual(result["zero_full_layout_frames"], 63)
+        self.assertFalse(result["all_frames_projected_without_full_layout"])
+        frame.pop("full_layouts")
+        result = self.analyze(records)["cases"]["1/warm"]["fallback"]
+        self.assertFalse(result["complete"])
+        self.assertIsNone(result["all_frames_projected_without_full_layout"])
+        frame.update(full_layouts=True, projection_used=1)
+        result = self.analyze(records)["cases"]["1/warm"]["fallback"]
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["full_layout_samples"], 63)
+        self.assertEqual(result["projection_samples"], 63)
+
+    def test_prefix_plus_delta_offsets_are_explicit_and_backward_compatible(self):
+        records = self.matrix()
+        for record in records:
+            if "fixture" in record:
+                stem = f"pages-{record['pages']}-{record['mode']}"
+                record.update(
+                    prefix_bytes=123,
+                    prefix_locator=f"{stem}.init.bin",
+                    delta_locator=f"{stem}.bin",
+                )
+            else:
+                record["stream_byte_range"] = [
+                    123 + value for value in record["byte_range"]
+                ]
+        self.assertTrue(self.analyze(records)["structure_valid"])
+        records[1]["stream_byte_range"] = [0, 10]
+        self.assertFalse(self.analyze(records)["structure_valid"])
+        records[1]["stream_byte_range"] = [123, 133]
+        records[0]["prefix_locator"] = "../old.bin"
+        self.assertFalse(self.analyze(records)["structure_valid"])
+        records[0]["prefix_locator"] = None
+        self.assertFalse(self.analyze(records)["structure_valid"])
+        records[0]["delta_locator"] = None
+        self.assertTrue(self.analyze(records)["structure_valid"])
+        records[0]["prefix_bytes"] = "bad"
+        self.assertFalse(self.analyze(records)["structure_valid"])
+
+    def test_public_snapshot_json_fields_are_additive(self):
+        records = self.matrix()
+        for record in records:
+            if "frame" in record:
+                record.update(
+                    sequence=record["frame"] + 2,
+                    project_us=100,
+                    controls_us=200,
+                    reveal_us=300,
+                    resource_us=400,
+                    paint_us=500,
+                    project_visited=12,
+                    retained_nodes=11,
+                    controls_visited=10,
+                    reveal_visited=9,
+                    resource_visited=8,
+                    paint_visited=7,
+                )
+        result = self.analyze(records)
+        self.assertTrue(result["structure_valid"])
+        case = result["cases"]["10/warm"]
+        self.assertEqual(case["timings"]["project_us"]["p95_ms"], 0.1)
+        self.assertEqual(case["timings"]["paint_us"]["p95_ms"], 0.5)
+        self.assertEqual(case["work"]["resource_visited"]["p95"], 8)
+        self.assertTrue(
+            all(value["within_bound"] for value in result["warm_work_scaling"].values())
+        )
+
+    def test_work_scaling_requires_complete_raw_counts(self):
+        records = self.matrix()
+        missing = self.analyze(records)["warm_work_scaling"]["project_visited"]
+        self.assertFalse(missing["complete"])
+        self.assertIsNone(missing["within_bound"])
+        for record in records:
+            if "frame" in record:
+                record["project_visited"] = 10 if record["pages"] == 1 else 20
+        self.assertTrue(
+            self.analyze(records)["warm_work_scaling"]["project_visited"][
+                "within_bound"
+            ]
+        )
+        for record in records:
+            if "frame" in record and record["pages"] == 10:
+                record["project_visited"] = 21
+        self.assertFalse(
+            self.analyze(records)["warm_work_scaling"]["project_visited"][
+                "within_bound"
+            ]
+        )
+        for record in records:
+            if (
+                record.get("mode") == "warm"
+                and record.get("pages") == 1
+                and "frame" in record
+            ):
+                record.pop("project_visited")
+                break
+        self.assertIsNone(
+            self.analyze(records)["warm_work_scaling"]["project_visited"][
+                "within_bound"
+            ]
+        )
+
+    def test_fixture_timings_keep_units_and_missing_sink_explicit(self):
+        records = self.matrix()
+        for record in records:
+            if "frame" in record:
+                record["sink_write_ns"] = 250_000
+        result = self.analyze(records)
+        timings = result["cases"]["1/text"]["timings"]
+        self.assertEqual(timings["prepare_present_us"]["p50_ms"], 0.002)
+        self.assertEqual(timings["sink_write_ns"]["p95_ms"], 0.25)
+        self.assertEqual(timings["sink_flush_ns"]["samples"], 0)
+        self.assertIsNone(timings["sink_flush_ns"]["max_ms"])
+
+    def test_old_fixture_without_identity_remains_readable_not_provenanced(self):
+        records = self.matrix()
+        for record in records:
+            record.pop("source_id", None)
+            record.pop("build_id", None)
+        result = self.analyze(records)
+        self.assertTrue(result["structure_valid"])
+        self.assertFalse(result["provenance_complete"])
+        self.assertEqual(len(result["missing_identity"]), 9)
+
+    def test_missing_duplicate_reordered_and_bad_ranges_rejected(self):
+        for change in (
+            "drop",
+            "duplicate",
+            "reorder",
+            "range",
+            "direction",
+            "timing",
+            "metadata",
+        ):
+            with self.subTest(change=change):
+                records = self.matrix()
+                if change == "drop":
+                    records.pop(1)
+                elif change == "duplicate":
+                    records.insert(1, records[1])
+                elif change == "reorder":
+                    records[1], records[2] = records[2], records[1]
+                elif change == "range":
+                    records[2]["byte_range"] = [0, 20]
+                elif change == "direction":
+                    records[1]["direction"] = "up"
+                elif change == "timing":
+                    records[1]["update_us"] = -1
+                else:
+                    records[0]["wheel_count"] = 63
+                self.assertFalse(self.analyze(records)["structure_valid"])
+
+    def test_empty_log_and_mixed_source_identity_rejected(self):
+        self.assertFalse(self.analyze([])["structure_valid"])
+        records = self.matrix()
+        records[65]["source_id"] = "other-source"
+        self.assertIn(
+            "inconsistent source/build identity within matrix",
+            self.analyze(records)["errors"],
+        )
+
+    def test_bad_identity_types_and_ranges_do_not_crash(self):
+        records = self.matrix()
+        records[0]["source_id"] = []
+        records[1]["byte_range"] = ["oops", None]
+        records.append(dict(pages=[], mode={}, frame=0))
+        result = self.analyze(records)
+        self.assertFalse(result["structure_valid"])
+        self.assertFalse(result["provenance_complete"])
 
 
 if __name__ == "__main__":

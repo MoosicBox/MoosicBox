@@ -22,7 +22,9 @@ use bmux_tui_components::select_dropdown::SelectDropdownState;
 use bmux_tui_components::text_input::TextInputState;
 use hyperchad_transformer::Container;
 
-use crate::layout::{CellRect, LayoutTree, LeafMeasure, node_key};
+use crate::layout::{
+    CellRect, LayoutTree, LeafMeasure, ResolvedNode, ViewportProjection, node_key,
+};
 
 mod events;
 mod native;
@@ -35,6 +37,191 @@ mod clipped_prepare_tests {
     use super::*;
     use crate::layout::{DefaultLeafMeasure, LayoutOptions, layout};
     use hyperchad_transformer::{Element, Input};
+
+    #[test]
+    fn projection_prepare_is_candidate_bounded_and_resolves_offscreen_tab_geometry() {
+        use crate::layout::RetainedLayout;
+        use std::sync::Arc;
+
+        for count in [128, 1024] {
+            let root = Container {
+                overflow_y: hyperchad_transformer::models::LayoutOverflow::Auto,
+                children: (0..count)
+                    .map(|index| Container {
+                        str_id: Some(format!("input-{index}")),
+                        height: Some(hyperchad_transformer::Number::Integer(16)),
+                        element: Element::Input {
+                            input: Input::Text {
+                                value: Some("retained".into()),
+                                placeholder: None,
+                            },
+                            name: None,
+                            autofocus: None,
+                        },
+                        ..Container::default()
+                    })
+                    .collect(),
+                ..Container::default()
+            };
+            let tree =
+                Arc::new(layout(&root, &LayoutOptions::default(), &DefaultLeafMeasure).unwrap());
+            let projection = RetainedLayout::new(tree.clone())
+                .project(&BTreeMap::new())
+                .unwrap();
+            let mut controls = Controls::new();
+            controls.reconcile(&root);
+            controls.prepare(&tree);
+            controls.prepare_projection(&projection);
+            assert_eq!(
+                controls.prepare_work.candidate_nodes,
+                projection.visible_nodes().len()
+            );
+            assert!(controls.prepare_work.visited_nodes <= projection.visible_nodes().len());
+            assert!(controls.prepare_work.visited_nodes < count);
+            assert_eq!(controls.prepare_work.new_placements, 0);
+            assert_eq!(controls.prepare_work.retained_placements, 0);
+            controls.prepare_projection(&projection);
+            assert!(controls.prepare_work.cleared_layouts <= projection.visible_nodes().len());
+            let outcome = controls.traverse(true);
+            let key = format!("input-{}", count - 1);
+            assert_eq!(controls.focused(), Some(key.as_str()));
+            assert!(
+                outcome
+                    .events
+                    .contains(&ControlEvent::Reveal { key: key.clone() })
+            );
+            let expected = projection.node(&key).unwrap();
+            let prepared = controls.nodes[&key].prepared.as_ref().unwrap();
+            assert_eq!(prepared.bounds, expected.content_bounds);
+            assert_eq!(prepared.clip, expected.clip);
+            assert_eq!(prepared.path, expected.path);
+            assert_eq!(prepared.hit_regions, expected.hit_regions);
+            assert_eq!(prepared.order, expected.paint_order);
+            controls.prepare_projection(&projection);
+            assert!(controls.prepare_work.visited_nodes <= projection.visible_nodes().len() + 1);
+            assert!(controls.nodes[&key].prepared.is_some());
+            controls.traverse(false);
+            assert_eq!(controls.focused(), Some("input-0"));
+            controls.focus(None);
+            let moved = projection
+                .reproject(&BTreeMap::from([(
+                    tree.root_key.clone(),
+                    crate::layout::ScrollOffset { x: 0, y: 32 },
+                )]))
+                .unwrap();
+            controls.prepare_projection(&moved);
+            controls.traverse(true);
+            let expected = moved.node(&key).unwrap();
+            let prepared = controls.nodes[&key].prepared.as_ref().unwrap();
+            assert_eq!(prepared.bounds, expected.content_bounds);
+            assert_eq!(prepared.clip, expected.clip);
+            // A moved viewport must never use the retained baseline placement.
+            assert_ne!(prepared.bounds, tree.get(&key).unwrap().content_bounds);
+        }
+    }
+
+    #[test]
+    fn warm_clipped_prepare_reuses_placements_and_preserves_lazy_focus_geometry() {
+        const COUNT: usize = 128;
+        let root = Container {
+            children: (0..COUNT)
+                .map(|index| Container {
+                    str_id: Some(format!("input-{index}")),
+                    element: Element::Input {
+                        input: Input::Text {
+                            value: Some("retained".into()),
+                            placeholder: None,
+                        },
+                        name: None,
+                        autofocus: None,
+                    },
+                    ..Container::default()
+                })
+                .collect(),
+            ..Container::default()
+        };
+        let mut tree = layout(&root, &LayoutOptions::default(), &DefaultLeafMeasure).unwrap();
+        for node in &mut tree.nodes {
+            node.clip = CellRect::default();
+            // Exercise retained region storage as well as structural paths.
+            node.hit_regions = vec![node.content_bounds];
+        }
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        controls.prepare(&tree);
+        assert_eq!(controls.prepare_work.new_placements, COUNT);
+        assert_eq!(controls.prepare_work.native_layouts, 0);
+        let storage: BTreeMap<_, _> = controls
+            .nodes
+            .iter()
+            .map(|(key, control)| {
+                let placement = control.deferred.as_ref().unwrap();
+                (
+                    key.clone(),
+                    (placement.path.as_ptr(), placement.hit_regions.as_ptr()),
+                )
+            })
+            .collect();
+        controls.prepare(&tree);
+        assert_eq!(
+            controls.prepare_work,
+            PrepareWork {
+                visited_nodes: tree.nodes.len(),
+                retained_placements: COUNT,
+                ..PrepareWork::default()
+            }
+        );
+        for (key, control) in &controls.nodes {
+            let placement = control.deferred.as_ref().unwrap();
+            assert_eq!(
+                (placement.path.as_ptr(), placement.hit_regions.as_ptr()),
+                storage[key],
+                "warm prepare must retain offscreen allocation storage"
+            );
+        }
+        // Reverse Tab reaches the final offscreen control, with exactly the
+        // placement and native geometry the original eager path would produce.
+        let outcome = controls.traverse(true);
+        let key = format!("input-{}", COUNT - 1);
+        assert_eq!(controls.focused(), Some(key.as_str()));
+        assert!(
+            outcome
+                .events
+                .contains(&ControlEvent::Reveal { key: key.clone() })
+        );
+        let node = tree.nodes.iter().find(|node| node.key == key).unwrap();
+        let prepared = controls.nodes[&key].prepared.as_ref().unwrap();
+        assert_eq!(prepared.bounds, node.content_bounds);
+        assert_eq!(prepared.clip, node.clip);
+        assert_eq!(prepared.path, node.path);
+        assert_eq!(prepared.hit_regions, node.hit_regions);
+        assert_eq!(prepared.order, node.paint_order);
+        let bounds = node.content_bounds;
+        let expected = controls.nodes[&key].component(&key, true).layout(
+            Constraints::new(
+                bounds.width,
+                bounds.width,
+                bounds.height,
+                Some(bounds.height),
+            ),
+            &mut LayoutCx::new(),
+        );
+        assert_eq!(format!("{:?}", prepared.layout), format!("{expected:?}"));
+        controls.traverse(false);
+        assert_eq!(controls.focused(), Some("input-0"));
+        // A retained placement is not current geometry after removal/closing.
+        for node in &mut tree.nodes {
+            node.visible = false;
+        }
+        controls.prepare(&tree);
+        assert_eq!(controls.prepare_work.cleared_layouts, 2);
+        assert_eq!(controls.prepare_work.new_placements, 0);
+        assert_eq!(controls.prepare_work.retained_placements, 0);
+        controls.traverse(false);
+        assert_eq!(controls.focused(), None);
+        controls.focus(Some(&key));
+        assert!(controls.nodes[&key].prepared.is_none());
+    }
 
     #[test]
     fn clipped_prepare_clears_geometry_preserves_focus_and_reveals_again() {
@@ -65,7 +252,7 @@ mod clipped_prepare_tests {
         controls.traverse(false);
         assert_eq!(controls.focused.as_deref(), Some("input"));
         assert!(controls.nodes["input"].prepared.is_some());
-        assert!(controls.nodes["input"].deferred.is_none());
+        assert!(controls.nodes["input"].deferred.is_some());
         controls.prepare(&clipped);
         assert!(controls.nodes["input"].prepared.is_some());
         let NativeState::Text(state) = &controls.nodes["input"].state else {
@@ -80,7 +267,7 @@ mod clipped_prepare_tests {
         assert!(!controls.paint("input", &mut PaintCx::new(&mut frame)));
         controls.prepare(&tree);
         assert!(controls.nodes["input"].prepared.is_some());
-        assert!(controls.nodes["input"].deferred.is_none());
+        assert!(controls.nodes["input"].deferred.is_some());
     }
 
     #[test]
@@ -99,6 +286,19 @@ mod clipped_prepare_tests {
         assert!(controls.nodes["button"].prepared.is_some());
         controls.captured = None;
         controls.prepare(&tree);
+        assert!(controls.nodes["button"].prepared.is_none());
+        let projection = crate::layout::RetainedLayout::new(std::sync::Arc::new(tree))
+            .project(&BTreeMap::new())
+            .unwrap();
+        controls.captured = Some("button".into());
+        controls.prepare_projection(&projection);
+        assert!(controls.nodes["button"].prepared.is_some());
+        assert_eq!(
+            controls.nodes["button"].prepared.as_ref().unwrap().clip,
+            CellRect::default()
+        );
+        controls.captured = None;
+        controls.prepare_projection(&projection);
         assert!(controls.nodes["button"].prepared.is_none());
     }
 }
@@ -207,6 +407,39 @@ impl Prepared {
     }
 }
 
+struct Placement {
+    generation: u64,
+    bounds: CellRect,
+    clip: CellRect,
+    order: usize,
+    path: Vec<usize>,
+    hit_regions: Vec<CellRect>,
+}
+
+impl Placement {
+    fn prepare(&self, layout: LayoutNode) -> Prepared {
+        Prepared {
+            layout,
+            bounds: self.bounds,
+            clip: self.clip,
+            order: self.order,
+            path: self.path.clone(),
+            hit_regions: self.hit_regions.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[derive(Default, Debug, PartialEq, Eq)]
+struct PrepareWork {
+    candidate_nodes: usize,
+    visited_nodes: usize,
+    cleared_layouts: usize,
+    retained_placements: usize,
+    new_placements: usize,
+    native_layouts: usize,
+}
+
 enum NativeState {
     Text(Box<RefCell<TextInputState>>),
     Checkbox(Cell<CheckboxState>),
@@ -221,7 +454,8 @@ struct Control {
     spec: Spec,
     state: NativeState,
     prepared: Option<Prepared>,
-    deferred: Option<Prepared>,
+    deferred: Option<Placement>,
+    placement_generation: u64,
     files: Vec<AuthorizedFile>,
     secret_pointer: RefCell<TextInputState>,
     active_option: Cell<usize>,
@@ -237,6 +471,11 @@ pub struct Controls {
     order: Vec<String>,
     focused: Option<String>,
     captured: Option<String>,
+    prepared_keys: Vec<String>,
+    prepare_generation: u64,
+    projection: Option<ViewportProjection>,
+    #[cfg(test)]
+    prepare_work: PrepareWork,
 }
 
 impl Controls {
@@ -249,6 +488,7 @@ impl Controls {
     /// preserve local edits, selection, undo history, and popup state. A changed
     /// external value replaces that value; incompatible kinds reset all state.
     pub fn reconcile(&mut self, root: &Container) -> ControlOutcome {
+        self.projection = None;
         let specs = spec::collect(root);
         let mut old = std::mem::take(&mut self.nodes);
         self.order.clear();
@@ -274,10 +514,12 @@ impl Controls {
             };
             control.prepared = None;
             control.deferred = None;
+            control.placement_generation = u64::MAX;
             self.order.push(key.clone());
             self.nodes.insert(key, control);
         }
         self.captured = None;
+        self.prepared_keys.clear();
         let mut outcome = ControlOutcome::default();
         if self.focused.as_ref().is_some_and(|key| {
             !self.nodes.contains_key(key)
@@ -361,64 +603,146 @@ impl Controls {
     /// Resolve and retain native layouts inside the layout lane's assigned content
     /// rectangles. Hidden/closed descendants never gain paint or input geometry.
     pub fn prepare(&mut self, tree: &LayoutTree) {
-        for control in self.nodes.values_mut() {
-            control.prepared = None;
-            control.deferred = None;
-        }
-        for node in &tree.nodes {
-            if !node.visible {
-                continue;
+        self.projection = None;
+        self.prepare_generation = self.prepare_generation.wrapping_add(1);
+        if self.prepare_generation == 0 {
+            // An ancient placement must never become eligible after wraparound.
+            for control in self.nodes.values_mut() {
+                control.deferred = None;
+                control.placement_generation = u64::MAX;
             }
-            if let Some(control) = self.nodes.get_mut(&node.key) {
-                if matches!(control.spec.kind, Kind::Hidden | Kind::Details) {
-                    continue;
-                }
-                let bounds = node.content_bounds;
-                let visible = if control.spec.kind == Kind::Anchor && !node.hit_regions.is_empty() {
-                    node.hit_regions.iter().any(|region| {
-                        let clipped = region.intersection(node.clip);
-                        clipped.width > 0 && clipped.height > 0
-                    })
-                } else {
-                    let clipped = bounds.intersection(node.clip);
+        }
+        self.clear_prepared();
+        for node in &tree.nodes {
+            self.prepare_node(node);
+        }
+    }
+
+    fn clear_prepared(&mut self) {
+        #[cfg(test)]
+        {
+            self.prepare_work = PrepareWork::default();
+        }
+        for key in self.prepared_keys.drain(..) {
+            if let Some(control) = self.nodes.get_mut(&key) {
+                control.prepared = None;
+            }
+            #[cfg(test)]
+            {
+                self.prepare_work.cleared_layouts += 1;
+            }
+        }
+    }
+
+    fn prepare_node(&mut self, node: &ResolvedNode) {
+        #[cfg(test)]
+        {
+            self.prepare_work.visited_nodes += 1;
+        }
+        if !node.visible {
+            return;
+        }
+        if let Some(control) = self.nodes.get_mut(&node.key) {
+            if matches!(control.spec.kind, Kind::Hidden | Kind::Details) {
+                return;
+            }
+            control.placement_generation = self.prepare_generation;
+            let bounds = node.content_bounds;
+            let visible = if control.spec.kind == Kind::Anchor && !node.hit_regions.is_empty() {
+                node.hit_regions.iter().any(|region| {
+                    let clipped = region.intersection(node.clip);
                     clipped.width > 0 && clipped.height > 0
-                };
-                if !visible
-                    && self.focused.as_deref() != Some(&node.key)
-                    && self.captured.as_deref() != Some(&node.key)
-                {
-                    // Keep placement for lazy keyboard focus, without native
-                    // layout or paint/hit-test participation.
-                    control.deferred = Some(Prepared {
-                        layout: LayoutNode::leaf(
-                            node.key.clone().into(),
-                            LogicalSize::new(bounds.width, bounds.height),
-                        ),
+                })
+            } else {
+                let clipped = bounds.intersection(node.clip);
+                clipped.width > 0 && clipped.height > 0
+            };
+            if !visible
+                && self.focused.as_deref() != Some(&node.key)
+                && self.captured.as_deref() != Some(&node.key)
+            {
+                // Keep placement for lazy keyboard focus, without native
+                // layout or paint/hit-test participation.
+                if let Some(placement) = &mut control.deferred {
+                    placement.generation = self.prepare_generation;
+                    placement.bounds = bounds;
+                    placement.clip = node.clip;
+                    placement.order = node.paint_order;
+                    placement.path.clone_from(&node.path);
+                    placement.hit_regions.clone_from(&node.hit_regions);
+                    #[cfg(test)]
+                    {
+                        self.prepare_work.retained_placements += 1;
+                    }
+                } else {
+                    control.deferred = Some(Placement {
+                        generation: self.prepare_generation,
                         bounds,
                         clip: node.clip,
                         order: node.paint_order,
                         path: node.path.clone(),
                         hit_regions: node.hit_regions.clone(),
                     });
-                    continue;
+                    #[cfg(test)]
+                    {
+                        self.prepare_work.new_placements += 1;
+                    }
                 }
-                let constraints = Constraints::new(
-                    bounds.width,
-                    bounds.width,
-                    bounds.height,
-                    Some(bounds.height),
-                );
-                let layout = control
-                    .component(&node.key, self.focused.as_deref() == Some(&node.key))
-                    .layout(constraints, &mut LayoutCx::new());
-                control.prepared = Some(Prepared {
-                    layout,
-                    bounds,
-                    clip: node.clip,
-                    order: node.paint_order,
-                    path: node.path.clone(),
-                    hit_regions: node.hit_regions.clone(),
-                });
+                return;
+            }
+            let constraints = Constraints::new(
+                bounds.width,
+                bounds.width,
+                bounds.height,
+                Some(bounds.height),
+            );
+            let layout = control
+                .component(&node.key, self.focused.as_deref() == Some(&node.key))
+                .layout(constraints, &mut LayoutCx::new());
+            self.prepared_keys.push(node.key.clone());
+            #[cfg(test)]
+            {
+                self.prepare_work.native_layouts += 1;
+            }
+            control.prepared = Some(Prepared {
+                layout,
+                bounds,
+                clip: node.clip,
+                order: node.paint_order,
+                path: node.path.clone(),
+                hit_regions: node.hit_regions.clone(),
+            });
+        }
+    }
+
+    /// Prepare viewport candidates against the most recently prepared full layout.
+    /// Call `prepare` again whenever the retained baseline changes. Offscreen Tab
+    /// eligibility stays in document order; placement is resolved only on focus.
+    pub fn prepare_projection(&mut self, projection: &ViewportProjection) {
+        self.clear_prepared();
+        self.projection = Some(projection.clone());
+        for candidate in projection.visible_nodes() {
+            #[cfg(test)]
+            {
+                self.prepare_work.candidate_nodes += 1;
+            }
+            if self.nodes.contains_key(&candidate.key)
+                && let Some(node) = projection.node(&candidate.key)
+            {
+                self.prepare_node(&node);
+            }
+        }
+        for key in [self.focused.clone(), self.captured.clone()]
+            .into_iter()
+            .flatten()
+        {
+            if self
+                .nodes
+                .get(&key)
+                .is_some_and(|control| control.prepared.is_none())
+                && let Some(node) = projection.node(&key)
+            {
+                self.prepare_node(&node);
             }
         }
     }
@@ -539,11 +863,24 @@ impl Controls {
         }
         self.focused = key.map(str::to_owned);
         if let Some(key) = key
+            && let Some(projection) = &self.projection
+            && self
+                .nodes
+                .get(key)
+                .is_some_and(|control| control.prepared.is_none())
+            && let Some(node) = projection.node(key)
+        {
+            self.prepare_node(&node);
+        }
+        if self.projection.is_none()
+            && let Some(key) = key
             && let Some(control) = self.nodes.get_mut(key)
-            && let Some(mut deferred) = control.deferred.take()
+            && control.prepared.is_none()
+            && let Some(deferred) = control.deferred.as_ref()
+            && deferred.generation == self.prepare_generation
         {
             let bounds = deferred.bounds;
-            deferred.layout = control.component(key, true).layout(
+            let layout = control.component(key, true).layout(
                 Constraints::new(
                     bounds.width,
                     bounds.width,
@@ -552,7 +889,8 @@ impl Controls {
                 ),
                 &mut LayoutCx::new(),
             );
-            control.prepared = Some(deferred);
+            control.prepared = Some(deferred.prepare(layout));
+            self.prepared_keys.push(key.to_owned());
         }
         let mut outcome = ControlOutcome::handled();
         outcome.events.push(ControlEvent::Focus {
@@ -577,7 +915,7 @@ impl Controls {
                 let control = &self.nodes[*key];
                 control.spec.focusable()
                     && !control.spec.disabled
-                    && (control.deferred.is_some() || control.prepared.is_some())
+                    && control.placement_generation == self.prepare_generation
             })
             .cloned()
             .collect();
@@ -938,6 +1276,7 @@ impl Control {
             state,
             prepared: None,
             deferred: None,
+            placement_generation: u64::MAX,
             files: Vec::new(),
             secret_pointer: RefCell::new(TextInputState::default()),
             active_option: Cell::new(0),
