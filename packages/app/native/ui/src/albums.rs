@@ -1022,6 +1022,7 @@ pub fn albums_page_content(
                     }
                 }
                 input
+                    #albums-filter
                     type=text
                     placeholder="Filter..."
                     value=[search]
