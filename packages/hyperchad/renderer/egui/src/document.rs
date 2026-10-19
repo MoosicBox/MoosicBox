@@ -961,6 +961,7 @@ mod tests {
             }],
             delete_selectors: vec![Selector::Id("replacement".into())],
             primary: Some(Container::from(vec![node(5, Some("last"), vec![])])),
+            primary_is_fragment: false,
             response: response.clone(),
         };
         let summary = document

@@ -159,7 +159,6 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
         return Err(RouteError::MissingQueryParam("limit"));
     };
     let limit = limit.parse::<u32>()?;
-    #[cfg(feature = "bmux")]
     let limit = limit.clamp(1, 100);
     let Some(size) = req.query.get("size") else {
         return Err(RouteError::MissingQueryParam("size"));
@@ -217,12 +216,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    #[cfg(feature = "bmux")]
-    let render_page = moosicbox_app_native_ui::albums::albums_list_page;
-    #[cfg(not(feature = "bmux"))]
-    let render_page = moosicbox_app_native_ui::albums::albums_list_start;
-
-    Ok(render_page(
+    Ok(moosicbox_app_native_ui::albums::albums_list_start(
         &state,
         &albums,
         &filtered_sources,

@@ -25,6 +25,90 @@ fn at_path<'a>(mut root: &'a Container, path: &[usize]) -> &'a Container {
 }
 
 #[test]
+fn terminal_album_scale_keeps_wide_and_narrow_layouts_usable() {
+    use bmux_tui::geometry::Size;
+    use hyperchad::{
+        renderer::View,
+        renderer_bmux::{
+            layout::{self, DefaultLeafMeasure, LayoutOptions},
+            state::ViewState,
+        },
+        transformer::{Element, models::SwapStrategy},
+    };
+    use moosicbox_app_native_ui::{ALBUM_ART_SIZE, albums, state::State};
+    use moosicbox_music_models::{AlbumSort, api::ApiAlbum};
+
+    let root: Container = albums::albums(&State::default(), &[], AlbumSort::NameAsc, None).into();
+    let mut state = ViewState::from_root(root).unwrap();
+    let cards: Container = albums::show_albums(
+        "http://example.invalid",
+        (0..12)
+            .map(|id| ApiAlbum {
+                album_id: id.into(),
+                contains_cover: true,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>()
+            .iter(),
+        ALBUM_ART_SIZE,
+    )
+    .into();
+    let mut grid = at_path(state.root(), &path_to(state.root(), "albums").unwrap()).clone();
+    grid.children = cards.children;
+    state
+        .apply_response(View::from(grid), Some("albums"), SwapStrategy::This)
+        .unwrap();
+    for (columns, rows) in [(80, 24), (140, 40), (180, 50)] {
+        let tree = layout::layout(
+            state.root(),
+            &LayoutOptions {
+                viewport: Size::new(columns, rows),
+                ..Default::default()
+            },
+            &DefaultLeafMeasure,
+        )
+        .unwrap();
+        let grid = tree.get("albums").unwrap();
+        let covers: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter(|node| {
+                matches!(&at_path(state.root(), &node.path).element,
+                Element::Image { source: Some(source), .. } if source.contains("/files/albums/"))
+            })
+            .collect();
+        assert_eq!(covers.len(), 12);
+        let first_y = covers[0].bounds.y;
+        let first_row = covers
+            .iter()
+            .filter(|cover| cover.bounds.y == first_y)
+            .count();
+        eprintln!(
+            "{columns}x{rows}: {first_row} covers per row, grid {:?}",
+            grid.bounds
+        );
+        assert!(first_row >= 1, "narrow panes retain useful grid space");
+        if columns == 180 {
+            assert_eq!(first_row, 5, "typical viewport is close to desktop density");
+        }
+        for cover in covers {
+            assert_eq!(cover.bounds.width, 25);
+            assert_eq!(cover.bounds.height, 13);
+            assert!(cover.bounds.x >= grid.bounds.x);
+            assert!(
+                cover.bounds.right() <= grid.bounds.right(),
+                "artwork must not overflow horizontally"
+            );
+        }
+        let filter = tree.get("albums-filter").unwrap();
+        assert!(
+            filter.bounds.y < i64::from(rows - 10),
+            "filter remains above footer"
+        );
+    }
+}
+
+#[test]
 fn search_button_opens_modal_focuses_and_selects_input() {
     let mut root: Container = moosicbox_app_native_ui::search::search(
         &moosicbox_app_native_ui::state::State::default(),

@@ -44,9 +44,7 @@ serde_json          = { workspace = true }
 strum               = { workspace = true }
 
 [features]
-# Features unify: terminal selects compact UI for every renderer in this build.
-default  = ["all-formats"]
-terminal = []
+default = ["all-formats"]
 
 fail-on-warnings = [
     "hyperchad/fail-on-warnings",

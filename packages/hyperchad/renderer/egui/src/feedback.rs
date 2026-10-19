@@ -226,6 +226,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
             .resources_mut()
             .install_completions(self.app.document(), ctx);
         self.app.frame(ctx, &mut self.painter);
+        // Use the current geometry before any completion mutates the document.
+        self.automatic_routes(ctx);
         self.poll_routes(ctx);
         if let Some(service) = &mut self.file_service {
             for error in service.dispatch(self.painter.forms_mut()) {
@@ -544,6 +546,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
                 .push("route request requires installed application router".to_owned());
             return;
         };
+        let source = request.source;
         match routing.prepare(self.app.document_mut(), request) {
             Ok(id) => {
                 let before = routing.before_event(id);
@@ -558,9 +561,27 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
                     let _ = routing.start(id);
                 }
             }
-            Err(error) => self.app.diagnostics.push(error.to_string()),
+            Err(crate::routing::RoutingError::AlreadyLoaded) => {}
+            Err(error) => {
+                routing.automatic_admission_failed(source);
+                self.app.diagnostics.push(error.to_string());
+            }
         }
         self.routing = Some(routing);
+    }
+
+    fn automatic_routes(&mut self, ctx: &egui::Context) {
+        let Some(mut routing) = self.routing.take() else {
+            return;
+        };
+        routing.reconcile(self.app.document_mut());
+        let requests = self.app.geometry().map_or_else(Vec::new, |geometry| {
+            routing.automatic_requests(self.app.document(), geometry, ctx.content_rect())
+        });
+        self.routing = Some(routing);
+        for request in requests {
+            self.admit_route(ctx, request);
+        }
     }
 
     fn enqueue_routes(&mut self, ctx: &egui::Context) {
@@ -668,7 +689,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
                     self.app.diagnostics.push(error);
                 }
                 if let Some(route) = &node.route {
-                    match crate::routing::RequestContext::route(source, route, "click") {
+                    let revealed = matches!(route,
+                        hyperchad_transformer::models::Route::Get { trigger, .. }
+                        if trigger.as_deref() == Some("revealed"));
+                    if revealed && let Some(routing) = &mut self.routing {
+                        routing.retry_revealed(source);
+                    }
+                    match crate::routing::RequestContext::route(
+                        source,
+                        route,
+                        if revealed { "revealed" } else { "click" },
+                    ) {
                         Ok(Some(request)) => requests.push(request),
                         Ok(None) => {}
                         Err(error) => self.app.diagnostics.push(error.to_string()),
@@ -1172,6 +1203,80 @@ mod tests {
         fn with_context(self, _: egui::Context) -> Self {
             self
         }
+    }
+
+    #[test]
+    fn frame_admits_hidden_load_after_geometry_without_revealing_distant_nodes() {
+        use crate::routing::Routing;
+        use hyperchad_transformer::models::{Route, Selector, SwapStrategy};
+        use std::future::Future;
+        let route = |trigger: &str| {
+            Some(Route::Get {
+                route: "/generic-fragment".into(),
+                trigger: Some(trigger.into()),
+                target: Selector::SelfTarget,
+                strategy: SwapStrategy::This,
+            })
+        };
+        let root = Container {
+            id: 1,
+            calculated_width: Some(400.0),
+            calculated_height: Some(1200.0),
+            children: vec![
+                Container {
+                    id: 2,
+                    hidden: Some(true),
+                    route: route("load"),
+                    ..Container::default()
+                },
+                Container {
+                    id: 3,
+                    calculated_x: Some(0.0),
+                    calculated_y: Some(1000.0),
+                    calculated_width: Some(100.0),
+                    calculated_height: Some(20.0),
+                    route: route("revealed"),
+                    ..Container::default()
+                },
+            ],
+            ..Container::default()
+        };
+        let mut host = FeedbackApp::new(root, NoLayout);
+        let (routing, worker) = Routing::new(8, 65536, std::sync::Arc::new(|| {})).unwrap();
+        host.routing = Some(routing);
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(400.0, 300.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| host.frame(ctx),
+            );
+        }
+        assert!(
+            host.app.diagnostics.is_empty(),
+            "{:?}",
+            host.app.diagnostics
+        );
+        // The FIFO worker receives exactly the hidden load. If the second frame
+        // duplicated it or the offscreen sentinel drained, the handler count grows.
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = seen.clone();
+        let router = hyperchad_router::Router::new().with_route("/generic-fragment", move |_| {
+            count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async { hyperchad_renderer::View::default() }
+        });
+        let mut work = Box::pin(worker.run(router));
+        assert!(
+            work.as_mut()
+                .poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+                .is_pending()
+        );
+        assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

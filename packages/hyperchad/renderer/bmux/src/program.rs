@@ -341,22 +341,24 @@ impl BmuxProgram {
         let tree = layout::layout(root, &self.options, &measure)?;
         let layout_us = layout_started.elapsed().as_micros();
         drop(controls);
-        self.controls.prepare(&tree);
+        let mut canvases = Vec::new();
         for node in &tree.nodes {
             if matches!(
                 at_path(self.state.root(), &node.path).map(|node| &node.element),
                 Some(Element::Canvas)
-            ) && self.graphics.rgba(&node.key).is_none()
-            {
-                let width = u32::try_from(node.content_bounds.width.saturating_mul(8))
-                    .map_err(|_| std::io::Error::other("canvas width overflow"))?;
-                let height = u32::try_from(node.content_bounds.height.saturating_mul(16))
-                    .map_err(|_| std::io::Error::other("canvas height overflow"))?;
+            ) {
+                let width = u32::try_from(node.content_bounds.width.saturating_mul(8))?;
+                let height = u32::try_from(node.content_bounds.height.saturating_mul(16))?;
                 if width > 0 && height > 0 {
-                    self.graphics.create_canvas(&node.key, width, height)?;
+                    canvases.push((node.key.clone(), width, height));
                 }
             }
         }
+        if let Err(error) = self.graphics.sync_canvases(&canvases) {
+            self.discard_prepared();
+            return Err(error.into());
+        }
+        self.controls.prepare(&tree);
         self.fixed_image_geometry = fixed_image_geometry;
         self.prepared_source = Some(self.state.root().clone());
         self.geometry_dirty = false;
@@ -2373,7 +2375,7 @@ impl BmuxProgram {
         {
             return Ok(());
         }
-        if self.graphics.rgba(&update.target).is_none() {
+        if self.geometry_dirty || self.graphics.rgba(&update.target).is_none() {
             self.prepare()?;
             let size = self
                 .candidate
@@ -3198,6 +3200,79 @@ mod runtime_regressions {
             .apply_view(View::from(Container::default()), None)
             .unwrap();
         program.message(update()).unwrap();
+    }
+
+    #[test]
+    fn canvas_resize_surface_matches_resolved_dimensions_and_preserves_failed_prepare() {
+        use hyperchad_renderer::canvas::CanvasAction;
+        use hyperchad_transformer::Number;
+        let mut program = program();
+        program.resize(Size::new(40, 20));
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("plot".into()),
+                    element: Element::Canvas,
+                    width: Some(Number::IntegerPercent(100)),
+                    height: Some(Number::Integer(35)),
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        assert_eq!(
+            program.graphics.rgba("plot").map(|(w, h, _)| (w, h)),
+            Some((320, 32))
+        );
+        program.resize(Size::new(80, 20));
+        program
+            .update_canvas(&CanvasUpdate {
+                target: "plot".into(),
+                canvas_actions: vec![CanvasAction::Clear],
+            })
+            .unwrap();
+        assert_eq!(
+            program.graphics.rgba("plot").map(|(w, h, _)| (w, h)),
+            Some((640, 32))
+        );
+        program.prepare().unwrap();
+        program.commit_prepared();
+        let pixels = program.graphics.rgba("plot").unwrap().2.to_vec();
+        let committed = program
+            .committed
+            .as_ref()
+            .unwrap()
+            .1
+            .get("plot")
+            .unwrap()
+            .bounds;
+        program.resize(Size::new(600, 20)); // 4800px exceeds the resource dimension limit.
+        assert!(program.prepare().is_err());
+        assert_eq!(
+            program.graphics.rgba("plot").map(|(w, h, _)| (w, h)),
+            Some((640, 32))
+        );
+        assert_eq!(program.graphics.rgba("plot").unwrap().2, pixels);
+        assert_eq!(
+            program
+                .committed
+                .as_ref()
+                .unwrap()
+                .1
+                .get("plot")
+                .unwrap()
+                .bounds,
+            committed
+        );
+        assert!(program.candidate.is_none());
+        program.resize(Size::new(20, 20));
+        program.prepare().unwrap();
+        assert_eq!(
+            program.graphics.rgba("plot").map(|(w, h, _)| (w, h)),
+            Some((160, 32))
+        );
     }
 
     #[test]

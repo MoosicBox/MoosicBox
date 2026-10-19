@@ -474,10 +474,92 @@ impl GraphicsStore {
         );
         Ok(())
     }
+    /// Resize resolved canvas surfaces as one allocation transaction. Unchanged
+    /// surfaces retain pixels/style; resized surfaces reset like a new canvas.
+    /// Allocation failure leaves every existing resource untouched.
+    pub(crate) fn sync_canvases(
+        &mut self,
+        sizes: &[(String, u32, u32)],
+    ) -> Result<(), GraphicsError> {
+        let mut replacements = Vec::new();
+        let mut total = 0_usize;
+        if sizes.len() > self.limits.max_entries {
+            return Err(GraphicsError::Limit);
+        }
+        for (key, width, height) in sizes {
+            self.key(key)?;
+            let size = self.size(*width, *height)?;
+            total = total.checked_add(size).ok_or(GraphicsError::Limit)?;
+            if total > self.limits.max_total_bytes {
+                return Err(GraphicsError::Limit);
+            }
+            if self.resources.get(key).is_some_and(|resource| {
+                resource.canvas.is_some() && resource.width == *width && resource.height == *height
+            }) {
+                continue;
+            }
+            let mut rgba = Vec::new();
+            rgba.try_reserve_exact(size)
+                .map_err(|_| GraphicsError::Limit)?;
+            rgba.resize(size, 0);
+            replacements.push((
+                key,
+                Resource {
+                    width: *width,
+                    height: *height,
+                    rgba: rgba.into_boxed_slice(),
+                    png: None,
+                    canvas: Some(CanvasState::default()),
+                    touched: 0,
+                },
+            ));
+        }
+        // No insertion means no eviction can occur, so unchanged canvases need
+        // no reservation scan (all requested canvas budgets were validated above).
+        if replacements.is_empty() {
+            return Ok(());
+        }
+        // Reserve the final canvas set against unrelated cache entries before
+        // publishing replacements, including unchanged surfaces with old LRU ages.
+        let targets: BTreeSet<_> = sizes.iter().map(|(key, _, _)| key.as_str()).collect();
+        let others: Vec<_> = self
+            .resources
+            .iter()
+            .filter(|(key, _)| !targets.contains(key.as_str()))
+            .map(|(key, resource)| {
+                (
+                    key.clone(),
+                    resource.rgba.len() + resource.png.as_ref().map_or(0, Vec::len),
+                )
+            })
+            .collect();
+        let mut retained: usize = others.iter().map(|(_, bytes)| bytes).sum();
+        let mut retained_count = others.len();
+        for (key, bytes) in others {
+            if total.saturating_add(retained) <= self.limits.max_total_bytes
+                && sizes.len() + retained_count <= self.limits.max_entries
+            {
+                break;
+            }
+            self.remove(&key);
+            retained -= bytes;
+            retained_count -= 1;
+        }
+        // Remove old versions before insertion so cache eviction cannot evict a
+        // retained canvas while counting both its old and new backing buffers.
+        for (key, _) in &replacements {
+            self.remove(key);
+        }
+        for (key, resource) in replacements {
+            self.insert(key, resource);
+        }
+        Ok(())
+    }
+
     /// Create/reset a transparent canvas with default black, one-pixel stroke.
     ///
     /// # Errors
-    /// Returns identity, size, allocation, or resource budget errors without mutation.
+    /// * Returns identity, size, allocation, or resource budget errors without mutation.
     pub fn create_canvas(
         &mut self,
         key: &str,
@@ -1253,6 +1335,28 @@ mod tests {
             assert_eq!(s.create_canvas("canvas", 1, 1), Err(GraphicsError::Limit));
             assert!(s.is_empty());
         }
+    }
+
+    #[test]
+    fn canvas_surface_sync_is_atomic_and_retains_unchanged_pixels() {
+        let mut store = GraphicsStore::new(GraphicsLimits::default());
+        store.create_canvas("a", 2, 2).unwrap();
+        store.create_canvas("b", 2, 2).unwrap();
+        store.resources.get_mut("a").unwrap().rgba[0] = 123;
+        store.sync_canvases(&[("a".into(), 2, 2)]).unwrap();
+        assert_eq!(store.rgba("a").unwrap().2[0], 123);
+        assert!(
+            store
+                .sync_canvases(&[("a".into(), 4, 4), ("b".into(), 5000, 4)])
+                .is_err()
+        );
+        assert_eq!(store.rgba("a").map(|(w, h, _)| (w, h)), Some((2, 2)));
+        assert_eq!(store.rgba("a").unwrap().2[0], 123);
+        store
+            .sync_canvases(&[("a".into(), 4, 4), ("b".into(), 3, 3)])
+            .unwrap();
+        assert_eq!(store.rgba("a").map(|(w, h, _)| (w, h)), Some((4, 4)));
+        assert!(store.rgba("a").unwrap().2.iter().all(|byte| *byte == 0));
     }
 
     #[test]

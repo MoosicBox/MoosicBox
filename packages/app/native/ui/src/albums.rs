@@ -228,7 +228,7 @@ pub fn album_page_content(
                     }
                 }
             }
-            div direction=row padding-y=(if cfg!(feature = "terminal") { 8 } else { 20 }) gap=8 overflow-x=(if cfg!(feature = "terminal") { LayoutOverflow::Wrap { grid: false } } else { LayoutOverflow::default() }) {
+            div direction=row padding-y=20 gap=8 overflow-x=(LayoutOverflow::default()) {
                 button
                     direction=row
                     width=130
@@ -488,9 +488,7 @@ pub fn album(
     )
 }
 
-/// Renders the initial album list with lazy loading triggers.
-///
-/// Sets up `HyperChad` requests for parallel loading of additional album pages.
+/// Renders the initial album page using the shared demand-driven continuation.
 #[must_use]
 pub fn albums_list_start(
     state: &State,
@@ -500,109 +498,7 @@ pub fn albums_list_start(
     size: u16,
     search: &str,
 ) -> Containers {
-    static MAX_PARALLEL_REQUESTS: u32 = 6;
-    static MIN_PAGE_THRESHOLD: u32 = 30;
-
-    let Some(connection) = &state.connection else {
-        return container! {};
-    };
-
-    let filtered_sources = filtered_sources_to_string(filtered_sources);
-    let sort = sort.to_string();
-    let limit = albums.limit();
-    let offset = albums.offset() + limit;
-    let remaining = if albums.has_more() {
-        albums.remaining().map_or_else(
-            || {
-                container! {
-                    div
-                        hx-get={
-                            "/albums-list-start"
-                            (build_query('?', &[
-                                ("offset", &offset.to_string()),
-                                ("limit", &limit.to_string()),
-                                ("size", &size.to_string()),
-                                ("sources", &filtered_sources),
-                                ("sort", &sort),
-                                ("search", search),
-                            ]))
-                        }
-                        hx-trigger="load"
-                        hidden=(true)
-                    {}
-                }
-            },
-            |remaining| {
-                let limit = remaining / MAX_PARALLEL_REQUESTS;
-                let last = limit + (remaining % MAX_PARALLEL_REQUESTS);
-
-                container! {
-                    @if limit < MIN_PAGE_THRESHOLD {
-                        div
-                            hx-get={
-                                "/albums-list"
-                                (build_query('?', &[
-                                    ("offset", &offset.to_string()),
-                                    ("limit", &remaining.to_string()),
-                                    ("size", &size.to_string()),
-                                    ("sources", &filtered_sources),
-                                    ("sort", &sort),
-                                    ("search", search),
-                                ]))
-                            }
-                            hx-trigger="load"
-                            hidden=(true)
-                        {}
-                    } @else {
-                        @for i in 0..MAX_PARALLEL_REQUESTS {
-                            @if i == MAX_PARALLEL_REQUESTS - 1 {
-                                div
-                                    hx-get={
-                                        "/albums-list"
-                                        (build_query('?', &[
-                                            ("offset", &(offset + i * limit).to_string()),
-                                            ("limit", &last.to_string()),
-                                            ("size", &size.to_string()),
-                                            ("sources", &filtered_sources),
-                                            ("sort", &sort),
-                                            ("search", search),
-                                        ]))
-                                    }
-                                    hx-trigger="load"
-                                    hidden=(true)
-                                {}
-                            } @else {
-                                div
-                                    hx-get={
-                                        "/albums-list"
-                                        (build_query('?', &[
-                                            ("offset", &(offset + i * limit).to_string()),
-                                            ("limit", &limit.to_string()),
-                                            ("size", &size.to_string()),
-                                            ("sources", &filtered_sources),
-                                            ("sort", &sort),
-                                            ("search", search),
-                                        ]))
-                                    }
-                                    hx-trigger="load"
-                                    hidden=(true)
-                                {}
-                            }
-                        }
-                    }
-                }
-            },
-        )
-    } else {
-        container! {}
-    };
-
-    let host = &connection.api_url;
-
-    container! {
-        (show_albums(host, albums.iter(), size))
-        (remaining)
-    }
+    albums_list_page(state, albums, filtered_sources, sort, size, search)
 }
 
 fn encode_query_value(value: &str) -> String {
@@ -620,13 +516,12 @@ fn encode_query_value(value: &str) -> String {
     encoded
 }
 
-/// Renders one demand-driven album page for terminal clients.
+/// Renders one demand-driven album page.
 ///
 /// Each revealed sentinel replaces itself with another page of cards and at most
-/// one successor sentinel. The renderer schedules requests near the viewport;
-/// off-screen pages do not eagerly load the remaining library. The button also
-/// permits keyboard/click retry after failure (the terminal renderer maps its
-/// activation to the revealed route and deduplicates in-flight requests).
+/// one successor sentinel. Reveal-capable renderers schedule requests near the
+/// viewport; off-screen pages do not eagerly load the remaining library. The
+/// button also permits explicit keyboard/click retry after failure.
 ///
 /// Empty pages with a continuation still advance by the server's page limit, or
 /// one if that limit is zero. A successor is omitted only at the end of results
@@ -712,7 +607,7 @@ pub fn album_display(
         );
 
         container! {
-            div align-items=center text-align=center white-space=(if cfg!(feature = "terminal") { hyperchad::transformer::models::WhiteSpace::Preserve } else { hyperchad::transformer::models::WhiteSpace::Normal }) text-overflow=ellipsis {
+            div align-items=center text-align=center white-space=(hyperchad::transformer::models::WhiteSpace::Normal) text-overflow=ellipsis {
                 div {
                     anchor href=(album_page_url) { (album.title) }
                 }
@@ -914,7 +809,7 @@ pub fn albums_page_content(
 
     container! {
         div background=(DARK_BACKGROUND) {
-            div padding-x=(if cfg!(feature = "terminal") { 8 } else { 30 }) padding-y=(if cfg!(feature = "terminal") { 0 } else { 15 }) {
+            div padding-x=30 padding-y=15 {
                 div direction=row align-items=center {
                     h1 { "Albums" }
                     @let button_size = 30;
@@ -1078,9 +973,9 @@ pub fn load_albums(
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
             justify-content=space-evenly
-            gap=(if cfg!(feature = "terminal") { 8 } else { 15 })
-            padding-x=(if cfg!(feature = "terminal") { 8 } else { 30 })
-            padding-y=(if cfg!(feature = "terminal") { 0 } else { 15 })
+            gap=15
+            padding-x=30
+            padding-y=15
         {
             @for _ in 0..100 {
                 div width=(size) height=(size + 30) {

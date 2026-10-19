@@ -48,6 +48,8 @@ use crate::{
 pub enum Trigger {
     Route,
     Load,
+    /// Geometry-gated automatic route, rearmed on failure re-entry or activation.
+    Revealed,
     Form,
     Navigation,
 }
@@ -176,7 +178,10 @@ impl RequestContext {
             } => (route, trigger, target, strategy, Method::Patch),
         };
         let trigger = trigger.as_deref().unwrap_or("click");
-        if !matches!(trigger, "click" | "change" | "input" | "submit" | "load") {
+        if !matches!(
+            trigger,
+            "click" | "change" | "input" | "submit" | "load" | "revealed"
+        ) {
             return Err(RoutingError::UnsupportedTrigger);
         }
         if trigger != event {
@@ -186,6 +191,9 @@ impl RequestContext {
         request.method = method;
         if trigger == "load" {
             request.trigger = Trigger::Load;
+        } else if trigger == "revealed" {
+            request.trigger = Trigger::Revealed;
+            request.scope = "revealed".into();
         }
         Ok(Some(request))
     }
@@ -394,6 +402,28 @@ pub enum NativeOutcome {
     Metadata(hyperchad_renderer::ResponseMetadata),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AutomaticPhase {
+    Ready,
+    Pending,
+    Failed,
+    Done,
+}
+
+struct AutomaticRoute {
+    source: ElementStamp,
+    route: hyperchad_transformer::models::Route,
+    near: bool,
+    phase: AutomaticPhase,
+    chain: u64,
+}
+
+#[derive(Default)]
+struct AutomaticChain {
+    admissions: u8,
+    motion: Option<(eframe::egui::Rect, Vec<(ElementKey, eframe::egui::Vec2)>)>,
+}
+
 /// UI-owned admission and stale-result gate. Every queue is bounded by capacity;
 /// cancelled jobs retain a slot until drained, so rapid replacement cannot grow it.
 pub struct Routing {
@@ -401,6 +431,9 @@ pub struct Routing {
     results: flume::Receiver<ResultMessage>,
     pending: BTreeMap<RequestId, Pending>,
     loaded: BTreeMap<(ElementKey, String), u64>,
+    automatic: BTreeMap<ElementKey, AutomaticRoute>,
+    chains: BTreeMap<u64, AutomaticChain>,
+    next_chain: u64,
     next: u64,
     capacity: usize,
     max_bytes: usize,
@@ -409,6 +442,181 @@ pub struct Routing {
 }
 
 impl Routing {
+    /// Collect automatic routes after layout, never during widget traversal.
+    /// Hidden load nodes remain eligible; revealed nodes require resolved geometry.
+    pub(crate) fn automatic_requests(
+        &mut self,
+        document: &Document,
+        geometry: &crate::geometry::GeometrySnapshot<ElementKey>,
+        viewport: eframe::egui::Rect,
+    ) -> Vec<RequestContext> {
+        self.automatic.retain(|_, entry| {
+            document.is_current(entry.source)
+                && document
+                    .get(entry.source.key)
+                    .and_then(|node| node.route.as_ref())
+                    == Some(&entry.route)
+        });
+        let live: BTreeSet<_> = self.automatic.values().map(|entry| entry.chain).collect();
+        self.chains.retain(|id, _| live.contains(id));
+        let mut requests = Vec::new();
+        for key in document.keys() {
+            let Some(route) = document.get(key).and_then(|node| node.route.as_ref()) else {
+                continue;
+            };
+            let trigger = match route {
+                hyperchad_transformer::models::Route::Get { trigger, .. }
+                | hyperchad_transformer::models::Route::Post { trigger, .. }
+                | hyperchad_transformer::models::Route::Put { trigger, .. }
+                | hyperchad_transformer::models::Route::Delete { trigger, .. }
+                | hyperchad_transformer::models::Route::Patch { trigger, .. } => trigger.as_deref(),
+            };
+            let Some(event @ ("load" | "revealed")) = trigger else {
+                continue;
+            };
+            let Some(source) = document.stamp(key) else {
+                continue;
+            };
+            if !self.automatic.contains_key(&key) {
+                let Some(chain) = self.next_chain.checked_add(1) else {
+                    break;
+                };
+                self.next_chain = chain;
+                self.automatic.insert(
+                    key,
+                    AutomaticRoute {
+                        source,
+                        route: route.clone(),
+                        near: false,
+                        phase: AutomaticPhase::Ready,
+                        chain,
+                    },
+                );
+            }
+            let entry = self.automatic.get_mut(&key).unwrap();
+            let chain = self.chains.entry(entry.chain).or_default();
+            let near = if event == "load" {
+                true
+            } else if let Some(node) = geometry.node(key) {
+                let mut offsets = Vec::new();
+                let mut visible = node.visible;
+                let mut parent = node.parent;
+                while let Some(ancestor) = parent.and_then(|key| geometry.node(key)) {
+                    visible &= ancestor.visible;
+                    if ancestor.scroll_offset != eframe::egui::Vec2::ZERO {
+                        offsets.push((ancestor.key, ancestor.scroll_offset));
+                    }
+                    parent = ancestor.parent;
+                }
+                let motion = (viewport, offsets);
+                if chain.motion.as_ref() != Some(&motion) {
+                    chain.admissions = 0;
+                    chain.motion = Some(motion);
+                }
+                let clip = node.paint_clip;
+                let margin = (clip.height() / 2.0).min(128.0);
+                visible
+                    && clip.is_positive()
+                    && node.border_box.is_positive()
+                    && node
+                        .border_box
+                        .intersects(clip.expand2(eframe::egui::vec2(0.0, margin)))
+            } else {
+                false
+            };
+            let entered = near && !entry.near;
+            entry.near = near;
+            if near
+                && chain.admissions < 4
+                && (entry.phase == AutomaticPhase::Ready
+                    || (event == "revealed" && entered && entry.phase == AutomaticPhase::Failed))
+                && let Ok(Some(request)) = RequestContext::route(source, route, event)
+            {
+                requests.push(request);
+            }
+        }
+        requests
+    }
+
+    pub(crate) fn automatic_admission_failed(&mut self, source: ElementStamp) {
+        if let Some(entry) = self.automatic.get_mut(&source.key)
+            && entry.source == source
+            && entry.phase == AutomaticPhase::Ready
+        {
+            entry.phase = AutomaticPhase::Failed;
+        }
+    }
+
+    pub(crate) fn retry_revealed(&mut self, source: ElementStamp) {
+        if let Some(entry) = self.automatic.get_mut(&source.key)
+            && entry.source == source
+            && matches!(entry.phase, AutomaticPhase::Failed | AutomaticPhase::Ready)
+        {
+            entry.phase = AutomaticPhase::Ready;
+            if let Some(chain) = self.chains.get_mut(&entry.chain) {
+                chain.admissions = 0;
+            }
+        }
+    }
+
+    fn finish_automatic(
+        &mut self,
+        document: &Document,
+        context: &RequestContext,
+        outcome: &Result<NativeOutcome, RoutingError>,
+    ) {
+        if !matches!(context.trigger, Trigger::Load | Trigger::Revealed) {
+            return;
+        }
+        let Some(entry) = self
+            .automatic
+            .get_mut(&context.source.key)
+            .filter(|entry| entry.source == context.source)
+        else {
+            return;
+        };
+        entry.phase = if outcome.is_ok() {
+            AutomaticPhase::Done
+        } else {
+            AutomaticPhase::Failed
+        };
+        let chain = entry.chain;
+        if outcome.is_err() && context.trigger == Trigger::Load {
+            self.loaded
+                .remove(&(context.source.key, context.scope.clone()));
+        }
+        if let Ok(NativeOutcome::Applied(summary)) = outcome {
+            // Only response-inserted automatic nodes inherit continuation allowance.
+            // Unrelated existing sources retain independent budgets.
+            for stamp in summary.inserted.iter().chain(&summary.changed) {
+                let Some(route) = document.get(stamp.key).and_then(|node| node.route.as_ref())
+                else {
+                    continue;
+                };
+                if RequestContext::route(*stamp, route, "revealed")
+                    .ok()
+                    .flatten()
+                    .is_some()
+                    || RequestContext::route(*stamp, route, "load")
+                        .ok()
+                        .flatten()
+                        .is_some()
+                {
+                    self.automatic.insert(
+                        stamp.key,
+                        AutomaticRoute {
+                            source: *stamp,
+                            route: route.clone(),
+                            near: false,
+                            phase: AutomaticPhase::Ready,
+                            chain,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     /// Create queues; the worker must be driven on B's existing runtime.
     /// `wake` must only schedule a UI repaint, not execute application code.
     /// # Errors
@@ -429,6 +637,9 @@ impl Routing {
                 results,
                 pending: BTreeMap::new(),
                 loaded: BTreeMap::new(),
+                automatic: BTreeMap::new(),
+                chains: BTreeMap::new(),
+                next_chain: 0,
                 next: 0,
                 capacity,
                 max_bytes,
@@ -475,6 +686,37 @@ impl Routing {
         Ok(id)
     }
 
+    fn revealed_blocked(&self, context: &RequestContext) -> bool {
+        matches!(context.trigger, Trigger::Load | Trigger::Revealed)
+            && self
+                .automatic
+                .get(&context.source.key)
+                .is_some_and(|entry| {
+                    entry.source == context.source
+                        && (matches!(entry.phase, AutomaticPhase::Pending | AutomaticPhase::Done)
+                            || self
+                                .chains
+                                .get(&entry.chain)
+                                .is_some_and(|chain| chain.admissions >= 4))
+                })
+            || (context.trigger == Trigger::Revealed
+                && self.pending.values().any(|pending| {
+                    pending.context.source == context.source
+                        && pending.context.trigger == Trigger::Revealed
+                }))
+    }
+
+    fn mark_automatic_pending(&mut self, context: &RequestContext) {
+        if matches!(context.trigger, Trigger::Load | Trigger::Revealed)
+            && let Some(entry) = self.automatic.get_mut(&context.source.key)
+            && entry.source == context.source
+        {
+            entry.phase = AutomaticPhase::Pending;
+            let chain = self.chains.entry(entry.chain).or_default();
+            chain.admissions = chain.admissions.saturating_add(1);
+        }
+    }
+
     /// Reserve FIFO work without permitting handler execution. B dispatches
     /// `before_event(id)` through G/H, then calls `start(id)` (or `cancel`).
     /// This makes before-request ordering deterministic even on a multithread runtime.
@@ -496,6 +738,9 @@ impl Routing {
         }
         if self.pending.len() >= self.capacity {
             return Err(RoutingError::QueueFull);
+        }
+        if self.revealed_blocked(&context) {
+            return Err(RoutingError::AlreadyLoaded);
         }
         let request = route_request(&context, self.max_bytes)?;
         if self.cookie_policy == CookiePolicy::Reject && !context.cookies.is_empty() {
@@ -568,6 +813,7 @@ impl Routing {
         if context.trigger == Trigger::Load {
             self.loaded.insert(load_key, context.source.generation);
         }
+        self.mark_automatic_pending(&context);
         self.next = next;
         self.pending.insert(
             id,
@@ -771,6 +1017,7 @@ impl Routing {
                 Some(_) => Err(RoutingError::UnsupportedContent),
             })
         };
+        self.finish_automatic(document, &pending.context, &outcome);
         document.cancel_request(&pending.ticket);
         Some(Completion {
             id: message.id,
@@ -1493,6 +1740,261 @@ mod tests {
         let mut work = Box::pin(worker.run(router));
         pump(work.as_mut());
         assert_eq!(*seen.lock().unwrap(), [Method::Patch, Method::Post]);
+    }
+
+    fn automatic_node(id: usize, y: f32, trigger: &str) -> Container {
+        Container {
+            id,
+            calculated_x: Some(0.0),
+            calculated_y: Some(y),
+            calculated_width: Some(100.0),
+            calculated_height: Some(20.0),
+            route: Some(hyperchad_transformer::models::Route::Get {
+                route: "/automatic".into(),
+                trigger: Some(trigger.into()),
+                target: Selector::SelfTarget,
+                strategy: SwapStrategy::This,
+            }),
+            ..Container::default()
+        }
+    }
+
+    fn automatic_view(node: Container) -> View {
+        View::from(Container {
+            id: 100,
+            calculated_x: Some(0.0),
+            calculated_y: Some(0.0),
+            calculated_width: Some(400.0),
+            calculated_height: Some(1200.0),
+            children: vec![node],
+            ..Container::default()
+        })
+    }
+
+    fn automatic_geometry(document: &Document) -> crate::geometry::GeometrySnapshot<ElementKey> {
+        crate::geometry::GeometrySnapshot::build_roots(
+            document.roots(),
+            crate::geometry::GeometryViewport {
+                rect: eframe::egui::Rect::from_min_size(
+                    eframe::egui::Pos2::ZERO,
+                    eframe::egui::vec2(400.0, 300.0),
+                ),
+                zoom: 1.0,
+            },
+            0,
+            &BTreeMap::new(),
+            |_, node| {
+                document
+                    .keys()
+                    .into_iter()
+                    .find(|key| document.get(*key).unwrap().id == node.id)
+            },
+        )
+        .unwrap()
+    }
+
+    fn automatic_frame(routing: &mut Routing, document: &Document) -> Vec<RequestContext> {
+        routing.automatic_requests(
+            document,
+            &automatic_geometry(document),
+            eframe::egui::Rect::from_min_size(
+                eframe::egui::Pos2::ZERO,
+                eframe::egui::vec2(400.0, 300.0),
+            ),
+        )
+    }
+
+    #[test]
+    fn automatic_hidden_load_not_starved_and_offscreen_reveal_not_drained() {
+        let mut hidden = automatic_node(2, 0.0, "load");
+        hidden.hidden = Some(true);
+        let mut offscreen = automatic_node(1, 800.0, "revealed");
+        offscreen.children.push(hidden);
+        let mut document = Document::default();
+        document
+            .apply_view(automatic_view(offscreen), ViewOrigin::Navigation)
+            .unwrap();
+        let (mut routing, _worker) = coordinator();
+        let requests = automatic_frame(&mut routing, &document);
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].trigger, Trigger::Load);
+        routing
+            .submit(&mut document, requests.into_iter().next().unwrap())
+            .unwrap();
+        assert!(automatic_frame(&mut routing, &document).is_empty());
+    }
+
+    #[test]
+    fn automatic_geometry_failure_reentry_and_stale_replacement() {
+        let mut document = Document::default();
+        document
+            .apply_view(
+                automatic_view(automatic_node(1, 10.0, "revealed")),
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let (mut routing, worker) = coordinator();
+        let router = Router::new().with_route_result("/automatic", |_| async {
+            Err::<View, _>(std::io::Error::other("temporary"))
+        });
+        let mut work = Box::pin(worker.run(router));
+        let request = automatic_frame(&mut routing, &document).pop().unwrap();
+        routing.submit(&mut document, request).unwrap();
+        assert!(automatic_frame(&mut routing, &document).is_empty());
+        pump(work.as_mut());
+        assert!(
+            routing
+                .try_complete(&mut document)
+                .unwrap()
+                .outcome
+                .is_err()
+        );
+        assert!(
+            automatic_frame(&mut routing, &document).is_empty(),
+            "stationary failure must not loop"
+        );
+        let mut away = document.roots().to_vec();
+        away[0].children[0].calculated_y = Some(1000.0);
+        let viewport = eframe::egui::Rect::from_min_size(
+            eframe::egui::Pos2::ZERO,
+            eframe::egui::vec2(400.0, 300.0),
+        );
+        let geometry = crate::geometry::GeometrySnapshot::build_roots(
+            &away,
+            crate::geometry::GeometryViewport {
+                rect: viewport,
+                zoom: 1.0,
+            },
+            0,
+            &BTreeMap::new(),
+            |_, node| {
+                document
+                    .keys()
+                    .into_iter()
+                    .find(|key| document.get(*key).unwrap().id == node.id)
+            },
+        )
+        .unwrap();
+        assert!(
+            routing
+                .automatic_requests(&document, &geometry, viewport)
+                .is_empty()
+        );
+        // Re-enter with the same source lifetime; only geometry has changed.
+        let retry = automatic_frame(&mut routing, &document).pop().unwrap();
+        routing.submit(&mut document, retry).unwrap();
+        document
+            .apply_view(
+                automatic_view(automatic_node(1, 10.0, "revealed")),
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        routing.reconcile(&mut document);
+        pump(work.as_mut());
+        assert!(
+            routing
+                .try_complete(&mut document)
+                .unwrap()
+                .outcome
+                .is_err()
+        );
+        assert_eq!(
+            automatic_frame(&mut routing, &document).len(),
+            1,
+            "replacement owns a fresh lifetime"
+        );
+    }
+
+    #[test]
+    fn automatic_replacement_chain_is_bounded_and_activation_rearms() {
+        let mut document = Document::default();
+        document
+            .apply_view(
+                automatic_view(automatic_node(1, 10.0, "revealed")),
+                ViewOrigin::Navigation,
+            )
+            .unwrap();
+        let (mut routing, worker) = coordinator();
+        let router = Router::new().with_route("/automatic", |_| async {
+            automatic_view(automatic_node(2, 10.0, "revealed"))
+        });
+        let mut work = Box::pin(worker.run(router));
+        for _ in 0..4 {
+            let request = automatic_frame(&mut routing, &document)
+                .pop()
+                .expect("allowed continuation");
+            routing.submit(&mut document, request).unwrap();
+            pump(work.as_mut());
+            assert!(routing.try_complete(&mut document).unwrap().outcome.is_ok());
+        }
+        assert!(
+            automatic_frame(&mut routing, &document).is_empty(),
+            "no fifth stationary successor"
+        );
+        let source = document
+            .keys()
+            .into_iter()
+            .find_map(|key| {
+                document
+                    .get(key)
+                    .unwrap()
+                    .route
+                    .as_ref()
+                    .map(|_| document.stamp(key).unwrap())
+            })
+            .unwrap();
+        routing.retry_revealed(source);
+        assert_eq!(automatic_frame(&mut routing, &document).len(), 1);
+    }
+
+    #[test]
+    fn revealed_parser_pending_dedupe_and_explicit_retry() {
+        use hyperchad_transformer::models::Route;
+        let (mut document, source) = fixture();
+        let (mut routing, _worker) = coordinator();
+        let route = Route::Get {
+            route: "/local".into(),
+            trigger: Some("revealed".into()),
+            target: Selector::SelfTarget,
+            strategy: SwapStrategy::This,
+        };
+        assert!(
+            RequestContext::route(source, &route, "load")
+                .unwrap()
+                .is_none()
+        );
+        let request = RequestContext::route(source, &route, "revealed")
+            .unwrap()
+            .unwrap();
+        assert_eq!(request.trigger, Trigger::Revealed);
+        routing.automatic.insert(
+            source.key,
+            super::AutomaticRoute {
+                source,
+                route,
+                near: true,
+                phase: super::AutomaticPhase::Ready,
+                chain: 1,
+            },
+        );
+        routing.submit(&mut document, request.clone()).unwrap();
+        assert_eq!(
+            routing.submit(&mut document, request),
+            Err(RoutingError::AlreadyLoaded)
+        );
+        routing.retry_revealed(source);
+        assert!(matches!(
+            routing.automatic[&source.key].phase,
+            super::AutomaticPhase::Pending
+        ));
+        routing.automatic.get_mut(&source.key).unwrap().phase = super::AutomaticPhase::Failed;
+        routing.chains.get_mut(&1).unwrap().admissions = 4;
+        routing.retry_revealed(source);
+        assert!(matches!(
+            routing.automatic[&source.key].phase,
+            super::AutomaticPhase::Ready
+        ));
+        assert_eq!(routing.chains[&1].admissions, 0);
     }
 
     #[test]

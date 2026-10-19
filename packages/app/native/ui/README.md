@@ -2,6 +2,11 @@
 
 User interface components and layouts for MoosicBox native applications.
 
+This package defines one shared presentation across all rendering backends. Do not
+add backend-selected features, conditional templates, dimensions, or component
+variants here. Renderers handle their capabilities and constraints generically;
+they must not recognize application IDs or components to substitute another design.
+
 ## Overview
 
 The MoosicBox Native App UI package provides:

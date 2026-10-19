@@ -192,7 +192,7 @@ fn production_hundred_album_document_fits_history_snapshot_budget() {
 
 #[test]
 fn actual_albums_shell_confines_scrolling_at_140_by_56() {
-    assert_album_shell(140, 56, 9);
+    assert_album_shell(140, 56, 3);
 }
 
 #[test]
@@ -488,7 +488,7 @@ fn actual_populated_albums_scroll_reuses_committed_geometry() {
 
 #[test]
 fn actual_albums_shell_is_stable_at_common_terminal_sizes() {
-    for (width, height, columns) in [(80, 24, 4), (120, 40, 7), (140, 60, 9)] {
+    for (width, height, columns) in [(80, 24, 1), (120, 40, 3), (140, 60, 3)] {
         assert_album_shell(width, height, columns);
     }
 }
@@ -1046,16 +1046,16 @@ fn assert_album_shell(width: u16, height: u16, columns: usize) {
         assert!(playlist.bounds.y >= footer.bounds.y);
         assert!(playlist.bounds.bottom() <= footer.bounds.bottom());
         assert_eq!(sidebar.bounds.x, 0);
-        assert_eq!(sidebar.bounds.width, 18);
-        assert_eq!(main.bounds.x, 18);
-        assert_eq!(main.bounds.width, u64::from(width) - 18);
+        assert_eq!(sidebar.bounds.width, 30);
+        assert_eq!(main.bounds.x, 30);
+        assert_eq!(main.bounds.width, u64::from(width) - 30);
         assert_eq!(main.bounds.bottom(), footer.bounds.y);
         assert_eq!(sidebar.bounds.height, main.bounds.height);
         assert_eq!(footer.bounds.right(), i64::from(width));
         assert!(footer.bounds.bottom() <= i64::from(height));
         assert_eq!(
             tree.get("albums").unwrap().content_bounds.width,
-            u64::from(width) - 20
+            u64::from(width) - 38
         );
         eprintln!(
             "{width}x{height}: sidebar={:?} main={:?} footer={:?}",
@@ -1080,10 +1080,12 @@ fn assert_album_shell(width: u16, height: u16, columns: usize) {
             })
             .expect("first card has title text");
         assert!(label.bounds.y >= tree.get(&main_key).unwrap().bounds.y);
-        assert!(
-            label.bounds.bottom() <= tree.get(&main_key).unwrap().bounds.bottom(),
-            "a labeled album must be visible without scrolling"
-        );
+        if height >= 40 {
+            assert!(
+                label.bounds.bottom() <= tree.get(&main_key).unwrap().bounds.bottom(),
+                "a labeled album must be visible without scrolling on a tall viewport"
+            );
+        }
         let first_y = cards[0].bounds.y;
         assert_eq!(
             cards
@@ -1101,7 +1103,7 @@ fn assert_album_shell(width: u16, height: u16, columns: usize) {
             columns
         );
         for (index, card) in cards.iter().enumerate() {
-            assert_eq!(card.bounds.width, 12);
+            assert_eq!(card.bounds.width, 25);
             assert_eq!(card.bounds.x, cards[index % columns].bounds.x);
             assert!(card.bounds.x >= grid.content_bounds.x);
             assert!(card.bounds.right() <= grid.content_bounds.right());

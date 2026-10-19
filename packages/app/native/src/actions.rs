@@ -450,7 +450,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
             let filter = value.as_str().ok_or(AppStateError::ActionInvalidParam)?;
             log::debug!("handle_action: FilterAlbums filter={filter}");
 
-            let size: u16 = 200;
+            let size = moosicbox_app_native_ui::ALBUM_ART_SIZE;
 
             let container = load_albums(size, *sort, filtered_sources, filter);
             let view = View::builder().with_fragments(container).build();

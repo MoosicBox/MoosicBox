@@ -41,18 +41,14 @@ pub const VIZ_PADDING: u16 = 5;
 /// Border size of the footer in pixels.
 pub const FOOTER_BORDER_SIZE: u16 = 3;
 /// Total height of the footer including visualization and padding.
-pub const FOOTER_HEIGHT: u16 = if cfg!(feature = "terminal") {
-    64
-} else {
-    100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE
-};
+pub const FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
 /// Size of icons in the footer in pixels.
 pub const FOOTER_ICON_SIZE: u16 = 25;
 /// Size of the current album artwork in the player in pixels.
-pub const CURRENT_ALBUM_SIZE: u16 = if cfg!(feature = "terminal") { 32 } else { 70 };
+pub const CURRENT_ALBUM_SIZE: u16 = 70;
 
 /// Artwork extent for the selected presentation.
-pub const ALBUM_ART_SIZE: u16 = if cfg!(feature = "terminal") { 96 } else { 200 };
+pub const ALBUM_ART_SIZE: u16 = 200;
 
 /// Dark background color used in the UI.
 pub const DARK_BACKGROUND: &str = "#080a0b";
@@ -223,21 +219,6 @@ impl<'a> TryFrom<&'a str> for Action {
 /// Includes the application logo, settings link, and navigation links to main sections.
 #[must_use]
 pub fn sidebar_navigation() -> Containers {
-    if cfg!(feature = "terminal") {
-        return container! {
-            aside width=144 height=100% background=(DARK_BACKGROUND) overflow-y=auto {
-                div padding-x=8 {
-                    h1 { "MoosicBox" }
-                    div { anchor href="/settings" { "Settings" } }
-                    div { anchor href="/" { "Home" } }
-                    div { anchor href="/downloads" { "Downloads" } }
-                    h1 { "My Collection" }
-                    div { anchor href="/albums" { "Albums" } }
-                    div { anchor href="/artists" { "Artists" } }
-                }
-            }
-        };
-    }
     container! {
         aside width=calc(max(240, min(280, 15%))) height=100% background=(DARK_BACKGROUND) {
             div .navigation-bar padding=20 {
@@ -310,7 +291,6 @@ pub fn sidebar_navigation() -> Containers {
 pub fn player(state: &State) -> Containers {
     container! {
         div height=(FOOTER_HEIGHT) border-top=((FOOTER_BORDER_SIZE, "#222")) {
-            @if !cfg!(feature = "terminal") {
             div height=(VIZ_HEIGHT) padding-y=(VIZ_PADDING) direction=row {
                 canvas
                     #visualization
@@ -322,14 +302,13 @@ pub fn player(state: &State) -> Containers {
                     fx-immediate=fx { invoke(Action::RefreshVisualization, get_width_px_self()) }
                 {}
             }
-            }
-            div height=(if cfg!(feature = "terminal") { 48 } else { 100 }) direction=row {
+            div height=100 direction=row {
                 div flex=1 justify-content=center {
                     (player_current_album_from_state(state, CURRENT_ALBUM_SIZE))
                 }
                 div flex=2 align-items=center justify-content=center {
-                    @let button_size = if cfg!(feature = "terminal") { 24 } else { 40 };
-                    @let progress_size = if cfg!(feature = "terminal") { 16 } else { 20 };
+                    @let button_size = 40;
+                    @let progress_size = 20;
                     div height=(button_size) direction=row justify-content=center {
                         button
                             width=(button_size)
@@ -525,7 +504,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
 /// Displays a pause icon when playing, or a play icon when paused.
 fn player_play_button(playing: bool) -> Containers {
     container! {
-        @let button_size = if cfg!(feature = "terminal") { 24 } else { 40 };
+        @let button_size = 40;
         button
             #player-play-button
             width=(button_size)
@@ -911,14 +890,40 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
 mod tests {
     #[test]
     fn presentation_tokens_are_explicit_and_keep_desktop_defaults() {
-        let terminal = cfg!(feature = "terminal");
-        assert_eq!(super::FOOTER_HEIGHT, if terminal { 64 } else { 148 });
-        assert_eq!(super::ALBUM_ART_SIZE, if terminal { 96 } else { 200 });
-        assert_eq!(super::CURRENT_ALBUM_SIZE, if terminal { 32 } else { 70 });
+        assert_eq!(super::FOOTER_HEIGHT, 148);
+        assert_eq!(super::ALBUM_ART_SIZE, 200);
+        assert_eq!(super::CURRENT_ALBUM_SIZE, 70);
     }
 
     use super::*;
     use moosicbox_music_models::id::Id;
+
+    #[test]
+    fn shared_ui_has_no_backend_specific_configuration() {
+        // Keep presentation decisions out of this package, including Cargo
+        // feature variants that would unify across renderers in one build.
+        fn audit(directory: &std::path::Path) {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    audit(&path);
+                } else if path.extension().is_some_and(|extension| extension == "rs") {
+                    let source = std::fs::read_to_string(&path).unwrap();
+                    for backend in ["terminal", "bmux", "egui", "fltk", "html"] {
+                        let feature = format!("feature = \"{backend}\"");
+                        assert!(
+                            !source.contains(&feature),
+                            "backend-specific UI feature in {}: {backend}",
+                            path.display(),
+                        );
+                    }
+                }
+            }
+        }
+        audit(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
+        let manifest = include_str!("../Cargo.toml");
+        assert!(!manifest.contains(concat!("terminal", " =")));
+    }
 
     #[test]
     fn test_connection_status_content_covers_every_status() {
