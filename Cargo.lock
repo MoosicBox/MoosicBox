@@ -2490,7 +2490,7 @@ dependencies = [
 [[package]]
 name = "bmux_attach_image_protocol"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_codec 0.0.1-alpha.4 (git+https://github.com/BSteffaniak/bmux.git?branch=master)",
  "serde",
@@ -2509,7 +2509,7 @@ dependencies = [
 [[package]]
 name = "bmux_codec"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "serde",
 ]
@@ -2517,7 +2517,7 @@ dependencies = [
 [[package]]
 name = "bmux_image"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_attach_image_protocol",
  "bmux_ipc",
@@ -2531,7 +2531,7 @@ dependencies = [
 [[package]]
 name = "bmux_ipc"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_attach_image_protocol",
  "bmux_codec 0.0.1-alpha.4 (git+https://github.com/BSteffaniak/bmux.git?branch=master)",
@@ -2546,7 +2546,7 @@ dependencies = [
 [[package]]
 name = "bmux_keyboard"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "crossterm",
 ]
@@ -2554,7 +2554,7 @@ dependencies = [
 [[package]]
 name = "bmux_text_edit"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_keyboard",
  "unicode-segmentation",
@@ -2564,7 +2564,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2580,7 +2580,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui_components"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_keyboard",
  "bmux_text_edit",
@@ -2592,7 +2592,7 @@ dependencies = [
 [[package]]
 name = "bmux_tui_runtime"
 version = "0.0.1-alpha.4"
-source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#f3315a4b084e35aa96d5b7ad3bd5f218214ed05d"
+source = "git+https://github.com/BSteffaniak/bmux.git?branch=master#5358e0c318ca809db0a93bd024ef4232c1326daa"
 dependencies = [
  "bmux_image",
  "bmux_keyboard",
