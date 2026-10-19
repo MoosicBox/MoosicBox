@@ -23,7 +23,7 @@ use crate::{
     graphics::{GraphicsFit, GraphicsPlacement, GraphicsStore},
     layout::{self, LayoutOptions, LayoutTree, LeafMeasure, TerminalMetrics},
     renderer::{BmuxConfig, Error, HostRequest, HostResponse, Shared},
-    state::ViewState,
+    state::{SourceSnapshot, ViewState},
 };
 
 #[path = "revealed.rs"]
@@ -102,6 +102,13 @@ enum Work {
     Navigate(String),
 }
 
+#[derive(Default)]
+struct ImageSources {
+    nodes: Vec<(String, String, bool)>,
+    keys: BTreeSet<String>,
+    unique_sources: usize,
+}
+
 /// Sole owner of mutable renderer state. Presentation candidates are not input authority.
 // Scheduler lane occupancy, lifecycle and terminal capability are independent flags.
 #[allow(clippy::struct_excessive_bools)]
@@ -114,7 +121,8 @@ pub struct BmuxProgram {
     options: LayoutOptions,
     candidate: Option<LayoutTree>,
     effective: Option<Container>,
-    prepared_source: Option<Container>,
+    prepared_source: Option<SourceSnapshot>,
+    image_sources_cache: Option<(SourceSnapshot, Arc<ImageSources>)>,
     scroll_reuse: bool,
     committed: Option<(u64, LayoutTree)>,
     pending: VecDeque<Work>,
@@ -198,6 +206,7 @@ impl BmuxProgram {
             candidate: None,
             effective: None,
             prepared_source: None,
+            image_sources_cache: None,
             scroll_reuse: false,
             committed: None,
             pending: VecDeque::new(),
@@ -261,6 +270,12 @@ impl BmuxProgram {
         self.graphics_available = available;
     }
 
+    fn prepared_source_is_current(&self) -> bool {
+        self.prepared_source
+            .as_ref()
+            .is_some_and(|source| self.state.matches_source(source))
+    }
+
     /// Set host-provided cell geometry without assuming ownership of its terminal.
     pub const fn resize(&mut self, size: Size) {
         self.geometry_dirty = true;
@@ -279,7 +294,7 @@ impl BmuxProgram {
         let scroll_reuse = self.log_scroll_admission();
         if scroll_reuse
             && self.fixed_image_geometry
-            && self.prepared_source.as_ref() == Some(self.state.root())
+            && self.prepared_source_is_current()
             && self.options.open_details == self.controls.details_open()
             && let Some((generation, tree)) = &self.committed
             && *generation == self.state.generation()
@@ -301,6 +316,7 @@ impl BmuxProgram {
         // changes reset this permission before any presentation is prepared.
         if std::mem::take(&mut self.resource_paint_only)
             && self.fixed_image_geometry
+            && self.prepared_source_is_current()
             && !self.geometry_dirty
             && let Some((generation, tree)) = &self.committed
             && *generation == self.state.generation()
@@ -360,7 +376,7 @@ impl BmuxProgram {
         }
         self.controls.prepare(&tree);
         self.fixed_image_geometry = fixed_image_geometry;
-        self.prepared_source = Some(self.state.root().clone());
+        self.prepared_source = Some(self.state.source_snapshot());
         self.geometry_dirty = false;
         self.revealed_routes.refresh_candidates(&effective);
         self.effective = Some(effective);
@@ -402,6 +418,17 @@ impl BmuxProgram {
                     .bg(bmux_tui::style::Color::Rgb(color.r, color.g, color.b)),
             );
         }
+        // Index only on-screen opaque backgrounds once per frame. Images must
+        // respect later layers, but need not scan every off-screen document node.
+        let occluders: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter(|node| node.visible && node.style.style.bg.is_some())
+            .filter_map(|node| {
+                let bounds = node.bounds.intersection(node.clip);
+                (bounds.width > 0 && bounds.height > 0).then_some((node.paint_order, bounds))
+            })
+            .collect();
         for node in &tree.nodes {
             if !node.visible {
                 continue;
@@ -444,14 +471,16 @@ impl BmuxProgram {
                     image.allocation = Some(allocation);
                     // Native terminal images are composited separately from cells.
                     // Paint order alone cannot put a cell background above them.
-                    let regions = image_visible_regions(tree, node);
-                    for region in regions {
+                    let regions = image_visible_regions(&occluders, node);
+                    for (fragment, region) in regions.into_iter().enumerate() {
                         let mut part = image.clone();
                         let visible = region.terminal();
-                        if visible != image.destination {
+                        // Content identity must survive movement and changing clips.
+                        // Extra occlusion fragments need distinct placement identities,
+                        // not identities derived from transient screen coordinates.
+                        if fragment != 0 {
                             part.key = bmux_tui::image::ImageKey::new(format!(
-                                "{placement_key}:clip:{}:{}:{}:{}",
-                                visible.x, visible.y, visible.width, visible.height
+                                "{placement_key}:fragment:{fragment}"
                             ));
                         }
                         part.destination = visible;
@@ -547,7 +576,13 @@ impl BmuxProgram {
         Ok(())
     }
 
-    fn image_sources(&self) -> Vec<(String, String, bool)> {
+    fn image_sources(&mut self) -> Arc<ImageSources> {
+        if let Some((snapshot, images)) = &self.image_sources_cache
+            && self.state.matches_source(snapshot)
+        {
+            return Arc::clone(images);
+        }
+        let snapshot = self.state.source_snapshot();
         let mut images = Vec::new();
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
             if let Element::Image {
@@ -563,19 +598,22 @@ impl BmuxProgram {
                 ));
             }
         });
+        let images = Arc::new(ImageSources {
+            keys: images.iter().map(|(key, _, _)| key.clone()).collect(),
+            unique_sources: images
+                .iter()
+                .map(|(_, source, _)| source)
+                .collect::<BTreeSet<_>>()
+                .len(),
+            nodes: images,
+        });
+        self.image_sources_cache = Some((snapshot, Arc::clone(&images)));
         images
     }
 
     fn schedule_resources(&mut self) -> Result<(), Error> {
         let images = self.image_sources();
-        let counts = (
-            images.len(),
-            images
-                .iter()
-                .map(|(_, source, _)| source)
-                .collect::<BTreeSet<_>>()
-                .len(),
-        );
+        let counts = (images.nodes.len(), images.unique_sources);
         if self.resource_scan_counts != Some(counts) {
             log::debug!(
                 "bmux resource scan images={} unique_sources={}",
@@ -584,13 +622,14 @@ impl BmuxProgram {
             );
             self.resource_scan_counts = Some(counts);
         }
-        let present: BTreeSet<_> = images.iter().map(|(key, _, _)| key.clone()).collect();
+        let present = &images.keys;
         self.resources.retain(|key, _| present.contains(key));
         self.resource_epochs.retain(|key, _| present.contains(key));
         self.resource_loaded.retain(|key| present.contains(key));
         self.resource_sources
             .retain(|key, _| self.graphics.rgba(key).is_some());
         let visible: BTreeSet<_> = images
+            .nodes
             .iter()
             .filter(|(key, _, _)| {
                 // Eager means load as soon as displayed, not load hidden menus
@@ -614,10 +653,13 @@ impl BmuxProgram {
             .map(|(key, _, _)| key.clone())
             .collect();
         self.prune_resource_queue(&visible);
-        for (key, source, _) in images {
-            if !visible.contains(&key) {
-                continue;
-            }
+        for (key, source, _) in images
+            .nodes
+            .iter()
+            .filter(|(key, _, _)| visible.contains(key))
+        {
+            let key = key.clone();
+            let source = source.clone();
             let admitted = self.resources.get(&key) == Some(&source);
             // Explicit host registration is already-authorized resident artwork.
             // Bind it on first visible admission rather than scheduling a fetch
@@ -1333,7 +1375,7 @@ impl BmuxProgram {
             && self.resource_epochs.get(key) == Some(generation))
             && !self.stopping
             && self.fixed_image_geometry
-            && self.prepared_source.as_ref() == Some(self.state.root())
+            && self.prepared_source_is_current()
             && self.options.open_details == self.controls.details_open()
             && self.effective.is_some()
             && self.committed.as_ref().is_some_and(|(generation, tree)| {
@@ -1350,7 +1392,7 @@ impl BmuxProgram {
         log::debug!(
             "bmux scroll admission fixed_images={} source_equal={} details_equal={} committed={} generation_equal={} viewport_equal={} effective={}",
             self.fixed_image_geometry,
-            self.prepared_source.as_ref() == Some(self.state.root()),
+            self.prepared_source_is_current(),
             self.options.open_details == self.controls.details_open(),
             committed.is_some(),
             committed.is_some_and(|(generation, _)| *generation == self.state.generation()),
@@ -1510,8 +1552,8 @@ impl BmuxProgram {
     }
 
     fn dispatch_context(&mut self, key: &str, context: &EventContext) -> Result<(), Error> {
-        let effects = match self.actions.dispatch(
-            self.state.root_mut(),
+        let effects = match self.actions.dispatch_readonly(
+            self.state.root(),
             context,
             &self.controls.action_values(),
         ) {
@@ -1558,8 +1600,8 @@ impl BmuxProgram {
             duration_ms: None,
             error: None,
         });
-        let effects = self.actions.dispatch(
-            self.state.root_mut(),
+        let effects = self.actions.dispatch_readonly(
+            self.state.root(),
             &context,
             &self.controls.action_values(),
         )?;
@@ -1567,6 +1609,12 @@ impl BmuxProgram {
     }
 
     fn effects(&mut self, effects: Vec<Effect>) -> Result<(), Error> {
+        if effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::StylesChanged { .. }))
+        {
+            self.actions.publish_styles(self.state.root_mut());
+        }
         for effect in effects {
             match effect {
                 Effect::Custom { action, value, .. } => {
@@ -2162,7 +2210,7 @@ impl BmuxProgram {
                         self.state.generation(),
                     )?;
                     let context = EventContext::new(source, EventKind::Hover, self.now_ms());
-                    let effects = self.actions.release(self.state.root_mut(), &context)?;
+                    let effects = self.actions.release_readonly(self.state.root(), &context)?;
                     self.effects(effects)?;
                 }
                 self.hover.clone_from(&hit);
@@ -2476,7 +2524,7 @@ impl BmuxProgram {
             Message::Background(color) => self.background = color,
             Message::Advance => {
                 let now = self.now_ms();
-                let effects = self.actions.advance(self.state.root_mut(), now)?;
+                let effects = self.actions.advance_readonly(self.state.root(), now)?;
                 self.effects(effects)?;
             }
             Message::Completed {
@@ -2579,13 +2627,15 @@ impl BmuxProgram {
 // Unrepresentable allocations must not be refitted from a truncated rectangle.
 // Subtract later cell backgrounds from native image placements. Retain the full
 // allocation on every piece so clipping never rescales or shifts the artwork.
-fn image_visible_regions(tree: &LayoutTree, image: &layout::ResolvedNode) -> Vec<layout::CellRect> {
+fn image_visible_regions(
+    occluders: &[(usize, layout::CellRect)],
+    image: &layout::ResolvedNode,
+) -> Vec<layout::CellRect> {
     let mut regions = vec![image.content_bounds.intersection(image.clip)];
-    for cover in tree.nodes.iter().skip(image.paint_order + 1) {
-        if !cover.visible || cover.style.style.bg.is_none() {
+    for &(order, cover) in occluders {
+        if order <= image.paint_order {
             continue;
         }
-        let cover = cover.bounds.intersection(cover.clip);
         let mut next = Vec::new();
         for region in regions {
             let overlap = region.intersection(cover);
@@ -2739,7 +2789,7 @@ impl Program for BmuxProgram {
             RuntimeEvent::Terminal(event) => self.terminal(&event)?,
             RuntimeEvent::Timer(_) => {
                 let now = self.now_ms();
-                let effects = self.actions.advance(self.state.root_mut(), now)?;
+                let effects = self.actions.advance_readonly(self.state.root(), now)?;
                 self.effects(effects)?;
             }
             RuntimeEvent::Message(message) => self.message(message)?,
@@ -4007,6 +4057,34 @@ mod runtime_regressions {
     }
 
     #[test]
+    fn resource_source_index_is_retained_until_source_identity_changes() {
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(artwork_image("cover", "/first.webp", false)),
+                None,
+            )
+            .unwrap();
+        let first = program.image_sources();
+        assert!(Arc::ptr_eq(&first, &program.image_sources()));
+        let generation = program.state.generation();
+        let Element::Image { source, .. } = &mut program.state.root_mut().element else {
+            panic!("expected image");
+        };
+        *source = Some("/changed.webp".into());
+        let changed = program.image_sources();
+        assert!(!Arc::ptr_eq(&first, &changed));
+        assert_eq!(changed.nodes[0].1, "/changed.webp");
+        assert_eq!(program.state.generation(), generation);
+        assert!(Arc::ptr_eq(&changed, &program.image_sources()));
+        program.state =
+            ViewState::from_root(artwork_image("replacement", "/new.webp", false)).unwrap();
+        let replaced = program.image_sources();
+        assert!(!Arc::ptr_eq(&changed, &replaced));
+        assert_eq!(replaced.nodes[0].0, "replacement");
+    }
+
+    #[test]
     fn native_artwork_is_clipped_around_overlay_and_restored_when_closed() {
         let mut program = program();
         program.set_graphics_available(true);
@@ -4121,6 +4199,7 @@ mod runtime_regressions {
             .register_rgba("cover", 128, 128, pixels)
             .unwrap();
         program.prepare().unwrap();
+        let mut placement_identity = None;
         for (x, y, clip_y) in [(20, 2, 0), (20, -1, 0), (-2, 2, 0), (-2, -1, 3), (20, 0, 3)] {
             let tree = program.candidate.as_mut().unwrap();
             let node = tree
@@ -4142,6 +4221,15 @@ mod runtime_regressions {
             let ImageContribution::Present(image) = &frame.images()[0] else {
                 panic!("expected image");
             };
+            let identity = (image.key.clone(), image.payload.clone());
+            if let Some(expected) = &placement_identity {
+                assert_eq!(
+                    &identity, expected,
+                    "scrolling/clipping must preserve the retained image identity and content"
+                );
+            } else {
+                placement_identity = Some(identity);
+            }
             let allocation = image.allocation.unwrap();
             assert_eq!(
                 (

@@ -123,6 +123,7 @@ fn assemble<'a>(
         text: Vec::new(),
         regions: Vec::new(),
         style,
+        build_context: None,
     })
 }
 
@@ -306,6 +307,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     text: Vec::new(),
                     regions: Vec::new(),
                     style: row.style,
+                    build_context: None,
                 },
             );
         }

@@ -569,6 +569,7 @@ impl<M: LeafMeasure> Engine<'_, M> {
                     .map(|rect| rect.translated(-bounds.x, -bounds.y))
                     .collect(),
                 style,
+                build_context: None,
             }
         }
         let nodes = sources

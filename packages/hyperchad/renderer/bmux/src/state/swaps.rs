@@ -259,6 +259,7 @@ fn noop_at_exhausted_epoch_is_allowed_but_actual_mutation_is_atomic() {
     let mut state = ViewState {
         root: node("root"),
         generation: u64::MAX,
+        ..ViewState::default()
     };
     state
         .apply_response(View::default(), None, SwapStrategy::None)

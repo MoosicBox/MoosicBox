@@ -485,6 +485,19 @@ impl ActionEngine {
         event: &EventContext,
         values: &FormValues,
     ) -> Result<Vec<Effect>, ActionError> {
+        let effects = self.dispatch_readonly(root, event, values)?;
+        self.publish_styles(root);
+        Ok(effects)
+    }
+
+    /// Evaluate atomically without obtaining mutable access to the source tree.
+    /// Publish styles before handling effects if `StylesChanged` is returned.
+    pub(crate) fn dispatch_readonly(
+        &mut self,
+        root: &Container,
+        event: &EventContext,
+        values: &FormValues,
+    ) -> Result<Vec<Effect>, ActionError> {
         #[cfg(test)]
         if matches!(event.kind, EventKind::Named(_)) {
             NAMED_WORK_COUNTS.with(|counts| {
@@ -523,7 +536,7 @@ impl ActionEngine {
             work.defaults(node)?;
         }
         let effects = work.finish()?;
-        next.commit_styles(root);
+        next.finish_evaluation(&effects);
         *self = next;
         Ok(effects)
     }
@@ -536,6 +549,17 @@ impl ActionEngine {
     pub fn release(
         &mut self,
         root: &mut Container,
+        event: &EventContext,
+    ) -> Result<Vec<Effect>, ActionError> {
+        let effects = self.release_readonly(root, event)?;
+        self.publish_styles(root);
+        Ok(effects)
+    }
+
+    /// Evaluate release atomically; publish returned style changes before effects.
+    pub(crate) fn release_readonly(
+        &mut self,
+        root: &Container,
         event: &EventContext,
     ) -> Result<Vec<Effect>, ActionError> {
         self.validate(root, event)?;
@@ -565,7 +589,7 @@ impl ActionEngine {
         }
         work.expire();
         let effects = work.finish()?;
-        next.commit_styles(root);
+        next.finish_evaluation(&effects);
         *self = next;
         Ok(effects)
     }
@@ -579,6 +603,17 @@ impl ActionEngine {
         root: &mut Container,
         now_ms: u64,
     ) -> Result<Vec<Effect>, ActionError> {
+        let effects = self.advance_readonly(root, now_ms)?;
+        self.publish_styles(root);
+        Ok(effects)
+    }
+
+    /// Evaluate expiration atomically; publish returned style changes before effects.
+    pub(crate) fn advance_readonly(
+        &mut self,
+        root: &Container,
+        now_ms: u64,
+    ) -> Result<Vec<Effect>, ActionError> {
         let source = Source::at(root, Vec::new(), self.generation)?;
         let event = EventContext::new(source, EventKind::Immediate, now_ms);
         self.validate(root, &event)?;
@@ -587,7 +622,7 @@ impl ActionEngine {
         let mut work = Work::new(root, &event, &values, &mut next)?;
         work.expire();
         let effects = work.finish()?;
-        next.commit_styles(root);
+        next.finish_evaluation(&effects);
         *self = next;
         Ok(effects)
     }
@@ -710,7 +745,19 @@ impl ActionEngine {
         Ok(())
     }
 
-    fn commit_styles(&mut self, root: &mut Container) {
+    fn finish_evaluation(&mut self, effects: &[Effect]) {
+        // Empty layers may still carry a baseline that must be restored. Keep
+        // them until publication only when finish detected actual source changes.
+        if !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::StylesChanged { .. }))
+        {
+            self.styles.retain(|_, styled| !styled.layers.is_empty());
+        }
+    }
+
+    /// Publish staged styles immediately after successful readonly evaluation.
+    pub(crate) fn publish_styles(&mut self, root: &mut Container) {
         for styled in self.styles.values() {
             if let Some(node) = selectors::at_mut(root, &styled.source.path) {
                 styled.effective().write(node);
@@ -1292,6 +1339,133 @@ mod named_admission_tests {
         assert!(
             matches!(engine.dispatch(&mut root, &event, &FormValues::new()).unwrap().as_slice(), [Effect::Custom { action, .. }] if action == "new-listener")
         );
+    }
+
+    #[test]
+    fn readonly_request_preserves_source_and_errors_are_atomic() {
+        use hyperchad_transformer_models::Route;
+        let mut state = crate::state::ViewState::from_root(Container {
+            str_id: Some("root".into()),
+            route: Some(Route::Get {
+                route: "/page".into(),
+                trigger: Some("load".into()),
+                target: hyperchad_transformer_models::Selector::default(),
+                strategy: hyperchad_transformer_models::SwapStrategy::default(),
+            }),
+            ..Default::default()
+        })
+        .unwrap();
+        let snapshot = state.source_snapshot();
+        let mut engine = ActionEngine::default();
+        let event = named(state.root(), vec![], 0, 5);
+        let effects = engine
+            .dispatch_readonly(state.root(), &event, &FormValues::new())
+            .unwrap();
+        assert!(matches!(effects.as_slice(), [Effect::Request(_)]));
+        assert!(state.matches_source(&snapshot));
+        let root = state.root().clone();
+        let before = format!("{engine:?}");
+        let backwards = named(state.root(), vec![], 0, 4);
+        assert!(
+            engine
+                .dispatch_readonly(state.root(), &backwards, &FormValues::new())
+                .is_err()
+        );
+        assert!(engine.release_readonly(state.root(), &backwards).is_err());
+        assert!(engine.advance_readonly(state.root(), 4).is_err());
+        assert_eq!(format!("{engine:?}"), before);
+        assert_eq!(state.root(), &root);
+        assert!(state.matches_source(&snapshot));
+    }
+
+    #[test]
+    fn readonly_style_publication_release_and_expiry_match_public_wrappers() {
+        use hyperchad_transformer_models::ElementTarget;
+        let mut hover = action(
+            ActionTrigger::Hover,
+            ActionType::Style {
+                target: ElementTarget::SelfTarget,
+                action: StyleAction::SetDisplay(false),
+            },
+        );
+        hover.effect.delay_off = Some(10);
+        let root = Container {
+            str_id: Some("root".into()),
+            actions: vec![hover],
+            ..Default::default()
+        };
+        let mut state = crate::state::ViewState::from_root(root.clone()).unwrap();
+        let mut expected_root = root;
+        let mut engine = ActionEngine::default();
+        let mut expected = engine.clone();
+        for (step, now) in [(0, 0), (1, 1), (2, 5), (2, 11), (2, 12)] {
+            let snapshot = state.source_snapshot();
+            let event = EventContext::new(
+                Source::at(state.root(), vec![], 0).unwrap(),
+                EventKind::Hover,
+                now,
+            );
+            let before_root = state.root().clone();
+            let effects = match step {
+                0 => engine.dispatch_readonly(state.root(), &event, &FormValues::new()),
+                1 => engine.release_readonly(state.root(), &event),
+                _ => engine.advance_readonly(state.root(), now),
+            }
+            .unwrap();
+            assert_eq!(state.root(), &before_root, "evaluation never publishes");
+            assert!(state.matches_source(&snapshot));
+            let changed = effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::StylesChanged { .. }));
+            if changed {
+                engine.publish_styles(state.root_mut());
+                assert!(!state.matches_source(&snapshot));
+            }
+            let expected_effects = match step {
+                0 => expected.dispatch(&mut expected_root, &event, &FormValues::new()),
+                1 => expected.release(&mut expected_root, &event),
+                _ => expected.advance(&mut expected_root, now),
+            }
+            .unwrap();
+            assert_eq!(format!("{effects:?}"), format!("{expected_effects:?}"));
+            assert_eq!(format!("{engine:?}"), format!("{expected:?}"));
+            assert_eq!(state.root(), &expected_root);
+            assert_eq!(state.generation(), 0);
+        }
+        assert!(
+            engine.styles.is_empty(),
+            "expired styles pruned after restoration"
+        );
+    }
+
+    #[test]
+    fn readonly_evaluation_failure_does_not_commit_partial_styles_or_engine() {
+        use hyperchad_transformer_models::ElementTarget;
+        let root = Container {
+            str_id: Some("root".into()),
+            actions: vec![
+                action(
+                    ActionTrigger::Click,
+                    ActionType::Style {
+                        target: ElementTarget::SelfTarget,
+                        action: StyleAction::SetDisplay(false),
+                    },
+                ),
+                action(ActionTrigger::Click, custom("overflow")),
+            ],
+            ..Default::default()
+        };
+        let mut engine = ActionEngine::default();
+        engine.limits.max_entries = 1;
+        let before = format!("{engine:?}");
+        let event = EventContext::new(Source::at(&root, vec![], 0).unwrap(), EventKind::Click, 1);
+        assert!(
+            engine
+                .dispatch_readonly(&root, &event, &FormValues::new())
+                .is_err()
+        );
+        assert_eq!(format!("{engine:?}"), before);
+        assert_eq!(root.hidden, None);
     }
 
     #[test]

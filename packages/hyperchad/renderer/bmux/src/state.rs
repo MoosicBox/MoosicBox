@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::discriminant;
+use std::sync::Arc;
 
 use hyperchad_renderer::{ResponseMetadata, View};
 use hyperchad_transformer::{Container, Element, Input};
@@ -191,11 +192,20 @@ pub struct ApplyReport {
     pub response: ResponseMetadata,
 }
 
+/// Retained source identity for derived geometry, independent of async generations.
+///
+/// Equality is deliberately not exposed: only the owning state can validate a
+/// snapshot, including mutable access pending a fresh identity.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SourceSnapshot(Arc<()>);
+
 /// Canonical root and generation used to reject stale asynchronous responses.
 #[derive(Debug, Clone, Default)]
 pub struct ViewState {
     root: Container,
     generation: u64,
+    source: SourceSnapshot,
+    source_pending: bool,
 }
 
 impl ViewState {
@@ -214,6 +224,7 @@ impl ViewState {
         Ok(Self {
             root,
             generation: 0,
+            ..Self::default()
         })
     }
 
@@ -227,9 +238,33 @@ impl ViewState {
     ///
     /// Call [`Self::mark_changed`] after actual changes, or prefer
     /// [`Self::mutate_root`] for validated, change-detecting transactions.
-    /// Merely borrowing the tree must not invalidate asynchronous work.
+    /// Merely borrowing the tree must not invalidate asynchronous work, but does
+    /// conservatively invalidate retained source snapshots even without a write.
     pub const fn root_mut(&mut self) -> &mut Container {
+        // Defer Arc renewal so this public accessor remains const. The pending
+        // flag rejects retained geometry immediately, without invalidating async work.
+        self.source_pending = true;
         &mut self.root
+    }
+
+    /// Capture an O(1) identity for the current source after any mutable access.
+    #[must_use]
+    pub(crate) fn source_snapshot(&mut self) -> SourceSnapshot {
+        if self.source_pending {
+            self.renew_source();
+        }
+        self.source.clone()
+    }
+
+    /// Validate a retained source identity without walking the canonical tree.
+    #[must_use]
+    pub(crate) fn matches_source(&self, snapshot: &SourceSnapshot) -> bool {
+        !self.source_pending && Arc::ptr_eq(&self.source.0, &snapshot.0)
+    }
+
+    fn renew_source(&mut self) {
+        self.source = SourceSnapshot::default();
+        self.source_pending = false;
     }
 
     /// Explicitly advance the tree epoch after a direct mutation.
@@ -243,6 +278,7 @@ impl ViewState {
             .generation
             .checked_add(1)
             .ok_or(ApplyError::GenerationExhausted)?;
+        self.renew_source();
         Ok(self.generation)
     }
 
@@ -266,6 +302,7 @@ impl ViewState {
             .ok_or(ApplyError::GenerationExhausted)?;
         self.root = candidate;
         self.generation = generation;
+        self.renew_source();
         Ok(true)
     }
 
@@ -292,6 +329,7 @@ impl ViewState {
     /// Call [`Self::mark_changed`] after actual direct changes.
     pub fn find_node_mut(&mut self, key: &str) -> Option<&mut Container> {
         let path = index(&self.root).ok()?.remove(key)?;
+        self.source_pending = true;
         at_mut(&mut self.root, &path)
     }
 
@@ -483,6 +521,9 @@ impl ViewState {
         record_removed_identities(&self.root, &candidate, &old, &new, &mut report);
         self.root = candidate;
         self.generation = generation;
+        if changed {
+            self.renew_source();
+        }
         Ok(report)
     }
 }
@@ -1275,6 +1316,170 @@ fn adjust_anchor(anchor: &mut Option<Path>, deleted: &[usize]) {
         && path[parent.len()] > i
     {
         path[parent.len()] -= 1;
+    }
+}
+
+#[cfg(test)]
+mod source_snapshot_tests {
+    use super::*;
+
+    fn state() -> ViewState {
+        ViewState::from_root(Container {
+            str_id: Some("root".into()),
+            ..Container::default()
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn immutable_observation_and_repeated_snapshots_preserve_source() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        let _ = state.root();
+        let _ = state.find_node("root");
+        assert!(state.is_current_generation(state.generation()));
+        let repeated = state.source_snapshot();
+        assert!(state.matches_source(&snapshot));
+        assert!(state.matches_source(&repeated));
+        assert!(Arc::ptr_eq(&snapshot.0, &repeated.0));
+    }
+
+    #[test]
+    fn unmarked_mutable_access_invalidates_source_without_advancing_generation() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        state.root_mut().data.insert("changed".into(), "yes".into());
+        assert_eq!(state.generation(), 0);
+        assert!(!state.matches_source(&snapshot));
+        let fresh = state.source_snapshot();
+        assert!(state.matches_source(&fresh));
+        assert!(!state.matches_source(&snapshot));
+        let _ = state.root_mut();
+        assert!(
+            !state.matches_source(&fresh),
+            "even a no-op mutable borrow invalidates"
+        );
+        assert_eq!(state.generation(), 0);
+    }
+
+    #[test]
+    fn mutable_lookup_invalidates_only_when_access_is_granted() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        assert!(state.find_node_mut("missing").is_none());
+        assert!(state.matches_source(&snapshot));
+        state
+            .find_node_mut("root")
+            .unwrap()
+            .data
+            .insert("changed".into(), "yes".into());
+        assert!(!state.matches_source(&snapshot));
+        assert_eq!(state.generation(), 0);
+    }
+
+    #[test]
+    fn constructors_and_replacement_have_unique_sources_at_generation_zero() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        let replacement = ViewState::from_root(state.root().clone()).unwrap();
+        assert!(!replacement.matches_source(&snapshot));
+        state = replacement;
+        assert_eq!(state.generation(), 0);
+        assert!(!state.matches_source(&snapshot));
+        let mut empty = ViewState::default();
+        let empty_snapshot = empty.source_snapshot();
+        assert!(!ViewState::new().matches_source(&empty_snapshot));
+    }
+
+    #[test]
+    fn clones_share_valid_source_but_pending_clones_reject_old_snapshots() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        let unchanged = state.clone();
+        assert!(unchanged.matches_source(&snapshot));
+        let _ = state.root_mut();
+        let mut pending = state.clone();
+        assert!(!state.matches_source(&snapshot));
+        assert!(!pending.matches_source(&snapshot));
+        assert!(unchanged.matches_source(&snapshot));
+        let renewed = state.source_snapshot();
+        assert!(state.matches_source(&renewed));
+        assert!(!pending.matches_source(&renewed));
+        let independently_renewed = pending.source_snapshot();
+        assert!(!state.matches_source(&independently_renewed));
+    }
+
+    #[test]
+    fn noop_and_failed_transactions_preserve_source_and_changed_commits_renew_it() {
+        let mut state = state();
+        let snapshot = state.source_snapshot();
+        assert!(!state.mutate_root(|_| {}).unwrap());
+        state
+            .apply_response(View::default(), None, SwapStrategy::None)
+            .unwrap();
+        assert!(state.matches_source(&snapshot));
+        let root = state.root().clone();
+        assert!(
+            state
+                .mutate_root(|candidate| {
+                    candidate.children.push(Container {
+                        str_id: Some("root".into()),
+                        ..Container::default()
+                    });
+                })
+                .is_err()
+        );
+        assert!(
+            state
+                .apply_view_if_generation(View::default(), None, 1)
+                .is_err()
+        );
+        assert!(state.apply_view(View::default(), Some("missing")).is_err());
+        assert_eq!(state.root(), &root);
+        assert_eq!(state.generation(), 0);
+        assert!(state.matches_source(&snapshot));
+        assert!(
+            state
+                .mutate_root(|candidate| {
+                    candidate.data.insert("changed".into(), "yes".into());
+                })
+                .unwrap()
+        );
+        assert!(!state.matches_source(&snapshot));
+        let snapshot = state.source_snapshot();
+        state.mark_changed().unwrap();
+        assert!(!state.matches_source(&snapshot));
+        let snapshot = state.source_snapshot();
+        state
+            .apply_view(View::from(Container::default()), None)
+            .unwrap();
+        assert!(!state.matches_source(&snapshot));
+    }
+
+    #[test]
+    fn rejected_generation_exhaustion_preserves_source_and_pending_invalidation() {
+        let mut state = state();
+        state.generation = u64::MAX;
+        let snapshot = state.source_snapshot();
+        assert!(state.mark_changed().is_err());
+        assert!(
+            state
+                .mutate_root(|candidate| candidate.str_id = Some("new".into()))
+                .is_err()
+        );
+        assert!(
+            state
+                .apply_view(View::from(Container::default()), None)
+                .is_err()
+        );
+        assert!(state.matches_source(&snapshot));
+        let _ = state.root_mut();
+        assert!(!state.mutate_root(|_| {}).unwrap());
+        assert!(state.mark_changed().is_err());
+        assert!(
+            !state.matches_source(&snapshot),
+            "failure cannot revive an invalidated source"
+        );
     }
 }
 

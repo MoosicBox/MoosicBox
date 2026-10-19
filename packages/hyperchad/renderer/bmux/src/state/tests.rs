@@ -485,6 +485,7 @@ fn exhausted_generation_does_not_mutate() {
     let mut state = ViewState {
         root: node("root"),
         generation: u64::MAX,
+        ..ViewState::default()
     };
     assert_eq!(
         state.apply_view(primary(node("new")), None).unwrap_err(),

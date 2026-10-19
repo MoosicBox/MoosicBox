@@ -30,6 +30,79 @@ mod spec;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod clipped_prepare_tests {
+    use super::*;
+    use crate::layout::{DefaultLeafMeasure, LayoutOptions, layout};
+    use hyperchad_transformer::{Element, Input};
+
+    #[test]
+    fn clipped_prepare_clears_geometry_preserves_focus_and_reveals_again() {
+        let root = Container {
+            str_id: Some("input".into()),
+            element: Element::Input {
+                input: Input::Text {
+                    value: Some("retained".into()),
+                    placeholder: None,
+                },
+                name: Some("input".into()),
+                autofocus: None,
+            },
+            ..Container::default()
+        };
+        let tree = layout(&root, &LayoutOptions::default(), &DefaultLeafMeasure).unwrap();
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        controls.prepare(&tree);
+        assert!(controls.nodes["input"].prepared.is_some());
+        let mut clipped = tree.clone();
+        clipped.nodes[0].clip = CellRect::default();
+        controls.prepare(&clipped);
+        assert!(controls.nodes["input"].prepared.is_none());
+        assert!(controls.nodes["input"].deferred.is_some());
+        // Offscreen controls remain in keyboard order, with native layout built
+        // lazily on focus rather than dropping the next key before a repaint.
+        controls.traverse(false);
+        assert_eq!(controls.focused.as_deref(), Some("input"));
+        assert!(controls.nodes["input"].prepared.is_some());
+        assert!(controls.nodes["input"].deferred.is_none());
+        controls.prepare(&clipped);
+        assert!(controls.nodes["input"].prepared.is_some());
+        let NativeState::Text(state) = &controls.nodes["input"].state else {
+            panic!("text state")
+        };
+        assert_eq!(state.borrow().buffer().text(), "retained");
+        controls.focus(None);
+        controls.prepare(&clipped);
+        assert!(controls.nodes["input"].prepared.is_none());
+        let mut buffer = bmux_tui::buffer::Buffer::empty(Rect::new(0, 0, 80, 24));
+        let mut frame = bmux_tui::frame::Frame::new(&mut buffer);
+        assert!(!controls.paint("input", &mut PaintCx::new(&mut frame)));
+        controls.prepare(&tree);
+        assert!(controls.nodes["input"].prepared.is_some());
+        assert!(controls.nodes["input"].deferred.is_none());
+    }
+
+    #[test]
+    fn clipped_captured_control_retains_release_geometry() {
+        let root = Container {
+            str_id: Some("button".into()),
+            element: Element::Button { r#type: None },
+            ..Container::default()
+        };
+        let mut tree = layout(&root, &LayoutOptions::default(), &DefaultLeafMeasure).unwrap();
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        controls.captured = Some("button".into());
+        tree.nodes[0].clip = CellRect::default();
+        controls.prepare(&tree);
+        assert!(controls.nodes["button"].prepared.is_some());
+        controls.captured = None;
+        controls.prepare(&tree);
+        assert!(controls.nodes["button"].prepared.is_none());
+    }
+}
+
 use spec::{ButtonContent, Kind, Spec};
 
 /// A control value. Secrets are deliberately absent from semantic event payloads.
@@ -148,6 +221,7 @@ struct Control {
     spec: Spec,
     state: NativeState,
     prepared: Option<Prepared>,
+    deferred: Option<Prepared>,
     files: Vec<AuthorizedFile>,
     secret_pointer: RefCell<TextInputState>,
     active_option: Cell<usize>,
@@ -199,6 +273,7 @@ impl Controls {
                 _ => Control::new(spec),
             };
             control.prepared = None;
+            control.deferred = None;
             self.order.push(key.clone());
             self.nodes.insert(key, control);
         }
@@ -288,6 +363,7 @@ impl Controls {
     pub fn prepare(&mut self, tree: &LayoutTree) {
         for control in self.nodes.values_mut() {
             control.prepared = None;
+            control.deferred = None;
         }
         for node in &tree.nodes {
             if !node.visible {
@@ -298,6 +374,34 @@ impl Controls {
                     continue;
                 }
                 let bounds = node.content_bounds;
+                let visible = if control.spec.kind == Kind::Anchor && !node.hit_regions.is_empty() {
+                    node.hit_regions.iter().any(|region| {
+                        let clipped = region.intersection(node.clip);
+                        clipped.width > 0 && clipped.height > 0
+                    })
+                } else {
+                    let clipped = bounds.intersection(node.clip);
+                    clipped.width > 0 && clipped.height > 0
+                };
+                if !visible
+                    && self.focused.as_deref() != Some(&node.key)
+                    && self.captured.as_deref() != Some(&node.key)
+                {
+                    // Keep placement for lazy keyboard focus, without native
+                    // layout or paint/hit-test participation.
+                    control.deferred = Some(Prepared {
+                        layout: LayoutNode::leaf(
+                            node.key.clone().into(),
+                            LogicalSize::new(bounds.width, bounds.height),
+                        ),
+                        bounds,
+                        clip: node.clip,
+                        order: node.paint_order,
+                        path: node.path.clone(),
+                        hit_regions: node.hit_regions.clone(),
+                    });
+                    continue;
+                }
                 let constraints = Constraints::new(
                     bounds.width,
                     bounds.width,
@@ -434,6 +538,22 @@ impl Controls {
             return ControlOutcome::default();
         }
         self.focused = key.map(str::to_owned);
+        if let Some(key) = key
+            && let Some(control) = self.nodes.get_mut(key)
+            && let Some(mut deferred) = control.deferred.take()
+        {
+            let bounds = deferred.bounds;
+            deferred.layout = control.component(key, true).layout(
+                Constraints::new(
+                    bounds.width,
+                    bounds.width,
+                    bounds.height,
+                    Some(bounds.height),
+                ),
+                &mut LayoutCx::new(),
+            );
+            control.prepared = Some(deferred);
+        }
         let mut outcome = ControlOutcome::handled();
         outcome.events.push(ControlEvent::Focus {
             key: self.focused.clone(),
@@ -446,7 +566,8 @@ impl Controls {
         outcome
     }
 
-    /// Traverse only prepared, enabled controls, in document order. The host can
+    /// Traverse laid-out, enabled controls, in document order, including clipped
+    /// controls whose native layout is deferred until focus. The host can
     /// instead supply focus from a broader document focus router.
     pub fn traverse(&mut self, backwards: bool) -> ControlOutcome {
         let keys: Vec<_> = self
@@ -454,7 +575,9 @@ impl Controls {
             .iter()
             .filter(|key| {
                 let control = &self.nodes[*key];
-                control.spec.focusable() && !control.spec.disabled && control.prepared.is_some()
+                control.spec.focusable()
+                    && !control.spec.disabled
+                    && (control.deferred.is_some() || control.prepared.is_some())
             })
             .cloned()
             .collect();
@@ -814,6 +937,7 @@ impl Control {
             spec,
             state,
             prepared: None,
+            deferred: None,
             files: Vec::new(),
             secret_pointer: RefCell::new(TextInputState::default()),
             active_option: Cell::new(0),

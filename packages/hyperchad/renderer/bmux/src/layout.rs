@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::Arc;
 
 use bmux_tui::component::{Constraints, LogicalSize};
 use bmux_tui::geometry::{Rect, Size};
@@ -194,12 +195,195 @@ pub struct ResolvedNode {
 }
 
 /// Retained scene shared by painting, selection, hit testing and image placement.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LayoutTree {
     pub root_key: String,
     pub viewport: Size,
     pub nodes: Vec<ResolvedNode>,
     indices: BTreeMap<String, usize>,
+    scroll_index: Arc<ScrollIndex>,
+}
+
+// Keep the public geometry/debug representation independent of acceleration data.
+#[expect(
+    clippy::missing_fields_in_debug,
+    reason = "private acceleration data is excluded to preserve the existing geometry Debug representation"
+)]
+impl fmt::Debug for LayoutTree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LayoutTree")
+            .field("root_key", &self.root_key)
+            .field("viewport", &self.viewport)
+            .field("nodes", &self.nodes)
+            .field("indices", &self.indices)
+            .finish()
+    }
+}
+
+#[derive(Default)]
+struct ScrollIndex {
+    nodes: Vec<ScrollNode>,
+    scrollports: Vec<usize>,
+}
+
+#[derive(Default)]
+struct Axes(u8);
+
+impl Axes {
+    fn new(x: bool, y: bool) -> Self {
+        Self(u8::from(x) | (u8::from(y) << 1))
+    }
+
+    const fn x(&self) -> bool {
+        self.0 & 1 != 0
+    }
+
+    const fn y(&self) -> bool {
+        self.0 & 2 != 0
+    }
+}
+
+#[derive(Default)]
+struct ScrollNode {
+    parent: Option<usize>,
+    end: usize,
+    scroll: Axes,
+    clip: Axes,
+    // A positioned dependency is either forbidden or requires an anchor
+    // strictly inside the changed scrollport. None means ordinary flow.
+    dependency: Option<usize>,
+}
+
+impl ScrollIndex {
+    fn build(root: &Container, tree: &LayoutTree) -> Self {
+        fn visit<'a>(
+            source: &'a Container,
+            path: &mut Vec<usize>,
+            ancestors: &mut Vec<&'a Container>,
+            tree: &LayoutTree,
+            index: &mut ScrollIndex,
+        ) {
+            let key = node_key(source, path);
+            if let Some(&ordinal) = tree.indices.get(&key) {
+                let node = &tree.nodes[ordinal];
+                let scroll_x = scrollable(source.overflow_x);
+                let scroll_y = scrollable(source.overflow_y);
+                let dependency = match source.position.unwrap_or_default() {
+                    Position::Fixed | Position::Sticky => Some(0),
+                    Position::Absolute => Some(
+                        ancestors
+                            .iter()
+                            .rposition(|ancestor| {
+                                ancestor.position.unwrap_or_default() != Position::Static
+                            })
+                            .filter(|&depth| absolute_translation_proven(source, ancestors[depth]))
+                            .unwrap_or(0),
+                    ),
+                    _ => None,
+                };
+                index.nodes[ordinal] = ScrollNode {
+                    parent: node
+                        .parent_key
+                        .as_ref()
+                        .and_then(|key| tree.indices.get(key))
+                        .copied(),
+                    end: ordinal + 1,
+                    scroll: Axes::new(scroll_x, scroll_y),
+                    clip: Axes::new(clips(source.overflow_x), clips(source.overflow_y)),
+                    dependency,
+                };
+                if scroll_x || scroll_y {
+                    index.scrollports.push(ordinal);
+                }
+            }
+            ancestors.push(source);
+            for (ordinal, child) in source.children.iter().enumerate() {
+                path.push(ordinal);
+                visit(child, path, ancestors, tree, index);
+                path.pop();
+            }
+            ancestors.pop();
+        }
+        let mut index = Self {
+            nodes: (0..tree.nodes.len())
+                .map(|_| ScrollNode::default())
+                .collect(),
+            scrollports: Vec::new(),
+        };
+        visit(root, &mut Vec::new(), &mut Vec::new(), tree, &mut index);
+        // Resolution emits preorder, including synthesized inline/table nodes.
+        for ordinal in (0..index.nodes.len()).rev() {
+            if let Some(parent) = index.nodes[ordinal].parent {
+                index.nodes[parent].end = index.nodes[parent].end.max(index.nodes[ordinal].end);
+            }
+        }
+        index
+    }
+}
+
+// Same conservative absolute proof as the original reprojector, evaluated once
+// with its actual source ancestor rather than repeatedly walking root paths.
+fn absolute_translation_proven(source: &Container, containing: &Container) -> bool {
+    let intrinsic_height = source.height.is_none()
+        && source.bottom.is_none()
+        && intrinsic_scroll_subtree(source, true);
+    if !matches!(source.width, Some(Number::Integer(_)))
+        || !(matches!(source.height, Some(Number::Integer(_))) || intrinsic_height)
+        || [&source.left, &source.right, &source.top, &source.bottom]
+            .into_iter()
+            .any(|length| match length {
+                None | Some(Number::Integer(_) | Number::IntegerPercent(_)) => false,
+                Some(Number::RealPercent(value)) => !value.is_finite(),
+                _ => true,
+            })
+        || [
+            &source.min_width,
+            &source.max_width,
+            &source.min_height,
+            &source.max_height,
+            &source.margin_left,
+            &source.margin_right,
+            &source.margin_top,
+            &source.margin_bottom,
+            &source.padding_left,
+            &source.padding_right,
+            &source.padding_top,
+            &source.padding_bottom,
+        ]
+        .into_iter()
+        .any(|length| !matches!(length, None | Some(Number::Integer(_))))
+    {
+        return false;
+    }
+    let needs_fixed_basis = intrinsic_height
+        || [&source.left, &source.right, &source.top, &source.bottom]
+            .into_iter()
+            .any(|length| {
+                matches!(
+                    length,
+                    Some(Number::IntegerPercent(_) | Number::RealPercent(_))
+                )
+            });
+    if needs_fixed_basis
+        && (![&containing.width, &containing.height]
+            .into_iter()
+            .all(|length| matches!(length, Some(Number::Integer(_))))
+            || [
+                &containing.min_width,
+                &containing.max_width,
+                &containing.min_height,
+                &containing.max_height,
+                &containing.padding_left,
+                &containing.padding_right,
+                &containing.padding_top,
+                &containing.padding_bottom,
+            ]
+            .into_iter()
+            .any(|length| !matches!(length, None | Some(Number::Integer(_)))))
+    {
+        return false;
+    }
+    true
 }
 
 impl LayoutTree {
@@ -422,6 +606,7 @@ pub fn layout(
         viewport: options.viewport,
         nodes: Vec::new(),
         indices: BTreeMap::new(),
+        scroll_index: Arc::default(),
     };
     if let Some(draft) = draft {
         let rect = CellRect::new(0, 0, viewport.width, viewport.height);
@@ -432,18 +617,126 @@ pub fn layout(
         tree.indices.clear();
         engine.resolve(draft, (0, 0), rect, rect, rect, None, &mut tree)?;
     }
+    tree.scroll_index = Arc::new(ScrollIndex::build(root, &tree));
     Ok(tree)
 }
 
 /// Reproject one changed scrollport using committed geometry. Fixed/sticky and
 /// unproven absolute descendants require normal layout; source/sizing must be unchanged.
 pub(crate) fn reproject_scroll(
+    _root: &Container,
+    tree: &LayoutTree,
+    offsets: &BTreeMap<String, ScrollOffset>,
+) -> Option<LayoutTree> {
+    let index = &tree.scroll_index;
+    let mut changed = None;
+    for &ordinal in &index.scrollports {
+        #[cfg(test)]
+        scroll_work::discovery();
+        let node = &tree.nodes[ordinal];
+        let flags = &index.nodes[ordinal];
+        let requested = offsets.get(&node.key).copied().unwrap_or_default();
+        let next = ScrollOffset {
+            x: if flags.scroll.x() {
+                requested.x.min(
+                    node.content_extents
+                        .width
+                        .saturating_sub(node.content_bounds.width),
+                )
+            } else {
+                0
+            },
+            y: if flags.scroll.y() {
+                requested.y.min(
+                    node.content_extents
+                        .height
+                        .saturating_sub(node.content_bounds.height),
+                )
+            } else {
+                0
+            },
+        };
+        if next != node.scroll_offset {
+            if changed.is_some() {
+                log::debug!(
+                    "bmux scroll rejection reason=multiple-scrollports key={:.128}",
+                    node.key
+                );
+                return None;
+            }
+            changed = Some((ordinal, next));
+        }
+    }
+    let (start, next) = changed?;
+    let end = index.nodes[start].end;
+    let depth = tree.nodes[start].path.len();
+    for ordinal in start + 1..end {
+        #[cfg(test)]
+        scroll_work::eligibility();
+        if index.nodes[ordinal]
+            .dependency
+            .is_some_and(|anchor| anchor <= depth)
+        {
+            log::debug!(
+                "bmux scroll rejection reason=positioned-dependency key={:.128}",
+                tree.nodes[ordinal].key
+            );
+            return None;
+        }
+    }
+    let previous = tree.nodes[start].scroll_offset;
+    let dx = signed(previous.x) - signed(next.x);
+    let dy = signed(previous.y) - signed(next.y);
+    // Public nodes remain an owned Vec: the candidate must not mutate committed
+    // hit-test/paint geometry. Unrelated siblings are still cloned here.
+    #[cfg(test)]
+    scroll_work::cloned(tree.nodes.len());
+    let mut result = tree.clone();
+    for ordinal in start..end {
+        #[cfg(test)]
+        scroll_work::translated();
+        let flags = &index.nodes[ordinal];
+        let inherited = flags.parent.map(|parent| result.nodes[parent].text_clip);
+        let node = &mut result.nodes[ordinal];
+        if ordinal == start {
+            node.scroll_offset = next;
+        } else {
+            node.bounds = node.bounds.translated(dx, dy);
+            node.content_bounds = node.content_bounds.translated(dx, dy);
+            for region in &mut node.hit_regions {
+                *region = region.translated(dx, dy);
+            }
+            node.clip = inherited?;
+        }
+        node.text_origin.0 += dx;
+        node.text_origin.1 += dy;
+        for fragment in &mut node.text {
+            fragment.bounds = fragment.bounds.translated(dx, dy);
+        }
+        node.text_clip = node.clip;
+        if flags.clip.x() {
+            node.text_clip = clip_axis(node.text_clip, node.content_bounds, true);
+        }
+        if flags.clip.y() {
+            node.text_clip = clip_axis(node.text_clip, node.content_bounds, false);
+        }
+    }
+    Some(result)
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "retain the independent pre-index reprojection algorithm verbatim for admission and geometry comparison"
+)]
+fn reproject_scroll_baseline(
     root: &Container,
     tree: &LayoutTree,
     offsets: &BTreeMap<String, ScrollOffset>,
 ) -> Option<LayoutTree> {
     let mut changed = None;
     for node in &tree.nodes {
+        scroll_work::discovery();
         let requested = offsets.get(&node.key).copied().unwrap_or_default();
         let source = source_at(root, &node.path)?;
         let next = ScrollOffset {
@@ -479,6 +772,7 @@ pub(crate) fn reproject_scroll(
     }
     let (path, next, previous) = changed?;
     for node in &tree.nodes {
+        scroll_work::eligibility();
         if !node.path.starts_with(&path) || node.path == path {
             continue;
         }
@@ -505,11 +799,13 @@ pub(crate) fn reproject_scroll(
     }
     let dx = signed(previous.x) - signed(next.x);
     let dy = signed(previous.y) - signed(next.y);
+    scroll_work::cloned(tree.nodes.len());
     let mut result = tree.clone();
     for index in 0..result.nodes.len() {
         if !result.nodes[index].path.starts_with(&path) {
             continue;
         }
+        scroll_work::translated();
         let is_scrollport = result.nodes[index].path == path;
         let inherited = result.nodes[index]
             .parent_key
@@ -546,6 +842,7 @@ pub(crate) fn reproject_scroll(
 
 // A fixed-size overlay can translate only when its positioned containing block
 // moves inside the changed scrollport. Dynamic lengths retain the full reflow path.
+#[cfg(test)]
 fn scrolls_absolute(root: &Container, node: &[usize], scrollport: &[usize]) -> Option<bool> {
     let source = source_at(root, node)?;
     let intrinsic_height = source.height.is_none()
@@ -664,7 +961,67 @@ fn intrinsic_scroll_subtree(node: &Container, overlay: bool) -> bool {
             .all(|child| intrinsic_scroll_subtree(child, false))
 }
 
+#[cfg(test)]
+mod scroll_work {
+    use std::cell::Cell;
+
+    #[derive(Clone, Copy, Debug, Default)]
+    pub(super) struct Work {
+        pub discovery: usize,
+        pub eligibility: usize,
+        pub source_steps: usize,
+        pub translated: usize,
+        pub cloned: usize,
+    }
+    thread_local! {
+        static WORK: Cell<Work> = Cell::new(Work::default());
+    }
+    pub(super) fn discovery() {
+        WORK.update(|mut w| {
+            w.discovery += 1;
+            w
+        });
+    }
+    pub(super) fn eligibility() {
+        WORK.update(|mut w| {
+            w.eligibility += 1;
+            w
+        });
+    }
+    pub(super) fn source_steps(count: usize) {
+        WORK.update(|mut w| {
+            w.source_steps += count;
+            w
+        });
+    }
+    pub(super) fn translated() {
+        WORK.update(|mut w| {
+            w.translated += 1;
+            w
+        });
+    }
+    pub(super) fn cloned(count: usize) {
+        WORK.update(|mut w| {
+            w.cloned += count;
+            w
+        });
+    }
+    pub(super) fn observe<T>(f: impl FnOnce() -> T) -> (T, Work) {
+        struct Restore(Work);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                WORK.set(self.0);
+            }
+        }
+        let _restore = Restore(WORK.replace(Work::default()));
+        let value = f();
+        (value, WORK.get())
+    }
+}
+
+#[cfg(test)]
 fn source_at<'a>(root: &'a Container, path: &[usize]) -> Option<&'a Container> {
+    scroll_work::source_steps(path.len());
     path.iter()
         .try_fold(root, |node, index| node.children.get(*index))
 }
@@ -794,6 +1151,75 @@ impl Edges {
     }
 }
 
+// Test-only instrumentation and the original unconditional rebuild path let the
+// same fixture compare complete geometry and deterministic work, not wall time.
+#[cfg(test)]
+mod positioned_work {
+    use std::cell::Cell;
+
+    #[derive(Clone, Copy, Debug, Default)]
+    pub(super) struct Work {
+        pub nodes: usize,
+        pub intrinsic: usize,
+        pub resolves: usize,
+        pub rebuilds: usize,
+    }
+
+    thread_local! {
+        static WORK: Cell<Work> = Cell::new(Work::default());
+        static FORCE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn node() {
+        WORK.update(|mut work| {
+            work.nodes += 1;
+            work
+        });
+    }
+    pub(super) fn intrinsic() {
+        WORK.update(|mut work| {
+            work.intrinsic += 1;
+            work
+        });
+    }
+    pub(super) fn resolve() {
+        WORK.update(|mut work| {
+            work.resolves += 1;
+            work
+        });
+    }
+    pub(super) fn rebuild() {
+        WORK.update(|mut work| {
+            work.rebuilds += 1;
+            work
+        });
+    }
+    pub(super) fn force_rebuild() -> bool {
+        FORCE.get()
+    }
+    pub(super) fn observe<T>(force: bool, f: impl FnOnce() -> T) -> (T, Work) {
+        struct Restore(bool, Work);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                FORCE.set(self.0);
+                WORK.set(self.1);
+            }
+        }
+        let _restore = Restore(FORCE.replace(force), WORK.replace(Work::default()));
+        let value = f();
+        (value, WORK.get())
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct BuildContext {
+    available: LogicalSize,
+    forced_width: Option<u64>,
+    forced_height: Option<u64>,
+    style: TextStyle,
+    geometry: (u64, u64, CellRect),
+}
+
 #[derive(Clone)]
 struct Draft<'a> {
     source: &'a Container,
@@ -807,6 +1233,9 @@ struct Draft<'a> {
     text: Vec<InlineFragment>,
     regions: Vec<CellRect>,
     style: TextStyle,
+    // Only positioned nodes may reuse a build during resolution. The actual
+    // containing block can differ from the normal-flow parent's allocation.
+    build_context: Option<Box<BuildContext>>,
 }
 impl Draft<'_> {
     fn outer_width(&self) -> u64 {
@@ -962,6 +1391,8 @@ impl<M: LeafMeasure> Engine<'_, M> {
         inherited: &TextStyle,
         depth: usize,
     ) -> Result<Option<Draft<'a>>, LayoutError> {
+        #[cfg(test)]
+        positioned_work::node();
         if depth > self.options.max_depth {
             return Err(LayoutError::DepthLimit);
         }
@@ -1023,6 +1454,16 @@ impl<M: LeafMeasure> Engine<'_, M> {
             children: Vec::new(),
             text: Vec::new(),
             regions: Vec::new(),
+            build_context: matches!(node.position, Some(Position::Absolute | Position::Fixed))
+                .then(|| {
+                    Box::new(BuildContext {
+                        available,
+                        forced_width,
+                        forced_height,
+                        style: style.clone(),
+                        geometry: (0, 0, CellRect::default()),
+                    })
+                }),
             style,
         };
         if native_leaf(node) {
@@ -1101,6 +1542,9 @@ impl<M: LeafMeasure> Engine<'_, M> {
         if draft.rect.width > MAX_EXTENT || draft.rect.height > MAX_EXTENT {
             return Err(LayoutError::InvalidLength { key: draft.key });
         }
+        if let Some(context) = &mut draft.build_context {
+            context.geometry = (draft.rect.width, draft.rect.height, draft.content);
+        }
         Ok(Some(draft))
     }
 
@@ -1112,6 +1556,8 @@ impl<M: LeafMeasure> Engine<'_, M> {
         style: &TextStyle,
         depth: usize,
     ) -> Result<u64, LayoutError> {
+        #[cfg(test)]
+        positioned_work::intrinsic();
         if hidden(node) {
             return Ok(0);
         }
@@ -1801,6 +2247,8 @@ impl<M: LeafMeasure> Engine<'_, M> {
         parent_key: Option<String>,
         tree: &mut LayoutTree,
     ) -> Result<(), LayoutError> {
+        #[cfg(test)]
+        positioned_work::resolve();
         let position = draft.source.position.unwrap_or_default();
         let viewport = CellRect::new(
             0,
@@ -1855,17 +2303,35 @@ impl<M: LeafMeasure> Engine<'_, M> {
             } else {
                 None
             };
-            draft = self
-                .node(
-                    draft.source,
-                    &draft.path,
-                    available,
-                    Some(width),
-                    height,
-                    &draft.style,
-                    draft.path.len(),
-                )?
-                .expect("visible positioned node");
+            let context = BuildContext {
+                available,
+                forced_width: Some(width),
+                forced_height: height,
+                // Preserve the existing resolve-time inheritance semantics.
+                style: draft.style.inherit(draft.source),
+                // Parent algorithms (e.g. table row stretching) may change a
+                // draft after construction. Never reuse that adjusted geometry
+                // in place of the original resolve-time positioned rebuild.
+                geometry: (draft.rect.width, draft.rect.height, draft.content),
+            };
+            let reuse = draft.build_context.as_deref() == Some(&context);
+            #[cfg(test)]
+            let reuse = reuse && !positioned_work::force_rebuild();
+            if !reuse {
+                #[cfg(test)]
+                positioned_work::rebuild();
+                draft = self
+                    .node(
+                        draft.source,
+                        &draft.path,
+                        available,
+                        Some(width),
+                        height,
+                        &draft.style,
+                        draft.path.len(),
+                    )?
+                    .expect("visible positioned node");
+            }
         }
         let mut bounds = draft.rect.translated(origin.0, origin.1);
         if matches!(position, Position::Absolute | Position::Fixed) {
@@ -2393,6 +2859,269 @@ fn redistribute(
 #[cfg(test)]
 mod scroll_reprojection_tests {
     use super::*;
+
+    fn positioned_chain(cards: usize, depth: usize) -> Container {
+        let card = || {
+            let mut child = Container {
+                width: Some(Number::Integer(160)),
+                height: Some(Number::Integer(160)),
+                position: Some(Position::Absolute),
+                right: Some(Number::Integer(0)),
+                bottom: Some(Number::Integer(0)),
+                ..Container::default()
+            };
+            for _ in 1..depth {
+                child = Container {
+                    children: vec![child],
+                    ..Container {
+                        width: Some(Number::Integer(160)),
+                        height: Some(Number::Integer(160)),
+                        position: Some(Position::Absolute),
+                        right: Some(Number::Integer(0)),
+                        bottom: Some(Number::Integer(0)),
+                        ..Container::default()
+                    }
+                };
+            }
+            Container {
+                width: Some(Number::Integer(160)),
+                height: Some(Number::Integer(160)),
+                position: Some(Position::Relative),
+                children: vec![child],
+                ..Container::default()
+            }
+        };
+        Container {
+            children: (0..cards).map(|_| card()).collect(),
+            ..Container::default()
+        }
+    }
+
+    fn observed_layout(
+        root: &Container,
+        options: &LayoutOptions,
+        baseline: bool,
+    ) -> (LayoutTree, positioned_work::Work) {
+        positioned_work::observe(baseline, || {
+            layout(root, options, &DefaultLeafMeasure).unwrap()
+        })
+    }
+
+    #[test]
+    fn positioned_build_work_scales_linearly_in_cards_and_depth() {
+        let options = LayoutOptions::default();
+        for cards in [1, 25, 100, 400] {
+            for depth in [1, 2, 4, 8] {
+                let root = positioned_chain(cards, depth);
+                let (baseline, before) = observed_layout(&root, &options, true);
+                let (optimized, after) = observed_layout(&root, &options, false);
+                assert_eq!(format!("{baseline:?}"), format!("{optimized:?}"));
+                assert_eq!(after.nodes, 1 + cards * (depth + 1));
+                assert_eq!(before.nodes, 1 + cards * (depth + 1).pow(2));
+                assert_eq!(after.rebuilds, 0);
+                assert_eq!(before.rebuilds, 2 * cards * depth);
+                assert_eq!(after.resolves, before.resolves);
+                eprintln!(
+                    "positioned cards={cards} depth={depth} before={before:?} after={after:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn positioned_reuse_preserves_actual_containing_blocks_and_scroll_geometry() {
+        let mut options = LayoutOptions {
+            viewport: Size::new(100, 40),
+            ..LayoutOptions::default()
+        };
+        for root in [
+            album_document(),
+            album_overlay_document(false),
+            album_overlay_document(true),
+        ] {
+            for offset in [0, 3, 200, 99999] {
+                options
+                    .scroll_offsets
+                    .insert("scroll".into(), ScrollOffset { x: 2, y: offset });
+                let (baseline, _) = observed_layout(&root, &options, true);
+                let (optimized, _) = observed_layout(&root, &options, false);
+                assert_eq!(format!("{baseline:?}"), format!("{optimized:?}"));
+            }
+        }
+        for position in [Position::Absolute, Position::Fixed, Position::Sticky] {
+            for percent in [false, true] {
+                let mut root = positioned_chain(1, 3);
+                // Static ancestor: normal-flow allocation is not the actual
+                // positioned containing block. Fixed anchors use the viewport.
+                root.children[0].position = Some(Position::Static);
+                let child = &mut root.children[0].children[0];
+                child.position = Some(position);
+                child.left = Some(Number::IntegerPercent(25));
+                child.right = Some(Number::IntegerPercent(10));
+                child.top = Some(Number::IntegerPercent(25));
+                child.bottom = Some(Number::IntegerPercent(10));
+                if percent {
+                    child.width = Some(Number::IntegerPercent(50));
+                    child.height = Some(Number::IntegerPercent(50));
+                    child.padding_left = Some(Number::IntegerPercent(10));
+                } else {
+                    child.width = None;
+                    child.height = None;
+                }
+                let (baseline, _) = observed_layout(&root, &options, true);
+                let (optimized, _) = observed_layout(&root, &options, false);
+                assert_eq!(format!("{baseline:?}"), format!("{optimized:?}"));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "timing benchmark; run explicitly with compiler-slot authorization"]
+    fn positioned_build_benchmark() {
+        for cards in [25, 100, 400] {
+            for depth in [1, 4, 8] {
+                let root = positioned_chain(cards, depth);
+                let options = LayoutOptions::default();
+                for baseline in [true, false] {
+                    let started = std::time::Instant::now();
+                    let ((), work) = positioned_work::observe(baseline, || {
+                        for _ in 0..20 {
+                            std::hint::black_box(
+                                layout(std::hint::black_box(&root), &options, &DefaultLeafMeasure)
+                                    .unwrap(),
+                            );
+                        }
+                    });
+                    eprintln!(
+                        "positioned baseline={baseline} cards={cards} depth={depth} iterations=20 elapsed_us={} work={work:?}",
+                        started.elapsed().as_micros()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_scroll_matches_original_admission_and_complete_geometry() {
+        for siblings in [0, 25, 100] {
+            for position in [
+                Position::Static,
+                Position::Absolute,
+                Position::Fixed,
+                Position::Sticky,
+            ] {
+                let mut root = album_document();
+                // Nested scrollport plus unchanged fixed sibling; nested changes
+                // exercise parent clipping after an outer translation.
+                let mut nested = root.children[0].clone();
+                nested.str_id = Some("nested".into());
+                nested.children.clear();
+                nested.width = Some(Number::Integer(1280));
+                nested.height = Some(Number::Integer(320));
+                nested.overflow_x = LayoutOverflow::Scroll;
+                nested.children.push(Container {
+                    width: Some(Number::Integer(2560)),
+                    height: Some(Number::Integer(6400)),
+                    position: Some(position),
+                    ..Container::default()
+                });
+                root.children[0].children.push(nested);
+                root.children
+                    .extend((0..siblings).map(|_| Container::default()));
+                let mut options = LayoutOptions {
+                    viewport: Size::new(100, 40),
+                    ..Default::default()
+                };
+                let mut retained = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+                for (key, x, y) in [
+                    ("scroll", 0, 3),
+                    ("nested", 2, 4),
+                    ("nested", 99999, 99999),
+                    ("scroll", 0, 0),
+                    ("nested", 0, 0),
+                ] {
+                    options
+                        .scroll_offsets
+                        .insert(key.into(), ScrollOffset { x, y });
+                    let (old, before) = scroll_work::observe(|| {
+                        reproject_scroll_baseline(&root, &retained, &options.scroll_offsets)
+                    });
+                    let (new, after) = scroll_work::observe(|| {
+                        reproject_scroll(&root, &retained, &options.scroll_offsets)
+                    });
+                    assert_eq!(format!("{old:?}"), format!("{new:?}"));
+                    assert_eq!(after.source_steps, 0);
+                    assert_eq!(after.discovery, retained.scroll_index.scrollports.len());
+                    assert!(after.discovery <= before.discovery);
+                    assert_eq!(after.cloned, before.cloned);
+                    let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+                    if let Some(projected) = new {
+                        assert_eq!(format!("{projected:?}"), format!("{full:?}"));
+                    }
+                    retained = full;
+                }
+                options.scroll_offsets = BTreeMap::from([
+                    ("scroll".into(), ScrollOffset { x: 0, y: 5 }),
+                    ("nested".into(), ScrollOffset { x: 5, y: 5 }),
+                ]);
+                assert_eq!(
+                    format!(
+                        "{:?}",
+                        reproject_scroll_baseline(&root, &retained, &options.scroll_offsets)
+                    ),
+                    format!(
+                        "{:?}",
+                        reproject_scroll(&root, &retained, &options.scroll_offsets)
+                    ),
+                );
+            }
+        }
+        // Existing production-shaped intrinsic/percent overlay fixtures also
+        // exercise the independent original dependency proof.
+        for root in [album_overlay_document(false), album_overlay_document(true)] {
+            let mut options = LayoutOptions::default();
+            let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            options
+                .scroll_offsets
+                .insert("scroll".into(), ScrollOffset { x: 0, y: 3 });
+            let old = reproject_scroll_baseline(&root, &tree, &options.scroll_offsets);
+            let new = reproject_scroll(&root, &tree, &options.scroll_offsets);
+            assert_eq!(format!("{old:?}"), format!("{new:?}"));
+            if let Some(projected) = new {
+                assert_eq!(
+                    format!("{projected:?}"),
+                    format!(
+                        "{:?}",
+                        layout(&root, &options, &DefaultLeafMeasure).unwrap()
+                    )
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_scroll_discovery_excludes_unrelated_siblings() {
+        for siblings in [0, 100, 400] {
+            let mut root = album_document();
+            root.children
+                .extend((0..siblings).map(|_| Container::default()));
+            let options = LayoutOptions::default();
+            let tree = layout(&root, &options, &DefaultLeafMeasure).unwrap();
+            let offsets = BTreeMap::from([("scroll".into(), ScrollOffset { x: 0, y: 3 })]);
+            let (old, before) =
+                scroll_work::observe(|| reproject_scroll_baseline(&root, &tree, &offsets));
+            let (new, after) = scroll_work::observe(|| reproject_scroll(&root, &tree, &offsets));
+            assert!(new.is_some());
+            assert_eq!(format!("{old:?}"), format!("{new:?}"));
+            assert_eq!(after.discovery, 1);
+            assert_eq!(after.source_steps, 0);
+            assert!(before.source_steps > 0);
+            assert_eq!(before.discovery, tree.nodes.len());
+            assert_eq!(after.cloned, tree.nodes.len());
+            assert_eq!(after.translated, before.translated);
+            eprintln!("scroll siblings={siblings} before={before:?} after={after:?}");
+        }
+    }
 
     fn album_document() -> Container {
         let albums = (0..100)
