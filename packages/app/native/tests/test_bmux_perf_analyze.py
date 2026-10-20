@@ -402,6 +402,7 @@ class FixtureTests(unittest.TestCase):
                         wheel_point=[105, 20],
                         viewport=[140, 40],
                         sink="in_memory_no_parser",
+                        sink_timing_semantics="in_memory_copy_and_lock_not_output_blocking",
                     )
                 )
                 for frame in range(64):
@@ -422,6 +423,79 @@ class FixtureTests(unittest.TestCase):
         return fixture_metrics(
             ["test harness diagnostic", "[]", "null"] + [json.dumps(r) for r in records]
         )
+
+    def test_buffering_identity_and_mixed_rejection(self):
+        records = self.matrix()
+        for record in records:
+            if "fixture" in record:
+                record.update(buffering_mode="buffered_64k", buffer_capacity=65536)
+        self.assertTrue(self.analyze(records)["structure_valid"])
+        records[0].update(buffering_mode="unbuffered", buffer_capacity=0)
+        result = self.analyze(records)
+        self.assertIn("incompatible buffering modes within matrix", result["errors"])
+        self.assertTrue(
+            all(not v["complete"] for v in result["warm_work_scaling"].values())
+        )
+        for mode, capacity in (
+            ("buffered_64k", 0),
+            ("unknown", 65536),
+            (None, 0),
+            ("unbuffered", False),
+        ):
+            records[0].update(buffering_mode=mode, buffer_capacity=capacity)
+            self.assertFalse(self.analyze(records)["structure_valid"])
+        records = self.matrix()
+        records[0]["buffer_capacity"] = 0
+        self.assertFalse(self.analyze(records)["structure_valid"])
+
+    def test_sink_modes_are_not_blindly_comparable(self):
+        records = self.matrix()
+        for record in records:
+            if "fixture" in record and record["pages"] == 10:
+                record.update(
+                    sink_mode="counting",
+                    sink_timing_semantics="in_memory_count_and_lock_not_output_blocking",
+                    stream_offset_semantics="accepted_byte_counts_no_stream",
+                )
+        result = self.analyze(records)
+        self.assertFalse(result["structure_valid"])
+        self.assertIn("incompatible sink modes within matrix", result["errors"])
+        self.assertTrue(
+            all(not value["complete"] for value in result["warm_work_scaling"].values())
+        )
+
+    def test_known_legacy_recording_only(self):
+        self.assertTrue(self.analyze(self.matrix())["structure_valid"])
+        for semantics in (
+            None,
+            "unknown",
+            "in_memory_count_and_lock_not_output_blocking",
+        ):
+            records = self.matrix()
+            records[0]["sink_timing_semantics"] = semantics
+            self.assertFalse(self.analyze(records)["structure_valid"])
+        for mode in (None, "unknown", "counting"):
+            records = self.matrix()
+            records[0]["sink_mode"] = mode
+            self.assertFalse(self.analyze(records)["structure_valid"])
+
+    def test_counting_requires_no_fabricated_stream(self):
+        records = self.matrix()
+        for record in records:
+            if "fixture" in record:
+                record.update(
+                    sink_mode="counting",
+                    sink_timing_semantics="in_memory_count_and_lock_not_output_blocking",
+                    stream_offset_semantics="accepted_byte_counts_no_stream",
+                    prefix_locator=None,
+                    delta_locator=None,
+                )
+        self.assertTrue(self.analyze(records)["structure_valid"])
+        records[0]["prefix_locator"] = "pages-1-text.init.bin"
+        self.assertFalse(self.analyze(records)["structure_valid"])
+        records[0]["prefix_locator"] = None
+        records[1]["stream_byte_range"] = [0, 10]
+        self.assertFalse(self.analyze(records)["structure_valid"])
 
     def test_complete_matrix_is_structure_not_product_acceptance(self):
         result = self.analyze(self.matrix())

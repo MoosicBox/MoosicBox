@@ -443,6 +443,192 @@ pub(crate) fn paint_node_text(
 mod writer_tests {
     use super::*;
 
+    // Enable the production debug-only instrumentation without sleeps or a
+    // wall-clock threshold. No other test in this crate installs a logger.
+    fn enable_writer_metrics() {
+        struct DebugLogger;
+        impl log::Log for DebugLogger {
+            fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+                metadata.level() <= log::Level::Debug
+            }
+            fn log(&self, _: &log::Record<'_>) {}
+            fn flush(&self) {}
+        }
+        static LOGGER: DebugLogger = DebugLogger;
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            log::set_logger(&LOGGER).expect("writer test logger");
+            log::set_max_level(log::LevelFilter::Debug);
+        });
+        assert!(log::log_enabled!(log::Level::Debug));
+    }
+
+    #[derive(Default)]
+    struct ContractWriter {
+        recorded: Option<Vec<u8>>,
+        accepted: usize,
+        writes: usize,
+        flushes: usize,
+        fail_after_writes: Option<usize>,
+        fail_flush: bool,
+        virtual_write_time: Duration,
+        virtual_flush_time: Duration,
+    }
+
+    impl Write for ContractWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            // Logical service costs model separate write/flush pressure. They
+            // deliberately do not advance TimedWriter's real Instant clock.
+            self.virtual_write_time += Duration::from_micros(7);
+            if self
+                .fail_after_writes
+                .is_some_and(|limit| self.writes > limit)
+            {
+                return Err(io::Error::new(io::ErrorKind::BrokenPipe, "contract write"));
+            }
+            let accepted = bytes.len().min(2);
+            self.accepted += accepted;
+            if let Some(recorded) = &mut self.recorded {
+                recorded.extend_from_slice(&bytes[..accepted]);
+            }
+            Ok(accepted)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            self.virtual_flush_time += Duration::from_micros(13);
+            if self.fail_flush {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "contract flush"));
+            }
+            Ok(())
+        }
+    }
+
+    fn assert_writer_counts(timing: &TimingHandle, bytes: usize, writes: usize, flushes: usize) {
+        let guard = timing.lock().unwrap();
+        let timing = guard.as_ref().expect("active timing window");
+        assert_eq!(timing.bytes, bytes);
+        assert_eq!(timing.writes, writes);
+        assert_eq!(timing.flushes, flushes);
+        assert!(timing.max_write <= timing.write_time);
+        if flushes == 0 {
+            assert_eq!(timing.flush_time, Duration::ZERO);
+        }
+        drop(guard);
+    }
+
+    #[test]
+    fn timed_writer_counting_and_recording_sinks_match_short_write_contract() {
+        enable_writer_metrics();
+        let payload = b"\x1b_Ga=t,m=0;AQID\x1b\\\x1b[2;3H";
+        for recorded in [None, Some(Vec::new())] {
+            let (mut writer, timing) = TimedWriter::new(ContractWriter {
+                recorded,
+                ..Default::default()
+            });
+            *timing.lock().unwrap() = Some(WriterTiming::default());
+            writer.write_all(payload).unwrap();
+            let expected_calls = payload.len().div_ceil(2);
+            assert_eq!(writer.inner.accepted, payload.len());
+            assert_eq!(writer.inner.writes, expected_calls);
+            assert_eq!(writer.inner.flushes, 0);
+            assert_writer_counts(&timing, payload.len(), expected_calls, 0);
+            if let Some(recorded) = &writer.inner.recorded {
+                assert_eq!(recorded, payload);
+            }
+            writer.flush().unwrap();
+            assert_writer_counts(&timing, payload.len(), expected_calls, 1);
+            assert_eq!(writer.inner.flushes, 1);
+            assert_eq!(
+                writer.inner.virtual_write_time,
+                Duration::from_micros(7) * u32::try_from(expected_calls).unwrap()
+            );
+            assert_eq!(writer.inner.virtual_flush_time, Duration::from_micros(13));
+        }
+    }
+
+    #[test]
+    fn timed_writer_short_writes_preserve_flush_failure_and_metrics() {
+        enable_writer_metrics();
+        let (mut writer, timing) = TimedWriter::new(ContractWriter {
+            recorded: Some(Vec::new()),
+            fail_flush: true,
+            ..Default::default()
+        });
+        *timing.lock().unwrap() = Some(WriterTiming::default());
+        writer.write_all(b"abcde").unwrap();
+        let error = writer.flush().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert_eq!(error.to_string(), "contract flush");
+        assert_eq!(writer.inner.recorded.as_deref(), Some(b"abcde".as_slice()));
+        assert_eq!(writer.inner.accepted, 5);
+        assert_eq!(writer.inner.writes, 3);
+        assert_eq!(writer.inner.flushes, 1);
+        assert_writer_counts(&timing, 5, 3, 1);
+        assert_eq!(writer.inner.virtual_write_time, Duration::from_micros(21));
+        assert_eq!(writer.inner.virtual_flush_time, Duration::from_micros(13));
+    }
+
+    #[test]
+    fn timed_writer_write_error_preserves_accepted_prefix_and_metrics() {
+        enable_writer_metrics();
+        let (mut writer, timing) = TimedWriter::new(ContractWriter {
+            recorded: Some(Vec::new()),
+            fail_after_writes: Some(1),
+            ..Default::default()
+        });
+        *timing.lock().unwrap() = Some(WriterTiming::default());
+        let error = writer.write_all(b"abcde").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        assert_eq!(error.to_string(), "contract write");
+        assert_eq!(writer.inner.recorded.as_deref(), Some(b"ab".as_slice()));
+        assert_eq!(writer.inner.accepted, 2);
+        assert_eq!(writer.inner.writes, 2);
+        assert_eq!(writer.inner.flushes, 0);
+        assert_writer_counts(&timing, 2, 2, 0);
+        assert_eq!(writer.inner.virtual_write_time, Duration::from_micros(14));
+        assert_eq!(writer.inner.virtual_flush_time, Duration::ZERO);
+        // A caller-owned flush is forwarded even after a write error; no
+        // accepted prefix or failed suffix is retried by the wrapper.
+        writer.flush().unwrap();
+        assert_writer_counts(&timing, 2, 2, 1);
+        assert_eq!(writer.inner.recorded.as_deref(), Some(b"ab".as_slice()));
+        assert_eq!(writer.inner.writes, 2);
+        assert_eq!(writer.inner.flushes, 1);
+    }
+
+    #[test]
+    fn timed_writer_records_only_active_window_and_preserves_flush_boundaries() {
+        enable_writer_metrics();
+        let (mut writer, timing) = TimedWriter::new(ContractWriter {
+            recorded: Some(Vec::new()),
+            ..Default::default()
+        });
+        writer.write_all(b"pre").unwrap();
+        writer.flush().unwrap();
+        assert!(timing.lock().unwrap().is_none());
+        *timing.lock().unwrap() = Some(WriterTiming::default());
+        writer.write_all(b"frame").unwrap();
+        assert_writer_counts(&timing, 5, 3, 0);
+        writer.flush().unwrap();
+        assert_writer_counts(&timing, 5, 3, 1);
+        let report = timing.lock().unwrap().take().unwrap();
+        writer.write_all(b"post").unwrap();
+        writer.flush().unwrap();
+        assert!(timing.lock().unwrap().is_none());
+        assert_eq!((report.bytes, report.writes, report.flushes), (5, 3, 1));
+        assert_eq!(
+            writer.inner.recorded.as_deref(),
+            Some(b"preframepost".as_slice())
+        );
+        assert_eq!(writer.inner.accepted, 12);
+        assert_eq!(writer.inner.writes, 7);
+        assert_eq!(writer.inner.flushes, 3);
+        assert_eq!(writer.inner.virtual_write_time, Duration::from_micros(49));
+        assert_eq!(writer.inner.virtual_flush_time, Duration::from_micros(39));
+    }
+
     #[derive(Default)]
     struct PartialWriter {
         bytes: Vec<u8>,

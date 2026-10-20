@@ -125,25 +125,40 @@ def png_fixture():
     )
 
 
-def decode_png(encoded):
+def decode_png(encoded, max_decoded_bytes=64 * 1024 * 1024):
     """Decode bounded 8-bit RGB/RGBA noninterlaced PNG protocol artifacts."""
     assert encoded[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(encoded) <= 64 * 1024 * 1024
     offset, compressed, width, height, channels = 8, bytearray(), 0, 0, 0
+    ended = False
     while offset + 12 <= len(encoded):
         size = int.from_bytes(encoded[offset : offset + 4], "big")
         kind = encoded[offset + 4 : offset + 8]
+        assert offset + size + 12 <= len(encoded), "truncated PNG chunk"
         data = encoded[offset + 8 : offset + 8 + size]
+        assert zlib.crc32(kind + data) & 0xFFFFFFFF == int.from_bytes(
+            encoded[offset + 8 + size : offset + 12 + size], "big"
+        ), "PNG chunk checksum"
         if kind == b"IHDR":
             width, height, depth, color, _, _, interlace = struct.unpack("!2I5B", data)
             assert depth == 8 and color in (2, 6) and interlace == 0
             channels = 4 if color == 6 else 3
             assert 0 < width <= 4096 and 0 < height <= 4096
+            assert width * height * 4 <= max_decoded_bytes, "PNG exceeds decoded budget"
         elif kind == b"IDAT":
             compressed.extend(data)
+        elif kind == b"IEND":
+            ended = True
+            offset += size + 12
+            break
         offset += size + 12
+    assert ended and offset == len(encoded) and channels, "incomplete PNG"
     stride = width * channels
-    raw = zlib.decompress(compressed)
-    assert len(raw) == (stride + 1) * height
+    expected_size = (stride + 1) * height
+    decoder = zlib.decompressobj()
+    raw = decoder.decompress(compressed, expected_size + 1)
+    assert decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail
+    assert len(raw) == expected_size
     previous, pixels = bytearray(stride), bytearray()
     for y in range(height):
         method = raw[y * (stride + 1)]
@@ -485,6 +500,101 @@ class Screen:
         return matches[occurrence] if len(matches) > occurrence else None
 
 
+class ArtworkValidation:
+    """Validation-only bounded RGBA cache; never called by the PTY drain loop."""
+
+    def __init__(self, max_entries=36, max_bytes=64 * 1024 * 1024):
+        self.cache = {}
+        self.max_entries, self.max_bytes = max_entries, max_bytes
+        self.bytes = 0
+        self.png_decode_ms = 0.0
+        self.png_decodes = 0
+
+    def rgba(self, parameters, payload):
+        width, height = int(parameters.get("s", 0)), int(parameters.get("v", 0))
+        assert 0 < width <= 4096 and 0 < height <= 4096, "image dimensions exceed limit"
+        assert width * height * 4 <= self.max_bytes, "decoded image exceeds budget"
+        if parameters.get("f") == "32":
+            assert len(payload) == width * height * 4, "RGBA dimensions mismatch"
+            return width, height, payload
+        assert parameters.get("f") == "100", "unsupported validation image format"
+        key = (width, height, hashlib.sha256(payload).digest())
+        if key not in self.cache:
+            started = time.monotonic()
+            try:
+                decoded_width, decoded_height, pixels = decode_png(
+                    payload, max_decoded_bytes=self.max_bytes
+                )
+            finally:
+                self.png_decode_ms += (time.monotonic() - started) * 1000
+                self.png_decodes += 1
+            assert (decoded_width, decoded_height) == (
+                width,
+                height,
+            ), "PNG dimensions mismatch"
+            while self.cache and (
+                len(self.cache) >= self.max_entries
+                or self.bytes + len(pixels) > self.max_bytes
+            ):
+                _, old = self.cache.popitem()
+                self.bytes -= len(old)
+            assert self.max_entries > 0 and len(pixels) <= self.max_bytes
+            self.cache[key] = pixels
+            self.bytes += len(pixels)
+        return width, height, self.cache[key]
+
+    def matches(self, parameters, payload):
+        width, height, pixels = self.rgba(parameters, payload)
+        # Preserve the tiny 2x2 fixture as well as real-size exact quadrant checks.
+        if width < 2 or height < 2:
+            return False
+        points = (
+            (width // 8, height // 8),
+            (7 * width // 8, height // 8),
+            (width // 8, 7 * height // 8),
+            (7 * width // 8, 7 * height // 8),
+        )
+        return b"".join(
+            pixels[(y * width + x) * 4 : (y * width + x) * 4 + 4] for x, y in points
+        ) == bytes((255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255))
+
+
+def connection_save_target(screen):
+    """Locate the unique visible connection-form button group, never a Save ordinal.
+
+    The API URL field scopes the form; a following Name/API URL field starts
+    another form. Require the Delete/Save group on one row, not unrelated text.
+    Missing/clipped anchors, unfinished frames and ambiguity fail closed.
+    """
+    if not screen.scene_ready():
+        return None
+    rows = screen.text().splitlines()
+    headings = [y for y, row in enumerate(rows) if "Connections" in row]
+    anchors = [y for y, row in enumerate(rows) if "API URL:" in row]
+    if len(headings) != 1 or len(anchors) != 1 or headings[0] >= anchors[0]:
+        return None
+    anchor = anchors[0]
+    if sum("Name:" in row for row in rows[headings[0] + 1 : anchor]) != 1:
+        return None
+    end = next(
+        (
+            y
+            for y in range(anchor + 1, len(rows))
+            if "Name:" in rows[y] or "API URL:" in rows[y] or "Connections" in rows[y]
+        ),
+        len(rows),
+    )
+    candidates = []
+    visible_saves = 0
+    for y in range(anchor + 1, end):
+        visible_saves += len(re.findall(r"\[\s*Save\s*\]", rows[y]))
+        # Both labels must be complete button decorations, in source order.
+        groups = list(re.finditer(r"\[\s*Delete\s*\]\s*\[\s*(Save)\s*\]", rows[y]))
+        for group in groups:
+            candidates.append((group.start(1), y))
+    return candidates[0] if len(candidates) == visible_saves == 1 else None
+
+
 class Mock(http.server.ThreadingHTTPServer):
     daemon_threads = True
 
@@ -698,7 +808,6 @@ def run(args):
             observed_placements = set()
 
             def pump():
-                nonlocal image_cursor, graphics_cursor
                 if select.select([master], [], [], 0.05)[0]:
                     try:
                         data = os.read(master, 262144)
@@ -719,47 +828,66 @@ def run(args):
                         now = (time.monotonic() - album_start) * 1000
                         if "Acceptance Quadrants" in screen.text():
                             measurements.setdefault("first_album_text_ms", now)
-                        for parameters, pixels, _ in screen.images[image_cursor:]:
-                            width, height = int(parameters.get("s", 0)), int(
-                                parameters.get("v", 0)
-                            )
-                            if parameters.get("f") == "32" and is_artwork(
-                                width, height, pixels
-                            ):
-                                # Require a textured center: the tiny icon fixture has
-                                # identical quadrant colors but cannot qualify here.
-                                center = pixels[
-                                    ((height // 2) * width + width // 2) * 4 :
-                                ][:4]
-                                if center not in (
-                                    b"\xff\0\0\xff",
-                                    b"\0\xff\0\xff",
-                                    b"\0\0\xff\xff",
-                                    b"\xff" * 4,
-                                ):
-                                    decoded_artwork.add(parameters.get("i"))
-                        for parameters, x, y in screen.graphics[graphics_cursor:]:
-                            if (
-                                parameters.get("a") in ("p", "T")
-                                and parameters.get("i") in decoded_artwork
-                                and 36 <= x < screen.width
-                                and 0 <= y < screen.height
-                            ):
-                                observed_placements.add(parameters.get("i"))
-                                measurements.setdefault(
-                                    "first_decoded_album_placement_ms", now
-                                )
-                        image_cursor, graphics_cursor = len(screen.images), len(
-                            screen.graphics
-                        )
                 assert (
                     process.poll() is None
                 ), f"app exited early ({process.returncode})"
+
+            artwork_validation = ArtworkValidation()
+
+            def validate_artwork_observations():
+                # Called between drain batches, never inside pump/Screen.feed.
+                nonlocal image_cursor, graphics_cursor
+                if album_start is None or not args.artwork_size:
+                    return
+                now = (time.monotonic() - album_start) * 1000
+                try:
+                    for parameters, payload, _ in screen.images[image_cursor:]:
+                        if parameters.get("f") not in ("32", "100"):
+                            continue
+                        width, height, pixels = artwork_validation.rgba(
+                            parameters, payload
+                        )
+                        if is_artwork(width, height, pixels):
+                            center = pixels[((height // 2) * width + width // 2) * 4 :][
+                                :4
+                            ]
+                            if center not in (
+                                b"\xff\0\0\xff",
+                                b"\0\xff\0\xff",
+                                b"\0\0\xff\xff",
+                                b"\xff" * 4,
+                            ):
+                                decoded_artwork.add(parameters.get("i"))
+                    for parameters, x, y in screen.graphics[graphics_cursor:]:
+                        if (
+                            parameters.get("a") in ("p", "T")
+                            and parameters.get("i") in decoded_artwork
+                            and 36 <= x < screen.width
+                            and 0 <= y < screen.height
+                        ):
+                            observed_placements.add(parameters.get("i"))
+                            measurements.setdefault(
+                                "first_decoded_album_placement_ms", now
+                            )
+                    image_cursor, graphics_cursor = len(screen.images), len(
+                        screen.graphics
+                    )
+                finally:
+                    measurements["png_validation_decode_ms"] = (
+                        artwork_validation.png_decode_ms
+                    )
+                    measurements["png_validation_decodes"] = (
+                        artwork_validation.png_decodes
+                    )
+                    measurements["artwork_observation_semantics"] = (
+                        "between_drain_validation_includes_helper_cost_not_presentation_latency"
+                    )
 
             def wait(predicate, description, timeout=15):
                 deadline = time.monotonic() + timeout
                 while time.monotonic() < deadline:
                     pump()
+                    validate_artwork_observations()
                     if predicate():
                         return
                 raise AssertionError(description + "\n" + screen.text())
@@ -807,7 +935,13 @@ def run(args):
                 lambda: endpoint in screen.text(),
                 "edited connection URL missing before submit",
             )
-            click("Save", occurrence=1, offset=1)
+            wait(
+                lambda: connection_save_target(screen),
+                "missing or ambiguous connection-form Save target",
+            )
+            x, y = connection_save_target(screen)
+            send(f"\x1b[<0;{x + 2};{y + 1}M".encode())
+            send(f"\x1b[<0;{x + 2};{y + 1}m".encode())
             # Fragment reload must retain the edited URL, not stale input state.
             wait(lambda: endpoint in screen.text(), "saved connection URL missing")
             # A first connection may be auto-selected by the real app. Only click
@@ -846,52 +980,30 @@ def run(args):
             os.killpg(process.pid, signal.SIGWINCH)
             wait(lambda: "Acceptance Quadrants" in screen.text(), "resize lost album")
             if args.protocol == "kitty":
-                expected = bytes(
-                    [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]
-                )
-
-                def artwork_pixels(parameters, pixels):
-                    width, height = int(parameters.get("s", 0)), int(
-                        parameters.get("v", 0)
-                    )
-                    if width < 2 or height < 2 or len(pixels) != width * height * 4:
-                        return False
-                    # The presenter resamples into cell-sized, padded textures;
-                    # sample inside each solid quadrant, away from filter edges.
-                    samples = [
-                        (width // 8, height // 8),
-                        (7 * width // 8, height // 8),
-                        (width // 8, 7 * height // 8),
-                        (7 * width // 8, 7 * height // 8),
-                    ]
-                    return (
-                        b"".join(
-                            pixels[(y * width + x) * 4 : (y * width + x) * 4 + 4]
-                            for x, y in samples
-                        )
-                        == expected
-                    )
 
                 wait(
                     lambda: any(
-                        p.get("f") == "32" and artwork_pixels(p, b)
+                        p.get("f") in ("32", "100") and artwork_validation.matches(p, b)
                         for p, b, _ in screen.images
                     ),
                     "actual mock artwork quadrant pixels absent",
                 )
                 rgba = [
-                    (p, b, pos) for p, b, pos in screen.images if p.get("f") == "32"
+                    (p, b, pos)
+                    for p, b, pos in screen.images
+                    if p.get("f") in ("32", "100")
                 ]
                 assert rgba, "no inspectable RGBA image payloads"
                 assert any(
-                    any(b[i + 3] > 0 for i in range(0, len(b) - 3, 4))
-                    for _, b, _ in rgba
+                    any(
+                        pixel_bytes[i + 3] > 0
+                        for i in range(0, len(pixel_bytes) - 3, 4)
+                    )
+                    for p, b, _ in rgba
+                    for pixel_bytes in (artwork_validation.rgba(p, b)[2],)
                 ), "all icon payloads transparent"
-                expected = bytes(
-                    [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]
-                )
                 assert any(
-                    artwork_pixels(p, b) for p, b, _ in rgba
+                    artwork_validation.matches(p, b) for p, b, _ in rgba
                 ), "actual mock artwork quadrant pixels absent"
                 placements = [
                     (p, x, y) for p, x, y in screen.graphics if p.get("a") == "p"
@@ -906,7 +1018,8 @@ def run(args):
                     ), f"empty placement: {p}"
                 white_ids = {
                     p.get("i")
-                    for p, b, _ in rgba
+                    for p, payload, _ in rgba
+                    for b in (artwork_validation.rgba(p, payload)[2],)
                     if any(
                         b[i] > 200
                         and b[i + 1] > 200
@@ -1024,6 +1137,14 @@ def run(args):
             assert b"\x1b[?1049l" in recording, "alternate screen not restored"
             metadata["result"] = "passed"
         finally:
+            if "artwork_validation" in locals():
+                measurements["png_validation_decode_ms"] = (
+                    artwork_validation.png_decode_ms
+                )
+                measurements["png_validation_decodes"] = artwork_validation.png_decodes
+                measurements["png_validation_semantics"] = (
+                    "helper_decode_cost_not_presentation_latency"
+                )
             metadata.setdefault("result", "failed")
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)

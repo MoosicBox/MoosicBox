@@ -11,6 +11,147 @@ Screen = ACCEPTANCE["Screen"]
 
 
 class RecorderTests(unittest.TestCase):
+    def connection_screen(self, upper="[ Save ]", lower="[ Delete ]  [ Save ]"):
+        screen = Screen(140, 30)
+        screen.feed(
+            (
+                f"\x1b[?2026h\x1b[5;126H{upper}\x1b[8;34HConnections"
+                f"\x1b[11;130HName:\x1b[13;126HAPI URL:"
+                f"\x1b[16;111H{lower}\x1b[?2026l"
+            ).encode()
+        )
+        return screen
+
+    def test_connection_save_uses_form_anchor_with_two_saves(self):
+        screen = self.connection_screen()
+        self.assertEqual(ACCEPTANCE["connection_save_target"](screen), (124, 15))
+
+    def test_connection_save_accepts_clipped_unrelated_name_save(self):
+        screen = self.connection_screen(upper="[ S")
+        self.assertEqual(ACCEPTANCE["connection_save_target"](screen), (124, 15))
+
+    def test_connection_save_rejects_missing_or_ambiguous_targets(self):
+        for lower in ("[ Delete ]  [ S", "Save", "[ Save ]", "[ Delete ]"):
+            with self.subTest(lower=lower):
+                self.assertIsNone(
+                    ACCEPTANCE["connection_save_target"](
+                        self.connection_screen(lower=lower)
+                    )
+                )
+        for extra in (b"[ Delete ]  [ Save ]", b"[ Save ]"):
+            screen = self.connection_screen()
+            screen.feed(b"\x1b[18;111H" + extra)
+            self.assertIsNone(ACCEPTANCE["connection_save_target"](screen))
+
+    def test_connection_save_rejects_missing_duplicate_or_uncommitted_anchors(self):
+        for update in (
+            b"\x1b[13;126H        ",
+            b"\x1b[8;34H           ",
+            b"\x1b[11;130H     ",
+            b"\x1b[20;100HAPI URL:",
+            b"\x1b[?2026h",
+        ):
+            with self.subTest(update=update):
+                screen = self.connection_screen()
+                screen.feed(update)
+                self.assertIsNone(ACCEPTANCE["connection_save_target"](screen))
+
+    def test_connection_save_rejects_button_beyond_next_form(self):
+        screen = self.connection_screen(lower="")
+        screen.feed(b"\x1b[15;100HName:\x1b[18;111H[ Delete ]  [ Save ]")
+        self.assertIsNone(ACCEPTANCE["connection_save_target"](screen))
+
+    def test_artwork_validation_png_and_rgba_preserve_dimensions_and_pixels(self):
+        validation = ACCEPTANCE["ArtworkValidation"]()
+        encoded = ACCEPTANCE["artwork_fixture"](1, 64)
+        width, height, pixels = ACCEPTANCE["decode_png"](encoded)
+        png = {"f": "100", "s": str(width), "v": str(height)}
+        rgba = {**png, "f": "32"}
+        self.assertEqual(validation.rgba(png, encoded), (width, height, pixels))
+        self.assertTrue(validation.matches(png, encoded))
+        self.assertTrue(validation.matches(rgba, pixels))
+        self.assertEqual(validation.png_decodes, 1)
+        tiny = ACCEPTANCE["png_fixture"]()
+        self.assertTrue(validation.matches({"f": "100", "s": "2", "v": "2"}, tiny))
+        self.assertEqual(
+            validation.rgba({"f": "100", "s": "2", "v": "2"}, tiny)[:2], (2, 2)
+        )
+        transparent = bytearray(pixels)
+        for index in range(3, len(transparent), 4):
+            transparent[index] = 0
+        self.assertFalse(validation.matches(rgba, transparent))
+        with self.assertRaises(AssertionError):
+            validation.rgba({**png, "s": "63"}, encoded)
+
+    def test_artwork_validation_rejects_invalid_oversized_and_bomb_png(self):
+        import struct
+
+        validation = ACCEPTANCE["ArtworkValidation"]()
+
+        def chunk(kind, data):
+            return (
+                struct.pack("!I", len(data))
+                + kind
+                + data
+                + struct.pack("!I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+            )
+
+        oversized = (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack("!2I5B", 4097, 1, 8, 6, 0, 0, 0))
+            + chunk(b"IEND", b"")
+        )
+        bomb = (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack("!2I5B", 2, 2, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"\0" * 10000))
+            + chunk(b"IEND", b"")
+        )
+        corrupt = bytearray(ACCEPTANCE["png_fixture"]())
+        corrupt[20] ^= 1
+        for payload in (
+            b"not PNG",
+            oversized,
+            bomb,
+            bytes(corrupt),
+            ACCEPTANCE["png_fixture"]()[:-4],
+        ):
+            with self.subTest(size=len(payload)), self.assertRaises(AssertionError):
+                validation.rgba({"f": "100", "s": "2", "v": "2"}, payload)
+        with self.assertRaises(AssertionError):
+            validation.rgba({"f": "100", "s": "4097", "v": "1"}, oversized)
+
+    def test_artwork_validation_cache_has_entry_and_byte_bounds(self):
+        validation = ACCEPTANCE["ArtworkValidation"](
+            max_entries=1, max_bytes=64 * 64 * 4
+        )
+        for identity in (1, 2):
+            validation.rgba(
+                {"f": "100", "s": "64", "v": "64"},
+                ACCEPTANCE["artwork_fixture"](identity, 64),
+            )
+            self.assertLessEqual(len(validation.cache), 1)
+            self.assertLessEqual(validation.bytes, 64 * 64 * 4)
+        self.assertEqual(validation.png_decodes, 2)
+        with self.assertRaises(AssertionError):
+            validation.rgba({"f": "100", "s": "65", "v": "65"}, b"")
+
+    def test_cover_png_is_not_decoded_in_screen_feed(self):
+        from unittest.mock import patch
+
+        encoded = ACCEPTANCE["artwork_fixture"](1, 64)
+        screen = Screen()
+        with patch.dict(
+            Screen.feed.__globals__, decode_png=lambda _: self.fail("hot decode")
+        ):
+            # Covers larger than the readiness-icon bound remain transport bytes.
+            screen.feed(
+                b"\x1b_Ga=t,f=100,s=512,v=512,i=1;"
+                + base64.b64encode(encoded)
+                + b"\x1b\\"
+            )
+        self.assertEqual(screen.images[0][1], encoded)
+
     def test_split_utf8_private_modes_and_absolute_cell_navigation(self):
         screen = Screen(20, 4)
         stream = b"\x1b[>7u\x1b[?1049h\x1b[2J\x1b[2;3HSettings\x1b[3;1H" + "音".encode()

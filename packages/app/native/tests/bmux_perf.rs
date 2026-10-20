@@ -10,6 +10,14 @@
 //! `BMUX_PERF_SOURCE_ID` and `BMUX_PERF_BUILD_ID` are coordinator-supplied
 //! provenance (including dirty source/dependency identity and build flags).
 //! Missing identity is reported as null, never inferred from a stale HEAD.
+//! `BMUX_PERF_SINK=recording` (default) retains replay bytes; `counting` only
+//! counts accepted bytes, without copying them. Counting never saves streams,
+//! even when `BMUX_PERF_ARTIFACTS` is set. Both are wall-time CPU-work proxies,
+//! not CPU-time measurements; compare only matching sink modes.
+//! `BMUX_PERF_BUFFERING=unbuffered` (default) is the legacy fragment reference;
+//! `buffered_64k` batches successful output before the instrumented memory sink.
+//! This is not production `FrameWriter` error/Drop equivalence. Compare only
+//! identical sink AND buffering metadata; neither measures application latency.
 //! Sink timings below measure only in-memory copies/locks, NOT PTY blocking.
 //! Compare the exact same 64 wheel inputs, not a time-limited input generator.
 //! Cold = terminal-resident-cold: freshly decoded in-memory resources + fresh
@@ -53,8 +61,109 @@ use moosicbox_music_models::{AlbumSort, api::ApiAlbum};
 const ARTWORK: &[u8] = include_bytes!("../public/img/icon128.png");
 const STEPS: usize = 32;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SinkMode {
+    #[default]
+    Recording,
+    Counting,
+}
+
+impl SinkMode {
+    fn parse(value: Option<&str>) -> Result<Self, &'static str> {
+        match value {
+            None | Some("recording") => Ok(Self::Recording),
+            Some("counting") => Ok(Self::Counting),
+            Some(_) => Err("BMUX_PERF_SINK must be counting or recording"),
+        }
+    }
+
+    fn artifacts(self, path: Option<std::path::PathBuf>) -> Option<std::path::PathBuf> {
+        path.filter(|_| self == Self::Recording)
+    }
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Recording => "recording",
+            Self::Counting => "counting",
+        }
+    }
+
+    const fn timing_semantics(self) -> &'static str {
+        match self {
+            Self::Recording => "in_memory_copy_and_lock_not_output_blocking",
+            Self::Counting => "in_memory_count_and_lock_not_output_blocking",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Buffering {
+    Unbuffered,
+    Buffered64k,
+}
+
+impl Buffering {
+    fn parse(value: Option<&str>) -> Result<Self, &'static str> {
+        match value {
+            None | Some("unbuffered") => Ok(Self::Unbuffered),
+            Some("buffered_64k") => Ok(Self::Buffered64k),
+            Some(_) => Err("BMUX_PERF_BUFFERING must be unbuffered or buffered_64k"),
+        }
+    }
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Unbuffered => "unbuffered",
+            Self::Buffered64k => "buffered_64k",
+        }
+    }
+
+    const fn capacity(self) -> usize {
+        match self {
+            Self::Unbuffered => 0,
+            Self::Buffered64k => 64 * 1024,
+        }
+    }
+}
+
+// Successful-output batching only: std BufWriter's Drop/error behavior is NOT
+// the production FrameWriter discard/no-publication-on-drop contract.
+enum FixtureWriter {
+    Direct(MemoryWriter),
+    Buffered(io::BufWriter<MemoryWriter>),
+}
+
+impl FixtureWriter {
+    fn new(writer: MemoryWriter, buffering: Buffering) -> Self {
+        match buffering {
+            Buffering::Unbuffered => Self::Direct(writer),
+            Buffering::Buffered64k => {
+                Self::Buffered(io::BufWriter::with_capacity(buffering.capacity(), writer))
+            }
+        }
+    }
+}
+
+impl Write for FixtureWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Direct(writer) => writer.write(bytes),
+            Self::Buffered(writer) => writer.write(bytes),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Direct(writer) => writer.flush(),
+            Self::Buffered(writer) => writer.flush(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Output {
+    mode: SinkMode,
+    accepted_bytes: usize,
     bytes: Vec<u8>,
     writes: usize,
     flushes: usize,
@@ -65,11 +174,27 @@ struct Output {
 
 #[derive(Clone, Default)]
 struct MemoryWriter(Arc<Mutex<Output>>);
+
+impl MemoryWriter {
+    fn new(mode: SinkMode) -> Self {
+        Self(Arc::new(Mutex::new(Output {
+            mode,
+            ..Output::default()
+        })))
+    }
+}
+
 impl Write for MemoryWriter {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         let started = Instant::now();
-        let mut output = self.0.lock().unwrap();
-        output.bytes.extend_from_slice(bytes);
+        let mut output = self
+            .0
+            .lock()
+            .map_err(|_| io::Error::other("sink lock poisoned"))?;
+        if output.mode == SinkMode::Recording {
+            output.bytes.extend_from_slice(bytes);
+        }
+        output.accepted_bytes += bytes.len();
         output.writes += 1;
         let elapsed = started.elapsed().as_nanos();
         output.write_ns += elapsed;
@@ -79,10 +204,253 @@ impl Write for MemoryWriter {
     }
     fn flush(&mut self) -> io::Result<()> {
         let started = Instant::now();
-        let mut output = self.0.lock().unwrap();
+        let mut output = self
+            .0
+            .lock()
+            .map_err(|_| io::Error::other("sink lock poisoned"))?;
         output.flushes += 1;
         output.flush_ns += started.elapsed().as_nanos();
+        drop(output);
         Ok(())
+    }
+}
+
+#[test]
+fn sink_mode_parsing_is_pure() {
+    assert_eq!(SinkMode::parse(None), Ok(SinkMode::Recording));
+    assert_eq!(SinkMode::parse(Some("recording")), Ok(SinkMode::Recording));
+    assert_eq!(SinkMode::parse(Some("counting")), Ok(SinkMode::Counting));
+    assert_eq!(Buffering::parse(None), Ok(Buffering::Unbuffered));
+    assert_eq!(
+        Buffering::parse(Some("unbuffered")),
+        Ok(Buffering::Unbuffered)
+    );
+    assert_eq!(
+        Buffering::parse(Some("buffered_64k")),
+        Ok(Buffering::Buffered64k)
+    );
+    for value in ["", "buffered", "BUFFERED_64K"] {
+        assert!(Buffering::parse(Some(value)).is_err());
+    }
+    for value in ["", "Counting", "recording ", "other"] {
+        assert!(SinkMode::parse(Some(value)).is_err());
+    }
+}
+
+#[test]
+fn counting_suppresses_artifact_directory_and_locators() {
+    let requested = std::path::PathBuf::from("requested-replay-directory");
+    assert_eq!(
+        SinkMode::Recording.artifacts(Some(requested.clone())),
+        Some(requested.clone())
+    );
+    let artifacts = SinkMode::Counting.artifacts(Some(requested));
+    // The matrix creates/writes only through this selected directory; no
+    // directory or stream file is created when counting was selected.
+    assert!(artifacts.is_none());
+    let prefix_locator = artifacts.as_ref().map(|_| "pages-1-warm.init.bin");
+    let delta_locator = artifacts.as_ref().map(|_| "pages-1-warm.bin");
+    assert_eq!(
+        serde_json::json!([prefix_locator, delta_locator]),
+        serde_json::json!([null, null])
+    );
+}
+
+// This is sink accounting equivalence, not committed-image/pixel equivalence.
+// BmuxPresenter does not expose its owned Terminal images. image_snapshot()
+// prepares/paints/commits through a different terminal and cannot authenticate
+// this presenter's committed image state. Keep the recording upload check and
+// the separate production image/full-layout oracles; recording replay is still
+// required before graphics correctness claims. Counting retains no replay.
+#[test]
+fn sinks_count_identical_production_output_without_counting_storage() {
+    moosicbox_app_native::register_api_sources();
+    let root = fixture(1);
+    let mut keys = BTreeSet::new();
+    walk(&root, &mut Vec::new(), &mut |node, path| {
+        if matches!(node.element, Element::Image { .. }) {
+            keys.insert(node_key(node, path));
+        }
+    });
+    for images in [false, true] {
+        let mut results = Vec::new();
+        for mode in [SinkMode::Recording, SinkMode::Counting] {
+            let mut config = BmuxConfig {
+                width: 140,
+                height: 40,
+                graphics_enabled: images,
+                image_protocol: if images {
+                    ImageProtocol::Kitty
+                } else {
+                    ImageProtocol::Disabled
+                },
+                ..Default::default()
+            };
+            config.graphics.max_entries = keys.len() + 128;
+            config.graphics.max_total_bytes = 256 * 1024 * 1024;
+            let (actions, _action_rx) = flume::unbounded();
+            let (resizes, _resize_rx) = flume::unbounded();
+            let mut program = BmuxProgram::new(config.clone(), actions, resizes);
+            program.apply_view(View::from(root.clone()), None).unwrap();
+            if images {
+                let policy = SourcePolicy {
+                    allow_memory: true,
+                    ..Default::default()
+                };
+                for key in &keys {
+                    program
+                        .graphics
+                        .decode(key, &GraphicsSource::Memory, &policy, ARTWORK)
+                        .unwrap();
+                }
+            }
+            // Each Terminal owns a fresh presenter/image registry. Neither sink
+            // changes the production buffering or image identity generator.
+            let writer = MemoryWriter::new(mode);
+            let terminal = Terminal::new(writer.clone(), Rect::new(0, 0, 140, 40));
+            let mut presenter = BmuxPresenter::new(terminal, &config);
+            presenter.present(&mut program).unwrap();
+            if images && mode == SinkMode::Recording {
+                let output = writer.0.lock().unwrap();
+                let stream = String::from_utf8_lossy(&output.bytes);
+                assert!(
+                    stream.split("\x1b_G").skip(1).any(|command| {
+                        let Some((body, _)) = command.split_once("\x1b\\") else {
+                            return false;
+                        };
+                        let Some((header, payload)) = body.split_once(';') else {
+                            return false;
+                        };
+                        header.split(',').any(|field| field == "a=t")
+                            && header.split(',').any(|field| field.starts_with("f="))
+                            && !payload.is_empty()
+                    }),
+                    "recording must contain a complete Kitty upload with payload"
+                );
+                drop(output);
+            }
+            // Warm the same full down/up trace as the opt-in matrix, then
+            // compare actual accepted counts/calls for every warm frame.
+            for index in 0..STEPS * 2 {
+                wheel(&mut program, index);
+                presenter.present(&mut program).unwrap();
+            }
+            let mut checkpoints = Vec::new();
+            for index in 0..STEPS * 2 {
+                wheel(&mut program, index);
+                presenter.present(&mut program).unwrap();
+                let output = writer.0.lock().unwrap();
+                checkpoints.push((output.accepted_bytes, output.writes, output.flushes));
+            }
+            presenter.cleanup().unwrap();
+            let output = writer.0.lock().unwrap();
+            assert!(output.accepted_bytes > 0);
+            assert!(output.flushes > 0);
+            if mode == SinkMode::Recording {
+                assert_eq!(output.bytes.len(), output.accepted_bytes);
+                assert!(output.bytes.contains(&0x1b), "production control output");
+            } else {
+                assert_eq!(output.bytes, [] as [u8; 0]);
+                assert_eq!(output.bytes.capacity(), 0);
+            }
+            checkpoints.push((output.accepted_bytes, output.writes, output.flushes));
+            results.push(checkpoints);
+            drop(output);
+        }
+        assert_eq!(results[0], results[1], "graphics_enabled={images}");
+    }
+}
+
+#[test]
+fn buffering_preserves_successful_kitty_trace_bytes_and_flushes() {
+    moosicbox_app_native::register_api_sources();
+    let root = fixture(1);
+    let keys = image_keys(&root);
+    let mut results = Vec::new();
+    for buffering in [Buffering::Unbuffered, Buffering::Buffered64k] {
+        let mut config = BmuxConfig {
+            width: 140,
+            height: 40,
+            graphics_enabled: true,
+            image_protocol: ImageProtocol::Kitty,
+            ..Default::default()
+        };
+        config.graphics.max_entries = keys.len() + 128;
+        let (actions, _action_rx) = flume::unbounded();
+        let (resizes, _resize_rx) = flume::unbounded();
+        let mut program = BmuxProgram::new(config.clone(), actions, resizes);
+        program.apply_view(View::from(root.clone()), None).unwrap();
+        decode_fixture_images(&mut program, &keys, true);
+        let writer = MemoryWriter::new(SinkMode::Recording);
+        let terminal = Terminal::new(
+            FixtureWriter::new(writer.clone(), buffering),
+            Rect::new(0, 0, 140, 40),
+        );
+        let mut presenter = BmuxPresenter::new(terminal, &config);
+        presenter.present(&mut program).unwrap();
+        for index in 0..STEPS * 4 {
+            wheel(&mut program, index % (STEPS * 2));
+            presenter.present(&mut program).unwrap();
+        }
+        presenter.cleanup().unwrap();
+        let output = writer.0.lock().unwrap();
+        assert_eq!(output.accepted_bytes, output.bytes.len());
+        assert!(output.bytes.windows(7).any(|part| part == b"\x1b_Ga=t,"));
+        results.push((
+            output.bytes.clone(),
+            output.accepted_bytes,
+            output.writes,
+            output.flushes,
+        ));
+        drop(output);
+    }
+    // Owner namespaces have equal-width fresh registry IDs here; compare actual
+    // wire bytes, not normalized placements or invented counting-sink bytes.
+    assert_eq!(results[0].0, results[1].0);
+    assert_eq!(results[0].1, results[1].1);
+    assert_eq!(results[0].3, results[1].3);
+    assert!(results[1].2 < results[0].2);
+}
+
+#[test]
+fn sinks_preserve_write_and_flush_error_contract() {
+    for mode in [SinkMode::Recording, SinkMode::Counting] {
+        let mut writer = MemoryWriter::new(mode);
+        assert_eq!(writer.write(b"\x1b[0m").unwrap(), 4);
+        assert_eq!(writer.write(b"").unwrap(), 0);
+        writer.flush().unwrap();
+        {
+            let output = writer.0.lock().unwrap();
+            assert_eq!(
+                (output.accepted_bytes, output.writes, output.flushes),
+                (4, 2, 1)
+            );
+            if mode == SinkMode::Recording {
+                assert_eq!(output.bytes, b"\x1b[0m");
+            } else {
+                assert_eq!(output.bytes, [] as [u8; 0]);
+            }
+            drop(output);
+        }
+        let shared = writer.0.clone();
+        assert!(
+            std::thread::spawn(move || {
+                let _guard = shared.lock().unwrap();
+                panic!("deliberate sink poison");
+            })
+            .join()
+            .is_err()
+        );
+        assert!(writer.write(b"not accepted").is_err());
+        assert!(writer.flush().is_err());
+        let output = writer
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(
+            (output.accepted_bytes, output.writes, output.flushes),
+            (4, 2, 1)
+        );
     }
 }
 
@@ -93,6 +461,16 @@ fn walk(node: &Container, path: &mut Vec<usize>, apply: &mut impl FnMut(&Contain
         walk(child, path, apply);
         path.pop();
     }
+}
+
+fn image_keys(root: &Container) -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    walk(root, &mut Vec::new(), &mut |node, path| {
+        if matches!(node.element, Element::Image { .. }) {
+            keys.insert(node_key(node, path));
+        }
+    });
+    keys
 }
 
 fn albums_slot(root: &mut Container) -> Option<&mut Container> {
@@ -149,7 +527,22 @@ fn production_albums_fixed_input_matrix() {
         std::env::var_os("BMUX_IMAGE_PROTOCOL").is_none(),
         "unset BMUX_IMAGE_PROTOCOL: fixture explicitly selects its protocol"
     );
-    let artifacts = std::env::var_os("BMUX_PERF_ARTIFACTS").map(std::path::PathBuf::from);
+    let sink_value = std::env::var("BMUX_PERF_SINK");
+    let sink_mode = match &sink_value {
+        Ok(value) => SinkMode::parse(Some(value)),
+        Err(std::env::VarError::NotPresent) => SinkMode::parse(None),
+        Err(std::env::VarError::NotUnicode(_)) => panic!("BMUX_PERF_SINK must be Unicode"),
+    }
+    .expect("invalid benchmark sink");
+    let buffering_value = std::env::var("BMUX_PERF_BUFFERING");
+    let buffering = match &buffering_value {
+        Ok(value) => Buffering::parse(Some(value)),
+        Err(std::env::VarError::NotPresent) => Buffering::parse(None),
+        Err(std::env::VarError::NotUnicode(_)) => panic!("BMUX_PERF_BUFFERING must be Unicode"),
+    }
+    .expect("invalid benchmark buffering");
+    let artifacts =
+        sink_mode.artifacts(std::env::var_os("BMUX_PERF_ARTIFACTS").map(std::path::PathBuf::from));
     if let Some(path) = &artifacts {
         fs::create_dir(path).expect("artifact directory must not already exist");
     }
@@ -165,9 +558,43 @@ fn production_albums_fixed_input_matrix() {
         });
         assert!(keys.len() >= usize::try_from(pages * 100).unwrap());
         for mode in ["text", "cold", "warm"] {
-            run_case(pages, mode, &root, &keys, nodes, artifacts.as_deref());
+            run_case(
+                pages,
+                mode,
+                &root,
+                &keys,
+                nodes,
+                artifacts.as_deref(),
+                (sink_mode, buffering),
+            );
         }
     }
+}
+
+fn decode_fixture_images(program: &mut BmuxProgram, keys: &BTreeSet<String>, images: bool) -> u128 {
+    let decode = Instant::now();
+    if images {
+        let policy = SourcePolicy {
+            allow_memory: true,
+            ..Default::default()
+        };
+        for key in keys {
+            program
+                .graphics
+                .decode(key, &GraphicsSource::Memory, &policy, ARTWORK)
+                .unwrap();
+        }
+    }
+    decode.elapsed().as_micros()
+}
+
+fn initial_present(
+    presenter: &mut BmuxPresenter<FixtureWriter>,
+    program: &mut BmuxProgram,
+) -> u128 {
+    let started = Instant::now();
+    presenter.present(program).unwrap();
+    started.elapsed().as_micros()
 }
 
 fn run_case(
@@ -177,6 +604,7 @@ fn run_case(
     keys: &BTreeSet<String>,
     nodes: usize,
     artifacts: Option<&std::path::Path>,
+    (sink_mode, buffering): (SinkMode, Buffering),
 ) {
     let images = mode != "text";
     let mut config = BmuxConfig {
@@ -199,37 +627,21 @@ fn run_case(
     let (resizes, _resize_rx) = flume::unbounded();
     let mut program = BmuxProgram::new(config.clone(), actions, resizes);
     program.apply_view(View::from(root.clone()), None).unwrap();
-    let decode = Instant::now();
-    if images {
-        let policy = SourcePolicy {
-            allow_memory: true,
-            ..Default::default()
-        };
-        for key in keys {
-            program
-                .graphics
-                .decode(key, &GraphicsSource::Memory, &policy, ARTWORK)
-                .unwrap();
-        }
-    }
-    let decode_us = decode.elapsed().as_micros();
-    let writer = MemoryWriter::default();
-    let terminal = Terminal::new(writer.clone(), Rect::new(0, 0, 140, 40));
+    let decode_us = decode_fixture_images(&mut program, keys, images);
+    let writer = MemoryWriter::new(sink_mode);
+    let terminal = Terminal::new(
+        FixtureWriter::new(writer.clone(), buffering),
+        Rect::new(0, 0, 140, 40),
+    );
     let mut presenter = BmuxPresenter::new(terminal, &config);
-    let initial = Instant::now();
-    presenter.present(&mut program).unwrap();
-    let initial_us = initial.elapsed().as_micros();
-    if images {
+    let initial_us = initial_present(&mut presenter, &mut program);
+    if images && sink_mode == SinkMode::Recording {
+        let output = writer.0.lock().unwrap();
         assert!(
-            !writer
-                .0
-                .lock()
-                .unwrap()
-                .bytes
-                .windows(3)
-                .all(|part| part != b"\x1b_G"),
+            output.bytes.windows(3).any(|part| part == b"\x1b_G"),
             "image mode must actually emit Kitty graphics; enable bmux images"
         );
+        drop(output);
     }
     if mode == "warm" {
         for index in 0..STEPS * 2 {
@@ -247,11 +659,14 @@ fn run_case(
             fs::write(path.join(&name), &output.bytes).unwrap();
             name
         });
-        (output.bytes.len(), locator)
+        (output.accepted_bytes, locator)
     };
     // All cases now start at the same top scroll position. No parser is
     // running: event/presenter time cannot include Python parser backlog.
-    *writer.0.lock().unwrap() = Output::default();
+    *writer.0.lock().unwrap() = Output {
+        mode: sink_mode,
+        ..Output::default()
+    };
     eprintln!(
         "{}",
         serde_json::json!({
@@ -259,11 +674,19 @@ fn run_case(
             "source_id": std::env::var("BMUX_PERF_SOURCE_ID").ok(),
             "build_id": std::env::var("BMUX_PERF_BUILD_ID").ok(),
             "trace_id": "wheel-v1-32-down-32-up-105-20",
+            "timer_scope_version": 2,
             "prefix_locator": prefix_locator,
             "prefix_bytes": prefix_bytes,
             "delta_locator": artifacts.map(|_| format!("pages-{pages}-{mode}.bin")),
-            "stream_offset_semantics": "byte_range_delta_relative_stream_byte_range_prefix_inclusive",
-            "sink_timing_semantics": "in_memory_copy_and_lock_not_output_blocking",
+            "stream_offset_semantics": if sink_mode == SinkMode::Recording {
+                "byte_range_delta_relative_stream_byte_range_prefix_inclusive"
+            } else {
+                "accepted_byte_counts_no_stream"
+            },
+            "sink_mode": sink_mode.name(),
+            "buffering_mode": buffering.name(),
+            "buffer_capacity": buffering.capacity(),
+            "sink_timing_semantics": sink_mode.timing_semantics(),
             "mode": mode, "nodes": nodes, "registered_images": if images {keys.len()} else {0},
             "decode_us": decode_us, "initial_prepare_present_us": initial_us,
             "wheel_count": STEPS * 2, "wheel_point": [105, 20],
@@ -272,12 +695,41 @@ fn run_case(
             "sink": "in_memory_no_parser", "viewport": [140, 40],
         })
     );
+    measure_trace(
+        pages,
+        mode,
+        &writer,
+        &mut program,
+        &mut presenter,
+        prefix_bytes,
+        sink_mode,
+    );
+    // Save once after timing; offline replay uses the exact recorded bytes.
+    if let Some(path) = artifacts {
+        fs::write(
+            path.join(format!("pages-{pages}-{mode}.bin")),
+            &writer.0.lock().unwrap().bytes,
+        )
+        .unwrap();
+    }
+    presenter.cleanup().unwrap();
+}
+
+fn measure_trace(
+    pages: u32,
+    mode: &str,
+    writer: &MemoryWriter,
+    program: &mut BmuxProgram,
+    presenter: &mut BmuxPresenter<FixtureWriter>,
+    prefix_bytes: usize,
+    sink_mode: SinkMode,
+) {
     for index in 0..STEPS * 2 {
         let (before, writes_before, flushes_before, write_ns_before, flush_ns_before) = {
             let mut output = writer.0.lock().unwrap();
             output.max_write_ns = 0;
             (
-                output.bytes.len(),
+                output.accepted_bytes,
                 output.writes,
                 output.flushes,
                 output.write_ns,
@@ -285,16 +737,21 @@ fn run_case(
             )
         };
         let started = Instant::now();
-        wheel(&mut program, index);
+        wheel(program, index);
         let update_us = started.elapsed().as_micros();
         let started = Instant::now();
-        presenter.present(&mut program).unwrap();
+        presenter.present(program).unwrap();
         let prepare_present_us = started.elapsed().as_micros();
         // Public diagnostic value API only: no layout/ABI/serde assumptions.
-        // Read after presentation so this attempt includes paint work.
+        // Read after presentation so this attempt includes paint and commit.
+        // prepare_us includes project/controls/reveal/resources: do not add
+        // those nested stages again. prepare_us, paint_us and commit_us are
+        // disjoint wall-time scopes, not CPU time. Missing fields in older
+        // artifacts are unknown, never zero. Their sum leaves an approximate
+        // residual within prepare_present_us (rounding/instrumentation remain).
         let performance = program.performance_snapshot();
         let output = writer.0.lock().unwrap();
-        let end = output.bytes.len();
+        let end = output.accepted_bytes;
         eprintln!(
             "{}",
             serde_json::json!({
@@ -304,6 +761,8 @@ fn run_case(
                 "sequence": performance.sequence,
                 "full_layouts": performance.full_layouts,
                 "projection_used": performance.projection_used,
+                "prepare_us": performance.prepare_us,
+                "commit_us": performance.commit_us,
                 "project_us": performance.project_us,
                 "controls_us": performance.controls_us,
                 "reveal_us": performance.reveal_us,
@@ -316,7 +775,8 @@ fn run_case(
                 "resource_visited": performance.resource_visited,
                 "paint_visited": performance.paint_visited,
                 "byte_range": [before, end],
-                "stream_byte_range": [prefix_bytes + before, prefix_bytes + end],
+                "stream_byte_range": (sink_mode == SinkMode::Recording)
+                    .then_some([prefix_bytes + before, prefix_bytes + end]),
                 "bytes": end - before,
                 "writes": output.writes - writes_before,
                 "flushes": output.flushes - flushes_before,
@@ -325,23 +785,14 @@ fn run_case(
                 "sink_flush_ns": output.flush_ns - flush_ns_before,
             })
         );
+        drop(output);
     }
-    // Save once after timing; offline analyzer/parser speed is a separate
-    // replay measurement over this exact immutable byte stream.
-    if let Some(path) = &artifacts {
-        fs::write(
-            path.join(format!("pages-{pages}-{mode}.bin")),
-            &writer.0.lock().unwrap().bytes,
-        )
-        .unwrap();
-    }
-    presenter.cleanup().unwrap();
 }
 
 /// Exact real-paint oracle, separate from timing. Same-size resize deliberately
 /// invalidates reuse on the comparator through the public geometry API.
 /// Action hit targets remain covered by renderer-internal projection tests;
-/// BmuxProgram does not expose its authoritative hit-test scene publicly.
+/// `BmuxProgram` does not expose its authoritative hit-test scene publicly.
 #[test]
 #[ignore = "expensive full-layout oracle; needs compiler slot and coherent sources"]
 fn production_fixed_trace_cells_and_images_match_full_layout() {
@@ -349,12 +800,7 @@ fn production_fixed_trace_cells_and_images_match_full_layout() {
     for pages in [1, 3, 10] {
         for mode in ["text", "cold", "warm"] {
             let root = fixture(pages);
-            let mut keys = BTreeSet::new();
-            walk(&root, &mut Vec::new(), &mut |node, path| {
-                if matches!(node.element, Element::Image { .. }) {
-                    keys.insert(node_key(node, path));
-                }
-            });
+            let keys = image_keys(&root);
             let mut allowed_keys = BTreeSet::new();
             walk(&root, &mut Vec::new(), &mut |node, path| {
                 if matches!(node.element, Element::Image { .. } | Element::Canvas) {

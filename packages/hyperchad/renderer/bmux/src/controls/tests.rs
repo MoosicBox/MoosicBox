@@ -12,6 +12,121 @@ fn node(id: &str, element: Element) -> Container {
 }
 
 #[test]
+fn details_open_work_depends_only_on_details() {
+    for unrelated in [0, 100, 1_000] {
+        let mut inner = node("inner", Element::Details { open: Some(true) });
+        inner.children.push(node("inner-summary", Element::Summary));
+        let mut outer = node("outer", Element::Details { open: Some(false) });
+        outer.children = vec![node("outer-summary", Element::Summary), inner];
+        let mut root = Container::default();
+        root.children.push(outer);
+        root.children.extend(
+            (0..unrelated)
+                .map(|index| node(&format!("button-{index}"), Element::Button { r#type: None })),
+        );
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        assert_eq!(controls.nodes.len(), unrelated + 4);
+        for _ in 0..2 {
+            let mut visited = 0;
+            let actual = controls.details_open_with_visit(|| visited += 1);
+            assert_eq!(actual, controls.details_open());
+            assert_eq!(
+                actual,
+                BTreeMap::from([("inner".into(), true), ("outer".into(), false)])
+            );
+            assert_eq!(
+                visited, 2,
+                "details query inspected unrelated controls: {unrelated}"
+            );
+        }
+    }
+}
+
+fn assert_details(controls: &Controls, expected: &[(&str, bool)]) {
+    let mut visited = 0;
+    let actual = controls.details_open_with_visit(|| visited += 1);
+    assert_eq!(actual, controls.details_open());
+    assert_eq!(
+        actual,
+        expected
+            .iter()
+            .map(|(key, open)| ((*key).into(), *open))
+            .collect()
+    );
+    assert_eq!(visited, expected.len());
+}
+
+#[test]
+fn details_index_tracks_reconciliation_and_reset() {
+    let mut inner = node("inner", Element::Details { open: Some(true) });
+    inner.children.push(node("inner-summary", Element::Summary));
+    let mut outer = node("outer", Element::Details { open: Some(false) });
+    outer.children = vec![node("outer-summary", Element::Summary), inner];
+    let mut root = node(
+        "form",
+        Element::Form {
+            action: None,
+            method: None,
+            multipart: false,
+        },
+    );
+    root.children.push(outer);
+    let mut controls = Controls::new();
+    assert_details(&controls, &[]);
+    controls.reconcile(&root);
+    assert_details(&controls, &[("inner", true), ("outer", false)]);
+
+    // Local toggles survive unchanged external values and repeated reconciliation.
+    controls.activate("outer-summary");
+    controls.activate("inner-summary");
+    assert_details(&controls, &[("inner", false), ("outer", true)]);
+    for _ in 0..2 {
+        controls.reconcile(&root);
+        assert_details(&controls, &[("inner", false), ("outer", true)]);
+    }
+    controls.reset("form");
+    assert_details(&controls, &[("inner", true), ("outer", false)]);
+
+    // Changed external values replace local values, including nested Details.
+    root.children[0].element = Element::Details { open: Some(true) };
+    root.children[0].children[1].element = Element::Details { open: Some(false) };
+    controls.reconcile(&root);
+    assert_details(&controls, &[("inner", false), ("outer", true)]);
+
+    // Same-kind identity replacement must reset local state via the real report lane.
+    controls.activate("outer-summary");
+    let report = crate::state::ApplyReport {
+        removed: BTreeSet::from(["outer".into()]),
+        ..Default::default()
+    };
+    controls.reconcile_report(&root, &report);
+    assert_details(&controls, &[("inner", false), ("outer", true)]);
+
+    // Reused keys changing kind in both directions cannot leave stale membership.
+    root.children[0].children[1].element = Element::Button { r#type: None };
+    controls.reconcile(&root);
+    assert_details(&controls, &[("outer", true)]);
+    root.children[0].children[1].element = Element::Details { open: None };
+    controls.reconcile(&root);
+    assert_details(&controls, &[("inner", false), ("outer", true)]);
+
+    root.children[0].children.pop();
+    controls.reconcile_report(
+        &root,
+        &crate::state::ApplyReport {
+            removed: BTreeSet::from(["inner".into()]),
+            ..Default::default()
+        },
+    );
+    assert_details(&controls, &[("outer", true)]);
+    controls.reconcile(&Container::default());
+    assert_details(&controls, &[]);
+    controls.reconcile(&root);
+    assert_details(&controls, &[("outer", true)]);
+}
+
+#[test]
 fn focused_editor_paints_visible_cursor_and_contrasting_input_chrome() {
     let root = node(
         "url",
@@ -211,6 +326,201 @@ fn prepare(controls: &mut Controls, key: &str, width: u64, height: u64) {
         path: Vec::new(),
         hit_regions: Vec::new(),
     });
+    if !controls
+        .prepared_keys
+        .iter()
+        .any(|prepared| prepared == key)
+    {
+        controls.prepared_keys.push(key.to_owned());
+    }
+}
+
+fn assert_prepared_membership(controls: &Controls) {
+    let actual: BTreeSet<_> = controls
+        .nodes
+        .iter()
+        .filter(|(_, control)| control.prepared.is_some())
+        .map(|(key, _)| key.clone())
+        .collect();
+    let indexed: BTreeSet<_> = controls.prepared_keys.iter().cloned().collect();
+    assert_eq!(actual, indexed);
+}
+
+#[test]
+fn mouse_target_work_is_prepared_not_registered_controls() {
+    use bmux_tui::event::MouseEvent;
+    for unrelated in [100, 1_000] {
+        let mut root = Container {
+            children: (0..unrelated)
+                .map(|index| {
+                    node(
+                        &format!("offscreen-{index}"),
+                        Element::Button { r#type: None },
+                    )
+                })
+                .collect(),
+            ..Default::default()
+        };
+        root.children.extend([
+            node("z", Element::Button { r#type: None }),
+            node("a", Element::Button { r#type: None }),
+        ]);
+        let mut controls = Controls::new();
+        controls.reconcile(&root);
+        // Reverse lexical order deliberately: equal-order targeting must retain
+        // the last BTreeMap match, not the last prepared-key insertion.
+        prepare(&mut controls, "z", 10, 1);
+        prepare(&mut controls, "a", 10, 1);
+        assert_prepared_membership(&controls);
+        let mouse = MouseEvent::new(MouseEventKind::ScrollDown, Point::new(2, 0));
+        let mut visited = 0;
+        assert_eq!(
+            controls
+                .mouse_target_with_visit(&mouse, || visited += 1)
+                .as_deref(),
+            Some("z")
+        );
+        assert_eq!(visited, 2, "unrelated controls: {unrelated}");
+    }
+}
+
+#[test]
+fn mouse_target_preserves_priority_clipping_capture_and_admission() {
+    use bmux_tui::event::MouseEvent;
+    let root = Container {
+        children: vec![
+            node("z", Element::Button { r#type: None }),
+            node("a", Element::Button { r#type: None }),
+        ],
+        ..Default::default()
+    };
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    prepare(&mut controls, "z", 10, 1);
+    prepare(&mut controls, "a", 10, 1);
+    let mouse = MouseEvent::new(MouseEventKind::Down(MouseButton::Left), Point::new(2, 0));
+    assert_eq!(
+        controls.mouse_target_with_visit(&mouse, || {}).as_deref(),
+        Some("z")
+    );
+    controls
+        .nodes
+        .get_mut("a")
+        .unwrap()
+        .prepared
+        .as_mut()
+        .unwrap()
+        .order = 1;
+    assert_eq!(
+        controls.mouse_target_with_visit(&mouse, || {}).as_deref(),
+        Some("a")
+    );
+    controls.nodes.get_mut("a").unwrap().spec.disabled = true;
+    assert_eq!(
+        controls.mouse_target_with_visit(&mouse, || {}).as_deref(),
+        Some("z")
+    );
+    controls.nodes.get_mut("a").unwrap().spec.disabled = false;
+    controls
+        .nodes
+        .get_mut("a")
+        .unwrap()
+        .prepared
+        .as_mut()
+        .unwrap()
+        .clip = CellRect::new(5, 0, 5, 1);
+    assert_eq!(
+        controls.mouse_target_with_visit(&mouse, || {}).as_deref(),
+        Some("z")
+    );
+    controls
+        .nodes
+        .get_mut("a")
+        .unwrap()
+        .prepared
+        .as_mut()
+        .unwrap()
+        .clip = CellRect::new(0, 0, 10, 1);
+    // Reject the topmost replacement; never fall through to the lower owner.
+    let outcome = controls.event_admitted(&Event::Mouse(mouse), |key| key != "a");
+    assert!(outcome.consumed);
+    assert!(controls.captured.is_none());
+    controls.captured = Some("z".into());
+    let mut visited = 0;
+    assert_eq!(
+        controls
+            .mouse_target_with_visit(&mouse, || visited += 1)
+            .as_deref(),
+        Some("z")
+    );
+    assert_eq!(visited, 0);
+    controls.event_admitted(&Event::Mouse(mouse), |_| false);
+    assert!(controls.captured.is_none());
+}
+
+#[test]
+fn prepared_membership_survives_projection_focus_reset_and_restoration() {
+    use crate::layout::{DefaultLeafMeasure, LayoutOptions, RetainedLayout, layout};
+    use std::sync::Arc;
+    let mut root = node(
+        "form",
+        Element::Form {
+            action: None,
+            method: None,
+            multipart: false,
+        },
+    );
+    root.overflow_y = hyperchad_transformer::models::LayoutOverflow::Auto;
+    root.children = (0..20)
+        .map(|index| {
+            let mut child = input(&format!("input-{index}"), Some("value"));
+            child.height = Some(hyperchad_transformer::Number::Integer(16));
+            child
+        })
+        .collect();
+    let mut controls = Controls::new();
+    controls.reconcile(&root);
+    let tree = Arc::new(
+        layout(
+            &root,
+            &LayoutOptions {
+                viewport: bmux_tui::geometry::Size::new(30, 4),
+                ..Default::default()
+            },
+            &DefaultLeafMeasure,
+        )
+        .unwrap(),
+    );
+    controls.prepare(&tree);
+    assert_prepared_membership(&controls);
+    // Full-layout deferred focus materializes a previously offscreen placement.
+    assert!(controls.nodes["input-19"].prepared.is_none());
+    controls.focus(Some("input-19"));
+    assert!(controls.nodes["input-19"].prepared.is_some());
+    assert_prepared_membership(&controls);
+    let retained = RetainedLayout::new(tree);
+    let committed = retained.project(&BTreeMap::new()).unwrap();
+    controls.prepare_projection(&committed);
+    assert_prepared_membership(&controls);
+    controls.reset("form");
+    assert_prepared_membership(&controls);
+    // Failed/uncommitted candidate geometry must be restorable through the same
+    // projection-preparation path used by the program's committed input scene.
+    let candidate = committed
+        .reproject(&BTreeMap::from([(
+            "form".into(),
+            crate::layout::ScrollOffset { x: 0, y: 10 },
+        )]))
+        .unwrap();
+    controls.prepare_projection(&candidate);
+    assert_prepared_membership(&controls);
+    controls.prepare_projection(&committed);
+    assert_prepared_membership(&controls);
+    controls.focus(Some("input-18"));
+    assert!(controls.nodes["input-18"].prepared.is_some());
+    assert_prepared_membership(&controls);
+    controls.reconcile(&Container::default());
+    assert_prepared_membership(&controls);
 }
 
 #[test]

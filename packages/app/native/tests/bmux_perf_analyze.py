@@ -486,6 +486,36 @@ def work_metrics(lines):
     return result
 
 
+def fixture_sink_mode(metadata):
+    """Normalize only the known legacy recording semantics; never guess a sink."""
+    mode = metadata.get("sink_mode")
+    semantics = metadata.get("sink_timing_semantics")
+    if (
+        "sink_mode" not in metadata
+        and semantics == "in_memory_copy_and_lock_not_output_blocking"
+    ):
+        return "recording"
+    if (mode, semantics) in (
+        ("recording", "in_memory_copy_and_lock_not_output_blocking"),
+        ("counting", "in_memory_count_and_lock_not_output_blocking"),
+    ):
+        return mode
+    return None
+
+
+def fixture_buffering(metadata):
+    """Accept explicit buffering or the exact known legacy sink semantics."""
+    if "buffering_mode" not in metadata and "buffer_capacity" not in metadata:
+        return "unbuffered" if fixture_sink_mode(metadata) is not None else None
+    mode, capacity = metadata.get("buffering_mode"), metadata.get("buffer_capacity")
+    if type(capacity) is int and (mode, capacity) in (
+        ("unbuffered", 0),
+        ("buffered_64k", 65536),
+    ):
+        return mode
+    return None
+
+
 def fixture_metrics(lines):
     """Validate the fixed matrix structure; missing provenance stays explicit.
 
@@ -540,6 +570,22 @@ def fixture_metrics(lines):
                 )
             ):
                 errors.append(f"{key}: incompatible trace metadata")
+            sink_mode = fixture_sink_mode(metadata) if metadata is not None else None
+            if metadata is not None and fixture_buffering(metadata) is None:
+                errors.append(f"{key}: unknown buffering mode/capacity")
+            if metadata is not None and sink_mode is None:
+                errors.append(f"{key}: unknown sink mode/semantics")
+            if metadata is not None and sink_mode == "counting":
+                if any(
+                    metadata.get(field) is not None
+                    for field in ("prefix_locator", "delta_locator")
+                ):
+                    errors.append(f"{key}: counting sink cannot have stream locators")
+                if (
+                    metadata.get("stream_offset_semantics")
+                    != "accepted_byte_counts_no_stream"
+                ):
+                    errors.append(f"{key}: counting sink must label count-only offsets")
             if metadata is not None and "prefix_bytes" in metadata:
                 prefix = metadata["prefix_bytes"]
                 if type(prefix) is not int or prefix < 0:
@@ -576,7 +622,12 @@ def fixture_metrics(lines):
                     errors.append(f"{key}: invalid byte range at {index}")
                 else:
                     previous_end = byte_range[1]
-                    if metadata is not None and "prefix_bytes" in metadata:
+                    if sink_mode == "counting":
+                        if frame.get("stream_byte_range") is not None:
+                            errors.append(
+                                f"{key}: counting sink cannot have stream byte ranges"
+                            )
+                    elif metadata is not None and "prefix_bytes" in metadata:
                         prefix = metadata["prefix_bytes"]
                         if (
                             type(prefix) is int
@@ -611,7 +662,27 @@ def fixture_metrics(lines):
     }
     if len(identities) > 1:
         errors.append("inconsistent source/build identity within matrix")
+    sink_modes = {
+        fixture_sink_mode(case["metadata"])
+        for case in cases.values()
+        if case["metadata"] is not None
+    }
+    buffering_modes = {
+        fixture_buffering(case["metadata"])
+        for case in cases.values()
+        if case["metadata"] is not None
+    }
+    if len(buffering_modes) > 1:
+        errors.append("incompatible buffering modes within matrix")
+    if len(sink_modes) > 1:
+        errors.append("incompatible sink modes within matrix")
     for case in cases.values():
+        case["sink_mode"] = (
+            fixture_sink_mode(case["metadata"]) if case["metadata"] else None
+        )
+        case["buffering_mode"] = (
+            fixture_buffering(case["metadata"]) if case["metadata"] else None
+        )
         frames = case["frames"]
         known_layouts = [
             frame["full_layouts"]
@@ -690,7 +761,14 @@ def fixture_metrics(lines):
     for field in WORK_FIELDS["stages"]:
         small = cases.get("1/warm", {}).get("work", {}).get(field, {})
         large = cases.get("10/warm", {}).get("work", {}).get(field, {})
-        complete = small.get("samples") == 64 and large.get("samples") == 64
+        complete = (
+            small.get("samples") == 64
+            and large.get("samples") == 64
+            and len(sink_modes) == 1
+            and None not in sink_modes
+            and len(buffering_modes) == 1
+            and None not in buffering_modes
+        )
         scaling[field] = dict(
             criterion="10-page warm p95 <= 1-page warm p95 * 1.25 + 8",
             complete=complete,

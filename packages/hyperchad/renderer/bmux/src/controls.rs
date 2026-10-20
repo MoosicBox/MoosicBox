@@ -468,6 +468,7 @@ struct Control {
 #[derive(Default)]
 pub struct Controls {
     nodes: BTreeMap<String, Control>,
+    details_keys: BTreeSet<String>,
     order: Vec<String>,
     focused: Option<String>,
     captured: Option<String>,
@@ -492,6 +493,7 @@ impl Controls {
         let specs = spec::collect(root);
         let mut old = std::mem::take(&mut self.nodes);
         self.order.clear();
+        self.details_keys.clear();
         for (key, mut spec) in specs {
             if let Some(previous) = old.get(&key) {
                 // Absent external values mean uncontrolled, not an instruction
@@ -516,6 +518,9 @@ impl Controls {
             control.deferred = None;
             control.placement_generation = u64::MAX;
             self.order.push(key.clone());
+            if matches!(control.state, NativeState::Details(_)) {
+                self.details_keys.insert(key.clone());
+            }
             self.nodes.insert(key, control);
         }
         self.captured = None;
@@ -953,6 +958,35 @@ impl Controls {
         self.event_admitted(event, |_| true)
     }
 
+    fn mouse_target_with_visit(
+        &self,
+        mouse: &bmux_tui::event::MouseEvent,
+        mut visit: impl FnMut(),
+    ) -> Option<String> {
+        self.captured.clone().or_else(|| {
+            self.prepared_keys
+                .iter()
+                .inspect(|_| visit())
+                .map(|key| (key, &self.nodes[key]))
+                .filter(|(_, control)| {
+                    !control.spec.disabled
+                        && control.prepared.as_ref().is_some_and(|p| {
+                            p.contains(i64::from(mouse.position.x), i64::from(mouse.position.y))
+                        })
+                })
+                // The old BTreeMap scan selected the greatest key on equal
+                // paint order, independent of preparation/insertion order.
+                .max_by(|(left_key, left), (right_key, right)| {
+                    left.prepared
+                        .as_ref()
+                        .map(|p| p.order)
+                        .cmp(&right.prepared.as_ref().map(|p| p.order))
+                        .then_with(|| left_key.cmp(right_key))
+                })
+                .map(|(key, _)| key.clone())
+        })
+    }
+
     /// Route only controls whose painted source and owner chain remain valid.
     /// Rejected capture/focus is cleared without dispatching into its replacement.
     pub(crate) fn event_admitted(
@@ -969,18 +1003,7 @@ impl Controls {
             return self.traverse_admitted(stroke.modifiers.shift, &admitted);
         }
         let target = match event {
-            Event::Mouse(mouse) => self.captured.clone().or_else(|| {
-                self.nodes
-                    .iter()
-                    .filter(|(_, control)| {
-                        !control.spec.disabled
-                            && control.prepared.as_ref().is_some_and(|p| {
-                                p.contains(i64::from(mouse.position.x), i64::from(mouse.position.y))
-                            })
-                    })
-                    .max_by_key(|(_, control)| control.prepared.as_ref().map(|p| p.order))
-                    .map(|(key, _)| key.clone())
-            }),
+            Event::Mouse(mouse) => self.mouse_target_with_visit(mouse, || {}),
             _ => self.focused.clone(),
         };
         let Some(target) = target else {
@@ -1186,9 +1209,14 @@ impl Controls {
     /// Details state for the next authoritative layout pass.
     #[must_use]
     pub fn details_open(&self) -> BTreeMap<String, bool> {
-        self.nodes
+        self.details_open_with_visit(|| {})
+    }
+
+    fn details_open_with_visit(&self, mut visit: impl FnMut()) -> BTreeMap<String, bool> {
+        self.details_keys
             .iter()
-            .filter_map(|(key, control)| match control.state {
+            .inspect(|_| visit())
+            .filter_map(|key| match self.nodes[key].state {
                 NativeState::Details(open) => Some((key.clone(), open)),
                 _ => None,
             })

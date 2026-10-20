@@ -205,6 +205,14 @@ pub struct PerformanceSnapshot {
     pub projection_used: bool,
     /// Observed sequence for this attempt.
     pub sequence: u64,
+    /// Successful preparation wall time, including admission, geometry, controls,
+    /// reveal and resource scheduling; excludes paint, output and commit. Not CPU
+    /// time or frame authority. Zero on failure (or sub-microsecond success).
+    pub prepare_us: u64,
+    /// Wall time inside `commit_prepared`, normally called only after successful
+    /// output flush. Excludes prepare, paint and output; not CPU time. Zero until
+    /// called for this attempt; a duration alone does not prove frame authority.
+    pub commit_us: u64,
     /// Observed project us for this attempt.
     pub project_us: u64,
     /// Observed controls us for this attempt.
@@ -546,8 +554,9 @@ impl BmuxProgram {
             self.geometry_dirty = false;
             self.schedule_revealed();
             self.schedule_resources()?;
-            let elapsed_us = started.elapsed().as_micros();
-            log::debug!("bmux prepare scroll-reuse elapsed_us={elapsed_us} full_layouts=0");
+            let prepare_elapsed_us = started.elapsed().as_micros();
+            log::debug!("bmux prepare scroll-reuse elapsed_us={prepare_elapsed_us} full_layouts=0");
+            self.performance.prepare_us = elapsed_us(started);
             return Ok(());
         }
         self.performance.project_visited += projection_work.spatial_entries
@@ -581,6 +590,7 @@ impl BmuxProgram {
                 "bmux prepare resource-only elapsed_us={}",
                 started.elapsed().as_micros()
             );
+            self.performance.prepare_us = elapsed_us(started);
             return Ok(());
         }
         self.baseline_pending = true;
@@ -653,6 +663,7 @@ impl BmuxProgram {
             started.elapsed().as_micros(),
             resources_started.elapsed().as_micros()
         );
+        self.performance.prepare_us = elapsed_us(started);
         Ok(())
     }
 
@@ -793,6 +804,7 @@ impl BmuxProgram {
 
     /// Publish geometry only after the enclosing host output flush succeeds.
     pub fn commit_prepared(&mut self) {
+        let started = Instant::now();
         if let Some(started) = self.presentation_started.take() {
             log::debug!(
                 "bmux presentation paint-through-flush elapsed_us={}",
@@ -864,6 +876,7 @@ impl BmuxProgram {
             self.committed_retained = self.retained_layout.clone();
             self.baseline_pending = false;
         }
+        self.performance.commit_us = elapsed_us(started);
     }
 
     /// Discard failed preparation and restore committed control event geometry.
@@ -4296,6 +4309,64 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn performance_totals_follow_attempt_and_commit_scopes() {
+        let mut program = program();
+        program
+            .apply_view(View::from(Container::default()), None)
+            .unwrap();
+        let sequence = program.performance.sequence;
+        program.prepare().unwrap();
+        let first = program.performance_snapshot();
+        assert_eq!(first.sequence, sequence.wrapping_add(1));
+        assert!(first.prepare_us >= first.project_us);
+        assert_eq!(first.commit_us, 0); // No commit callback yet.
+        assert!(program.committed.is_none());
+        program.commit_prepared();
+        assert!(program.committed.is_some());
+        assert_eq!(program.performance.sequence, first.sequence);
+        assert_eq!(program.performance.prepare_us, first.prepare_us);
+
+        // Exercise the resource-only success return without authorizing a new
+        // frame; discard must not publish candidate geometry or commit timing.
+        program.resource_paint_only = true;
+        program.prepare().unwrap();
+        assert_eq!(program.performance.full_layouts, 0);
+        assert!(program.performance.prepare_us >= program.performance.resource_us);
+        assert_eq!(program.performance.commit_us, 0);
+        let committed = Arc::clone(&program.committed.as_ref().unwrap().1);
+        program.discard_prepared();
+        assert!(Arc::ptr_eq(
+            &committed,
+            &program.committed.as_ref().unwrap().1
+        ));
+        assert_eq!(program.performance.commit_us, 0);
+
+        // A failed full prepare resets totals; no elapsed-time threshold or
+        // requirement that a successful microsecond duration be nonzero.
+        program.resource_paint_only = false;
+        program.options.max_nodes = 0;
+        let sequence = program.performance.sequence;
+        assert!(program.prepare().is_err());
+        assert_eq!(program.performance.sequence, sequence.wrapping_add(1));
+        assert_eq!(program.performance.prepare_us, 0);
+        assert_eq!(program.performance.commit_us, 0);
+        assert!(Arc::ptr_eq(
+            &committed,
+            &program.committed.as_ref().unwrap().1
+        ));
+
+        let mut warm = pending_wheel_program_pages(1);
+        warm.prepare().unwrap();
+        let prepared = warm.performance_snapshot();
+        assert!(prepared.projection_used);
+        assert!(prepared.prepare_us >= prepared.project_us);
+        assert_eq!(prepared.commit_us, 0);
+        warm.commit_prepared();
+        assert_eq!(warm.performance.prepare_us, prepared.prepare_us);
+        assert_eq!(warm.performance.sequence, prepared.sequence);
     }
 
     #[test]
