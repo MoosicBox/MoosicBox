@@ -26,8 +26,86 @@ use crate::{
     state::{SourceSnapshot, ViewState},
 };
 
+// The permit crosses the blocking boundary and comes back with the prepared
+// value. Aborting the awaiting command cannot release a still-running job;
+// completed-but-uninstalled values remain charged to the same four slots.
+async fn prepare_blocking<T, F>(
+    permit: tokio::sync::OwnedSemaphorePermit,
+    prepare: F,
+) -> Result<(tokio::sync::OwnedSemaphorePermit, T), Error>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static,
+{
+    let runtime = tokio::runtime::Handle::try_current()
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    runtime
+        .spawn_blocking(move || {
+            let result = prepare();
+            (permit, result)
+        })
+        .await
+        .map_err(|error| std::io::Error::other(error.to_string()).into())
+}
+
 #[path = "revealed.rs"]
 mod revealed;
+
+#[cfg(test)]
+thread_local! {
+    // (image-index node visits, lifecycle set checks), local to each test.
+    static LIFECYCLE_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+// Debug-only phase stopwatch: no clock reads when diagnostics are disabled.
+struct PhaseClock(Option<Instant>);
+
+impl PhaseClock {
+    fn start() -> Self {
+        Self(log::log_enabled!(log::Level::Debug).then(Instant::now))
+    }
+
+    fn record(&mut self, phase: &'static str, generation: u64) {
+        if let Some(started) = self.0.as_mut() {
+            let now = Instant::now();
+            // Segments are independent within a scope. schedule_resources is
+            // inclusive of the separately reported resource subphase scope.
+            let scope = if phase.starts_with("resource_") {
+                "resource"
+            } else {
+                "apply"
+            };
+            log::debug!(
+                "bmux apply_phase scope={scope} phase={phase} generation={generation} elapsed_us={}",
+                now.duration_since(*started).as_micros()
+            );
+            *started = Instant::now();
+        }
+    }
+}
+
+struct ResourceTiming {
+    permit_wait_us: u64,
+    fetch_us: u64,
+    blocking_wait_us: u64,
+    decode_us: u64,
+    ready: Instant,
+}
+
+/// Internal worker result; fields are private and installation is state-owned.
+#[doc(hidden)]
+pub struct ResourcePreparation {
+    key: String,
+    source: String,
+    generation: u64,
+    context: Option<u64>,
+    encoded_bytes: usize,
+    timing: Option<ResourceTiming>,
+    result: Result<crate::graphics::PreparedImage, Error>,
+    // Erase the guard type at the message boundary: consumers can only retain
+    // or drop this lease, never release/forget permits independently of pixels.
+    _permit: Box<dyn Send>,
+}
 
 /// Ordered renderer messages. Producers must use the bounded facade admission path.
 // Keep the public producer contract stable; admission bounds message count and payload bytes.
@@ -58,6 +136,9 @@ pub enum Message {
         work: Completion,
         result: Result<HostResponse, Error>,
     },
+    /// Internal immutable image preparation completion.
+    #[doc(hidden)]
+    ResourcePrepared(Box<ResourcePreparation>),
     /// Wake resource invalidation after an opaque authorization epoch changes.
     ResourceContextChanged,
     /// Advance debounced/delayed action state using the program's monotonic clock.
@@ -148,6 +229,72 @@ pub struct PerformanceSnapshot {
     pub paint_visited: usize,
 }
 
+// Parent links come from the committed layout, never from a fresh DOM walk.
+// A shared ancestor is recorded once even when many visible hits bubble to it.
+#[derive(Default)]
+struct CommittedInputs {
+    context: Option<u64>,
+    nodes: BTreeMap<String, (Option<u64>, Option<String>)>,
+    #[cfg(test)]
+    visited: usize,
+}
+
+impl CommittedInputs {
+    fn collect(
+        tree: &LayoutTree,
+        visible: &[layout::ResolvedNode],
+        epochs: &BTreeMap<String, u64>,
+        context: Option<u64>,
+    ) -> Self {
+        let mut snapshot = Self {
+            context,
+            ..Self::default()
+        };
+        for seed in visible {
+            #[cfg(test)]
+            {
+                snapshot.visited += 1;
+            }
+            let mut node = Some(seed);
+            while let Some(current) = node {
+                if snapshot.nodes.contains_key(&current.key) {
+                    break;
+                }
+                #[cfg(test)]
+                {
+                    snapshot.visited += 1;
+                }
+                snapshot.nodes.insert(
+                    current.key.clone(),
+                    (
+                        epochs.get(&current.key).copied(),
+                        current.parent_key.clone(),
+                    ),
+                );
+                node = current.parent_key.as_deref().and_then(|key| tree.get(key));
+            }
+        }
+        snapshot
+    }
+
+    fn continuous(&self, key: &str, epochs: &BTreeMap<String, u64>, context: Option<u64>) -> bool {
+        if self.context != context {
+            return false;
+        }
+        let mut key = Some(key);
+        while let Some(current) = key {
+            let Some((Some(epoch), parent)) = self.nodes.get(current) else {
+                return false;
+            };
+            if epochs.get(current) != Some(epoch) {
+                return false;
+            }
+            key = parent.as_deref();
+        }
+        true
+    }
+}
+
 /// Sole owner of mutable renderer state. Presentation candidates are not input authority.
 // Scheduler lane occupancy, lifecycle and terminal capability are independent flags.
 #[allow(clippy::struct_excessive_bools)]
@@ -171,9 +318,11 @@ pub struct BmuxProgram {
     image_sources_cache: Option<(SourceSnapshot, Arc<ImageSources>)>,
     scroll_reuse: bool,
     committed: Option<(u64, Arc<LayoutTree>)>,
+    committed_inputs: CommittedInputs,
     pending: VecDeque<Work>,
     active: bool,
     resource_active: usize,
+    decode_permits: Arc<tokio::sync::Semaphore>,
     quitting: bool,
     stopping: bool,
     active_local_mutation: Option<(String, u64)>,
@@ -262,9 +411,11 @@ impl BmuxProgram {
             image_sources_cache: None,
             scroll_reuse: false,
             committed: None,
+            committed_inputs: CommittedInputs::default(),
             pending: VecDeque::new(),
             active: false,
             resource_active: 0,
+            decode_permits: Arc::new(tokio::sync::Semaphore::new(4)),
             quitting: false,
             stopping: false,
             active_local_mutation: None,
@@ -649,6 +800,64 @@ impl BmuxProgram {
             );
         }
         if let Some(tree) = self.candidate.take() {
+            // Build input authority from the indexed viewport query, not the
+            // retained full-document node/epoch maps. Baseline layout and
+            // scroll projections share the same bounded seed selection.
+            let input_projection = self.candidate_projection.clone().or_else(|| {
+                self.retained_layout
+                    .as_ref()
+                    .and_then(|retained| retained.project(&self.options.scroll_offsets))
+            });
+            let mut inputs =
+                input_projection
+                    .as_ref()
+                    .map_or_else(CommittedInputs::default, |projection| {
+                        CommittedInputs::collect(
+                            &tree,
+                            projection.visible_nodes(),
+                            &self.node_epochs,
+                            self.resource_context,
+                        )
+                    });
+            // A newly painted identical key must not inherit an old press.
+            // Validate the old snapshot before replacing its epoch evidence.
+            if self.pressed.as_deref().is_some_and(|key| {
+                !self
+                    .committed_inputs
+                    .continuous(key, &self.node_epochs, self.resource_context)
+            }) {
+                self.pressed = None;
+            }
+            if self.hover.as_deref().is_some_and(|key| {
+                !self
+                    .committed_inputs
+                    .continuous(key, &self.node_epochs, self.resource_context)
+            }) {
+                self.hover = None;
+            }
+            if self.committed.is_some() {
+                self.controls.retain_input_owners(|key| {
+                    Self::input_admitted(
+                        &self.committed_inputs,
+                        self.committed.as_ref(),
+                        &self.node_epochs,
+                        self.resource_context,
+                        key,
+                    )
+                });
+            }
+            // Context invalidation clears lifecycle epochs. Only a successful
+            // presentation may establish new input authority for these chains.
+            // Do this after rejecting capture against the previous snapshot.
+            for (key, (epoch, _)) in &mut inputs.nodes {
+                *epoch = Some(
+                    *self
+                        .node_epochs
+                        .entry(key.clone())
+                        .or_insert_with(|| self.state.generation()),
+                );
+            }
+            self.committed_inputs = inputs;
             self.committed = Some((self.state.generation(), tree));
             self.committed_projection = self.candidate_projection.take();
             self.committed_resource_context = self.resource_context;
@@ -672,6 +881,74 @@ impl BmuxProgram {
         self.candidate_projection = None;
         self.retained_layout = self.committed_retained.clone();
         self.restore_committed_controls();
+    }
+
+    // Deferred/offscreen native focus uses the committed tree's indexed chain.
+    // Birth epochs no newer than that presentation prove continuity without
+    // eagerly snapshotting every offscreen control on each viewport commit.
+    fn input_admitted(
+        inputs: &CommittedInputs,
+        tree: Option<&(u64, Arc<LayoutTree>)>,
+        epochs: &BTreeMap<String, u64>,
+        context: Option<u64>,
+        key: &str,
+    ) -> bool {
+        if inputs.nodes.contains_key(key) {
+            return inputs.continuous(key, epochs, context);
+        }
+        if inputs.context != context {
+            return false;
+        }
+        let Some((generation, tree)) = tree else {
+            return false;
+        };
+        let mut node = tree.get(key);
+        if node.is_none() {
+            return false;
+        }
+        while let Some(current) = node {
+            if epochs
+                .get(&current.key)
+                .is_none_or(|epoch| epoch > generation)
+            {
+                return false;
+            }
+            node = match current.parent_key.as_deref() {
+                Some(parent) => {
+                    let Some(parent) = tree.get(parent) else {
+                        return false;
+                    };
+                    Some(parent)
+                }
+                None => None,
+            };
+        }
+        true
+    }
+
+    fn input_continuous(&self, key: &str) -> bool {
+        Self::input_admitted(
+            &self.committed_inputs,
+            self.committed.as_ref(),
+            &self.node_epochs,
+            self.resource_context,
+            key,
+        ) && self.committed_node(key).is_some_and(|node| {
+            at_path(self.state.root(), &node.path)
+                .is_some_and(|source| layout::node_key(source, &node.path) == key)
+        })
+    }
+
+    fn dispatch_input(
+        &mut self,
+        key: &str,
+        kind: EventKind,
+        value: Option<String>,
+    ) -> Result<(), Error> {
+        if !self.input_continuous(key) {
+            return Ok(());
+        }
+        self.dispatch(key, kind, value)
     }
 
     fn restore_committed_controls(&mut self) {
@@ -823,8 +1100,14 @@ impl BmuxProgram {
         self.committed_projection.as_ref()
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "debug phase boundaries remain beside the unchanged admission transaction"
+    )]
     fn schedule_resources_inner(&mut self) -> Result<(), Error> {
+        let mut phase = PhaseClock::start();
         let images = self.image_sources();
+        phase.record("resource_image_snapshot", self.state.generation());
         let counts = (images.nodes.len(), images.unique_sources);
         if self.resource_scan_counts != Some(counts) {
             log::debug!(
@@ -871,7 +1154,9 @@ impl BmuxProgram {
                 .map(|(key, _, _)| key.clone())
                 .collect()
         };
+        phase.record("resource_visibility", self.state.generation());
         self.prune_resource_queue(&visible);
+        phase.record("resource_queue_prune", self.state.generation());
         for (key, source, _) in visible
             .iter()
             .filter_map(|key| images.by_key.get(key).map(|&index| &images.nodes[index]))
@@ -922,12 +1207,14 @@ impl BmuxProgram {
                 }
             }
         }
+        phase.record("resource_alias_admission", self.state.generation());
         self.resource_visible = visible;
         self.resource_sources.retain(|key, _| {
             #[cfg(test)]
             count_resource_scan(0, 1);
             self.graphics.rgba(key).is_some()
         });
+        phase.record("resource_resident_prune", self.state.generation());
         Ok(())
     }
 
@@ -1249,11 +1536,22 @@ impl BmuxProgram {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "effect correlation, deadline and resource permit lifetime form one command transaction"
+    )]
     fn start_work(&mut self, work: Work) -> Command<Message> {
         let resource = matches!(&work, Work::Resource { .. });
         let host = self.shared.config.host.clone();
         let custom = self.shared.request_action.clone();
         let max_bytes = self.shared.config.graphics.max_encoded_bytes;
+        let limits = self.shared.config.graphics;
+        let decode_permits = Arc::clone(&self.decode_permits);
+        let context = self.resource_context;
+        let display_size = match &work {
+            Work::Resource { key, .. } => self.resource_display_size(key),
+            _ => None,
+        };
         let current_generation = self.state.generation();
         let timeout = self.shared.config.effect_timeout;
         let (timeout_generation, timeout_completion) = work_correlation(&work, current_generation);
@@ -1278,6 +1576,22 @@ impl BmuxProgram {
                         source,
                         generation,
                     } => {
+                        // Acquire before fetching: encoded bytes waiting for a
+                        // blocking slot and prepared results share this bound.
+                        let permit_started =
+                            log::log_enabled!(log::Level::Debug).then(Instant::now);
+                        let permit = match decode_permits.acquire_owned().await {
+                            Ok(permit) => permit,
+                            Err(error) => {
+                                return Message::Completed {
+                                    generation,
+                                    work: Completion::Resource { key, source },
+                                    result: Err(std::io::Error::other(error.to_string()).into()),
+                                };
+                            }
+                        };
+                        let permit_wait_us = permit_started.map(elapsed_us);
+                        let fetch_started = permit_started.map(|_| Instant::now());
                         let result = match host.request {
                             Some(host) => {
                                 host(HostRequest::Resource {
@@ -1292,6 +1606,66 @@ impl BmuxProgram {
                             )
                             .into()),
                         };
+                        let fetch_us = fetch_started.map(elapsed_us);
+                        if let Ok(HostResponse::Bytes(bytes)) = result {
+                            let encoded_bytes = bytes.len();
+                            if encoded_bytes > max_bytes {
+                                return Message::Completed {
+                                    generation,
+                                    work: Completion::Resource { key, source },
+                                    result: Err(std::io::Error::other(
+                                        "resource exceeds encoded byte limit",
+                                    )
+                                    .into()),
+                                };
+                            }
+                            let prepare_key = key.clone();
+                            let submitted = permit_started.map(|_| Instant::now());
+                            let prepared = prepare_blocking(permit, move || {
+                                let blocking_wait_us = submitted.map(elapsed_us);
+                                let started = submitted.map(|_| {
+                                    log::debug!("bmux resource decode start encoded_bytes={encoded_bytes}");
+                                    Instant::now()
+                                });
+                                let result = GraphicsStore::prepare_for_display(
+                                    limits, &prepare_key,
+                                    &crate::graphics::GraphicsSource::Memory,
+                                    &crate::graphics::SourcePolicy { allow_memory: true, ..Default::default() },
+                                    &bytes, display_size,
+                                ).map_err(|error| -> Error { Box::new(error) });
+                                if let Some(started) = started {
+                                    log::debug!("bmux resource decode end elapsed_us={} encoded_bytes={encoded_bytes} success={}", elapsed_us(started), result.is_ok());
+                                }
+                                let timing = started.map(|started| ResourceTiming {
+                                    permit_wait_us: permit_wait_us.unwrap_or(0),
+                                    fetch_us: fetch_us.unwrap_or(0),
+                                    blocking_wait_us: blocking_wait_us.unwrap_or(0),
+                                    decode_us: elapsed_us(started),
+                                    ready: Instant::now(),
+                                });
+                                (result, timing)
+                            }).await;
+                            return match prepared {
+                                Ok((permit, (result, timing))) => {
+                                    Message::ResourcePrepared(Box::new(ResourcePreparation {
+                                        key,
+                                        source,
+                                        generation,
+                                        context,
+                                        encoded_bytes,
+                                        timing,
+                                        result,
+                                        _permit: Box::new(permit),
+                                    }))
+                                }
+                                Err(error) => Message::Completed {
+                                    generation,
+                                    work: Completion::Resource { key, source },
+                                    result: Err(error),
+                                },
+                            };
+                        }
+                        drop(permit);
                         (generation, Completion::Resource { key, source }, result)
                     }
                     Work::Host {
@@ -1370,20 +1744,29 @@ impl BmuxProgram {
         self.apply_targets(&view, vec![target.map(str::to_owned)], &strategy)
     }
 
-    fn image_source_index(&self) -> BTreeMap<String, String> {
+    fn image_source_index(&self) -> (BTreeMap<String, String>, BTreeSet<String>) {
         let mut sources = BTreeMap::new();
+        let mut live_keys = BTreeSet::new();
         visit(self.state.root(), &mut Vec::new(), &mut |node, path| {
+            #[cfg(test)]
+            LIFECYCLE_WORK.with(|work| work.set((work.get().0 + 1, work.get().1)));
+            let key = layout::node_key(node, path);
+            live_keys.insert(key.clone());
             if let Element::Image {
                 source: Some(source),
                 ..
             } = &node.element
             {
-                sources.insert(layout::node_key(node, path), source.clone());
+                sources.insert(key, source.clone());
             }
         });
-        sources
+        (sources, live_keys)
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "debug phase boundaries remain beside the unchanged reconciliation transaction"
+    )]
     fn apply_targets(
         &mut self,
         view: &View,
@@ -1392,8 +1775,11 @@ impl BmuxProgram {
     ) -> Result<(), Error> {
         #[cfg(test)]
         HISTORY_APPLY_WORK.with(|work| work.set(work.get() + 1));
+        let mut phase = PhaseClock::start();
         validate_view(view, &self.shared.config)?;
+        phase.record("validate_view", self.state.generation());
         let mut next = self.state.clone();
+        phase.record("state_clone", self.state.generation());
         let mut report = None;
         for target in targets {
             let current = next.apply_response(view.clone(), target.as_deref(), strategy.clone())?;
@@ -1409,10 +1795,12 @@ impl BmuxProgram {
                 report = Some(current);
             }
         }
+        phase.record("apply_response", self.state.generation());
         let Some(mut report) = report else {
             return Ok(());
         };
         crate::admission::validate_tree(next.root(), &self.shared.config)?;
+        phase.record("validate_tree", report.generation);
         // Canonical keyed no-op transactions preserve their state generation.
         // A renderer replacement still starts new source lifetimes; give those
         // sources a fresh epoch so prior request completions cannot target them.
@@ -1421,7 +1809,8 @@ impl BmuxProgram {
         }
         self.state = next;
         self.geometry_dirty = true;
-        let image_sources = self.image_source_index();
+        let (image_sources, live_keys) = self.image_source_index();
+        phase.record("image_source_index", report.generation);
         for key in &report.lifecycle_removed {
             self.restored_immediate.remove(key);
             self.revealed_routes.remove(key);
@@ -1437,7 +1826,11 @@ impl BmuxProgram {
             if !unchanged_image {
                 // A reused identity now belonging to another element is not a
                 // detached image cache entry (it may become a mutable canvas).
-                if !image_sources.contains_key(key) && self.state.find_node(key).is_some() {
+                if !image_sources.contains_key(key) && {
+                    #[cfg(test)]
+                    LIFECYCLE_WORK.with(|work| work.set((work.get().0, work.get().1 + 1)));
+                    live_keys.contains(key)
+                } {
                     self.resource_sources.remove(key);
                 }
                 // Decoded sources may outlive their DOM placement, but remain in
@@ -1451,12 +1844,15 @@ impl BmuxProgram {
                 self.resource_visible.remove(key);
             }
         }
+        phase.record("lifecycle_cleanup", report.generation);
         self.controls.reconcile_report(self.state.root(), &report);
+        phase.record("controls_reconcile", report.generation);
         self.actions.reconcile_removed(
             self.state.root(),
             report.generation,
             &report.lifecycle_removed,
         )?;
+        phase.record("actions_reconcile", report.generation);
         for key in &report.lifecycle_removed {
             self.node_epochs.remove(key);
         }
@@ -1466,9 +1862,12 @@ impl BmuxProgram {
                 .entry(layout::node_key(node, path))
                 .or_insert(report.generation);
         });
+        phase.record("epoch_chain_registration", report.generation);
         // Changed document content needs admission even in the same context.
         self.revalidate_resource_context()?;
+        phase.record("context_revalidate", report.generation);
         self.schedule_resources()?;
+        phase.record("schedule_resources", report.generation);
         if !report.response.cookies.is_empty() {
             self.enqueue(Work::Host {
                 request: Box::new(HostRequest::Cookies(report.response.cookies.clone())),
@@ -1492,9 +1891,11 @@ impl BmuxProgram {
                 }
             }
         }
+        phase.record("response_effects", report.generation);
         if !self.restoring_history {
             self.broadcast(&EventKind::Immediate, None)?;
         }
+        phase.record("immediate_actions", report.generation);
         Ok(())
     }
 
@@ -1579,6 +1980,9 @@ impl BmuxProgram {
                 work: Completion::Resource { key, .. },
                 ..
             }) => Some(key.clone()),
+            RuntimeEvent::Message(Message::ResourcePrepared(prepared)) => {
+                Some(prepared.key.clone())
+            }
             _ => None,
         };
         if let RuntimeEvent::Message(message) = event {
@@ -1593,12 +1997,24 @@ impl BmuxProgram {
     }
 
     fn pending_scroll_resource(&self, event: &RuntimeEvent<Message>) -> bool {
-        matches!(event, RuntimeEvent::Message(Message::Completed {
-            generation,
-            work: Completion::Resource { key, source },
-            result: Ok(HostResponse::Bytes(_)),
-        }) if self.resources.get(key) == Some(source)
-            && self.resource_epochs.get(key) == Some(generation))
+        let current = match event {
+            RuntimeEvent::Message(Message::Completed {
+                generation,
+                work: Completion::Resource { key, source },
+                result: Ok(HostResponse::Bytes(_)),
+            }) => {
+                self.resources.get(key) == Some(source)
+                    && self.resource_epochs.get(key) == Some(generation)
+            }
+            RuntimeEvent::Message(Message::ResourcePrepared(prepared)) => {
+                prepared.result.is_ok()
+                    && prepared.context == self.resource_context
+                    && self.resources.get(&prepared.key) == Some(&prepared.source)
+                    && self.resource_epochs.get(&prepared.key) == Some(&prepared.generation)
+            }
+            _ => false,
+        };
+        current
             && !self.stopping
             && self.fixed_image_geometry
             && self.prepared_source_is_current()
@@ -1697,7 +2113,8 @@ impl BmuxProgram {
         let indexed = geometry
             .or_else(|| {
                 self.committed.as_ref().and_then(|(generation, tree)| {
-                    (*generation == self.state.generation()).then_some(tree.as_ref())
+                    (*generation == self.state.generation() || self.input_continuous(key))
+                        .then_some(tree.as_ref())
                 })
             })
             .and_then(|tree| tree.get(key))
@@ -1954,7 +2371,52 @@ impl BmuxProgram {
         Ok(())
     }
 
+    fn dispatch_control(
+        &mut self,
+        key: &str,
+        kind: EventKind,
+        value: Option<String>,
+        terminal: bool,
+    ) -> Result<(), Error> {
+        if terminal {
+            self.dispatch_input(key, kind, value)
+        } else {
+            self.dispatch(key, kind, value)
+        }
+    }
+
     fn control_events(&mut self, events: Vec<ControlEvent>) -> Result<(), Error> {
+        self.control_events_admitted(events, false)
+    }
+
+    fn control_event_continuous(&self, event: &ControlEvent) -> bool {
+        match event {
+            ControlEvent::Activate { key }
+            | ControlEvent::Navigate { key, .. }
+            | ControlEvent::Change { key, .. }
+            | ControlEvent::FileRequest { key, .. }
+            | ControlEvent::Toggle { key, .. }
+            | ControlEvent::Reveal { key }
+            | ControlEvent::Scroll { key, .. }
+            | ControlEvent::Popup { key, .. } => self.input_continuous(key),
+            ControlEvent::Focus { key } => {
+                key.as_deref().is_none_or(|key| self.input_continuous(key))
+            }
+            ControlEvent::Reset { form } => self.input_continuous(form),
+            ControlEvent::Submit { form, submitter } => {
+                self.input_continuous(form)
+                    && submitter
+                        .as_deref()
+                        .is_none_or(|key| self.input_continuous(key))
+            }
+        }
+    }
+
+    fn control_events_admitted(
+        &mut self,
+        events: Vec<ControlEvent>,
+        terminal: bool,
+    ) -> Result<(), Error> {
         let activated: BTreeSet<_> = events
             .iter()
             .filter_map(|event| match event {
@@ -1963,12 +2425,17 @@ impl BmuxProgram {
             })
             .collect();
         for event in events {
+            if terminal && !self.control_event_continuous(&event) {
+                continue;
+            }
             match event {
-                ControlEvent::Activate { key } => self.dispatch(&key, EventKind::Click, None)?,
-                ControlEvent::Navigate { key, .. } if !activated.contains(&key) => {
-                    self.dispatch(&key, EventKind::Click, None)?;
+                ControlEvent::Activate { key } => {
+                    self.dispatch_control(&key, EventKind::Click, None, terminal)?;
                 }
-                ControlEvent::Change { key, value } => self.dispatch(
+                ControlEvent::Navigate { key, .. } if !activated.contains(&key) => {
+                    self.dispatch_control(&key, EventKind::Click, None, terminal)?;
+                }
+                ControlEvent::Change { key, value } => self.dispatch_control(
                     &key,
                     EventKind::Change,
                     Some(match value {
@@ -1976,11 +2443,12 @@ impl BmuxProgram {
                         crate::controls::ControlValue::Checked(value) => value.to_string(),
                         other => format!("{other:?}"),
                     }),
+                    terminal,
                 )?,
                 ControlEvent::Submit { form, submitter } => {
                     let key = submitter.as_deref().unwrap_or(&form);
                     if !activated.contains(key) {
-                        self.dispatch(key, EventKind::Submit, None)?;
+                        self.dispatch_control(key, EventKind::Submit, None, terminal)?;
                     }
                 }
                 ControlEvent::FileRequest { key, .. } => self.enqueue(Work::Host {
@@ -2307,8 +2775,70 @@ impl BmuxProgram {
         Ok(())
     }
 
-    // Decode a current resource at its display size, then publish only resident
-    // entries to the source-reuse index. Failure retains negative admission.
+    fn resource_display_size(&self, key: &str) -> Option<(u32, u32)> {
+        self.current_node(key)
+            .filter(|node| node.content_bounds.width > 0 && node.content_bounds.height > 0)
+            .map(|node| {
+                (
+                    u32::try_from(node.content_bounds.width.saturating_mul(8)).unwrap_or(u32::MAX),
+                    u32::try_from(node.content_bounds.height.saturating_mul(16))
+                        .unwrap_or(u32::MAX),
+                )
+            })
+            .or(Some((64, 64)))
+    }
+
+    fn install_resource(&mut self, prepared: ResourcePreparation) -> Result<(), Error> {
+        self.resource_active = self.resource_active.saturating_sub(1);
+        self.revalidate_resource_context()?;
+        if let Some(timing) = &prepared.timing {
+            log::debug!(
+                "bmux resource_pipeline serial={} permit_wait_us={} fetch_us={} blocking_wait_us={} decode_us={} delivery_wait_us={}",
+                prepared.generation,
+                timing.permit_wait_us,
+                timing.fetch_us,
+                timing.blocking_wait_us,
+                timing.decode_us,
+                elapsed_us(timing.ready)
+            );
+        }
+        if prepared.context != self.resource_context
+            || self.resources.get(&prepared.key) != Some(&prepared.source)
+            || self.resource_epochs.get(&prepared.key) != Some(&prepared.generation)
+        {
+            log::debug!(
+                "bmux prepared resource stale generation={}",
+                prepared.generation
+            );
+            return Ok(());
+        }
+        let ResourcePreparation {
+            key,
+            source,
+            encoded_bytes,
+            result,
+            _permit,
+            ..
+        } = prepared;
+        let installed = result.and_then(|image| {
+            self.graphics
+                .install_prepared(
+                    &key,
+                    &crate::graphics::GraphicsSource::Memory,
+                    &crate::graphics::SourcePolicy {
+                        allow_memory: true,
+                        ..Default::default()
+                    },
+                    image,
+                )
+                .map_err(|error| -> Error { Box::new(error) })
+        });
+        self.resource_installed(key, source, encoded_bytes, installed);
+        Ok(())
+    }
+
+    // Synchronous compatibility path for callers/tests; runtime fetch commands
+    // use immutable preparation and the stale-checked installer above.
     fn complete_resource(&mut self, key: String, source: String, bytes: &[u8]) {
         let display_size = self
             .current_node(&key)
@@ -2347,6 +2877,21 @@ impl BmuxProgram {
                 decoded.is_ok()
             );
         }
+        self.resource_installed(
+            key,
+            source,
+            bytes.len(),
+            decoded.map_err(|error| -> Error { Box::new(error) }),
+        );
+    }
+
+    fn resource_installed(
+        &mut self,
+        key: String,
+        source: String,
+        encoded_bytes: usize,
+        decoded: Result<(), Error>,
+    ) {
         if let Err(error) = decoded {
             // Preserve negative admission until explicit retry or source change.
             // A rejected decode is not a successful paint-only completion.
@@ -2356,7 +2901,7 @@ impl BmuxProgram {
             if let Some((width, height, _)) = self.graphics.rgba(&key) {
                 log::debug!(
                     "bmux resource installed key={key:?} width={width} height={height} encoded_bytes={} resident_bytes={}",
-                    bytes.len(),
+                    encoded_bytes,
                     self.graphics.resident_bytes()
                 );
             }
@@ -2441,11 +2986,17 @@ impl BmuxProgram {
                 | MouseEventKind::ScrollLeft
                 | MouseEventKind::ScrollRight
         ) {
-            self.scroll_pointer(mouse);
+            if self
+                .committed_hit(i64::from(mouse.position.x), i64::from(mouse.position.y))
+                .is_some_and(|node| self.input_continuous(&node.key))
+            {
+                self.scroll_pointer(mouse);
+            }
             return Ok(());
         }
         let hit = self
             .committed_hit(i64::from(mouse.position.x), i64::from(mouse.position.y))
+            .filter(|node| self.input_continuous(&node.key))
             .and_then(|node| {
                 if mouse.kind == MouseEventKind::Move {
                     // Hover belongs to the actionable ancestor, not whichever
@@ -2473,7 +3024,7 @@ impl BmuxProgram {
             MouseEventKind::Down(_) => {
                 self.pressed.clone_from(&hit);
                 if let Some(key) = hit {
-                    let result = self.dispatch(&key, EventKind::MouseDown, None);
+                    let result = self.dispatch_input(&key, EventKind::MouseDown, None);
                     log::debug!(
                         "bmux pointer dispatch event=mouse-down key={key:?} success={}",
                         result.is_ok()
@@ -2483,7 +3034,7 @@ impl BmuxProgram {
             }
             MouseEventKind::Up(_) if hit == self.pressed.take() => {
                 if let Some(key) = hit {
-                    let result = self.dispatch(&key, EventKind::Click, None);
+                    let result = self.dispatch_input(&key, EventKind::Click, None);
                     log::debug!(
                         "bmux pointer dispatch event=click key={key:?} success={}",
                         result.is_ok()
@@ -2493,6 +3044,7 @@ impl BmuxProgram {
             }
             MouseEventKind::Move if hit != self.hover => {
                 if let Some(previous) = self.hover.take()
+                    && self.input_continuous(&previous)
                     && let Some(node) = self.committed_node(&previous)
                 {
                     let source = Source::at(
@@ -2506,7 +3058,7 @@ impl BmuxProgram {
                 }
                 self.hover.clone_from(&hit);
                 if let Some(key) = hit {
-                    self.dispatch(&key, EventKind::Hover, None)?;
+                    self.dispatch_input(&key, EventKind::Hover, None)?;
                 }
             }
             _ => {}
@@ -2764,12 +3316,13 @@ impl BmuxProgram {
             Message::Completed {
                 work: Completion::Resource { .. },
                 ..
-            }
+            } | Message::ResourcePrepared(_)
         ) {
             self.resource_paint_only = false;
             self.geometry_dirty = true;
         }
         match message {
+            Message::ResourcePrepared(prepared) => self.install_resource(*prepared)?,
             Message::RetryResource(key) => {
                 if let Some(Container {
                     element:
@@ -2876,6 +3429,23 @@ impl BmuxProgram {
         result
     }
 
+    fn admitted_control_event(&mut self, event: &Event) -> crate::controls::ControlOutcome {
+        let inputs = &self.committed_inputs;
+        let epochs = &self.node_epochs;
+        let context = self.resource_context;
+        let committed = self.committed.as_ref();
+        let root = self.state.root();
+        self.controls.event_admitted(event, |key| {
+            Self::input_admitted(inputs, committed, epochs, context, key)
+                && committed
+                    .and_then(|(_, tree)| tree.get(key))
+                    .is_some_and(|node| {
+                        at_path(root, &node.path)
+                            .is_some_and(|source| layout::node_key(source, &node.path) == key)
+                    })
+        })
+    }
+
     fn terminal_inner(&mut self, event: &Event) -> Result<(), Error> {
         self.resource_paint_only = false;
         if !matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Move) {
@@ -2893,17 +3463,13 @@ impl BmuxProgram {
                 .on_resize
                 .try_send((f32::from(size.width) * 8.0, f32::from(size.height) * 16.0));
         }
+        self.revalidate_resource_context()?;
         if self
-            .committed
-            .as_ref()
-            .is_some_and(|(generation, _)| *generation != self.state.generation())
+            .pressed
+            .as_deref()
+            .is_some_and(|key| !self.input_continuous(key))
         {
-            if matches!(event, Event::Mouse(_)) {
-                log::debug!(
-                    "bmux pointer outcome=stale-committed-generation controls_invoked=false"
-                );
-            }
-            return Ok(());
+            self.pressed = None;
         }
         self.restore_committed_controls();
         if let Event::Key(key) = event {
@@ -2917,6 +3483,15 @@ impl BmuxProgram {
                     bmux_keyboard::KeyCode::Left | bmux_keyboard::KeyCode::Right
                 )
             {
+                // History is not part of source-target continuity. Preserve
+                // its previous admission while a new document is unpresented.
+                if self
+                    .committed
+                    .as_ref()
+                    .is_some_and(|(generation, _)| *generation != self.state.generation())
+                {
+                    return Ok(());
+                }
                 log::debug!(
                     "bmux history chord forward={}",
                     key.key == bmux_keyboard::KeyCode::Right
@@ -2925,34 +3500,32 @@ impl BmuxProgram {
             }
             self.key_chord.clone_from(&key_chord(key));
             if let Some(focused) = self.controls.focused().map(str::to_owned) {
-                self.dispatch(&focused, EventKind::KeyDown, Some(format!("{:?}", key.key)))?;
+                self.dispatch_input(&focused, EventKind::KeyDown, Some(format!("{:?}", key.key)))?;
             }
         }
         if let Event::Mouse(mouse) = event
             && matches!(mouse.kind, MouseEventKind::Down(_))
         {
             let outside: Vec<_> = self
-                .committed
-                .as_ref()
-                .map(|(_, tree)| {
-                    tree.nodes
-                        .iter()
-                        .filter(|node| {
-                            at_path(self.state.root(), &node.path).is_some_and(|source| {
-                                accepts_event(source, &EventKind::ClickOutside)
-                            }) && !node
-                                .bounds
-                                .contains(i64::from(mouse.position.x), i64::from(mouse.position.y))
-                        })
-                        .map(|node| node.key.clone())
-                        .collect()
+                .committed_inputs
+                .nodes
+                .keys()
+                .filter(|key| self.input_continuous(key))
+                .filter_map(|key| self.committed_node(key))
+                .filter(|node| {
+                    at_path(self.state.root(), &node.path)
+                        .is_some_and(|source| accepts_event(source, &EventKind::ClickOutside))
+                        && !node
+                            .bounds
+                            .contains(i64::from(mouse.position.x), i64::from(mouse.position.y))
                 })
-                .unwrap_or_default();
+                .map(|node| node.key.clone())
+                .collect();
             for key in outside {
-                self.dispatch(&key, EventKind::ClickOutside, None)?;
+                self.dispatch_input(&key, EventKind::ClickOutside, None)?;
             }
         }
-        let result = self.controls.event(event);
+        let result = self.admitted_control_event(event);
         if matches!(event, Event::Mouse(_)) && log::log_enabled!(log::Level::Debug) {
             log::debug!(
                 "bmux pointer controls consumed={} redraw={} relayout={} control_events={}",
@@ -2963,7 +3536,9 @@ impl BmuxProgram {
             );
         }
         self.geometry_dirty |= result.redraw || result.relayout || !result.events.is_empty();
-        self.control_events(result.events)?;
+        // Revalidate each native outcome immediately before dispatch; earlier
+        // outcomes may have changed the source/owner of subsequent events.
+        self.control_events_admitted(result.events, true)?;
         if result.consumed {
             return Ok(());
         }
@@ -3121,15 +3696,18 @@ impl Program for BmuxProgram {
                 Message::Completed {
                     work: Completion::Resource { .. },
                     ..
-                } | Message::Advance
+                } | Message::ResourcePrepared(_)
+                    | Message::Advance
             )
         ) {
             self.resource_paint_only = matches!(
                 &event,
-                RuntimeEvent::Message(Message::Completed {
-                    work: Completion::Resource { .. },
-                    ..
-                })
+                RuntimeEvent::Message(
+                    Message::Completed {
+                        work: Completion::Resource { .. },
+                        ..
+                    } | Message::ResourcePrepared(_)
+                )
             );
             self.complete_paint_event(
                 event,
@@ -3718,6 +4296,954 @@ mod runtime_regressions {
         let (actions, _) = flume::bounded(8);
         let (resize, _) = flume::bounded(8);
         BmuxProgram::new(BmuxConfig::default(), actions, resize)
+    }
+
+    #[test]
+    fn lifecycle_cleanup_indexes_live_tree_once() {
+        let mut program = program();
+        let document = || Container {
+            children: (0..64)
+                .map(|index| Container {
+                    str_id: Some(format!("live-{index}")),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        program.apply_view(View::from(document()), None).unwrap();
+        LIFECYCLE_WORK.with(|work| work.set((0, 0)));
+        program.apply_view(View::from(document()), None).unwrap();
+        let (visits, memberships) = LIFECYCLE_WORK.with(std::cell::Cell::get);
+        assert_eq!(visits, 65, "one visit per live node including root");
+        assert_eq!(
+            memberships, 65,
+            "one set lookup per removed non-image identity"
+        );
+        // Retain an executable reference to the old lookup behavior. Its full
+        // index rebuild per key is the work removed from the cleanup loop.
+        let (_, live) = program.image_source_index();
+        let mut old_calls = 0;
+        for key in &live {
+            old_calls += 1;
+            assert!(program.state.find_node(key).is_some());
+        }
+        assert_eq!(old_calls, 65);
+        assert_eq!(old_calls * visits, 4225);
+    }
+
+    #[test]
+    fn lifecycle_cleanup_preserves_alias_artwork_and_canvas_transitions() {
+        let mut program = program();
+        let image = |id: &str| Container {
+            str_id: Some(id.into()),
+            element: Element::Image {
+                source: Some("/shared.png".into()),
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None,
+            },
+            ..Default::default()
+        };
+        let document = || Container {
+            children: vec![
+                image("alias-a"),
+                image("alias-b"),
+                image("detached"),
+                image("canvas"),
+            ],
+            ..Default::default()
+        };
+        program.apply_view(View::from(document()), None).unwrap();
+        let (sources, _) = program.image_source_index();
+        for (key, source) in &sources {
+            program
+                .graphics
+                .register_rgba(key, 1, 1, vec![255; 4])
+                .unwrap();
+            program.resources.insert(key.clone(), source.clone());
+            program.resource_sources.insert(key.clone(), source.clone());
+            program.resource_loaded.insert(key.clone());
+        }
+        let key_for = |id: &str| {
+            sources
+                .keys()
+                .find(|key| key.ends_with(id))
+                .unwrap()
+                .clone()
+        };
+        let alias_a = key_for("alias-a");
+        let alias_b = key_for("alias-b");
+        let detached = key_for("detached");
+        let canvas = key_for("canvas");
+        for _ in 0..2 {
+            program
+                .apply_view(
+                    View::from(Container {
+                        children: vec![
+                            image("alias-a"),
+                            image("alias-b"),
+                            Container {
+                                str_id: Some("canvas".into()),
+                                element: Element::Canvas,
+                                ..Default::default()
+                            },
+                        ],
+                        ..Default::default()
+                    }),
+                    None,
+                )
+                .unwrap();
+            for key in [&alias_a, &alias_b, &detached] {
+                assert!(program.graphics.rgba(key).is_some(), "retain {key}");
+                assert_eq!(program.resource_sources[key], "/shared.png");
+            }
+            assert!(program.graphics.rgba(&canvas).is_none());
+            assert!(!program.resource_sources.contains_key(&canvas));
+            assert!(!program.resources.contains_key(&detached));
+            assert!(!program.resource_loaded.contains(&detached));
+        }
+        program.apply_view(View::from(document()), None).unwrap();
+        let (sources, live) = program.image_source_index();
+        assert_eq!(sources.len(), 4);
+        for key in sources.keys() {
+            assert!(live.contains(key));
+            assert!(program.state.find_node(key).is_some());
+        }
+        assert!(!live.contains("absent"));
+    }
+
+    // Input continuity regressions intentionally exercise terminal admission, not
+    // direct dispatch: direct dispatch would bypass the stale-scene guard.
+    fn painted_input_owner() -> Container {
+        Container {
+            str_id: Some("painted-owner".into()),
+            actions: vec![hyperchad_actions::Action {
+                trigger: hyperchad_actions::ActionTrigger::Click,
+                effect: hyperchad_actions::ActionType::Navigate {
+                    url: "/painted".into(),
+                }
+                .into(),
+            }],
+            width: Some(hyperchad_transformer::Number::Integer(160)),
+            height: Some(hyperchad_transformer::Number::Integer(160)),
+            children: vec![Container {
+                width: Some(hyperchad_transformer::Number::Integer(80)),
+                height: Some(hyperchad_transformer::Number::Integer(80)),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn commit_input_scene(program: &mut BmuxProgram) {
+        program
+            .apply_view(
+                View::from(Container {
+                    children: vec![
+                        painted_input_owner(),
+                        Container {
+                            str_id: Some("unrelated".into()),
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        assert_eq!(program.committed_hit(0, 0).unwrap().key, "@0/0");
+    }
+
+    fn painted_pointer(program: &mut BmuxProgram, kind: MouseEventKind) {
+        program
+            .terminal(&Event::Mouse(bmux_tui::event::MouseEvent::new(
+                kind,
+                bmux_tui::geometry::Point::new(0, 0),
+            )))
+            .unwrap();
+    }
+
+    fn painted_click(program: &mut BmuxProgram) {
+        painted_pointer(
+            program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        painted_pointer(
+            program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+    }
+
+    fn painted_navigation_count(program: &BmuxProgram) -> usize {
+        program
+            .pending
+            .iter()
+            .filter(|work| matches!(work, Work::Navigate(url) if url == "/painted"))
+            .count()
+    }
+
+    fn replace_unrelated_input_sibling(program: &mut BmuxProgram) {
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("unrelated".into()),
+                    children: vec![Container::default()],
+                    ..Default::default()
+                }),
+                Some("unrelated"),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn prepared_resource_stale_epoch_and_context_do_not_install_or_clear_new_retry() {
+        let mut program = program();
+        program.resources.insert("art".into(), "/art".into());
+        program.resource_epochs.insert("art".into(), 2);
+        let policy = crate::graphics::SourcePolicy {
+            allow_memory: true,
+            ..Default::default()
+        };
+        let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#fff"/></svg>"##;
+        for (generation, context) in [(1, None), (2, Some(999))] {
+            let image = GraphicsStore::prepare_for_display(
+                program.shared.config.graphics,
+                "art",
+                &crate::graphics::GraphicsSource::Memory,
+                &policy,
+                svg,
+                None,
+            )
+            .unwrap();
+            let permit = Arc::clone(&program.decode_permits)
+                .try_acquire_owned()
+                .unwrap();
+            program.resource_active = 1;
+            program
+                .install_resource(ResourcePreparation {
+                    key: "art".into(),
+                    source: "/art".into(),
+                    generation,
+                    context,
+                    encoded_bytes: svg.len(),
+                    timing: None,
+                    result: Ok(image),
+                    _permit: Box::new(permit),
+                })
+                .unwrap();
+            assert!(program.graphics.rgba("art").is_none());
+            assert!(!program.resource_loaded.contains("art"));
+            assert_eq!(program.resource_epochs["art"], 2);
+            assert_eq!(program.decode_permits.available_permits(), 4);
+        }
+    }
+
+    #[test]
+    fn prepared_resource_failure_stays_negative_until_explicit_retry() {
+        let mut program = program();
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("art".into()),
+                    element: Element::Image {
+                        source: Some("/art".into()),
+                        alt: None,
+                        fit: None,
+                        source_set: None,
+                        sizes: None,
+                        loading: None,
+                    },
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        let generation = program.resource_epochs["art"];
+        program.pending.clear();
+        let permit = Arc::clone(&program.decode_permits)
+            .try_acquire_owned()
+            .unwrap();
+        program
+            .install_resource(ResourcePreparation {
+                key: "art".into(),
+                source: "/art".into(),
+                generation,
+                context: program.resource_context,
+                encoded_bytes: 1,
+                timing: None,
+                result: Err(std::io::Error::other("rejected decode").into()),
+                _permit: Box::new(permit),
+            })
+            .unwrap();
+        program.prepare().unwrap();
+        assert!(
+            program
+                .pending
+                .iter()
+                .all(|work| !matches!(work, Work::Resource { .. }))
+        );
+        assert!(!program.resource_loaded.contains("art"));
+        program
+            .message(Message::RetryResource("art".into()))
+            .unwrap();
+        assert!(
+            program
+                .pending
+                .iter()
+                .any(|work| matches!(work, Work::Resource { key, .. } if key == "art"))
+        );
+        assert!(program.resource_epochs["art"] > generation);
+    }
+
+    #[test]
+    fn blocking_prepare_timeout_keeps_closure_permit_and_current_thread_progress() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let permits = Arc::new(tokio::sync::Semaphore::new(4));
+            let (started_tx, started_rx) = flume::bounded(1);
+            let (release_tx, release_rx) = flume::bounded::<()>(1);
+            let job = tokio::spawn(prepare_blocking(
+                Arc::clone(&permits).acquire_owned().await.unwrap(),
+                move || {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                },
+            ));
+            started_rx.recv_async().await.unwrap();
+            // The current-thread executor processes independent work while the
+            // blocking closure waits. No elapsed-time assertion is involved.
+            assert_eq!(tokio::spawn(async { 7 }).await.unwrap(), 7);
+            let mut job = job;
+            assert!(
+                tokio::time::timeout(std::time::Duration::ZERO, &mut job)
+                    .await
+                    .is_err()
+            );
+            // The command's effect timeout drops the awaiting wrapper, not the
+            // actual closure. Abort that wrapper after the deadline fires.
+            job.abort();
+            assert!(job.await.unwrap_err().is_cancelled());
+            assert_eq!(permits.available_permits(), 3);
+            release_tx.send(()).unwrap();
+            let all = Arc::clone(&permits).acquire_many_owned(4).await.unwrap();
+            drop(all);
+        });
+    }
+
+    #[test]
+    fn blocking_prepare_cancellation_keeps_actual_closure_and_result_bounded() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let permits = Arc::new(tokio::sync::Semaphore::new(4));
+            let (started_tx, started_rx) = flume::bounded(4);
+            let (release_tx, release_rx) = flume::bounded::<()>(4);
+            let mut tasks = Vec::new();
+            for _ in 0..4 {
+                let permit = Arc::clone(&permits).acquire_owned().await.unwrap();
+                let started = started_tx.clone();
+                let release = release_rx.clone();
+                tasks.push(tokio::spawn(prepare_blocking(permit, move || {
+                    started.send(()).unwrap();
+                    release.recv().unwrap();
+                })));
+            }
+            for _ in 0..4 {
+                started_rx.recv_async().await.unwrap();
+            }
+            for task in tasks {
+                task.abort();
+                assert!(task.await.unwrap_err().is_cancelled());
+            }
+            assert_eq!(permits.available_permits(), 0);
+            assert!(Arc::clone(&permits).try_acquire_owned().is_err());
+            for _ in 0..4 {
+                release_tx.send(()).unwrap();
+            }
+            // Awaiting all capacity proves actual blocking closures have exited;
+            // no sleeps or wall-clock performance thresholds are involved.
+            let all = Arc::clone(&permits).acquire_many_owned(4).await.unwrap();
+            drop(all);
+            let completed =
+                prepare_blocking(Arc::clone(&permits).acquire_owned().await.unwrap(), || 42)
+                    .await
+                    .unwrap();
+            assert_eq!(completed.1, 42);
+            assert_eq!(permits.available_permits(), 3);
+            drop(completed);
+            assert_eq!(permits.available_permits(), 4);
+        });
+    }
+
+    #[test]
+    fn painted_anonymous_hit_keeps_action_owner_across_unrelated_generation() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let hit_epoch = program.node_epochs["@0/0"];
+        let owner_epoch = program.node_epochs["painted-owner"];
+        replace_unrelated_input_sibling(&mut program);
+        assert_eq!(program.node_epochs["@0/0"], hit_epoch);
+        assert_eq!(program.node_epochs["painted-owner"], owner_epoch);
+        assert_ne!(
+            program.committed.as_ref().unwrap().0,
+            program.state.generation()
+        );
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn painted_press_survives_unrelated_mutation_before_release() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(program.pressed.as_deref(), Some("@0/0"));
+        replace_unrelated_input_sibling(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 1);
+        assert!(program.pressed.is_none());
+    }
+
+    #[test]
+    fn identical_anonymous_replacement_cannot_inherit_painted_press() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        let hit_epoch = program.node_epochs["@0/0"];
+        let owner_epoch = program.node_epochs["painted-owner"];
+        let replacement = program.state.root().children[0].children[0].clone();
+        program
+            .apply_view(View::from(replacement), Some("@0/0"))
+            .unwrap();
+        assert_ne!(program.node_epochs["@0/0"], hit_epoch);
+        assert_eq!(program.node_epochs["painted-owner"], owner_epoch);
+        // Publishing the same path again must not revive the old Down binding.
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 0);
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn replaced_action_ancestor_cannot_inherit_painted_press() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        let owner_epoch = program.node_epochs["painted-owner"];
+        program
+            .apply_view(View::from(painted_input_owner()), Some("painted-owner"))
+            .unwrap();
+        assert_ne!(program.node_epochs["painted-owner"], owner_epoch);
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 0);
+    }
+
+    #[test]
+    fn removed_painted_target_cannot_dispatch_to_old_geometry() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("painted-owner".into()),
+                    ..Default::default()
+                }),
+                Some("painted-owner"),
+            )
+            .unwrap();
+        assert!(!program.node_epochs.contains_key("@0/0"));
+        assert_eq!(program.committed_hit(0, 0).unwrap().key, "@0/0");
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 0);
+    }
+
+    #[test]
+    fn discarded_candidate_does_not_publish_input_geometry_or_disable_continuous_hit() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let committed = Arc::clone(&program.committed.as_ref().unwrap().1);
+        replace_unrelated_input_sibling(&mut program);
+        program.prepare().unwrap();
+        program.discard_prepared();
+        assert!(Arc::ptr_eq(
+            &program.committed.as_ref().unwrap().1,
+            &committed
+        ));
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn painted_input_context_change_requires_fresh_presentation() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        let epoch = Arc::new(AtomicU64::new(1));
+        let callback_epoch = Arc::clone(&epoch);
+        let (actions, _) = flume::bounded(8);
+        let (resize, _) = flume::bounded(8);
+        let mut program = BmuxProgram::new(
+            BmuxConfig {
+                resource_context: Some(Arc::new(move || callback_epoch.load(Ordering::SeqCst))),
+                ..BmuxConfig::default()
+            },
+            actions,
+            resize,
+        );
+        commit_input_scene(&mut program);
+        let generation = program.state.generation();
+        epoch.store(2, Ordering::SeqCst);
+        program.revalidate_resource_context().unwrap();
+        assert_eq!(program.state.generation(), generation);
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 0);
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn committed_input_chain_checks_ancestor_epoch_context_and_missing_epoch() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let tree = &program.committed.as_ref().unwrap().1;
+        let visible = [tree.get("@0/0").unwrap().clone()];
+        let snapshot = CommittedInputs::collect(
+            tree,
+            &visible,
+            &program.node_epochs,
+            program.resource_context,
+        );
+        assert!(snapshot.continuous("@0/0", &program.node_epochs, program.resource_context));
+        let mut epochs = program.node_epochs.clone();
+        *epochs.get_mut("painted-owner").unwrap() += 1;
+        assert!(!snapshot.continuous("@0/0", &epochs, program.resource_context));
+        epochs.remove("painted-owner");
+        assert!(!snapshot.continuous("@0/0", &epochs, program.resource_context));
+        assert!(!snapshot.continuous("@0/0", &program.node_epochs, Some(987)));
+        assert!(!snapshot.continuous("unrelated", &program.node_epochs, program.resource_context));
+    }
+
+    #[test]
+    fn committed_input_snapshot_work_is_visible_seeds_plus_unique_parent_chains() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let tree = &program.committed.as_ref().unwrap().1;
+        let visible = [tree.get("@0/0").unwrap().clone()];
+        let epochs = program.node_epochs.clone();
+        let small = CommittedInputs::collect(tree, &visible, &epochs, None);
+        let mut large_tree = tree.as_ref().clone();
+        // Unvisited retained rows must not add snapshot work. No new tree index
+        // is needed: these rows must never be looked up by the input builder.
+        for _ in 0..4096 {
+            large_tree
+                .nodes
+                .push(tree.get("unrelated").unwrap().clone());
+        }
+        let mut large_epochs = epochs;
+        for index in 0..4096 {
+            large_epochs.insert(format!("offscreen-{index}"), 1);
+        }
+        let large = CommittedInputs::collect(&large_tree, &visible, &large_epochs, None);
+        assert_eq!(large.nodes, small.nodes);
+        assert_eq!(large.visited, small.visited);
+        assert_eq!(large.visited, visible.len() + large.nodes.len());
+        assert!(!large.nodes.contains_key("unrelated"));
+    }
+
+    #[test]
+    fn painted_native_control_replacement_cannot_inherit_capture_after_commit() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let mut native = painted_input_owner();
+        native.element = Element::Anchor {
+            href: Some("/painted".into()),
+            target: None,
+        };
+        native.actions.clear();
+        program
+            .apply_view(View::from(native.clone()), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        program
+            .apply_view(View::from(native), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 0);
+        painted_click(&mut program);
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn painted_native_control_keeps_its_own_chain_across_unrelated_mutation() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let mut native = painted_input_owner();
+        native.element = Element::Anchor {
+            href: Some("/painted".into()),
+            target: None,
+        };
+        native.actions.clear();
+        program
+            .apply_view(View::from(native), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        replace_unrelated_input_sibling(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 1);
+    }
+
+    #[test]
+    fn painted_focus_paste_requires_its_own_chain_not_continuous_pointer_hit() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let input = Container {
+            str_id: Some("unrelated".into()),
+            element: Element::Input {
+                input: hyperchad_transformer::Input::Text {
+                    value: Some("before".into()),
+                    placeholder: None,
+                },
+                name: None,
+                autofocus: None,
+            },
+            ..Default::default()
+        };
+        program
+            .apply_view(View::from(input.clone()), Some("unrelated"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        program.controls.focus(Some("unrelated"));
+        let tree = &program.committed.as_ref().unwrap().1;
+        let snapshot = CommittedInputs::collect(
+            tree,
+            &[
+                tree.get("@0/0").unwrap().clone(),
+                tree.get("unrelated").unwrap().clone(),
+            ],
+            &program.node_epochs,
+            program.resource_context,
+        );
+        program
+            .apply_view(View::from(input), Some("unrelated"))
+            .unwrap();
+        program.controls.focus(Some("unrelated"));
+        assert!(snapshot.continuous("@0/0", &program.node_epochs, program.resource_context));
+        assert!(!snapshot.continuous("unrelated", &program.node_epochs, program.resource_context));
+        let before = format!("{:?}", program.controls.value("unrelated"));
+        program.terminal(&Event::Paste("unsafe".into())).unwrap();
+        assert_eq!(format!("{:?}", program.controls.value("unrelated")), before);
+    }
+
+    #[test]
+    fn painted_focus_paste_survives_unrelated_generation() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let mut input = painted_input_owner();
+        input.element = Element::Input {
+            input: hyperchad_transformer::Input::Text {
+                value: Some("before".into()),
+                placeholder: None,
+            },
+            name: None,
+            autofocus: None,
+        };
+        input.actions.clear();
+        input.children.clear();
+        program
+            .apply_view(View::from(input), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        program.controls.focus(Some("painted-owner"));
+        assert_eq!(
+            program.controls.value("painted-owner"),
+            Some(crate::controls::ControlValue::Text("before".into()))
+        );
+        replace_unrelated_input_sibling(&mut program);
+        program.terminal(&Event::Paste("safe".into())).unwrap();
+        let Some(crate::controls::ControlValue::Text(value)) =
+            program.controls.value("painted-owner")
+        else {
+            panic!("text control missing");
+        };
+        assert!(value.contains("safe"));
+    }
+
+    #[test]
+    fn painted_offscreen_focus_tab_and_paste_keep_continuity_but_reject_replacement() {
+        let mut program = program();
+        let input = |key: &str| Container {
+            str_id: Some(key.into()),
+            element: Element::Input {
+                input: hyperchad_transformer::Input::Text {
+                    value: Some("before".into()),
+                    placeholder: None,
+                },
+                name: None,
+                autofocus: None,
+            },
+            height: Some(hyperchad_transformer::Number::Integer(32)),
+            ..Default::default()
+        };
+        program
+            .apply_view(
+                View::from(Container {
+                    overflow_y: hyperchad_transformer::models::LayoutOverflow::Auto,
+                    children: vec![
+                        input("first"),
+                        Container {
+                            str_id: Some("spacer".into()),
+                            height: Some(hyperchad_transformer::Number::Integer(1600)),
+                            ..Default::default()
+                        },
+                        input("last"),
+                    ],
+                    ..Default::default()
+                }),
+                None,
+            )
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        assert!(!program.committed_inputs.nodes.contains_key("last"));
+        program
+            .apply_view(
+                View::from(Container {
+                    str_id: Some("spacer".into()),
+                    height: Some(hyperchad_transformer::Number::Integer(1600)),
+                    ..Default::default()
+                }),
+                Some("spacer"),
+            )
+            .unwrap();
+        assert!(program.input_continuous("last"));
+        let tab = Event::Key(bmux_keyboard::KeyStroke::simple(
+            bmux_keyboard::KeyCode::Tab,
+        ));
+        program.controls.focus(Some("first"));
+        program.terminal(&tab).unwrap();
+        assert_eq!(program.controls.focused(), Some("last"));
+        assert_eq!(
+            program.controls.value("last"),
+            Some(crate::controls::ControlValue::Text("before".into()))
+        );
+        program.terminal(&Event::Paste("safe".into())).unwrap();
+        assert!(
+            matches!(program.controls.value("last"), Some(crate::controls::ControlValue::Text(value)) if value.contains("safe"))
+        );
+        let epochs = program.node_epochs.clone();
+        let root_key = program.committed.as_ref().unwrap().1.root_key.clone();
+        program.node_epochs.remove(&root_key);
+        assert!(!program.input_continuous("last"));
+        program.node_epochs = epochs;
+        let context = program.resource_context;
+        program.resource_context = Some(999);
+        assert!(!program.input_continuous("last"));
+        program.resource_context = context;
+        program
+            .apply_view(View::from(input("last")), Some("last"))
+            .unwrap();
+        assert!(!program.input_continuous("last"));
+        program.controls.focus(Some("first"));
+        program.terminal(&tab).unwrap();
+        assert_ne!(program.controls.focused(), Some("last"));
+    }
+
+    #[test]
+    fn painted_input_snapshot_commit_work_does_not_visit_offscreen_document() {
+        let mut counts = Vec::new();
+        for rows in [128, 4096] {
+            let mut program = program();
+            program
+                .apply_view(
+                    View::from(Container {
+                        overflow_y: hyperchad_transformer::models::LayoutOverflow::Auto,
+                        children: (0..rows)
+                            .map(|index| Container {
+                                str_id: Some(format!("row-{index}")),
+                                height: Some(hyperchad_transformer::Number::Integer(32)),
+                                ..Default::default()
+                            })
+                            .collect(),
+                        ..Default::default()
+                    }),
+                    None,
+                )
+                .unwrap();
+            program.prepare().unwrap();
+            program.commit_prepared();
+            counts.push((
+                program.committed_inputs.visited,
+                program.committed_inputs.nodes.len(),
+            ));
+        }
+        assert_eq!(counts[0], counts[1]);
+        assert!(counts[1].0 > 0 && counts[1].0 < 128);
+    }
+
+    #[test]
+    fn painted_click_outside_revalidates_each_owner_after_unrelated_update() {
+        use hyperchad_actions::{Action, ActionTrigger, ActionType};
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let outside = Container {
+            str_id: Some("unrelated".into()),
+            width: Some(hyperchad_transformer::Number::Integer(80)),
+            height: Some(hyperchad_transformer::Number::Integer(80)),
+            actions: vec![Action {
+                trigger: ActionTrigger::ClickOutside,
+                effect: ActionType::Navigate {
+                    url: "/outside".into(),
+                }
+                .into(),
+            }],
+            ..Default::default()
+        };
+        program
+            .apply_view(View::from(outside.clone()), Some("unrelated"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        // Keep the painted outside owner but advance the unrelated hit lifetime.
+        program
+            .apply_view(View::from(painted_input_owner()), Some("painted-owner"))
+            .unwrap();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(
+            program
+                .pending
+                .iter()
+                .filter(|work| matches!(work, Work::Navigate(url) if url == "/outside"))
+                .count(),
+            1
+        );
+        program.pending.clear();
+        // Replacing the outside owner must revoke it even though the hit itself
+        // can be made current by a later presentation.
+        program
+            .apply_view(View::from(outside), Some("unrelated"))
+            .unwrap();
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        assert!(
+            !program
+                .pending
+                .iter()
+                .any(|work| matches!(work, Work::Navigate(_)))
+        );
+    }
+
+    #[test]
+    fn painted_hover_owner_survives_unrelated_update_but_not_replacement() {
+        use hyperchad_actions::{Action, ActionTrigger, ActionType, ElementTarget, StyleAction};
+        let mut program = program();
+        commit_input_scene(&mut program);
+        let mut owner = painted_input_owner();
+        owner.actions = vec![Action {
+            trigger: ActionTrigger::Hover,
+            effect: ActionType::Style {
+                target: ElementTarget::SelfTarget,
+                action: StyleAction::SetBackground(Some("#abcdef".into())),
+            }
+            .into(),
+        }];
+        program
+            .apply_view(View::from(owner.clone()), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        replace_unrelated_input_sibling(&mut program);
+        painted_pointer(&mut program, MouseEventKind::Move);
+        assert_eq!(program.hover.as_deref(), Some("painted-owner"));
+        assert!(program.state.root().children[0].background.is_some());
+        program
+            .apply_view(View::from(owner), Some("painted-owner"))
+            .unwrap();
+        program.prepare().unwrap();
+        program.commit_prepared();
+        // Old hover state cannot suppress entry on the newly painted owner.
+        painted_pointer(&mut program, MouseEventKind::Move);
+        assert!(program.state.root().children[0].background.is_some());
+    }
+
+    #[test]
+    fn painted_press_resize_uses_committed_geometry_until_next_commit() {
+        let mut program = program();
+        commit_input_scene(&mut program);
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Down(bmux_tui::event::MouseButton::Left),
+        );
+        let committed = Arc::clone(&program.committed.as_ref().unwrap().1);
+        program
+            .terminal(&Event::Resize(Size::new(100, 40)))
+            .unwrap();
+        assert!(Arc::ptr_eq(
+            &program.committed.as_ref().unwrap().1,
+            &committed
+        ));
+        painted_pointer(
+            &mut program,
+            MouseEventKind::Up(bmux_tui::event::MouseButton::Left),
+        );
+        assert_eq!(painted_navigation_count(&program), 1);
     }
 
     #[test]

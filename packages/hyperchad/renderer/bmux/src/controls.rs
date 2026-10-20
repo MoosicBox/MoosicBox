@@ -550,6 +550,7 @@ impl Controls {
         root: &Container,
         report: &crate::state::ApplyReport,
     ) -> ControlOutcome {
+        let capture = self.captured.clone();
         for key in &report.removed {
             self.nodes.remove(key);
         }
@@ -558,7 +559,10 @@ impl Controls {
                 self.nodes.remove(&update.key);
             }
         }
-        self.reconcile(root)
+        let outcome = self.reconcile(root);
+        self.captured = capture
+            .filter(|key| self.nodes.contains_key(key) && !report.lifecycle_removed.contains(key));
+        outcome
     }
 
     /// A source-bound measurer resolves structural-path identities correctly.
@@ -908,12 +912,21 @@ impl Controls {
     /// controls whose native layout is deferred until focus. The host can
     /// instead supply focus from a broader document focus router.
     pub fn traverse(&mut self, backwards: bool) -> ControlOutcome {
+        self.traverse_admitted(backwards, &|_| true)
+    }
+
+    fn traverse_admitted(
+        &mut self,
+        backwards: bool,
+        admitted: &impl Fn(&str) -> bool,
+    ) -> ControlOutcome {
         let keys: Vec<_> = self
             .order
             .iter()
             .filter(|key| {
                 let control = &self.nodes[*key];
-                control.spec.focusable()
+                admitted(key)
+                    && control.spec.focusable()
                     && !control.spec.disabled
                     && control.placement_generation == self.prepare_generation
             })
@@ -937,12 +950,23 @@ impl Controls {
 
     /// Route native controls without a separate host interaction router.
     pub fn event(&mut self, event: &Event) -> ControlOutcome {
+        self.event_admitted(event, |_| true)
+    }
+
+    /// Route only controls whose painted source and owner chain remain valid.
+    /// Rejected capture/focus is cleared without dispatching into its replacement.
+    pub(crate) fn event_admitted(
+        &mut self,
+        event: &Event,
+        admitted: impl Fn(&str) -> bool,
+    ) -> ControlOutcome {
+        self.retain_input_owners(&admitted);
         if let Event::Key(stroke) = event
             && stroke.key == KeyCode::Tab
             && !stroke.modifiers.ctrl
             && !stroke.modifiers.alt
         {
-            return self.traverse(stroke.modifiers.shift);
+            return self.traverse_admitted(stroke.modifiers.shift, &admitted);
         }
         let target = match event {
             Event::Mouse(mouse) => self.captured.clone().or_else(|| {
@@ -962,6 +986,13 @@ impl Controls {
         let Some(target) = target else {
             return ControlOutcome::default();
         };
+        if !admitted(&target)
+            || matches!(event, Event::Mouse(mouse) if matches!(mouse.kind, MouseEventKind::Up(_)) && self.captured.is_none())
+        {
+            // Do not route through a rejected topmost control or deliver a
+            // release to a replacement which never received the press.
+            return ControlOutcome::handled();
+        }
         let mut outcome = ControlOutcome::default();
         if matches!(event, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left))
         {
@@ -974,6 +1005,15 @@ impl Controls {
             self.captured = None;
         }
         outcome
+    }
+
+    pub(crate) fn retain_input_owners(&mut self, admitted: impl Fn(&str) -> bool) {
+        if self.captured.as_deref().is_some_and(|key| !admitted(key)) {
+            self.captured = None;
+        }
+        if self.focused.as_deref().is_some_and(|key| !admitted(key)) {
+            self.focused = None;
+        }
     }
 
     /// Dispatch a host-router-resolved event. Pointer coordinates remain viewport

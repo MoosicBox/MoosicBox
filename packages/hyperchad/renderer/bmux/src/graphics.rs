@@ -214,6 +214,26 @@ pub enum GraphicsPlacement {
     Hidden,
 }
 
+pub(crate) struct PreparedImage {
+    width: u32,
+    height: u32,
+    rgba: Box<[u8]>,
+    png: Option<Vec<u8>>,
+    encoded_bytes: usize,
+    action_limit: usize,
+    pixel_visit_limit: u64,
+}
+
+struct ImagePreparation {
+    limits: GraphicsLimits,
+}
+
+impl ImagePreparation {
+    fn size(&self, width: u32, height: u32) -> Result<usize, GraphicsError> {
+        GraphicsStore::validate_size(self.limits, width, height)
+    }
+}
+
 /// Bounded LRU cache keyed by caller-owned stable resource identity.
 ///
 /// Canvases participate in eviction. Keep live resources refreshed or handle
@@ -289,10 +309,18 @@ impl GraphicsStore {
         }
     }
     fn size(&self, width: u32, height: u32) -> Result<usize, GraphicsError> {
+        Self::validate_size(self.limits, width, height)
+    }
+
+    fn validate_size(
+        limits: GraphicsLimits,
+        width: u32,
+        height: u32,
+    ) -> Result<usize, GraphicsError> {
         if width == 0
             || height == 0
-            || width > self.limits.max_dimension
-            || height > self.limits.max_dimension
+            || width > limits.max_dimension
+            || height > limits.max_dimension
         {
             return Err(GraphicsError::InvalidSize);
         }
@@ -301,9 +329,9 @@ impl GraphicsStore {
             .and_then(|n| n.checked_mul(4))
             .and_then(|n| usize::try_from(n).ok())
             .ok_or(GraphicsError::InvalidSize)?;
-        if size > self.limits.max_resource_bytes
-            || size > self.limits.max_total_bytes
-            || self.limits.max_entries == 0
+        if size > limits.max_resource_bytes
+            || size > limits.max_total_bytes
+            || limits.max_entries == 0
         {
             return Err(GraphicsError::Limit);
         }
@@ -428,24 +456,40 @@ impl GraphicsStore {
         encoded: &[u8],
         display_size: Option<(u32, u32)>,
     ) -> Result<(), GraphicsError> {
-        self.key(key)?;
+        let prepared =
+            Self::prepare_for_display(self.limits, key, source, policy, encoded, display_size)?;
+        self.install_prepared(key, source, policy, prepared)
+    }
+
+    pub(crate) fn prepare_for_display(
+        limits: GraphicsLimits,
+        key: &str,
+        source: &GraphicsSource,
+        policy: &SourcePolicy,
+        encoded: &[u8],
+        display_size: Option<(u32, u32)>,
+    ) -> Result<PreparedImage, GraphicsError> {
+        if key.is_empty() || key.len() > limits.max_key_bytes {
+            return Err(GraphicsError::InvalidKey);
+        }
         policy.authorize(source)?;
-        if encoded.len() > self.limits.max_encoded_bytes {
+        if encoded.len() > limits.max_encoded_bytes {
             return Err(GraphicsError::Limit);
         }
+        let preparation = ImagePreparation { limits };
         // Raster magic remains authoritative; unknown XML-like input goes
         // through the strict static SVG parser, never a resource resolver.
         if image::guess_format(encoded).is_err() {
-            return self.decode_svg(key, encoded, display_size);
+            return preparation.prepare_svg(encoded, display_size);
         }
         let reader = || {
             let mut reader = image::ImageReader::new(Cursor::new(encoded))
                 .with_guessed_format()
                 .map_err(|e| GraphicsError::Decode(e.to_string()))?;
             let mut limits = image::Limits::default();
-            limits.max_image_width = Some(self.limits.max_dimension);
-            limits.max_image_height = Some(self.limits.max_dimension);
-            limits.max_alloc = Some(self.limits.max_resource_bytes as u64);
+            limits.max_image_width = Some(preparation.limits.max_dimension);
+            limits.max_image_height = Some(preparation.limits.max_dimension);
+            limits.max_alloc = Some(preparation.limits.max_resource_bytes as u64);
             reader.limits(limits);
             Ok::<_, GraphicsError>(reader)
         };
@@ -454,20 +498,55 @@ impl GraphicsStore {
             other => GraphicsError::Decode(other.to_string()),
         };
         let (width, height) = reader()?.into_dimensions().map_err(classify)?;
-        self.size(width, height)?;
+        preparation.size(width, height)?;
         let decoded = reader()?.decode().map_err(classify)?;
         let rgba = decoded.into_rgba8().into_raw();
         // bmux's Kitty Contain path can retain and fit PNG natively. RGBA
         // Contain otherwise invokes CPU Lanczos3 and allocates a full cell canvas.
         // Keep the encoded copy inside the same resource and total byte budgets.
-        let png = native_png(&rgba, width, height, self.limits);
+        let png = native_png(&rgba, width, height, preparation.limits);
+        Ok(PreparedImage {
+            width,
+            height,
+            rgba: rgba.into_boxed_slice(),
+            png,
+            encoded_bytes: encoded.len(),
+            action_limit: preparation.limits.max_actions,
+            pixel_visit_limit: preparation.limits.max_pixel_visits,
+        })
+    }
+
+    pub(crate) fn install_prepared(
+        &mut self,
+        key: &str,
+        source: &GraphicsSource,
+        policy: &SourcePolicy,
+        prepared: PreparedImage,
+    ) -> Result<(), GraphicsError> {
+        self.key(key)?;
+        policy.authorize(source)?;
+        if prepared.encoded_bytes > self.limits.max_encoded_bytes
+            || prepared.action_limit > self.limits.max_actions
+            || prepared.pixel_visit_limit > self.limits.max_pixel_visits
+            || self.size(prepared.width, prepared.height)? != prepared.rgba.len()
+        {
+            return Err(GraphicsError::Limit);
+        }
+        let bytes = prepared
+            .rgba
+            .len()
+            .checked_add(prepared.png.as_ref().map_or(0, Vec::len))
+            .ok_or(GraphicsError::Limit)?;
+        if bytes > self.limits.max_resource_bytes || bytes > self.limits.max_total_bytes {
+            return Err(GraphicsError::Limit);
+        }
         self.insert(
             key,
             Resource {
-                width,
-                height,
-                rgba: rgba.into_boxed_slice(),
-                png,
+                width: prepared.width,
+                height: prepared.height,
+                rgba: prepared.rgba,
+                png: prepared.png,
                 canvas: None,
                 touched: 0,
             },
@@ -952,6 +1031,78 @@ mod tests {
         )
         .unwrap();
         (s, rgba, encoded.into_inner())
+    }
+
+    #[test]
+    fn prepared_decode_does_not_mutate_store_and_install_rechecks_limits_and_policy() {
+        let (mut s, _, encoded) = decoded_artwork_store();
+        let policy = SourcePolicy {
+            allow_memory: true,
+            ..Default::default()
+        };
+        let prepared = GraphicsStore::prepare_for_display(
+            s.limits,
+            "new",
+            &GraphicsSource::Memory,
+            &policy,
+            &encoded,
+            None,
+        )
+        .unwrap();
+        assert!(s.rgba("new").is_none());
+        let bytes = s.resident_bytes();
+        let old = s.rgba("art").unwrap().2.to_vec();
+        assert!(
+            s.install_prepared(
+                "new",
+                &GraphicsSource::Memory,
+                &SourcePolicy::default(),
+                prepared
+            )
+            .is_err()
+        );
+        assert_eq!(s.resident_bytes(), bytes);
+        assert_eq!(s.rgba("art").unwrap().2, old);
+        let prepared = GraphicsStore::prepare_for_display(
+            s.limits,
+            "art",
+            &GraphicsSource::Memory,
+            &policy,
+            &encoded,
+            None,
+        )
+        .unwrap();
+        s.limits.max_resource_bytes = 1;
+        assert!(
+            s.install_prepared("art", &GraphicsSource::Memory, &policy, prepared)
+                .is_err()
+        );
+        assert_eq!(s.resident_bytes(), bytes);
+        assert_eq!(s.rgba("art").unwrap().2, old);
+    }
+
+    #[test]
+    fn prepared_svg_install_is_atomic_against_live_canvas_budget() {
+        let mut s = store();
+        let policy = SourcePolicy {
+            allow_memory: true,
+            ..Default::default()
+        };
+        s.create_canvas("canvas", 2, 2).unwrap();
+        let prepared = GraphicsStore::prepare_for_display(
+            s.limits, "svg", &GraphicsSource::Memory, &policy,
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#fff"/></svg>"##,
+            None,
+        ).unwrap();
+        let before = s.resident_bytes();
+        s.limits.max_total_bytes = 16;
+        assert!(
+            s.install_prepared("svg", &GraphicsSource::Memory, &policy, prepared)
+                .is_err()
+        );
+        assert_eq!(s.resident_bytes(), before);
+        assert!(s.rgba("canvas").is_some());
+        assert!(s.rgba("svg").is_none());
     }
 
     #[test]

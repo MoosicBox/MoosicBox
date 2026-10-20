@@ -199,19 +199,239 @@ def stage_metrics(lines):
     for line in lines:
         for name, pattern in STAGES.items():
             match = pattern.search(line)
-            if match:
+            if match and (match.end() == len(line) or line[match.end()].isspace()):
                 samples[name].append(int(match[1]))
-    result = {}
-    for name, values in samples.items():
-        values.sort()
-        result[name] = dict(
-            samples=len(values),
-            **{
-                key: values[math.ceil(len(values) * q) - 1] / 1000 if values else None
-                for key, q in (("p50_ms", 0.5), ("p95_ms", 0.95), ("max_ms", 1))
-            },
+    return {name: timing_distribution(values) for name, values in samples.items()}
+
+
+def timing_distribution(values):
+    """Nearest-rank milliseconds; missing samples are not zero-duration work."""
+    values = sorted(values)
+    return dict(
+        samples=len(values),
+        **{
+            key: values[math.ceil(len(values) * q) - 1] / 1000 if values else None
+            for key, q in (("p50_ms", 0.5), ("p95_ms", 0.95), ("max_ms", 1))
+        },
+    )
+
+
+def duration_histogram_metrics(buckets, sum_us, max_us):
+    """Summarize runtime DurationHistogram values, not a serialized log schema.
+
+    Bounds follow packages/tui-runtime/src/stats.rs. Counts and sum saturate;
+    any saturation makes rank inference unavailable. Open-ended buckets never
+    become exact percentile estimates, even when max_us is available.
+    """
+    ceiling = (1 << 64) - 1
+    if (
+        not isinstance(buckets, (list, tuple))
+        or len(buckets) != 8
+        or any(type(value) is not int or not 0 <= value <= ceiling for value in buckets)
+        or any(
+            type(value) is not int or not 0 <= value <= ceiling
+            for value in (sum_us, max_us)
         )
-    return result
+    ):
+        raise ValueError("expected eight u64 buckets and u64 sum_us/max_us")
+    count = sum(buckets)
+    saturated = ceiling in (*buckets, sum_us, max_us) or count >= ceiling
+    quantiles = {}
+    bounds = (100, 500, 1000, 4000, 16000, 64000, 256000, None)
+    for label, numerator in (("p50", 50), ("p95", 95)):
+        interval = None
+        if count and not saturated:
+            rank = (count * numerator + 99) // 100
+            cumulative = 0
+            for index, value in enumerate(buckets):
+                cumulative += value
+                if cumulative >= rank:
+                    interval = dict(
+                        lower_us=0 if index == 0 else bounds[index - 1] + 1,
+                        upper_us=bounds[index],
+                    )
+                    break
+        quantiles[label] = interval
+    return dict(
+        samples=count,
+        sum_us=sum_us,
+        max_us=max_us if count else None,
+        status=(
+            "saturated_unknown_rank"
+            if saturated
+            else "bounded" if count else "missing_samples"
+        ),
+        quantile_method="nearest_rank_bucket_bounds_not_exact_percentiles",
+        quantile_bounds=quantiles,
+        input_causality="unknown",
+    )
+
+
+def phase_metrics(lines):
+    """Classify existing logs only; timestamps never imply input/frame linkage."""
+    samples = {
+        outcome: {name: [] for name in STAGES}
+        for outcome in ("successful", "failed", "unknown")
+    }
+    # Keep only admission records, not the entire log or unrelated payloads.
+    admission_lines = []
+    for line in lines:
+        outcome = re.search(r"\bsuccess=(true|false)(?=\s|$)", line)
+        key = (
+            ("successful" if outcome[1] == "true" else "failed")
+            if outcome
+            else "unknown"
+        )
+        for name, pattern in STAGES.items():
+            match = pattern.search(line)
+            if match and (match.end() == len(line) or line[match.end()].isspace()):
+                samples[key][name].append(int(match[1]))
+        if re.search(r"\bbmux input admission_(attempt|result|cancelled)\b", line):
+            admission_lines.append(line)
+    phases = {
+        outcome: {name: timing_distribution(values) for name, values in fields.items()}
+        for outcome, fields in samples.items()
+    }
+    coverage = {
+        name: (
+            "observed_unpaired"
+            if any(fields[name] for fields in samples.values())
+            else "missing_or_invalid"
+        )
+        for name in STAGES
+    }
+    # Admission sequence is independent of stage/frame sequence. Duplicate IDs
+    # (including concatenated runs) cannot be safely paired without a run scope.
+    attempts, results = collections.defaultdict(list), collections.defaultdict(list)
+    cancelled = collections.Counter()
+    malformed = 0
+    for line in admission_lines:
+        marker = re.search(r"\bbmux input admission_(attempt|result|cancelled)\b", line)
+        if not marker:
+            continue
+        sequence = re.search(r"\bsequence=Some\((\d+)\)(?=\s|$)", line)
+        if not sequence:
+            malformed += 1
+            continue
+        identity = int(sequence[1])
+        if marker[1] == "cancelled":
+            cancelled[identity] += 1
+        else:
+            (attempts if marker[1] == "attempt" else results)[identity].append(line)
+    counts = collections.Counter()
+    samples = {"pre_enqueue": [], "admission_wait": []}
+    for identity in attempts.keys() | results.keys() | cancelled.keys():
+        before, after = attempts[identity], results[identity]
+        if (
+            len(before) > 1
+            or len(after) > 1
+            or cancelled[identity] > 1
+            or (after and cancelled[identity])
+        ):
+            counts["ambiguous"] += 1
+            continue
+        if cancelled[identity]:
+            counts["cancelled" if before else "missing_attempt"] += 1
+            continue
+        if not before or not after:
+            counts["missing_result" if before else "missing_attempt"] += 1
+            continue
+        observed = re.search(r"\bobserved_us=(\d+)(?=\s|$)", before[0])
+        enqueue = re.search(r"\benqueue_us=(\d+)(?=\s|$)", before[0])
+        completion = re.search(r"\bcompletion_us=(\d+)(?=\s|$)", after[0])
+        accepted = re.search(r"\baccepted=(true|false)(?=\s|$)", after[0])
+        if not all((observed, enqueue, completion, accepted)):
+            counts["invalid"] += 1
+            continue
+        start, queued, end = int(observed[1]), int(enqueue[1]), int(completion[1])
+        if not start <= queued <= end:
+            counts["invalid"] += 1
+            continue
+        if accepted[1] == "false":
+            counts["rejected"] += 1
+            continue
+        counts["matched"] += 1
+        samples["pre_enqueue"].append(queued - start)
+        samples["admission_wait"].append(end - queued)
+    return dict(
+        quantile_method="nearest_rank",
+        aggregate_scope="all_logged_outcomes_unpaired_not_end_to_end",
+        coverage=coverage,
+        by_outcome=phases,
+        admission=dict(
+            scope="managed_reader_observation_to_fifo_admission_only",
+            correlation="sequence_matched_within_log_run_context_epoch_unverified",
+            counts={
+                key: counts[key]
+                for key in (
+                    "matched",
+                    "missing_attempt",
+                    "missing_result",
+                    "cancelled",
+                    "rejected",
+                    "invalid",
+                    "ambiguous",
+                )
+            },
+            malformed_records=malformed,
+            distributions={
+                name: timing_distribution(values) for name, values in samples.items()
+            },
+        ),
+        input_frame_correlation="unavailable_no_explicit_batch_linkage",
+        dispatch_and_commit="not_observed",
+        telemetry_loss="unknown_no_drop_accounting",
+    )
+
+
+def capture_provenance(capture):
+    """Preserve reported provenance; never derive build/source identity from HEAD."""
+    fields = ("sha256", "source_id", "build_id", "geometry")
+    values = {key: capture.get(key) for key in fields}
+    missing = [
+        key
+        for key in ("sha256", "source_id", "build_id")
+        if not isinstance(values[key], str) or not values[key].strip()
+    ]
+    geometry = values["geometry"]
+    if not isinstance(geometry, (dict, list)) or not geometry:
+        missing.append("geometry")
+    digest = values["sha256"]
+    if digest and (
+        not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest)
+    ):
+        missing.append("valid_sha256")
+    return dict(
+        reported=values,
+        missing=missing,
+        verified=False,
+        status="incomplete" if missing else "reported_unverified",
+        comparison="unavailable_workload_and_environment_identity_not_recorded",
+    )
+
+
+def compare_captures(reports):
+    """Explain identity differences without blessing unmatched workload evidence."""
+    identities = [report["provenance"]["reported"] for report in reports]
+    fields = ("sha256", "source_id", "build_id", "geometry")
+    return dict(
+        comparable=False,
+        reason="workload_environment_and_build_compatibility_not_established",
+        missing=[report["provenance"]["missing"] for report in reports],
+        identity_fields={
+            key: (
+                "missing"
+                if any(not item[key] for item in identities)
+                else (
+                    "equal"
+                    if all(item[key] == identities[0][key] for item in identities)
+                    else "different"
+                )
+            )
+            for key in fields
+        },
+        speedup="not_evaluated",
+    )
 
 
 WORK_FIELDS = {
@@ -500,6 +720,8 @@ def analyze_capture(directory):
         stages = stage_metrics(stream)
     with (directory / "app-0.log").open() as stream:
         work = work_metrics(stream)
+    with (directory / "app-0.log").open() as stream:
+        phases = phase_metrics(stream)
     with (directory / "result.json").open() as stream:
         capture = json.load(stream)
     return dict(
@@ -517,6 +739,8 @@ def analyze_capture(directory):
             )
         },
         stages=stages,
+        phases=phases,
+        provenance=capture_provenance(capture),
         work=work,
         kitty=analyzer.finish(),
         limitations=[
@@ -564,6 +788,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("captures", nargs="*", type=Path)
     parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="classify provenance compatibility, not a speedup verdict",
+    )
+    parser.add_argument(
         "--replay", type=Path, help="separate fixed-byte helper CPU replay, no renderer"
     )
     parser.add_argument(
@@ -572,6 +801,8 @@ if __name__ == "__main__":
         help="validate saved fixed-input matrix JSONL; no renderer execution",
     )
     args = parser.parse_args()
+    if args.compare and (args.fixture_log or args.replay or len(args.captures) != 2):
+        parser.error("--compare requires exactly two capture directories")
     if args.fixture_log and (args.replay or args.captures):
         parser.error("--fixture-log cannot be combined with captures or --replay")
     if args.fixture_log:
@@ -582,4 +813,14 @@ if __name__ == "__main__":
     else:
         if not args.captures:
             parser.error("provide capture directories or --replay terminal.bin")
-        print(json.dumps([analyze_capture(path) for path in args.captures], indent=2))
+        reports = [analyze_capture(path) for path in args.captures]
+        print(
+            json.dumps(
+                (
+                    dict(reports=reports, comparison=compare_captures(reports))
+                    if args.compare
+                    else reports
+                ),
+                indent=2,
+            )
+        )

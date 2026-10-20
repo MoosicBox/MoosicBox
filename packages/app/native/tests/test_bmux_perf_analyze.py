@@ -8,6 +8,11 @@ import unittest
 
 from bmux_perf_analyze import (
     KittyAnalyzer,
+    analyze_capture,
+    capture_provenance,
+    compare_captures,
+    phase_metrics,
+    duration_histogram_metrics,
     fixture_metrics,
     replay_profile,
     stage_metrics,
@@ -132,6 +137,16 @@ class StageTests(unittest.TestCase):
         self.assertEqual(result["resource_only"]["samples"], 0)
         self.assertIsNone(result["resource_only"]["p95_ms"])
 
+    def test_malformed_timing_tokens_are_not_numeric_samples(self):
+        result = stage_metrics(
+            [
+                "bmux prepare elapsed_us=1000oops layout_us=2.5",
+                "bmux presenter output present_us=-1 write_us=nan flush_us=1e9",
+            ]
+        )
+        for name in ("prepare", "layout", "present", "write", "flush"):
+            self.assertEqual(result[name]["samples"], 0, name)
+
     def test_nearest_rank_percentiles(self):
         result = stage_metrics(
             f"bmux prepare elapsed_us={i * 1000}" for i in range(1, 21)
@@ -139,6 +154,174 @@ class StageTests(unittest.TestCase):
         self.assertEqual(
             result["prepare"], dict(samples=20, p50_ms=10, p95_ms=19, max_ms=20)
         )
+
+
+class HistogramTests(unittest.TestCase):
+    def test_quantiles_are_inclusive_bucket_bounds_not_points(self):
+        result = duration_histogram_metrics([1, 1, 18, 0, 0, 0, 0, 0], 15000, 999)
+        self.assertEqual(result["samples"], 20)
+        self.assertEqual(
+            result["quantile_bounds"]["p50"], dict(lower_us=501, upper_us=1000)
+        )
+        self.assertEqual(
+            result["quantile_bounds"]["p95"], dict(lower_us=501, upper_us=1000)
+        )
+        self.assertNotIn("p95_ms", result)
+        self.assertEqual(result["input_causality"], "unknown")
+
+    def test_zero_duration_and_empty_are_distinct(self):
+        zero = duration_histogram_metrics([1, 0, 0, 0, 0, 0, 0, 0], 0, 0)
+        empty = duration_histogram_metrics([0] * 8, 0, 0)
+        self.assertEqual(zero["quantile_bounds"]["p95"], dict(lower_us=0, upper_us=100))
+        self.assertEqual(zero["max_us"], 0)
+        self.assertIsNone(empty["max_us"])
+        self.assertIsNone(empty["quantile_bounds"]["p95"])
+
+    def test_open_bucket_and_saturation_do_not_fabricate_percentile(self):
+        result = duration_histogram_metrics([0] * 7 + [1], 500000, 500000)
+        self.assertEqual(
+            result["quantile_bounds"]["p95"], dict(lower_us=256001, upper_us=None)
+        )
+        for buckets, total, maximum in (
+            ([(1 << 64) - 1] + [0] * 7, 0, 0),
+            ([1] + [0] * 7, (1 << 64) - 1, 100),
+        ):
+            result = duration_histogram_metrics(buckets, total, maximum)
+            self.assertEqual(result["status"], "saturated_unknown_rank")
+            self.assertIsNone(result["quantile_bounds"]["p95"])
+
+    def test_invalid_values_rejected(self):
+        for buckets, total, maximum in (
+            ([0] * 7, 0, 0),
+            ([True] + [0] * 7, 0, 0),
+            ([-1] + [0] * 7, 0, 0),
+            ([0] * 8, 1.5, 0),
+            ([0] * 8, 0, 1 << 64),
+        ):
+            with self.assertRaises(ValueError):
+                duration_histogram_metrics(buckets, total, maximum)
+
+
+class PhaseTests(unittest.TestCase):
+    def test_outcomes_and_missing_are_not_success_or_zero(self):
+        result = phase_metrics(
+            [
+                "bmux presenter output present_us=1000 success=true",
+                "bmux presenter output present_us=9000 success=false",
+                "bmux presenter output present_us=5000",
+            ]
+        )
+        self.assertEqual(result["by_outcome"]["successful"]["present"]["samples"], 1)
+        self.assertEqual(result["by_outcome"]["failed"]["present"]["max_ms"], 9)
+        self.assertEqual(result["by_outcome"]["unknown"]["present"]["max_ms"], 5)
+        self.assertEqual(result["coverage"]["paint"], "missing_or_invalid")
+        self.assertEqual(
+            result["input_frame_correlation"], "unavailable_no_explicit_batch_linkage"
+        )
+        self.assertEqual(result["telemetry_loss"], "unknown_no_drop_accounting")
+
+    def test_admission_pairs_by_id_not_order(self):
+        result = phase_metrics(
+            [
+                "bmux input admission_attempt sequence=Some(1) observed_us=10 enqueue_us=20",
+                "bmux input admission_attempt sequence=Some(2) observed_us=30 enqueue_us=40",
+                "bmux input admission_result sequence=Some(2) accepted=true completion_us=90",
+                "bmux input admission_result sequence=Some(1) accepted=true completion_us=120",
+            ]
+        )["admission"]
+        self.assertEqual(result["counts"]["matched"], 2)
+        self.assertEqual(result["distributions"]["admission_wait"]["max_ms"], 0.1)
+        self.assertEqual(result["distributions"]["pre_enqueue"]["samples"], 2)
+
+    def test_incomplete_ambiguous_rejected_invalid_and_cancelled(self):
+        lines = []
+        for identity in range(1, 8):
+            lines.append(
+                f"bmux input admission_attempt sequence=Some({identity}) observed_us=10 enqueue_us=20"
+            )
+        lines += [
+            "bmux input admission_attempt sequence=Some(1) observed_us=10 enqueue_us=20",
+            "bmux input admission_result sequence=Some(2) accepted=false completion_us=30",
+            "bmux input admission_result sequence=Some(3) accepted=true completion_us=5",
+            "bmux input admission_cancelled sequence=Some(4)",
+            "bmux input admission_result sequence=Some(5) accepted=true completion_us=30oops",
+            "bmux input admission_result sequence=Some(6) accepted=true completion_us=30",
+            "bmux input admission_cancelled sequence=Some(6)",
+            "bmux input admission_result sequence=Some(8) accepted=true completion_us=30",
+            "bmux input admission_result sequence=None accepted=true completion_us=30",
+        ]
+        result = phase_metrics(lines)["admission"]
+        self.assertEqual(
+            result["counts"],
+            dict(
+                matched=0,
+                ambiguous=2,
+                rejected=1,
+                invalid=2,
+                cancelled=1,
+                missing_result=1,
+                missing_attempt=1,
+            ),
+        )
+        self.assertEqual(result["malformed_records"], 1)
+        self.assertIsNone(result["distributions"]["admission_wait"]["p95_ms"])
+
+
+class ProvenanceTests(unittest.TestCase):
+    def test_missing_identity_never_inferred(self):
+        provenance = capture_provenance(dict(sha256="a" * 64))
+        self.assertEqual(provenance["missing"], ["source_id", "build_id", "geometry"])
+        self.assertFalse(provenance["verified"])
+        self.assertIn("valid_sha256", capture_provenance(dict(sha256="bad"))["missing"])
+
+    def test_equal_binary_is_not_comparable_workload(self):
+        provenance = capture_provenance(
+            dict(sha256="a" * 64, source_id="s", build_id="b", geometry=[140, 40])
+        )
+        result = compare_captures([dict(provenance=provenance)] * 2)
+        self.assertFalse(result["comparable"])
+        self.assertEqual(result["identity_fields"]["sha256"], "equal")
+        self.assertEqual(result["speedup"], "not_evaluated")
+
+    def test_different_identity_and_bad_types_are_explicit(self):
+        first = capture_provenance(
+            dict(sha256="a" * 64, source_id="s", build_id="b", geometry=[140, 40])
+        )
+        second = capture_provenance(
+            dict(sha256="b" * 64, source_id="t", build_id="b", geometry=[80, 24])
+        )
+        result = compare_captures([dict(provenance=first), dict(provenance=second)])
+        self.assertEqual(
+            result["identity_fields"],
+            dict(
+                sha256="different",
+                source_id="different",
+                build_id="equal",
+                geometry="different",
+            ),
+        )
+        self.assertFalse(result["comparable"])
+        invalid = capture_provenance(
+            dict(source_id=[], build_id=42, geometry="unknown")
+        )
+        self.assertEqual(
+            invalid["missing"], ["sha256", "source_id", "build_id", "geometry"]
+        )
+
+    def test_saved_capture_integration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "terminal.bin").write_bytes(b"text")
+            (path / "app-0.log").write_text(
+                "bmux presenter output present_us=1000 success=false\n"
+            )
+            (path / "result.json").write_text(json.dumps(dict(sha256="a" * 64)))
+            result = analyze_capture(path)
+        self.assertEqual(result["stages"]["present"]["samples"], 1)
+        self.assertEqual(
+            result["phases"]["by_outcome"]["successful"]["present"]["samples"], 0
+        )
+        self.assertEqual(result["provenance"]["status"], "incomplete")
 
 
 class WorkTests(unittest.TestCase):

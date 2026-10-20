@@ -563,6 +563,34 @@ def ready_sidebar_target(screen, label, main_bottom):
     return exact_sidebar_target(screen.text(), label, main_bottom)
 
 
+def first_albums_dispatched(lines, target, request_observed):
+    """Reject proven stale input, never infer route eligibility from painted icons.
+
+    The log slice must begin before the one first-Album click. A menu request
+    proves navigation reached data loading, not that the resulting UI is ready.
+    """
+    active = False
+    for line in lines:
+        if "bmux pointer phase=" in line:
+            active = False
+            match = re.search(
+                r"bmux pointer phase=before-controls kind=(?:Down|Up)\(Left\) x=(\d+) y=(\d+)(?=\s|$)",
+                line,
+            )
+            if match:
+                active = (int(match[1]), int(match[2])) == target
+        elif (
+            active
+            and "bmux pointer outcome=stale-committed-generation controls_invoked=false"
+            in line
+        ):
+            raise AssertionError(
+                "First Albums readiness failure: stale-committed-generation rejected input; "
+                "not an artwork latency sample (no click retry)"
+            )
+    return request_observed
+
+
 def album_click_candidates(screen, payloads, card_columns=None):
     """Resolve exact displayed title/artist pairs uniquely across ALL loaded IDs."""
     albums = {}
@@ -1429,15 +1457,18 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                 f"Cold structure {structure_seconds:.3f}s exceeds 300ms",
             )
 
-            # Resolve again under the parser lock and write before that scene can
-            # be replaced. No album request or fabricated WS Ready is required.
+            # This is only a parsed-scene barrier, not a runtime commit fence.
+            # Verify dispatch evidence afterwards; never retry a rejected click.
+            albums_target = None
+
             def click_ready_albums():
-                nonlocal albums_start
+                nonlocal albums_start, albums_target
                 with screen.lock:
                     target = ready_sidebar_target(screen, "Albums", rows - 4)
                     if target is None:
                         return False
                     x, y = target
+                    albums_target = target
                     albums_start = time.monotonic()
                     os.write(
                         master,
@@ -1453,18 +1484,47 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
                     return True
 
             albums_start = time.monotonic()
+            navigation_log_offsets = {
+                str(path): path.stat().st_size for path in Path(home).rglob("*.log")
+            }
             wait(click_ready_albums, "complete current Albums scene with active icon")
             frame("initial-shell")
+
+            def first_navigation_artwork():
+                request_observed = any(
+                    urllib.parse.urlsplit(path).path == "/menu/albums"
+                    for path, _ in list(gateway.payloads)
+                )
+                for path in Path(home).rglob("*.log"):
+                    with path.open() as stream:
+                        stream.seek(navigation_log_offsets.get(str(path), 0))
+                        first_albums_dispatched(stream, albums_target, request_observed)
+                return request_observed and any(
+                    image["received_seconds"] >= albums_start - started
+                    for image in decoded
+                )
+
             try:
                 wait(
-                    lambda: any(
-                        image["received_seconds"] >= albums_start - started
-                        for image in decoded
-                    ),
+                    first_navigation_artwork,
                     "actual decoded real artwork after navigation",
                     15,
                 )
             except AssertionError as error:
+                if "First Albums readiness failure" in str(error):
+                    event("first_albums_readiness", status="rejected_stale_commit")
+                    raise
+                if not any(
+                    urllib.parse.urlsplit(path).path == "/menu/albums"
+                    for path, _ in list(gateway.payloads)
+                ):
+                    event(
+                        "first_albums_readiness", status="unconfirmed_no_menu_response"
+                    )
+                    raise AssertionError(
+                        "First Albums readiness unconfirmed: no menu response; "
+                        "not an artwork latency sample"
+                    ) from error
                 failures.append(str(error))
             checks["decoded_real_artwork"] = bool(decoded)
             cover_receipt = min(
@@ -2136,6 +2196,28 @@ def run(executable, artifacts, timeout, kitty_screenshots=False):
 
 
 class SafetyTests(unittest.TestCase):
+    def test_first_navigation_rejection_is_readiness_not_cover_latency(self):
+        lines = [
+            'bmux pointer phase=before-controls kind=Down(Left) x=6 y=6 committed_generation=Some(1) current_generation=2 hit=Some("Albums")',
+            "bmux pointer outcome=stale-committed-generation controls_invoked=false",
+        ]
+        with self.assertRaisesRegex(
+            AssertionError, "readiness.*stale-committed-generation"
+        ):
+            first_albums_dispatched(lines, (6, 6), False)
+        self.assertFalse(first_albums_dispatched([], (6, 6), False))
+        self.assertTrue(first_albums_dispatched([], (6, 6), True))
+        self.assertFalse(first_albums_dispatched(lines, (8, 9), False))
+
+    def test_first_navigation_ignores_stale_other_pointer(self):
+        lines = [
+            "bmux pointer phase=before-controls kind=Down(Left) x=6 y=6",
+            "bmux pointer phase=after-dispatch kind=Down(Left) x=6 y=6",
+            "bmux pointer phase=before-controls kind=Move x=10 y=10",
+            "bmux pointer outcome=stale-committed-generation controls_invoked=false",
+        ]
+        self.assertFalse(first_albums_dispatched(lines, (6, 6), False))
+
     def test_sidebar_requires_latest_complete_scene_and_uploaded_active_icon(self):
         screen = LockedScreen()
         upload = b"\x1b_Ga=t,f=32,s=1,v=1,i=3;/////w==\x1b\\"

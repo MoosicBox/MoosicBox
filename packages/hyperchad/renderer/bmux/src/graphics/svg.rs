@@ -2,7 +2,9 @@
 
 use resvg::{tiny_skia, usvg};
 
-use super::{GraphicsError, GraphicsStore};
+#[cfg(test)]
+use super::GraphicsStore;
+use super::{GraphicsError, ImagePreparation, PreparedImage};
 
 const SVG_NAMESPACE: &str = "http://www.w3.org/2000/svg";
 // Independent ceilings keep parser/CSS/path allocations bounded even when callers
@@ -15,13 +17,12 @@ fn invalid(message: &str) -> GraphicsError {
     GraphicsError::Decode(format!("SVG: {message}"))
 }
 
-impl GraphicsStore {
-    pub(super) fn decode_svg(
-        &mut self,
-        key: &str,
+impl ImagePreparation {
+    pub(super) fn prepare_svg(
+        &self,
         encoded: &[u8],
         display_size: Option<(u32, u32)>,
-    ) -> Result<(), GraphicsError> {
+    ) -> Result<PreparedImage, GraphicsError> {
         if encoded.len() > MAX_SVG_BYTES {
             return Err(GraphicsError::Limit);
         }
@@ -112,7 +113,15 @@ impl GraphicsStore {
         );
         // tiny-skia stores premultiplied sRGB; bmux expects straight alpha.
         // Its maintained conversion also normalizes fully transparent pixels.
-        self.register_rgba(key, width, height, pixmap.take_demultiplied())
+        Ok(PreparedImage {
+            width,
+            height,
+            rgba: pixmap.take_demultiplied().into_boxed_slice(),
+            png: None,
+            encoded_bytes: encoded.len(),
+            action_limit: self.limits.max_actions,
+            pixel_visit_limit: self.limits.max_pixel_visits,
+        })
     }
 }
 
