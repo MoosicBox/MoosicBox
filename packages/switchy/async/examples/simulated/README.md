@@ -69,7 +69,18 @@ runtime.block_on(async {
 runtime.wait()?;
 ```
 
-Coordinating between blocking operations and spawned tasks.
+Coordinating between blocking operations and spawned tasks in the normal Tokio
+mode. With `--features simulator`, the example instead spawns that foreground
+future and explicitly alternates `runtime.tick()` with
+`switchy_time::simulator::next_step()` until all tasks (including nested tasks)
+finish. Polling alone does not advance simulated time. The driver returns an error
+after 100,000 steps rather than hanging indefinitely.
+
+Run the bounded completion regression test with:
+
+```bash
+cargo test --package async_simulated --features simulator
+```
 
 ## Running the example
 

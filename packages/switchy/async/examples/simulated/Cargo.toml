@@ -9,7 +9,7 @@ repository  = { workspace = true }
 version     = { workspace = true }
 
 [package.metadata]
-tests = false
+tests = true
 
 [dependencies]
 switchy_async  = { workspace = true, features = ["time", "tokio"] }

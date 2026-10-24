@@ -117,13 +117,24 @@ fn main() -> Result<(), Error> {
             });
         }
     });
-    runtime.block_on(async {
+    let foreground = async {
         println!("block on");
         // This sleeps longer than any of the spawned functions, but we poll
         // this to completion first even if we await here.
         time::sleep(Duration::from_secs(11)).await;
         println!("Blocking Function Polled To Completion");
-    });
+    };
+
+    #[cfg(not(feature = "simulator"))]
+    runtime.block_on(foreground);
+
+    #[cfg(feature = "simulator")]
+    {
+        // Polling tasks does not advance simulated time. Drive both explicitly,
+        // including the foreground sleeper and any nested tasks it outlives.
+        drop(runtime.spawn(foreground));
+        drive_simulation(&runtime)?;
+    }
 
     // We now wait on the runtime to complete each of the tasks that were
     // spawned before we exit the program
@@ -153,4 +164,29 @@ fn main() -> Result<(), Error> {
     // End of Asynchronous Execution
 
     Ok(())
+}
+
+/// Bound this example's simulation rather than spinning forever on stuck tasks.
+#[cfg(feature = "simulator")]
+fn drive_simulation(runtime: &Runtime) -> Result<(), Error> {
+    for _ in 0..100_000 {
+        // Give all of this small example's actors opportunities to run at each
+        // clock step. Keep polling and clock progression on the same thread.
+        for _ in 0..128 {
+            if runtime.try_finish() {
+                return Ok(());
+            }
+            runtime.tick();
+        }
+        let _ = switchy_time::simulator::next_step();
+    }
+    if runtime.try_finish() {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "simulation exceeded 100000 clock steps with unfinished tasks",
+        )
+        .into())
+    }
 }
