@@ -258,8 +258,13 @@ fn discover(root: &Path, directory: &Path, result: &mut Vec<PathBuf>) -> Result<
             // Nested independent workspaces do not belong to the outer workspace.
             let candidate = entry.path().join("Cargo.toml");
             if let Some(text) = read_optional(&candidate)? {
-                let doc: DocumentMut = text.parse()?;
-                if doc.get("workspace").is_some() {
+                // Only probe for an independent workspace here. Unrelated
+                // manifests (including intentionally invalid test fixtures) are
+                // not workspace members and must not fail discovery. Selected
+                // members and automatic path members are parsed strictly later.
+                if let Ok(doc) = text.parse::<DocumentMut>()
+                    && doc.get("workspace").is_some()
+                {
                     continue;
                 }
             }

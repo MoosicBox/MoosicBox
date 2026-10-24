@@ -41,6 +41,46 @@ fn plan(input: &UpgradeInput, versions: &[&str]) -> UpgradePlan {
 const PACKAGE: &str = "[package]\nname='fixture'\nversion='0.1.0'\n";
 
 #[test]
+fn workspace_discovery_ignores_invalid_nonmembers_but_rejects_invalid_members() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers=['member']\n").unwrap();
+    for name in ["member", "fixtures/invalid", "independent/member"] {
+        fs::create_dir_all(root.join(name)).unwrap();
+    }
+    fs::write(root.join("member/Cargo.toml"), PACKAGE).unwrap();
+    fs::write(
+        root.join("fixtures/invalid/Cargo.toml"),
+        "This is clearly not a valid Cargo.toml.",
+    )
+    .unwrap();
+    fs::write(
+        root.join("independent/Cargo.toml"),
+        "[workspace]\nmembers=['member']\n",
+    )
+    .unwrap();
+    fs::write(root.join("independent/member/Cargo.toml"), "also invalid").unwrap();
+    let options = UpgradeOptions {
+        manifest_path: Some(root.into()),
+        lockfile: Some(LockfilePolicy::None),
+        ..UpgradeOptions::default()
+    };
+    let input = load_upgrade_input(&options).unwrap();
+    assert_eq!(input.manifests.len(), 2);
+    assert!(plan_upgrade_with_releases(&input, &BTreeMap::new()).is_ok());
+
+    // Being selected as a member must not suppress a malformed manifest.
+    fs::write(root.join("member/Cargo.toml"), "also invalid").unwrap();
+    assert!(load_upgrade_input(&options).is_err());
+    fs::write(
+        root.join("member/Cargo.toml"),
+        format!("{PACKAGE}[dependencies]\nbroken={{path='../fixtures/invalid'}}\n"),
+    )
+    .unwrap();
+    assert!(load_upgrade_input(&options).is_err());
+}
+
+#[test]
 fn locked_baseline_rejects_msrv_induced_downgrade() {
     let (dir, _) = fixture(&format!("{PACKAGE}[dependencies]\nfoo='1.0.0'\n"), |_| {});
     fs::write(dir.path().join("Cargo.lock"),"version=4\n[[package]]\nname='foo'\nversion='1.9.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\n").unwrap();
