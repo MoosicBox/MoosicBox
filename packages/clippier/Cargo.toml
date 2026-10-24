@@ -178,6 +178,7 @@ release = [
     "switchy_async/net",
 ]
 upgrade = [
+    "dep:bmux_tui",
     "dep:cargo_metadata",
     "dep:reqwest",
     "dep:semver",

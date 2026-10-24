@@ -519,6 +519,13 @@ requirements; it does not implicitly permit changing pins or introducing prerele
 `--pinned upgrade`, `--prerelease allow`, and `--msrv <VERSION>` are independent
 controls. Dependency kinds can be restricted with `--kinds normal,dev,build`.
 
+Text output shows changed declarations and warnings by default, with inherited
+workspace dependencies listed once. Use `--verbose` (`-v`) to include unchanged
+and skipped declarations and their policy explanations. The summary always reports
+lockfile work, even when no manifest requirement changes. JSON retains all consumer
+occurrences regardless of verbosity. `--color auto|always|never` controls BMUX
+inline styling; auto respects `NO_COLOR`, `TERM=dumb`, and redirected output.
+
 Application displays a summary before prompting. Only `y`/`yes` (case-insensitive)
 accepts; any other input or EOF cancels. Non-interactive application requires
 `--yes` when work exists. Preview and no-work operations never prompt. `--yes`

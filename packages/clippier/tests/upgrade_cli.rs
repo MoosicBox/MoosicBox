@@ -249,6 +249,93 @@ fn text_groups_workspace_declarations_without_merging_local_dependencies() {
 }
 
 #[test]
+fn text_visibility_color_and_json_are_independent() {
+    let fixture = Fixture::new(Some("1.2.0"));
+    let plain = fixture.run(&["plan", "--offline", "--no-lockfile"]);
+    assert!(plain.status.success());
+    let text = String::from_utf8(plain.stdout).unwrap();
+    assert!(!text.contains("  demo"), "{text}");
+    assert!(!text.contains('\u{1b}'));
+    assert!(text.contains("No dependency upgrades available."));
+    let verbose = fixture.run(&[
+        "plan",
+        "--offline",
+        "--no-lockfile",
+        "-v",
+        "--color",
+        "never",
+    ]);
+    let text = String::from_utf8(verbose.stdout).unwrap();
+    assert!(
+        text.contains("demo [Normal]: 1.2.0 -> 1.2.0 (Unchanged:"),
+        "{text}"
+    );
+    assert!(!text.contains('\u{1b}'));
+    let colored = fixture.run(&[
+        "plan",
+        "--offline",
+        "--no-lockfile",
+        "--verbose",
+        "--color",
+        "always",
+    ]);
+    assert!(colored.status.success());
+    assert!(colored.stdout.contains(&0x1b));
+    // Styled inline output must not take over the terminal.
+    let styled = String::from_utf8(colored.stdout).unwrap();
+    assert!(!styled.contains("?1049"));
+    assert!(styled.contains("demo [Normal]"));
+    let json = fixture.run(&[
+        "plan",
+        "--offline",
+        "--no-lockfile",
+        "--output",
+        "json",
+        "--color",
+        "always",
+    ]);
+    assert!(!json.stdout.contains(&0x1b));
+    assert_eq!(
+        report(&json)["report"]["dependencies"][0]["status"],
+        "UNCHANGED"
+    );
+
+    // Routine skips disappear, but diagnostics remain available explicitly.
+    fs::write(
+        fixture.path().join("Cargo.toml"),
+        format!(
+            "{}[dependencies]\ndemo={{git='https://example.invalid/demo',version='1.0'}}\n",
+            "[package]\nname='fixture'\nversion='0.1.0'\n"
+        ),
+    )
+    .unwrap();
+    let hidden = fixture.run(&["plan", "--offline", "--no-lockfile"]);
+    assert!(
+        !String::from_utf8(hidden.stdout)
+            .unwrap()
+            .contains("demo [Normal]")
+    );
+    let shown = fixture.run(&["plan", "--offline", "--no-lockfile", "--verbose"]);
+    assert!(
+        String::from_utf8(shown.stdout)
+            .unwrap()
+            .contains("Git source preserved")
+    );
+
+    // Failure to find an eligible version is actionable, not a routine skip.
+    fs::write(
+        fixture.path().join("Cargo.toml"),
+        "[package]\nname='fixture'\nversion='0.1.0'\n[dependencies]\ndemo='9.0.0'\n",
+    )
+    .unwrap();
+    let warning = fixture.run(&["plan", "--offline", "--no-lockfile"]);
+    let text = String::from_utf8(warning.stdout).unwrap();
+    assert!(text.contains("Unavailable:"), "{text}");
+    assert!(text.contains("warnings: 1"), "{text}");
+    assert!(!text.contains("No dependency upgrades available."));
+}
+
+#[test]
 fn default_apply_refreshes_only_lockfile_when_requirement_is_current() {
     // >=1.0.0,<2 retains its spelling and already permits the selected 1.2.0.
     let fixture = Fixture::new(Some(">=1.0.0, <2"));

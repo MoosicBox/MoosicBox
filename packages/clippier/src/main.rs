@@ -161,6 +161,12 @@ mod upgrade_cli {
         /// Report format; JSON emits exactly one report on stdout
         #[arg(long, value_enum, default_value = "text", global = true)]
         output: Output,
+        /// Include unchanged and skipped dependencies with policy explanations
+        #[arg(short = 'v', long, global = true)]
+        verbose: bool,
+        /// Color mode for the upgrade report
+        #[arg(long, value_enum, default_value_t = clippier::ColorMode::Auto, global = true)]
+        color: clippier::ColorMode,
         /// Preview only, exiting unsuccessfully if changes are needed
         #[arg(long, global = true)]
         check: bool,
@@ -292,15 +298,94 @@ mod upgrade_cli {
         error: Option<&'a str>,
     }
 
-    fn write_text(writer: &mut impl Write, report: &UpgradeReport) -> io::Result<()> {
-        writeln!(writer, "Workspace: {}", report.workspace_root.display())?;
-        // Group by declaration ownership, not by the packages inheriting it.
-        // Keep the full per-consumer report intact for JSON/API callers.
+    fn use_color(mode: clippier::ColorMode, terminal: bool) -> bool {
+        match mode {
+            clippier::ColorMode::Always => true,
+            clippier::ColorMode::Never => false,
+            clippier::ColorMode::Auto => {
+                terminal
+                    && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
+                    && std::env::var_os("TERM").is_none_or(|v| v != "dumb")
+            }
+        }
+    }
+
+    fn write_line(
+        writer: &mut impl Write,
+        line: &bmux_tui::text::Line,
+        color: bool,
+    ) -> io::Result<()> {
+        use bmux_tui::{ansi::write_ansi_inline_frame, buffer::Buffer, geometry::Rect};
+        if color && let Ok(width) = u16::try_from(line.width().max(1)) {
+            let area = Rect::new(0, 0, width, 1);
+            let mut buffer = Buffer::empty(area);
+            buffer.write_line(area, line);
+            write_ansi_inline_frame(writer, &buffer)
+        } else {
+            for span in &line.spans {
+                write!(writer, "{}", span.content)?;
+            }
+            writeln!(writer)
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // One presentation pass over declaration groups.
+    fn write_text(
+        writer: &mut impl Write,
+        report: &UpgradeReport,
+        verbose: bool,
+        color: bool,
+    ) -> io::Result<()> {
+        use bmux_tui::{
+            style::{Color, Modifier, Style},
+            text::{Line, Span},
+        };
+        let accent = Style::new()
+            .fg(Color::Rgb(110, 205, 235))
+            .add_modifier(Modifier::BOLD);
+        let muted = Style::new().fg(Color::Rgb(150, 160, 180));
+        let success = Style::new().fg(Color::Rgb(120, 210, 155));
+        let warning = Style::new().fg(Color::Rgb(240, 195, 105));
+        let danger = Style::new().fg(Color::Rgb(245, 125, 140));
+        write_line(
+            writer,
+            &Line::from_spans(vec![Span::styled(
+                format!("Workspace: {}", report.workspace_root.display()),
+                accent,
+            )]),
+            color,
+        )?;
         let mut groups = std::collections::BTreeMap::new();
-        let mut workspace_declarations = std::collections::BTreeSet::new();
+        let mut owners = std::collections::BTreeSet::new();
+        let mut changed = 0;
+        let mut warnings = 0;
         for dependency in &report.dependencies {
-            if dependency.workspace
-                && !workspace_declarations.insert((&dependency.manifest, &dependency.alias))
+            let key = (
+                &dependency.manifest,
+                dependency.workspace,
+                &dependency.alias,
+                (!dependency.workspace).then_some((dependency.kind, &dependency.target)),
+            );
+            if !owners.insert(key) {
+                continue;
+            }
+            if matches!(
+                dependency.status,
+                UpgradeStatus::Planned | UpgradeStatus::Applied
+            ) {
+                changed += 1;
+            }
+            if matches!(
+                dependency.status,
+                UpgradeStatus::Unavailable | UpgradeStatus::Failed
+            ) {
+                warnings += 1;
+            }
+            if !verbose
+                && matches!(
+                    dependency.status,
+                    UpgradeStatus::Unchanged | UpgradeStatus::Skipped
+                )
             {
                 continue;
             }
@@ -315,36 +400,101 @@ mod upgrade_cli {
                 .push(dependency);
         }
         for ((_, heading), dependencies) in groups {
-            writeln!(writer, "\n{heading}:")?;
-            for dependency in dependencies {
-                write!(writer, "  {}", dependency.alias)?;
-                // These distinguish independent declarations of the same alias.
-                if !dependency.workspace {
-                    write!(writer, " [{:?}", dependency.kind)?;
-                    if let Some(target) = &dependency.target {
-                        write!(writer, ", {target}")?;
+            writeln!(writer)?;
+            write_line(
+                writer,
+                &Line::from_spans(vec![Span::styled(format!("{heading}:"), accent)]),
+                color,
+            )?;
+            let labels = dependencies
+                .iter()
+                .map(|d| {
+                    if d.workspace {
+                        d.alias.clone()
+                    } else {
+                        let target = d
+                            .target
+                            .as_ref()
+                            .map_or(String::new(), |t| format!(", {t}"));
+                        format!("{} [{:?}{target}]", d.alias, d.kind)
                     }
-                    write!(writer, "]")?;
-                }
-                writeln!(
-                    writer,
-                    ": {} -> {} ({:?}: {})",
-                    dependency.previous.as_deref().unwrap_or("-"),
-                    dependency.requirement.as_deref().unwrap_or("-"),
-                    dependency.status,
-                    dependency
+                })
+                .collect::<Vec<_>>();
+            let width = labels
+                .iter()
+                .map(|s| Line::from_spans(vec![Span::raw(s.clone())]).width())
+                .max()
+                .unwrap_or(0);
+            let old_width = dependencies
+                .iter()
+                .map(|d| d.previous.as_deref().unwrap_or("-").len())
+                .max()
+                .unwrap_or(0);
+            for (dependency, label) in dependencies.into_iter().zip(labels) {
+                let padding = width - Line::from_spans(vec![Span::raw(label.clone())]).width();
+                let status_style = match dependency.status {
+                    UpgradeStatus::Failed => danger,
+                    UpgradeStatus::Unavailable | UpgradeStatus::Cancelled => warning,
+                    UpgradeStatus::Planned | UpgradeStatus::Applied => success,
+                    _ => muted,
+                };
+                let mut spans = vec![
+                    Span::raw(format!("  {label}:{} ", " ".repeat(padding))),
+                    Span::styled(
+                        format!(
+                            "{:old_width$}",
+                            dependency.previous.as_deref().unwrap_or("-")
+                        ),
+                        muted,
+                    ),
+                    Span::styled(" -> ", muted),
+                    Span::styled(
+                        dependency.requirement.as_deref().unwrap_or("-"),
+                        status_style,
+                    ),
+                ];
+                if verbose
+                    || matches!(
+                        dependency.status,
+                        UpgradeStatus::Unavailable
+                            | UpgradeStatus::Failed
+                            | UpgradeStatus::Cancelled
+                    )
+                {
+                    let reason = dependency
                         .reason
                         .strip_prefix("workspace owner update affects this consumer: ")
-                        .unwrap_or(&dependency.reason)
-                )?;
+                        .unwrap_or(&dependency.reason);
+                    spans.push(Span::styled(
+                        format!(" ({:?}: {reason})", dependency.status),
+                        status_style,
+                    ));
+                }
+                write_line(writer, &Line::from_spans(spans), color)?;
             }
         }
-        writeln!(
+        if changed == 0 && warnings == 0 {
+            write_line(
+                writer,
+                &Line::from_spans(vec![Span::styled(
+                    "No dependency upgrades available.",
+                    muted,
+                )]),
+                color,
+            )?;
+        }
+        write_line(
             writer,
-            "Manifests: {}; lockfile: {:?}; applied: {}",
-            report.manifests.len(),
-            report.lockfile,
-            report.applied
+            &Line::from_spans(vec![Span::styled(
+                format!(
+                    "Changes: {changed} declarations; manifests: {}; warnings: {warnings}; lockfile: {:?}; applied: {}",
+                    report.manifests.len(),
+                    report.lockfile,
+                    report.applied
+                ),
+                accent,
+            )]),
+            color,
         )
     }
 
@@ -382,7 +532,12 @@ mod upgrade_cli {
             Output::Text => {
                 writeln!(stdout, "{:?}", report.outcome)?;
                 if let Some(inner) = report.details {
-                    write_text(&mut stdout, inner)?;
+                    write_text(
+                        &mut stdout,
+                        inner,
+                        flags.verbose,
+                        use_color(flags.color, io::stdout().is_terminal()),
+                    )?;
                 }
                 if let Some(diff) = report.diff {
                     write!(stdout, "{diff}")?;
@@ -477,7 +632,12 @@ mod upgrade_cli {
         if confirmation_needed(flags.yes, has_work) {
             // JSON stdout must remain a single final report. Preview and prompt use stderr.
             let mut stderr = io::stderr().lock();
-            write_text(&mut stderr, report)?;
+            write_text(
+                &mut stderr,
+                report,
+                flags.verbose,
+                use_color(flags.color, io::stderr().is_terminal()),
+            )?;
             if let Some(diff) = shown_diff {
                 write!(stderr, "{diff}")?;
             }
