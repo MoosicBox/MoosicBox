@@ -303,6 +303,11 @@ pub fn plan_upgrade_with_releases(
             owner_configs.insert(key, (config, fingerprint));
         }
     }
+    let used_owners = occurrences
+        .iter()
+        .filter(|o| !o.raw.workspace)
+        .map(|o| (o.owner.clone(), o.owner_key.clone()))
+        .collect::<BTreeSet<_>>();
     let mut decisions: BTreeMap<OwnerKey, Decision> = BTreeMap::new();
     let mut documents = input
         .manifests
@@ -356,12 +361,16 @@ pub fn plan_upgrade_with_releases(
                     .max_by(|a, b| a.version.cmp(&b.version));
                 if let Some(release) = choice {
                     reject_locked_downgrade(input, &registry, &req, &release.version)?;
-                    lock_targets.insert(registry.clone());
-                    lock_versions.insert(super::LockTarget {
-                        key: registry.clone(),
-                        previous: old.into(),
-                        selected: release.version.to_string(),
-                    });
+                    // Unused workspace declarations are manifest edits only.
+                    // Cargo does not resolve them into the dependency graph.
+                    if used_owners.contains(&key) {
+                        lock_targets.insert(registry.clone());
+                        lock_versions.insert(super::LockTarget {
+                            key: registry.clone(),
+                            previous: old.into(),
+                            selected: release.version.to_string(),
+                        });
+                    }
                     let next = if input.lockfile_only {
                         old.into()
                     } else {

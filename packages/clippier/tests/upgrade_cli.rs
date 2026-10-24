@@ -336,6 +336,83 @@ fn text_visibility_color_and_json_are_independent() {
 }
 
 #[test]
+fn unused_workspace_declaration_upgrades_without_a_locked_identity() {
+    let fixture = Fixture::new(None);
+    fs::write(
+        fixture.path().join("Cargo.toml"),
+        format!(
+            "{}[workspace.dependencies]\ndemo='1.0.0'\n",
+            fixture.original
+        ),
+    )
+    .unwrap();
+    let original_lock = "version=4\n[[package]]\nname='upgrade_cli_fixture'\nversion='0.1.0'\n";
+    fs::write(fixture.path().join("Cargo.lock"), original_lock).unwrap();
+    let applied = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    assert!(applied.status.success(), "{applied:?}");
+    assert_eq!(report(&applied)["outcome"], "APPLIED");
+    assert!(
+        fs::read_to_string(fixture.path().join("Cargo.toml"))
+            .unwrap()
+            .contains("1.2.0")
+    );
+    let lock = fs::read_to_string(fixture.path().join("Cargo.lock")).unwrap();
+    assert!(!lock.contains("demo"));
+}
+
+#[test]
+fn missing_used_lock_identity_is_reconciled_before_precise_update() {
+    for declaration in [
+        "demo='1.0.0'",
+        "alias={package='demo',version='1.0.0',optional=true}",
+        "alias={package='demo',version='1.0.0'}",
+    ] {
+        let fixture = Fixture::new(None);
+        fs::write(
+            fixture.path().join("Cargo.toml"),
+            format!(
+                "{}[target.'cfg(unix)'.dependencies]\n{declaration}\n",
+                fixture.original
+            ),
+        )
+        .unwrap();
+        fs::write(
+            fixture.path().join("Cargo.lock"),
+            "version=4\n[[package]]\nname='upgrade_cli_fixture'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        let applied = fixture.run(&["--offline", "--yes", "--output", "json"]);
+        assert!(applied.status.success(), "{declaration}: {applied:?}");
+        assert_eq!(report(&applied)["outcome"], "APPLIED");
+        assert!(
+            fs::read_to_string(fixture.path().join("Cargo.lock"))
+                .unwrap()
+                .contains("1.2.0")
+        );
+    }
+}
+
+#[test]
+fn multiple_locked_versions_matching_one_requirement_are_updated_by_identity() {
+    let fixture = Fixture::new(Some(">=1.0.0"));
+    let lock = fixture.seed_lockfile();
+    let checksum =
+        checksum(
+            &fs::read(fixture.path().join(
+                "cargo-home/registry/cache/index.crates.io-1949cf8c6b5b557f/demo-2.0.0.crate",
+            ))
+            .unwrap(),
+        );
+    fs::write(fixture.path().join("Cargo.lock"), format!("{lock}\n[[package]]\nname='demo'\nversion='2.0.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\nchecksum='{checksum}'\n")).unwrap();
+    let applied = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    assert!(applied.status.success(), "{applied:?}");
+    assert_eq!(report(&applied)["outcome"], "APPLIED");
+    let resolved = fs::read_to_string(fixture.path().join("Cargo.lock")).unwrap();
+    assert!(resolved.contains("2.0.0"));
+    assert!(!resolved.contains("1.0.0"));
+}
+
+#[test]
 fn default_apply_refreshes_only_lockfile_when_requirement_is_current() {
     // >=1.0.0,<2 retains its spelling and already permits the selected 1.2.0.
     let fixture = Fixture::new(Some(">=1.0.0, <2"));
@@ -652,6 +729,17 @@ fn apply_failure_is_not_reported_as_success_and_preserves_project() {
     assert_eq!(summary["report"]["status"], "FAILED");
     assert_eq!(summary["report"]["applied"], false);
     assert!(summary["error"].is_string());
+    fixture.assert_unchanged();
+    let text = fixture.run(&["--offline", "--yes", "--color", "never"]);
+    assert!(!text.status.success());
+    let stderr = String::from_utf8(text.stderr).unwrap();
+    assert!(stderr.contains("Applying upgrades:"));
+    assert!(stderr.contains("Upgrade failed"));
+    assert!(
+        !String::from_utf8(text.stdout)
+            .unwrap()
+            .contains("Workspace dependencies:")
+    );
     fixture.assert_unchanged();
 }
 

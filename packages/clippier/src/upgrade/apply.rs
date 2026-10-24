@@ -277,15 +277,63 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
             if sources.len() > 1 {
                 return Err(format!("targeted resolution of '{}' from multiple registries is unsupported; no live files written", key.name).into());
             }
-            if candidates.len() > 1 {
-                return Err(format!("multiple locked versions of {} satisfy {}; narrow the requirement before upgrading", key.name, target.previous).into());
-            }
             if candidates.is_empty() {
-                return Err(format!(
-                    "no locked registry identity for {}; regenerate lockfile explicitly",
-                    key.name
-                )
-                .into());
+                // A valid declaration need not already have a locked identity.
+                // Reconcile the edited manifests, retaining Cargo's existing
+                // locks rather than running an unrestricted update. Final
+                // selection, Git and protected-identity checks still apply.
+                cargo(
+                    &root,
+                    plan.offline,
+                    &["update".into(), "--workspace".into()],
+                )?;
+                let reconciled: toml::Value =
+                    toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
+                let packages = reconciled
+                    .get("package")
+                    .and_then(toml::Value::as_array)
+                    .ok_or("lockfile lacks packages")?;
+                let matches = packages
+                    .iter()
+                    .filter(|p| {
+                        p.get("name").and_then(toml::Value::as_str) == Some(&key.name)
+                            && p.get("source")
+                                .and_then(toml::Value::as_str)
+                                .is_some_and(|s| {
+                                    s.starts_with("registry+") || s.starts_with("sparse+")
+                                })
+                    })
+                    .collect::<Vec<_>>();
+                if matches.len() != 1 {
+                    return Err(format!(
+                        "cannot identify reconciled registry dependency {}; no live files written",
+                        key.name
+                    )
+                    .into());
+                }
+                let package = matches[0];
+                let version = package
+                    .get("version")
+                    .and_then(toml::Value::as_str)
+                    .ok_or("lock package lacks version")?;
+                let source = package
+                    .get("source")
+                    .and_then(toml::Value::as_str)
+                    .ok_or("lock package lacks source")?;
+                if version != selected {
+                    cargo(
+                        &root,
+                        plan.offline,
+                        &[
+                            "update".into(),
+                            "--package".into(),
+                            format!("{source}#{}@{version}", key.name),
+                            "--precise".into(),
+                            selected.clone(),
+                        ],
+                    )?;
+                }
+                continue;
             }
             for package in candidates {
                 let version = package
@@ -317,7 +365,14 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                     &[
                         "update".into(),
                         "--package".into(),
-                        format!("{}@{version}", key.name),
+                        format!(
+                            "{}#{}@{version}",
+                            package
+                                .get("source")
+                                .and_then(toml::Value::as_str)
+                                .ok_or("lock package lacks source")?,
+                            key.name
+                        ),
                         "--precise".into(),
                         selected.clone(),
                     ],

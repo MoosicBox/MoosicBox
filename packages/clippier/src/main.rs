@@ -531,7 +531,11 @@ mod upgrade_cli {
             }
             Output::Text => {
                 writeln!(stdout, "{:?}", report.outcome)?;
-                if let Some(inner) = report.details {
+                if matches!(report.outcome, Outcome::ApplyFailed) {
+                    eprintln!(
+                        "Upgrade failed — changes were not applied successfully. See error below."
+                    );
+                } else if let Some(inner) = report.details {
                     write_text(
                         &mut stdout,
                         inner,
@@ -689,6 +693,9 @@ mod upgrade_cli {
                     return Ok(1);
                 }
             }
+        }
+        if matches!(flags.output, Output::Text) {
+            eprintln!("Applying upgrades: resolving lockfile and validating changes…");
         }
         match apply_upgrade_plan(&plan).await {
             Ok(applied) => {

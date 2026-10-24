@@ -532,6 +532,12 @@ accepts; any other input or EOF cancels. Non-interactive application requires
 does not bypass validation or policy. JSON output remains on stdout, with prompts
 and diagnostics on stderr.
 
+Unused `[workspace.dependencies]` declarations can be upgraded without a lockfile
+entry. Missing entries for used dependencies are reconciled in the isolated Cargo
+workspace; existing matching versions are updated by source/version identity.
+Resolution errors leave live manifests and lockfile untouched. In particular, the
+tool does not relax explicit pins to work around dependency conflicts.
+
 By default, upgrades also refresh the lockfile, even if requirements are already
 current. `--lockfile resolve` requests minimal reconciliation; `--no-lockfile`
 (or `--lockfile none`) disables lockfile changes. Lockfile-only mode cannot be
