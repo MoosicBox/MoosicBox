@@ -26,7 +26,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex, RwLock},
 };
 
-use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
+use rand_08::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 
 use crate::GenericRng;
 
@@ -178,12 +178,12 @@ impl GenericRng for SimulatorRng {
     /// # Panics
     ///
     /// * If the internal mutex is poisoned
-    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand::Error> {
+    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand_08::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
 
-impl ::rand::RngCore for SimulatorRng {
+impl ::rand_08::RngCore for SimulatorRng {
     fn next_u32(&mut self) -> u32 {
         <Self as GenericRng>::next_u32(self)
     }
@@ -196,7 +196,7 @@ impl ::rand::RngCore for SimulatorRng {
         <Self as GenericRng>::fill_bytes(self, dest);
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand_08::Error> {
         <Self as GenericRng>::try_fill_bytes(self, dest)
     }
 }
@@ -388,7 +388,7 @@ mod tests {
     #[test_log::test]
     fn test_simulator_rng_mutable_rng_core_interface() {
         {
-            use rand::RngCore;
+            use rand_08::RngCore;
 
             let mut sim_rng = SimulatorRng::new(42_u64);
 

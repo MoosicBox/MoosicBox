@@ -2,6 +2,16 @@
 
 A basic random number generation library providing a unified interface for random number generation with optional seeding and distribution utilities.
 
+## Replay compatibility
+
+The RNG backend uses the separately named workspace dependency `rand_08`, pinned
+at `0.8.8`. The main workspace's `rand` remains on its newer API line. This pin
+protects seeded simulation replay; update it only after checking historical traces.
+`tests/replay.rs` records mixed-operation baselines captured with Rand `0.8.5`
+and checks simulator reset/seed progression in an isolated process. These checks
+currently cover 64-bit targets only: `SmallRng` uses a different algorithm on
+32-bit targets and does not promise cross-version/platform reproducibility.
+
 ## Features
 
 - **Generic RNG Interface**: Unified trait for different random number generators

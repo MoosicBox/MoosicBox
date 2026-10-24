@@ -723,7 +723,9 @@ test-strategy = { version = "0.4.5", default-features = false }
 time = "0.3.54"
 
 quote = "1.0.47"
-rand = "0.10.2"
+rand  = "0.10.2"
+# Separate 0.8 API line for deterministic simulation replay (see random/tests/replay.rs).
+rand_08 = { package = "rand", version = "=0.8.8", default-features = false }
 rangemap = "1.7.1"
 ratatui = "0.30.2"
 raw-window-handle = { version = "0.6.2", default-features = false }

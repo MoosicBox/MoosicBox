@@ -17,8 +17,8 @@ examples = true
 group = "switchy"
 
 [dependencies]
-log  = { workspace = true }
-rand = { version = "=0.8.5", features = ["small_rng"] }
+log     = { workspace = true }
+rand_08 = { workspace = true, features = ["small_rng", "std", "std_rng"] }
 
 [dev-dependencies]
 test-log = { workspace = true }

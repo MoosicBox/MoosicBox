@@ -51,7 +51,7 @@
 
 use std::sync::{Arc, Mutex};
 
-extern crate rand as external_rand;
+extern crate rand_08 as external_rand;
 use external_rand::RngCore;
 
 /// Standard random number generation backend.
@@ -91,7 +91,7 @@ pub trait GenericRng: Send + Sync + RngCore {
     /// # Errors
     ///
     /// * If the underlying random implementation fails to fill the bytes
-    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand::Error>;
+    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand_08::Error>;
 }
 
 /// A thread-safe wrapper around a `GenericRng` implementation.
@@ -119,7 +119,7 @@ impl<R: GenericRng> RngCore for RngWrapper<R> {
         <Self as GenericRng>::fill_bytes(self, dest);
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand_08::Error> {
         <Self as GenericRng>::try_fill_bytes(self, dest)
     }
 }
@@ -161,7 +161,7 @@ impl<R: GenericRng> GenericRng for RngWrapper<R> {
     ///
     /// * If the internal mutex is poisoned
     #[inline]
-    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
+    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), ::rand_08::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
@@ -232,9 +232,9 @@ macro_rules! impl_rng {
             #[must_use]
             pub fn random<T>(&self) -> T
             where
-                ::rand::distributions::Standard: ::rand::prelude::Distribution<T>,
+                ::rand_08::distributions::Standard: ::rand_08::prelude::Distribution<T>,
             {
-                ::rand::distributions::Standard.sample(&mut *self.0.lock().unwrap())
+                ::rand_08::distributions::Standard.sample(&mut *self.0.lock().unwrap())
             }
 
             /// Generates a random value within the specified range.
@@ -246,8 +246,8 @@ macro_rules! impl_rng {
             #[must_use]
             pub fn gen_range<T, R>(&self, range: R) -> T
             where
-                T: ::rand::distributions::uniform::SampleUniform,
-                R: ::rand::distributions::uniform::SampleRange<T>,
+                T: ::rand_08::distributions::uniform::SampleUniform,
+                R: ::rand_08::distributions::uniform::SampleRange<T>,
             {
                 assert!(!range.is_empty(), "cannot sample empty range");
                 range.sample_single(&mut *self.0.lock().unwrap())
@@ -277,8 +277,8 @@ macro_rules! impl_rng {
             #[must_use]
             pub fn gen_range_dist<T, R>(&self, range: R, dist: f64) -> T
             where
-                T: ::rand::distributions::uniform::SampleUniform,
-                R: ::rand::distributions::uniform::SampleRange<T>,
+                T: ::rand_08::distributions::uniform::SampleUniform,
+                R: ::rand_08::distributions::uniform::SampleRange<T>,
                 T: F64Convertible,
             {
                 assert!(!range.is_empty(), "cannot sample empty range");
@@ -311,8 +311,8 @@ macro_rules! impl_rng {
             #[must_use]
             pub fn gen_range_disti<T, R>(&self, range: R, dist: i32) -> T
             where
-                T: ::rand::distributions::uniform::SampleUniform,
-                R: ::rand::distributions::uniform::SampleRange<T>,
+                T: ::rand_08::distributions::uniform::SampleUniform,
+                R: ::rand_08::distributions::uniform::SampleRange<T>,
                 T: F64Convertible,
             {
                 assert!(!range.is_empty(), "cannot sample empty range");
@@ -327,7 +327,7 @@ macro_rules! impl_rng {
             ///
             /// * If the internal mutex is poisoned
             #[must_use]
-            pub fn sample<T, D: ::rand::prelude::Distribution<T>>(&self, distr: D) -> T {
+            pub fn sample<T, D: ::rand_08::prelude::Distribution<T>>(&self, distr: D) -> T {
                 distr.sample(&mut *self.0.lock().unwrap())
             }
 
@@ -336,7 +336,7 @@ macro_rules! impl_rng {
             /// # Panics
             ///
             /// * If the underlying `Rng` implementation fails to fill
-            pub fn fill<T: ::rand::Fill + ?Sized>(&self, dest: &mut T) {
+            pub fn fill<T: ::rand_08::Fill + ?Sized>(&self, dest: &mut T) {
                 dest.try_fill(&mut *self.0.lock().unwrap())
                     .unwrap_or_else(|_| core::panic!("Rng::fill failed"))
             }
@@ -346,10 +346,10 @@ macro_rules! impl_rng {
             /// # Errors
             ///
             /// * If the underlying `Rng` implementation fails to fill
-            pub fn try_fill<T: ::rand::Fill + ?Sized>(
+            pub fn try_fill<T: ::rand_08::Fill + ?Sized>(
                 &self,
                 dest: &mut T,
-            ) -> Result<(), ::rand::Error> {
+            ) -> Result<(), ::rand_08::Error> {
                 dest.try_fill(&mut *self.0.lock().unwrap())
             }
 
@@ -361,7 +361,7 @@ macro_rules! impl_rng {
             /// * If the internal mutex is poisoned
             #[must_use]
             pub fn gen_bool(&self, p: f64) -> bool {
-                let d = ::rand::distributions::Bernoulli::new(p).unwrap();
+                let d = ::rand_08::distributions::Bernoulli::new(p).unwrap();
                 self.sample(d)
             }
 
@@ -373,8 +373,8 @@ macro_rules! impl_rng {
             /// * If the internal mutex is poisoned
             #[must_use]
             pub fn gen_ratio(&self, numerator: u32, denominator: u32) -> bool {
-                let d =
-                    ::rand::distributions::Bernoulli::from_ratio(numerator, denominator).unwrap();
+                let d = ::rand_08::distributions::Bernoulli::from_ratio(numerator, denominator)
+                    .unwrap();
                 self.sample(d)
             }
         }

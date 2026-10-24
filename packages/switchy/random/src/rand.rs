@@ -17,13 +17,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use rand::{Rng as _, RngCore, SeedableRng, rngs::SmallRng};
+use rand_08::{Rng as _, RngCore, SeedableRng, rngs::SmallRng};
 
 /// Re-export of the `rand` crate for access to distribution types and traits.
 ///
 /// This allows users to access `rand`'s types like `Distribution`, `Uniform`, etc.
 /// without needing to add `rand` as a separate dependency.
-pub use rand;
+pub use rand_08 as rand;
 
 use crate::{GenericRng, Rng};
 
@@ -87,12 +87,12 @@ impl GenericRng for RandRng {
     /// # Panics
     ///
     /// * If the internal mutex is poisoned
-    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand::Error> {
+    fn try_fill_bytes(&self, dest: &mut [u8]) -> Result<(), rand_08::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
 
-impl ::rand::RngCore for RandRng {
+impl ::rand_08::RngCore for RandRng {
     fn next_u32(&mut self) -> u32 {
         self.0.lock().unwrap().next_u32()
     }
@@ -105,7 +105,7 @@ impl ::rand::RngCore for RandRng {
         self.0.lock().unwrap().fill_bytes(dest);
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), ::rand_08::Error> {
         self.0.lock().unwrap().try_fill_bytes(dest)
     }
 }
@@ -237,7 +237,7 @@ mod tests {
     #[test_log::test]
     fn test_rand_rng_mutable_rng_core_interface() {
         {
-            use rand::RngCore;
+            use rand_08::RngCore;
 
             let mut rng = RandRng::new(42_u64);
 
