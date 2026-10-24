@@ -161,6 +161,94 @@ fn report(output: &Output) -> Value {
 }
 
 #[test]
+fn text_groups_workspace_declarations_without_merging_local_dependencies() {
+    let fixture = Fixture::new(Some("1.0.0"));
+    fs::write(
+        fixture.path().join("Cargo.toml"),
+        "\
+[workspace]\nmembers=['one','two']\n\
+[workspace.dependencies]\ndemo='1.0.0'\nother={package='demo',version='1.0.0'}\n\
+[package]\nname='root'\nversion='0.1.0'\n\
+[dependencies]\ndemo='1.0.0'\n",
+    )
+    .unwrap();
+    for name in ["one", "two"] {
+        let member = fixture.path().join(name);
+        fs::create_dir_all(member.join("src")).unwrap();
+        fs::write(member.join("src/lib.rs"), "").unwrap();
+        fs::write(
+            member.join("Cargo.toml"),
+            format!(
+                "\
+[package]\nname='{name}'\nversion='0.1.0'\n\
+[dependencies]\ndemo.workspace=true\nother.workspace=true\n\
+[dev-dependencies]\ndemo.workspace=true\n"
+            ),
+        )
+        .unwrap();
+    }
+    // A separate local declaration must not be merged into the inherited demo.
+    let member = fixture.path().join("two/Cargo.toml");
+    let text = fs::read_to_string(&member).unwrap();
+    fs::write(
+        &member,
+        text.replace(
+            "[dependencies]\ndemo.workspace=true",
+            "[dependencies]\ndemo='1.0.0'\nlocal={package='demo',version='1.0.0'}",
+        ),
+    )
+    .unwrap();
+    let before_root = fs::read_to_string(fixture.path().join("Cargo.toml")).unwrap();
+    let before_member = fs::read_to_string(&member).unwrap();
+    let text = fixture.run(&["plan", "--offline", "--no-lockfile"]);
+    assert!(text.status.success(), "{text:?}");
+    let stdout = String::from_utf8(text.stdout).unwrap();
+    let workspace = stdout
+        .split("Workspace dependencies:\n")
+        .nth(1)
+        .unwrap()
+        .split("\nPackage ")
+        .next()
+        .unwrap();
+    assert_eq!(workspace.matches("  demo:").count(), 1, "{stdout}");
+    assert_eq!(workspace.matches("  other:").count(), 1, "{stdout}");
+    assert!(
+        stdout.contains("Package root:\n  demo [Normal]:"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("Package two:\n  demo [Normal]:"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("  local [Normal]:"), "{stdout}");
+    assert!(!stdout.contains("Package one:"), "{stdout}");
+
+    let json = fixture.run(&["plan", "--offline", "--no-lockfile", "--output", "json"]);
+    assert!(json.status.success(), "{json:?}");
+    let json = report(&json);
+    let dependencies = json["report"]["dependencies"].as_array().unwrap();
+    assert_eq!(
+        dependencies
+            .iter()
+            .filter(|d| d["workspace"] == true && d["alias"] == "demo")
+            .count(),
+        3
+    );
+    assert_eq!(
+        dependencies
+            .iter()
+            .filter(|d| d["workspace"] == false && d["alias"] == "demo")
+            .count(),
+        2
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.path().join("Cargo.toml")).unwrap(),
+        before_root
+    );
+    assert_eq!(fs::read_to_string(&member).unwrap(), before_member);
+}
+
+#[test]
 fn default_apply_refreshes_only_lockfile_when_requirement_is_current() {
     // >=1.0.0,<2 retains its spelling and already permits the selected 1.2.0.
     let fixture = Fixture::new(Some(">=1.0.0, <2"));

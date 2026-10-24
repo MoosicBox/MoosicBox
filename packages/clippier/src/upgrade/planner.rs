@@ -414,6 +414,10 @@ pub fn plan_upgrade_with_releases(
             package: occurrence.package,
             alias: occurrence.raw.alias,
             name: registry.name,
+            workspace: occurrence
+                .owner_key
+                .first()
+                .is_some_and(|key| key == "workspace"),
             manifest: occurrence.owner,
             consumer_manifest: occurrence.consumer,
             kind: occurrence.raw.kind,

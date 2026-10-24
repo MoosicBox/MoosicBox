@@ -228,6 +228,8 @@ pub struct DependencyReport {
     pub name: String,
     /// Source declaration's manifest (workspace root for inherited dependencies).
     pub manifest: PathBuf,
+    /// Whether the declaration belongs to `[workspace.dependencies]`.
+    pub workspace: bool,
     /// Consumer's manifest.
     pub consumer_manifest: PathBuf,
     /// Dependency kind.

@@ -294,17 +294,50 @@ mod upgrade_cli {
 
     fn write_text(writer: &mut impl Write, report: &UpgradeReport) -> io::Result<()> {
         writeln!(writer, "Workspace: {}", report.workspace_root.display())?;
+        // Group by declaration ownership, not by the packages inheriting it.
+        // Keep the full per-consumer report intact for JSON/API callers.
+        let mut groups = std::collections::BTreeMap::new();
+        let mut workspace_declarations = std::collections::BTreeSet::new();
         for dependency in &report.dependencies {
-            writeln!(
-                writer,
-                "{} / {}: {} -> {} ({:?}: {})",
-                dependency.package,
-                dependency.alias,
-                dependency.previous.as_deref().unwrap_or("-"),
-                dependency.requirement.as_deref().unwrap_or("-"),
-                dependency.status,
-                dependency.reason
-            )?;
+            if dependency.workspace
+                && !workspace_declarations.insert((&dependency.manifest, &dependency.alias))
+            {
+                continue;
+            }
+            let group = if dependency.workspace {
+                (0, "Workspace dependencies".to_owned())
+            } else {
+                (1, format!("Package {}", dependency.package))
+            };
+            groups
+                .entry(group)
+                .or_insert_with(Vec::new)
+                .push(dependency);
+        }
+        for ((_, heading), dependencies) in groups {
+            writeln!(writer, "\n{heading}:")?;
+            for dependency in dependencies {
+                write!(writer, "  {}", dependency.alias)?;
+                // These distinguish independent declarations of the same alias.
+                if !dependency.workspace {
+                    write!(writer, " [{:?}", dependency.kind)?;
+                    if let Some(target) = &dependency.target {
+                        write!(writer, ", {target}")?;
+                    }
+                    write!(writer, "]")?;
+                }
+                writeln!(
+                    writer,
+                    ": {} -> {} ({:?}: {})",
+                    dependency.previous.as_deref().unwrap_or("-"),
+                    dependency.requirement.as_deref().unwrap_or("-"),
+                    dependency.status,
+                    dependency
+                        .reason
+                        .strip_prefix("workspace owner update affects this consumer: ")
+                        .unwrap_or(&dependency.reason)
+                )?;
+            }
         }
         writeln!(
             writer,
