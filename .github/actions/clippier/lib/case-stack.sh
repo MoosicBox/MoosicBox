@@ -9,10 +9,14 @@ run_case_stack() {
     # Validate the transport before executing any commands. Setup identity must
     # match each case, even if a malformed matrix bypasses the planner.
     printf '%s' "$job" | jq -e '
-        del(.cases, .osIndex, .osCount, .hasMultipleOs, .osShort, .osEmoji) as $setup |
+        (.cases[0].package | del(.features)) as $setup |
+        . as $job |
+        all($setup | keys[]; . as $key | ($job | has($key)) and $job[$key] == $setup[$key]) and
         all(.cases[]; (.id | test("^case-[0-9]+$")) and
           ((.package | del(.features)) == $setup)) and
         ([.cases[].id] | length == (unique | length))' >/dev/null || return 1
+    # Execute and identify the canonical job, not workflow-added naming fields.
+    job=$(printf '%s' "$job" | jq -c '(.cases[0].package | del(.features)) + {cases: .cases}') || return 1
     if [[ "$count" -gt 1 ]]; then
         printf '%s' "$job" | jq -e '(.freshRunner != true) and
             ((.ciSteps // "") == "") and ((.dependencies // "") == "") and

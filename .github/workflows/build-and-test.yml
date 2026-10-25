@@ -140,6 +140,26 @@ jobs:
                   git-strategy: workflow-history
                   jq-filter: |
                       map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli")) | join("\n")))
+                  jq-post-filter: |
+                      (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
+                      | (group_by([.name, .os]) | map({key: ([.[0].name, .[0].os] | tojson), value: length}) | from_entries) as $osCounts
+                      | reduce .[] as $item ({result: [], counters: {}};
+                          ([$item.name, $item.os] | tojson) as $key |
+                          ((.counters[$key] // 0) + 1) as $idx |
+                          ($item.os | gsub("-latest$"; "")) as $osShort |
+                          {
+                              result: (.result + [$item + {
+                                  osIndex: $idx,
+                                  osCount: $osCounts[$key],
+                                  hasMultipleOs: $multiOs[$item.name],
+                                  osShort: $osShort,
+                                  osEmoji: (if $osShort == "ubuntu" then "🐧" elif $osShort == "macos" then "🍎" elif $osShort == "windows" then "🪟" else $osShort end),
+                                  stackSuffix: (if ($item.cases | length) > 1 then " · \($item.cases | length) cases" else "" end)
+                              }]),
+                              counters: (.counters + {($key): $idx})
+                          }
+                      )
+                      | .result
                   ignore: |
                       **/*.md
                       **/*.txt
@@ -281,7 +301,7 @@ jobs:
                   path: validation-report.json
 
     build:
-        name: ${{ matrix.package.name }} (${{ matrix.package.os }}, job ${{ strategy.job-index }})
+        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}${{ matrix.package.stackSuffix }}
         runs-on: ${{ matrix.package.os }}
 
         needs: [determine-affected-packages, build-clippier-machete]

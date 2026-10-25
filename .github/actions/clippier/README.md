@@ -32,6 +32,13 @@ cases run sequentially through the existing executor in separate processes and
 clean disposable checkouts; per-case results, diagnostics, and coverage remain
 separate. If incompatible setups cannot fit, analysis fails explicitly.
 
+The workflow keeps job naming in jq: `jq-filter` changes execution metadata
+before scheduling, while `jq-post-filter` adds top-level naming fields afterward.
+The latter may not change existing fields, cases, job order, or job count. The
+saved plan and diagnostic identities exclude those added naming fields. Build
+and Test uses this hook for its conditional OS emojis, per-package/OS job indexes,
+and a ` · N cases` suffix only on stacked jobs.
+
 Always upload `case-receipts-path`, including after test failure, and reconcile
 those receipts against the saved plan with `clippier verify-matrix`. Missing or
 failed cases must fail the workflow; summaries alone are not completion proof.

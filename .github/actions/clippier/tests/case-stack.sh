@@ -25,11 +25,20 @@ export TRACE="$work/trace"
 package='{"name":"fixture","path":".","os":"ubuntu-latest"}'
 export INPUT_RUN_MATRIX_PACKAGE_JSON
 INPUT_RUN_MATRIX_PACKAGE_JSON=$(printf '%s' "$package" | jq '. + {cases:[{id:"case-000000",package:(. + {features:["bad"]})},{id:"case-000001",package:(. + {features:["good"]})}]}')
+# Workflow-added naming fields must neither affect execution nor identity.
+INPUT_RUN_MATRIX_PACKAGE_JSON=$(printf '%s' "$INPUT_RUN_MATRIX_PACKAGE_JSON" | jq '. + {osEmoji:"🐧", stackSuffix:" · 2 cases", customLabel:"anything"}')
 if run_case_stack > "$work/log" 2>&1; then
     echo 'Failed case incorrectly succeeded' >&2
     exit 1
 fi
 receipts=$(sed -n 's/^case-receipts-path=//p' "$GITHUB_OUTPUT")
+canonical_hash=$(printf '%s' "$INPUT_RUN_MATRIX_PACKAGE_JSON" | jq -c '(.cases[0].package | del(.features)) + {cases: .cases}' | tr -d '\n' | md5sum | cut -c1-12)
+grep -q "^failure-artifact-name=clippier-diagnostics-job-$canonical_hash$" "$GITHUB_OUTPUT"
+# Cosmetic additions cannot mask a changed setup value.
+original_job="$INPUT_RUN_MATRIX_PACKAGE_JSON"
+INPUT_RUN_MATRIX_PACKAGE_JSON=$(printf '%s' "$original_job" | jq '.os = "windows-latest"')
+if run_case_stack >> "$work/log" 2>&1; then exit 1; fi
+INPUT_RUN_MATRIX_PACKAGE_JSON="$original_job"
 jq -s -e 'length == 2 and .[0].exit_code != 0 and .[1].exit_code == 0 and .[1].case.package.features == ["good"]' "$receipts"/*.json
 [[ $(wc -l < "$TRACE") == 2 ]]
 [[ $(cat "$work/repo/state") == clean ]]

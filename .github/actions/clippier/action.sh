@@ -698,6 +698,27 @@ output_matrix() {
         "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" --max-jobs "${INPUT_MAX_PARALLEL:-256}" > "$plan_dir/jobs.json" || return $?
         matrix_json=$(jq -c . "$plan_dir/jobs.json") || return $?
     fi
+    if [[ -n "${INPUT_JQ_POST_FILTER:-}" ]]; then
+        local filter_dir
+        filter_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/clippier-naming.XXXXXX") || return 1
+        printf '%s' "$matrix_json" > "$filter_dir/before.json"
+        printf '%s' "$matrix_json" | jq -c "$INPUT_JQ_POST_FILTER" > "$filter_dir/after.json" || return $?
+        # Naming may add top-level fields, never alter existing execution data,
+        # remove/reorder jobs, or emit multiple JSON documents.
+        jq -e -s --slurpfile before "$filter_dir/before.json" '
+            length == 1 and (.[0] | type == "array") and
+            (.[0] | length) == ($before[0] | length) and
+            (.[0] as $after | all(range(0; $before[0] | length);
+                . as $i | ($after[$i] | type == "object") and
+                all($before[0][$i] | keys[];
+                    . as $key | ($after[$i] | has($key)) and
+                    $after[$i][$key] == $before[0][$i][$key])))
+        ' "$filter_dir/after.json" >/dev/null || {
+            echo 'jq-post-filter may only add fields to existing jobs' >&2
+            return 1
+        }
+        matrix_json=$(jq -c . "$filter_dir/after.json") || return $?
+    fi
     echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
 }
 

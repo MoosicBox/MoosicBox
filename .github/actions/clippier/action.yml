@@ -193,6 +193,10 @@ inputs:
         required: false
         default: ""
 
+    jq-post-filter:
+        description: "jq filter applied after scheduling; may add job naming fields but cannot change existing jobs or execution data"
+        required: false
+
     matrix-properties:
         description: "Comma-separated list of properties to include in matrix"
         required: false
@@ -908,6 +912,7 @@ runs:
               INPUT_DOCKER_NAME_PREFIX: ${{ inputs.docker-name-prefix }}
               INPUT_TRANSFORM_SCRIPTS: ${{ inputs.transform-scripts }}
               INPUT_TRANSFORM_TRACE: ${{ inputs.transform-trace }}
+              INPUT_JQ_POST_FILTER: ${{ inputs.jq-post-filter }}
               INPUT_JQ_FILTER: ${{ inputs.jq-filter }}
               INPUT_PACKAGE_JSON: ${{ inputs.package-json }}
               INPUT_WORKSPACE_TOOLCHAINS_JSON: ${{ inputs.workspace-toolchains-json }}
