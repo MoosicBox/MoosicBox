@@ -44,7 +44,11 @@ test-log      = { workspace = true }
 [features]
 default = ["aac", "flac", "mp3", "opus"]
 
-fail-on-warnings = ["switchy_fs?/fail-on-warnings"]
+fail-on-warnings = [
+    "moosicbox_ogg_opus?/fail-on-warnings",
+    "moosicbox_opus_native?/fail-on-warnings",
+    "switchy_fs?/fail-on-warnings",
+]
 
 aac = ["dep:fdk-aac"]
 flac = ["dep:flacenc"]

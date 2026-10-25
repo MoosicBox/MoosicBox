@@ -63,6 +63,8 @@ jobs:
                   bash .github/actions/clippier/tests/analysis.sh
                   bash .github/actions/clippier/tests/case-stack.sh
                   bash .github/actions/clippier/tests/large-output.sh
+                  bash .github/actions/clippier/tests/validation.sh
+                  bash .github/actions/clippier/tests/report.sh
 
     cargo-deny:
         continue-on-error: true

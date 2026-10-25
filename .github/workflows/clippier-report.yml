@@ -98,6 +98,7 @@ jobs:
                   report-output-file: ./clippier-report/report.md
 
             - name: Add workflow job health
+              if: always()
               shell: bash
               env:
                   SUMMARY_TITLE: ${{ inputs.summary-title }}

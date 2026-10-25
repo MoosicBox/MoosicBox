@@ -54,6 +54,8 @@ cargo test -p clippier --no-default-features --test matrix_schedule_tests
 bash .github/actions/clippier/tests/analysis.sh
 bash .github/actions/clippier/tests/case-stack.sh
 bash .github/actions/clippier/tests/large-output.sh
+bash .github/actions/clippier/tests/validation.sh
+bash .github/actions/clippier/tests/report.sh
 ```
 
 ## Stateless Cargo release commands

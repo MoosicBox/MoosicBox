@@ -33,7 +33,10 @@ test-case         = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default          = ["libopus"]
-fail-on-warnings = []
-libopus          = ["dep:audiopus"]
-native           = ["dep:moosicbox_opus_native"]
+default = ["libopus"]
+fail-on-warnings = [
+    "moosicbox_ogg_opus/fail-on-warnings",
+    "moosicbox_opus_native?/fail-on-warnings",
+]
+libopus = ["dep:audiopus"]
+native = ["dep:moosicbox_opus_native"]

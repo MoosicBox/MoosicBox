@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Pure JSON/command boundary, also sourced by regression tests.
 run_clippier_json() {
-    local command="$1" output status
+    local command="$1" output status=0
+    local preserve_failure_output="${2:-false}"
     if output=$(eval "$command"); then
         :
     else
         status=$?
         echo "Clippier failed (exit $status)" >&2
-        return "$status"
+        if [[ "$preserve_failure_output" != true ]]; then
+            return "$status"
+        fi
     fi
     # Slurping distinguishes no documents from a valid empty array and rejects
     # multiple documents. jq empty alone accepts empty stdout.
@@ -15,7 +18,8 @@ run_clippier_json() {
         echo 'Clippier must produce exactly one JSON document' >&2
         return 1
     fi
-    printf '%s' "$output" | jq -c .
+    printf '%s' "$output" | jq -c . || return $?
+    return "$status"
 }
 
 validate_case_array() {

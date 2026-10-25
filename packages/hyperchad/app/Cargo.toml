@@ -74,6 +74,7 @@ default = [
 fail-on-warnings = [
     "hyperchad_actions/fail-on-warnings",
     "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_bmux?/fail-on-warnings",
     "hyperchad_renderer_egui?/fail-on-warnings",
     "hyperchad_renderer_fltk?/fail-on-warnings",
     "hyperchad_renderer_html?/fail-on-warnings",

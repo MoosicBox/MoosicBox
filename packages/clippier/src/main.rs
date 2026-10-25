@@ -2820,6 +2820,16 @@ mod lockfile_cli_tests {
                 let mut args = command.clone();
                 args.extend(["--use-lockfile", value, "--require-lockfile-match", value]);
                 let parsed = Args::try_parse_from(args).unwrap();
+                #[cfg(not(feature = "release"))]
+                let Commands::Publish {
+                    use_lockfile,
+                    require_lockfile_match,
+                    ..
+                } = parsed.cmd
+                else {
+                    panic!("expected publish");
+                };
+                #[cfg(feature = "release")]
                 let (use_lockfile, require_lockfile_match) = match parsed.cmd {
                     Commands::Publish {
                         use_lockfile,
@@ -2869,6 +2879,16 @@ mod publish_cli_tests {
             ] {
                 let mut args = command.clone();
                 args.extend(flags.iter().copied());
+                #[cfg(not(feature = "release"))]
+                let Commands::Publish {
+                    preflight: enabled,
+                    no_preflight: disabled,
+                    ..
+                } = Args::try_parse_from(args).unwrap().cmd
+                else {
+                    panic!("expected publish");
+                };
+                #[cfg(feature = "release")]
                 let (enabled, disabled) = match Args::try_parse_from(args).unwrap().cmd {
                     Commands::Publish {
                         preflight,

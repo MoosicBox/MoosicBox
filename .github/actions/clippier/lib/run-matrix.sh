@@ -1663,10 +1663,10 @@ run_matrix_aggregate_failures_command() {
     if [[ -n "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
         if [[ ! -d "${INPUT_RUN_MATRIX_WORKING_DIRECTORY}" ]]; then
             echo "ℹ️  Working directory doesn't exist: ${INPUT_RUN_MATRIX_WORKING_DIRECTORY}"
-            echo "ℹ️  No test failure artifacts were found - all tests may have passed!"
-            write_aggregate_content "# ✅ Workflow-Wide Test Results"
+            echo "ℹ️  No test diagnostics are available"
+            write_aggregate_content "# ⚠️ Workflow-Wide Test Results"
             write_aggregate_content ""
-            write_aggregate_content "**Status**: All tests passed! No failures to report."
+            write_aggregate_content "**Status**: No test diagnostics found. Test results are unavailable; check workflow job health."
             # Set outputs
             if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
                 echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
@@ -1713,64 +1713,20 @@ run_matrix_aggregate_failures_command() {
             ;;
     esac
 
-    # Find all test result artifact files in current directory
-    # Pattern: clippier-diagnostics-*.json (downloaded and merged from all matrix jobs)
+    # Artifacts may be flat, per-job, or nested under per-case directories.
+    # Keep paths intact so duplicate basenames and reproduction scripts remain
+    # associated with their original case.
     local json_files=()
-    for file in clippier-diagnostics-*.json; do
-        if [[ -f "$file" ]]; then
-            json_files+=("$file")
-        fi
-    done
-
-    # Rename reproduce.sh scripts to be unique based on their artifact
-    # When artifacts are merged, multiple reproduce.sh files would overwrite each other
-    # We look for reproduce.sh in subdirectories (artifact-name/reproduce.sh pattern)
-    # and rename them to reproduce_<artifact-name>.sh in the current directory
-    for artifact_dir in clippier-diagnostics-*/; do
-        if [[ -d "$artifact_dir" ]]; then
-            local reproduce_script="${artifact_dir}reproduce.sh"
-            if [[ -f "$reproduce_script" ]]; then
-                # Extract artifact name from directory (remove trailing slash)
-                local artifact_name="${artifact_dir%/}"
-                # Remove "clippier-diagnostics-" prefix for cleaner name
-                local unique_suffix="${artifact_name#clippier-diagnostics-}"
-                local new_name="reproduce_${unique_suffix}.sh"
-                mv "$reproduce_script" "./$new_name"
-                echo "  📜 Renamed: $reproduce_script -> $new_name"
-            fi
-            # Also check for JSON file in subdirectory and move it up
-            for json_in_subdir in "${artifact_dir}"*.json; do
-                if [[ -f "$json_in_subdir" ]]; then
-                    local json_basename=$(basename "$json_in_subdir")
-                    if [[ ! -f "./$json_basename" ]]; then
-                        mv "$json_in_subdir" "./"
-                        json_files+=("$json_basename")
-                        echo "  📄 Moved: $json_in_subdir -> ./$json_basename"
-                    fi
-                fi
-            done
-        fi
-    done
-
-    # Also handle reproduce.sh in current directory (single artifact case or already merged)
-    # If there's a single reproduce.sh and we have JSON files, rename it based on first JSON
-    if [[ -f "reproduce.sh" && ${#json_files[@]} -gt 0 ]]; then
-        # Get unique suffix from first JSON file
-        local first_json="${json_files[0]}"
-        local unique_suffix="${first_json%.json}"
-        unique_suffix="${unique_suffix#clippier-diagnostics-}"
-        local new_name="reproduce_${unique_suffix}.sh"
-        if [[ ! -f "$new_name" ]]; then
-            mv "reproduce.sh" "$new_name"
-            echo "  📜 Renamed: reproduce.sh -> $new_name"
-        fi
-    fi
+    local json_file
+    while IFS= read -r -d '' json_file; do
+        json_files+=("$json_file")
+    done < <(find . -type f -name 'clippier-diagnostics-*.json' -print0)
 
     if [[ ${#json_files[@]} -eq 0 ]]; then
-        echo "ℹ️  No test result artifacts found - all tests may have passed!"
-        write_aggregate_content "# ✅ Workflow-Wide Test Results"
+        echo "ℹ️  No test diagnostics are available"
+        write_aggregate_content "# ⚠️ Workflow-Wide Test Results"
         write_aggregate_content ""
-        write_aggregate_content "**Status**: All tests passed! No failures to report."
+        write_aggregate_content "**Status**: No test diagnostics found. Test results are unavailable; check workflow job health."
         # Set outputs
         if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
             echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT

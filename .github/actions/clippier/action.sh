@@ -675,7 +675,11 @@ run_clippier() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
     echo "" >&2
 
-    run_clippier_json "$cmd" || return $?
+    local preserve_failure_output=false
+    if [[ "$INPUT_COMMAND" == validate-feature-propagation ]]; then
+        preserve_failure_output=true
+    fi
+    run_clippier_json "$cmd" "$preserve_failure_output" || return $?
 }
 
 # Helper function to output matrix with optional jq-filter applied at the end of the pipeline
@@ -1687,7 +1691,11 @@ main() {
         return
     fi
 
-    RAW_OUTPUT=$(run_clippier) || return $?
+    local clippier_status=0
+    RAW_OUTPUT=$(run_clippier) || clippier_status=$?
+    if [[ "$clippier_status" -ne 0 && "$INPUT_COMMAND" != validate-feature-propagation ]]; then
+        return "$clippier_status"
+    fi
 
     # Debug: Log raw clippier output for diagnostics
     echo "📋 Clippier raw output:" >&2
@@ -1746,6 +1754,9 @@ main() {
                 generate_validation_summary "$RAW_OUTPUT"
             fi
         fi
+        # Validation JSON is diagnostic output even when the CLI fails (for
+        # example, on missing parent exposures or expired overrides).
+        return "$clippier_status"
     fi
 
     if [[ "$INPUT_COMMAND" == "features" || "$INPUT_COMMAND" == "packages" ]]; then
