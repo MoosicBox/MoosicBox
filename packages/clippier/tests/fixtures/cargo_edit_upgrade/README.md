@@ -51,7 +51,10 @@ native policies, then compares the rest of the manifest without exemptions:
   unchanged in both. This documents the observable difference, not a claim that
   upstream's behavior is incorrect.
 * Git declarations and patch tables are preserved, not converted into registry
-  sources. Exact/wildcard/upper-bound pins require explicit opt-in.
+  sources. `patched` also preserves the patched dependency's requirement: without
+  a resolved source identity, the planner reports the occurrence as unavailable
+  rather than guessing that a registry upgrade can replace the patch.
+  Exact/wildcard/upper-bound pins require explicit opt-in.
 
 Migration gaps are tested as rejection with **all inputs unchanged**, not parity:
 

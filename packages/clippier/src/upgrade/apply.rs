@@ -250,6 +250,10 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
         for target in &plan.lock_versions {
             let key = &target.key;
             let selected = &target.selected;
+            let registry_source = target
+                .registry_source
+                .as_deref()
+                .ok_or("cannot establish target registry identity; no live files written")?;
             let original_requirement = semver::VersionReq::parse(&target.previous)?;
             let current: toml::Value =
                 toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
@@ -267,7 +271,7 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                             .is_some_and(|v| original_requirement.matches(&v))
                         && p.get("source")
                             .and_then(toml::Value::as_str)
-                            .is_some_and(|s| s.starts_with("registry+") || s.starts_with("sparse+"))
+                            .is_some_and(|s| super::sources::same_registry(s, registry_source))
                 })
                 .collect::<Vec<_>>();
             let sources = candidates
@@ -299,9 +303,7 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                         p.get("name").and_then(toml::Value::as_str) == Some(&key.name)
                             && p.get("source")
                                 .and_then(toml::Value::as_str)
-                                .is_some_and(|s| {
-                                    s.starts_with("registry+") || s.starts_with("sparse+")
-                                })
+                                .is_some_and(|s| super::sources::same_registry(s, registry_source))
                     })
                     .collect::<Vec<_>>();
                 if matches.len() != 1 {
@@ -467,6 +469,14 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                     package.get("name").and_then(toml::Value::as_str) == Some(&target.key.name)
                         && package.get("version").and_then(toml::Value::as_str)
                             == Some(&target.selected)
+                        && package
+                            .get("source")
+                            .and_then(toml::Value::as_str)
+                            .is_some_and(|source| {
+                                target.registry_source.as_deref().is_some_and(|index| {
+                                    super::sources::same_registry(source, index)
+                                })
+                            })
                 })
             })
         {

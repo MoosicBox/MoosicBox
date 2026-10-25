@@ -248,7 +248,17 @@ pub(super) fn registry_requests(input: &UpgradeInput) -> Result<BTreeSet<Registr
     for occurrence in occurrences(input)? {
         let config = effective_config(input, &occurrence)?;
         if occurrence.selected && skip_reason(&config, &occurrence.declaration).is_none() {
-            requests.insert(registry_key(&occurrence));
+            let key = registry_key(&occurrence);
+            if super::sources::patch_policy(
+                input,
+                &key.name,
+                key.registry.as_deref(),
+                requirement(&occurrence.declaration),
+            )?
+            .is_none()
+            {
+                requests.insert(key);
+            }
         }
     }
     Ok(requests)
@@ -339,6 +349,13 @@ pub fn plan_upgrade_with_releases(
                     previous.clone(),
                     None,
                 )
+            } else if let Some((status, reason)) = super::sources::patch_policy(
+                input,
+                &registry.name,
+                registry.registry.as_deref(),
+                previous.as_deref(),
+            )? {
+                (status, reason, previous.clone(), None)
             } else {
                 let old = previous.as_deref().ok_or("missing version requirement")?;
                 let versions = releases
@@ -367,6 +384,10 @@ pub fn plan_upgrade_with_releases(
                         lock_targets.insert(registry.clone());
                         lock_versions.insert(super::LockTarget {
                             key: registry.clone(),
+                            registry_source: super::sources::registry_index(
+                                input,
+                                registry.registry.as_deref(),
+                            )?,
                             previous: old.into(),
                             selected: release.version.to_string(),
                         });
@@ -517,6 +538,7 @@ fn reject_locked_downgrade(
     else {
         return Ok(());
     };
+    let registry_index = super::sources::registry_index(input, key.registry.as_deref())?;
     let lock: toml::Value = toml::from_str(text)?;
     if let Some(packages) = lock.get("package").and_then(toml::Value::as_array) {
         for package in packages {
@@ -524,7 +546,11 @@ fn reject_locked_downgrade(
                 && package
                     .get("source")
                     .and_then(toml::Value::as_str)
-                    .is_some_and(|s| s.starts_with("registry+") || s.starts_with("sparse+"))
+                    .is_some_and(|s| {
+                        registry_index
+                            .as_deref()
+                            .is_some_and(|index| super::sources::same_registry(s, index))
+                    })
             {
                 let version = Version::parse(
                     package

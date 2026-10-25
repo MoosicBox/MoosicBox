@@ -220,6 +220,18 @@ pub fn load_upgrade_input(options: &UpgradeOptions) -> Result<UpgradeInput, BoxE
         offline: registry.offline,
         registry,
         overrides: options.clone(),
+        registry_indexes: std::env::vars_os()
+            .filter_map(|(key, value)| {
+                let key = key.to_str()?;
+                (key.starts_with("CARGO_REGISTRIES_") && key.ends_with("_INDEX"))
+                    .then(|| {
+                        value
+                            .to_str()
+                            .map(|value| (key.to_owned(), value.to_owned()))
+                    })
+                    .flatten()
+            })
+            .collect(),
     })
 }
 

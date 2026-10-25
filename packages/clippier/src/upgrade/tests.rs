@@ -81,6 +81,161 @@ fn workspace_discovery_ignores_invalid_nonmembers_but_rejects_invalid_members() 
 }
 
 #[test]
+fn patched_sources_are_preserved_before_registry_discovery() {
+    for (patch, lock_source, status) in [
+        (
+            "fork={package='foo',git='https://example.invalid/fork'}",
+            Some("git+https://example.invalid/fork#abc"),
+            UpgradeStatus::Skipped,
+        ),
+        ("foo={path='vendor/foo'}", Some(""), UpgradeStatus::Skipped),
+        (
+            "foo={git='https://example.invalid/fork'}",
+            None,
+            UpgradeStatus::Unavailable,
+        ),
+        (
+            "foo={git='https://example.invalid/fork',version='9.0.0'}",
+            Some("registry+https://github.com/rust-lang/crates.io-index"),
+            UpgradeStatus::Unavailable,
+        ),
+    ] {
+        let (dir, _) = fixture(
+            &format!(
+                "{PACKAGE}[dependencies]\nrenamed={{package='foo',version='1.0.0'}}\n[patch.crates-io]\n{patch}\n"
+            ),
+            |_| {},
+        );
+        if let Some(source) = lock_source {
+            let source = if source.is_empty() {
+                String::new()
+            } else {
+                format!("source='{source}'\n")
+            };
+            fs::write(
+                dir.path().join("Cargo.lock"),
+                format!("version=4\n[[package]]\nname='foo'\nversion='1.0.0'\n{source}"),
+            )
+            .unwrap();
+        }
+        let input = load_upgrade_input(&UpgradeOptions {
+            manifest_path: Some(dir.path().into()),
+            lockfile: Some(LockfilePolicy::None),
+            source: Some(SourcePolicy::IncludePath),
+            ..UpgradeOptions::default()
+        })
+        .unwrap();
+        assert!(
+            super::planner::registry_requests(&input)
+                .unwrap()
+                .is_empty()
+        );
+        let plan = plan_upgrade_with_releases(&input, &BTreeMap::new()).unwrap();
+        assert!(plan.changes().is_empty());
+        assert_eq!(plan.lock_targets.len(), 0);
+        assert_eq!(plan.lock_versions.len(), 0);
+        assert_eq!(plan.report.dependencies[0].status, status);
+        assert!(plan.report.dependencies[0].reason.contains("patch"));
+    }
+}
+
+#[test]
+fn patch_scope_and_package_identity_do_not_skip_unrelated_dependencies() {
+    for (scope, patch) in [
+        (
+            "crates-io",
+            "foo={package='different',git='https://example.invalid/fork'}",
+        ),
+        (
+            "https://example.invalid/other-index",
+            "foo={git='https://example.invalid/fork'}",
+        ),
+    ] {
+        let (_dir, input) = fixture(
+            &format!("{PACKAGE}[dependencies]\nfoo='1.0.0'\n[patch.'{scope}']\n{patch}\n"),
+            |_| {},
+        );
+        assert_eq!(super::planner::registry_requests(&input).unwrap().len(), 1);
+        assert_eq!(
+            plan(&input, &["1.2.0"]).report.dependencies[0].status,
+            UpgradeStatus::Planned
+        );
+    }
+}
+
+#[test]
+fn inherited_patch_with_multiple_locked_sources_is_not_guessed() {
+    let (dir, _) = fixture(PACKAGE, |_| {});
+    fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers=['member']\n[workspace.dependencies]\nfoo='1.0.0'\n[patch.crates-io]\nfoo={git='https://example.invalid/fork'}\n").unwrap();
+    fs::create_dir(dir.path().join("member")).unwrap();
+    fs::write(
+        dir.path().join("member/Cargo.toml"),
+        format!("{PACKAGE}[dependencies]\nfoo.workspace=true\n"),
+    )
+    .unwrap();
+    fs::write(dir.path().join("Cargo.lock"), "version=4\n[[package]]\nname='foo'\nversion='1.0.0'\nsource='git+https://example.invalid/fork#abc'\n[[package]]\nname='foo'\nversion='1.1.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\n").unwrap();
+    let input = load_upgrade_input(&UpgradeOptions {
+        manifest_path: Some(dir.path().into()),
+        ..UpgradeOptions::default()
+    })
+    .unwrap();
+    let plan = plan_upgrade_with_releases(&input, &BTreeMap::new()).unwrap();
+    assert_eq!(
+        plan.report.dependencies[0].status,
+        UpgradeStatus::Unavailable
+    );
+    assert!(plan.changes.is_empty());
+    assert_eq!(plan.lock_versions.len(), 0);
+}
+
+#[test]
+fn alternate_registry_patch_and_lock_targets_are_source_qualified() {
+    let (dir, _) = fixture(
+        &format!(
+            "{PACKAGE}[dependencies]\nfoo={{version='1.0.0',registry='private'}}\n[patch.'https://example.invalid/index']\nfoo={{git='https://example.invalid/fork'}}\n"
+        ),
+        |_| {},
+    );
+    fs::create_dir(dir.path().join(".cargo")).unwrap();
+    fs::write(
+        dir.path().join(".cargo/config.toml"),
+        "[registries.private]\nindex='https://example.invalid/index'\n",
+    )
+    .unwrap();
+    fs::write(dir.path().join("Cargo.lock"), "version=4\n[[package]]\nname='foo'\nversion='1.0.0'\nsource='git+https://example.invalid/fork#abc'\n").unwrap();
+    let options = UpgradeOptions {
+        manifest_path: Some(dir.path().into()),
+        lockfile: Some(LockfilePolicy::None),
+        ..UpgradeOptions::default()
+    };
+    let input = load_upgrade_input(&options).unwrap();
+    assert_eq!(super::planner::registry_requests(&input).unwrap().len(), 0);
+    let plan = plan_upgrade_with_releases(&input, &BTreeMap::new()).unwrap();
+    assert_eq!(plan.report.dependencies[0].status, UpgradeStatus::Skipped);
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        format!("{PACKAGE}[dependencies]\nfoo={{version='1.0.0',registry='private'}}\n"),
+    )
+    .unwrap();
+    // A newer same-named crate from another registry must not cause a downgrade
+    // rejection or become the target of reconciliation.
+    fs::write(dir.path().join("Cargo.lock"), "version=4\n[[package]]\nname='foo'\nversion='1.9.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\n").unwrap();
+    let input = load_upgrade_input(&options).unwrap();
+    let releases = BTreeMap::from([(
+        RegistryKey {
+            name: "foo".into(),
+            registry: Some("private".into()),
+        },
+        vec![release("1.2.0")],
+    )]);
+    let plan = plan_upgrade_with_releases(&input, &releases).unwrap();
+    assert_eq!(
+        plan.lock_versions[0].registry_source.as_deref(),
+        Some("https://example.invalid/index")
+    );
+}
+
+#[test]
 fn locked_baseline_rejects_msrv_induced_downgrade() {
     let (dir, _) = fixture(&format!("{PACKAGE}[dependencies]\nfoo='1.0.0'\n"), |_| {});
     fs::write(dir.path().join("Cargo.lock"),"version=4\n[[package]]\nname='foo'\nversion='1.9.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\n").unwrap();

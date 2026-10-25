@@ -3796,3 +3796,11 @@ clippier affected-packages . --changed-files "*.rs" --target-package server
 - [Cargo Workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) - Rust workspace documentation
 - [GitHub Actions](https://docs.github.com/en/actions) - CI/CD platform integration
 - [Docker Multi-stage Builds](https://docs.docker.com/develop/dev-best-practices/dockerfile_best-practices/#use-multi-stage-builds) - Docker optimization techniques
+
+Root `[patch]` entries are classified before registry discovery. Dependencies
+resolved through Git/path patches keep their requirements and sources, even with
+`--source include-path`. If an applicable patch's effective source is ambiguous
+(including a missing lockfile or multiple matching identities), that occurrence
+is reported as unavailable and preserved; unrelated dependencies still upgrade.
+Patch tables are never rewritten. Lock reconciliation is registry-qualified and
+rejects changes to protected identities and existing Git revisions before writing.

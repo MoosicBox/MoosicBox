@@ -7,6 +7,7 @@ mod apply;
 mod manifest;
 mod planner;
 pub mod registry;
+mod sources;
 #[cfg(test)]
 mod tests;
 
@@ -195,6 +196,7 @@ pub struct UpgradeInput {
     pub(crate) offline: bool,
     pub(crate) registry: RegistryOptions,
     pub(crate) overrides: UpgradeOptions,
+    pub(crate) registry_indexes: BTreeMap<String, String>,
 }
 
 /// Outcome of a dependency or file operation.
@@ -313,6 +315,7 @@ pub struct ManifestChange {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) struct LockTarget {
     pub(crate) key: RegistryKey,
+    pub(crate) registry_source: Option<String>,
     pub(crate) previous: String,
     pub(crate) selected: String,
 }

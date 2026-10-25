@@ -345,6 +345,8 @@ fn differences(name: &str) -> Vec<(&'static str, &'static str, &'static str)> {
     match name {
         // Native incompatible mode preserves bounded ranges and wildcard pins;
         // cargo-edit --pinned rewrites these constraints more aggressively.
+        // A patch without a resolved lock identity is conservatively preserved.
+        "patched" => vec![("Cargo.toml", "dependencies.default", "0.2")],
         "preserve_op" => vec![
             ("Cargo.toml", "dependencies.lessthan", "<0.2"),
             ("Cargo.toml", "dependencies.lessorequal", "<=0.2"),
