@@ -499,7 +499,8 @@ async fn transitive_exact_pin_holds_back_conflict_but_refreshes_independent_pack
         vec![release("1.0.0")],
     )]);
     let mut plan = plan_upgrade_with_releases(&input, &releases).unwrap();
-    let (resolved, warnings) = super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
+    let (resolved, warnings, diagnostics) =
+        super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
     let doc: toml::Value = toml::from_str(&resolved).unwrap();
     let packages = doc["package"].as_array().unwrap();
     for (name, version) in [
@@ -509,11 +510,17 @@ async fn transitive_exact_pin_holds_back_conflict_but_refreshes_independent_pack
     ] {
         assert!(packages.iter().any(|p| p["name"].as_str() == Some(name) && p["version"].as_str() == Some(version)), "{name}: {resolved}");
     }
+    // Cargo can retain the old parser while updating the independent package.
+    // Failed parent batches are recovered attempts, not final warnings.
+    assert_eq!(warnings, Vec::<String>::new());
     assert!(
-        warnings
+        diagnostics.iter().any(|message| message.contains("leaf")),
+        "{diagnostics:?}"
+    );
+    assert!(
+        diagnostics
             .iter()
-            .any(|w| w.contains("parser") && w.contains("leaf")),
-        "{warnings:?}"
+            .all(|message| message.starts_with("Retrying transitive refresh batch"))
     );
     assert_eq!(
         fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
@@ -522,8 +529,10 @@ async fn transitive_exact_pin_holds_back_conflict_but_refreshes_independent_pack
     // Preview diagnostics survive cached resolution and apply publication.
     plan.resolved_lockfile = Some(resolved.clone());
     plan.report.warnings = warnings.clone();
+    plan.report.diagnostics = diagnostics.clone();
     let report = apply_upgrade_plan(&plan).await.unwrap();
     assert_eq!(report.warnings, warnings);
+    assert_eq!(report.diagnostics, diagnostics);
     assert_eq!(
         fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
         resolved
@@ -613,7 +622,7 @@ async fn incompatible_resolution_splits_shared_versions_at_selected_declaration_
             vec![release("0.23.1")],
         )]);
         let plan = plan_upgrade_with_releases(&input, &releases).unwrap();
-        let (resolved, _) = super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
+        let (resolved, _, _) = super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
         assert_eq!(
             fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
             original_lock

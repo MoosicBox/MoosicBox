@@ -52,6 +52,7 @@ pub async fn apply_upgrade_plan(plan: &UpgradePlan) -> Result<UpgradeReport, Box
         let _: DocumentMut = text.parse()?;
     }
     let mut resolution_warnings = Vec::new();
+    let mut resolution_diagnostics = Vec::new();
     let lock_path = plan.root.join("Cargo.lock");
     if plan.lockfile_policy != LockfilePolicy::None {
         let resolved = if let Some(text) = &plan.resolved_lockfile {
@@ -59,6 +60,7 @@ pub async fn apply_upgrade_plan(plan: &UpgradePlan) -> Result<UpgradeReport, Box
         } else {
             let resolution = resolve_lockfile_with_warnings(plan)?;
             resolution_warnings = resolution.1;
+            resolution_diagnostics = resolution.2;
             resolution.0
         };
         let _: DocumentMut = resolved.parse()?;
@@ -104,6 +106,7 @@ pub async fn apply_upgrade_plan(plan: &UpgradePlan) -> Result<UpgradeReport, Box
     }
     let mut report = plan.report.clone();
     report.warnings.extend(resolution_warnings);
+    report.diagnostics.extend(resolution_diagnostics);
     report.applied = true;
     report.pending = false;
     report.status = if updates.is_empty() {
@@ -196,8 +199,9 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
 #[allow(clippy::too_many_lines)] // Resolution is intentionally a single isolated transaction.
 pub(super) fn resolve_lockfile_with_warnings(
     plan: &UpgradePlan,
-) -> Result<(String, Vec<String>), BoxError> {
+) -> Result<(String, Vec<String>, Vec<String>), BoxError> {
     let mut warnings = Vec::new();
+    let mut diagnostics = Vec::new();
     check_snapshots(plan)?;
     let temporary = tempfile::tempdir()?;
     // Reproduce the ancestor configuration hierarchy, not just the root config.
@@ -330,7 +334,14 @@ pub(super) fn resolve_lockfile_with_warnings(
             // Requested direct selections are mandatory. Only the optional
             // transitive refresh may be held back to preserve the valid graph.
             validate_resolution(plan, original_lock, &baseline)?;
-            refresh_compatible(plan, &root, original_lock, &candidates, &mut warnings)?;
+            refresh_compatible(
+                plan,
+                &root,
+                original_lock,
+                &candidates,
+                &mut warnings,
+                &mut diagnostics,
+            )?;
         }
     }
     let resolved = fs::read_to_string(root.join("Cargo.lock"))?;
@@ -339,7 +350,7 @@ pub(super) fn resolve_lockfile_with_warnings(
         fs::write(path, text)?;
     }
     check_snapshots(plan)?;
-    Ok((resolved, warnings))
+    Ok((resolved, warnings, diagnostics))
 }
 
 /// Pin selected owner declarations only inside the disposable resolver snapshot.
@@ -434,6 +445,7 @@ fn refresh_compatible(
     original_lock: Option<&str>,
     candidates: &[String],
     warnings: &mut Vec<String>,
+    diagnostics: &mut Vec<String>,
 ) -> Result<(), BoxError> {
     if candidates.is_empty() {
         return Ok(());
@@ -482,16 +494,13 @@ fn refresh_compatible(
                 candidates[0]
             ));
         } else {
-            let summary = candidates
-                .iter()
-                .take(8)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ");
-            warnings.push(format!("Held back incompatible transitive refresh batch ({} packages; {summary}): {error}; retrying smaller batches", candidates.len()));
+            diagnostics.push(format!(
+                "Retrying transitive refresh batch ({} packages): {error}",
+                candidates.len()
+            ));
             let (left, right) = candidates.split_at(candidates.len() / 2);
-            refresh_compatible(plan, root, original_lock, left, warnings)?;
-            refresh_compatible(plan, root, original_lock, right, warnings)?;
+            refresh_compatible(plan, root, original_lock, left, warnings, diagnostics)?;
+            refresh_compatible(plan, root, original_lock, right, warnings, diagnostics)?;
         }
     }
     Ok(())

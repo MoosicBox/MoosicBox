@@ -288,6 +288,8 @@ pub struct UpgradeReport {
     pub blockers: Vec<String>,
     /// Optional transitive updates held back to preserve resolution policies.
     pub warnings: Vec<String>,
+    /// Intermediate resolution attempts, shown only with verbose text output.
+    pub diagnostics: Vec<String>,
     /// The caller declined confirmation.
     pub cancelled: bool,
     /// Canonical Cargo workspace root.
@@ -438,7 +440,7 @@ async fn build_plan(options: &UpgradeOptions, for_apply: bool) -> Result<Upgrade
         if plan.lockfile_policy == LockfilePolicy::None {
             return Err("resolve-lockfile cannot be combined with lockfile policy NONE".into());
         }
-        let (lockfile, warnings) = apply::resolve_lockfile_with_warnings(&plan)?;
+        let (lockfile, warnings, diagnostics) = apply::resolve_lockfile_with_warnings(&plan)?;
         let lock_path = plan.root.join("Cargo.lock");
         let lock_changed = plan
             .snapshots
@@ -459,6 +461,7 @@ async fn build_plan(options: &UpgradeOptions, for_apply: bool) -> Result<Upgrade
         };
         plan.resolved_lockfile = Some(lockfile);
         plan.report.warnings.extend(warnings);
+        plan.report.diagnostics.extend(diagnostics);
     }
     Ok(plan)
 }

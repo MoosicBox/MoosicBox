@@ -358,6 +358,15 @@ mod upgrade_cli {
         let mut groups = std::collections::BTreeMap::new();
         let mut owners = std::collections::BTreeSet::new();
         let mut changed = 0;
+        if verbose {
+            for message in &report.diagnostics {
+                write_line(
+                    writer,
+                    &Line::from_spans(vec![Span::styled(format!("Resolution: {message}"), muted)]),
+                    color,
+                )?;
+            }
+        }
         let mut warnings = report.warnings.len();
         for message in &report.warnings {
             write_line(
@@ -806,6 +815,50 @@ mod upgrade_cli {
                 panic!("expected upgrade")
             };
             command
+        }
+
+        #[test]
+        fn retries_are_verbose_diagnostics_not_final_warnings() {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("Cargo.toml"), "[workspace]\nmembers=[]\n").unwrap();
+            let input = clippier::upgrade::load_upgrade_input(&UpgradeOptions {
+                manifest_path: Some(dir.path().into()),
+                lockfile: Some(LockfilePolicy::None),
+                ..UpgradeOptions::default()
+            })
+            .unwrap();
+            let plan = clippier::upgrade::plan_upgrade_with_releases(
+                &input,
+                &std::collections::BTreeMap::new(),
+            )
+            .unwrap();
+            let mut report = plan.report().clone();
+            report.diagnostics.push(
+                "Retrying transitive refresh batch (1470 packages): downgrade rejected".into(),
+            );
+            let mut normal = Vec::new();
+            write_text(&mut normal, &report, false, false).unwrap();
+            let normal = String::from_utf8(normal).unwrap();
+            assert!(!normal.contains("Retrying"));
+            assert!(normal.contains("warnings: 0"));
+            assert!(normal.contains("Already up to date."));
+            let mut verbose = Vec::new();
+            write_text(&mut verbose, &report, true, false).unwrap();
+            let verbose = String::from_utf8(verbose).unwrap();
+            assert!(verbose.contains("Resolution: Retrying"));
+            assert!(verbose.contains("warnings: 0"));
+            let value = serde_json::to_value(&report).unwrap();
+            assert_eq!(value["warnings"], serde_json::json!([]));
+            assert_eq!(value["diagnostics"].as_array().unwrap().len(), 1);
+            report
+                .warnings
+                .push("Held back transitive refresh of parser: downgrade rejected".into());
+            let mut unresolved = Vec::new();
+            write_text(&mut unresolved, &report, false, false).unwrap();
+            let unresolved = String::from_utf8(unresolved).unwrap();
+            assert!(unresolved.contains("Warning: Held back transitive refresh of parser"));
+            assert!(unresolved.contains("warnings: 1"));
+            assert!(!unresolved.contains("Already up to date."));
         }
 
         #[test]

@@ -519,6 +519,7 @@ pub fn plan_upgrade_with_releases(
         pending: !changes.is_empty() || input.config.lockfile != LockfilePolicy::None,
         blockers: Vec::new(),
         warnings: Vec::new(),
+        diagnostics: Vec::new(),
         cancelled: false,
         workspace_root: input.root.clone(),
         dependencies: reports,
