@@ -11,6 +11,7 @@ const MEANS_Q4: [i8; CELT_NUM_BANDS] = [
 ];
 
 /// Persistent per-channel histories, with two slots also for mono as in libopus.
+#[derive(Clone)]
 pub(super) struct EnergyHistory {
     pub band: [i32; 2 * CELT_NUM_BANDS],
     pub log: [i32; 2 * CELT_NUM_BANDS],

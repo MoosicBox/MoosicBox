@@ -159,13 +159,16 @@ fn silk_stream_matches_common_native_regression_baseline() {
         &directory.0,
         "silk-16000-1-100",
         "packets",
-        (15931, 0xb48f_7982_d6c5_65e0),
+        // Approved flush-only correction: packets 0..100 are unchanged; the
+        // final zero-input packet now uses synthesis-aware silence LPC scoring.
+        // Debug/release agree and the complete stream decodes exactly as pinned C.
+        (15_925, 0x8a06_e315_1837_b9c8),
     );
     check(
         &directory.0,
         "silk-16000-1-100",
         "pcm",
-        (64640, 0x2d16_058c_80ba_19c2),
+        (64_640, 0xb14d_6f89_9afa_3b68),
     );
 }
 

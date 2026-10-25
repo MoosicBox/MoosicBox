@@ -150,6 +150,10 @@ impl SampleRate {
 /// * `silk` - SILK codec (NB/MB/WB)
 /// * `celt` - CELT codec (NB/WB/SWB/FB)
 /// * `hybrid` - Hybrid mode (implies both `silk` and `celt`)
+///
+/// Cloning copies configuration and predictive/filter history. Advancing or
+/// resetting either instance does not modify the other.
+#[derive(Clone)]
 pub struct Decoder {
     #[cfg_attr(not(any(feature = "silk", feature = "celt")), allow(dead_code))]
     sample_rate: SampleRate,

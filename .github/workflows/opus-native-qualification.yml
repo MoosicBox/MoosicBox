@@ -1,0 +1,174 @@
+name: Opus native strict platform qualification
+
+on:
+    workflow_dispatch:
+        inputs:
+            music_wav_url:
+                description: "Reviewed public HTTPS URL of exact music-carefree-30s.wav bytes (manifest SHA-256 enforced; not source MP3)"
+                required: true
+                type: string
+    pull_request:
+        paths:
+            - "packages/opus_native/**"
+            - ".github/workflows/opus-native-qualification.yml"
+            - "Cargo.toml"
+            - "Cargo.lock"
+    push:
+        branches: [master]
+        paths:
+            - "packages/opus_native/**"
+            - ".github/workflows/opus-native-qualification.yml"
+            - "Cargo.toml"
+            - "Cargo.lock"
+
+permissions:
+    contents: read
+
+concurrency:
+    group: opus-native-strict-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_BUILD_JOBS: "2"
+    CARGO_TERM_COLOR: never
+    CMAKE_GENERATOR: Ninja
+    # Do not let platform line-ending conversion create different source images.
+    GIT_CONFIG_COUNT: "1"
+    GIT_CONFIG_KEY_0: core.autocrlf
+    GIT_CONFIG_VALUE_0: "false"
+
+jobs:
+    native:
+        name: Offline native ${{ matrix.platform.id }} ${{ matrix.profile }}
+        runs-on: ${{ matrix.platform.runner }}
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                platform:
+                    - {id: linux-x64, runner: ubuntu-24.04}
+                    - {id: linux-arm64, runner: ubuntu-24.04-arm}
+                    - {id: macos-x64, runner: macos-15-intel}
+                    - {id: windows-x64, runner: windows-2025}
+                profile: [debug, release]
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  submodules: false
+            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.13"
+            - name: Explicit locked dependency provisioning (network only here)
+              run: cargo fetch --locked
+            - name: Offline native tests and repeated immutable fingerprint probe
+              shell: bash
+              run: |
+                  python -B packages/opus_native/test_runner/src/qualification_ci.py run \
+                    --mode native --platform '${{ matrix.platform.id }}' --profile '${{ matrix.profile }}' \
+                    --output "$RUNNER_TEMP/opus-native-${{ matrix.platform.id }}-${{ matrix.profile }}"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: opus-platform-native-${{ matrix.platform.id }}-${{ matrix.profile }}
+                  path: |
+                      ${{ runner.temp }}/opus-native-${{ matrix.platform.id }}-${{ matrix.profile }}/
+                      !${{ runner.temp }}/opus-native-${{ matrix.platform.id }}-${{ matrix.profile }}/target/**
+                      !${{ runner.temp }}/opus-native-${{ matrix.platform.id }}-${{ matrix.profile }}/repeat/**
+                  if-no-files-found: error
+                  retention-days: 14
+
+    quality:
+        name: Strict frozen-C and reviewed media ${{ matrix.platform.id }}
+        runs-on: ${{ matrix.platform.runner }}
+        timeout-minutes: 90
+        strategy:
+            fail-fast: false
+            matrix:
+                platform:
+                    - {id: linux-x64, runner: ubuntu-24.04}
+                    - {id: linux-arm64, runner: ubuntu-24.04-arm}
+                    - {id: macos-x64, runner: macos-15-intel}
+                    - {id: windows-x64, runner: windows-2025}
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  submodules: false
+            - name: Fail closed when reviewed derived music WAV URL is missing
+              env:
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+              shell: bash
+              run: |
+                  if [[ -z "$MUSIC_WAV_URL" ]]; then
+                    echo 'Missing reviewed WAV URL: configure OPUS_REVIEWED_MUSIC_WAV_URL or explicit dispatch input; strict qualification cannot skip media.' >&2
+                    exit 1
+                  fi
+            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.13"
+            - uses: ilammy/msvc-dev-cmd@v1
+              if: runner.os == 'Windows'
+            - name: Initialize only pinned test-only C reference source
+              shell: bash
+              run: |
+                  git submodule update --init --depth 1 -- packages/opus_native/libopus/opus
+                  test "$(git -C packages/opus_native/libopus/opus rev-parse HEAD)" = 34bba701ae97c913de719b1f7c10686f62cddb15
+                  cmake --version
+                  ninja --version
+            - name: Explicit locked dependency provisioning (network only here)
+              run: cargo fetch --locked
+            - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
+              env:
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+              shell: bash
+              run: |
+                  python -B packages/opus_native/test_runner/src/qualification_ci.py run \
+                    --mode quality --platform '${{ matrix.platform.id }}' --profile release \
+                    --music-wav-url "$MUSIC_WAV_URL" \
+                    --output "$RUNNER_TEMP/opus-quality-${{ matrix.platform.id }}"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: opus-platform-quality-${{ matrix.platform.id }}
+                  path: |
+                      ${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/target/**
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/media/**
+                  if-no-files-found: error
+                  retention-days: 14
+
+    compare:
+        name: Require every actual platform and exact native fingerprints
+        needs: [native, quality]
+        if: always()
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.13"
+            - uses: actions/download-artifact@v4
+              with:
+                  pattern: opus-platform-*
+                  path: platform-evidence
+                  merge-multiple: false
+            - name: Verify all 12 executions, retained bytes and exact debug/release/platform agreement
+              shell: bash
+              env:
+                  NATIVE_RESULT: ${{ needs.native.result }}
+                  QUALITY_RESULT: ${{ needs.quality.result }}
+              run: |
+                  set -euo pipefail
+                  if [[ "$NATIVE_RESULT" != success || "$QUALITY_RESULT" != success ]]; then
+                    echo 'A required real-execution job failed/cancelled/skipped; qualification is NOT accepted.' >&2
+                    exit 1
+                  fi
+                  python -B packages/opus_native/test_runner/src/qualification_ci.py compare platform-evidence | tee comparison.txt
+                  cat comparison.txt >> "$GITHUB_STEP_SUMMARY"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: opus-platform-exact-comparison
+                  path: comparison.txt
+                  if-no-files-found: error

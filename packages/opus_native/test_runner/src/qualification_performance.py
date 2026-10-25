@@ -23,7 +23,18 @@ CASES = (
     "silk-mono",
     "hybrid-stereo",
     "auto-stereo",
+    "silk-mono-48k",
+    "silk-stereo-96k",
+    "hybrid-stereo-32k",
+    "hybrid-stereo-64k",
+    "celt-stereo-32k",
+    "celt-stereo-64k",
+    "auto-stereo-32k",
+    "auto-stereo-64k",
 )
+
+# Below the current standalone SILK public floor; never silently count as covered.
+CANDIDATE_CASES = ("silk-mono-16k", "silk-mono-32k")
 
 
 def digest(path):
@@ -132,13 +143,18 @@ def main():
     parser.add_argument("--frames", type=int, default=500)
     parser.add_argument("--timeout-seconds", type=int, default=300)
     parser.add_argument("--repetitions", type=int, default=2)
+    parser.add_argument(
+        "--candidate-cases",
+        action="store_true",
+        help="also run below-public-floor candidates; rejection remains a failure",
+    )
     args = parser.parse_args()
     if (
         not 10 <= args.frames <= 30000
-        or not 1 <= args.repetitions <= 10
+        or not 2 <= args.repetitions <= 10
         or not 1 <= args.timeout_seconds <= 3600
     ):
-        parser.error("frames 10..30000, repetitions 1..10, timeout 1..3600 required")
+        parser.error("frames 10..30000, repetitions 2..10, timeout 1..3600 required")
     executable = args.executable.resolve(strict=True)
     source = native_source_identity()
     image = digest(executable)
@@ -151,6 +167,16 @@ def main():
         script_sha256=digest(__file__),
         cases=[],
         measurement_complete=False,
+        public_envelope_only=not args.candidate_cases,
+        required_qualification_blockers=[
+            dict(
+                case=case,
+                status="below_current_public_silk_floor",
+                qualified=False,
+                performance_measured=False,
+            )
+            for case in CANDIDATE_CASES
+        ],
         platform=dict(
             system=platform.system(),
             release=platform.release(),
@@ -162,7 +188,7 @@ def main():
         limitation="local measurement only; synthetic PCM is not quality evidence; no CI, other-OS or performance-budget acceptance",
     )
     try:
-        for case in CASES:
+        for case in CASES + (CANDIDATE_CASES if args.candidate_cases else ()):
             first = None
             for repetition in range(args.repetitions):
                 row = measure(executable, case, args.frames, args.timeout_seconds)

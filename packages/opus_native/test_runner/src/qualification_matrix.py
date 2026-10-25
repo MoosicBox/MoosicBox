@@ -10,7 +10,8 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import selectors
+import queue
+import threading
 import struct
 import subprocess
 import tempfile
@@ -64,31 +65,69 @@ class Native:
             stderr=self.errors,
         )
 
+    REQUEST_TIMEOUT = 15
+
+    def _abort(self):
+        """End a failed exchange before closing pipes or allowing another request."""
+        self._failed = True
+        if self.process.poll() is None:
+            self.process.kill()
+        self.process.wait(timeout=2)
+
     def request(self, op, **fields):
+        if getattr(self, "_failed", False):
+            raise RuntimeError("native transport is unusable after a failed request")
         payload = (
             json.dumps(dict(op=op, **fields), separators=(",", ":")) + "\n"
         ).encode()
-        assert len(payload) <= 1048576
-        self.process.stdin.write(payload)
-        self.process.stdin.flush()
-        with selectors.DefaultSelector() as selector:
-            selector.register(self.process.stdout, selectors.EVENT_READ)
-            if not selector.select(15):
-                raise TimeoutError("native request exceeded 15 seconds")
-        reply = self.process.stdout.readline(1048577)
-        if not reply or len(reply) > 1048576:
-            self.errors.seek(0)
-            detail = self.errors.read(2048).decode("utf-8", errors="replace")
-            raise RuntimeError(
-                "native rejected request, crashed, or exceeded output bound: " + detail
-            )
-        return json.loads(reply)
+        if len(payload) > 1048576:
+            raise ValueError("native request exceeds 1 MiB")
+        result = queue.Queue(maxsize=1)
+
+        def exchange():
+            # Windows selectors cannot register subprocess pipes. A dedicated
+            # bounded exchange also covers blocked writes and partial-line reads.
+            try:
+                self.process.stdin.write(payload)
+                self.process.stdin.flush()
+                reply = self.process.stdout.readline(1048577)
+                result.put((reply, None))
+            except Exception as error:
+                result.put((None, error))
+
+        worker = threading.Thread(
+            target=exchange, name="opus-native-exchange", daemon=True
+        )
+        worker.start()
+        try:
+            try:
+                reply, error = result.get(timeout=self.REQUEST_TIMEOUT)
+            except queue.Empty as error:
+                raise TimeoutError(
+                    "native request exceeded bounded exchange deadline"
+                ) from error
+            if error is not None:
+                raise RuntimeError("native request pipe failed") from error
+            if not reply or len(reply) > 1048576 or not reply.endswith(b"\n"):
+                raise RuntimeError(
+                    "native rejected request, truncated reply or exceeded output bound"
+                )
+            return json.loads(reply)
+        except Exception:
+            # Killing/reaping unblocks both Windows and Unix synchronous pipe IO.
+            self._abort()
+            raise
+        finally:
+            worker.join(timeout=2)
 
     def __enter__(self):
         return self
 
     def __exit__(self, *unused):
-        self.process.stdin.close()
+        try:
+            self.process.stdin.close()
+        except (BrokenPipeError, OSError):
+            pass
         try:
             self.process.wait(timeout=2)
         except subprocess.TimeoutExpired:
@@ -426,6 +465,94 @@ def quality(native_executable, reference_executable, filename, label):
     )
 
 
+def silence_matrix(native_executable, reference_executable):
+    """Fresh-state and sustained encoded silence, with native/C parity and duration."""
+    rows = []
+    for rate, modes in ((16000, (0, 1000, 1002)), (48000, (0, 1001, 1002))):
+        for channels in (1, 2):
+            for mode in modes:
+                bitrates = (
+                    (32000, 64000, 128000) if channels == 2 else (16000, 32000, 128000)
+                )
+                for bitrate in bitrates:
+                    row = dict(
+                        rate=rate,
+                        channels=channels,
+                        mode=mode,
+                        bitrate=bitrate,
+                        frames=12,
+                        status="pass",
+                        max_abs_sample=0,
+                        max_native_reference_error=0,
+                        actual_modes=[],
+                    )
+                    try:
+                        with Native(native_executable) as native, Oracle(
+                            reference_executable
+                        ) as reference:
+                            native.request("encoder", rate=rate, channels=channels)
+                            native.request(
+                                "configure",
+                                controls=(
+                                    ([[11002, mode]] if mode else [])
+                                    + [[4002, bitrate], [4006, 0]]
+                                ),
+                            )
+                            native.request("decoder", rate=rate, channels=channels)
+                            reference.request("decoder", rate=rate, channels=channels)
+                            size = rate // 50
+                            for _ in range(row["frames"]):
+                                packet = native.request(
+                                    "encode",
+                                    frame_size=size,
+                                    pcm=[0] * (size * channels),
+                                )["packet"]
+                                actual_mode = packet_mode(packet)
+                                assert actual_mode in (1000, 1001, 1002)
+                                assert not mode or actual_mode == mode
+                                if actual_mode not in row["actual_modes"]:
+                                    row["actual_modes"].append(actual_mode)
+                                actual = native.request(
+                                    "decode", frame_size=size, packet=packet
+                                )
+                                expected = reference.request(
+                                    "decode", frame_size=size, packet=packet
+                                )
+                                assert actual["samples"] == expected["samples"] == size
+                                assert (
+                                    len(actual["pcm"])
+                                    == len(expected["pcm"])
+                                    == size * channels
+                                )
+                                row["max_abs_sample"] = max(
+                                    row["max_abs_sample"],
+                                    max(
+                                        abs(x) for x in actual["pcm"] + expected["pcm"]
+                                    ),
+                                )
+                                row["max_native_reference_error"] = max(
+                                    row["max_native_reference_error"],
+                                    max(
+                                        abs(a - b)
+                                        for a, b in zip(actual["pcm"], expected["pcm"])
+                                    ),
+                                )
+                            if row["max_abs_sample"] > 1:
+                                row["status"] = "silence_above_1lsb"
+                            if row["max_native_reference_error"] > 2:
+                                row["status"] = "native_reference_error_above_2lsb"
+                    except (
+                        RuntimeError,
+                        AssertionError,
+                        BrokenPipeError,
+                        TimeoutError,
+                        KeyError,
+                    ) as error:
+                        row.update(status="codec_failure", error=str(error)[:300])
+                    rows.append(row)
+    return rows
+
+
 def gain_matrix(native_executable, reference_executable):
     rows = []
     with Oracle(reference_executable) as reference:
@@ -747,6 +874,7 @@ def main():
         script_sha256=digest(Path(__file__).read_bytes()),
         frozen=frozen(native),
         matrix=compare(native, reference, args.frames),
+        silence_matrix=silence_matrix(native, reference),
         gain_matrix=gain_matrix(native, reference),
         decoder_matrix=decode_matrix(native, reference, args.frames),
         long_stream=long_stream(native, reference, args.long_frames),
@@ -768,6 +896,7 @@ def main():
     rows = (
         report["frozen"]["cases"]
         + report["matrix"]
+        + report["silence_matrix"]
         + report["gain_matrix"]
         + report["decoder_matrix"]
         + [report["long_stream"], report["adversarial"]]
@@ -775,7 +904,7 @@ def main():
     rows += [r for media in report["real_media"] for r in media["metrics"]]
     failures = sum(row["status"] != "pass" for row in rows)
     # Explicit real media is required for strict qualification; missing media never silently passes.
-    media_missing = len(report["real_media"]) != 2
+    media_missing = len(report["real_media"]) != 2 or args.media_directory is None
     if args.media_directory:
         # Recheck whole-file media identities, not only the consumed PCM prefix.
         verify_inputs(args.media_directory)

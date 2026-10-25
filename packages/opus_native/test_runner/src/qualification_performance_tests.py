@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from qualification_performance import CASES, measure, verify_receipt
+from qualification_performance import CASES, CANDIDATE_CASES, measure, verify_receipt
 
 
 class PerformanceTests(unittest.TestCase):
@@ -51,6 +51,20 @@ class PerformanceTests(unittest.TestCase):
         self.assertIn("auto-stereo", CASES)
         self.assertIn("silk-mono", CASES)
         self.assertIn("hybrid-stereo", CASES)
+        self.assertEqual(len(CASES), 14)
+        self.assertEqual(set(CANDIDATE_CASES), {"silk-mono-16k", "silk-mono-32k"})
+        self.assertFalse(set(CASES) & set(CANDIDATE_CASES))
+        for case in (
+            "silk-mono-48k",
+            "silk-stereo-96k",
+            "hybrid-stereo-32k",
+            "hybrid-stereo-64k",
+            "celt-stereo-32k",
+            "celt-stereo-64k",
+            "auto-stereo-32k",
+            "auto-stereo-64k",
+        ):
+            self.assertIn(case, CASES)
 
     def test_receipt_requires_coherent_release_build(self):
         with tempfile.TemporaryDirectory() as directory:

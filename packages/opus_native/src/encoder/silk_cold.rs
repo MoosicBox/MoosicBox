@@ -2,6 +2,64 @@
 use super::*;
 
 #[test]
+#[cfg(feature = "hybrid")]
+fn memoized_low_budget_prefix_is_bit_exact() {
+    for bitrate in [25_600, 48_000] {
+        let config = EncoderConfig {
+            sample_rate: SampleRate::Hz16000,
+            channels: crate::Channels::Stereo,
+            frame_size: 320,
+            bitrate,
+        };
+        let mut cached = SilkEncoder::new(config).unwrap();
+        let mut uncached = cached.clone();
+        uncached.quantizer_cache_disabled = true;
+        let mut seed = 1_u32;
+        let mut cached_decoder = SilkDecoder::new(config.sample_rate, config.channels, 20).unwrap();
+        let mut reference_decoder = cached_decoder.clone();
+        for _ in 0..3 {
+            let input: Vec<_> = (0..640)
+                .map(|_| {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let sample = i16::from_le_bytes(seed.to_le_bytes()[..2].try_into().unwrap());
+                    f32::from(sample) / 131_072.0
+                })
+                .collect();
+            let capacity = bitrate as usize / 400;
+            let mut actual = RangeEncoder::new(capacity).unwrap();
+            let mut expected = actual.clone();
+            cached.encode_prefix_ranked(&input, &mut actual).unwrap();
+            uncached
+                .encode_prefix_ranked(&input, &mut expected)
+                .unwrap();
+            assert_eq!(actual.tell(), expected.tell());
+            let packet = actual.finish().unwrap();
+            assert_eq!(packet, expected.finish().unwrap());
+            let mut outputs = Vec::new();
+            for decoder in [&mut cached_decoder, &mut reference_decoder] {
+                let mut range = crate::range::RangeDecoder::new(&packet).unwrap();
+                decoder.begin_packet();
+                decoder.decode_header_bits(&mut range, true).unwrap();
+                let mut output = vec![0_i16; 640];
+                decoder
+                    .decode_silk_frame(&mut range, true, &mut output)
+                    .unwrap();
+                outputs.push(output);
+            }
+            assert_eq!(outputs[0], outputs[1]);
+            assert_eq!(cached.history, uncached.history);
+            assert_eq!(cached.gain, uncached.gain);
+            assert_eq!(cached.previous_index, uncached.previous_index);
+            assert_eq!(cached.pcm_history, uncached.pcm_history);
+        }
+        let (calls, hits) = cached.quantizer_cache_counts;
+        eprintln!("SILK memo bitrate={bitrate} quantizer_calls={calls} cache_hits={hits}");
+        assert!(hits > 0);
+        assert_eq!(calls + hits, uncached.quantizer_cache_counts.0);
+    }
+}
+
+#[test]
 #[ignore = "requires actual consecutive adaptive_low captures via MOOSICBOX_OPUS_COLD_SEQUENCE"]
 fn captured_cold_prefix_sequence() {
     // Comma-separated paths in actual stream order, starting at SILK reset.
@@ -402,6 +460,7 @@ fn diagnostic_model_cost(
         bitrate: previous.config.bitrate / 2,
         rate_pressure: pressure,
         optimize_pulse_cost: true,
+        unshaped: false,
     });
     let distortion = samples
         .iter()

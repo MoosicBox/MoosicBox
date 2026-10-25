@@ -255,7 +255,8 @@ mod tests {
         assert!(media.len() >= 32 * 960 * 2);
         let mut failures = Vec::new();
         for frame_size in [480, 960] {
-            for shape in 0..4 {
+            let shapes = if PUBLIC_RD_QUALIFIER.get() { 5 } else { 4 };
+            for shape in 0..shapes {
                 failures.extend(qualify_unredundant_case(frame_size, shape, &media, &oracle));
             }
         }
@@ -293,6 +294,158 @@ mod tests {
         }
     }
 
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "explicit frozen oracle and real PCM required; candidate layouts, public guards unchanged"]
+    #[allow(clippy::too_many_lines)] // Oracle matrix keeps each encode/decode quality gate together.
+    fn reference_unredundant_mono_swb_matrix() {
+        let oracle =
+            std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE").expect("explicit oracle required");
+        let bytes = std::fs::read(
+            std::env::var_os("MOOSICBOX_OPUS_HYBRID_REAL_PCM").expect("real PCM required"),
+        )
+        .unwrap();
+        assert_eq!(bytes.len() % 4, 0);
+        let media: Vec<_> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| f32::from(i16::from_le_bytes(*b)) / 32768.0)
+            .collect();
+        assert!(media.len() >= 32 * 960 * 2);
+        let mut failures = Vec::new();
+        for channels in [Channels::Mono, Channels::Stereo] {
+            let count = super::super::channel_count(channels);
+            for bandwidth in [Bandwidth::SuperWideband, Bandwidth::Fullband] {
+                for size in [480, 960] {
+                    for rate in [32_000, 48_000, 64_000] {
+                        for shape in 0..4 {
+                            let label =
+                                format!("{channels:?}/{bandwidth:?}/{size}/{rate}/shape{shape}");
+                            let mut encoder = Encoder::new_auto(EncoderConfig {
+                                channels,
+                                frame_size: size,
+                                bitrate: 64_000,
+                                ..EncoderConfig::default()
+                            })
+                            .unwrap();
+                            let mut source = Vec::new();
+                            let mut packets = Vec::new();
+                            let mut encode_error = None;
+                            for frame in 0..32 {
+                                let stereo = candidate_hybrid_shape(shape, frame, size, &media);
+                                let pcm = if count == 2 {
+                                    stereo
+                                } else {
+                                    stereo
+                                        .as_chunks::<2>()
+                                        .0
+                                        .iter()
+                                        .map(|x| f32::midpoint(x[0], x[1]))
+                                        .collect()
+                                };
+                                source.extend_from_slice(&pcm);
+                                let hybrid = (4..12).contains(&frame) || (16..24).contains(&frame);
+                                let bitrate = if hybrid { rate } else { 64_000 };
+                                match encoder.encode_unredundant_candidate(
+                                    &pcm,
+                                    EncoderControl {
+                                        bitrate,
+                                        bandwidth,
+                                        mode: if hybrid {
+                                            EncoderMode::Hybrid
+                                        } else {
+                                            EncoderMode::Celt
+                                        },
+                                    },
+                                ) {
+                                    Ok(packet) => {
+                                        assert!(packet.len() <= bitrate as usize * size / 384_000);
+                                        packets.push(packet);
+                                    }
+                                    Err(error) => {
+                                        encode_error =
+                                            Some(format!("{label} frame{frame}: {error}"));
+                                        break;
+                                    }
+                                }
+                            }
+                            if let Some(error) = encode_error {
+                                failures.push(error);
+                                continue;
+                            }
+                            match encoder.finish() {
+                                Ok(tail) => packets.extend(tail),
+                                Err(error) => {
+                                    failures.push(format!("{label} finish: {error}"));
+                                    continue;
+                                }
+                            }
+                            let decoded = decode_candidate_layout(&packets, &oracle, count);
+                            assert_eq!(decoded.len(), packets.len() * size * count);
+                            let mut native =
+                                crate::Decoder::new(crate::SampleRate::Hz48000, channels).unwrap();
+                            for (packet, expected) in
+                                packets.iter().zip(decoded.chunks_exact(size * count))
+                            {
+                                let mut pcm = vec![0_i16; size * count];
+                                let samples = match native.decode(Some(packet), &mut pcm, false) {
+                                    Ok(samples) => samples,
+                                    Err(error) => {
+                                        failures.push(format!("{label} native decode: {error}"));
+                                        break;
+                                    }
+                                };
+                                assert_eq!(samples, size);
+                                let peak = pcm
+                                    .iter()
+                                    .zip(expected)
+                                    .map(|(&a, &b)| {
+                                        (i32::from(a) - (b * 32768.0).round() as i32).abs()
+                                    })
+                                    .max()
+                                    .unwrap();
+                                assert!(peak <= 2, "{label} C parity={peak}");
+                            }
+                            let delay = encoder.lookahead() * count;
+                            let aligned = &decoded[delay..delay + source.len()];
+                            for (start, end) in
+                                [(4, 6), (6, 12), (12, 14), (16, 18), (18, 24), (24, 26)]
+                            {
+                                let range = start * size * count..end * size * count;
+                                let signal: f64 = source[range.clone()]
+                                    .iter()
+                                    .map(|&x| f64::from(x).powi(2))
+                                    .sum();
+                                let error: f64 = source[range.clone()]
+                                    .iter()
+                                    .zip(&aligned[range.clone()])
+                                    .map(|(&a, &b)| f64::from(a - b).powi(2))
+                                    .sum();
+                                let snr = 10.0 * (signal / error).log10();
+                                let pass = if signal <= 1e-12 {
+                                    (error / range.len() as f64).sqrt() <= 1.0 / 32768.0
+                                } else {
+                                    snr.is_finite() && snr > 3.0
+                                };
+                                eprintln!(
+                                    "layout {label} region={start}..{end} SNR={snr} pass={pass}"
+                                );
+                                if !pass {
+                                    failures.push(format!("{label} {start}..{end} SNR={snr}"));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "unqualified candidate layouts: {failures:?}"
+        );
+    }
+
     #[cfg(feature = "hybrid")]
     fn qualify_unredundant_case(
         frame_size: usize,
@@ -304,6 +457,232 @@ mod tests {
     }
 
     #[cfg(feature = "hybrid")]
+    std::thread_local! {
+        static CLOSED_LOOP_PROOF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        static PUBLIC_RD_QUALIFIER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "bounded native closed-loop proof; explicit frozen oracle and PCM required"]
+    fn reference_unredundant_closed_loop_energy_proof() {
+        CLOSED_LOOP_PROOF.set(true);
+        reference_practical_unredundant_transition_quality();
+        CLOSED_LOOP_PROOF.set(false);
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "public packet API qualification with internally gated native RD; explicit oracle and PCM"]
+    fn reference_public_practical_rd_quality() {
+        PUBLIC_RD_QUALIFIER.set(true);
+        reference_practical_unredundant_transition_quality();
+        PUBLIC_RD_QUALIFIER.set(false);
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "focused public RD diagnostic; full reference_public_practical_rd_quality remains mandatory"]
+    fn reference_public_practical_rd_voiced_10ms() {
+        let oracle =
+            std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE").expect("explicit oracle required");
+        PUBLIC_RD_QUALIFIER.set(true);
+        let failures = qualify_unredundant_case(480, 1, &[], &oracle);
+        PUBLIC_RD_QUALIFIER.set(false);
+        assert!(
+            failures.is_empty(),
+            "unqualified voiced steady region: {failures:?}"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "diagnostic production/proof state equivalence; does not replace full public quality qualification"]
+    fn practical_rd_voiced_proof_packet_identity() {
+        let config = EncoderConfig {
+            bitrate: 64_000,
+            frame_size: 480,
+            ..EncoderConfig::default()
+        };
+        let mut public = Encoder::new_auto(config).unwrap();
+        public.practical = Some(Box::new(
+            super::super::hybrid::PracticalSynthesis::new().unwrap(),
+        ));
+        let mut proof = Encoder::new_auto(config).unwrap();
+        let mut synthesis =
+            crate::Decoder::new(crate::SampleRate::Hz48000, Channels::Stereo).unwrap();
+        let mut history = vec![0_i16; 384 * 2];
+        for frame in 0..24 {
+            let pcm = candidate_hybrid_shape(1, frame, 480, &[]);
+            history.extend(
+                pcm.iter()
+                    .map(|x| (x * 32768.0).round().clamp(-32768.0, 32767.0) as i16),
+            );
+            let target: Vec<_> = history.drain(..pcm.len()).collect();
+            let mode = if (4..12).contains(&frame) || frame >= 16 {
+                EncoderMode::Hybrid
+            } else {
+                EncoderMode::Celt
+            };
+            let control = EncoderControl {
+                mode,
+                bitrate: if (4..12).contains(&frame) {
+                    32_000
+                } else {
+                    64_000
+                },
+                bandwidth: Bandwidth::Fullband,
+            };
+            public
+                .set_control(EncoderControl {
+                    mode: if frame >= 16 { EncoderMode::Auto } else { mode },
+                    ..control
+                })
+                .unwrap();
+            let actual = public.encode(&pcm).unwrap();
+            let expected =
+                closed_loop_packet(&mut proof, &mut synthesis, &pcm, control, &target).unwrap();
+            assert_eq!(
+                actual, expected,
+                "production/proof packet divergence at frame {frame}"
+            );
+            assert_eq!(
+                public.active_mode(),
+                proof.active_mode(),
+                "active mode at frame {frame}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    fn practical_shadow_preserves_nominal_high_rate_packets() {
+        let config = EncoderConfig {
+            bitrate: 224_000,
+            ..EncoderConfig::default()
+        };
+        let mut nominal = Encoder::new_auto(config).unwrap();
+        let mut shadowed = nominal.clone();
+        shadowed.practical = Some(Box::new(
+            super::super::hybrid::PracticalSynthesis::new().unwrap(),
+        ));
+        for frame in 0..4 {
+            let pcm = candidate_hybrid_shape(1, frame, 960, &[]);
+            assert_eq!(
+                nominal.encode(&pcm).unwrap(),
+                shadowed.encode(&pcm).unwrap()
+            );
+        }
+        assert_eq!(nominal.finish().unwrap(), shadowed.finish().unwrap());
+    }
+
+    #[cfg(feature = "hybrid")]
+    struct ClosedLoopCandidate {
+        error: i128,
+        encoder: Encoder,
+        synthesis: crate::Decoder,
+        packet: Vec<u8>,
+        db: i32,
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn closed_loop_packet(
+        encoder: &mut Encoder,
+        decoder: &mut crate::Decoder,
+        pcm: &[f32],
+        control: EncoderControl,
+        target: &[i16],
+    ) -> crate::Result<Vec<u8>> {
+        let mut best: Option<ClosedLoopCandidate> = None;
+        let mut nominal_error = None;
+        for db in [0, -1, -2, -3, -6] {
+            if db != 0 && (control.mode != EncoderMode::Hybrid || control.bitrate >= 128_000) {
+                continue;
+            }
+            let mut candidate = encoder.clone();
+            let mut synthesis = decoder.clone();
+            let previous = super::super::HYBRID_TEST_ENERGY_DB.replace(db);
+            let result = candidate.encode_unredundant_candidate(pcm, control);
+            super::super::HYBRID_TEST_ENERGY_DB.set(previous);
+            let Ok(packet) = result else { continue };
+            if packet.len() > control.bitrate as usize * encoder.config.frame_size / 384_000 {
+                continue;
+            }
+            let mut output = vec![0_i16; target.len()];
+            let Ok(samples) = synthesis.decode(Some(&packet), &mut output, false) else {
+                continue;
+            };
+            if samples * super::super::channel_count(encoder.config.channels) != target.len() {
+                continue;
+            }
+            let distortion: i128 = output
+                .iter()
+                .zip(target)
+                .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
+                .sum();
+            if db == 0 {
+                nominal_error = Some(distortion);
+            }
+            if best.as_ref().is_none_or(|old| distortion < old.error) {
+                best = Some(ClosedLoopCandidate {
+                    error: distortion,
+                    encoder: candidate,
+                    synthesis,
+                    packet,
+                    db,
+                });
+            }
+        }
+        let Some(ClosedLoopCandidate {
+            error,
+            encoder: candidate,
+            synthesis,
+            packet,
+            db,
+        }) = best
+        else {
+            return Err(super::unavailable("no finalized native RD candidate"));
+        };
+        if let Some(nominal) = nominal_error {
+            assert!(error <= nominal);
+        }
+        eprintln!("closed loop selected db={db} distortion={error} nominal={nominal_error:?}");
+        *encoder = candidate;
+        *decoder = synthesis;
+        Ok(packet)
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn trace_practical_frame_errors(
+        source: &[f32],
+        aligned: &[f32],
+        frame_size: usize,
+        shape: usize,
+    ) {
+        if !PUBLIC_RD_QUALIFIER.get() || std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_none() {
+            return;
+        }
+        for frame in 0..32 {
+            let start = frame * frame_size * 2;
+            let end = start + frame_size * 2;
+            let signal: f64 = source[start..end]
+                .iter()
+                .map(|&x| f64::from(x).powi(2))
+                .sum();
+            let error: f64 = source[start..end]
+                .iter()
+                .zip(&aligned[start..end])
+                .map(|(&a, &b)| f64::from(a - b).powi(2))
+                .sum();
+            eprintln!(
+                "practical RD oracle shape={shape} frame_size={frame_size} frame={frame} signal={signal} error={error} SNR={}",
+                10.0 * (signal / error).log10()
+            );
+        }
+    }
+
+    #[cfg(feature = "hybrid")]
+    #[allow(clippy::too_many_lines)] // Persistent packet matrix retains ordered control, oracle, tail and quality gates.
     fn qualify_unredundant_case_with_budget(
         frame_size: usize,
         shape: usize,
@@ -319,13 +698,32 @@ mod tests {
         .unwrap();
         let mut source = Vec::new();
         let mut packets = Vec::new();
+        if PUBLIC_RD_QUALIFIER.get() {
+            encoder.practical = Some(Box::new(
+                super::super::hybrid::PracticalSynthesis::new().unwrap(),
+            ));
+        }
+        let mut proof_decoder =
+            crate::Decoder::new(crate::SampleRate::Hz48000, Channels::Stereo).unwrap();
         for frame in 0..32 {
             let (mode, bitrate) = match frame {
                 0..=3 | 12..=15 | 24..=31 => (EncoderMode::Celt, 64_000),
                 4..=11 => (EncoderMode::Hybrid, 32_000),
                 _ => (EncoderMode::Hybrid, 64_000),
             };
-            let pcm = candidate_hybrid_shape(shape, frame, frame_size, media);
+            let mut pcm = candidate_hybrid_shape(
+                if shape == 4 { 3 } else { shape },
+                frame,
+                frame_size,
+                media,
+            );
+            if shape == 4 {
+                // Quiet real music retains the relative >3 dB gate; it is not
+                // reclassified as silence to make low-level errors disappear.
+                for sample in &mut pcm {
+                    *sample *= 0.01;
+                }
+            }
             source.extend_from_slice(&pcm);
             let trace_prefix = matches!(
                 (shape, frame_size, frame),
@@ -333,14 +731,43 @@ mod tests {
             );
             let incoming_silk = trace_prefix.then(|| encoder.silk.as_ref().unwrap().clone());
             let previous_budget = super::super::hybrid::PREFIX_FRONTIER_BYTES.replace(prefix_bytes);
-            let packet = encoder.encode_unredundant_candidate(
-                &pcm,
-                EncoderControl {
-                    bitrate,
-                    bandwidth: Bandwidth::Fullband,
-                    mode,
+            let control = EncoderControl {
+                bitrate,
+                bandwidth: Bandwidth::Fullband,
+                mode: if PUBLIC_RD_QUALIFIER.get() && (16..24).contains(&frame) {
+                    EncoderMode::Auto
+                } else {
+                    mode
                 },
-            );
+            };
+            let packet = if PUBLIC_RD_QUALIFIER.get() {
+                if std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_some() {
+                    eprintln!(
+                        "practical RD input shape={shape} frame_size={frame_size} frame={frame} mode={:?} bitrate={bitrate}",
+                        control.mode
+                    );
+                }
+                assert_eq!(
+                    super::super::HYBRID_TEST_ENERGY_DB.get(),
+                    0,
+                    "public RD must use only the production field bias"
+                );
+                encoder
+                    .set_control(control)
+                    .and_then(|()| encoder.encode(&pcm))
+            } else if CLOSED_LOOP_PROOF.get() {
+                let delay = encoder.lookahead() * 2;
+                let begin = frame * frame_size * 2;
+                let target: Vec<_> = (begin..begin + pcm.len())
+                    .map(|i| {
+                        let sample = i.checked_sub(delay).map_or(0.0, |j| source[j]);
+                        (sample * 32768.0).round().clamp(-32768.0, 32767.0) as i16
+                    })
+                    .collect();
+                closed_loop_packet(&mut encoder, &mut proof_decoder, &pcm, control, &target)
+            } else {
+                encoder.encode_unredundant_candidate(&pcm, control)
+            };
             super::super::hybrid::PREFIX_FRONTIER_BYTES.set(previous_budget);
             let packet = packet.unwrap();
             if let Some(incoming_silk) = incoming_silk {
@@ -354,12 +781,25 @@ mod tests {
         let decoded = decode_candidate_hybrid(&packets, oracle);
         assert_eq!(decoded.len(), packets.len() * frame_size * 2);
         assert_auto_native_parity(&packets, frame_size, &decoded);
-        report_unredundant_prefixes(&packets, frame_size, &decoded, &source, encoder.lookahead());
+        report_unredundant_prefixes(
+            &packets,
+            frame_size,
+            &decoded,
+            &source,
+            encoder.lookahead(),
+            shape,
+        );
         let aligned = &decoded[encoder.lookahead() * 2..encoder.lookahead() * 2 + source.len()];
+        trace_practical_frame_errors(&source, aligned, frame_size, shape);
         let mut failures = Vec::new();
         // Include each entry/departure, not only settled interior frames.
-        for boundary in [4, 12, 16, 24] {
-            let range = boundary * frame_size * 2..(boundary + 2) * frame_size * 2;
+        let regions: &[(usize, usize)] = if PUBLIC_RD_QUALIFIER.get() || CLOSED_LOOP_PROOF.get() {
+            &[(4, 6), (6, 12), (12, 14), (16, 18), (18, 24), (24, 26)]
+        } else {
+            &[(4, 6), (12, 14), (16, 18), (24, 26)]
+        };
+        for &(boundary, end) in regions {
+            let range = boundary * frame_size * 2..end * frame_size * 2;
             let count = (range.end - range.start) as f64;
             let signal: f64 = source[range.clone()]
                 .iter()
@@ -466,14 +906,21 @@ mod tests {
     }
 
     #[cfg(feature = "hybrid")]
+    #[allow(clippy::too_many_lines)] // Diagnostic entropy replay follows SILK prefix decoding order.
     fn report_unredundant_prefixes(
         packets: &[Vec<u8>],
         frame_size: usize,
         full: &[f32],
         source: &[f32],
         lookahead: usize,
+        shape: usize,
     ) {
         for boundary in [4, 16] {
+            // At a CELT->hybrid boundary the new layers are reset. A fresh
+            // decoder therefore reconstructs the same new-mode sum, without
+            // the outgoing CELT concealment/fade applied by a continuous stream.
+            let mut isolated =
+                crate::Decoder::new(crate::SampleRate::Hz48000, Channels::Stereo).unwrap();
             let mut decoder = crate::silk::SilkDecoder::new(
                 crate::SampleRate::Hz16000,
                 Channels::Stereo,
@@ -484,7 +931,16 @@ mod tests {
                 crate::silk::resampler::SilkResampler::new(16000, 48000).unwrap(),
                 crate::silk::resampler::SilkResampler::new(16000, 48000).unwrap(),
             ];
+            let mut gate_low = Vec::new();
+            let mut gate_isolated = Vec::new();
             for (frame, packet) in packets.iter().enumerate().skip(boundary).take(3) {
+                let mut isolated_pcm = vec![0_i16; frame_size * 2];
+                assert_eq!(
+                    isolated
+                        .decode(Some(packet), &mut isolated_pcm, false)
+                        .unwrap(),
+                    frame_size
+                );
                 let mut range = crate::range::RangeDecoder::new(&packet[1..]).unwrap();
                 decoder.begin_packet();
                 decoder.decode_header_bits(&mut range, true).unwrap();
@@ -515,6 +971,8 @@ mod tests {
                         [f32::from(left) / 32768.0, f32::from(right) / 32768.0]
                     })
                     .collect();
+                gate_low.extend_from_slice(&low);
+                gate_isolated.extend(isolated_pcm.iter().map(|&x| f32::from(x) / 32768.0));
                 let reference = &full[frame * frame_size * 2..(frame + 1) * frame_size * 2];
                 let low_energy: f64 = low.iter().map(|&x| f64::from(x).powi(2)).sum();
                 let residual: f64 = low
@@ -524,22 +982,43 @@ mod tests {
                     .sum();
                 let target_start = (frame * frame_size - lookahead) * 2;
                 let target = &source[target_start..target_start + frame_size * 2];
-                for (label, samples) in [("head5ms", 0..480), ("after5ms", 480..frame_size * 2)] {
+                for (label, samples) in [
+                    ("old_only_2p5ms", 0..240),
+                    ("crossfade_2p5ms", 240..480),
+                    ("head5ms", 0..480),
+                    ("after5ms", 480..frame_size * 2),
+                ] {
                     let mut target_energy = 0.0_f64;
                     let mut target_minus_low = 0.0_f64;
                     let mut output_error = 0.0_f64;
                     let mut added_energy = 0.0_f64;
                     let mut residual_dot_added = 0.0_f64;
+                    let mut isolated_error = 0.0_f64;
+                    let mut highband_energy = 0.0_f64;
+                    let mut transition_energy = 0.0_f64;
+                    let mut transition_cross = 0.0_f64;
                     for i in samples {
                         let t = f64::from(target[i]);
                         let l = f64::from(low[i]);
                         let y = f64::from(reference[i]);
+                        let z = f64::from(isolated_pcm[i]) / 32768.0;
+                        isolated_error += (t - z).powi(2);
+                        highband_energy += (z - l).powi(2);
+                        transition_energy += (y - z).powi(2);
+                        transition_cross += (t - z) * (y - z);
                         target_energy += t * t;
                         target_minus_low += (t - l).powi(2);
                         output_error += (t - y).powi(2);
                         added_energy += (y - l).powi(2);
                         residual_dot_added += (t - l) * (y - l);
                     }
+                    // z is reset new-mode synthesis without the outgoing fade.
+                    // E(t-y)=E(t-z)+E(y-z)-2 dot(t-z,y-z). Outside the first
+                    // 5 ms, y-z should be only native/C rounding differences;
+                    // a larger residual falsifies this reset-state comparison.
+                    eprintln!(
+                        "entry isolated boundary={boundary} frame={frame} region={label} isolated_error={isolated_error} highband_energy={highband_energy} transition_energy={transition_energy} transition_cross={transition_cross} full_error={output_error}"
+                    );
                     // y-l contains the high band PLUS transition concealment/
                     // fade; it is not an isolated CELT decoder reconstruction.
                     // Error identity: E(t-y)=E(t-l)+E(y-l)-2 dot(t-l,y-l).
@@ -554,6 +1033,46 @@ mod tests {
                     "entry prefix boundary={boundary} frame={frame} bits={bits} pcm_peak={peak} low_energy={low_energy} reference_minus_low={residual}"
                 );
             }
+            if shape == 3 && frame_size == 480 && boundary == 4 {
+                let base = "/tmp/opus-entry-reconstruction-3-480-4";
+                let target_start = (boundary * frame_size - lookahead) * 2;
+                for (name, pcm) in [
+                    (
+                        "target",
+                        &source[target_start..target_start + gate_low.len()],
+                    ),
+                    ("low", gate_low.as_slice()),
+                    ("isolated", gate_isolated.as_slice()),
+                    (
+                        "full",
+                        &full
+                            [boundary * frame_size * 2..boundary * frame_size * 2 + gate_low.len()],
+                    ),
+                ] {
+                    let bytes: Vec<_> = pcm.iter().flat_map(|x| x.to_le_bytes()).collect();
+                    std::fs::write(format!("{base}-{name}.f32"), bytes).unwrap();
+                }
+                std::fs::write(format!("{base}.meta"), format!("format=f32le\nchannels=2\nsample_rate=48000\npacket_frames=4,5,6\npacket_samples_per_channel=480\ntarget_source_start={}\ngate_offset_samples_per_channel={lookahead}\ngate_length_samples_per_channel=960\n", target_start / 2)).unwrap();
+            }
+            let mut low_error = 0.0_f64;
+            let mut full_error = 0.0_f64;
+            let mut suffix_energy = 0.0_f64;
+            let mut cross = 0.0_f64;
+            let mut fade_energy = 0.0_f64;
+            for i in 0..frame_size * 4 {
+                let t = f64::from(source[boundary * frame_size * 2 + i]);
+                let l = f64::from(gate_low[lookahead * 2 + i]);
+                let z = f64::from(gate_isolated[lookahead * 2 + i]);
+                let y = f64::from(full[boundary * frame_size * 2 + lookahead * 2 + i]);
+                low_error += (t - l).powi(2);
+                full_error += (t - y).powi(2);
+                suffix_energy += (y - l).powi(2);
+                cross += (t - l) * (y - l);
+                fade_energy += (y - z).powi(2);
+            }
+            eprintln!(
+                "entry exact gate boundary={boundary} low_error={low_error} full_error={full_error} suffix_energy={suffix_energy} correction_cross={cross} fade_energy={fade_energy}"
+            );
         }
     }
 
@@ -968,6 +1487,15 @@ mod tests {
 
     #[cfg(feature = "hybrid")]
     fn decode_candidate_hybrid(packets: &[Vec<u8>], oracle: &std::ffi::OsStr) -> Vec<f32> {
+        decode_candidate_layout(packets, oracle, 2)
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn decode_candidate_layout(
+        packets: &[Vec<u8>],
+        oracle: &std::ffi::OsStr,
+        channels: usize,
+    ) -> Vec<f32> {
         use std::io::Write;
         use std::process::{Command, Stdio};
         let mut child = Command::new("python3")
@@ -976,7 +1504,7 @@ mod tests {
                 env!("CARGO_MANIFEST_DIR"),
                 "/tests/output_oracle.py"
             ))
-            .args(["--decode", "48000", "2"])
+            .args(["--decode", "48000", &channels.to_string()])
             .env("MOOSICBOX_OPUS_REFERENCE_ORACLE", oracle)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

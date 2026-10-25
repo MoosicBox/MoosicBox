@@ -13,6 +13,7 @@ pub(super) const HISTORY: usize = 2048;
 const ORDER: usize = 24;
 const PERIOD: usize = 1024;
 
+#[derive(Clone)]
 pub(super) struct LossState {
     pub memory: Vec<Vec<i32>>,
     pub lpc: Vec<[i16; ORDER]>,

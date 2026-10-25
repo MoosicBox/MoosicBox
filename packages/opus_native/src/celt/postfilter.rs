@@ -9,7 +9,7 @@ struct Params {
     gain: i32,
     tap: usize,
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct Postfilter {
     history: Vec<Vec<i32>>,
     old: Params,

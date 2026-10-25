@@ -51,6 +51,9 @@ impl AudioDecode for Sink {
     }
 }
 fn playback(bytes: Vec<u8>) -> Captured {
+    playback_with_seek(bytes, None)
+}
+fn playback_with_seek(bytes: Vec<u8>, seek: Option<f64>) -> Captured {
     let capture = Arc::new(Mutex::new(Vec::new()));
     let sink = capture.clone();
     let mut handler = AudioDecodeHandler::new()
@@ -67,7 +70,7 @@ fn playback(bytes: Vec<u8>) -> Captured {
             ..Default::default()
         },
         None,
-        None,
+        seek,
     )
     .unwrap();
     capture.lock().unwrap().clone()
@@ -161,6 +164,79 @@ fn chained_independent_sections_preserve_pcm_same_and_changed_headers() {
         );
     }
 }
+#[test]
+fn chained_public_player_seek_crosses_section_boundary_without_losing_tail() {
+    for channels in [1, 2] {
+        let first = encode(1, 0.0, false);
+        let mut second = encode(channels, 0.7, false);
+        new_serial(&mut second, 42);
+        let second_pcm: Vec<f32> = playback(second.clone())
+            .into_iter()
+            .flat_map(|(_, pcm)| pcm)
+            .collect();
+        assert_eq!(second_pcm.len(), 2457 * channels);
+        let mut chained = first;
+        chained.extend(second);
+        // 60 ms is frame 2880 on the concatenated audible clock, i.e. 423
+        // frames into the second independently primed logical section.
+        let sought = playback_with_seek(chained, Some(0.06));
+        assert!(sought.iter().all(|(count, _)| *count == channels));
+        let actual: Vec<f32> = sought.into_iter().flat_map(|(_, pcm)| pcm).collect();
+        assert_eq!(actual.len(), (2457 - 423) * channels);
+        assert_eq!(actual, second_pcm[423 * channels..]);
+    }
+}
+
+#[test]
+fn native_player_propagates_output_failure_without_decoding_remaining_sections() {
+    struct FailingOutput(Arc<Mutex<usize>>);
+    impl AudioDecode for FailingOutput {
+        fn decoded(
+            &mut self,
+            _: AudioBuffer<f32>,
+            _: &Packet,
+            _: &Track,
+        ) -> Result<(), AudioDecodeError> {
+            *self.0.lock().unwrap() += 1;
+            Err(AudioDecodeError::Other(Box::new(std::io::Error::other(
+                "output rejected PCM",
+            ))))
+        }
+        fn flush(&mut self) -> Result<(), AudioDecodeError> {
+            Ok(())
+        }
+    }
+    let writes = Arc::new(Mutex::new(0));
+    let output = writes.clone();
+    let mut handler = AudioDecodeHandler::new().with_output(Box::new(move |_, _| {
+        Ok(Box::new(FailingOutput(output.clone())))
+    }));
+    let mut bytes = encode(1, 0.0, false);
+    let mut second = encode(2, 0.7, false);
+    new_serial(&mut second, 42);
+    bytes.extend(second);
+    let result = moosicbox_player::symphonia::play_media_source_with_options(
+        MediaSourceStream::new(Box::new(Cursor::new(bytes)), Default::default()),
+        &Hint::new(),
+        &mut handler,
+        DecodeOptions {
+            opus_backend: OpusDecodeBackend::Native,
+            ..Default::default()
+        },
+        None,
+        None,
+    );
+    assert!(
+        result.is_err(),
+        "output failure must not become successful EOS"
+    );
+    assert_eq!(
+        *writes.lock().unwrap(),
+        1,
+        "output failure must stop delivery"
+    );
+}
+
 #[test]
 fn family1_surround_reaches_public_player_with_distinct_channel_routing() {
     for channels in [3, 6, 8] {

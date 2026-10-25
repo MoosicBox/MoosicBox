@@ -196,6 +196,8 @@ impl LtpState {
 /// # Ok(())
 /// # }
 /// ```
+/// Cloning at a completed call boundary copies predictor, PLC/CNG, stereo and
+/// recovery history. Subsequent decode/reset calls do not mutate the source.
 #[derive(Clone)]
 #[allow(clippy::struct_excessive_bools)] // Reference per-channel reset flags plus stereo coding state.
 pub struct SilkDecoder {

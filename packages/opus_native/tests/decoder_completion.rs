@@ -378,3 +378,177 @@ fn gain_preserves_reset_and_does_not_change_prediction() {
     control.decode(Some(packet), &mut expected, false).unwrap();
     assert_eq!(actual, expected);
 }
+
+/// Exercise the same integer-origin 100-frame signal and zero-input finish as
+/// qualification_probe, without adopting any native packet/PCM fingerprint.
+#[test]
+#[ignore = "requires explicitly selected MOOSICBOX_OPUS_REFERENCE_ORACLE"]
+fn silk_nonzero_to_silence_finish_matches_reference() {
+    use moosicbox_opus_native::{Encoder, EncoderConfig};
+    use std::io::Write;
+    use std::process::Stdio;
+    let script = r"
+import os,struct,sys
+sys.path.insert(0,sys.argv[1]+'/libopus/src')
+from oracle import Oracle
+with Oracle(os.environ['MOOSICBOX_OPUS_REFERENCE_ORACLE']) as o:
+ r=o.request('decoder',rate=16000,channels=1); assert 'error' not in r,r
+ data=sys.stdin.buffer.read()
+ while data:
+  n=struct.unpack_from('<I',data)[0]; packet=list(data[4:4+n]); data=data[4+n:]
+  r=o.request('decode',packet=packet,frame_size=320)
+  assert 'error' not in r and r['samples']==320,r
+  sys.stdout.buffer.write(struct.pack('<'+'h'*len(r['pcm']),*r['pcm']))
+";
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels: Channels::Mono,
+        bitrate: 64_000,
+        frame_size: 320,
+    };
+    let mut encoder = Encoder::new_silk(config).unwrap();
+    let mut decoder = Decoder::new(SampleRate::Hz16000, Channels::Mono).unwrap();
+    let mut packets = Vec::new();
+    let mut state = 0x1234_5678_u32;
+    for frame in 0..100_usize {
+        let input = (0..320)
+            .map(|index| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let noise = i32::from(state.to_le_bytes()[3]) - 128;
+                let position = (frame * 320 + index) % 256;
+                let triangle = i32::try_from(position.min(256 - position)).unwrap() - 64;
+                let integer = i16::try_from(triangle * 128 + noise * 8).unwrap();
+                f32::from(integer) / 32768.0
+            })
+            .collect::<Vec<_>>();
+        packets.push(encoder.encode(&input).unwrap());
+    }
+    let tail = encoder.finish().unwrap();
+    assert_eq!(tail.len(), 1, "one 20-ms silence flush packet");
+    packets.extend(tail);
+    let mut native = Vec::new();
+    let mut wire = Vec::new();
+    for packet in &packets {
+        assert_eq!(packet[0] >> 3, 9, "WB mono 20-ms SILK");
+        wire.extend_from_slice(&u32::try_from(packet.len()).unwrap().to_le_bytes());
+        wire.extend_from_slice(packet);
+        let mut pcm = [0; 320];
+        assert_eq!(decoder.decode(Some(packet), &mut pcm, false).unwrap(), 320);
+        native.extend_from_slice(&pcm);
+    }
+    let executable = std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE")
+        .expect("explicit public C oracle required");
+    let mut child = Command::new("python3")
+        .args(["-B", "-c", script, env!("CARGO_MANIFEST_DIR")])
+        .env("MOOSICBOX_OPUS_REFERENCE_ORACLE", executable)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&wire).unwrap();
+    let result = child.wait_with_output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let reference = result
+        .stdout
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|bytes| i16::from_le_bytes(*bytes))
+        .collect::<Vec<_>>();
+    assert_eq!(native.len(), 101 * 320);
+    assert_eq!(reference.len(), native.len());
+    let first = native.iter().zip(&reference).position(|(a, b)| a != b);
+    assert!(
+        first.is_none(),
+        "first={:?}",
+        first.map(|i| (i, i / 320, native[i], reference[i]))
+    );
+}
+
+#[test]
+fn decoder_clone_preserves_persistent_history_without_sharing_mutations() {
+    let packets: [&[u8]; 3] = [
+        include_bytes!("../src/silk/reference/nb_sine_mono.packet"),
+        include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin"),
+        include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin"),
+    ];
+    for rate in [SampleRate::Hz16000, SampleRate::Hz48000] {
+        for channels in [Channels::Mono, Channels::Stereo] {
+            for packet in packets {
+                let samples = rate as usize / 50;
+                let width = channels as usize;
+                let mut original = Decoder::new(rate, channels).unwrap();
+                let mut ordinary_control = Decoder::new(rate, channels).unwrap();
+                let mut loss_control = Decoder::new(rate, channels).unwrap();
+                for state in [&mut original, &mut ordinary_control, &mut loss_control] {
+                    state.set_gain(1536);
+                    for _ in 0..4 {
+                        assert_eq!(
+                            state
+                                .decode(Some(packet), &mut vec![0; samples * width], false)
+                                .unwrap(),
+                            samples
+                        );
+                    }
+                }
+                let mut candidate = original.clone();
+                let mut actual = vec![123; samples * width];
+                let mut expected = vec![0; samples * width];
+                // Speculative candidate advances its PLC, RNG, overlap and
+                // resampler history, while committed history must stay intact.
+                for _ in 0..3 {
+                    assert_eq!(
+                        candidate.decode_loss(&mut actual, samples).unwrap(),
+                        samples
+                    );
+                    assert_eq!(
+                        loss_control.decode_loss(&mut expected, samples).unwrap(),
+                        samples
+                    );
+                    assert_eq!(
+                        actual, expected,
+                        "cloned loss rate={rate:?} channels={channels:?}"
+                    );
+                }
+                for _ in 0..3 {
+                    candidate.decode(Some(packet), &mut actual, false).unwrap();
+                    loss_control
+                        .decode(Some(packet), &mut expected, false)
+                        .unwrap();
+                    assert_eq!(actual, expected, "cloned recovery");
+                    original.decode(Some(packet), &mut actual, false).unwrap();
+                    ordinary_control
+                        .decode(Some(packet), &mut expected, false)
+                        .unwrap();
+                    assert_eq!(
+                        actual, expected,
+                        "candidate must not mutate committed state"
+                    );
+                }
+                // Mutating the source must not affect a retained snapshot either.
+                let mut retained = original.clone();
+                candidate.reset_state().unwrap();
+                original.decode_loss(&mut actual, samples).unwrap();
+                retained.decode(Some(packet), &mut actual, false).unwrap();
+                ordinary_control
+                    .decode(Some(packet), &mut expected, false)
+                    .unwrap();
+                assert_eq!(actual, expected, "source mutation must not affect snapshot");
+                // Resetting a clone retains gain but clears all predictive state.
+                let mut fresh = Decoder::new(rate, channels).unwrap();
+                fresh.set_gain(1536);
+                candidate.decode(Some(packet), &mut actual, false).unwrap();
+                fresh.decode(Some(packet), &mut expected, false).unwrap();
+                assert_eq!(
+                    actual, expected,
+                    "clone reset matches fresh decoder with gain"
+                );
+            }
+        }
+    }
+}

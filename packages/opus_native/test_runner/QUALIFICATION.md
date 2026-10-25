@@ -103,6 +103,18 @@ speech/music quality evidence. Ten warm-up frames precede measured frames.
 Standard 20-ms cases are CELT mono/stereo at 128k, CELT stereo at 256k, SILK
 16-kHz mono at 128k, hybrid stereo at 128k and Auto stereo at 128k. Unsupported
 features fail explicitly; use the default/full-feature release image for all six.
+Eight additional practical-rate CELT, SILK, hybrid and Auto cases exercise the
+currently public supported envelope. The runner requires at least two repetitions;
+these timing workloads do not qualify low-rate transitions or release guards.
+
+The receipt helper captures source identities around the actual allocated build
+and obtains the executable from Cargo's artifact record:
+
+```sh
+python3 -B packages/opus_native/test_runner/src/qualification_build.py \
+  --kind performance --target-directory "$PERFORMANCE_TARGET" \
+  --receipt "$PERFORMANCE_RECEIPT"
+```
 
 After a granted build slot, capture source identity around this actual build:
 
@@ -168,5 +180,8 @@ missing URL, missing artifact, wrong bytes, HTTP downgrade or existing destinati
 fails, not skips. No download or upload was performed to implement this tool.
 The derived music WAV has no claimed public hosting URL; an approved artifact
 location is still required. Do not substitute the MP3 or silently transcode a
-new WAV. CI workflow wiring remains coordinator-owned/proposed, not implemented.
+new WAV. The dedicated `.github/workflows/opus-native-qualification.yml` and
+`src/qualification_ci.py` now provide fail-closed platform execution and artifact
+comparison. Workflow implementation is not evidence of a successful platform run:
+remote execution still requires separate authorization and reviewed hosted media.
 The existing fixed oracle is not rebuilt, modified or used by the performance tool.

@@ -73,6 +73,9 @@ pub struct DecodedFrame {
 }
 
 /// CELT decoder state (RFC Section 4.3)
+///
+/// Cloning copies predictor and overlap buffers; snapshots share no mutable history.
+#[derive(Clone)]
 pub struct CeltState {
     /// Previous frame's final energy per band (Q8 format) - frame t-1
     ///
@@ -243,6 +246,9 @@ impl CeltState {
 /// # Ok(())
 /// # }
 /// ```
+/// Cloning at a completed call boundary copies all synthesis, loss and RNG
+/// history. Advancing or resetting a clone does not mutate the source decoder.
+#[derive(Clone)]
 pub struct CeltDecoder {
     sample_rate: SampleRate,
     #[allow(dead_code)]

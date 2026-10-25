@@ -163,6 +163,44 @@ async fn multistream_transcode_has_explicit_mapping_header() {
 }
 
 #[switchy_async::test]
+async fn cancelling_after_first_output_does_not_cache_partial_transcode() {
+    use moosicbox_audio_output::encoder::opus::OpusEncodeMode;
+
+    for mode in [OpusEncodeMode::Default, OpusEncodeMode::Auto] {
+        let config = OpusEncodeConfig {
+            mode,
+            bitrate: 192_000,
+            ..config(48_000)
+        };
+        let expected = collect(config).await;
+        let mut result = get_audio_bytes_with_opus_encoder(source(), options(), config)
+            .await
+            .unwrap();
+        let first = result
+            .stream
+            .next()
+            .await
+            .expect("transcode must produce an item")
+            .unwrap()
+            .unwrap();
+        assert!(
+            !first.is_empty(),
+            "cancellation must happen after actual output"
+        );
+        // Drop the live consumer without draining it. The subsequent request
+        // must create fresh codec/filter state and not reuse cached partial bytes.
+        drop(result);
+        let actual = collect(config).await;
+        assert_eq!(actual, expected, "mode={mode:?}");
+        let eos = actual
+            .windows(4)
+            .rposition(|window| window == b"OggS")
+            .unwrap();
+        assert_ne!(actual[eos + 5] & 4, 0, "retry must include completed EOS");
+    }
+}
+
+#[switchy_async::test]
 async fn dropping_consumer_does_not_poison_next_transcode() {
     let result = get_audio_bytes_with_opus_encoder(source(), options(), config(48000))
         .await

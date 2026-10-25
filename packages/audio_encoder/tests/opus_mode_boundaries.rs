@@ -17,16 +17,61 @@ impl Write for Sink {
     }
 }
 #[test]
+fn hybrid_24k_and_mono_keep_128k_minimum_before_headers() {
+    for sample_rate in [24_000, 48_000] {
+        for channels in [1, 2] {
+            if sample_rate == 48_000 && channels == 2 {
+                continue; // Only this independently qualified case admits 32 kb/s.
+            }
+            for divisor in [100, 50] {
+                let base = OpusEncodeConfig {
+                    backend: OpusEncodeBackend::Native,
+                    mode: OpusEncodeMode::Hybrid,
+                    sample_rate,
+                    channels,
+                    frame_size: sample_rate as usize / divisor,
+                    ..Default::default()
+                };
+                for bitrate in [32_000, 64_000, 127_999, 256_001] {
+                    let mut sink = Sink::default();
+                    assert!(
+                        OpusStreamEncoder::new(&mut sink, OpusEncodeConfig { bitrate, ..base })
+                            .is_err(),
+                        "{base:?} bitrate={bitrate}"
+                    );
+                    assert_eq!(sink.0, 0, "invalid configuration wrote headers");
+                }
+                for bitrate in [128_000, 256_000] {
+                    assert!(
+                        OpusStreamEncoder::new(
+                            Sink::default(),
+                            OpusEncodeConfig { bitrate, ..base }
+                        )
+                        .is_ok(),
+                        "{base:?} bitrate={bitrate}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn native_mode_bitrate_boundaries_validate_before_headers() {
     for (mode, channels, frame_size, minimum, maximum) in [
-        (OpusEncodeMode::Celt, 1, 120, 128000, 256000),
+        // CELT packet budgets are per channel: mono needs 64/32 kb/s at
+        // 2.5/5 ms, stereo needs 128/64 kb/s. Both floor at 32 kb/s.
+        (OpusEncodeMode::Celt, 1, 120, 64000, 256000),
+        (OpusEncodeMode::Celt, 2, 120, 128000, 256000),
+        (OpusEncodeMode::Celt, 1, 240, 32000, 256000),
         (OpusEncodeMode::Celt, 2, 240, 64000, 256000),
         (OpusEncodeMode::Celt, 1, 480, 32000, 256000),
         (OpusEncodeMode::Celt, 2, 960, 32000, 256000),
         (OpusEncodeMode::Silk, 1, 160, 48000, 128000),
         (OpusEncodeMode::Silk, 2, 320, 96000, 128000),
         (OpusEncodeMode::Hybrid, 1, 480, 128000, 256000),
-        (OpusEncodeMode::Hybrid, 2, 960, 128000, 256000),
+        (OpusEncodeMode::Hybrid, 2, 480, 32000, 256000),
+        (OpusEncodeMode::Hybrid, 2, 960, 32000, 256000),
     ] {
         let base = OpusEncodeConfig {
             backend: OpusEncodeBackend::Native,

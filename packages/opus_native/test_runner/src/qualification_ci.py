@@ -1,0 +1,626 @@
+"""Explicit, fail-closed CI execution for native Opus; no acceptance baselines written.
+
+Dependency network provisioning is a separate workflow step; reviewed media
+network provisioning requires the explicit quality URL. All Cargo commands here are
+locked/offline, with two build jobs. Native jobs never build/link the C oracle.
+Quality jobs explicitly build the pinned, test-only fixed-point oracle. The
+existing strict harness, frozen expectations and reviewed media hashes decide
+acceptance; this orchestrator cannot lower their thresholds.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import wave
+import shutil
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+HERE = Path(__file__).resolve().parent
+PLATFORMS = {
+    "linux-x64": ("Linux", {"x86_64", "amd64"}),
+    "linux-arm64": ("Linux", {"aarch64", "arm64"}),
+    "macos-x64": ("Darwin", {"x86_64", "amd64"}),
+    "windows-x64": ("Windows", {"amd64", "x86_64"}),
+}
+FEATURES = "celt,silk,hybrid"
+
+
+def digest(path):
+    sha = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def write_json(path, value):
+    Path(path).write_text(
+        json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+def sources():
+    paths = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / ".cargo/config.toml"]
+    paths += sorted((ROOT / "packages/opus_native").rglob("*.rs"))
+    paths += sorted((ROOT / "packages/opus_native").rglob("Cargo.toml"))
+    paths += sorted((ROOT / "packages/opus_native").rglob("*.py"))
+    paths += [
+        ROOT / "packages/opus_native/test_runner/fixtures/qualification_inputs.json",
+        ROOT / ".github/workflows/opus-native-qualification.yml",
+    ]
+    # C source provenance is independently checked by reference_oracle.
+    return {
+        str(path.relative_to(ROOT)): digest(path)
+        for path in paths
+        if "target" not in path.relative_to(ROOT).parts
+    }
+
+
+class Execution:
+    def __init__(self, output):
+        self.output = output
+        self.commands = []
+        self.env = dict(os.environ, CARGO_BUILD_JOBS="2", CARGO_NET_OFFLINE="true")
+        self.env["CARGO_TARGET_DIR"] = str(output / "target")
+
+    def run(self, arguments, timeout=900, env=None):
+        index = len(self.commands)
+        row = {"argv": list(map(str, arguments)), "timeout_seconds": timeout}
+        self.commands.append(row)
+        write_json(self.output / "commands.json", self.commands)
+        started = time.monotonic()
+        # Files bound memory even for verbose test failures. Timeout kills and
+        # waits for the direct process; job-level timeout bounds the entire run.
+        with (self.output / f"command-{index}.stdout").open("wb") as stdout, (
+            self.output / f"command-{index}.stderr"
+        ).open("wb") as stderr:
+            try:
+                result = subprocess.run(
+                    row["argv"],
+                    cwd=ROOT,
+                    env=env or self.env,
+                    stdout=stdout,
+                    stderr=stderr,
+                    timeout=timeout,
+                    check=False,
+                )
+                row["exit_code"] = result.returncode
+                if result.returncode:
+                    raise RuntimeError(
+                        f"command {index} failed ({result.returncode}); see retained logs"
+                    )
+            except subprocess.TimeoutExpired:
+                row["timed_out"] = True
+                raise
+            finally:
+                row["wall_seconds"] = time.monotonic() - started
+                write_json(self.output / "commands.json", self.commands)
+        return (self.output / f"command-{index}.stdout").read_text(encoding="utf-8")
+
+    def build(self, package, example, profile, binary=False):
+        arguments = [
+            "cargo",
+            "build",
+            "--locked",
+            "--offline",
+            "-j",
+            "2",
+            "-p",
+            package,
+            "--bin" if binary else "--example",
+            example,
+            "--message-format=json-render-diagnostics",
+        ]
+        if package != "moosicbox_opus_native_libopus":
+            arguments += ["--no-default-features", "--features", FEATURES]
+        if profile == "release":
+            arguments.append("--release")
+        output = self.run(arguments)
+        paths = set()
+        for line in output.splitlines():
+            if line.startswith("{"):
+                item = json.loads(line)
+                if (
+                    item.get("reason") == "compiler-artifact"
+                    and item.get("executable")
+                    and item.get("target", {}).get("name") == example
+                ):
+                    paths.add(item["executable"])
+        if len(paths) != 1:
+            raise RuntimeError(f"expected one executable for {example}: {paths}")
+        source = Path(paths.pop()).resolve(strict=True)
+        destination = self.output / (example + source.suffix)
+        shutil.copy2(source, destination)
+        return destination
+
+
+def native_tests(execution, profile, package="moosicbox_opus_native"):
+    args = [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "-j",
+        "2",
+        "-p",
+        package,
+        "--no-default-features",
+        "--features",
+        FEATURES,
+        "--lib",
+        "--tests",
+    ]
+    # test_runner is a binary crate, not a library.
+    if package == "moosicbox_opus_native_test_runner":
+        args.remove("--lib")
+    if profile == "release":
+        args.append("--release")
+    return execution.run(args, timeout=1800)
+
+
+# Explicit acceptance inventory. These invoke public APIs or pinned-reference
+# decoder arithmetic. New ignored tests must be classified, never silently lost.
+LIVE_INTEGRATION = {
+    "celt_plc_tests": "celt_loss_and_recovery_matches_pinned_public_decoder",
+    "celt_transition_tests": "transition_payload_and_silence_match_public_reference smooth_fade_matches_pinned_c_arithmetic accumulation_matches_qualified_c_deemphasis",
+    "decoder_completion": "short_fec_constituents_match_reference one_byte_constituents_match_reference supported_output_fixtures_match_reference legal_channel_fec_and_short_loss_match_reference nonzero_gain_matches_reference silk_nonzero_to_silence_finish_matches_reference",
+    "encoder_adaptive_tests": "reference_hybrid_24k_input_preserves_delay_and_duration reference_silk_high_rate_input_preserves_alignment_and_tail reference_silk_and_hybrid_switching_quality reference_nonstationary_content_retains_alignment_across_modes reference_decodes_transitions_with_continuous_timing_and_signal",
+    "encoder_celt_completion": "short_duration_low_budget_music_matches_portable_reference joint_stereo_channel_geometry_matches_reference_with_fixed_packet_budget practical_celt_music_and_attacks_match_portable_reference",
+    "encoder_silk_completion": "pinned_c_decodes_native_voiced_speech",
+    "encoder_tests": "public_libopus_decodes_nonzero_audio public_libopus_rates_and_durations public_libopus_silk_audio_quality public_libopus_silk_stereo public_libopus_hybrid_quality public_libopus_silk_bitrate_boundaries public_libopus_celt_bitrate_boundaries public_libopus_hybrid_bitrate_boundaries",
+    "multistream_tests": "pinned_c_multistream_interoperability pinned_c_multistream_exact_pcm short_constituents_match_public_c_multistream",
+    "output_tests": "pinned_reference_deemphasis_matches_all_rates_channels_and_shapes silk_mono_to_stereo_exact_public_api celt_mono_to_stereo_exact_public_api silk_stereo_coded_output_mapping_matches_pinned_api_all_rates celt_stereo_coded_output_mapping_matches_pinned_api_all_rates storage_shrink_matches_upstream_shared_entropy_exactly hybrid_nonzero_persistent_mapping_matches_pinned_api_all_rates hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates",
+    "stream_decoder_tests": "persistent_silk_duration_changes_match_public_c_decoder public_celt_loss_bursts_and_recovery_match_pinned_api public_celt_loss_output_rates_match_pinned_api public_silk_loss_prototype_matches_pinned_api persistent_mode_transitions_match_public_c legal_empty_constituent_matches_public_c public_hybrid_loss_matches_pinned_api public_hybrid_short_loss_matches_pinned_api missing_lbrr_uses_real_plc_and_preserves_current_packet exhausted_hybrid_and_empty_constituent_match_public_c",
+}
+LIVE_LIBRARY = (
+    "encoder::silk::public::public_floor_synthetic_matrix",
+    "encoder::silk::public::public_floor_real_speech_matrix",
+    "encoder::silk::public::public_native_fingerprint_stream_c_parity",
+    "encoder::silk::public::public_silence_c_parity",
+    "encoder::silk::completion::completion_tests::real_speech_low_rate_budget_and_quality",
+    "encoder::adaptive::tests::reference_practical_hybrid_constructor_quality",
+    "encoder::adaptive::tests::reference_practical_hybrid_intermediate_quality",
+    "encoder::adaptive::tests::reference_practical_auto_steady_quality",
+    "encoder::adaptive::tests::reference_public_practical_rd_quality",
+    "encoder::adaptive::tests::reference_practical_unredundant_transition_quality",
+)
+# These remain development evidence, not acceptance and not silently 'passed'.
+# Internal floor searches do not substitute for the required public floor tests:
+# those intentionally fail until guards/capability satisfy the acceptance contract.
+# Cold-prefix diagnostics require independent captured state, not fabricated input.
+DEVELOPMENT_ONLY = {
+    "reference_unredundant_closed_loop_energy_proof": "test-only closed-loop energy candidate; public unredundant transition acceptance remains required",
+    "internal_practical_floor_media_matrix": "internal low-rate candidate; public floor equivalents remain required acceptance gates",
+    "comfort_noise_estimate_matches_pinned_cng_state": "private CNG component compiler oracle; not public API acceptance",
+    "concealment_parameter_update_matches_pinned_c": "private PLC component compiler oracle; not public API acceptance",
+    "recovery_glue_matches_pinned_c_loss_burst_and_recovery": "private recovery component compiler oracle; not public API acceptance",
+    "reference_practical_hybrid_split_candidates": "private split search",
+    "reference_practical_hybrid_policy_quality": "private candidate policy",
+    "reference_practical_hybrid_policy_split4_quality": "experimental private split4",
+    "reference_unredundant_prefix_budget_frontier": "budget search diagnostics",
+    "reference_unredundant_mono_swb_matrix": "candidate matrix",
+    "reference_high_rate_long_silk_candidate_duration_and_quality": "candidate duration policy",
+    "reference_mono_short_frame_candidate_quality": "candidate short frame policy",
+    "reference_mono_five_ms_candidate_quality": "candidate five-ms policy",
+    "captured_cold_prefix_sequence": "requires independent internal captures",
+    "captured_cold_prefix_quality": "requires independent internal captures",
+    "converted_rate_floor_candidates": "candidate converted-rate floors",
+}
+
+
+def acceptance_inventory():
+    required = [
+        ("--test", target, name)
+        for target, names in LIVE_INTEGRATION.items()
+        for name in names.split()
+    ]
+    required += [("--lib", None, name) for name in LIVE_LIBRARY]
+    classified = {name.rsplit("::", 1)[-1] for _, _, name in required} | set(
+        DEVELOPMENT_ONLY
+    )
+    discovered = set()
+    for directory in (
+        ROOT / "packages/opus_native/tests",
+        ROOT / "packages/opus_native/src",
+    ):
+        for path in directory.rglob("*.rs"):
+            discovered.update(
+                re.findall(r"#\[ignore[^\n]*\][\s\S]*?fn (\w+)", path.read_text())
+            )
+    if classified != discovered:
+        raise RuntimeError(
+            f"ignored test inventory changed: unclassified={sorted(discovered-classified)}, missing={sorted(classified-discovered)}"
+        )
+    return required
+
+
+def live_acceptance(execution, profile, env):
+    required = acceptance_inventory()
+    write_json(
+        execution.output / "acceptance-inventory.json",
+        {
+            "required": required,
+            "development_only_not_accepted": DEVELOPMENT_ONLY,
+            "normal_tests": "all native lib/tests including unchanged qualification_regression",
+            "strict_matrix": "required frozen-C and reviewed media; no --diagnostic",
+        },
+    )
+    for kind, target, name in required:
+        args = [
+            "cargo",
+            "test",
+            "--locked",
+            "--offline",
+            "-j",
+            "2",
+            "-p",
+            "moosicbox_opus_native",
+            "--no-default-features",
+            "--features",
+            FEATURES,
+            kind,
+        ]
+        if target:
+            args.append(target)
+        if profile == "release":
+            args.append("--release")
+        args += [name, "--", "--ignored", "--exact", "--test-threads=1"]
+        output = execution.run(args, timeout=600, env=env)
+        # Cargo exits zero for a misspelled/filtered test: fail closed on zero runs.
+        if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
+            raise RuntimeError(f"required exact live test did not execute once: {name}")
+
+
+def media_environment(directory, destination, base_env, reference):
+    from qualification_inputs import verify_inputs
+
+    manifest, paths = verify_inputs(directory)
+    with wave.open(str(paths["music"]), "rb") as source:
+        if (
+            source.getframerate(),
+            source.getnchannels(),
+            source.getsampwidth(),
+            source.getcomptype(),
+        ) != (48000, 2, 2, "NONE"):
+            raise RuntimeError(
+                "reviewed music must be uncompressed stereo signed16 48k WAV"
+            )
+        count = source.getnframes()
+        pcm = source.readframes(count)
+    if len(pcm) != count * 4 or count < 32 * 960:
+        raise RuntimeError("incomplete/too short reviewed music PCM")
+    raw = destination / "reviewed-music-s16le-48k-stereo.pcm"
+    with raw.open("xb") as stream:
+        stream.write(pcm)
+    write_json(
+        destination / "media-transform.json",
+        {
+            "schema": "moosicbox.opus.ci-media-transform.v1",
+            "input_manifest": manifest,
+            "source_music_sha256": digest(paths["music"]),
+            "source_speech_sha256": digest(paths["speech"]),
+            "transform": "Python wave readframes all frames; remove RIFF container only; no resample/gain/channel changes",
+            "frames": count,
+            "rate": 48000,
+            "channels": 2,
+            "sample_format": "s16le",
+            "output_sha256": digest(raw),
+            "output_bytes": len(pcm),
+        },
+    )
+    return dict(
+        base_env,
+        MOOSICBOX_OPUS_REFERENCE_ORACLE=str(reference),
+        MOOSICBOX_OPUS_SPEECH_WAV=str(paths["speech"]),
+        MOOSICBOX_OPUS_HYBRID_REAL_PCM=str(raw),
+    )
+
+
+def strict_matrix(execution, native, reference):
+    execution.run(
+        [
+            sys.executable,
+            "-B",
+            HERE / "qualification_matrix.py",
+            "--native",
+            native,
+            "--reference",
+            reference,
+            "--output",
+            execution.output / "quality.json",
+            "--media-directory",
+            execution.output / "media",
+            "--build-receipt",
+            execution.output / "build-receipt.json",
+        ],
+        timeout=1800,
+    )
+    quality = json.loads((execution.output / "quality.json").read_text())
+    if quality.get("accepted") is not True or quality.get("failures") != 0:
+        raise RuntimeError("strict quality/frozen-C/media qualification not accepted")
+
+
+def probe_files(directory):
+    result = {}
+    for path in sorted(directory.iterdir()):
+        if path.suffix in {".input", ".pcm", ".packets", ".outcomes"}:
+            result[path.name] = {"sha256": digest(path), "bytes": path.stat().st_size}
+    if not result or not any(name.endswith(".pcm") for name in result):
+        raise RuntimeError("probe produced no PCM fingerprints")
+    return result
+
+
+def run(args):
+    expected_system, expected_machines = PLATFORMS[args.platform]
+    if (
+        platform.system() != expected_system
+        or platform.machine().lower() not in expected_machines
+    ):
+        raise RuntimeError(
+            "runner identity does not match requested real-execution platform"
+        )
+    if args.mode == "quality" and args.profile != "release":
+        raise RuntimeError("strict quality CI requires release diagnostics")
+    if args.mode == "quality" and not (args.music_wav_url or args.media_directory):
+        raise RuntimeError(
+            "quality requires explicit reviewed local media or music WAV URL; never skip"
+        )
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    execution = Execution(output)
+    before = sources()
+    write_json(output / "sources-before.json", before)
+    compiler = execution.run(["rustc", "-vV"], timeout=30)
+    revision = execution.run(["git", "rev-parse", "HEAD"], timeout=30).strip()
+    report = {
+        "schema": "moosicbox.opus.ci.v1",
+        "mode": args.mode,
+        "platform": args.platform,
+        "profile": args.profile,
+        "revision": revision,
+        "rustc": compiler,
+        "machine": platform.machine(),
+        "system": platform.system(),
+        "accepted": False,
+        "source_sha256": before,
+        "scope": "executed configurations only; not perceptual or hardware acceptance",
+    }
+    write_json(output / "ci.json", report)
+    if args.mode == "native":
+        tree = execution.run(
+            [
+                "cargo",
+                "tree",
+                "--locked",
+                "--offline",
+                "-p",
+                "moosicbox_opus_native",
+                "--no-default-features",
+                "--features",
+                FEATURES,
+                "--edges",
+                "normal,build",
+                "--prefix",
+                "none",
+            ]
+        )
+        allowed = {
+            "moosicbox_opus_native",
+            "log",
+            "thiserror",
+            "thiserror-impl",
+            "proc-macro2",
+            "unicode-ident",
+            "quote",
+            "syn",
+        }
+        unexpected = {
+            line.split()[0] for line in tree.splitlines() if line.strip()
+        } - allowed
+        if unexpected:
+            raise RuntimeError(
+                f"unreviewed production native graph: {sorted(unexpected)}"
+            )
+        native_tests(execution, args.profile)
+        executable = execution.build(
+            "moosicbox_opus_native", "qualification_probe", args.profile
+        )
+        if sources() != before:
+            raise RuntimeError("source changed during native build")
+        image = digest(executable)
+        # Actual immutable copies are executed twice, not mutable Cargo paths.
+        execution.run([executable, output / "data", "6000"], timeout=600)
+        execution.run([executable, output / "repeat", "6000"], timeout=600)
+        hashes = probe_files(output / "data")
+        if probe_files(output / "repeat") != hashes or digest(executable) != image:
+            raise RuntimeError("fresh-process packet/PCM/corpus determinism mismatch")
+        report.update(
+            executable_sha256=image,
+            executable_file=executable.name,
+            fingerprints=hashes,
+        )
+    else:
+        # Network is opt-in and bounded by the existing checksum-pinned provisioner.
+        provision = [sys.executable, "-B", HERE / "qualification_provision.py"]
+        if args.media_directory:
+            provision += [
+                "--source-directory",
+                args.media_directory.resolve(strict=True),
+            ]
+        else:
+            provision += ["--download", "--music-wav-url", args.music_wav_url]
+        provision += ["--destination", output / "media"]
+        execution.run(provision, timeout=180)
+        from qualification_matrix import native_source_identity
+
+        receipt_before = native_source_identity()
+        native = execution.build(
+            "moosicbox_opus_native_test_runner", "native_oracle", args.profile
+        )
+        reference = execution.build(
+            "moosicbox_opus_native_libopus", "reference_oracle", args.profile
+        )
+        receipt_after = native_source_identity()
+        if receipt_after != receipt_before or sources() != before:
+            raise RuntimeError("source changed during explicit oracle build")
+        receipt = {
+            "schema": "moosicbox.opus.qualification-build.v1",
+            "source_before_sha256": receipt_before,
+            "source_after_sha256": receipt_after,
+            "native_sha256": digest(native),
+            "reference_sha256": digest(reference),
+            "profile": args.profile,
+            "command": execution.commands.copy(),
+        }
+        write_json(output / "build-receipt.json", receipt)
+        execution.run([reference, "provenance"], timeout=30)
+        execution.run(
+            [
+                sys.executable,
+                "-B",
+                ROOT / "packages/opus_native/libopus/src/oracle_tests.py",
+                reference,
+            ],
+            timeout=600,
+        )
+        native_tests(execution, args.profile, "moosicbox_opus_native_test_runner")
+        scoreboard = execution.build(
+            "moosicbox_opus_native_test_runner",
+            "moosicbox_opus_native_test_runner",
+            args.profile,
+            binary=True,
+        )
+        execution.run([scoreboard], timeout=1800)
+        live_env = media_environment(output / "media", output, execution.env, reference)
+        live_acceptance(execution, args.profile, live_env)
+        strict_matrix(execution, native, reference)
+        report.update(
+            native_sha256=digest(native),
+            reference_sha256=digest(reference),
+            quality_sha256=digest(output / "quality.json"),
+        )
+    after = sources()
+    write_json(output / "sources-after.json", after)
+    if after != before:
+        raise RuntimeError("source changed during execution")
+    report["accepted"] = True
+    write_json(output / "ci.json", report)
+    print(
+        json.dumps(
+            {
+                "output": str(output),
+                "accepted": True,
+                "platform": args.platform,
+                "mode": args.mode,
+                "profile": args.profile,
+            }
+        )
+    )
+
+
+def compare(args):
+    paths = sorted(args.root.rglob("ci.json"))
+    identities = set()
+    native = []
+    expected = {
+        (platform_id, profile, "native")
+        for platform_id in PLATFORMS
+        for profile in ("debug", "release")
+    }
+    expected |= {(platform_id, "release", "quality") for platform_id in PLATFORMS}
+    for path in paths:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if report.get("schema") != "moosicbox.opus.ci.v1":
+            raise RuntimeError("unsupported CI evidence schema")
+        identity = (report["platform"], report["profile"], report["mode"])
+        if identity in identities or report.get("accepted") is not True:
+            raise RuntimeError(f"duplicate or failed execution evidence: {identity}")
+        identities.add(identity)
+        if report["mode"] == "native":
+            if probe_files(path.parent / "data") != report["fingerprints"]:
+                raise RuntimeError(
+                    "downloaded probe artifact bytes differ from fingerprints"
+                )
+            executable_file = Path(report["executable_file"])
+            if executable_file.name != str(executable_file):
+                raise RuntimeError("executable must be an artifact-local basename")
+            if digest(path.parent / executable_file) != report["executable_sha256"]:
+                raise RuntimeError("downloaded executable identity mismatch")
+            native.append(report)
+        else:
+            quality_path = path.parent / "quality.json"
+            quality = json.loads(quality_path.read_text(encoding="utf-8"))
+            if (
+                digest(quality_path) != report["quality_sha256"]
+                or quality.get("accepted") is not True
+            ):
+                raise RuntimeError("strict quality evidence missing or changed")
+    if identities != expected:
+        raise RuntimeError(
+            f"missing/unexpected real executions: {sorted(expected - identities)}"
+        )
+    baseline = native[0]
+    for path in paths:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if any(
+            report[key] != baseline[key]
+            for key in ("schema", "revision", "source_sha256")
+        ):
+            raise RuntimeError(
+                "quality/native jobs did not execute a common source snapshot"
+            )
+    for report in native[1:]:
+        for key in ("schema", "revision", "source_sha256", "fingerprints"):
+            if report[key] != baseline[key]:
+                raise RuntimeError(
+                    f"cross-platform exact {key} mismatch: {report['platform']}/{report['profile']}"
+                )
+        # Host triples legitimately differ; compiler release/commit must not.
+        compiler = lambda value: [
+            line for line in value.splitlines() if not line.startswith("host:")
+        ]
+        if compiler(report["rustc"]) != compiler(baseline["rustc"]):
+            raise RuntimeError("compiler version differs across real platform runs")
+    print(
+        "Exact packet/PCM/input/corpus SHA-256 agreement: eight real platform/profile runs; "
+        "four strict quality/media/frozen-C runs accepted. No unexecuted platform claim."
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="operation", required=True)
+    runner = sub.add_parser("run")
+    runner.add_argument("--mode", choices=("native", "quality"), required=True)
+    runner.add_argument("--profile", choices=("debug", "release"), required=True)
+    runner.add_argument("--platform", choices=tuple(PLATFORMS), required=True)
+    runner.add_argument("--output", type=Path, required=True)
+    media = runner.add_mutually_exclusive_group()
+    media.add_argument("--music-wav-url")
+    media.add_argument(
+        "--media-directory",
+        type=Path,
+        help="explicit offline directory containing both checksum-reviewed WAVs",
+    )
+    comparison = sub.add_parser("compare")
+    comparison.add_argument("root", type=Path)
+    args = parser.parse_args()
+    if args.operation == "run":
+        run(args)
+    else:
+        compare(args)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, ValueError, OSError, subprocess.TimeoutExpired) as error:
+        print(f"qualification failed: {error}", file=sys.stderr)
+        sys.exit(1)

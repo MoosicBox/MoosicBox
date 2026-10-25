@@ -19,6 +19,11 @@
 mod adaptive;
 mod allocation;
 pub use adaptive::{EncoderControl, EncoderMode};
+
+#[cfg(test)]
+std::thread_local! {
+    static HYBRID_TEST_ENERGY_DB: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+}
 mod analysis;
 #[cfg(feature = "hybrid")]
 mod hybrid;
@@ -80,10 +85,24 @@ pub struct Encoder {
     hybrid: Option<hybrid::LowBand>,
     #[cfg(feature = "hybrid")]
     hybrid_input: Option<resample::Interpolator>,
+    #[cfg(feature = "hybrid")]
+    practical: Option<Box<hybrid::PracticalSynthesis>>,
+    #[cfg(feature = "hybrid")]
+    hybrid_energy_db: i32,
     analysis: analysis::Analysis,
     interpolator: resample::Interpolator,
     finished: bool,
     started: bool,
+}
+
+#[cfg(feature = "hybrid")]
+struct PracticalCandidate {
+    #[cfg(test)]
+    bias: i32,
+    error: i128,
+    encoder: Encoder,
+    synthesis: crate::Decoder,
+    packet: Vec<u8>,
 }
 
 fn entropy(error: RangeEncoderError) -> Error {
@@ -134,6 +153,10 @@ impl Encoder {
             hybrid: None,
             #[cfg(feature = "hybrid")]
             hybrid_input: None,
+            #[cfg(feature = "hybrid")]
+            practical: None,
+            #[cfg(feature = "hybrid")]
+            hybrid_energy_db: 0,
             analysis: analysis::Analysis::new(channel_count(config.channels)),
             interpolator: resample::Interpolator::new(channel_count(config.channels), factor),
             finished: false,
@@ -321,6 +344,25 @@ impl Encoder {
             (15_360_000 / internal_size).max(32_000) as u32
         };
         adaptive::validate_celt(control, minimum)?;
+        #[cfg(feature = "hybrid")]
+        if self.practical.is_some()
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.channels == Channels::Stereo
+            && matches!(self.config.frame_size, 480 | 960)
+            && control.bandwidth == crate::Bandwidth::Fullband
+            && (32_000..=64_000).contains(&control.bitrate)
+            && matches!(
+                control.mode,
+                EncoderMode::Auto | EncoderMode::Hybrid | EncoderMode::Celt
+            )
+        {
+            self.config.bitrate = control.bitrate;
+            let state = self.adaptive.as_mut().ok_or_else(|| {
+                adaptive::unavailable("practical control requires adaptive state")
+            })?;
+            state.control = control;
+            return Ok(());
+        }
         #[cfg(not(feature = "hybrid"))]
         if control.mode != EncoderMode::Celt {
             return Err(adaptive::unavailable(
@@ -527,6 +569,133 @@ impl Encoder {
     #[allow(clippy::too_many_lines)] // Ordered CELT packet entropy stages.
     fn encode_frame(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
         #[cfg(feature = "hybrid")]
+        if self.practical.is_some() {
+            return self.encode_practical_frame(pcm);
+        }
+        self.encode_frame_inner(pcm)
+    }
+
+    #[cfg(feature = "hybrid")]
+    #[allow(clippy::too_many_lines)] // Bounded transactional RD loop commits packet, predictive state and synthesis together.
+    fn encode_practical_frame(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
+        // Remove the boxed synthesis snapshot before cloning encoder candidates.
+        // The public encode/finish transaction owns rollback if all trials fail.
+        let mut shadow = self
+            .practical
+            .take()
+            .ok_or_else(|| adaptive::unavailable("missing practical synthesis"))?;
+        let target = shadow.target(pcm);
+        let control = self
+            .adaptive
+            .as_ref()
+            .ok_or_else(|| adaptive::unavailable("practical synthesis requires adaptive state"))?
+            .control;
+        let eligible = self.config.sample_rate == SampleRate::Hz48000
+            && self.config.channels == Channels::Stereo
+            && matches!(self.config.frame_size, 480 | 960)
+            && control.bandwidth == crate::Bandwidth::Fullband
+            && (32_000..=64_000).contains(&control.bitrate)
+            && matches!(control.mode, EncoderMode::Auto | EncoderMode::Hybrid);
+        let departing = self.active_mode() == EncoderMode::Hybrid
+            && control.mode == EncoderMode::Celt
+            && control.bitrate <= 64_000;
+        let mut best: Option<PracticalCandidate> = None;
+        for db in [0, -1, -2, -3, -6] {
+            if db != 0 && !eligible {
+                continue;
+            }
+            let mut trial = self.clone();
+            trial.hybrid_energy_db = db;
+            // Eligibility covers every practical Hybrid frame, not just entry.
+            // Normalize Auto here so steady packets cannot enter legacy policy.
+            let packet = if eligible || departing {
+                trial.encode_practical_boundary(
+                    pcm,
+                    EncoderControl {
+                        mode: if departing {
+                            EncoderMode::Celt
+                        } else {
+                            EncoderMode::Hybrid
+                        },
+                        ..control
+                    },
+                )
+            } else {
+                trial.encode_frame_inner(pcm)
+            };
+            let Ok(packet) = packet else { continue };
+            if packet.len() > control.bitrate as usize * self.config.frame_size / 384_000 {
+                continue;
+            }
+            let mut decoder = shadow.decoder.clone();
+            let mut output = vec![0_i16; target.len()];
+            let Ok(samples) = decoder.decode(Some(&packet), &mut output, false) else {
+                continue;
+            };
+            if samples * 2 != target.len() {
+                continue;
+            }
+            let error = output
+                .iter()
+                .zip(&target)
+                .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
+                .sum();
+            #[cfg(test)]
+            if std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_some() {
+                eprintln!(
+                    "practical RD mode={:?} bitrate={} bias={db} distortion={error} target_energy={} bytes={}",
+                    control.mode,
+                    control.bitrate,
+                    target.iter().map(|&x| i128::from(x).pow(2)).sum::<i128>(),
+                    packet.len()
+                );
+            }
+            if best.as_ref().is_none_or(|old| error < old.error) {
+                best = Some(PracticalCandidate {
+                    #[cfg(test)]
+                    bias: db,
+                    error,
+                    encoder: trial,
+                    synthesis: decoder,
+                    packet,
+                });
+            }
+        }
+        #[cfg(test)]
+        if std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_some()
+            && let Some(candidate) = &best
+        {
+            eprintln!(
+                "practical RD winner bias={} distortion={} bitrate={}",
+                candidate.bias, candidate.error, control.bitrate
+            );
+        }
+        let Some(PracticalCandidate {
+            encoder: mut winner,
+            synthesis: decoder,
+            packet,
+            ..
+        }) = best
+        else {
+            return Err(adaptive::unavailable(
+                "no finalized practical hybrid RD candidate",
+            ));
+        };
+        shadow.decoder = decoder;
+        winner.hybrid_energy_db = 0;
+        let state = winner
+            .adaptive
+            .as_mut()
+            .ok_or_else(|| adaptive::unavailable("RD winner missing adaptive state"))?;
+        state.control = control;
+        winner.practical = Some(shadow);
+        *self = winner;
+        Ok(packet)
+    }
+
+    #[allow(clippy::too_many_lines)] // Ordered CELT packet entropy stages.
+    fn encode_frame_inner(&mut self, pcm: &[f32]) -> Result<Vec<u8>> {
+        #[cfg(feature = "hybrid")]
         if self.adaptive.is_some() {
             return self.encode_adaptive_frame(pcm);
         }
@@ -567,6 +736,15 @@ impl Encoder {
         pcm: &[f32],
         control: EncoderControl,
     ) -> Result<Vec<u8>> {
+        self.encode_practical_boundary(pcm, control)
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn encode_practical_boundary(
+        &mut self,
+        pcm: &[f32],
+        control: EncoderControl,
+    ) -> Result<Vec<u8>> {
         assert!(!self.finished, "candidate cannot encode after finish");
         assert_eq!(
             pcm.len(),
@@ -582,7 +760,12 @@ impl Encoder {
         let state = self.adaptive.as_mut().expect("adaptive test encoder");
         state.control = control;
         state.next_celt = false;
-        state.end = 21;
+        state.end = hybrid::coding_layout(
+            control.bandwidth,
+            self.config.channels,
+            self.config.frame_size * rate_factor(self.config.sample_rate),
+        )?
+        .end_band;
         let low = self.hybrid.as_mut().expect("hybrid test filters");
         self.adaptive_low = low.process(pcm);
         let delayed = low.delay_celt(pcm);
@@ -632,11 +815,17 @@ impl Encoder {
         let entering = active == EncoderMode::Celt && target != EncoderMode::Celt;
         let departing = active != EncoderMode::Celt && target == EncoderMode::Celt;
         let packet_mode = if departing { active } else { target };
-        self.adaptive.as_mut().unwrap().end = if packet_mode == EncoderMode::Silk {
+        let end = if packet_mode == EncoderMode::Silk {
             17
         } else {
-            21
+            hybrid::coding_layout(
+                self.adaptive.as_ref().unwrap().control.bandwidth,
+                self.config.channels,
+                self.config.frame_size * rate_factor(self.config.sample_rate),
+            )?
+            .end_band
         };
+        self.adaptive.as_mut().unwrap().end = end;
         // Both analysis branches advance once, regardless of the selected packet mode.
         // Their fixed delays are identical to explicit hybrid (384 samples).
         let low = self
@@ -837,7 +1026,34 @@ impl Encoder {
             .analysis
             .transform_celt(&resampled, !hybrid && bytes >= 24 * channels);
         let lm = (internal_size / 120).ilog2() as usize;
-        let (target_energy, mut energy) = quantize::energies(&spectrum, lm);
+        #[cfg_attr(not(feature = "hybrid"), allow(unused_mut))]
+        let (mut target_energy, energy) = quantize::energies(&spectrum, lm);
+        #[cfg(not(test))]
+        let mut energy = energy;
+        #[cfg(feature = "hybrid")]
+        if hybrid && self.config.bitrate <= 64_000 {
+            let offset = self.hybrid_energy_db * 10_885;
+            for channel in 0..channels {
+                for band in start..end {
+                    target_energy[channel * 21 + band] += offset;
+                }
+            }
+        }
+        #[cfg(test)]
+        let (target_energy, mut energy) = {
+            let mut target_energy = target_energy;
+            if hybrid && self.config.bitrate < 128_000 {
+                // Legal log2-amplitude energy targets: 1 dB = log2(10)/20.
+                // Both coarse coding and fine/final coding use this same target.
+                let offset = HYBRID_TEST_ENERGY_DB.get() * 10_885;
+                for channel in 0..channels {
+                    for band in start..end {
+                        target_energy[channel * 21 + band] += offset;
+                    }
+                }
+            }
+            (target_energy, energy)
+        };
         let mut enc = RangeEncoder::new(bytes).map_err(entropy)?;
         #[cfg(feature = "hybrid")]
         if hybrid && let Some(lowband) = &mut self.hybrid {
@@ -954,8 +1170,12 @@ impl Encoder {
             21
         };
         let intensity = allocation::stereo_intensity(&spectrum, lm, intensity);
-        let allocation = if hybrid {
+        let allocation = if hybrid && end == 21 {
             allocation::allocate(&mut enc, remaining, channels, lm as i32, start)?
+        } else if hybrid {
+            allocation::allocate_celt_end(
+                &mut enc, remaining, channels, lm as i32, start, end, end,
+            )?
         } else if channels == 2 {
             allocation::allocate_joint(
                 &mut enc,
@@ -1075,11 +1295,12 @@ impl Encoder {
         }
         let payload = enc.finish().map_err(entropy)?;
         let mut packet = Vec::with_capacity(bytes + 1);
+        let bandwidth_base = if end == 19 { 0xc0 } else { 0xe0 };
         packet.push(
             (if hybrid {
-                0x70 | ((u8::from(lm == 3)) << 3)
+                (if end == 19 { 0x60 } else { 0x70 }) | ((u8::from(lm == 3)) << 3)
             } else {
-                0xe0 | ((lm as u8) << 3)
+                bandwidth_base | ((lm as u8) << 3)
             }) | if channels == 2 { 4 } else { 0 },
         );
         packet.extend(payload);

@@ -378,6 +378,54 @@ mod tests {
     use crate::range::{RangeDecoder, RangeEncoder};
 
     #[test]
+    fn hybrid_swb_allocation_respects_end_and_entropy_ranges() {
+        // Hybrid SWB codes only bands 17 and 18. FB's end=21 changes the
+        // intensity alphabet and allocation, even with identical input budget.
+        for channels in [1, 2] {
+            for lm in [2, 3] {
+                for total in [64, 256, 1024, 4096] {
+                    let mut encoder = RangeEncoder::new(128).unwrap();
+                    let allocation =
+                        allocate_celt_end(&mut encoder, total, channels, lm, 17, 19, 19).unwrap();
+                    assert!((18..=19).contains(&allocation.coded));
+                    for band in (0..17).chain(19..21) {
+                        assert_eq!(allocation.bits[band], 0);
+                        assert_eq!(allocation.fine[band], 0);
+                        assert_eq!(allocation.priority[band], 0);
+                    }
+                    let tell = encoder.tell_frac();
+                    encoder.ec_enc_uint(11, 23).unwrap();
+                    let packet = encoder.finish().unwrap();
+                    let mut decoder = RangeDecoder::new(&packet).unwrap();
+                    // Mirror the production decoder's entropy sequence: a
+                    // forced skip emits nothing; retaining band 18 emits one.
+                    if allocation.coded == 19 {
+                        assert!(decoder.ec_dec_bit_logp(1).unwrap());
+                    }
+                    if channels == 2 {
+                        assert_eq!(allocation.intensity, allocation.coded);
+                        let intensity = 17
+                            + usize::try_from(
+                                decoder
+                                    .ec_dec_uint((allocation.coded + 1 - 17) as u32)
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                        assert_eq!(intensity, allocation.intensity);
+                        assert!(allocation.dual);
+                        assert!(decoder.ec_dec_bit_logp(1).unwrap());
+                    } else {
+                        assert_eq!(allocation.intensity, 0);
+                        assert!(!allocation.dual);
+                    }
+                    assert_eq!(u64::from(decoder.ec_tell_frac()), tell);
+                    assert_eq!(decoder.ec_dec_uint(23).unwrap(), 11);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn joint_and_independent_allocation_signal_distinct_dual_flags() {
         // At this budget, fullband allocation force-skips down to 16 bands.
         // Intensity is bounded by coded bands, not by the requested end=21.

@@ -6,6 +6,7 @@ use crate::range::RangeEncoder;
 use crate::silk::{self, SilkDecoder};
 use crate::{Bandwidth, Error, Result, SampleRate};
 use prediction::Pitch;
+use std::collections::BTreeMap;
 #[cfg(test)]
 #[path = "silk_cold.rs"]
 mod cold;
@@ -31,6 +32,11 @@ pub(super) struct SilkEncoder {
     pcm_history: [Vec<i16>; 2],
     #[cfg(test)]
     transmitted_voiced: usize,
+    #[cfg(test)]
+    quantizer_cache_disabled: bool,
+    /// Actual quantizations and exact-key hits in the retained search state.
+    #[cfg(test)]
+    quantizer_cache_counts: (usize, usize),
 }
 
 type QuantizedFrame = (Vec<i16>, [i32; 16], Vec<i16>);
@@ -68,6 +74,10 @@ impl SilkEncoder {
             pcm_history: [Vec::new(), Vec::new()],
             #[cfg(test)]
             transmitted_voiced: 0,
+            #[cfg(test)]
+            quantizer_cache_disabled: false,
+            #[cfg(test)]
+            quantizer_cache_counts: (0, 0),
         })
     }
 
@@ -226,6 +236,7 @@ impl SilkEncoder {
                 bitrate: self.config.bitrate / super::channel_count(self.config.channels) as u32,
                 rate_pressure: 0,
                 optimize_pulse_cost: false,
+                unshaped: false,
             });
             let error = pcm.iter().map(|&x| i128::from(x).pow(2)).sum();
             if error < best_error {
@@ -437,8 +448,10 @@ impl SilkEncoder {
         // twelve independent pulse penalties, plus the one/two-index
         // neighborhood at pressures zero through twelve. This applies to
         // ranked stereo at all budgets and standalone low-rate coding.
-        let independent_pressure =
-            (rank_prefix && channels == 2) || (shared.is_none() && per_channel_bitrate <= 24_000);
+        let independent_pressure = (rank_prefix && channels == 2)
+            || (shared.is_none()
+                && (per_channel_bitrate <= 24_000
+                    || (self.config.frame_size == rate / 100 && per_channel_bitrate <= 32_000)));
         let baseline_search_trials = baseline_trials + if independent_pressure { 122 } else { 0 };
         // The sparse search is anchored to the first fit at gain 63. On a
         // persistent predictor, useful fits can lie below its eight coarse
@@ -452,12 +465,27 @@ impl SilkEncoder {
         // Refine one component while retaining the other's exact winning
         // pulses. A shared pulse pressure cannot allocate bits independently
         // even when both RMS gain offsets are nearly zero.
+        // Retain the shaped passes, then append unshaped coordinate passes.
+        // Noise shaping can overshoot raw PCM at sparse budgets; rank both
+        // using transmitted reconstruction under the same real range budget.
         let coordinate_trials = if rank_prefix && channels == 2 && per_channel_bitrate <= 16_000 {
-            2 * 2 * 17 * 13
+            4 * 2 * 17 * 13
         } else {
             0
         };
         let mut coordinate_anchor = [0_i32; 2];
+        // Input, model, old gain and committed histories are fixed throughout
+        // this search. Only these exact quantizer controls vary. Keep entropy
+        // trials and first-fit updates in their original order on cache hits.
+        let mut quantizer_cache: BTreeMap<(usize, i32, u32, bool), QuantizedFrame> =
+            BTreeMap::new();
+        #[cfg(test)]
+        let mut cache_hits = 0_usize;
+        #[cfg(test)]
+        let mut quantizer_calls = 0_usize;
+        let cache_enabled = true;
+        #[cfg(test)]
+        let cache_enabled = cache_enabled && !self.quantizer_cache_disabled;
         for search_trial in 0..common_trials + coordinate_trials {
             let coordinate = search_trial >= common_trials;
             if coordinate && best.is_none() {
@@ -550,7 +578,20 @@ impl SilkEncoder {
                             .quantized[c]
                             .clone();
                     }
-                    quantize(QuantizerInput {
+                    let unshaped = coordinate && trial >= 2 * 2 * 17 * 13;
+                    let key = (c, indices[c], rate_pressure, unshaped);
+                    if cache_enabled && let Some(quantized) = quantizer_cache.get(&key) {
+                        #[cfg(test)]
+                        {
+                            cache_hits += 1;
+                        }
+                        return quantized.clone();
+                    }
+                    #[cfg(test)]
+                    {
+                        quantizer_calls += 1;
+                    }
+                    let quantized = quantize(QuantizerInput {
                         input: &inputs[c],
                         lpc: &models[c].lpc,
                         history: &self.history[c],
@@ -563,7 +604,12 @@ impl SilkEncoder {
                         rate_pressure,
                         optimize_pulse_cost: rank_prefix
                             || (shared.is_none() && per_channel_bitrate <= 24_000),
-                    })
+                        unshaped,
+                    });
+                    if cache_enabled {
+                        quantizer_cache.insert(key, quantized.clone());
+                    }
+                    quantized
                 })
                 .collect();
             let encode = |encoder: &mut RangeEncoder| -> Result<()> {
@@ -766,6 +812,11 @@ impl SilkEncoder {
                 }
             }
         }
+        #[cfg(test)]
+        {
+            self.quantizer_cache_counts.0 += quantizer_calls;
+            self.quantizer_cache_counts.1 += cache_hits;
+        }
         if let Some(candidate) = best {
             if let Some(prefix) = candidate.prefix {
                 *shared.expect("ranked prefix has entropy state") = prefix;
@@ -944,6 +995,17 @@ struct QuantizerInput<'a> {
     bitrate: u32,
     rate_pressure: u32,
     optimize_pulse_cost: bool,
+    unshaped: bool,
+}
+
+const fn shaping_coefficient(bitrate: u32, unshaped: bool) -> i64 {
+    if unshaped {
+        0
+    } else if bitrate < 24000 {
+        24576_i64
+    } else {
+        8192_i64
+    }
 }
 
 fn quantize(context: QuantizerInput<'_>) -> (Vec<i16>, [i32; 16], Vec<i16>) {
@@ -959,6 +1021,7 @@ fn quantize(context: QuantizerInput<'_>) -> (Vec<i16>, [i32; 16], Vec<i16>) {
         bitrate,
         rate_pressure,
         optimize_pulse_cost,
+        unshaped,
     } = context;
     let mut history = *history;
     if old_gain != gain {
@@ -976,7 +1039,7 @@ fn quantize(context: QuantizerInput<'_>) -> (Vec<i16>, [i32; 16], Vec<i16>) {
     let mut error = 0_i32;
     // First-order error feedback shapes quantization noise toward high
     // frequencies. Keep the decoder state separate from the shaping state.
-    let shaping = if bitrate < 24000 { 24576_i64 } else { 8192_i64 };
+    let shaping = shaping_coefficient(bitrate, unshaped);
     let offset = if pitch.is_some() { 512 } else { 1600 };
     for (i, &sample) in input.iter().enumerate() {
         let prediction = ((lpc.len() / 2) as i32

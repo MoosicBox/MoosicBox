@@ -4,7 +4,8 @@
 //! RES24 builds instead round Q12→Q8→i16 and require a different corpus contract.
 use crate::{Error, Result};
 
-#[derive(Default)]
+/// Persistent deemphasis state. Cloning copies filter memory without sharing it.
+#[derive(Clone, Default)]
 pub struct CeltOutput {
     memory: [i32; 2],
 }

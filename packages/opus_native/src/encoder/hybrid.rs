@@ -4,6 +4,77 @@
 //! treating frequency-dependent phase as a constant sample delay.
 use crate::{Channels, Result};
 
+/// Packet-domain layout shared by main hybrid and redundant CELT coding.
+/// This describes wire syntax, not qualification or permission to encode it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)] // Coordinator-owned mod.rs integrates this interface.
+pub(super) struct CodingLayout {
+    pub end_band: usize,
+    pub hybrid_toc: u8,
+    pub celt_toc: u8,
+}
+
+/// Select matching bandwidth, duration and channel flags for both layers.
+///
+/// # Errors
+/// * Rejects bandwidths other than SWB/FB and durations other than 10/20 ms.
+#[allow(dead_code)] // Coordinator-owned mod.rs integrates this interface.
+pub(super) fn coding_layout(
+    bandwidth: crate::Bandwidth,
+    channels: Channels,
+    frame_size_48k: usize,
+) -> Result<CodingLayout> {
+    let (end_band, hybrid_base, celt_base) = match bandwidth {
+        crate::Bandwidth::SuperWideband => (19, 0x60, 0xc0),
+        crate::Bandwidth::Fullband => (21, 0x70, 0xe0),
+        _ => {
+            return Err(crate::Error::Unsupported(
+                "hybrid layout requires SWB or FB".into(),
+            ));
+        }
+    };
+    let lm = match frame_size_48k {
+        480 => 2,
+        960 => 3,
+        _ => {
+            return Err(crate::Error::Unsupported(
+                "hybrid layout requires 10/20 ms".into(),
+            ));
+        }
+    };
+    let stereo = if channels == Channels::Stereo { 4 } else { 0 };
+    Ok(CodingLayout {
+        end_band,
+        hybrid_toc: hybrid_base | (u8::from(lm == 3) << 3) | stereo,
+        celt_toc: celt_base | (lm << 3) | stereo,
+    })
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    #[test]
+    fn hybrid_and_celt_layouts_match_wire_bandwidth_and_channels() {
+        for channels in [Channels::Mono, Channels::Stereo] {
+            let stereo = if channels == Channels::Stereo { 4 } else { 0 };
+            for (bandwidth, end, hybrid, celt) in [
+                (crate::Bandwidth::SuperWideband, 19, 0x60, 0xc0),
+                (crate::Bandwidth::Fullband, 21, 0x70, 0xe0),
+            ] {
+                for (size, duration, lm) in [(480, 0, 2), (960, 8, 3)] {
+                    let layout = coding_layout(bandwidth, channels, size).unwrap();
+                    assert_eq!(layout.end_band, end);
+                    assert_eq!(layout.hybrid_toc, hybrid | duration | stereo);
+                    assert_eq!(layout.celt_toc, celt | (lm << 3) | stereo);
+                }
+            }
+        }
+        assert!(coding_layout(crate::Bandwidth::Wideband, Channels::Mono, 480).is_err());
+        assert!(coding_layout(crate::Bandwidth::Fullband, Channels::Stereo, 240).is_err());
+    }
+}
+
 /// Candidate split reserving CELT header/shape space before SILK searches its
 /// excitation budget. This is not a public supported-bitrate declaration.
 #[cfg(test)]
@@ -107,6 +178,31 @@ use crate::silk::resampler::SilkResampler;
 pub(super) const DELAY: usize = 384;
 const FFT: usize = 1024;
 const TAPS: usize = 769;
+
+#[derive(Clone)]
+pub(super) struct PracticalSynthesis {
+    pub decoder: crate::Decoder,
+    delay: Vec<i16>,
+}
+
+impl PracticalSynthesis {
+    #[cfg(test)]
+    pub(super) fn new() -> Result<Self> {
+        Ok(Self {
+            decoder: crate::Decoder::new(crate::SampleRate::Hz48000, Channels::Stereo)?,
+            delay: vec![0; DELAY * 2],
+        })
+    }
+
+    /// Advance the fixed 384-sample target delay exactly once per input frame.
+    pub(super) fn target(&mut self, pcm: &[f32]) -> Vec<i16> {
+        self.delay.extend(
+            pcm.iter()
+                .map(|x| (x * 32768.0).round().clamp(-32768.0, 32767.0) as i16),
+        );
+        self.delay.drain(..pcm.len()).collect()
+    }
+}
 
 #[derive(Clone)]
 pub(super) struct LowBand {
