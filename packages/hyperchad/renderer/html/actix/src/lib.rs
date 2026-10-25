@@ -86,6 +86,9 @@ use hyperchad_shared_state_models::{TransportInbound, TransportOutbound};
 /// and response types without needing a separate dependency.
 pub use actix_web;
 
+mod http_policy;
+pub use http_policy::HttpPolicy;
+
 #[cfg(feature = "actions")]
 mod actions;
 
@@ -114,6 +117,19 @@ type SharedStateCommandInputResolver = Arc<
         + Send
         + Sync,
 >;
+
+/// Media type for in-memory static assets, based on their route extension.
+#[cfg(feature = "assets")]
+fn static_content_type(extension: Option<&str>) -> &'static str {
+    match extension {
+        Some("js" | "mjs" | "cjs") => "text/javascript;charset=UTF-8",
+        Some("html" | "htm") => "text/html;charset=UTF-8",
+        Some("wasm") => "application/wasm",
+        Some("json") => "application/json",
+        Some("css") => "text/css;charset=UTF-8",
+        _ => "application/octet-stream",
+    }
+}
 
 /// Generates the route pattern for a directory asset route.
 /// Handles the special case where route="/" or "" to avoid producing "//" and
@@ -253,6 +269,8 @@ pub struct ActixApp<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send 
     /// Default behavior when a requested asset file is not found (requires `assets` feature).
     #[cfg(feature = "assets")]
     pub asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior,
+    /// Optional pre-routing request bounds and sensitive response protection.
+    pub http_policy: Option<HttpPolicy>,
     _phantom: PhantomData<T>,
 }
 
@@ -281,8 +299,21 @@ impl<T: Send + Sync + Clone, R: ActixResponseProcessor<T> + Send + Sync + Clone>
             static_asset_routes: vec![],
             #[cfg(feature = "assets")]
             asset_not_found_behavior: hyperchad_renderer::assets::AssetNotFoundBehavior::NotFound,
+            http_policy: None,
             _phantom: PhantomData,
         }
+    }
+
+    /// Enables a generic HTTP policy and returns the modified app.
+    #[must_use]
+    pub fn with_http_policy(mut self, policy: HttpPolicy) -> Self {
+        self.set_http_policy(policy);
+        self
+    }
+
+    /// Enables pre-routing body limits, sensitive headers, and built-in log redaction.
+    pub fn set_http_policy(&mut self, policy: HttpPolicy) {
+        self.http_policy = Some(policy);
     }
 
     /// Configures a factory that creates an independent renderer event subscription.
@@ -597,9 +628,19 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                 #[allow(unused_mut)]
                 let mut app = App::new()
                     .app_data(Data::new(html_app.clone()))
+                    .configure(|config| {
+                        if let Some(policy) = &html_app.http_policy {
+                            config.app_data(web::PayloadConfig::new(policy.max_body_bytes()));
+                            config.app_data(Data::new(policy.clone()));
+                        }
+                    })
                     .wrap(cors)
                     .wrap(middleware::Compress::default())
-                    .wrap(moosicbox_middleware::api_logger::ApiLogger::default());
+                    .wrap(middleware::Condition::new(
+                        html_app.http_policy.is_none(),
+                        moosicbox_middleware::api_logger::ApiLogger::default(),
+                    ))
+                    .wrap(middleware::from_fn(http_policy::enforce));
 
                 #[cfg(feature = "assets")]
                 {
@@ -646,10 +687,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                     .extension()
                                     .and_then(|x| x.to_str().map(str::to_lowercase));
 
-                                let content_type = match extension.as_deref() {
-                                    Some("js" | "mjs" | "cjs") => "text/javascript;charset=UTF-8",
-                                    _ => "application/octet-stream",
-                                };
+                                let content_type = static_content_type(extension.as_deref());
 
                                 app = app.route(
                                     route,
@@ -798,8 +836,15 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
 
                 let catchall = move |req: HttpRequest,
                                      app: web::Data<ActixApp<T, R>>,
-                                     body: Option<web::Bytes>| async move {
-                    log::trace!("catchall: req={req:?} body={body:?}");
+                                     body: Result<web::Bytes, actix_web::Error>| async move {
+                    let body = match body {
+                        Ok(body) => Some(body),
+                        Err(error) if app.http_policy.is_some() => return Err(error),
+                        Err(_) => None, // Preserve legacy optional-body extraction without a policy.
+                    };
+                    if app.http_policy.is_none() {
+                        log::trace!("catchall: req={req:?} body={body:?}");
+                    }
                     let data = app.processor.prepare_request(req, body.map(Arc::new))?;
                     app.processor.to_response(data).await
                 };

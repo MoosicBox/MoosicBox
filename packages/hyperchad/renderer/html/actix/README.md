@@ -100,6 +100,41 @@ Actions are posted to `/$action` and forwarded through the action channel.
 
 When the `assets` feature is enabled, configure static asset routes via the `static_asset_routes` field on `ActixApp`.
 
+### HTTP Policy
+
+HTTP protection is opt-in; existing apps retain their logging and extraction defaults.
+Configure the app before starting the renderer:
+
+```rust,ignore
+use hyperchad_renderer_html_actix::HttpPolicy;
+
+app.set_http_policy(
+    HttpPolicy::new(1024 * 1024)
+        .with_sensitive_path_prefix("/api/")
+        .with_sensitive_path_prefix("/app/"),
+);
+```
+
+`with_http_policy` provides the equivalent builder API. A selected policy:
+
+- Bounds and buffers **every request body before routing**, including static, action,
+  SSE, authentication, and unsupported-method requests. Actix checks actual streamed
+  bytes as well as declared lengths, including decoded compressed bodies; overflow
+  returns HTTP 413 without invoking handlers. This is not a streaming-upload API.
+- Adds `Cache-Control: no-store` and `Referrer-Policy: no-referrer` to sensitive
+  responses, including error and method-rejection responses. Prefixes match the
+  literal URI path, case-sensitively, not the query or path segments. Use `/` to
+  protect all responses, or include every token-bearing application document path.
+- Disables built-in API request logging, catchall request/body tracing, and action
+  payload logging for all requests. Custom processors, security implementations,
+  external middleware, reverse proxies, and WebSocket messages retain their own
+  logging/security responsibilities. Request bounds cover the HTTP upgrade request,
+  not subsequent WebSocket frames.
+
+In-memory static assets infer media types from their route extension: HTML, WASM,
+JSON, CSS, and JavaScript are served with browser-compatible types; unknown types
+remain `application/octet-stream`.
+
 ## License
 
 This project is licensed under the MPL-2.0 License.

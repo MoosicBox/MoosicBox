@@ -148,7 +148,9 @@ pub async fn handle_action<
     app: web::Data<ActixApp<T, R>>,
     action: web::Json<ActionPayload>,
 ) -> impl Responder {
-    log::debug!("handle_action: action={action:?}");
+    if app.http_policy.is_none() {
+        log::debug!("handle_action: action={action:?}");
+    }
 
     #[cfg(not(feature = "shared-state-bridge"))]
     let _ = &req;
