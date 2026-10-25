@@ -418,7 +418,25 @@ pub fn plan_upgrade_with_releases(
                 } else {
                     (
                         UpgradeStatus::Unavailable,
-                        "no eligible non-yanked release with requested features".into(),
+                        {
+                            let missing = features
+                                .iter()
+                                .filter(|feature| {
+                                    !versions
+                                        .iter()
+                                        .any(|release| release.features.contains(*feature))
+                                })
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            if missing.is_empty() {
+                                "no eligible non-yanked release with requested features".into()
+                            } else {
+                                format!(
+                                    "requested features not found in registry releases: {}",
+                                    missing.join(", ")
+                                )
+                            }
+                        },
                         previous.clone(),
                         None,
                     )

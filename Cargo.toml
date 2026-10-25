@@ -678,10 +678,6 @@ moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.5"
-mysql = { version = "28.0.0", features = [
-    "default-rustls",
-    "rustls-tls",
-], default-features = false }
 nanoid = "0.5.0"
 native-tls = "0.2.18"
 net2 = "0.2.39"

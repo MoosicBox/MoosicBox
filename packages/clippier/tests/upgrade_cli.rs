@@ -256,7 +256,7 @@ fn text_visibility_color_and_json_are_independent() {
     let text = String::from_utf8(plain.stdout).unwrap();
     assert!(!text.contains("  demo"), "{text}");
     assert!(!text.contains('\u{1b}'));
-    assert!(text.contains("No dependency upgrades available."));
+    assert!(text.contains("Already up to date."));
     let verbose = fixture.run(&[
         "plan",
         "--offline",
@@ -332,7 +332,7 @@ fn text_visibility_color_and_json_are_independent() {
     let text = String::from_utf8(warning.stdout).unwrap();
     assert!(text.contains("Unavailable:"), "{text}");
     assert!(text.contains("warnings: 1"), "{text}");
-    assert!(!text.contains("No dependency upgrades available."));
+    assert!(!text.contains("Already up to date."));
 }
 
 #[test]
@@ -696,6 +696,78 @@ fn selectors_and_config_overrides_are_forwarded() {
 }
 
 #[test]
+fn repeated_upgrade_is_a_noop_without_confirmation_or_writes() {
+    let fixture = Fixture::new(Some(">=1.0.0, <2"));
+    fixture.seed_lockfile();
+    let first = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    assert!(first.status.success(), "{first:?}");
+    assert_eq!(report(&first)["report"]["lockfile"], "APPLIED");
+    let lock_path = fixture.path().join("Cargo.lock");
+    let before = fs::read(&lock_path).unwrap();
+    let modified = fs::metadata(&lock_path).unwrap().modified().unwrap();
+    // No --yes, and all streams redirected: a false positive would block.
+    let second = fixture.run(&["--offline", "--output", "json"]);
+    assert!(second.status.success(), "{second:?}");
+    let summary = report(&second);
+    assert_eq!(summary["outcome"], "UNCHANGED");
+    assert_eq!(summary["report"]["pending"], false);
+    assert_eq!(summary["report"]["applied"], false);
+    assert_eq!(summary["report"]["lockfile"], "UNCHANGED");
+    assert_eq!(fs::read(&lock_path).unwrap(), before);
+    assert_eq!(
+        fs::metadata(&lock_path).unwrap().modified().unwrap(),
+        modified
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.path().join("Cargo.toml")).unwrap(),
+        fixture.original
+    );
+    let text = fixture.run(&["--offline", "--color", "never"]);
+    assert!(text.status.success(), "{text:?}");
+    assert!(
+        String::from_utf8(text.stdout)
+            .unwrap()
+            .contains("Already up to date.")
+    );
+    assert!(!String::from_utf8(text.stderr).unwrap().contains("Apply"));
+    let check = fixture.run(&["--offline", "--check", "--output", "json"]);
+    assert!(check.status.success(), "{check:?}");
+    assert_eq!(report(&check)["report"]["pending"], false);
+    let exact = fixture.run(&[
+        "plan",
+        "--offline",
+        "--resolve-lockfile",
+        "--output",
+        "json",
+    ]);
+    assert_eq!(report(&exact)["report"]["pending"], false);
+}
+
+#[test]
+fn unavailable_features_are_named_and_not_hidden_by_noop() {
+    let fixture = Fixture::new(Some("1.2.0"));
+    // Use an unused workspace declaration so the diagnostic is independent of
+    // Cargo's resolver rejecting an actively used invalid feature.
+    fs::write(fixture.path().join("Cargo.toml"), "[workspace]\n[workspace.dependencies]\ndemo={version='1.2.0',features=['nonexistent']}\n[package]\nname='root'\nversion='0.1.0'\n").unwrap();
+    let output = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    assert!(output.status.success(), "{output:?}");
+    let second = fixture.run(&["--offline", "--output", "json"]);
+    assert!(second.status.success(), "{second:?}");
+    let summary = report(&second);
+    assert_eq!(summary["report"]["pending"], false);
+    assert_eq!(
+        summary["report"]["dependencies"][0]["status"],
+        "UNAVAILABLE"
+    );
+    assert!(
+        summary["report"]["dependencies"][0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("nonexistent")
+    );
+}
+
+#[test]
 fn exact_lockfile_preview_is_isolated() {
     let fixture = Fixture::new(None);
     let output = fixture.run(&[
@@ -714,7 +786,7 @@ fn exact_lockfile_preview_is_isolated() {
 }
 
 #[test]
-fn apply_failure_is_not_reported_as_success_and_preserves_project() {
+fn resolution_failure_is_reported_before_confirmation_and_preserves_project() {
     let fixture = Fixture::new(None);
     fs::create_dir(fixture.path().join(".cargo")).unwrap();
     fs::write(
@@ -725,16 +797,14 @@ fn apply_failure_is_not_reported_as_success_and_preserves_project() {
     let output = fixture.run(&["--offline", "--yes", "--output", "json"]);
     assert!(!output.status.success(), "{output:?}");
     let summary = report(&output);
-    assert_eq!(summary["outcome"], "APPLY_FAILED");
-    assert_eq!(summary["report"]["status"], "FAILED");
-    assert_eq!(summary["report"]["applied"], false);
+    assert_eq!(summary["outcome"], "PLANNING_FAILED");
+    assert!(summary["report"].is_null());
     assert!(summary["error"].is_string());
     fixture.assert_unchanged();
     let text = fixture.run(&["--offline", "--yes", "--color", "never"]);
     assert!(!text.status.success());
     let stderr = String::from_utf8(text.stderr).unwrap();
-    assert!(stderr.contains("Applying upgrades:"));
-    assert!(stderr.contains("Upgrade failed"));
+    assert!(!stderr.contains("Applying upgrades"));
     assert!(
         !String::from_utf8(text.stdout)
             .unwrap()

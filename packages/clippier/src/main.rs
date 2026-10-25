@@ -481,12 +481,17 @@ mod upgrade_cli {
             }
         }
         if changed == 0 && warnings == 0 {
+            let message = match report.lockfile {
+                clippier::upgrade::LockfileStatus::Applied => "Lockfile updated.",
+                clippier::upgrade::LockfileStatus::Resolved => "Lockfile changes available.",
+                clippier::upgrade::LockfileStatus::Unresolved => {
+                    "No manifest upgrades; lockfile changes not yet resolved."
+                }
+                _ => "Already up to date.",
+            };
             write_line(
                 writer,
-                &Line::from_spans(vec![Span::styled(
-                    "No dependency upgrades available.",
-                    muted,
-                )]),
+                &Line::from_spans(vec![Span::styled(message, muted)]),
                 color,
             )?;
         }
@@ -575,6 +580,35 @@ mod upgrade_cli {
         has_work && !yes
     }
 
+    // Keep provisional output off the main screen, including tall previews.
+    struct ConfirmationScreen(bool);
+
+    impl ConfirmationScreen {
+        fn enter() -> io::Result<Self> {
+            let enabled = io::stdin().is_terminal()
+                && io::stdout().is_terminal()
+                && io::stderr().is_terminal()
+                && std::env::var("TERM").is_ok_and(|term| term != "dumb");
+            let screen = Self(enabled);
+            if enabled {
+                let mut stderr = io::stderr().lock();
+                write!(stderr, "\x1b[?1049h\x1b[H")?;
+                stderr.flush()?;
+            }
+            Ok(screen)
+        }
+    }
+
+    impl Drop for ConfirmationScreen {
+        fn drop(&mut self) {
+            if self.0 {
+                let mut stderr = io::stderr().lock();
+                let _ = write!(stderr, "\x1b[?1049l");
+                let _ = stderr.flush();
+            }
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn run(command: &UpgradeCli) -> Result<u8, BoxError> {
         let flags = &command.flags;
@@ -585,7 +619,13 @@ mod upgrade_cli {
         } else {
             Scope::Apply
         };
-        let plan = match build_upgrade_plan(&flags.options()).await {
+        let options = flags.options();
+        let planned = if matches!(scope, Scope::Apply | Scope::Check) {
+            clippier::upgrade::build_upgrade_plan_for_apply(&options).await
+        } else {
+            build_upgrade_plan(&options).await
+        };
+        let plan = match planned {
             Ok(plan) => plan,
             Err(error) => {
                 emit(
@@ -642,6 +682,7 @@ mod upgrade_cli {
         }
         if confirmation_needed(flags.yes, has_work) {
             // JSON stdout must remain a single final report. Preview and prompt use stderr.
+            let screen = ConfirmationScreen::enter()?;
             let mut stderr = io::stderr().lock();
             write_text(
                 &mut stderr,
@@ -671,10 +712,16 @@ mod upgrade_cli {
                 )?;
                 return Ok(1);
             }
-            write!(stderr, "Apply these upgrades? [y/N] ")?;
+            let prompt = if report.manifests.is_empty() {
+                "Apply lockfile changes? [y/N] "
+            } else {
+                "Apply these upgrades? [y/N] "
+            };
+            write!(stderr, "{prompt}")?;
             stderr.flush()?;
             drop(stderr);
             let confirmation = read_confirmation(&mut io::stdin().lock());
+            drop(screen);
             match confirmation {
                 Ok(true) => {}
                 answer => {
@@ -701,10 +748,19 @@ mod upgrade_cli {
                 }
             }
         }
-        if matches!(flags.output, Output::Text) {
-            eprintln!("Applying upgrades: resolving lockfile and validating changes…");
+        let progress = matches!(flags.output, Output::Text)
+            && io::stderr().is_terminal()
+            && std::env::var("TERM").is_ok_and(|term| term != "dumb");
+        if progress {
+            eprint!("Applying upgrades…");
+            io::stderr().flush()?;
         }
-        match apply_upgrade_plan(&plan).await {
+        let applied = apply_upgrade_plan(&plan).await;
+        if progress {
+            eprint!("\r\x1b[2K");
+            io::stderr().flush()?;
+        }
+        match applied {
             Ok(applied) => {
                 emit(
                     flags,

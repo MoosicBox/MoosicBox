@@ -410,6 +410,21 @@ fn render_diff(output: &mut String, path: &std::path::Path, before: &str, after:
 /// * Registry transport/metadata failures.
 /// * Unsupported or failed isolated lockfile resolution when explicitly requested.
 pub async fn build_upgrade_plan(options: &UpgradeOptions) -> Result<UpgradePlan, BoxError> {
+    build_plan(options, false).await
+}
+
+/// Build an exact plan for confirmation and apply, resolving enabled lockfile policies
+/// in isolation so unchanged lockfiles do not count as pending work.
+///
+/// # Errors
+/// * The same planning and isolated-resolution errors as [`build_upgrade_plan`].
+pub async fn build_upgrade_plan_for_apply(
+    options: &UpgradeOptions,
+) -> Result<UpgradePlan, BoxError> {
+    build_plan(options, true).await
+}
+
+async fn build_plan(options: &UpgradeOptions, for_apply: bool) -> Result<UpgradePlan, BoxError> {
     let input = load_upgrade_input(options)?;
     let requests = planner::registry_requests(&input)?;
     let client = registry::RegistryClient::new(&input.root, input.registry.clone())?;
@@ -419,14 +434,31 @@ pub async fn build_upgrade_plan(options: &UpgradeOptions) -> Result<UpgradePlan,
         releases.insert(key, versions);
     }
     let mut plan = plan_upgrade_with_releases(&input, &releases)?;
-    if input.resolve_lockfile {
+    if input.resolve_lockfile || (for_apply && plan.lockfile_policy != LockfilePolicy::None) {
         if plan.lockfile_policy == LockfilePolicy::None {
             return Err("resolve-lockfile cannot be combined with lockfile policy NONE".into());
         }
         let (lockfile, warnings) = apply::resolve_lockfile_with_warnings(&plan)?;
+        let lock_path = plan.root.join("Cargo.lock");
+        let lock_changed = plan
+            .snapshots
+            .iter()
+            .find(|snapshot| snapshot.path == lock_path)
+            .and_then(|snapshot| snapshot.contents.as_deref())
+            != Some(lockfile.as_str());
+        plan.report.pending = !plan.changes.is_empty() || lock_changed;
+        plan.report.status = if plan.report.pending {
+            UpgradeStatus::Planned
+        } else {
+            UpgradeStatus::Unchanged
+        };
+        plan.report.lockfile = if lock_changed {
+            LockfileStatus::Resolved
+        } else {
+            LockfileStatus::Unchanged
+        };
         plan.resolved_lockfile = Some(lockfile);
         plan.report.warnings.extend(warnings);
-        plan.report.lockfile = LockfileStatus::Resolved;
     }
     Ok(plan)
 }
