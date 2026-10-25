@@ -21,7 +21,7 @@ impl WidgetAdapter for Adapter {
         Ok(NodeOutput {
             response: ui.interact(
                 geometry.content_box,
-                egui::Id::new(stamp.key),
+                egui::Id::unique(stamp.key),
                 egui::Sense::click(),
             ),
             value: Some("adapter-value".to_owned()),
@@ -87,25 +87,37 @@ fn button_does_not_paint_descendant_text_or_allocate_child_layout() {
         WidgetPainter::new(Adapter::default(), Adapter::default(), Adapter::default());
     painter.reconcile(&document, &[]).unwrap();
     let mut text_shapes = 0;
-    let _ = context.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let output = painter
-                .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
-                .unwrap()
-                .unwrap();
-            assert_eq!(output.response.rect, geometry(stamp).border_box);
-            assert_eq!(output.value, None);
+    let _ = {
+        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let output = painter
+                        .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(output.response.rect, geometry(stamp).border_box);
+                    assert_eq!(output.value, None);
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     // A structural button has no native label widget. Descendant traversal is
     // the only code that may emit its text, verified below using the shape list.
-    let output = context.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            painter
-                .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
-                .unwrap();
+    let output = {
+        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    painter
+                        .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
+                        .unwrap();
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     for shape in output.shapes {
         if matches!(shape.shape, egui::Shape::Text(_)) {
             text_shapes += 1;
@@ -132,15 +144,21 @@ fn textarea_delegates_exactly_once_and_preserves_changed_value() {
         WidgetPainter::new(Adapter::default(), Adapter::default(), Adapter::default());
     painter.reconcile(&document, &[]).unwrap();
     let context = egui::Context::default();
-    let _ = context.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let result = painter
-                .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
-                .unwrap()
-                .unwrap();
-            assert_eq!(result.value.as_deref(), Some("adapter-value"));
+    let _ = {
+        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let result = painter
+                        .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(result.value.as_deref(), Some("adapter-value"));
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     assert_eq!(painter.forms.0, 1);
     assert_eq!(painter.resources.0, 0);
     assert_eq!(painter.canvas.0, 0);
@@ -169,13 +187,19 @@ fn custom_link_has_native_role_name_and_clipped_geometry() {
     painter.reconcile(&document, &[]).unwrap();
     let mut projected = geometry(stamp);
     projected.paint_clip = Rect::from_min_max(pos2(30.0, 25.0), pos2(100.0, 55.0));
-    let output = context.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            painter
-                .paint_node(ui, stamp, &authored, &authored, &projected)
-                .unwrap();
+    let output = {
+        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    painter
+                        .paint_node(ui, stamp, &authored, &authored, &projected)
+                        .unwrap();
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     let update = output
         .platform_output
         .accesskit_update
@@ -249,16 +273,22 @@ fn closed_details_paints_native_fallback_with_expanded_semantics() {
     let mut painter =
         WidgetPainter::new(Adapter::default(), Adapter::default(), Adapter::default());
     painter.reconcile(&document, &[]).unwrap();
-    let output = context.run(egui::RawInput::default(), |ctx| {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            assert!(
-                painter
-                    .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
-                    .unwrap()
-                    .is_some()
-            );
+    let output = {
+        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+            ctx.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    assert!(
+                        painter
+                            .paint_node(ui, stamp, &authored, &authored, &geometry(stamp))
+                            .unwrap()
+                            .is_some()
+                    );
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     let update = output.platform_output.accesskit_update.unwrap();
     let node = update
         .nodes
@@ -286,16 +316,22 @@ fn raw_source_is_literal_native_text_without_angle_or_entity_heuristics() {
         painter.reconcile(&document, &[]).unwrap();
         let mut calculated = authored.clone();
         calculated.calculated_text_wrap_width = Some(geometry(stamp).content_box.width());
-        let output = context.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                assert!(
-                    painter
-                        .paint_node(ui, stamp, &authored, &calculated, &geometry(stamp))
-                        .unwrap()
-                        .is_some()
-                );
+        let output = {
+            let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+                ctx.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        assert!(
+                            painter
+                                .paint_node(ui, stamp, &authored, &calculated, &geometry(stamp))
+                                .unwrap()
+                                .is_some()
+                        );
+                    })
+                });
             });
-        });
+            output.textures_delta.clear();
+            output
+        };
         assert!(output.shapes.iter().any(
             |shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.job.text == value)
         ));
@@ -316,39 +352,46 @@ fn production_html_raw_labels_emit_visible_white_glyph_meshes() {
     let mut painter =
         WidgetPainter::new(Adapter::default(), Adapter::default(), Adapter::default());
     painter.reconcile(&document, &[]).unwrap();
-    let output = context.run(
-        egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(640.0, 480.0))),
-            ..Default::default()
-        },
-        |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                for (index, &key) in raw_keys.iter().enumerate() {
-                    let stamp = document.stamp(key).unwrap();
-                    let authored = document.get(key).unwrap();
-                    let mut calculated = authored.clone();
-                    calculated.color = Some(hyperchad_color::Color {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                        a: None,
-                    });
-                    calculated.calculated_text_wrap_width =
-                        Some(geometry(stamp).content_box.width());
-                    calculated.calculated_font_size = Some(20.0);
-                    let mut projected = geometry(stamp);
-                    let offset = egui::vec2(0.0, f32::from(u16::try_from(index).unwrap()) * 45.0);
-                    projected.content_box = projected.content_box.translate(offset);
-                    projected.border_box = projected.content_box;
-                    projected.padding_box = projected.content_box;
-                    projected.paint_clip = projected.content_box;
-                    painter
-                        .paint_node(ui, stamp, authored, &calculated, &projected)
-                        .unwrap();
-                }
-            });
-        },
-    );
+    let output = {
+        let mut output = context.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(640.0, 480.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        for (index, &key) in raw_keys.iter().enumerate() {
+                            let stamp = document.stamp(key).unwrap();
+                            let authored = document.get(key).unwrap();
+                            let mut calculated = authored.clone();
+                            calculated.color = Some(hyperchad_color::Color {
+                                r: 255,
+                                g: 255,
+                                b: 255,
+                                a: None,
+                            });
+                            calculated.calculated_text_wrap_width =
+                                Some(geometry(stamp).content_box.width());
+                            calculated.calculated_font_size = Some(20.0);
+                            let mut projected = geometry(stamp);
+                            let offset =
+                                egui::vec2(0.0, f32::from(u16::try_from(index).unwrap()) * 45.0);
+                            projected.content_box = projected.content_box.translate(offset);
+                            projected.border_box = projected.content_box;
+                            projected.padding_box = projected.content_box;
+                            projected.paint_clip = projected.content_box;
+                            painter
+                                .paint_node(ui, stamp, authored, &calculated, &projected)
+                                .unwrap();
+                        }
+                    })
+                });
+            },
+        );
+        output.textures_delta.clear();
+        output
+    };
     let labels: Vec<_> = output
         .shapes
         .iter()

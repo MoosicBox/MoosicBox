@@ -669,8 +669,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                     web::get().to(move |req: HttpRequest| {
                                         let target = target.clone();
                                         async move {
-                                            let file = actix_files::NamedFile::open_async(target)
-                                                .await
+                                            let file = actix_web::web::block({ let path = target.clone(); move || actix_files::NamedFile::open(path) }).await.map_err(actix_web::error::ErrorInternalServerError)?
                                                 .map_err(
                                                     actix_web::error::ErrorInternalServerError,
                                                 )?;
@@ -727,10 +726,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                                         async move {
                                                             let file_path = target.join(path.as_str());
                                                             let file =
-                                                                actix_files::NamedFile::open_async(
-                                                                    file_path,
-                                                                )
-                                                                .await
+                                                                actix_web::web::block({ let path = file_path.clone(); move || actix_files::NamedFile::open(path) }).await.map_err(actix_web::error::ErrorInternalServerError)?
                                                                 .map_err(
                                                                     actix_web::error::ErrorInternalServerError,
                                                                 )?;
@@ -757,10 +753,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                                                 .finish());
                                                         }
                                                         let file =
-                                                            actix_files::NamedFile::open_async(
-                                                                file_path,
-                                                            )
-                                                            .await
+                                                            actix_web::web::block({ let path = file_path.clone(); move || actix_files::NamedFile::open(path) }).await.map_err(actix_web::error::ErrorInternalServerError)?
                                                             .map_err(
                                                                 actix_web::error::ErrorInternalServerError,
                                                             )?;
@@ -773,7 +766,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                         );
                                     }
                                     AssetNotFoundBehavior::InternalServerError => {
-                                        // Original behavior - let NamedFile::open_async fail
+                                        // Original behavior - let NamedFile::open fail
                                         app = app.route(
                                             &directory_route_pattern(route),
                                             web::get().to(
@@ -783,10 +776,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                                     async move {
                                                         let file_path = target.join(path.as_str());
                                                         let file =
-                                                            actix_files::NamedFile::open_async(
-                                                                file_path,
-                                                            )
-                                                            .await
+                                                            actix_web::web::block({ let path = file_path.clone(); move || actix_files::NamedFile::open(path) }).await.map_err(actix_web::error::ErrorInternalServerError)?
                                                             .map_err(
                                                                 actix_web::error::ErrorInternalServerError,
                                                             )?;

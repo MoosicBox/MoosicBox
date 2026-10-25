@@ -299,54 +299,58 @@ mod tests {
                     context.set_pixels_per_point(dpi);
                     let mut expected_galley = None;
                     let mut projected_width = 0.0;
-                    let output = context.run(egui::RawInput::default(), |ctx| {
-                        let metrics = EguiFontMetrics::new(ctx.clone());
-                        let request = TextMeasureRequest {
-                            text: value,
-                            family: TextFontFamily::CompatibilityDefault,
-                            weight: TextFontWeight::CompatibilityDefault,
-                            size: 19.6,
-                            wrap_width: constraint,
-                            whitespace: None,
-                        };
-                        let measured = metrics.measure_text(&request).unwrap();
-                        assert_eq!(measured.rows.len() > 1, expected_multiline);
-                        let child = Container {
-                            id: 2,
-                            element: hyperchad_transformer::Element::Text {
-                                value: value.to_owned(),
-                            },
-                            calculated_x: Some(0.0),
-                            calculated_y: Some(0.0),
-                            calculated_width: Some(measured.width()),
-                            calculated_height: Some(measured.height()),
-                            calculated_font_size: Some(request.size),
-                            calculated_text_wrap_width: Some(constraint),
-                            ..Default::default()
-                        };
-                        let rect = project_measured_text(&child, zoom);
-                        projected_width = rect.width();
-                        // Compare against the same authoritative job at paint scale,
-                        // not a fresh wrap constraint derived from projected bounds.
-                        let projected_request = TextMeasureRequest {
-                            size: request.size * zoom,
-                            wrap_width: constraint * zoom,
-                            ..request
-                        };
-                        let expected = metrics.layout_request(&projected_request).unwrap();
-                        assert_eq!(expected.rows.len(), measured.rows.len());
-                        expected_galley = Some(expected);
-                        let node = &child;
-                        paint_text(
-                            &ctx.layer_painter(egui::LayerId::background()),
-                            node,
-                            &TextStyle::resolve(node, None),
-                            value,
-                            rect,
-                            zoom,
-                        )
-                        .unwrap();
-                    });
+                    let output = {
+                        let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+                            let metrics = EguiFontMetrics::new(ctx.clone());
+                            let request = TextMeasureRequest {
+                                text: value,
+                                family: TextFontFamily::CompatibilityDefault,
+                                weight: TextFontWeight::CompatibilityDefault,
+                                size: 19.6,
+                                wrap_width: constraint,
+                                whitespace: None,
+                            };
+                            let measured = metrics.measure_text(&request).unwrap();
+                            assert_eq!(measured.rows.len() > 1, expected_multiline);
+                            let child = Container {
+                                id: 2,
+                                element: hyperchad_transformer::Element::Text {
+                                    value: value.to_owned(),
+                                },
+                                calculated_x: Some(0.0),
+                                calculated_y: Some(0.0),
+                                calculated_width: Some(measured.width()),
+                                calculated_height: Some(measured.height()),
+                                calculated_font_size: Some(request.size),
+                                calculated_text_wrap_width: Some(constraint),
+                                ..Default::default()
+                            };
+                            let rect = project_measured_text(&child, zoom);
+                            projected_width = rect.width();
+                            // Compare against the same authoritative job at paint scale,
+                            // not a fresh wrap constraint derived from projected bounds.
+                            let projected_request = TextMeasureRequest {
+                                size: request.size * zoom,
+                                wrap_width: constraint * zoom,
+                                ..request
+                            };
+                            let expected = metrics.layout_request(&projected_request).unwrap();
+                            assert_eq!(expected.rows.len(), measured.rows.len());
+                            expected_galley = Some(expected);
+                            let node = &child;
+                            paint_text(
+                                &ctx.layer_painter(egui::LayerId::background()),
+                                node,
+                                &TextStyle::resolve(node, None),
+                                value,
+                                rect,
+                                zoom,
+                            )
+                            .unwrap();
+                        });
+                        output.textures_delta.clear();
+                        output
+                    };
                     let painted = output
                         .shapes
                         .iter()
@@ -378,35 +382,39 @@ mod tests {
     fn c18_collection_intrinsic_width_is_not_a_new_wrap_constraint() {
         use crate::font_metrics::EguiFontMetrics;
         let context = egui::Context::default();
-        let output = context.run(egui::RawInput::default(), |ctx| {
-            let metrics = EguiFontMetrics::new(ctx.clone());
-            let measured = metrics.layout_text("My Collection", 19.6, f32::INFINITY);
-            assert_eq!(measured.rows.len(), 1);
-            // Native C18's calculated text is projected at this nonzero origin;
-            // the resulting f32 rectangle width is not the measurement input.
-            let node = Container {
-                id: 2,
-                calculated_x: Some(0.0),
-                calculated_y: Some(0.0),
-                calculated_width: Some(120.380_005),
-                calculated_height: Some(23.0),
-                calculated_font_size: Some(19.6),
-                calculated_text_wrap_width: Some(f32::INFINITY),
-                ..Default::default()
-            };
-            let rect = project_measured_text(&node, 1.0);
-            assert_eq!(rect.min, egui::pos2(20.0, 106.76));
-            assert!((rect.width() - 120.380_005).abs() < 0.000_02);
-            paint_text(
-                &ctx.layer_painter(egui::LayerId::background()),
-                &node,
-                &TextStyle::resolve(&node, None),
-                "My Collection",
-                rect,
-                1.0,
-            )
-            .unwrap();
-        });
+        let output = {
+            let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+                let metrics = EguiFontMetrics::new(ctx.clone());
+                let measured = metrics.layout_text("My Collection", 19.6, f32::INFINITY);
+                assert_eq!(measured.rows.len(), 1);
+                // Native C18's calculated text is projected at this nonzero origin;
+                // the resulting f32 rectangle width is not the measurement input.
+                let node = Container {
+                    id: 2,
+                    calculated_x: Some(0.0),
+                    calculated_y: Some(0.0),
+                    calculated_width: Some(120.380_005),
+                    calculated_height: Some(23.0),
+                    calculated_font_size: Some(19.6),
+                    calculated_text_wrap_width: Some(f32::INFINITY),
+                    ..Default::default()
+                };
+                let rect = project_measured_text(&node, 1.0);
+                assert_eq!(rect.min, egui::pos2(20.0, 106.76));
+                assert!((rect.width() - 120.380_005).abs() < 0.000_02);
+                paint_text(
+                    &ctx.layer_painter(egui::LayerId::background()),
+                    &node,
+                    &TextStyle::resolve(&node, None),
+                    "My Collection",
+                    rect,
+                    1.0,
+                )
+                .unwrap();
+            });
+            output.textures_delta.clear();
+            output
+        };
         let painted = output
             .shapes
             .iter()
@@ -422,29 +430,33 @@ mod tests {
     #[test]
     fn missing_or_invalid_measurement_constraint_is_diagnostic() {
         let context = egui::Context::default();
-        let _ = context.run(egui::RawInput::default(), |ctx| {
-            for width in [None, Some(f32::NAN), Some(-1.0), Some(f32::NEG_INFINITY)] {
-                let node = Container {
-                    calculated_font_size: Some(19.6),
-                    calculated_text_wrap_width: width,
-                    ..Default::default()
-                };
-                assert!(
-                    paint_text(
-                        &ctx.layer_painter(egui::LayerId::background()),
-                        &node,
-                        &TextStyle::resolve(&node, None),
-                        "My Collection",
-                        egui::Rect::from_min_size(
-                            egui::pos2(20.0, 106.76),
-                            egui::vec2(120.380_005, 23.0)
-                        ),
-                        1.0,
-                    )
-                    .is_err()
-                );
-            }
-        });
+        let _ = {
+            let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+                for width in [None, Some(f32::NAN), Some(-1.0), Some(f32::NEG_INFINITY)] {
+                    let node = Container {
+                        calculated_font_size: Some(19.6),
+                        calculated_text_wrap_width: width,
+                        ..Default::default()
+                    };
+                    assert!(
+                        paint_text(
+                            &ctx.layer_painter(egui::LayerId::background()),
+                            &node,
+                            &TextStyle::resolve(&node, None),
+                            "My Collection",
+                            egui::Rect::from_min_size(
+                                egui::pos2(20.0, 106.76),
+                                egui::vec2(120.380_005, 23.0)
+                            ),
+                            1.0,
+                        )
+                        .is_err()
+                    );
+                }
+            });
+            output.textures_delta.clear();
+            output
+        };
     }
 
     #[test]
@@ -458,41 +470,47 @@ mod tests {
                 let context = egui::Context::default();
                 context.set_pixels_per_point(dpi);
                 let mut measured = None;
-                let output = context.run(egui::RawInput::default(), |ctx| {
-                    let metrics = EguiFontMetrics::new(ctx.clone());
-                    measured = Some(
-                        metrics
-                            .measure_text(&TextMeasureRequest {
-                                text: value,
-                                family: TextFontFamily::CompatibilityDefault,
-                                weight: TextFontWeight::CompatibilityDefault,
-                                size: 17.375,
-                                wrap_width: width,
-                                whitespace: None,
-                            })
-                            .unwrap(),
-                    );
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        let node = Container {
-                            calculated_font_size: Some(17.375),
-                            calculated_text_wrap_width: Some(width),
-                            ..Container::default()
-                        };
-                        let rect = egui::Rect::from_min_size(
-                            egui::pos2(8.0, 8.0),
-                            egui::vec2(width, 400.0),
+                let output = {
+                    let mut output = context.run_pass(egui::RawInput::default(), |ctx| {
+                        let metrics = EguiFontMetrics::new(ctx.clone());
+                        measured = Some(
+                            metrics
+                                .measure_text(&TextMeasureRequest {
+                                    text: value,
+                                    family: TextFontFamily::CompatibilityDefault,
+                                    weight: TextFontWeight::CompatibilityDefault,
+                                    size: 17.375,
+                                    wrap_width: width,
+                                    whitespace: None,
+                                })
+                                .unwrap(),
                         );
-                        paint_text(
-                            ui.painter(),
-                            &node,
-                            &TextStyle::resolve(&node, None),
-                            value,
-                            rect,
-                            1.0,
-                        )
-                        .unwrap();
+                        ctx.root_ui(|ui| {
+                            egui::CentralPanel::default().show(ui, |ui| {
+                                let node = Container {
+                                    calculated_font_size: Some(17.375),
+                                    calculated_text_wrap_width: Some(width),
+                                    ..Container::default()
+                                };
+                                let rect = egui::Rect::from_min_size(
+                                    egui::pos2(8.0, 8.0),
+                                    egui::vec2(width, 400.0),
+                                );
+                                paint_text(
+                                    ui.painter(),
+                                    &node,
+                                    &TextStyle::resolve(&node, None),
+                                    value,
+                                    rect,
+                                    1.0,
+                                )
+                                .unwrap();
+                            })
+                        });
                     });
-                });
+                    output.textures_delta.clear();
+                    output
+                };
                 let painted = output
                     .shapes
                     .iter()

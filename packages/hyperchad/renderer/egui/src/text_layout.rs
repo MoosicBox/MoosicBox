@@ -180,7 +180,7 @@ impl FontRegistryBuilder {
         let key = (family.to_owned(), weight);
         if family.trim().is_empty()
             || !(100..=900).contains(&weight)
-            || data.font.is_empty()
+            || data.font.as_ref().as_ref().is_empty()
             || self.registry.faces.contains_key(&key)
         {
             return Err(FontRegistrationError(format!(
@@ -304,7 +304,7 @@ impl FontRegistryBuilder {
 }
 
 fn registry_id() -> egui::Id {
-    egui::Id::new("hyperchad-native-font-registry")
+    egui::Id::unique("hyperchad-native-font-registry")
 }
 
 /// Shared ASCII whitespace policy. NBSP and other Unicode spaces are retained.

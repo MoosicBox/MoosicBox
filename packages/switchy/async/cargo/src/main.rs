@@ -148,6 +148,7 @@ fn main() {
             attrs: vec![],
             items: vec![],
             shebang: None,
+            frontmatter: None,
         });
         let file_str = path.display().to_string();
         let mut checker = Checker {

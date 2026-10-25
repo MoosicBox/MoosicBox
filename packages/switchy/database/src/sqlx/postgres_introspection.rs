@@ -18,7 +18,7 @@ pub async fn postgres_sqlx_table_exists(
         WHERE table_schema = 'public' AND table_name = $1
     )";
 
-    let row = sqlx::query(query)
+    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_one(conn)
         .await
@@ -36,9 +36,12 @@ pub async fn postgres_sqlx_list_tables(
 ) -> Result<Vec<String>, DatabaseError> {
     let query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
 
-    let rows = sqlx::query(query).fetch_all(conn).await.map_err(|e| {
-        DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
-    })?;
+    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
+        .fetch_all(conn)
+        .await
+        .map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
 
     let mut tables = Vec::new();
     for row in rows {
@@ -65,7 +68,7 @@ pub async fn postgres_sqlx_get_table_columns(
     WHERE table_schema = 'public' AND table_name = $1
     ORDER BY ordinal_position";
 
-    let rows = sqlx::query(query)
+    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -82,7 +85,7 @@ pub async fn postgres_sqlx_get_table_columns(
       AND tc.table_name = $1
       AND tc.constraint_type = 'PRIMARY KEY'";
 
-    let pk_rows = sqlx::query(pk_query)
+    let pk_rows = sqlx::query(sqlx::AssertSqlSafe((pk_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -217,7 +220,7 @@ pub async fn postgres_sqlx_column_exists(
         AND column_name = $2
     )";
 
-    let row = sqlx::query(query)
+    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .bind(column_name)
         .fetch_one(conn)
@@ -254,7 +257,7 @@ pub async fn postgres_sqlx_get_table_info(
     FROM pg_indexes i
     WHERE i.schemaname = 'public' AND i.tablename = $1";
 
-    let index_rows = sqlx::query(index_query)
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe((index_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -315,7 +318,7 @@ pub async fn postgres_sqlx_get_table_info(
         AND tc.table_schema = 'public'
         AND tc.table_name = $1";
 
-    let fk_rows = sqlx::query(fk_query)
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe((fk_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await

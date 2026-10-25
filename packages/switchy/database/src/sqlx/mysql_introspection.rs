@@ -158,7 +158,7 @@ pub async fn mysql_sqlx_table_exists(
         WHERE table_schema = DATABASE() AND table_name = ?
     )";
 
-    let row = sqlx::query(query)
+    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_one(&mut *conn)
         .await
@@ -177,7 +177,7 @@ pub async fn mysql_sqlx_list_tables(
 ) -> Result<Vec<String>, DatabaseError> {
     let query = "SELECT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY TABLE_NAME";
 
-    let rows = sqlx::query(query)
+    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .fetch_all(&mut *conn)
         .await
         .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
@@ -212,7 +212,7 @@ pub async fn mysql_sqlx_get_table_columns(
     WHERE table_schema = DATABASE() AND table_name = ?
     ORDER BY ORDINAL_POSITION";
 
-    let rows = sqlx::query(query)
+    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -225,7 +225,7 @@ pub async fn mysql_sqlx_get_table_columns(
       AND table_name = ?
       AND constraint_name = 'PRIMARY'";
 
-    let pk_rows = sqlx::query(pk_query)
+    let pk_rows = sqlx::query(sqlx::AssertSqlSafe((pk_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -303,7 +303,7 @@ pub async fn mysql_sqlx_column_exists(
         AND column_name = ?
     )";
 
-    let row = sqlx::query(query)
+    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .bind(column_name)
         .fetch_one(&mut *conn)
@@ -340,7 +340,7 @@ pub async fn mysql_sqlx_get_table_info(
     WHERE table_schema = DATABASE() AND table_name = ?
     ORDER BY INDEX_NAME, SEQ_IN_INDEX";
 
-    let index_rows = sqlx::query(index_query)
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe((index_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
@@ -394,7 +394,7 @@ pub async fn mysql_sqlx_get_table_info(
       AND kcu.table_name = ?
       AND kcu.REFERENCED_TABLE_NAME IS NOT NULL";
 
-    let fk_rows = sqlx::query(fk_query)
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe((fk_query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await

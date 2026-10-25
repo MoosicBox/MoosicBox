@@ -123,7 +123,7 @@ mod tests {
         let context = egui::Context::default();
         context.begin_pass(egui::RawInput::default());
         test(EguiFontMetrics::new(context.clone()));
-        let _ = context.end_pass();
+        context.end_pass().drop_without_applying_deltas();
     }
 
     #[test]

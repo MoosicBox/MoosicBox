@@ -806,10 +806,14 @@ pub async fn artist_source_artwork_endpoint(
     let path_buf = std::path::PathBuf::from(path);
     let file_path = path_buf.as_path();
 
-    let file = actix_files::NamedFile::open_async(file_path)
-        .await
-        .map_err(|e| ArtistCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
-        .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+    let file = actix_web::web::block({
+        let path = file_path.to_path_buf();
+        move || actix_files::NamedFile::open(path)
+    })
+    .await
+    .map_err(ErrorInternalServerError)?
+    .map_err(|e| ArtistCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
+    .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
     Ok(file.into_response(&req))
 }
@@ -984,10 +988,14 @@ pub async fn album_source_artwork_endpoint(
     let path_buf = std::path::PathBuf::from(path);
     let file_path = path_buf.as_path();
 
-    let file = actix_files::NamedFile::open_async(file_path)
-        .await
-        .map_err(|e| AlbumCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
-        .map_err(|e| ErrorInternalServerError(e.to_string()))?;
+    let file = actix_web::web::block({
+        let path = file_path.to_path_buf();
+        move || actix_files::NamedFile::open(path)
+    })
+    .await
+    .map_err(ErrorInternalServerError)?
+    .map_err(|e| AlbumCoverError::File(file_path.to_str().unwrap().into(), format!("{e:?}")))
+    .map_err(|e| ErrorInternalServerError(e.to_string()))?;
 
     Ok(file.into_response(&req))
 }

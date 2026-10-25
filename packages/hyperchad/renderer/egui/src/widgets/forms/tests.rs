@@ -383,20 +383,26 @@ fn paint(
     document: &Document,
     key: ElementKey,
 ) -> egui::FullOutput {
-    context.run(egui::RawInput::default(), |context| {
-        egui::CentralPanel::default().show(context, |ui| {
-            let authored = document.get(key).unwrap();
-            adapter
-                .paint_node(
-                    ui,
-                    document.stamp(key).unwrap(),
-                    authored,
-                    authored,
-                    &geometry(key),
-                )
-                .unwrap();
+    {
+        let mut output = context.run_pass(egui::RawInput::default(), |context| {
+            context.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let authored = document.get(key).unwrap();
+                    adapter
+                        .paint_node(
+                            ui,
+                            document.stamp(key).unwrap(),
+                            authored,
+                            authored,
+                            &geometry(key),
+                        )
+                        .unwrap();
+                })
+            });
         });
-    })
+        output.textures_delta.clear();
+        output
+    }
 }
 
 #[test]
@@ -413,8 +419,10 @@ fn native_cursor_selection_and_focus_survive_unrelated_reconcile() {
     let id = adapter.fields[&key].id();
     context.memory_mut(|memory| memory.request_focus(id));
     let mut editor = egui::text_edit::TextEditState::load(&context, id).unwrap();
-    let selection =
-        egui::text::CCursorRange::two(egui::text::CCursor::new(1), egui::text::CCursor::new(4));
+    let selection = egui::text::CCursorRange::two(
+        egui::text::CCursor::new(egui::text::CharIndex(1)),
+        egui::text::CCursor::new(egui::text::CharIndex(4)),
+    );
     editor.cursor.set_char_range(Some(selection));
     editor.store(&context, id);
     let sibling = document.numeric_matches(3)[0];
@@ -592,7 +600,7 @@ fn removed_fields_do_not_leak_edits_into_new_identity() {
     assert_ne!(fresh_file, old_file);
     assert_ne!(
         adapter.fields[&fresh].id(),
-        Id::new(("hyperchad-form", old))
+        Id::unique(("hyperchad-form", old))
     );
     assert!(adapter.fields[&fresh].value == Value::Text("fresh default".into()));
     adapter

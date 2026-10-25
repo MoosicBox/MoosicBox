@@ -620,7 +620,7 @@ impl WidgetAdapter for ImageResources {
         let entry = self.entries.get(&stamp.key).ok_or("image state missing")?;
         let response = ui.interact(
             rect,
-            ui.id().with(("image", stamp.key)),
+            ui.scope_id().with(("image", stamp.key)),
             egui::Sense::hover(),
         );
         if visible {
@@ -1123,27 +1123,39 @@ mod tests {
             fixed: false,
         };
         let context = egui::Context::default();
-        let _ = context.run(egui::RawInput::default(), |context| {
-            egui::CentralPanel::default().show(context, |ui| {
-                assert!(
-                    resources
-                        .paint_node(ui, stamp, &authored, &authored, &geometry)
-                        .is_ok()
-                );
+        let _ = {
+            let mut output = context.run_pass(egui::RawInput::default(), |context| {
+                context.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        assert!(
+                            resources
+                                .paint_node(ui, stamp, &authored, &authored, &geometry)
+                                .is_ok()
+                        );
+                    })
+                });
             });
-        });
+            output.textures_delta.clear();
+            output
+        };
         assert!(worker.try_request().is_none());
         assert_eq!(resources.snapshot().entries[0].2, ResourceStatus::Deferred);
         geometry.visible = true;
-        let _ = context.run(egui::RawInput::default(), |context| {
-            egui::CentralPanel::default().show(context, |ui| {
-                assert!(
-                    resources
-                        .paint_node(ui, stamp, &authored, &authored, &geometry)
-                        .is_ok()
-                );
+        let _ = {
+            let mut output = context.run_pass(egui::RawInput::default(), |context| {
+                context.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        assert!(
+                            resources
+                                .paint_node(ui, stamp, &authored, &authored, &geometry)
+                                .is_ok()
+                        );
+                    })
+                });
             });
-        });
+            output.textures_delta.clear();
+            output
+        };
         assert!(worker.try_request().is_some());
         assert_eq!(resources.snapshot().texture_bytes, 0);
         assert_eq!(resources.snapshot().entries[0].2, ResourceStatus::Queued);

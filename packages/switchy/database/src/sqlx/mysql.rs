@@ -3,6 +3,11 @@
 //! This module contains query execution, transaction handling, parameter binding,
 //! and schema/introspection support for the `MySQL` `sqlx` backend.
 
+// SQLx 0.9 owns dynamic SQL. AssertSqlSafe marks the existing SQL-generation
+// boundary: query builders keep value parameters bound separately; schema SQL
+// uses backend identifier quoting. The opt-in raw-sql API intentionally accepts
+// caller-authored SQL and retains that caller's trust contract.
+
 use std::{
     ops::Deref,
     pin::Pin,
@@ -443,7 +448,7 @@ async fn mysql_get_column_dependencies(
         AND COLUMN_NAME = ?
         AND INDEX_NAME != 'PRIMARY'";
 
-    let index_rows = sqlx::query(index_query)
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe((index_query).to_string()))
         .bind(table_name)
         .bind(column_name)
         .fetch_all(&mut *connection)
@@ -464,7 +469,7 @@ async fn mysql_get_column_dependencies(
         AND COLUMN_NAME = ?
         AND REFERENCED_TABLE_NAME IS NOT NULL";
 
-    let fk_rows = sqlx::query(fk_query)
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe((fk_query).to_string()))
         .bind(table_name)
         .bind(column_name)
         .fetch_all(&mut *connection)
@@ -1350,9 +1355,12 @@ impl crate::Savepoint for MysqlSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            tx.execute(sqlx::raw_sql(&format!("RELEASE SAVEPOINT {}", self.name)))
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+                "RELEASE SAVEPOINT {}",
+                self.name
+            ))))
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -1378,10 +1386,10 @@ impl crate::Savepoint for MysqlSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            tx.execute(sqlx::raw_sql(&format!(
+            tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
                 "ROLLBACK TO SAVEPOINT {}",
                 self.name
-            )))
+            ))))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
@@ -1427,9 +1435,11 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
 
         // Execute SAVEPOINT SQL
         if let Some(tx) = self.transaction.lock().await.as_mut() {
-            tx.execute(sqlx::raw_sql(&format!("SAVEPOINT {name}")))
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+                "SAVEPOINT {name}"
+            ))))
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -1757,7 +1767,7 @@ async fn mysql_sqlx_exec_create_table(
     log::trace!("exec_create_table: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1777,7 +1787,7 @@ async fn mysql_sqlx_get_direct_dependents(
             AND REFERENCED_TABLE_NAME = ?
     ";
 
-    let rows: Vec<(String,)> = sqlx::query_as(query)
+    let rows: Vec<(String,)> = sqlx::query_as(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *connection)
         .await
@@ -1833,7 +1843,7 @@ async fn mysql_sqlx_exec_drop_table_cascade(
             table
         );
         connection
-            .execute(sql.as_str())
+            .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
             .await
             .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
     }
@@ -1884,7 +1894,7 @@ async fn mysql_sqlx_exec_drop_table_basic(
     log::trace!("exec_drop_table: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1935,7 +1945,7 @@ async fn mysql_sqlx_exec_drop_table(
     log::trace!("exec_drop_table: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1977,7 +1987,7 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
     log::trace!("exec_create_index: query:\n{sql}");
 
     connection
-        .execute(sql.as_str())
+        .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2009,7 +2019,7 @@ pub(crate) async fn mysql_sqlx_exec_drop_index(
     log::trace!("exec_drop_index: query:\n{sql}");
 
     connection
-        .execute(sql.as_str())
+        .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2117,7 +2127,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table ADD COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2148,7 +2158,9 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                                 );
                                 log::trace!("MySQL CASCADE dropping index: {drop_index_sql}");
                                 connection
-                                    .execute(drop_index_sql.as_str())
+                                    .execute(sqlx::AssertSqlSafe(
+                                        (drop_index_sql.as_str()).to_string(),
+                                    ))
                                     .await
                                     .map_err(SqlxDatabaseError::Sqlx)?;
                             }
@@ -2161,7 +2173,9 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                                 );
                                 log::trace!("MySQL CASCADE dropping foreign key: {drop_fk_sql}");
                                 connection
-                                    .execute(drop_fk_sql.as_str())
+                                    .execute(sqlx::AssertSqlSafe(
+                                        (drop_fk_sql.as_str()).to_string(),
+                                    ))
                                     .await
                                     .map_err(SqlxDatabaseError::Sqlx)?;
                             }
@@ -2201,7 +2215,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table DROP COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2214,7 +2228,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table RENAME COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2313,7 +2327,7 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table MODIFY COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2429,7 +2443,10 @@ async fn update_and_get_row(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let query = bind_values(sqlx::query(&query), Some(&all_values))?;
+    let query = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(query.clone())),
+        Some(&all_values),
+    )?;
     query.execute(connection).await?;
 
     // MySQL doesn't support RETURNING, so we return None for now
@@ -2463,7 +2480,10 @@ async fn update_and_get_rows(
     );
 
     let filter_params = bexprs_to_values_opt(filters);
-    let id_select_bound = bind_values(sqlx::query(&id_select_query), filter_params.as_deref())?;
+    let id_select_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(id_select_query.clone())),
+        filter_params.as_deref(),
+    )?;
 
     // Get the IDs of rows to be updated
     let id_rows: Vec<MySqlRow> = id_select_bound.fetch_all(&mut *tx).await?;
@@ -2503,7 +2523,10 @@ async fn update_and_get_rows(
 
     log::trace!("Running update query: {update_query} with params: {all_update_params:?}");
 
-    let update_bound = bind_values(sqlx::query(&update_query), Some(&all_update_params))?;
+    let update_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(update_query.clone())),
+        Some(&all_update_params),
+    )?;
     update_bound.execute(&mut *tx).await?;
 
     // Step 3: SELECT the updated rows
@@ -2512,7 +2535,10 @@ async fn update_and_get_rows(
         ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
     );
 
-    let final_select_bound = bind_values(sqlx::query(&final_select_query), Some(&id_params))?;
+    let final_select_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(final_select_query.clone())),
+        Some(&id_params),
+    )?;
     let updated_rows: Vec<MySqlRow> = final_select_bound.fetch_all(&mut *tx).await?;
 
     // Step 4: Commit the transaction
@@ -2826,7 +2852,11 @@ async fn select(
 
     let query = typed.map_or(query, ToSql::to_sql);
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -2878,7 +2908,10 @@ async fn delete(
     );
 
     let filter_params = bexprs_to_values_opt(filters);
-    let select_bound = bind_values(sqlx::query(&select_query), filter_params.as_deref())?;
+    let select_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(select_query.clone())),
+        filter_params.as_deref(),
+    )?;
 
     // Execute SELECT and collect results
     let selected_rows: Vec<MySqlRow> = select_bound.fetch_all(&mut *tx).await?;
@@ -2908,7 +2941,10 @@ async fn delete(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let delete_bound = bind_values(sqlx::query(&delete_query), filter_params.as_deref())?;
+    let delete_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(delete_query.clone())),
+        filter_params.as_deref(),
+    )?;
     delete_bound.execute(&mut *tx).await?;
 
     // Step 3: Commit the transaction
@@ -2947,7 +2983,11 @@ async fn find_row(
         format!("SELECT * FROM ({}) AS switchy_first LIMIT 1", q.to_sql())
     });
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3015,7 +3055,10 @@ async fn insert_and_get_row(
     );
 
     let insert_values = exprs_to_values(values);
-    let insert_bound = bind_values(sqlx::query(&query), Some(&insert_values))?;
+    let insert_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(query.clone())),
+        Some(&insert_values),
+    )?;
     let result = insert_bound.execute(&mut *tx).await?;
 
     // Get the ID of the inserted row
@@ -3027,7 +3070,8 @@ async fn insert_and_get_row(
     log::trace!("Running select after insert query: {select_query} with id: {inserted_id}");
 
     #[allow(clippy::cast_possible_wrap)]
-    let select_bound = sqlx::query(&select_query).bind(inserted_id as i64);
+    let select_bound =
+        sqlx::query(sqlx::AssertSqlSafe(select_query.clone())).bind(inserted_id as i64);
     let inserted_row: MySqlRow = select_bound.fetch_one(&mut *tx).await?;
 
     // Step 3: Commit the transaction
@@ -3173,7 +3217,11 @@ async fn update_chunk(
 
     log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3301,7 +3349,11 @@ async fn upsert_chunk(
 
     log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3427,7 +3479,7 @@ impl MySqlSqlxDatabase {
         drop(pool);
 
         connection
-            .execute(statement)
+            .execute(sqlx::AssertSqlSafe((statement).to_string()))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -3445,7 +3497,7 @@ impl MySqlSqlxDatabase {
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
         drop(pool);
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut *connection)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -3489,7 +3541,7 @@ impl MySqlSqlxDatabase {
         drop(pool);
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(&transformed_query);
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query.clone()));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -3562,7 +3614,7 @@ impl MySqlSqlxDatabase {
         drop(pool);
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(&transformed_query);
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query.clone()));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -3649,7 +3701,7 @@ impl MysqlSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        tx.execute(statement)
+        tx.execute(sqlx::AssertSqlSafe((statement).to_string()))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
         drop(transaction_guard);
@@ -3669,7 +3721,7 @@ impl MysqlSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut **tx)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -3707,7 +3759,7 @@ impl MysqlSqlxTransaction {
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
         let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(query);
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {
@@ -3778,7 +3830,7 @@ impl MysqlSqlxTransaction {
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(query);
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {

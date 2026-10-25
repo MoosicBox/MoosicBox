@@ -254,23 +254,40 @@ struct ScreenshotMarker {
     viewport: eframe::egui::ViewportId,
 }
 
+/// Callback-owned screenshot pixels and private capture provenance.
+pub struct ScreenshotCompletion {
+    marker: ScreenshotMarker,
+    viewport_id: eframe::egui::ViewportId,
+    image: Arc<eframe::egui::ColorImage>,
+}
+
 impl CaptureRequest {
     /// Issue only at the end of the frame represented by `state`. The host must not
-    /// defer issuing this command to another rendered frame. egui returns this private
-    /// marker with the screenshot event; unrelated screenshot events cannot match it.
+    /// defer issuing this command to another rendered frame. The one-shot callback
+    /// carries private provenance; unrelated completions cannot match it.
     #[must_use]
     pub fn screenshot_command(
         &self,
         viewport: eframe::egui::ViewportId,
+        completed: impl FnOnce(ScreenshotCompletion) + Send + 'static,
     ) -> eframe::egui::ViewportCommand {
-        eframe::egui::ViewportCommand::Screenshot(eframe::egui::UserData::new(ScreenshotMarker {
+        let marker = ScreenshotMarker {
             nonce: self.state.nonce.clone(),
             seq: self.seq,
             frame: self.state.frame,
             revision: self.state.revision,
             window: self.state.window_id,
             viewport,
-        }))
+        };
+        eframe::egui::ViewportCommand::Screenshot(eframe::egui::ScreenshotCallback::new(
+            move |image| {
+                completed(ScreenshotCompletion {
+                    marker,
+                    viewport_id: viewport,
+                    image,
+                });
+            },
+        ))
     }
 }
 
@@ -540,23 +557,13 @@ impl Interaction {
     pub fn complete_screenshot(
         &mut self,
         request: &CaptureRequest,
-        event: &eframe::egui::Event,
+        event: &ScreenshotCompletion,
     ) -> Result<bool, String> {
-        let eframe::egui::Event::Screenshot {
+        let ScreenshotCompletion {
+            marker,
             viewport_id,
-            user_data,
             image,
-        } = event
-        else {
-            return Ok(false);
-        };
-        let Some(marker) = user_data
-            .data
-            .as_ref()
-            .and_then(|data| data.downcast_ref::<ScreenshotMarker>())
-        else {
-            return Ok(false);
-        };
+        } = event;
         if marker.nonce != request.state.nonce
             || marker.seq != request.seq
             || marker.frame != request.state.frame
@@ -1146,7 +1153,7 @@ mod tests {
 
     #[test]
     fn given_unrelated_or_wrong_viewport_screenshot_then_capture_state_is_not_mislabelled() {
-        use eframe::egui::{Color32, ColorImage, Event, UserData, ViewportCommand, ViewportId};
+        use eframe::egui::{Color32, ColorImage, ViewportCommand, ViewportId};
         let (mut interaction, writes, events) = harness();
         interaction.poll(state(10)).unwrap();
         events
@@ -1154,9 +1161,16 @@ mod tests {
             .unwrap();
         let capture = interaction.poll(state(11)).unwrap().unwrap();
         let image = Arc::new(ColorImage::new([2, 2], vec![Color32::WHITE; 4]));
-        let unrelated = Event::Screenshot {
+        let unrelated = ScreenshotCompletion {
             viewport_id: ViewportId::ROOT,
-            user_data: UserData::default(),
+            marker: ScreenshotMarker {
+                nonce: "unrelated".into(),
+                seq: capture.seq,
+                frame: capture.state.frame,
+                revision: capture.state.revision,
+                window: capture.state.window_id,
+                viewport: ViewportId::ROOT,
+            },
             image: image.clone(),
         };
         assert!(
@@ -1164,28 +1178,26 @@ mod tests {
                 .complete_screenshot(&capture, &unrelated)
                 .unwrap()
         );
-        let ViewportCommand::Screenshot(marker) = capture.screenshot_command(ViewportId::ROOT)
-        else {
-            panic!("expected screenshot command");
+        let delivered = Arc::new(Mutex::new(None));
+        let ViewportCommand::Screenshot(callback) = capture.screenshot_command(ViewportId::ROOT, {
+            let delivered = delivered.clone();
+            move |event| *delivered.lock().unwrap() = Some(event)
+        }) else {
+            panic!("expected screenshot callback");
         };
-        let wrong_viewport = Event::Screenshot {
-            viewport_id: ViewportId::from_hash_of("other"),
-            user_data: marker.clone(),
-            image: image.clone(),
-        };
+        callback.complete(image);
+        let mut matching = delivered.lock().unwrap().take().unwrap();
+        matching.viewport_id = ViewportId::from_hash_of("other");
+        let wrong_viewport = &matching;
         assert!(
             interaction
-                .complete_screenshot(&capture, &wrong_viewport)
+                .complete_screenshot(&capture, wrong_viewport)
                 .is_err()
         );
         // Delivery happens in a later frame; only the marker's requested frame is
         // eligible for the reply. A fresh screenshot of frame 12 cannot stand in.
         interaction.poll(state(12)).unwrap();
-        let matching = Event::Screenshot {
-            viewport_id: ViewportId::ROOT,
-            user_data: marker,
-            image,
-        };
+        matching.viewport_id = ViewportId::ROOT;
         assert!(
             interaction
                 .complete_screenshot(&capture, &matching)

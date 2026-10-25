@@ -68,6 +68,9 @@ pub struct FeedbackApp<C: EguiCalc + Clone + Send + Sync> {
     #[cfg(feature = "feedback")]
     interaction_capture: Option<crate::interaction::CaptureRequest>,
     #[cfg(feature = "feedback")]
+    interaction_screenshot:
+        std::sync::Arc<std::sync::Mutex<Option<crate::interaction::ScreenshotCompletion>>>,
+    #[cfg(feature = "feedback")]
     interaction_initialized: ObservationBootstrap,
     #[cfg(feature = "feedback")]
     interaction_frame: u64,
@@ -123,6 +126,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
             interaction: None,
             #[cfg(feature = "feedback")]
             interaction_capture: None,
+            #[cfg(feature = "feedback")]
+            interaction_screenshot: std::sync::Arc::default(),
             #[cfg(feature = "feedback")]
             interaction_initialized: ObservationBootstrap::Uninitialized,
             #[cfg(feature = "feedback")]
@@ -181,6 +186,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
     /// # Panics
     /// * The fixed file-service capacity is rejected during initialization.
     pub fn frame(&mut self, ctx: &egui::Context) {
+        self.frame_with_ui(ctx, None);
+    }
+
+    /// Render within an already-borrowed egui root UI, such as `eframe::App::ui`.
+    pub fn frame_ui(&mut self, ui: &mut egui::Ui) {
+        self.frame_with_ui(&ui.ctx().clone(), Some(ui));
+    }
+
+    pub(crate) fn frame_with_ui(&mut self, ctx: &egui::Context, root_ui: Option<&mut egui::Ui>) {
         if self.routing.is_none()
             && let Some(router) = self.router.take()
         {
@@ -225,7 +239,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
         self.painter
             .resources_mut()
             .install_completions(self.app.document(), ctx);
-        self.app.frame(ctx, &mut self.painter);
+        self.app.frame_with_ui(ctx, &mut self.painter, root_ui);
         // Use the current geometry before any completion mutates the document.
         self.automatic_routes(ctx);
         self.poll_routes(ctx);
@@ -406,8 +420,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
 
     /// Render and observe one native frame; screenshot authority belongs to this exact frame.
     #[cfg(feature = "feedback")]
-    pub(crate) fn native_frame(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
-        if let Err(error) = self.native_interaction_frame(ctx, frame) {
+    pub(crate) fn native_frame(&mut self, ui: &mut egui::Ui, frame: &eframe::Frame) {
+        let ctx = &ui.ctx().clone();
+        if let Err(error) = self.native_interaction_frame(ui, frame) {
             self.app.diagnostics.push(error.clone());
             log::error!("native interaction failed: {error}");
             self.app.fail_native_host(ctx, error);
@@ -418,10 +433,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
     #[cfg(feature = "feedback")]
     fn native_interaction_frame(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut egui::Ui,
         frame: &eframe::Frame,
     ) -> Result<(), String> {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let ctx = &ui.ctx().clone();
         if self.interaction_initialized == ObservationBootstrap::Uninitialized {
             self.interaction_initialized = ObservationBootstrap::Initialized;
             let wake = ctx.clone();
@@ -436,15 +452,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
         if let (Some(interaction), Some(request)) =
             (&mut self.interaction, &self.interaction_capture)
         {
-            let events = ctx.input(|input| input.events.clone());
-            for event in events {
-                if interaction.complete_screenshot(request, &event)? {
-                    self.interaction_capture = None;
-                    break;
-                }
+            let event = self.interaction_screenshot.lock().unwrap().take();
+            if let Some(event) = event
+                && interaction.complete_screenshot(request, &event)?
+            {
+                self.interaction_capture = None;
             }
         }
-        self.frame(ctx);
+        self.frame_with_ui(ctx, Some(ui));
         self.interaction_frame = self
             .interaction_frame
             .checked_add(1)
@@ -464,7 +479,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> FeedbackApp<C> {
         let state = self.observation_state(ctx, window_id);
         let interaction = self.interaction.as_mut().ok_or("interaction disappeared")?;
         if let Some(request) = interaction.poll(state)? {
-            ctx.send_viewport_cmd(request.screenshot_command(ctx.viewport_id()));
+            ctx.send_viewport_cmd(request.screenshot_command(ctx.viewport_id(), {
+                let completed = self.interaction_screenshot.clone();
+                let ctx = ctx.clone();
+                move |image| {
+                    *completed.lock().unwrap() = Some(image);
+                    ctx.request_repaint();
+                }
+            }));
             self.interaction_capture = Some(request);
         }
         if interaction.needs_frame() {
@@ -802,16 +824,18 @@ pub(crate) struct NativeCapture {
     options: CaptureOptions,
     frames: u64,
     requested: bool,
+    screenshot: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<egui::ColorImage>>>>,
     result: Option<Result<PathBuf, String>>,
 }
 
 impl NativeCapture {
-    const fn new(options: CaptureOptions) -> Self {
+    fn new(options: CaptureOptions) -> Self {
         Self {
             blocked_details: None,
             options,
             frames: 0,
             requested: false,
+            screenshot: std::sync::Arc::default(),
             result: None,
         }
     }
@@ -866,12 +890,7 @@ impl NativeCapture {
         if self.result.is_some() {
             // Validation failed before requesting any framebuffer.
         } else if self.requested {
-            let screenshot = ctx.input(|input| {
-                input.events.iter().find_map(|event| match event {
-                    egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                    _ => None,
-                })
-            });
+            let screenshot = self.screenshot.lock().unwrap().take();
             if let Some(image) = screenshot {
                 self.result = Some(
                     save_capture(&image, &options.output)
@@ -889,7 +908,14 @@ impl NativeCapture {
             match ready_result {
                 Ok(()) => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                        egui::UserData::default(),
+                        egui::ScreenshotCallback::new({
+                            let screenshot = self.screenshot.clone();
+                            let ctx = ctx.clone();
+                            move |image| {
+                                *screenshot.lock().unwrap() = Some(image);
+                                ctx.request_repaint();
+                            }
+                        }),
                     ));
                     self.requested = true;
                 }
@@ -927,13 +953,15 @@ impl NativeCapture {
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for FeedbackApp<C> {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        #[cfg(not(feature = "feedback"))]
+        let ctx = &ui.ctx().clone();
         #[cfg(feature = "feedback")]
-        self.native_frame(ctx, frame);
+        self.native_frame(ui, frame);
         #[cfg(not(feature = "feedback"))]
         {
             let _ = frame;
-            self.frame(ctx);
+            self.frame_with_ui(ctx, Some(ui));
         }
     }
 }
@@ -1246,16 +1274,20 @@ mod tests {
         host.routing = Some(routing);
         let ctx = egui::Context::default();
         for _ in 0..2 {
-            let _ = ctx.run(
-                egui::RawInput {
-                    screen_rect: Some(egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(400.0, 300.0),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| host.frame(ctx),
-            );
+            let _ = {
+                let mut output = ctx.run_pass(
+                    egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(400.0, 300.0),
+                        )),
+                        ..Default::default()
+                    },
+                    |ctx| host.frame(ctx),
+                );
+                output.textures_delta.clear();
+                output
+            };
         }
         assert!(
             host.app.diagnostics.is_empty(),
@@ -1323,18 +1355,22 @@ mod tests {
         };
         let ctx = egui::Context::default();
         let mut host = FeedbackApp::new(root, NoLayout);
-        let _ = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(100.0, 100.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                host.frame(ctx);
-            },
-        );
+        let _ = {
+            let mut output = ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(100.0, 100.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    host.frame(ctx);
+                },
+            );
+            output.textures_delta.clear();
+            output
+        };
         let members = host.app.scene_images(&host.painter);
         assert_eq!(members.len(), 1);
         assert_eq!(host.app.document().get(members[0].key).unwrap().id, 2);
@@ -1375,32 +1411,36 @@ mod tests {
         };
         let mut host = FeedbackApp::new(root, NoLayout);
         let ctx = egui::Context::default();
-        let _ = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(100.0, 100.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                host.frame(ctx);
-                let state = host.observation_state(ctx, 123);
-                assert_eq!(state.window_id, 123);
-                let password = state
-                    .nodes
-                    .values()
-                    .find(|node| node.id.as_deref() == Some("password"))
-                    .unwrap();
-                assert_eq!(password.value, crate::interaction::ExportValue::default());
-                assert!(password.parent.is_some());
-                assert!(
-                    !serde_json::to_string(&state)
-                        .unwrap()
-                        .contains("DO_NOT_EXPORT")
-                );
-            },
-        );
+        let _ = {
+            let mut output = ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(100.0, 100.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    host.frame(ctx);
+                    let state = host.observation_state(ctx, 123);
+                    assert_eq!(state.window_id, 123);
+                    let password = state
+                        .nodes
+                        .values()
+                        .find(|node| node.id.as_deref() == Some("password"))
+                        .unwrap();
+                    assert_eq!(password.value, crate::interaction::ExportValue::default());
+                    assert!(password.parent.is_some());
+                    assert!(
+                        !serde_json::to_string(&state)
+                            .unwrap()
+                            .contains("DO_NOT_EXPORT")
+                    );
+                },
+            );
+            output.textures_delta.clear();
+            output
+        };
     }
 
     #[cfg(feature = "feedback")]
@@ -1445,32 +1485,36 @@ mod tests {
         };
         let mut host = FeedbackApp::new(root, NoLayout);
         let ctx = egui::Context::default();
-        let _ = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(100.0, 100.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                host.frame(ctx);
-                let state = host.observation_state(ctx, 123);
-                let text = |id| {
-                    state
-                        .nodes
-                        .values()
-                        .find(|node| node.id.as_deref() == Some(id))
-                        .unwrap()
-                        .text
-                        .as_str()
-                };
-                assert_eq!(text("text-2"), "Raw <>& café");
-                assert_eq!(text("text-4"), "Text <>& 音楽 🎵");
-                assert_eq!(text("nested"), "Text <>& 音楽 🎵");
-                assert_eq!(text("root"), "Raw <>& café Text <>& 音楽 🎵");
-            },
-        );
+        let _ = {
+            let mut output = ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(100.0, 100.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    host.frame(ctx);
+                    let state = host.observation_state(ctx, 123);
+                    let text = |id| {
+                        state
+                            .nodes
+                            .values()
+                            .find(|node| node.id.as_deref() == Some(id))
+                            .unwrap()
+                            .text
+                            .as_str()
+                    };
+                    assert_eq!(text("text-2"), "Raw <>& café");
+                    assert_eq!(text("text-4"), "Text <>& 音楽 🎵");
+                    assert_eq!(text("nested"), "Text <>& 音楽 🎵");
+                    assert_eq!(text("root"), "Raw <>& café Text <>& 音楽 🎵");
+                },
+            );
+            output.textures_delta.clear();
+            output
+        };
     }
 
     #[test]
@@ -1554,9 +1598,13 @@ mod tests {
             },
             NoLayout,
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -1613,18 +1661,26 @@ mod tests {
             .submit(DocumentCommand::RouteCompletion(prepared))
             .unwrap();
         handle.submit(update()).unwrap();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(
             host.app.diagnostics.is_empty(),
             "preceding canvas accepted: {:?}",
             host.app.diagnostics
         );
         assert!(!host.app.document().is_current(canvas_stamp));
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(
             host.app.diagnostics.len(),
             1,
@@ -1650,7 +1706,11 @@ mod tests {
             },
             NoLayout,
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| host.frame(ctx));
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| host.frame(ctx));
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -1761,7 +1821,11 @@ mod tests {
             },
             NoLayout,
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| host.frame(ctx));
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| host.frame(ctx));
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -1904,9 +1968,13 @@ mod tests {
             },
             NoLayout,
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -1970,9 +2038,13 @@ mod tests {
         handle
             .submit(DocumentCommand::RouteCompletion(prepared))
             .unwrap();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(
             host.drain_actions(),
             vec![("after".to_owned(), None), ("abort".to_owned(), None)],
@@ -1993,9 +2065,13 @@ mod tests {
                 .select(&Selector::Id("late".into()), None),
             []
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(host.drain_actions(), []);
     }
 
@@ -2039,9 +2115,13 @@ mod tests {
             ..Container::default()
         };
         let mut host = FeedbackApp::new(root, NoLayout);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -2082,9 +2162,13 @@ mod tests {
                 origin: ViewOrigin::Navigation,
             })
             .unwrap();
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(
             host.app.document().roots()[0].str_id.as_deref(),
             Some("new-navigation")
@@ -2129,9 +2213,13 @@ mod tests {
             },
             NoLayout,
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let source = host
             .app
             .document()
@@ -2158,21 +2246,33 @@ mod tests {
                 .is_pending()
         );
         host.routing = Some(routing);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(host.app.route_boundary.is_none());
         assert!(
             host.app.geometry().is_none(),
             "first mutation invalidates projection"
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(host.app.route_boundary.is_none());
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            host.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                host.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(
             host.drain_actions(),
             vec![("terminal".to_owned(), None); 4],
@@ -2213,9 +2313,13 @@ mod tests {
             focused: true,
             ..Default::default()
         };
-        let _ = ctx.run(input(), |ctx| {
-            app.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(input(), |ctx| {
+                app.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let key = app.app.document().root_keys()[0];
         let stamp = app.app.document().stamp(key).unwrap();
         let id = app.painter.forms_mut().focus_id(stamp).unwrap();
@@ -2224,17 +2328,25 @@ mod tests {
         assert_eq!(ctx.memory(egui::Memory::focused), Some(id));
         let state = egui::text_edit::TextEditState::load(&ctx, id).unwrap();
         let range = state.cursor.char_range().unwrap();
-        assert_eq!(range.sorted_cursors()[0].index, 0);
-        assert_eq!(range.sorted_cursors()[1].index, 3);
-        let _ = ctx.run(input(), |ctx| {
-            app.frame(ctx);
-        });
+        assert_eq!(range.sorted_cursors()[0].index, egui::text::CharIndex(0));
+        assert_eq!(range.sorted_cursors()[1].index, egui::text::CharIndex(3));
+        let _ = {
+            let mut output = ctx.run_pass(input(), |ctx| {
+                app.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(ctx.memory(egui::Memory::focused), Some(id));
         FramePainter::blur(&mut app.painter, &ctx, stamp).unwrap();
         assert_ne!(ctx.memory(egui::Memory::focused), Some(id));
-        let _ = ctx.run(input(), |ctx| {
-            app.frame(ctx);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(input(), |ctx| {
+                app.frame(ctx);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert_ne!(ctx.memory(egui::Memory::focused), Some(id));
     }
 
@@ -2247,14 +2359,18 @@ mod tests {
             "required".to_owned(),
             egui::Rect::from_min_size(egui::pos2(1.0, 1.0), egui::vec2(10.0, 10.0)),
         );
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            assert!(!app.ready(ctx, &["absent".to_owned()]));
-            assert!(!app.ready(ctx, &[]));
-            // Cache readiness is covered by K's generation-checked resource tests.
-            app.resources_ready = false;
-            assert!(!app.ready(ctx, &["required".to_owned()]));
-            app.resources_ready = true;
-            assert!(!app.ready(ctx, &["required".to_owned()])); // no calculated snapshot installed
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                assert!(!app.ready(ctx, &["absent".to_owned()]));
+                assert!(!app.ready(ctx, &[]));
+                // Cache readiness is covered by K's generation-checked resource tests.
+                app.resources_ready = false;
+                assert!(!app.ready(ctx, &["required".to_owned()]));
+                app.resources_ready = true;
+                assert!(!app.ready(ctx, &["required".to_owned()])); // no calculated snapshot installed
+            });
+            output.textures_delta.clear();
+            output
+        };
     }
 }

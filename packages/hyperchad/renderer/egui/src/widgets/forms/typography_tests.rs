@@ -97,16 +97,22 @@ fn paint_input(
     input: egui::RawInput,
 ) -> (egui::FullOutput, Result<(), String>) {
     let mut result = Ok(());
-    let output = context.run(input, |context| {
-        egui::CentralPanel::default().show(context, |ui| {
-            let authored = document.get(source.key).unwrap();
-            let mut calculated = authored.clone();
-            calculated.calculated_font_size = Some(24.0);
-            result = forms
-                .paint_node(ui, source, authored, &calculated, &geometry(source))
-                .map(|_| ());
+    let output = {
+        let mut output = context.run_pass(input, |context| {
+            context.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let authored = document.get(source.key).unwrap();
+                    let mut calculated = authored.clone();
+                    calculated.calculated_font_size = Some(24.0);
+                    result = forms
+                        .paint_node(ui, source, authored, &calculated, &geometry(source))
+                        .map(|_| ());
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     (output, result)
 }
 
@@ -125,20 +131,24 @@ fn find_galley(shape: &egui::Shape, displayed: &str) -> Option<Arc<egui::Galley>
 fn assert_parity(context: &egui::Context, actual: &egui::Galley, family: &str, weight: u16) {
     let families = [family.to_owned()];
     let mut expected = None;
-    let _ = context.run(egui::RawInput::default(), |_| {
-        expected = Some(
-            EguiFontMetrics::new(context.clone())
-                .layout_request(&TextMeasureRequest {
-                    text: BUFFER,
-                    family: TextFontFamily::Authored(&families),
-                    weight: TextFontWeight::Absolute(weight),
-                    size: 30.0,
-                    wrap_width: f32::INFINITY,
-                    whitespace: Some(WhiteSpace::Normal),
-                })
-                .unwrap(),
-        );
-    });
+    let _ = {
+        let mut output = context.run_pass(egui::RawInput::default(), |_| {
+            expected = Some(
+                EguiFontMetrics::new(context.clone())
+                    .layout_request(&TextMeasureRequest {
+                        text: BUFFER,
+                        family: TextFontFamily::Authored(&families),
+                        weight: TextFontWeight::Absolute(weight),
+                        size: 30.0,
+                        wrap_width: f32::INFINITY,
+                        whitespace: Some(WhiteSpace::Normal),
+                    })
+                    .unwrap(),
+            );
+        });
+        output.textures_delta.clear();
+        output
+    };
     let expected = expected.unwrap();
     assert_eq!(
         actual.job.sections[0].format.font_id,
@@ -182,9 +192,12 @@ fn assert_native_editor(
         .unwrap();
     assert_eq!(
         selection.primary.index.max(selection.secondary.index),
-        BUFFER.chars().count()
+        egui::text::CharIndex(BUFFER.chars().count())
     );
-    assert_eq!(selection.primary.index.min(selection.secondary.index), 0);
+    assert_eq!(
+        selection.primary.index.min(selection.secondary.index),
+        egui::text::CharIndex(0)
+    );
     assert_eq!(context.memory(egui::Memory::focused), Some(id));
     assert!(
         matches!(forms.current_value(source).unwrap(), crate::events::EventValue::String(value) if value == BUFFER)
@@ -205,7 +218,7 @@ fn assert_native_editor(
     editor
         .cursor
         .set_char_range(Some(egui::text::CCursorRange::one(
-            egui::text::CCursor::new(7),
+            egui::text::CCursor::new(egui::text::CharIndex(7)),
         )));
     editor.store(context, id);
     let (_, result) = paint_input(
@@ -230,7 +243,7 @@ fn assert_native_editor(
             .unwrap()
             .primary
             .index,
-        8
+        egui::text::CharIndex(8)
     );
 }
 
@@ -330,14 +343,20 @@ fn default_editor_policy_keeps_preserved_unicode_offsets_and_authored_size_requi
     );
     let context = egui::Context::default();
     let mut result = Ok(());
-    let _ = context.run(egui::RawInput::default(), |context| {
-        egui::CentralPanel::default().show(context, |ui| {
-            let authored = document.get(source.key).unwrap();
-            result = forms
-                .paint_node(ui, source, authored, authored, &geometry(source))
-                .map(|_| ());
+    let _ = {
+        let mut output = context.run_pass(egui::RawInput::default(), |context| {
+            context.root_ui(|ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    let authored = document.get(source.key).unwrap();
+                    result = forms
+                        .paint_node(ui, source, authored, authored, &geometry(source))
+                        .map(|_| ());
+                })
+            });
         });
-    });
+        output.textures_delta.clear();
+        output
+    };
     assert!(result.is_err());
 }
 

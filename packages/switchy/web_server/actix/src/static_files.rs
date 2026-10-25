@@ -84,8 +84,9 @@ fn create_files_service(
         files = files.default_handler(actix_web::web::to(move |req: actix_web::HttpRequest| {
             let index_path = index_path.clone();
             async move {
-                actix_files::NamedFile::open_async(&index_path)
+                actix_web::web::block(move || actix_files::NamedFile::open(index_path))
                     .await
+                    .map_err(std::io::Error::other)?
                     .map(|file| file.into_response(&req))
             }
         }));

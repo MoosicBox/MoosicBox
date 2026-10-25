@@ -36,11 +36,12 @@ struct NativeKeyboardState {
 impl NativeKeyboardState {
     const fn observe(&mut self, event: &egui::Event) {
         match event {
-            egui::Event::Ime(egui::ImeEvent::Enabled | egui::ImeEvent::Preedit(_)) => {
-                self.composing = true;
+            egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => {
+                self.composing = !text.is_empty();
             }
-            egui::Event::Ime(egui::ImeEvent::Commit(_) | egui::ImeEvent::Disabled)
-            | egui::Event::WindowFocused(false) => self.composing = false,
+            egui::Event::Ime(egui::ImeEvent::Commit(_)) | egui::Event::WindowFocused(false) => {
+                self.composing = false;
+            }
             _ => {}
         }
     }
@@ -144,7 +145,7 @@ const fn physical_code(key: egui::Key) -> Option<&'static str> {
 /// Keep native widget hit testing identical to `HyperChad`'s exact geometry.
 /// Call before the first egui frame so nearest-widget picking never expands bounds.
 pub fn configure_exact_hit_testing(ctx: &egui::Context) {
-    ctx.style_mut(|style| style.interaction.interact_radius = 0.0);
+    ctx.global_style_mut(|style| style.interaction.interact_radius = 0.0);
 }
 
 #[cfg(test)]
@@ -168,22 +169,29 @@ mod exact_hit_policy_tests {
                     modifiers: egui::Modifiers::default(),
                 });
             }
-            let _ = ctx.run(
-                egui::RawInput {
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.spacing_mut().interact_size = egui::Vec2::ZERO;
-                        ui.spacing_mut().icon_width = 16.0;
-                        let response = ui.put(bounds, egui::Checkbox::new(&mut checked, ""));
-                        assert!(!response.clicked());
-                        assert!(!response.hovered());
-                        assert!(!response.changed());
-                    });
-                },
-            );
+            let _ = {
+                let mut output = ctx.run_pass(
+                    egui::RawInput {
+                        events,
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        ctx.root_ui(|ui| {
+                            egui::CentralPanel::default().show(ui, |ui| {
+                                ui.spacing_mut().interact_size = egui::Vec2::ZERO;
+                                ui.spacing_mut().icon_width = 16.0;
+                                let response =
+                                    ui.put(bounds, egui::Checkbox::new(&mut checked, ""));
+                                assert!(!response.clicked());
+                                assert!(!response.hovered());
+                                assert!(!response.changed());
+                            })
+                        });
+                    },
+                );
+                output.textures_delta.clear();
+                output
+            };
             assert!(!checked);
         }
     }
@@ -504,13 +512,14 @@ struct NativeHost<C: EguiCalc + Clone + Send + Sync> {
     size: Option<egui::Vec2>,
 }
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for NativeHost<C> {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        let ctx = &ui.ctx().clone();
         #[cfg(feature = "feedback")]
-        self.app.native_frame(ctx, frame);
+        self.app.native_frame(ui, frame);
         #[cfg(not(feature = "feedback"))]
         {
             let _ = frame;
-            self.app.frame(ctx);
+            self.app.frame_with_ui(ctx, Some(ui));
         }
         self.app.flush_responses(ctx);
         for url in self.app.drain_navigation() {
@@ -926,6 +935,16 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
         reason = "one ordered UI transaction; split only after the integration contract settles"
     )]
     pub fn frame(&mut self, ctx: &egui::Context, painter: &mut impl FramePainter) {
+        self.frame_with_ui(ctx, painter, None);
+    }
+
+    #[allow(clippy::too_many_lines)] // One ordered layout, paint, and input transaction.
+    pub(crate) fn frame_with_ui(
+        &mut self,
+        ctx: &egui::Context,
+        painter: &mut impl FramePainter,
+        root_ui: Option<&mut egui::Ui>,
+    ) {
         // Snapshot before TextEdit can consume/reorder IME input. Never mutate the
         // widget stream: editing and committed text remain egui's responsibility.
         let raw_events = ctx.input(|input| input.events.clone());
@@ -1088,45 +1107,52 @@ impl<C: EguiCalc + Clone> BackendFrame<C> {
             }
         }
         let paths_by_key: BTreeMap<_, _> = paths.iter().map(|(path, key)| (*key, path)).collect();
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new())
-            .show(ctx, |ui| {
-                for geometry in snapshot.paint_order() {
-                    let key = geometry.key;
-                    let Some(path) = paths_by_key.get(&key) else {
-                        continue;
-                    };
-                    let (Some(stamp), Some(authored), Some(calculated)) = (
-                        self.document.stamp(key),
-                        self.document.get(key),
-                        at_path(&self.roots, path),
-                    ) else {
-                        continue;
-                    };
-                    if !painter.allows_node(key) {
-                        continue;
-                    }
-                    if geometry.visible_bounds().is_none() {
-                        continue;
-                    }
-                    let mut builder = egui::UiBuilder::new()
-                        .id_salt(key)
-                        .max_rect(geometry.border_box);
-                    if let Some(parent) = self.document.parent(key) {
-                        builder = builder.accessibility_parent(egui::Id::new(parent));
-                    }
-                    ui.scope_builder(builder, |ui| {
-                        ui.set_clip_rect(geometry.paint_clip);
-                        match painter.paint_node(ui, stamp, authored, calculated, geometry) {
-                            Ok(Some(output)) => {
-                                self.interactions.push(NodeInteraction { stamp, output });
-                            }
-                            Ok(None) => {}
-                            Err(error) => self.diagnostics.push(error),
+        let mut paint = |ui: &mut egui::Ui| {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new())
+                .show(ui, |ui| {
+                    for geometry in snapshot.paint_order() {
+                        let key = geometry.key;
+                        let Some(path) = paths_by_key.get(&key) else {
+                            continue;
+                        };
+                        let (Some(stamp), Some(authored), Some(calculated)) = (
+                            self.document.stamp(key),
+                            self.document.get(key),
+                            at_path(&self.roots, path),
+                        ) else {
+                            continue;
+                        };
+                        if !painter.allows_node(key) {
+                            continue;
                         }
-                    });
-                }
-            });
+                        if geometry.visible_bounds().is_none() {
+                            continue;
+                        }
+                        let mut builder = egui::UiBuilder::new()
+                            .id_salt(key)
+                            .max_rect(geometry.border_box);
+                        if let Some(parent) = self.document.parent(key) {
+                            builder = builder.accessibility_parent(egui::Id::unique(parent));
+                        }
+                        ui.scope_builder(builder, |ui| {
+                            ui.set_clip_rect(geometry.paint_clip);
+                            match painter.paint_node(ui, stamp, authored, calculated, geometry) {
+                                Ok(Some(output)) => {
+                                    self.interactions.push(NodeInteraction { stamp, output });
+                                }
+                                Ok(None) => {}
+                                Err(error) => self.diagnostics.push(error),
+                            }
+                        });
+                    }
+                })
+        };
+        if let Some(ui) = root_ui {
+            paint(ui);
+        } else {
+            ctx.root_ui(paint);
+        }
         // Feed normalized platform facts and authoritative native widget facts to
         // G's persistent router. H consumes routed_events after this traversal.
         let mut released_gestures = BTreeMap::new();
@@ -1778,9 +1804,15 @@ mod tests {
         let key = native_key(egui::Key::Enter, None);
         let batch = [
             key.clone(),
-            egui::Event::Ime(egui::ImeEvent::Enabled),
+            egui::Event::Ime(egui::ImeEvent::Preedit {
+                text: "候補".into(),
+                active_range_chars: None,
+            }),
             key.clone(),
-            egui::Event::Ime(egui::ImeEvent::Preedit("候補".into())),
+            egui::Event::Ime(egui::ImeEvent::Preedit {
+                text: "候補".into(),
+                active_range_chars: None,
+            }),
             key.clone(),
         ];
         let mut states = Vec::new();
@@ -1795,12 +1827,18 @@ mod tests {
         assert!(keyboard.key(&key, false).unwrap().composing);
         for terminal in [
             egui::Event::Ime(egui::ImeEvent::Commit("確定".into())),
-            egui::Event::Ime(egui::ImeEvent::Disabled),
+            egui::Event::Ime(egui::ImeEvent::Preedit {
+                text: String::new(),
+                active_range_chars: None,
+            }),
             egui::Event::WindowFocused(false),
         ] {
             keyboard.observe(&terminal);
             assert!(!keyboard.key(&key, false).unwrap().composing);
-            keyboard.observe(&egui::Event::Ime(egui::ImeEvent::Preedit(String::new())));
+            keyboard.observe(&egui::Event::Ime(egui::ImeEvent::Preedit {
+                text: "候補".into(),
+                active_range_chars: None,
+            }));
             assert!(keyboard.key(&key, false).unwrap().composing);
         }
     }
@@ -1851,24 +1889,40 @@ mod tests {
         let mut painter = Consuming;
         let mut input = overlap_input(None);
         input.events = vec![
-            egui::Event::Ime(egui::ImeEvent::Preedit("候補".into())),
+            egui::Event::Ime(egui::ImeEvent::Preedit {
+                text: "候補".into(),
+                active_range_chars: None,
+            }),
             native_key(egui::Key::Enter, None),
         ];
-        let _ = ctx.run(input, |ctx| {
-            frame.frame(ctx, &mut painter);
-            assert!(!ctx.input(|input| {
-                input
-                    .events
-                    .iter()
-                    .any(|event| matches!(event, egui::Event::Ime(_)))
-            }));
-        });
+        let _ = {
+            let mut output = ctx.run_pass(input, |ctx| {
+                frame.frame(ctx, &mut painter);
+                assert!(!ctx.input(|input| {
+                    input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::Ime(_)))
+                }));
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(frame.keyboard.composing);
-        let _ = ctx.run(overlap_input(None), |ctx| frame.frame(ctx, &mut painter));
+        let _ = {
+            let mut output =
+                ctx.run_pass(overlap_input(None), |ctx| frame.frame(ctx, &mut painter));
+            output.textures_delta.clear();
+            output
+        };
         assert!(frame.keyboard.composing);
         let mut input = overlap_input(None);
         input.events = vec![egui::Event::Ime(egui::ImeEvent::Commit("確定".into()))];
-        let _ = ctx.run(input, |ctx| frame.frame(ctx, &mut painter));
+        let _ = {
+            let mut output = ctx.run_pass(input, |ctx| frame.frame(ctx, &mut painter));
+            output.textures_delta.clear();
+            output
+        };
         assert!(!frame.keyboard.composing);
     }
 
@@ -1894,6 +1948,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // Full native pointer/scroll sequence.
     fn sticky_paint_order_matches_overlap_click_owner_after_preorder_preparation() {
         use hyperchad_transformer::models::Position;
         #[derive(Default)]
@@ -1932,7 +1987,7 @@ mod tests {
                 Ok(Some(NodeOutput {
                     response: ui.interact(
                         geometry.border_box,
-                        egui::Id::new(stamp.key),
+                        egui::Id::unique(stamp.key),
                         egui::Sense::click(),
                     ),
                     value: None,
@@ -1965,15 +2020,28 @@ mod tests {
             .unwrap();
         let ctx = egui::Context::default();
         let mut painter = Recording::default();
-        let _ = ctx.run(overlap_input(None), |ctx| frame.frame(ctx, &mut painter));
+        let _ = {
+            let mut output =
+                ctx.run_pass(overlap_input(None), |ctx| frame.frame(ctx, &mut painter));
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(painter.prepared, vec![1, 2, 3, 4]);
         assert_eq!(painter.painted, vec![1, 4, 2, 3]);
-        let _ = ctx.run(overlap_input(Some(true)), |ctx| {
-            frame.frame(ctx, &mut painter);
-        });
-        let _ = ctx.run(overlap_input(Some(false)), |ctx| {
-            frame.frame(ctx, &mut painter);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(overlap_input(Some(true)), |ctx| {
+                frame.frame(ctx, &mut painter);
+            });
+            output.textures_delta.clear();
+            output
+        };
+        let _ = {
+            let mut output = ctx.run_pass(overlap_input(Some(false)), |ctx| {
+                frame.frame(ctx, &mut painter);
+            });
+            output.textures_delta.clear();
+            output
+        };
         let clicked: Vec<_> = frame
             .interactions
             .iter()
@@ -2020,18 +2088,22 @@ mod tests {
             .unwrap();
         let ctx = egui::Context::default();
         let mut painter = Probe;
-        let _ = ctx.run(
-            egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(100.0, 100.0),
-                )),
-                ..Default::default()
-            },
-            |ctx| {
-                frame.frame(ctx, &mut painter);
-            },
-        );
+        let _ = {
+            let mut output = ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(100.0, 100.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    frame.frame(ctx, &mut painter);
+                },
+            );
+            output.textures_delta.clear();
+            output
+        };
         assert!(
             frame
                 .geometry
@@ -2046,15 +2118,25 @@ mod tests {
                 egui::Event::PointerMoved(egui::pos2(20.0, 20.0)),
                 egui::Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
                     delta: egui::vec2(0.0, -30.0),
                     modifiers: egui::Modifiers::NONE,
                 },
             ],
             ..Default::default()
         };
-        let _ = ctx.run(input(), |ctx| frame.frame(ctx, &mut painter));
+        let _ = {
+            let mut output = ctx.run_pass(input(), |ctx| frame.frame(ctx, &mut painter));
+            output.textures_delta.clear();
+            output
+        };
         assert_eq!(frame.scroll, BTreeMap::new());
-        let _ = ctx.run(input(), |ctx| frame.frame(ctx, &mut painter));
+        let _ = {
+            let mut output = ctx.run_pass(input(), |ctx| frame.frame(ctx, &mut painter));
+            output.textures_delta.clear();
+            output
+        };
         assert!(frame.scroll.values().any(|offset| offset.y > 0.0));
     }
 
@@ -2075,14 +2157,22 @@ mod tests {
         }
         let ctx = egui::Context::default();
         let mut painter = Probe;
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            frame.frame(ctx, &mut painter);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                frame.frame(ctx, &mut painter);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(frame.backlog);
         assert!(!frame.ready(&painter));
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            frame.frame(ctx, &mut painter);
-        });
+        let _ = {
+            let mut output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                frame.frame(ctx, &mut painter);
+            });
+            output.textures_delta.clear();
+            output
+        };
         assert!(!frame.backlog);
     }
 

@@ -318,7 +318,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
         // Create the stream daemon - this solves the !Send issue on macOS
         let device_clone = device.clone();
-        let config_clone = config.clone();
+        let config_clone = config;
         let ring_buf_consumer_clone = ring_buf_consumer;
         let volume_shared_for_daemon = volume_shared.clone();
         let consumed_samples_callback = consumed_samples_shared.clone();
@@ -339,7 +339,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             move || {
                 device_clone
                     .build_output_stream(
-                        &config_clone,
+                        config_clone,
                         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                             // Write out as many samples as possible from the ring buffer to the audio output
                             let written = ring_buf_consumer_clone.read(data).unwrap_or(0);

@@ -88,7 +88,7 @@ fn local_changed_paths(repo: &Repository) -> Result<BTreeSet<PathBuf>, git2::Err
                 .index_to_workdir()
                 .and_then(|delta| delta.new_file().path().map(Path::to_path_buf))
         } else {
-            entry.path().map(PathBuf::from)
+            Some(entry.path().map(PathBuf::from)?)
         };
         if let Some(path) = path {
             paths.insert(path);

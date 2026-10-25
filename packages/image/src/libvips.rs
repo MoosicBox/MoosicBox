@@ -92,8 +92,8 @@ pub fn resize_local_file(
     let options = ops::ThumbnailImageOptions {
         #[allow(clippy::cast_possible_wrap)]
         height: height as i32,
-        input_profile: "sRGB".into(),
-        output_profile: "sRGB".into(),
+        input_profile: Some("sRGB".into()),
+        output_profile: Some("sRGB".into()),
         ..ops::ThumbnailImageOptions::default()
     };
 
@@ -138,8 +138,8 @@ pub fn resize_bytes(width: u32, height: u32, bytes: &[u8]) -> Result<Bytes, libv
     let options = ops::ThumbnailBufferOptions {
         #[allow(clippy::cast_possible_wrap)]
         height: height as i32,
-        input_profile: "sRGB".into(),
-        output_profile: "sRGB".into(),
+        input_profile: Some("sRGB".into()),
+        output_profile: Some("sRGB".into()),
         ..ops::ThumbnailBufferOptions::default()
     };
 

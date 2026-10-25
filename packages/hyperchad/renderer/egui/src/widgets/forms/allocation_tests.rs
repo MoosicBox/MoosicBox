@@ -58,23 +58,27 @@ fn paint_control(
     input: egui::RawInput,
 ) -> (egui::FullOutput, egui::Response) {
     let mut response = None;
-    let output = context.run(input, |context| {
-        let mut ui = egui::Ui::new(
-            context.clone(),
-            Id::new("allocation-test"),
-            egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(800.0, 600.0),
-            )),
-        );
-        let authored = document.get(source.key).unwrap();
-        response = Some(
-            forms
-                .paint_node(&mut ui, source, authored, authored, geometry)
-                .unwrap()
-                .response,
-        );
-    });
+    let output = {
+        let mut output = context.run_pass(input, |context| {
+            let mut ui = egui::Ui::new(
+                context.clone(),
+                Id::unique("allocation-test"),
+                egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+            );
+            let authored = document.get(source.key).unwrap();
+            response = Some(
+                forms
+                    .paint_node(&mut ui, source, authored, authored, geometry)
+                    .unwrap()
+                    .response,
+            );
+        });
+        output.textures_delta.clear();
+        output
+    };
     (output, response.unwrap())
 }
 
@@ -84,7 +88,7 @@ fn assert_control_bounds(element: Element, size: egui::Vec2, editable: bool) {
     // Native DOM geometry is exact, unlike egui's default nearest-widget
     // selection within five points. This policy must be installed by the frame
     // host before begin_pass: hover/click candidates are chosen at frame start.
-    context.style_mut(|style| style.interaction.interact_radius = 0.0);
+    context.global_style_mut(|style| style.interaction.interact_radius = 0.0);
     let geometry = geometry(source, size);
     let original_value = forms.current_value(source).unwrap();
     if editable {
@@ -135,7 +139,8 @@ fn assert_control_bounds(element: Element, size: egui::Vec2, editable: bool) {
         assert_eq!(
             selection.primary.index.max(selection.secondary.index),
             match &original_value {
-                crate::events::EventValue::String(value) => value.chars().count(),
+                crate::events::EventValue::String(value) =>
+                    egui::text::CharIndex(value.chars().count()),
                 _ => panic!("expected text"),
             }
         );

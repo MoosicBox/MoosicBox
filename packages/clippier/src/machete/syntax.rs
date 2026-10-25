@@ -752,9 +752,9 @@ impl<'ast> Visit<'ast> for Resolver<'_> {
         visit::visit_trait_bound(self, bound);
         self.scope = old;
     }
-    fn visit_type_bare_fn(&mut self, ty: &'ast syn::TypeBareFn) {
+    fn visit_type_fn_ptr(&mut self, ty: &'ast syn::TypeFnPtr) {
         let old = self.push(false);
-        visit::visit_type_bare_fn(self, ty);
+        visit::visit_type_fn_ptr(self, ty);
         self.scope = old;
     }
     fn visit_lifetime(&mut self, lifetime: &'ast syn::Lifetime) {
@@ -828,10 +828,14 @@ impl<'ast> Visit<'ast> for Resolver<'_> {
     }
     fn visit_arm(&mut self, arm: &'ast syn::Arm) {
         let old = self.push(false);
-        self.visit_pat(&arm.pat);
-        self.pattern(&arm.pat);
-        if let Some((_, guard)) = &arm.guard {
-            self.visit_expr(guard);
+        let pattern = match &arm.pat {
+            syn::Pat::Guard(guard) => &*guard.pat,
+            pattern => pattern,
+        };
+        self.visit_pat(pattern);
+        self.pattern(pattern);
+        if let syn::Pat::Guard(guard) = &arm.pat {
+            self.visit_expr(&guard.guard);
         }
         self.visit_expr(&arm.body);
         self.scope = old;

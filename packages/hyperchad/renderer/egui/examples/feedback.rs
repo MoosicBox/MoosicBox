@@ -23,8 +23,8 @@ struct Native {
 }
 
 impl eframe::App for Native {
-    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        self.app.frame(ctx);
+    fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
+        self.app.frame_ui(ui);
         if let Some(result) = self.app.capture_result() {
             *self.outcome.lock().unwrap() = Some(result.clone());
         }

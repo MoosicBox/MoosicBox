@@ -97,7 +97,10 @@ impl Driver {
             ..Default::default()
         };
         self.frame += 1;
-        self.ctx.run(input, |ctx| self.app.frame(ctx))
+        let mut output = self.ctx.run_ui(input, |ui| self.app.frame_ui(ui));
+        // Headless driver inspects shapes, not a GPU texture backend.
+        output.textures_delta.clear();
+        output
     }
 
     pub fn settle(&mut self) {

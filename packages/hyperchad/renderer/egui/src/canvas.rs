@@ -200,7 +200,7 @@ impl WidgetAdapter for CanvasAdapter {
             } else {
                 Rect::NOTHING
             },
-            ui.id().with(("canvas", stamp.key)),
+            ui.scope_id().with(("canvas", stamp.key)),
             egui::Sense::hover(),
         );
         if !geometry.visible || !rect.is_positive() || !clip.is_positive() {
@@ -825,17 +825,23 @@ mod tests {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(64.0, 64.0))),
             ..egui::RawInput::default()
         };
-        let output = ctx.run(input, |ctx| {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::NONE)
-                .show(ctx, |ui| {
+        let mut output = ctx.run_pass(input, |ctx| {
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(
+                &mut egui::Ui::new(
+                    ctx.clone(),
+                    egui::Id::unique("hyperchad_root"),
+                    egui::UiBuilder::new().max_rect(ctx.content_rect()),
+                ),
+                |ui| {
                     let authored = document.get(stamp.key).unwrap();
                     let result = adapter
                         .paint_node(ui, stamp, authored, authored, &geometry)
                         .unwrap();
                     assert_eq!(result.response.rect, clip);
-                });
+                },
+            );
         });
+
         let state = &adapter.states[&stamp.key];
         let raster = state.raster.as_ref().unwrap();
         assert_eq!(raster.size, [8, 8]);
@@ -850,6 +856,7 @@ mod tests {
                 .iter()
                 .any(|(id, _)| *id == state.texture.as_ref().unwrap().id())
         );
+        output.textures_delta.clear();
         assert_eq!(adapter.pending_resources(), 0);
     }
 

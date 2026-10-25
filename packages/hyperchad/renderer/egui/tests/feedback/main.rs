@@ -212,6 +212,19 @@ fn production_interaction_geometry_actions_values_and_navigation() {
         )]
     );
     driver.click(fixture::INPUT_ID);
+    // egui preserves the clicked caret rather than selecting the whole value.
+    // Make replacement explicit instead of depending on focus-selection defaults.
+    driver.step(vec![eframe::egui::Event::Key {
+        key: eframe::egui::Key::A,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: eframe::egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        },
+    }]);
     driver.step(vec![eframe::egui::Event::Text(" Lovelace".to_owned())]);
     let actions = driver.app.drain_actions();
     assert_eq!(actions.len(), 1, "{actions:?}");

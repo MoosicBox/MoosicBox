@@ -3,6 +3,11 @@
 //! This module provides `PostgreSQL` query execution, transaction management,
 //! value conversion, and schema-introspection integration for `sqlx`.
 
+// SQLx 0.9 owns dynamic SQL. AssertSqlSafe marks the existing SQL-generation
+// boundary: query builders keep value parameters bound separately; schema SQL
+// uses backend identifier quoting. The opt-in raw-sql API intentionally accepts
+// caller-authored SQL and retains that caller's trust contract.
+
 use std::{
     ops::Deref,
     pin::Pin,
@@ -1411,10 +1416,13 @@ impl crate::Savepoint for PostgresSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "RELEASE SAVEPOINT {}",
+                self.name
+            )))
+            .execute(&mut **tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -1440,10 +1448,13 @@ impl crate::Savepoint for PostgresSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "ROLLBACK TO SAVEPOINT {}",
+                self.name
+            )))
+            .execute(&mut **tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -1487,7 +1498,7 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
 
         // Execute SAVEPOINT SQL
         if let Some(tx) = self.transaction.lock().await.as_mut() {
-            sqlx::query(&format!("SAVEPOINT {name}"))
+            sqlx::query(sqlx::AssertSqlSafe(format!("SAVEPOINT {name}")))
                 .execute(&mut **tx)
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
@@ -1858,7 +1869,7 @@ async fn postgres_sqlx_exec_create_table(
     log::trace!("exec_create_table: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1886,7 +1897,7 @@ async fn postgres_sqlx_get_direct_dependents(
             AND tc.table_schema = 'public'
     ";
 
-    let rows: Vec<(String,)> = sqlx::query_as(query)
+    let rows: Vec<(String,)> = sqlx::query_as(sqlx::AssertSqlSafe((query).to_string()))
         .bind(table_name)
         .fetch_all(&mut *connection)
         .await
@@ -1937,7 +1948,7 @@ async fn postgres_sqlx_exec_drop_table_cascade(
             table
         );
         connection
-            .execute(sql.as_str())
+            .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
             .await
             .map_err(|e| DatabaseError::PostgresSqlx(SqlxDatabaseError::Sqlx(e)))?;
     }
@@ -1961,7 +1972,7 @@ async fn postgres_sqlx_exec_drop_table_restrict_native(
     log::trace!("exec_drop_table_restrict_native: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(|e| DatabaseError::PostgresSqlx(SqlxDatabaseError::Sqlx(e)))?;
 
@@ -2012,7 +2023,7 @@ async fn postgres_sqlx_exec_drop_table(
     log::trace!("exec_drop_table: query:\n{query}");
 
     connection
-        .execute(query.as_str())
+        .execute(sqlx::AssertSqlSafe((query.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2050,7 +2061,7 @@ pub(crate) async fn postgres_sqlx_exec_create_index(
     log::trace!("exec_create_index: query:\n{sql}");
 
     connection
-        .execute(sql.as_str())
+        .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2077,7 +2088,7 @@ pub(crate) async fn postgres_sqlx_exec_drop_index(
     log::trace!("exec_drop_index: query:\n{sql}");
 
     connection
-        .execute(sql.as_str())
+        .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2185,7 +2196,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table ADD COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2213,7 +2224,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table DROP COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2226,7 +2237,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table RENAME COLUMN: query:\n{sql}");
 
                 connection
-                    .execute(sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2285,7 +2296,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 log::trace!("exec_alter_table MODIFY COLUMN (type): query:\n{alter_type_sql}");
 
                 connection
-                    .execute(alter_type_sql.as_str())
+                    .execute(sqlx::AssertSqlSafe((alter_type_sql.as_str()).to_string()))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2308,7 +2319,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     );
 
                     connection
-                        .execute(nullable_sql.as_str())
+                        .execute(sqlx::AssertSqlSafe((nullable_sql.as_str()).to_string()))
                         .await
                         .map_err(SqlxDatabaseError::Sqlx)?;
                 }
@@ -2352,7 +2363,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                     log::trace!("exec_alter_table MODIFY COLUMN (default): query:\n{default_sql}");
 
                     connection
-                        .execute(default_sql.as_str())
+                        .execute(sqlx::AssertSqlSafe((default_sql.as_str()).to_string()))
                         .await
                         .map_err(SqlxDatabaseError::Sqlx)?;
                 }
@@ -2468,7 +2479,11 @@ async fn update_and_get_row(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
 
     let column_names = statement
         .columns()
@@ -2547,7 +2562,11 @@ async fn update_and_get_rows(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
 
     let column_names = statement
         .columns()
@@ -2891,7 +2910,11 @@ async fn select(
 
     let query = typed.map_or(query, |typed| typed.to_sql(&AtomicU16::new(0)));
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -2941,7 +2964,11 @@ async fn delete(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3012,7 +3039,11 @@ async fn find_row(
         )
     });
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3074,7 +3105,11 @@ async fn insert_and_get_row(
             .collect::<Vec<_>>()
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3242,7 +3277,11 @@ async fn update_chunk(
 
     log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3369,7 +3408,11 @@ async fn upsert_chunk(
 
     log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3953,7 +3996,7 @@ impl PostgresSqlxDatabase {
         let mut connection = connection.lock().await;
 
         connection
-            .execute(statement)
+            .execute(sqlx::AssertSqlSafe((statement).to_string()))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -3973,7 +4016,7 @@ impl PostgresSqlxDatabase {
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
         drop(pool);
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut *connection)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -4019,7 +4062,7 @@ impl PostgresSqlxDatabase {
         };
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(&transformed_query);
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query.clone()));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -4132,7 +4175,7 @@ impl PostgresSqlxDatabase {
         };
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(&transformed_query);
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query.clone()));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -4243,7 +4286,7 @@ impl PostgresSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        tx.execute(statement)
+        tx.execute(sqlx::AssertSqlSafe((statement).to_string()))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
         drop(transaction_guard);
@@ -4263,7 +4306,7 @@ impl PostgresSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut **tx)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -4301,7 +4344,7 @@ impl PostgresSqlxTransaction {
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(query);
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {
@@ -4396,7 +4439,7 @@ impl PostgresSqlxTransaction {
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(query);
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {

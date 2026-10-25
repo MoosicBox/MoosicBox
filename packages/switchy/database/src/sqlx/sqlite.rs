@@ -3,6 +3,11 @@
 //! This module implements query execution, transaction handling, and value
 //! mapping for the `sqlx` `SQLite` backend.
 
+// SQLx 0.9 owns dynamic SQL. AssertSqlSafe marks the existing SQL-generation
+// boundary: query builders keep value parameters bound separately; schema SQL
+// uses backend identifier quoting. The opt-in raw-sql API intentionally accepts
+// caller-authored SQL and retains that caller's trust contract.
+
 use std::{
     ops::Deref,
     pin::Pin,
@@ -575,7 +580,7 @@ async fn sqlite_get_column_dependencies(
 
     // Find indexes that use this column
     let index_list_query = format!("PRAGMA index_list({})", quote_schema_identifier(table_name));
-    let index_rows = sqlx::query(&index_list_query)
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe(index_list_query.clone()))
         .fetch_all(&mut *connection)
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
@@ -588,7 +593,7 @@ async fn sqlite_get_column_dependencies(
             "PRAGMA index_info({})",
             quote_schema_identifier(&index_name)
         );
-        let column_rows = sqlx::query(&index_info_query)
+        let column_rows = sqlx::query(sqlx::AssertSqlSafe(index_info_query.clone()))
             .fetch_all(&mut *connection)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
@@ -607,7 +612,7 @@ async fn sqlite_get_column_dependencies(
         "PRAGMA foreign_key_list({})",
         quote_schema_identifier(table_name)
     );
-    let fk_rows = sqlx::query(&fk_list_query)
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_list_query.clone()))
         .fetch_all(&mut *connection)
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
@@ -635,7 +640,7 @@ impl Database for SqliteSqlxDatabase {
         } else {
             "PRAGMA foreign_keys = OFF"
         };
-        sqlx::query(statement)
+        sqlx::query(sqlx::AssertSqlSafe((statement).to_string()))
             .execute(&mut **connection)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
@@ -1132,7 +1137,11 @@ async fn update_and_get_row(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
 
     let column_names = statement
         .columns()
@@ -1209,7 +1218,11 @@ async fn update_and_get_rows(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
 
     let column_names = statement
         .columns()
@@ -1349,9 +1362,9 @@ fn format_identifier(identifier: &str) -> String {
 }
 
 fn bind_values<'a, 'b>(
-    mut query: Query<'a, Sqlite, SqliteArguments<'a>>,
+    mut query: Query<'a, Sqlite, SqliteArguments>,
     values: Option<&'b [SqliteDatabaseValue]>,
-) -> Result<Query<'a, Sqlite, SqliteArguments<'a>>, SqlxDatabaseError>
+) -> Result<Query<'a, Sqlite, SqliteArguments>, SqlxDatabaseError>
 where
     'b: 'a,
 {
@@ -1663,7 +1676,7 @@ async fn sqlite_sqlx_exec_create_table(
     query.push(')');
 
     connection
-        .execute(sqlx::raw_sql(&query))
+        .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(query.clone())))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1699,7 +1712,7 @@ async fn sqlite_sqlx_exec_drop_table(
     query.push_str(statement.table_name);
 
     connection
-        .execute(sqlx::raw_sql(&query))
+        .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(query.clone())))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1729,7 +1742,7 @@ async fn sqlite_sqlx_exec_drop_table_cascade(
             query.push_str(table_to_drop);
 
             connection
-                .execute(sqlx::raw_sql(&query))
+                .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(query.clone())))
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
         }
@@ -1762,7 +1775,7 @@ async fn sqlite_sqlx_exec_drop_table_restrict(
     query.push_str(statement.table_name);
 
     connection
-        .execute(sqlx::raw_sql(&query))
+        .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(query.clone())))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1807,7 +1820,7 @@ async fn sqlite_sqlx_find_cascade_dependents(
                 "PRAGMA foreign_key_list({})",
                 quote_schema_identifier(&check_table)
             );
-            let fk_rows = sqlx::query(&fk_query)
+            let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.clone()))
                 .fetch_all(&mut *connection)
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
@@ -1857,7 +1870,7 @@ async fn sqlite_sqlx_has_dependents(
             "PRAGMA foreign_key_list({})",
             quote_schema_identifier(&check_table)
         );
-        let fk_rows = sqlx::query(&fk_query)
+        let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.clone()))
             .fetch_all(&mut *connection)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
@@ -1899,7 +1912,7 @@ async fn sqlite_sqlx_set_foreign_key_state(
         "PRAGMA foreign_keys = OFF"
     };
 
-    sqlx::query(pragma)
+    sqlx::query(sqlx::AssertSqlSafe((pragma).to_string()))
         .execute(&mut *connection)
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
@@ -1936,7 +1949,7 @@ pub(crate) async fn sqlite_sqlx_exec_create_index(
     );
 
     connection
-        .execute(sqlx::raw_sql(&sql))
+        .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql.clone())))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1961,7 +1974,7 @@ pub(crate) async fn sqlite_sqlx_exec_drop_index(
     );
 
     connection
-        .execute(sqlx::raw_sql(&sql))
+        .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql.clone())))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2059,7 +2072,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                 );
 
                 connection
-                    .execute(sqlx::raw_sql(&sql))
+                    .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql.clone())))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2087,7 +2100,9 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                                 let drop_index_sql = format!("DROP INDEX IF EXISTS `{index_name}`");
                                 log::trace!("SQLite CASCADE dropping index: {drop_index_sql}");
                                 connection
-                                    .execute(sqlx::raw_sql(&drop_index_sql))
+                                    .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(
+                                        drop_index_sql.clone(),
+                                    )))
                                     .await
                                     .map_err(SqlxDatabaseError::Sqlx)?;
                             }
@@ -2136,7 +2151,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                 );
 
                 connection
-                    .execute(sqlx::raw_sql(&sql))
+                    .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql.clone())))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2147,7 +2162,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                 );
 
                 connection
-                    .execute(sqlx::raw_sql(&sql))
+                    .execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql.clone())))
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
@@ -2282,44 +2297,44 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
         None => String::new(),
     };
 
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "ALTER TABLE {table_name} ADD COLUMN `{temp_column}` {type_str}{nullable_str}{default_str}"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
     // Step 2: Copy and convert data
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "UPDATE {table_name} SET `{temp_column}` = CAST(`{column_name}` AS {type_str})"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
     // Step 3: Drop original column
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "ALTER TABLE {table_name} DROP COLUMN `{column_name}`"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
     // Step 4: Add column with original name and new type
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "ALTER TABLE {table_name} ADD COLUMN `{column_name}` {type_str}{nullable_str}{default_str}"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
     // Step 5: Copy data from temp to final column
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "UPDATE {table_name} SET `{column_name}` = `{temp_column}`"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
     // Step 6: Drop temporary column
-    tx.execute(sqlx::raw_sql(&format!(
+    tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
         "ALTER TABLE {table_name} DROP COLUMN `{temp_column}`"
-    )))
+    ))))
     .await
     .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -2612,13 +2627,13 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
             new_default,
         )?;
 
-        sqlx::query(&new_table_sql)
+        sqlx::query(sqlx::AssertSqlSafe(new_table_sql.clone()))
             .execute(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
         // Step 6: Get column list for INSERT SELECT
-        let columns: Vec<String> = sqlx::query(&format!("PRAGMA table_info({})", quote_schema_identifier(table_name)))
+        let columns: Vec<String> = sqlx::query(sqlx::AssertSqlSafe(format!("PRAGMA table_info({})", quote_schema_identifier(table_name))))
             .fetch_all(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?
@@ -2670,19 +2685,19 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
             .collect::<Vec<_>>()
             .join(", ");
 
-        sqlx::query(&format!("INSERT INTO {temp_table} SELECT {column_list} FROM {table_name}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("INSERT INTO {temp_table} SELECT {column_list} FROM {table_name}")))
             .execute(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
         // Step 8: Drop old table
-        sqlx::query(&format!("DROP TABLE {table_name}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TABLE {table_name}")))
             .execute(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
         // Step 9: Rename temp table to original name
-        sqlx::query(&format!("ALTER TABLE {temp_table} RENAME TO {table_name}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("ALTER TABLE {temp_table} RENAME TO {table_name}")))
             .execute(&mut *tx)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
@@ -2691,7 +2706,7 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
         for schema_sql in schema_objects {
             // Skip auto-indexes and internal indexes
             if !schema_sql.to_uppercase().contains("AUTOINDEX") {
-                sqlx::query(&schema_sql)
+                sqlx::query(sqlx::AssertSqlSafe(schema_sql.clone()))
                     .execute(&mut *tx)
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
@@ -2823,7 +2838,11 @@ async fn select(
 
     let query = typed.map_or(query, |typed| typed.to_sql(&AtomicU16::new(0)));
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -2889,7 +2908,11 @@ async fn delete(
             .collect::<Vec<_>>()
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -2947,7 +2970,11 @@ async fn find_row(
         )
     });
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3010,7 +3037,11 @@ async fn insert_and_get_row(
             .collect::<Vec<_>>()
     );
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3178,7 +3209,11 @@ async fn update_chunk(
 
     log::trace!("Running update chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3305,7 +3340,11 @@ async fn upsert_chunk(
 
     log::trace!("Running upsert chunk query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let statement = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            query.clone(),
+        )))
+        .await?;
     let column_names = statement
         .columns()
         .iter()
@@ -3838,10 +3877,13 @@ impl crate::Savepoint for SqliteSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "RELEASE SAVEPOINT {}",
+                self.name
+            )))
+            .execute(&mut **tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -3867,10 +3909,13 @@ impl crate::Savepoint for SqliteSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "ROLLBACK TO SAVEPOINT {}",
+                self.name
+            )))
+            .execute(&mut **tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -3914,7 +3959,7 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
 
         // Execute SAVEPOINT SQL
         if let Some(tx) = self.transaction.lock().await.as_mut() {
-            sqlx::query(&format!("SAVEPOINT {name}"))
+            sqlx::query(sqlx::AssertSqlSafe(format!("SAVEPOINT {name}")))
                 .execute(&mut **tx)
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
@@ -4150,7 +4195,9 @@ async fn sqlx_sqlite_get_table_columns(
     let mut columns = Vec::new();
 
     let pragma_query = format!("PRAGMA table_info({})", quote_schema_identifier(table_name));
-    let rows = sqlx::query(&pragma_query).fetch_all(&mut *executor).await?;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(pragma_query.clone()))
+        .fetch_all(&mut *executor)
+        .await?;
 
     for row in rows {
         let cid: i32 = row.get(0);
@@ -4254,7 +4301,9 @@ async fn sqlx_sqlite_get_table_info(
     // Get indexes
     let mut indexes = BTreeMap::new();
     let index_query = format!("PRAGMA index_list({})", quote_schema_identifier(table_name));
-    let index_rows = sqlx::query(&index_query).fetch_all(&mut *executor).await?;
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe(index_query.clone()))
+        .fetch_all(&mut *executor)
+        .await?;
 
     for row in index_rows {
         let index_name: String = row.get(1);
@@ -4266,7 +4315,7 @@ async fn sqlx_sqlite_get_table_info(
             "PRAGMA index_info({})",
             quote_schema_identifier(&index_name)
         );
-        let column_rows = sqlx::query(&index_info_query)
+        let column_rows = sqlx::query(sqlx::AssertSqlSafe(index_info_query.clone()))
             .fetch_all(&mut *executor)
             .await?;
 
@@ -4293,7 +4342,9 @@ async fn sqlx_sqlite_get_table_info(
         "PRAGMA foreign_key_list({})",
         quote_schema_identifier(table_name)
     );
-    let fk_rows = sqlx::query(&fk_query).fetch_all(&mut *executor).await?;
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.clone()))
+        .fetch_all(&mut *executor)
+        .await?;
 
     for row in fk_rows {
         let id: i32 = row.get(0);
@@ -4870,7 +4921,7 @@ impl SqliteSqlxDatabase {
         let mut binding = connection.lock().await;
 
         binding
-            .execute(sqlx::raw_sql(statement))
+            .execute(sqlx::raw_sql(sqlx::AssertSqlSafe((statement).to_string())))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -4890,7 +4941,7 @@ impl SqliteSqlxDatabase {
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
         drop(pool);
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut *connection)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -4935,7 +4986,7 @@ impl SqliteSqlxDatabase {
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(&transformed_query);
+        let mut query_builder = sqlx::query::<Sqlite>(sqlx::AssertSqlSafe(transformed_query));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -5037,7 +5088,7 @@ impl SqliteSqlxDatabase {
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(&transformed_query);
+        let mut query_builder = sqlx::query::<Sqlite>(sqlx::AssertSqlSafe(transformed_query));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
@@ -5150,7 +5201,7 @@ impl SqliteSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        tx.execute(sqlx::raw_sql(sql))
+        tx.execute(sqlx::raw_sql(sqlx::AssertSqlSafe((sql).to_string())))
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
         drop(transaction_guard);
@@ -5170,7 +5221,7 @@ impl SqliteSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
 
-        let result = sqlx::query(query)
+        let result = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
             .fetch_all(&mut **tx)
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
@@ -5207,7 +5258,8 @@ impl SqliteSqlxTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
+        let mut query_builder: Query<'_, Sqlite, SqliteArguments> =
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - SQLite uses ? placeholders
         for param in params {
@@ -5305,7 +5357,8 @@ impl SqliteSqlxTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
+        let mut query_builder: Query<'_, Sqlite, SqliteArguments> =
+            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
 
         // Add parameters in order - SQLite uses ? placeholders
         for param in params {

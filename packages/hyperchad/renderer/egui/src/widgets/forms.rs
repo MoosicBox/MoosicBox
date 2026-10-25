@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::text_layout::{FontRegistry, request_job};
-use eframe::egui::{self, Id, Key, Sense, WidgetInfo, WidgetType};
+use eframe::egui::{self, Id, Key, Role, Sense, WidgetInfo};
 use hyperchad_transformer::layout::font::{
     TextFontFamily, TextFontWeight, TextMeasureRequest, resolve_text_weight,
 };
@@ -266,7 +266,7 @@ impl Field {
     }
 
     fn id(&self) -> Id {
-        Id::new(("hyperchad-form", self.stamp.key))
+        Id::unique(("hyperchad-form", self.stamp.key))
     }
 }
 
@@ -432,7 +432,7 @@ impl FormsAdapter {
         editor
             .cursor
             .set_char_range(Some(egui::text::CCursorRange::two(
-                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(egui::text::CharIndex(0)),
                 egui::text::CCursor::new(end),
             )));
         editor.store(context, id);
@@ -937,7 +937,7 @@ impl WidgetAdapter for FormsAdapter {
         // it never measures/reflows any HyperChad descendants.
         let mut slot = ui.new_child(
             egui::UiBuilder::new()
-                .id(("hyperchad-form-slot", stamp.key))
+                .id_salt(("hyperchad-form-slot", stamp.key))
                 .max_rect(geometry.content_box)
                 .layout(egui::Layout::top_down(egui::Align::Min)),
         );
@@ -1184,7 +1184,7 @@ impl FormsAdapter {
         // Options use E's geometry, never ComboBox child layout or a recursive UI.
         let response = ui
             .scope_builder(
-                egui::UiBuilder::new().id(("hyperchad-option", stamp.key)),
+                egui::UiBuilder::new().id_salt(("hyperchad-option", stamp.key)),
                 |ui| {
                     ui.add_enabled_ui(enabled, |ui| {
                         ui.put(
@@ -1199,9 +1199,9 @@ impl FormsAdapter {
         response.widget_info(|| {
             WidgetInfo::selected(
                 if field.multiple {
-                    WidgetType::Checkbox
+                    Role::CheckBox
                 } else {
-                    WidgetType::RadioButton
+                    Role::RadioButton
                 },
                 enabled,
                 selected.contains(&index),
@@ -1242,7 +1242,7 @@ fn paint_checkbox(
     label: &str,
     disabled: bool,
 ) -> egui::Response {
-    ui.scope_builder(egui::UiBuilder::new().id(id), |ui| {
+    ui.scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
         let side = rect.width().min(rect.height()).max(0.0);
         let spacing = ui.spacing_mut();
         spacing.interact_size = egui::Vec2::splat(side);
@@ -1255,8 +1255,7 @@ fn paint_checkbox(
             })
             .inner;
         // The accessible name does not consume shared child layout space.
-        response
-            .widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, !disabled, *checked, label));
+        response.widget_info(|| WidgetInfo::selected(Role::CheckBox, !disabled, *checked, label));
         response
     })
     .inner
@@ -1319,7 +1318,8 @@ fn paint_text(
     let mut layouter = |ui: &egui::Ui, buffer: &dyn egui::TextBuffer, width: f32| {
         let mut job = template.clone();
         job.text = editor_display(buffer.as_str(), whitespace, password);
-        job.sections[0].byte_range = 0..job.text.len();
+        job.sections[0].byte_range =
+            egui::text::ByteIndex(0)..egui::text::ByteIndex(job.text.len());
         if multiline && whitespace != WhiteSpace::Preserve {
             job.wrap.max_width = width;
         }
@@ -1470,7 +1470,7 @@ fn paint_select(
         ui.visuals().text_color(),
     );
     response.widget_info(|| {
-        let mut info = WidgetInfo::labeled(WidgetType::ComboBox, !field.disabled, &field.label);
+        let mut info = WidgetInfo::labeled(Role::ComboBox, !field.disabled, &field.label);
         info.current_text_value = Some(label.clone());
         info
     });
@@ -1525,7 +1525,7 @@ fn paint_file(
 ) -> Result<egui::Response, String> {
     let id = field.id();
     let response = ui
-        .scope_builder(egui::UiBuilder::new().id(id), |ui| {
+        .scope_builder(egui::UiBuilder::new().scope_id(id), |ui| {
             ui.add_enabled_ui(!field.disabled, |ui| {
                 ui.put(
                     rect,
@@ -1582,7 +1582,7 @@ fn label_and_focus(
             label_id,
             Sense::hover(),
         );
-        label.widget_info(|| WidgetInfo::labeled(WidgetType::Label, !field.disabled, &field.label));
+        label.widget_info(|| WidgetInfo::labeled(Role::Label, !field.disabled, &field.label));
         response = response.labelled_by(label_id);
     }
     response
@@ -1660,41 +1660,49 @@ mod focus_effect_tests {
         source: ElementStamp,
     ) -> Id {
         let mut response_id = None;
-        let _ = context.run(egui::RawInput::default(), |context| {
-            egui::CentralPanel::default().show(context, |ui| {
-                let rect =
-                    egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(220.0, 32.0));
-                let geometry = NodeGeometry {
-                    key: source.key,
-                    container_id: 1,
-                    parent: None,
-                    containing_block: None,
-                    margin_box: rect,
-                    padding_box: rect,
-                    content_box: rect,
-                    border_box: rect,
-                    paint_clip: rect,
-                    descendant_clip: rect,
-                    transform: crate::geometry::GeometryTransform {
-                        origin: rect.min,
-                        scale: 1.0,
-                    },
-                    scroll_extent: rect,
-                    scroll_max: egui::Vec2::ZERO,
-                    scroll_offset: egui::Vec2::ZERO,
-                    visible: true,
-                    fixed: false,
-                };
-                let authored = document.get(source.key).unwrap();
-                response_id = Some(
-                    forms
-                        .paint_node(ui, source, authored, authored, &geometry)
-                        .unwrap()
-                        .response
-                        .id,
-                );
+        let _ = {
+            let mut output = context.run_pass(egui::RawInput::default(), |context| {
+                context.root_ui(|ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        let rect = egui::Rect::from_min_size(
+                            egui::pos2(20.0, 20.0),
+                            egui::vec2(220.0, 32.0),
+                        );
+                        let geometry = NodeGeometry {
+                            key: source.key,
+                            container_id: 1,
+                            parent: None,
+                            containing_block: None,
+                            margin_box: rect,
+                            padding_box: rect,
+                            content_box: rect,
+                            border_box: rect,
+                            paint_clip: rect,
+                            descendant_clip: rect,
+                            transform: crate::geometry::GeometryTransform {
+                                origin: rect.min,
+                                scale: 1.0,
+                            },
+                            scroll_extent: rect,
+                            scroll_max: egui::Vec2::ZERO,
+                            scroll_offset: egui::Vec2::ZERO,
+                            visible: true,
+                            fixed: false,
+                        };
+                        let authored = document.get(source.key).unwrap();
+                        response_id = Some(
+                            forms
+                                .paint_node(ui, source, authored, authored, &geometry)
+                                .unwrap()
+                                .response
+                                .id,
+                        );
+                    })
+                });
             });
-        });
+            output.textures_delta.clear();
+            output
+        };
         response_id.unwrap()
     }
 
@@ -1710,8 +1718,8 @@ mod focus_effect_tests {
             adapter.select_all(context, source).unwrap();
             assert_eq!(context.memory(egui::Memory::focused), Some(id));
             let selection = egui::text::CCursorRange::two(
-                egui::text::CCursor::new(0),
-                egui::text::CCursor::new(4),
+                egui::text::CCursor::new(egui::text::CharIndex(0)),
+                egui::text::CCursor::new(egui::text::CharIndex(4)),
             );
             assert_eq!(
                 egui::text_edit::TextEditState::load(context, id)
@@ -1778,8 +1786,8 @@ mod focus_effect_tests {
             assert_eq!(context.memory(egui::Memory::focused), Some(id));
             assert_eq!(paint(&context, &mut forms, &document, source), id);
             let selection = egui::text::CCursorRange::two(
-                egui::text::CCursor::new(0),
-                egui::text::CCursor::new(4),
+                egui::text::CCursor::new(egui::text::CharIndex(0)),
+                egui::text::CCursor::new(egui::text::CharIndex(4)),
             );
             assert_eq!(
                 egui::text_edit::TextEditState::load(&context, id)
@@ -1800,7 +1808,7 @@ mod focus_effect_tests {
             );
             forms.blur(&context, source).unwrap();
             assert_eq!(context.memory(egui::Memory::focused), None);
-            let other = Id::new("different native control");
+            let other = Id::unique("different native control");
             context.memory_mut(|memory| memory.request_focus(other));
             forms.blur(&context, source).unwrap();
             assert_eq!(context.memory(egui::Memory::focused), Some(other));

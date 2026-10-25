@@ -1160,7 +1160,9 @@ pub fn search_global_search_index(
     // We can now perform our query.
     let top_docs = searcher.search(
         &global_search_query,
-        &TopDocs::with_limit(limit as usize).and_offset(offset as usize),
+        &TopDocs::with_limit(limit as usize)
+            .and_offset(offset as usize)
+            .order_by_score(),
     )?;
 
     // The actual documents still need to be

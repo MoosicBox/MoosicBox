@@ -419,7 +419,7 @@ impl<F, R, C> WidgetPainter<F, R, C> {
         // Hover-only descendants cannot steal the parent's click/focus response.
         let mut response = ui.interact(
             bounds,
-            egui::Id::new(stamp.key),
+            egui::Id::unique(stamp.key),
             if interactive {
                 egui::Sense::click()
             } else {
@@ -482,11 +482,11 @@ impl<F, R, C> WidgetPainter<F, R, C> {
         response.widget_info(|| {
             egui::WidgetInfo::labeled(
                 if matches!(authored.element, Element::Anchor { .. }) {
-                    egui::WidgetType::Link
+                    egui::Role::Link
                 } else if interactive {
-                    egui::WidgetType::Button
+                    egui::Role::Button
                 } else {
-                    egui::WidgetType::Label
+                    egui::Role::Label
                 },
                 response.enabled(),
                 name,

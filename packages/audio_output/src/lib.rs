@@ -473,7 +473,7 @@ pub enum AudioOutputError {
     /// Failed to query supported stream configurations (CPAL-specific)
     #[cfg(feature = "cpal")]
     #[error(transparent)]
-    SupportedStreamConfigs(#[from] ::cpal::SupportedStreamConfigsError),
+    SupportedStreamConfigs(#[from] ::cpal::Error),
 }
 
 /// Converts an audio buffer to interleaved samples of the specified type.
