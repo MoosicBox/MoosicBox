@@ -2,4 +2,16 @@
 os = "macos"
 
 [[config.dependencies]]
-command = "brew install automake autoconf libtool"
+command = "brew install automake autoconf libtool ffmpeg"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "sudo apt-get update && sudo apt-get install -y ffmpeg"
+
+[[config]]
+os = "windows"
+
+[[config.dependencies]]
+command = "choco install ffmpeg -y --no-progress"

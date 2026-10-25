@@ -10,7 +10,7 @@
 //! asynchronous producers submit ordered commands without blocking frames.
 //!
 //! * **wgpu** - Use wgpu backend for rendering (enabled by default)
-//! * **glow** - Use OpenGL backend for rendering
+//! * **glow** - Explicitly select the OpenGL backend (also the fallback without wgpu)
 //! * **wayland** - Enable Wayland support on Linux
 //! * **x11** - Enable X11 support on Linux
 //!

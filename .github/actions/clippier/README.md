@@ -56,6 +56,7 @@ bash .github/actions/clippier/tests/case-stack.sh
 bash .github/actions/clippier/tests/large-output.sh
 bash .github/actions/clippier/tests/validation.sh
 bash .github/actions/clippier/tests/report.sh
+bash .github/actions/clippier/tests/rust-validation.sh
 ```
 
 ## Stateless Cargo release commands

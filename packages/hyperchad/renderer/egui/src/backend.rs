@@ -1549,7 +1549,7 @@ mod tests {
     use crate::runtime::DocumentCommand;
 
     #[test]
-    #[cfg(all(feature = "glow", not(feature = "wgpu")))]
+    #[cfg(not(feature = "wgpu"))]
     fn native_renderer_selects_glow_without_wgpu() {
         assert_eq!(native_renderer(), eframe::Renderer::Glow);
     }

@@ -2,6 +2,9 @@
 os = "ubuntu"
 
 [[config.dependencies]]
+command = "sudo apt-get update && sudo apt-get install -y ffmpeg"
+
+[[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-dev"
 features = ["jack"]
 
@@ -13,12 +16,18 @@ features = ["asio", "cpal", "default", "default-windows", "jack"]
 os = "macos"
 
 [[config.dependencies]]
+command = "brew install ffmpeg"
+
+[[config.dependencies]]
 command  = "brew install berkeley-db@5 jack"
 features = ["jack"]
 
 [[config]]
 os   = "windows"
 rust = { skip-features = ["asio"] }
+
+[[config.dependencies]]
+command = "choco install ffmpeg -y --no-progress"
 
 # [[config.dependencies]]
 # command  = "winget install -e --id Jackaudio.JACK2 --accept-source-agreements --accept-package-agreements"

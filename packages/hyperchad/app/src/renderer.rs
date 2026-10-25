@@ -219,99 +219,6 @@ pub mod bmux {
         }
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test_log::test(switchy_async::test)]
-        async fn terminal_navigation_routes_path_and_preserves_album_query() {
-            let router = Router::new().with_route("/albums", |request| async move {
-                assert_eq!(request.path, "/albums");
-                assert_eq!(
-                    request.query.get("albumId").map(String::as_str),
-                    Some("1339")
-                );
-                assert_eq!(
-                    request.query.get("source").map(String::as_str),
-                    Some("Library")
-                );
-                View::from(hyperchad_renderer::transformer::Container::default())
-            });
-            assert!(matches!(
-                resolve_navigation(
-                    &router,
-                    "/albums?albumId=1339&source=Library",
-                    std::future::pending(),
-                )
-                .await,
-                NavigationOutcome::Completed(Some(_)),
-            ));
-            assert!(
-                matches!(
-                    resolve_navigation(
-                        &router,
-                        "/albums-other?albumId=1339&source=Library",
-                        std::future::pending(),
-                    )
-                    .await,
-                    NavigationOutcome::Completed(None),
-                ),
-                "query parsing must not weaken exact route matching"
-            );
-            assert!(
-                router.receiver.try_recv().is_err(),
-                "correlated routes must not publish through the uncorrelated render channel"
-            );
-        }
-        #[test_log::test(switchy_async::test)]
-        async fn terminal_navigation_non_document_does_not_commit() {
-            let router =
-                Router::new().with_route("/raw", |_| async { "not a document".to_string() });
-            assert!(matches!(
-                resolve_navigation(&router, "/raw", std::future::pending()).await,
-                NavigationOutcome::Completed(None),
-            ));
-        }
-
-        #[test_log::test(switchy_async::test)]
-        async fn terminal_navigation_new_request_cancels_pending_route() {
-            struct Cancelled(std::sync::Arc<std::sync::atomic::AtomicBool>);
-            impl Drop for Cancelled {
-                fn drop(&mut self) {
-                    self.0.store(true, std::sync::atomic::Ordering::SeqCst);
-                }
-            }
-            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let (started_tx, started_rx) = flume::bounded(1);
-            let marker = std::sync::Arc::clone(&cancelled);
-            let router = Router::new().with_route("/slow", move |_| {
-                let marker = std::sync::Arc::clone(&marker);
-                let started_tx = started_tx.clone();
-                async move {
-                    let _guard = Cancelled(marker);
-                    started_tx.send(()).unwrap();
-                    std::future::pending::<View>().await
-                }
-            });
-            let outcome = resolve_navigation(&router, "/slow?albumId=1339", async {
-                started_rx.recv_async().await.unwrap();
-                Some(NavigationRequest {
-                    id: 2,
-                    url: "/albums?albumId=47&source=Library".into(),
-                })
-            })
-            .await;
-            assert!(matches!(
-                outcome,
-                NavigationOutcome::Superseded(Some(NavigationRequest { id: 2, .. }))
-            ));
-            assert!(
-                cancelled.load(std::sync::atomic::Ordering::SeqCst),
-                "superseded route future must be dropped"
-            );
-        }
-    }
-
     impl AppBuilder {
         /// Builds an application with an explicitly configured terminal renderer.
         ///
@@ -378,6 +285,100 @@ pub mod bmux {
                     Ok::<_, Error>(())
                 });
             Ok(app)
+        }
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        struct Cancelled(std::sync::Arc<std::sync::atomic::AtomicBool>);
+
+        impl Drop for Cancelled {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_routes_path_and_preserves_album_query() {
+            let router = Router::new().with_route("/albums", |request| async move {
+                assert_eq!(request.path, "/albums");
+                assert_eq!(
+                    request.query.get("albumId").map(String::as_str),
+                    Some("1339")
+                );
+                assert_eq!(
+                    request.query.get("source").map(String::as_str),
+                    Some("Library")
+                );
+                View::from(hyperchad_renderer::transformer::Container::default())
+            });
+            assert!(matches!(
+                resolve_navigation(
+                    &router,
+                    "/albums?albumId=1339&source=Library",
+                    std::future::pending(),
+                )
+                .await,
+                NavigationOutcome::Completed(Some(_)),
+            ));
+            assert!(
+                matches!(
+                    resolve_navigation(
+                        &router,
+                        "/albums-other?albumId=1339&source=Library",
+                        std::future::pending(),
+                    )
+                    .await,
+                    NavigationOutcome::Completed(None),
+                ),
+                "query parsing must not weaken exact route matching"
+            );
+            assert!(
+                router.receiver.try_recv().is_err(),
+                "correlated routes must not publish through the uncorrelated render channel"
+            );
+        }
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_non_document_does_not_commit() {
+            let router =
+                Router::new().with_route("/raw", |_| async { "not a document".to_string() });
+            assert!(matches!(
+                resolve_navigation(&router, "/raw", std::future::pending()).await,
+                NavigationOutcome::Completed(None),
+            ));
+        }
+
+        #[test_log::test(switchy_async::test)]
+        async fn terminal_navigation_new_request_cancels_pending_route() {
+            let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let (started_tx, started_rx) = flume::bounded(1);
+            let marker = std::sync::Arc::clone(&cancelled);
+            let router = Router::new().with_route("/slow", move |_| {
+                let marker = std::sync::Arc::clone(&marker);
+                let started_tx = started_tx.clone();
+                async move {
+                    let _guard = Cancelled(marker);
+                    started_tx.send(()).unwrap();
+                    std::future::pending::<View>().await
+                }
+            });
+            let outcome = resolve_navigation(&router, "/slow?albumId=1339", async {
+                started_rx.recv_async().await.unwrap();
+                Some(NavigationRequest {
+                    id: 2,
+                    url: "/albums?albumId=47&source=Library".into(),
+                })
+            })
+            .await;
+            assert!(matches!(
+                outcome,
+                NavigationOutcome::Superseded(Some(NavigationRequest { id: 2, .. }))
+            ));
+            assert!(
+                cancelled.load(std::sync::atomic::Ordering::SeqCst),
+                "superseded route future must be dropped"
+            );
         }
     }
 }

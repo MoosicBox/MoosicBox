@@ -29,7 +29,13 @@ coverage:
     # Collect before clear-target-2; each stacked case has its own output file.
     commands: |
         if [[ -n "{{vars.coverage-output}}" ]]; then
-            cargo llvm-cov report --lcov --output-path "{{vars.coverage-output}}"
+            # With only fail-on-warnings, this facade contains no executable
+            # code or tests. LLVM correctly emits no coverage mapping for it.
+            if [[ "{{matrix.package.name}}" == moosicbox && "{{clippier.all-features}}" == fail-on-warnings ]]; then
+                echo "No executable code to cover in the no-feature moosicbox facade"
+            else
+                cargo llvm-cov report --lcov --output-path "{{vars.coverage-output}}"
+            fi
         fi
     label: "Coverage"
     strategy: "combined"
@@ -38,7 +44,14 @@ clear-target-2:
     commands: rm -rf target
 
 format:
-    commands: cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --all -- --check
+    # Windows cannot spawn rustfmt with the entire workspace's file list.
+    # Other runners retain the workspace-wide check.
+    commands: |
+        if [[ "{{matrix.package.os}}" == windows-latest ]]; then
+            cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --package "{{matrix.package.name}}" -- --check
+        else
+            cargo{{if matrix.package.nightly}} +nightly{{endif}} fmt --all -- --check
+        fi
     label: "Format"
     strategy: "combined"
 

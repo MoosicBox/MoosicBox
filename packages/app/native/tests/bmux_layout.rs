@@ -259,26 +259,20 @@ fn actual_populated_albums_scroll_reuses_committed_geometry() {
         },
         ..State::default()
     };
-    // Replay the captured API payload without contacting the live server.
-    let response_path = std::env::var("BMUX_ALBUM_RESPONSES").unwrap_or_else(|_| {
-        "/tmp/bmux-visual-48f67fe4/percentage-checkpoint/visible-candidate-80x24/responses.json"
-            .into()
-    });
-    let responses: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(&response_path).expect("recorded Albums response must be available"),
-    )
-    .expect("recorded responses must be JSON");
-    assert_eq!(
-        responses[0][0],
-        "/menu/albums?moosicboxProfile=master&offset=0&limit=100&sort=name"
-    );
-    let recorded = &responses[0][1];
     let page = Page::WithTotal {
-        items: serde_json::from_value::<Vec<ApiAlbum>>(recorded["items"].clone())
-            .expect("recorded API albums must deserialize"),
-        offset: serde_json::from_value(recorded["offset"].clone()).unwrap(),
-        limit: serde_json::from_value(recorded["limit"].clone()).unwrap(),
-        total: serde_json::from_value(recorded["total"].clone()).unwrap(),
+        items: (0_u64..100)
+            .map(|index| ApiAlbum {
+                album_id: index.into(),
+                artist_id: (index / 4).into(),
+                title: format!("Production album {index}: a long title with bonus tracks"),
+                artist: format!("Production artist {}", index / 4),
+                contains_cover: true,
+                ..Default::default()
+            })
+            .collect(),
+        offset: 0,
+        limit: 100,
+        total: 100,
     };
     let mut failures = Vec::new();
     for (width, height, menu_shown) in [(80, 24), (120, 40), (140, 60)]

@@ -1,3 +1,9 @@
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "sudo apt-get update && sudo apt-get install -y libwayland-dev libxkbcommon-dev"
+
 # Clippier configuration for hyperchad_renderer_egui
 
 [[feature-validation.override]]
