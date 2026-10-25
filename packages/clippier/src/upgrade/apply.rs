@@ -833,7 +833,10 @@ fn verify_no_downgrades(before: &str, after: &str) -> Result<(), BoxError> {
                             && p.get("version") == package.get("version")
                     })
                 {
-                    return Err(format!("Cargo resolution would downgrade {name:?} from {old_version} to {version}; no live files written").into());
+                    let name = name
+                        .and_then(toml::Value::as_str)
+                        .ok_or("locked package lacks name")?;
+                    return Err(format!("Cargo resolution would downgrade {name} from {old_version} to {version}; no live files written").into());
                 }
             }
         }
@@ -902,6 +905,20 @@ fn contains_git(root: &Path) -> Result<bool, BoxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn downgrade_message_uses_plain_package_name() {
+        let lock = |version: &str| {
+            format!(
+                "version=4\n[[package]]\nname='psm'\nversion='{version}'\nsource='registry+https://github.com/rust-lang/crates.io-index'\n"
+            )
+        };
+        let error = verify_no_downgrades(&lock("0.1.31"), &lock("0.1.24")).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Cargo resolution would downgrade psm from 0.1.31 to 0.1.24; no live files written"
+        );
+    }
 
     #[test]
     fn snapshot_does_not_copy_dotenv_credentials_or_assets() {
