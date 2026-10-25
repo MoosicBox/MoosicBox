@@ -900,6 +900,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::similar_names)]
     fn awaited_vector_response_conversion_retains_fragment_provenance() {
         // Mirrors the router's await-then-TryInto<Content> conversion without a
         // runtime: this response is immediately ready and needs no I/O driver.
@@ -911,7 +912,7 @@ mod tests {
         else {
             panic!("immediate response must be ready")
         };
-        let content: Content = nodes.try_into().unwrap();
+        let content: Content = nodes.into();
         let Content::View(view) = content else {
             panic!("expected view")
         };
