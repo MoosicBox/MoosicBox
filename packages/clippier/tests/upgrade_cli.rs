@@ -404,7 +404,7 @@ fn multiple_locked_versions_matching_one_requirement_are_updated_by_identity() {
             .unwrap(),
         );
     fs::write(fixture.path().join("Cargo.lock"), format!("{lock}\n[[package]]\nname='demo'\nversion='2.0.0'\nsource='registry+https://github.com/rust-lang/crates.io-index'\nchecksum='{checksum}'\n")).unwrap();
-    let applied = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    let applied = fixture.run(&["--offline", "--lockfile-only", "--yes", "--output", "json"]);
     assert!(applied.status.success(), "{applied:?}");
     assert_eq!(report(&applied)["outcome"], "APPLIED");
     let resolved = fs::read_to_string(fixture.path().join("Cargo.lock")).unwrap();
@@ -413,7 +413,7 @@ fn multiple_locked_versions_matching_one_requirement_are_updated_by_identity() {
 }
 
 #[test]
-fn default_apply_refreshes_only_lockfile_when_requirement_is_current() {
+fn normal_upgrade_is_informational_when_only_lockfile_refresh_is_available() {
     // >=1.0.0,<2 retains its spelling and already permits the selected 1.2.0.
     let fixture = Fixture::new(Some(">=1.0.0, <2"));
     let original_lock = fixture.seed_lockfile();
@@ -453,8 +453,46 @@ fn default_apply_refreshes_only_lockfile_when_requirement_is_current() {
         fixture.original
     );
 
-    // Captured input/output is nonterminal; -y must bypass confirmation only.
-    let applied = fixture.run(&["--offline", "-y", "--output", "json"]);
+    // Optional refreshes must not trigger confirmation, even with --yes. All
+    // streams are nonterminal, so an attempted prompt would fail this test.
+    let modified = fs::metadata(fixture.path().join("Cargo.lock"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    for args in [
+        vec!["--offline", "--output", "json"],
+        vec!["--offline", "--yes", "--output", "json"],
+    ] {
+        let output = fixture.run(&args);
+        assert!(output.status.success(), "{output:?}");
+        let summary = report(&output);
+        assert_eq!(summary["outcome"], "PLANNED");
+        assert_eq!(summary["report"]["lockfile"], "RESOLVED");
+        assert_eq!(summary["report"]["applied"], false);
+        assert_eq!(
+            fs::read_to_string(fixture.path().join("Cargo.lock")).unwrap(),
+            original_lock
+        );
+        assert_eq!(
+            fs::metadata(fixture.path().join("Cargo.lock"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            modified
+        );
+        assert!(!String::from_utf8(output.stderr).unwrap().contains("Apply"));
+    }
+    let text = fixture.run(&["--offline", "--color", "never"]);
+    assert!(text.status.success(), "{text:?}");
+    let stdout = String::from_utf8(text.stdout).unwrap();
+    assert!(stdout.contains("No declaration upgrades."), "{stdout}");
+    assert!(stdout.contains("--lockfile-only"), "{stdout}");
+    assert!(!String::from_utf8(text.stderr).unwrap().contains("Apply"));
+    // Explicitly requesting a lockfile-only update still requires consent.
+    let blocked = fixture.run(&["--offline", "--lockfile-only", "--output", "json"]);
+    assert!(!blocked.status.success());
+    assert_eq!(report(&blocked)["outcome"], "BLOCKED");
+    let applied = fixture.run(&["--offline", "--lockfile-only", "-y", "--output", "json"]);
     assert!(applied.status.success(), "{applied:?}");
     let summary = report(&applied);
     assert_eq!(summary["outcome"], "APPLIED");
@@ -699,7 +737,7 @@ fn selectors_and_config_overrides_are_forwarded() {
 fn repeated_upgrade_is_a_noop_without_confirmation_or_writes() {
     let fixture = Fixture::new(Some(">=1.0.0, <2"));
     fixture.seed_lockfile();
-    let first = fixture.run(&["--offline", "--yes", "--output", "json"]);
+    let first = fixture.run(&["--offline", "--lockfile-only", "--yes", "--output", "json"]);
     assert!(first.status.success(), "{first:?}");
     assert_eq!(report(&first)["report"]["lockfile"], "APPLIED");
     let lock_path = fixture.path().join("Cargo.lock");
@@ -754,7 +792,11 @@ fn unavailable_features_are_named_and_not_hidden_by_noop() {
     let second = fixture.run(&["--offline", "--output", "json"]);
     assert!(second.status.success(), "{second:?}");
     let summary = report(&second);
-    assert_eq!(summary["report"]["pending"], false);
+    // Normal upgrade remains informational, including when the optional
+    // lockfile creation is still pending. Diagnostics must not disappear.
+    assert_eq!(summary["outcome"], "PLANNED");
+    assert_eq!(summary["report"]["applied"], false);
+    assert!(!fixture.path().join("Cargo.lock").exists());
     assert_eq!(
         summary["report"]["dependencies"][0]["status"],
         "UNAVAILABLE"

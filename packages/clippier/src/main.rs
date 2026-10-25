@@ -492,6 +492,11 @@ mod upgrade_cli {
         if changed == 0 && warnings == 0 {
             let message = match report.lockfile {
                 clippier::upgrade::LockfileStatus::Applied => "Lockfile updated.",
+                clippier::upgrade::LockfileStatus::Resolved
+                    if report.manifests.is_empty() && !report.lockfile_only =>
+                {
+                    "No declaration upgrades. Optional lockfile refresh available; use --lockfile-only to apply it."
+                }
                 clippier::upgrade::LockfileStatus::Resolved => "Lockfile changes available.",
                 clippier::upgrade::LockfileStatus::Unresolved => {
                     "No manifest upgrades; lockfile changes not yet resolved."
@@ -669,7 +674,9 @@ mod upgrade_cli {
             return Ok(1);
         }
         let preview = command.command.is_some() || flags.dry_run || flags.check;
-        if preview || !has_work {
+        let informational =
+            matches!(scope, Scope::Apply) && report.manifests.is_empty() && !report.lockfile_only;
+        if preview || !has_work || informational {
             let failed_check = flags.check && has_work;
             emit(
                 flags,
