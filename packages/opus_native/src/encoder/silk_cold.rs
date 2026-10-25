@@ -1,6 +1,145 @@
 //! Exact captured cold-entry prefix qualification (test-only).
 use super::*;
 
+pub(super) fn trace_trial(
+    (trial, pressure, bits, budget): (i32, u32, u64, usize),
+    indices: &[i32],
+    inputs: &[Vec<i32>],
+    quantized: &[SharedQuantizedFrame],
+) {
+    let error: i128 = inputs
+        .iter()
+        .zip(quantized)
+        .map(|(input, frame)| {
+            let pcm = &frame.2;
+            input
+                .iter()
+                .zip(pcm)
+                .map(|(&target, &sample)| (i128::from(target) - i128::from(sample)).pow(2))
+                .sum::<i128>()
+        })
+        .sum();
+    eprintln!(
+        "SILK_TRIAL trial={trial} pressure={pressure} bits={bits} budget={budget} fit={} error={error} indices={indices:?}",
+        bits as usize <= budget
+    );
+}
+
+#[test]
+#[cfg(feature = "hybrid")]
+#[ignore = "requires actual snapshot via MOOSICBOX_OPUS_SILK_PREFIX_REPLAY; enable SILK_TRIAL_TRACE for fit frontier"]
+fn captured_prefix_budget_frontier() {
+    let path = std::env::var_os("MOOSICBOX_OPUS_SILK_PREFIX_REPLAY").unwrap();
+    let text = std::fs::read_to_string(path).unwrap();
+    let mut words = text
+        .split_whitespace()
+        .map(|word| word.parse::<i64>().unwrap());
+    let bitrate = words.next().unwrap() as u32;
+    let frame_size = words.next().unwrap() as usize;
+    let channels = match words.next().unwrap() {
+        1 => crate::Channels::Mono,
+        2 => crate::Channels::Stereo,
+        _ => panic!("invalid snapshot channels"),
+    };
+    let capacity = words.next().unwrap() as usize;
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels,
+        frame_size,
+        bitrate,
+    };
+    let mut state = SilkEncoder::new(config).unwrap();
+    for channel in 0..2 {
+        state.gain[channel] = words.next().unwrap() as i32;
+        state.previous_index[channel] = words.next().unwrap() as i32;
+        for value in &mut state.history[channel] {
+            *value = words.next().unwrap() as i32;
+        }
+        let count = words.next().unwrap() as usize;
+        state.pcm_history[channel] = words
+            .by_ref()
+            .take(count)
+            .map(|value| value as i16)
+            .collect();
+    }
+    let input: Vec<_> = words.map(|value| f32::from_bits(value as u32)).collect();
+    assert_eq!(
+        input.len(),
+        frame_size * super::super::channel_count(channels)
+    );
+    let mut reference = state.clone();
+    reference.quantizer_cache_disabled = true;
+    let mut coder = RangeEncoder::new(capacity).unwrap();
+    let mut reference_coder = coder.clone();
+    reference
+        .encode_prefix_ranked(&input, &mut reference_coder)
+        .unwrap();
+    state.encode_prefix_ranked(&input, &mut coder).unwrap();
+    assert_eq!(format!("{coder:?}"), format!("{reference_coder:?}"));
+    assert_eq!(state.history, reference.history);
+    assert_eq!(state.gain, reference.gain);
+    assert_eq!(state.previous_index, reference.previous_index);
+    assert_eq!(state.pcm_history, reference.pcm_history);
+    assert_eq!(
+        coder.clone().finish().unwrap(),
+        reference_coder.finish().unwrap()
+    );
+    eprintln!(
+        "SILK_REPLAY bitrate={bitrate} frame_size={frame_size} capacity={capacity} bits={} indices={:?}",
+        coder.tell(),
+        state.previous_index
+    );
+    coder.finish().unwrap();
+}
+
+/// Opt-in snapshots of actual prefix calls, including committed predictor state.
+/// Only pristine incoming coders can currently be replayed by this diagnostic.
+#[cfg(feature = "hybrid")]
+pub(super) fn capture_prefix(state: &SilkEncoder, input: &[f32], coder: &RangeEncoder) {
+    static SEQUENCE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let Some(directory) = std::env::var_os("MOOSICBOX_OPUS_SILK_PREFIX_CAPTURE") else {
+        return;
+    };
+    if coder.tell() != 1 || state.config.sample_rate != SampleRate::Hz16000 {
+        return;
+    }
+    let sequence = SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut words = vec![
+        state.config.bitrate.to_string(),
+        state.config.frame_size.to_string(),
+        super::super::channel_count(state.config.channels).to_string(),
+        coder.clone().finish().unwrap().len().to_string(),
+    ];
+    for channel in 0..2 {
+        words.push(state.gain[channel].to_string());
+        words.push(state.previous_index[channel].to_string());
+        words.extend(state.history[channel].iter().map(ToString::to_string));
+        words.push(state.pcm_history[channel].len().to_string());
+        words.extend(state.pcm_history[channel].iter().map(ToString::to_string));
+    }
+    words.extend(input.iter().map(|value| value.to_bits().to_string()));
+    let directory = std::path::Path::new(&directory);
+    std::fs::create_dir_all(directory).unwrap();
+    let path = directory.join(format!("prefix-{sequence}.txt"));
+    std::fs::write(&path, words.join("\n")).unwrap();
+    eprintln!(
+        "SILK prefix snapshot {} bitrate={}",
+        path.display(),
+        state.config.bitrate
+    );
+}
+
+#[test]
+fn quantizer_cache_uses_exact_channel_and_spectral_identity() {
+    let mut cache = QuantizerCache::default();
+    let first = cache.model_id(0, &[17, -29], None);
+    assert_eq!(first, cache.model_id(0, &[17, -29], None));
+    assert_ne!(first, cache.model_id(1, &[17, -29], None));
+    assert_ne!(first, cache.model_id(0, &[17, -28], None));
+    assert_ne!(first, cache.model_id(0, &[17, -29, 0], None));
+    assert_eq!(cache.models.len(), 4);
+}
+
 #[test]
 #[cfg(feature = "hybrid")]
 fn memoized_low_budget_prefix_is_bit_exact() {
@@ -33,6 +172,7 @@ fn memoized_low_budget_prefix_is_bit_exact() {
                 .encode_prefix_ranked(&input, &mut expected)
                 .unwrap();
             assert_eq!(actual.tell(), expected.tell());
+            assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
             let packet = actual.finish().unwrap();
             assert_eq!(packet, expected.finish().unwrap());
             let mut outputs = Vec::new();

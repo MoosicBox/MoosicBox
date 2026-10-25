@@ -257,6 +257,200 @@ with module.Oracle(sys.argv[2]) as oracle:
     pcm
 }
 
+// These are acceptance tests for the intended public envelope, including cells
+// still blocked by native codec guards. Unsupported is deliberately not success.
+
+// Do not replace the process-global panic hook: tests may run concurrently.
+// Libtest captures hook output; the final assertion lists every failed cell.
+fn public_case_failure(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&str>().copied())
+        .unwrap_or("non-string panic payload")
+}
+
+fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
+    let mut failures = Vec::new();
+    let mut attempted = 0;
+    for &bitrate in bitrates {
+        for channels in [1, 2] {
+            for frame_size in [480, 960] {
+                for (input_rate, input_frames) in [(48_000, 2457), (44_100, 2258)] {
+                    let config = OpusEncodeConfig {
+                        backend: OpusEncodeBackend::Native,
+                        mode,
+                        sample_rate: 48_000,
+                        channels,
+                        frame_size,
+                        bitrate,
+                    };
+                    attempted += 1;
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let mut encoder =
+                            SelectedOpusEncoder::new(config).unwrap_or_else(|error| {
+                                panic!("public constructor {config:?}: {error}")
+                            });
+                        let mut bytes = encoder
+                            .encode(input(input_rate, channels, input_frames))
+                            .unwrap_or_else(|error| {
+                                panic!("public encode {config:?}, input_rate={input_rate}: {error}")
+                            })
+                            .to_vec();
+                        bytes.extend_from_slice(
+                            &encoder.finish().unwrap_or_else(|error| {
+                                panic!("public finish {config:?}: {error}")
+                            }),
+                        );
+                        assert!(encoder.finish().unwrap().is_empty(), "{config:?}");
+                        let full = play(bytes.clone(), None);
+                        assert_eq!(full.len(), usize::from(channels), "{config:?}");
+                        for plane in &full {
+                            assert_eq!(plane.len(), 2457, "{config:?}, input_rate={input_rate}");
+                            assert!(plane.iter().all(|sample| sample.is_finite()), "{config:?}");
+                            assert!(
+                                plane.iter().any(|sample| sample.abs() > 0.001),
+                                "{config:?}"
+                            );
+                        }
+                        let sought = play(bytes.clone(), Some(0.05));
+                        assert_eq!(sought.len(), full.len());
+                        for (actual, expected) in sought.iter().zip(&full) {
+                            assert_eq!(
+                                actual,
+                                &expected[2400..],
+                                "public low-rate seek: {config:?}"
+                            );
+                        }
+                        let gained = play(with_gain(bytes, -1536), None);
+                        let factor = 10.0_f32.powf(-1536.0 / (256.0 * 20.0));
+                        assert_eq!(gained.len(), full.len());
+                        for (actual, expected) in gained.iter().zip(&full) {
+                            assert_eq!(actual.len(), 2457);
+                            for (actual, expected) in actual.iter().zip(expected) {
+                                assert_eq!(
+                                    *actual,
+                                    *expected * factor,
+                                    "gain exactly once: {config:?}"
+                                );
+                            }
+                        }
+                    }));
+                    if let Err(payload) = outcome {
+                        failures.push(format!(
+                            "{config:?}, input_rate={input_rate}, input_frames={input_frames}: {}",
+                            public_case_failure(payload.as_ref())
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} / {attempted} public player cells failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn intended_public_silk_low_rates_reach_player_and_seek() {
+    intended_public_low_rate_playback(OpusEncodeMode::Silk, &[16_000, 24_000, 32_000, 64_000]);
+}
+
+#[test]
+fn intended_public_hybrid_low_rates_reach_player_and_seek() {
+    intended_public_low_rate_playback(OpusEncodeMode::Hybrid, &[32_000, 64_000]);
+}
+
+#[test]
+fn intended_public_auto_low_budget_mode_controls_reach_player() {
+    let mut failures = Vec::new();
+    let mut attempted = 0;
+    use moosicbox_audio_output::encoder::opus::EncoderMode;
+
+    for bitrate in [32_000, 64_000] {
+        for channels in [1, 2] {
+            for frame_size in [480, 960] {
+                let config = OpusEncodeConfig {
+                    backend: OpusEncodeBackend::Native,
+                    mode: OpusEncodeMode::Auto,
+                    sample_rate: 48_000,
+                    channels,
+                    frame_size,
+                    bitrate,
+                };
+                attempted += 1;
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let mut encoder = SelectedOpusEncoder::new(config)
+                        .unwrap_or_else(|error| panic!("public Auto {config:?}: {error}"));
+                    let mut control = encoder.control().expect("native requested controls");
+                    let mut bytes = encoder
+                        .encode(input(48_000, channels, frame_size))
+                        .unwrap()
+                        .to_vec();
+                    control.mode = EncoderMode::Hybrid;
+                    encoder.set_control(control).unwrap_or_else(|error| {
+                        panic!("intended low-budget Hybrid entry {config:?}: {error}")
+                    });
+                    bytes.extend_from_slice(
+                        &encoder
+                            .encode(input(48_000, channels, frame_size))
+                            .unwrap_or_else(|error| {
+                                panic!("public Hybrid boundary {config:?}: {error}")
+                            }),
+                    );
+                    assert_eq!(
+                        encoder.active_mode(),
+                        Some(EncoderMode::Hybrid),
+                        "{config:?}"
+                    );
+                    control.mode = EncoderMode::Celt;
+                    encoder.set_control(control).unwrap_or_else(|error| {
+                        panic!("intended low-budget CELT departure {config:?}: {error}")
+                    });
+                    bytes.extend_from_slice(
+                        &encoder
+                            .encode(input(48_000, channels, 2457 - 2 * frame_size))
+                            .unwrap_or_else(|error| panic!("public departure {config:?}: {error}")),
+                    );
+                    bytes.extend_from_slice(&encoder.finish().unwrap());
+                    assert!(encoder.finish().unwrap().is_empty());
+                    let full = play(bytes.clone(), None);
+                    assert_eq!(full.len(), usize::from(channels));
+                    for plane in &full {
+                        assert_eq!(plane.len(), 2457, "{config:?}");
+                        assert!(plane.iter().any(|sample| sample.abs() > 0.001));
+                    }
+                    let sought = play(bytes, Some(0.05));
+                    assert_eq!(sought.len(), full.len());
+                    for (actual, expected) in sought.iter().zip(full) {
+                        assert_eq!(actual, &expected[2400..], "controlled seek: {config:?}");
+                    }
+                }));
+                if let Err(payload) = outcome {
+                    failures.push(format!(
+                        "{config:?}: {}",
+                        public_case_failure(payload.as_ref())
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} / {attempted} public player cells failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn intended_public_auto_low_rates_reach_player_and_seek() {
+    intended_public_low_rate_playback(OpusEncodeMode::Auto, &[32_000, 64_000]);
+}
+
 #[test]
 fn selected_modes_reenter_native_player_with_exact_tail_and_seek() {
     selected_modes(false);

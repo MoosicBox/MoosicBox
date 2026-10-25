@@ -30,6 +30,13 @@ PLATFORMS = {
     "windows-x64": ("Windows", {"amd64", "x86_64"}),
 }
 FEATURES = "celt,silk,hybrid"
+LIVE_SHARD_COUNT = 8
+LIVE_SHARDS = tuple(f"live-{index}" for index in range(LIVE_SHARD_COUNT))
+PUBLIC_SHARDS = tuple(f"public-{index}" for index in range(24))
+LAYOUT_SHARDS = tuple(f"layout-{index}" for index in range(40))
+QUALITY_SHARDS = ("core",) + LIVE_SHARDS + PUBLIC_SHARDS + LAYOUT_SHARDS
+LAYOUT_TEST = "encoder::adaptive::tests::reference_practical_layout_quality"
+PUBLIC_MEDIA_TEST = "encoder::silk::public::public_practical_floor_media_matrix"
 
 
 def digest(path):
@@ -180,6 +187,11 @@ LIVE_INTEGRATION = {
     "stream_decoder_tests": "persistent_silk_duration_changes_match_public_c_decoder public_celt_loss_bursts_and_recovery_match_pinned_api public_celt_loss_output_rates_match_pinned_api public_silk_loss_prototype_matches_pinned_api persistent_mode_transitions_match_public_c legal_empty_constituent_matches_public_c public_hybrid_loss_matches_pinned_api public_hybrid_short_loss_matches_pinned_api missing_lbrr_uses_real_plc_and_preserves_current_packet exhausted_hybrid_and_empty_constituent_match_public_c",
 }
 LIVE_LIBRARY = (
+    LAYOUT_TEST,
+    "encoder::silk::public::standalone_reviewed_first_frame_search_parity",
+    "encoder::silk::public::standalone_reviewed_pulse_kernel_parity",
+    PUBLIC_MEDIA_TEST,
+    "encoder::adaptive::tests::practical_prepared_prefix_exact_identity",
     "encoder::silk::public::public_floor_synthetic_matrix",
     "encoder::silk::public::public_floor_real_speech_matrix",
     "encoder::silk::public::public_native_fingerprint_stream_c_parity",
@@ -196,6 +208,9 @@ LIVE_LIBRARY = (
 # those intentionally fail until guards/capability satisfy the acceptance contract.
 # Cold-prefix diagnostics require independent captured state, not fabricated input.
 DEVELOPMENT_ONLY = {
+    "captured_prefix_budget_frontier": "development replay requires an actual independent SILK prefix snapshot",
+    "reference_public_practical_rd_voiced_10ms": "focused voiced diagnostic; full public RD matrix remains required",
+    "practical_rd_voiced_proof_packet_identity": "production/proof state-equivalence diagnostic; not public quality acceptance",
     "reference_unredundant_closed_loop_energy_proof": "test-only closed-loop energy candidate; public unredundant transition acceptance remains required",
     "internal_practical_floor_media_matrix": "internal low-rate candidate; public floor equivalents remain required acceptance gates",
     "comfort_noise_estimate_matches_pinned_cng_state": "private CNG component compiler oracle; not public API acceptance",
@@ -241,8 +256,50 @@ def acceptance_inventory():
     return required
 
 
-def live_acceptance(execution, profile, env):
+def public_cases(shard):
+    if shard not in PUBLIC_SHARDS:
+        raise ValueError("public case selection requires a public-N shard")
+    from qualification_silk import cases
+
+    complete = cases()
+    if len(complete) != 192 or len(set(complete)) != 192:
+        raise RuntimeError("reviewed public case enumeration changed")
+    return complete[int(shard.removeprefix("public-")) :: len(PUBLIC_SHARDS)]
+
+
+def layout_cell(shard):
+    if shard not in LAYOUT_SHARDS:
+        raise ValueError("layout selection requires a layout-N shard")
+    cells = [
+        f"{rate}:{channels}:{duration}:{shape}"
+        for rate in (24000, 48000)
+        for channels in (1, 2)
+        for duration in (10, 20)
+        for shape in range(5)
+    ]
+    return cells[int(shard.removeprefix("layout-"))]
+
+
+def selected_live_tests(shard=None):
     required = acceptance_inventory()
+    if shard is None:
+        return required
+    if shard in LAYOUT_SHARDS:
+        return [("--lib", None, LAYOUT_TEST)]
+    if shard in PUBLIC_SHARDS:
+        return [("--lib", None, PUBLIC_MEDIA_TEST)]
+    if shard not in LIVE_SHARDS:
+        raise ValueError("live acceptance requires a known live-N or public-N shard")
+    index = int(shard.removeprefix("live-"))
+    required = [
+        row for row in required if row[2] not in (PUBLIC_MEDIA_TEST, LAYOUT_TEST)
+    ]
+    # Stable round-robin selection is independent of hosted runner scheduling.
+    return required[index::LIVE_SHARD_COUNT]
+
+
+def live_acceptance(execution, profile, env, shard=None):
+    required = selected_live_tests(shard)
     write_json(
         execution.output / "acceptance-inventory.json",
         {
@@ -252,7 +309,29 @@ def live_acceptance(execution, profile, env):
             "strict_matrix": "required frozen-C and reviewed media; no --diagnostic",
         },
     )
+    if shard in PUBLIC_SHARDS:
+        cases_to_run = public_cases(shard)
+    elif shard is None:
+        # Local full inventory execution still expands public media into exact
+        # cases; no inherited filter can quietly reduce a mandatory matrix.
+        from qualification_silk import cases
+
+        cases_to_run = cases()
+    else:
+        cases_to_run = ()
+    invocations = []
     for kind, target, name in required:
+        filters = cases_to_run if name == PUBLIC_MEDIA_TEST else (None,)
+        for case in filters:
+            clean_env = dict(env)
+            clean_env.pop("MOOSICBOX_OPUS_SILK_CASE", None)
+            clean_env.pop("MOOSICBOX_OPUS_LAYOUT_CELL", None)
+            if name == LAYOUT_TEST and shard in LAYOUT_SHARDS:
+                clean_env["MOOSICBOX_OPUS_LAYOUT_CELL"] = layout_cell(shard)
+            if case is not None:
+                clean_env["MOOSICBOX_OPUS_SILK_CASE"] = case
+            invocations.append((kind, target, name, case, clean_env))
+    for kind, target, name, case, selected_env in invocations:
         args = [
             "cargo",
             "test",
@@ -271,11 +350,25 @@ def live_acceptance(execution, profile, env):
             args.append(target)
         if profile == "release":
             args.append("--release")
-        args += [name, "--", "--ignored", "--exact", "--test-threads=1"]
-        output = execution.run(args, timeout=600, env=env)
+        args += [
+            name,
+            "--",
+            "--ignored",
+            "--exact",
+            "--test-threads=1",
+            "--show-output",
+        ]
+        output = execution.run(args, timeout=600, env=selected_env)
         # Cargo exits zero for a misspelled/filtered test: fail closed on zero runs.
         if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
             raise RuntimeError(f"required exact live test did not execute once: {name}")
+        if name == LAYOUT_TEST and shard in LAYOUT_SHARDS:
+            # Rust harness diagnostics are normally captured on success. Request
+            # --show-output below so the cell's explicit proof count is retained.
+            if "layout qualification executed=1 filtered=true" not in output:
+                raise RuntimeError(
+                    "layout shard did not prove exactly one filtered cell"
+                )
 
 
 def media_environment(directory, destination, base_env, reference):
@@ -317,6 +410,7 @@ def media_environment(directory, destination, base_env, reference):
     )
     return dict(
         base_env,
+        MOOSICBOX_OPUS_QUALIFICATION_MEDIA=str(Path(directory).resolve()),
         MOOSICBOX_OPUS_REFERENCE_ORACLE=str(reference),
         MOOSICBOX_OPUS_SPEECH_WAV=str(paths["speech"]),
         MOOSICBOX_OPUS_HYBRID_REAL_PCM=str(raw),
@@ -380,7 +474,8 @@ def run(args):
     compiler = execution.run(["rustc", "-vV"], timeout=30)
     revision = execution.run(["git", "rev-parse", "HEAD"], timeout=30).strip()
     report = {
-        "schema": "moosicbox.opus.ci.v1",
+        "schema": "moosicbox.opus.ci.v2",
+        "quality_shard": args.quality_shard if args.mode == "quality" else None,
         "mode": args.mode,
         "platform": args.platform,
         "profile": args.profile,
@@ -481,31 +576,38 @@ def run(args):
         }
         write_json(output / "build-receipt.json", receipt)
         execution.run([reference, "provenance"], timeout=30)
-        execution.run(
-            [
-                sys.executable,
-                "-B",
-                ROOT / "packages/opus_native/libopus/src/oracle_tests.py",
-                reference,
-            ],
-            timeout=600,
-        )
-        native_tests(execution, args.profile, "moosicbox_opus_native_test_runner")
-        scoreboard = execution.build(
-            "moosicbox_opus_native_test_runner",
-            "moosicbox_opus_native_test_runner",
-            args.profile,
-            binary=True,
-        )
-        execution.run([scoreboard], timeout=1800)
-        live_env = media_environment(output / "media", output, execution.env, reference)
-        live_acceptance(execution, args.profile, live_env)
-        strict_matrix(execution, native, reference)
-        report.update(
-            native_sha256=digest(native),
-            reference_sha256=digest(reference),
-            quality_sha256=digest(output / "quality.json"),
-        )
+        if args.quality_shard == "core":
+            execution.run(
+                [
+                    sys.executable,
+                    "-B",
+                    ROOT / "packages/opus_native/libopus/src/oracle_tests.py",
+                    reference,
+                ],
+                timeout=600,
+            )
+            native_tests(execution, args.profile, "moosicbox_opus_native_test_runner")
+            scoreboard = execution.build(
+                "moosicbox_opus_native_test_runner",
+                "moosicbox_opus_native_test_runner",
+                args.profile,
+                binary=True,
+            )
+            execution.run([scoreboard], timeout=1800)
+            strict_matrix(execution, native, reference)
+            report["quality_sha256"] = digest(output / "quality.json")
+        else:
+            live_env = media_environment(
+                output / "media", output, execution.env, reference
+            )
+            live_acceptance(execution, args.profile, live_env, args.quality_shard)
+            report["required_tests"] = selected_live_tests(args.quality_shard)
+            if args.quality_shard in LAYOUT_SHARDS:
+                report["layout_cell"] = layout_cell(args.quality_shard)
+            if args.quality_shard in PUBLIC_SHARDS:
+                report["public_cases"] = public_cases(args.quality_shard)
+            report["media_transform_sha256"] = digest(output / "media-transform.json")
+        report.update(native_sha256=digest(native), reference_sha256=digest(reference))
     after = sources()
     write_json(output / "sources-after.json", after)
     if after != before:
@@ -527,70 +629,111 @@ def run(args):
 
 def compare(args):
     paths = sorted(args.root.rglob("ci.json"))
-    identities = set()
-    native = []
+    identities, reports, native = set(), [], []
     expected = {
-        (platform_id, profile, "native")
-        for platform_id in PLATFORMS
+        (pid, profile, "native", None)
+        for pid in PLATFORMS
         for profile in ("debug", "release")
     }
-    expected |= {(platform_id, "release", "quality") for platform_id in PLATFORMS}
+    expected |= {
+        (pid, "release", "quality", shard)
+        for pid in PLATFORMS
+        for shard in QUALITY_SHARDS
+    }
     for path in paths:
         report = json.loads(path.read_text(encoding="utf-8"))
-        if report.get("schema") != "moosicbox.opus.ci.v1":
+        if report.get("schema") != "moosicbox.opus.ci.v2":
             raise RuntimeError("unsupported CI evidence schema")
-        identity = (report["platform"], report["profile"], report["mode"])
-        if identity in identities or report.get("accepted") is not True:
-            raise RuntimeError(f"duplicate or failed execution evidence: {identity}")
+        identity = (
+            report["platform"],
+            report["profile"],
+            report["mode"],
+            report.get("quality_shard"),
+        )
+        if (
+            identity not in expected
+            or identity in identities
+            or report.get("accepted") is not True
+        ):
+            raise RuntimeError(
+                f"unexpected, duplicate or failed execution evidence: {identity}"
+            )
         identities.add(identity)
+        reports.append(report)
         if report["mode"] == "native":
             if probe_files(path.parent / "data") != report["fingerprints"]:
                 raise RuntimeError(
                     "downloaded probe artifact bytes differ from fingerprints"
                 )
-            executable_file = Path(report["executable_file"])
-            if executable_file.name != str(executable_file):
+            filename = Path(report["executable_file"])
+            if filename.name != str(filename):
                 raise RuntimeError("executable must be an artifact-local basename")
-            if digest(path.parent / executable_file) != report["executable_sha256"]:
+            if digest(path.parent / filename) != report["executable_sha256"]:
                 raise RuntimeError("downloaded executable identity mismatch")
             native.append(report)
-        else:
+        elif report["quality_shard"] == "core":
             quality_path = path.parent / "quality.json"
             quality = json.loads(quality_path.read_text(encoding="utf-8"))
             if (
                 digest(quality_path) != report["quality_sha256"]
                 or quality.get("accepted") is not True
+                or quality.get("failures") != 0
             ):
-                raise RuntimeError("strict quality evidence missing or changed")
+                raise RuntimeError("strict quality evidence missing, failed or changed")
+        else:
+            required = [
+                list(row) for row in selected_live_tests(report["quality_shard"])
+            ]
+            if report.get("required_tests") != required:
+                raise RuntimeError("live shard required-test coverage changed")
+            if report["quality_shard"] in LAYOUT_SHARDS:
+                if report.get("layout_cell") != layout_cell(report["quality_shard"]):
+                    raise RuntimeError("required 40-cell layout coverage changed")
+            if report["quality_shard"] in PUBLIC_SHARDS:
+                if report.get("public_cases") != list(
+                    public_cases(report["quality_shard"])
+                ):
+                    raise RuntimeError("public 192-case shard coverage changed")
+            if (
+                digest(path.parent / "media-transform.json")
+                != report["media_transform_sha256"]
+            ):
+                raise RuntimeError("reviewed media transformation changed")
     if identities != expected:
         raise RuntimeError(
-            f"missing/unexpected real executions: {sorted(expected - identities)}"
+            f"missing real executions: {sorted(expected - identities, key=str)}"
         )
     baseline = native[0]
-    for path in paths:
-        report = json.loads(path.read_text(encoding="utf-8"))
-        if any(
-            report[key] != baseline[key]
-            for key in ("schema", "revision", "source_sha256")
-        ):
-            raise RuntimeError(
-                "quality/native jobs did not execute a common source snapshot"
-            )
-    for report in native[1:]:
-        for key in ("schema", "revision", "source_sha256", "fingerprints"):
+    compiler = lambda value: [
+        line for line in value.splitlines() if not line.startswith("host:")
+    ]
+    for report in reports:
+        for key in ("schema", "revision", "source_sha256"):
             if report[key] != baseline[key]:
                 raise RuntimeError(
-                    f"cross-platform exact {key} mismatch: {report['platform']}/{report['profile']}"
+                    "quality/native shards did not execute a common source snapshot"
                 )
-        # Host triples legitimately differ; compiler release/commit must not.
-        compiler = lambda value: [
-            line for line in value.splitlines() if not line.startswith("host:")
-        ]
         if compiler(report["rustc"]) != compiler(baseline["rustc"]):
             raise RuntimeError("compiler version differs across real platform runs")
+    for report in native[1:]:
+        if report["fingerprints"] != baseline["fingerprints"]:
+            raise RuntimeError("cross-platform exact fingerprints mismatch")
+    write_json(
+        args.root / "platform-acceptance.json",
+        {
+            "schema": "moosicbox.opus.platform-acceptance.v1",
+            "accepted": True,
+            "executions": [list(identity) for identity in sorted(identities, key=str)],
+            "required_live_tests_per_platform": len(acceptance_inventory()),
+            "revision": baseline["revision"],
+            "source_sha256": baseline["source_sha256"],
+            "scope": "only actual configurations; no hardware or perceptual acceptance",
+        },
+    )
     print(
-        "Exact packet/PCM/input/corpus SHA-256 agreement: eight real platform/profile runs; "
-        "four strict quality/media/frozen-C runs accepted. No unexecuted platform claim."
+        "Exact packet/PCM/input/corpus SHA-256 agreement: eight native executions; "
+        "four strict frozen/media core runs and all 288 required live/public/layout shards accepted. "
+        "No unexecuted platform claim."
     )
 
 
@@ -602,6 +745,12 @@ def main():
     runner.add_argument("--profile", choices=("debug", "release"), required=True)
     runner.add_argument("--platform", choices=tuple(PLATFORMS), required=True)
     runner.add_argument("--output", type=Path, required=True)
+    runner.add_argument(
+        "--quality-shard",
+        choices=QUALITY_SHARDS,
+        default="core",
+        help="core frozen/media matrix or one mandatory live-test shard",
+    )
     media = runner.add_mutually_exclusive_group()
     media.add_argument("--music-wav-url")
     media.add_argument(

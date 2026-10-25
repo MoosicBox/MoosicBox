@@ -286,6 +286,10 @@ fn compare_reference(scenario: &str, channels: Channels, gain: i16) {
     };
     let mut decoder = Decoder::new(rate, channels).unwrap();
     decoder.set_gain(gain);
+    // Keep independent float history through FEC, PLC, channel changes and recovery.
+    // Expected values remain the unchanged integer PCM returned by pinned C.
+    let mut floating = Decoder::new(rate, channels).unwrap();
+    floating.set_gain(gain);
     let mut step = 0;
     while !bytes.is_empty() {
         let header: Vec<_> = bytes[..16]
@@ -304,6 +308,32 @@ fn compare_reference(scenario: &str, channels: Channels, gain: i16) {
             .map(|x| i16::from_le_bytes(*x))
             .collect();
         bytes = &bytes[header[3] * 2..];
+        if packet.is_empty() {
+            let mut loss = vec![123; expected.len() + 3];
+            assert_eq!(
+                floating.decode_loss(&mut loss, header[1]).unwrap(),
+                header[1]
+            );
+            assert_eq!(&loss[..expected.len()], expected.as_slice());
+            assert_eq!(&loss[expected.len()..], &[123; 3]);
+        } else {
+            let mut float = vec![0.25; expected.len() + 1];
+            // FEC duration is requested through output capacity, so exclude guards.
+            assert_eq!(
+                floating
+                    .decode_float(Some(packet), &mut float[..expected.len()], header[2] != 0)
+                    .unwrap(),
+                header[1]
+            );
+            for (&value, &sample) in float.iter().zip(&expected) {
+                assert_eq!(
+                    value.to_bits(),
+                    (f32::from(sample) / 32768.0).to_bits(),
+                    "float {scenario} {channels:?} step {step}, gain {gain}"
+                );
+            }
+            assert_eq!(float[expected.len()].to_bits(), 0.25_f32.to_bits());
+        }
         let mut actual = vec![123; expected.len()];
         let result = if packet.is_empty() {
             decoder.decode_loss(&mut actual, header[1])
@@ -352,6 +382,18 @@ fn malformed_celt_postfilter_wraps_reference_signal_arithmetic() {
     let _ = decoder.decode(Some(&packet), audio, false);
     assert_eq!(guard, &[1234; 16]);
     decoder.reset_state().unwrap();
+    let mut fresh = Decoder::new(SampleRate::Hz12000, Channels::Stereo).unwrap();
+    let valid = include_bytes!("../test_vectors/frozen/celt_fb_stereo/packet.bin");
+    let mut expected = [0; 480];
+    for _ in 0..3 {
+        assert_eq!(decoder.decode(Some(valid), audio, false).unwrap(), 240);
+        assert_eq!(
+            fresh.decode(Some(valid), &mut expected, false).unwrap(),
+            240
+        );
+        assert_eq!(&audio[..480], &expected);
+    }
+    assert_eq!(guard, &[1234; 16]);
 }
 
 #[test]

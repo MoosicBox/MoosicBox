@@ -42,6 +42,132 @@ async fn collect(config: OpusEncodeConfig) -> Vec<u8> {
     }
     bytes
 }
+
+// Do not replace the process-global panic hook: tests may run concurrently.
+// Libtest captures hook output; the final assertion lists every failed cell.
+fn public_case_failure(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| payload.downcast_ref::<&str>().copied())
+        .unwrap_or("non-string panic payload")
+}
+
+async fn intended_public_file_mode_acceptance(
+    mode: moosicbox_audio_output::encoder::opus::OpusEncodeMode,
+    rates: &[u32],
+    bitrates: &[u32],
+) {
+    use std::io::Cursor;
+    use symphonia::core::{audio::Audio, formats::probe::Hint, io::MediaSourceStream};
+
+    let original = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/silk.ogg"
+    ))
+    .unwrap();
+    let decode = |bytes: Vec<u8>| {
+        let format = moosicbox_audio_decoder::create_format_probe()
+            .probe(
+                &Hint::new(),
+                MediaSourceStream::new(Box::new(Cursor::new(bytes)), Default::default()),
+                Default::default(),
+                Default::default(),
+            )
+            .unwrap();
+        let buffers: Vec<_> = moosicbox_audio_decoder::unsync::decode_with_options_result(
+            format,
+            None,
+            None,
+            options(),
+        )
+        .unwrap()
+        .iter()
+        .map(Result::unwrap)
+        .collect();
+        let frames = buffers.iter().map(Audio::frames).sum::<usize>();
+        assert!(
+            buffers
+                .iter()
+                .flat_map(|audio| audio.iter_planes())
+                .any(|plane| plane.iter().any(|sample| sample.abs() > 0.001))
+        );
+        frames
+    };
+    use futures::FutureExt;
+    let mut failures = Vec::new();
+    let mut attempted = 0;
+    let source_frames = decode(original.clone());
+    for &sample_rate in rates {
+        for &bitrate in bitrates {
+            let config = OpusEncodeConfig {
+                mode,
+                bitrate,
+                ..config(sample_rate)
+            };
+            attempted += 1;
+            let outcome = std::panic::AssertUnwindSafe(async {
+                // collect() unwraps both layers of terminal stream errors: a closed
+                // public codec guard is a failure, never an accepted test outcome.
+                let bytes = collect(config).await;
+                assert_ne!(bytes, original, "must actually transcode: {config:?}");
+                assert_eq!(
+                    decode(bytes.clone()),
+                    source_frames,
+                    "public file clock: {config:?}"
+                );
+                assert_eq!(
+                    bytes,
+                    collect(config).await,
+                    "fresh file encoder state: {config:?}"
+                );
+            })
+            .catch_unwind()
+            .await;
+            if let Err(payload) = outcome {
+                failures.push(format!(
+                    "{config:?}: {}",
+                    public_case_failure(payload.as_ref())
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} / {attempted} public file cells failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+#[switchy_async::test]
+async fn intended_public_silk_low_rate_files_transcode_and_decode() {
+    use moosicbox_audio_output::encoder::opus::OpusEncodeMode;
+    intended_public_file_mode_acceptance(
+        OpusEncodeMode::Silk,
+        &[8000, 12000, 16000, 24000, 48000],
+        &[16_000, 24_000, 32_000, 64_000],
+    )
+    .await;
+}
+
+#[switchy_async::test]
+async fn intended_public_hybrid_low_rate_files_transcode_and_decode() {
+    use moosicbox_audio_output::encoder::opus::OpusEncodeMode;
+    intended_public_file_mode_acceptance(
+        OpusEncodeMode::Hybrid,
+        &[24000, 48000],
+        &[32_000, 64_000],
+    )
+    .await;
+}
+
+#[switchy_async::test]
+async fn intended_public_auto_low_rate_files_transcode_and_decode() {
+    use moosicbox_audio_output::encoder::opus::OpusEncodeMode;
+    intended_public_file_mode_acceptance(OpusEncodeMode::Auto, &[48000], &[32_000, 64_000]).await;
+}
+
 #[switchy_async::test]
 async fn explicit_configurations_never_reuse_source_or_other_configuration_cache() {
     let original = std::fs::read(concat!(

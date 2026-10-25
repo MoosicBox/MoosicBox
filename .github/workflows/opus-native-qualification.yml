@@ -79,12 +79,13 @@ jobs:
                   retention-days: 14
 
     quality:
-        name: Strict frozen-C and reviewed media ${{ matrix.platform.id }}
+        name: Strict frozen-C and reviewed media ${{ matrix.platform.id }} ${{ matrix.shard }}
         runs-on: ${{ matrix.platform.runner }}
         timeout-minutes: 90
         strategy:
             fail-fast: false
             matrix:
+                shard: [core, live-0, live-1, live-2, live-3, live-4, live-5, live-6, live-7, public-0, public-1, public-2, public-3, public-4, public-5, public-6, public-7, public-8, public-9, public-10, public-11, public-12, public-13, public-14, public-15, public-16, public-17, public-18, public-19, public-20, public-21, public-22, public-23]
                 platform:
                     - {id: linux-x64, runner: ubuntu-24.04}
                     - {id: linux-arm64, runner: ubuntu-24.04-arm}
@@ -125,22 +126,85 @@ jobs:
               run: |
                   python -B packages/opus_native/test_runner/src/qualification_ci.py run \
                     --mode quality --platform '${{ matrix.platform.id }}' --profile release \
+                    --quality-shard '${{ matrix.shard }}' \
                     --music-wav-url "$MUSIC_WAV_URL" \
-                    --output "$RUNNER_TEMP/opus-quality-${{ matrix.platform.id }}"
+                    --output "$RUNNER_TEMP/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}"
             - uses: actions/upload-artifact@v4
               if: always()
               with:
-                  name: opus-platform-quality-${{ matrix.platform.id }}
+                  name: opus-platform-quality-${{ matrix.platform.id }}-${{ matrix.shard }}
                   path: |
-                      ${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/
-                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/target/**
-                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}/media/**
+                      ${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/target/**
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/media/**
+                  if-no-files-found: error
+                  retention-days: 14
+
+    layout:
+        name: Required layout cell ${{ matrix.platform.id }} ${{ matrix.shard }}
+        runs-on: ${{ matrix.platform.runner }}
+        timeout-minutes: 90
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [layout-0, layout-1, layout-2, layout-3, layout-4, layout-5, layout-6, layout-7, layout-8, layout-9, layout-10, layout-11, layout-12, layout-13, layout-14, layout-15, layout-16, layout-17, layout-18, layout-19, layout-20, layout-21, layout-22, layout-23, layout-24, layout-25, layout-26, layout-27, layout-28, layout-29, layout-30, layout-31, layout-32, layout-33, layout-34, layout-35, layout-36, layout-37, layout-38, layout-39]
+                platform:
+                    - {id: linux-x64, runner: ubuntu-24.04}
+                    - {id: linux-arm64, runner: ubuntu-24.04-arm}
+                    - {id: macos-x64, runner: macos-15-intel}
+                    - {id: windows-x64, runner: windows-2025}
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  submodules: false
+            - name: Fail closed when reviewed derived music WAV URL is missing
+              env:
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+              shell: bash
+              run: |
+                  if [[ -z "$MUSIC_WAV_URL" ]]; then
+                    echo 'Missing reviewed WAV URL: configure OPUS_REVIEWED_MUSIC_WAV_URL or explicit dispatch input; strict qualification cannot skip media.' >&2
+                    exit 1
+                  fi
+            - uses: dtolnay/rust-toolchain@1.99.0
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.13"
+            - uses: ilammy/msvc-dev-cmd@v1
+              if: runner.os == 'Windows'
+            - name: Initialize only pinned test-only C reference source
+              shell: bash
+              run: |
+                  git submodule update --init --depth 1 -- packages/opus_native/libopus/opus
+                  test "$(git -C packages/opus_native/libopus/opus rev-parse HEAD)" = 34bba701ae97c913de719b1f7c10686f62cddb15
+                  cmake --version
+                  ninja --version
+            - name: Explicit locked dependency provisioning (network only here)
+              run: cargo fetch --locked
+            - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
+              env:
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+              shell: bash
+              run: |
+                  python -B packages/opus_native/test_runner/src/qualification_ci.py run \
+                    --mode quality --platform '${{ matrix.platform.id }}' --profile release \
+                    --quality-shard '${{ matrix.shard }}' \
+                    --music-wav-url "$MUSIC_WAV_URL" \
+                    --output "$RUNNER_TEMP/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}"
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: opus-platform-quality-${{ matrix.platform.id }}-${{ matrix.shard }}
+                  path: |
+                      ${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/target/**
+                      !${{ runner.temp }}/opus-quality-${{ matrix.platform.id }}-${{ matrix.shard }}/media/**
                   if-no-files-found: error
                   retention-days: 14
 
     compare:
         name: Require every actual platform and exact native fingerprints
-        needs: [native, quality]
+        needs: [native, quality, layout]
         if: always()
         runs-on: ubuntu-24.04
         timeout-minutes: 10
@@ -154,14 +218,15 @@ jobs:
                   pattern: opus-platform-*
                   path: platform-evidence
                   merge-multiple: false
-            - name: Verify all 12 executions, retained bytes and exact debug/release/platform agreement
+            - name: Verify all 300 executions, retained bytes and exact debug/release/platform agreement
               shell: bash
               env:
                   NATIVE_RESULT: ${{ needs.native.result }}
                   QUALITY_RESULT: ${{ needs.quality.result }}
+                  LAYOUT_RESULT: ${{ needs.layout.result }}
               run: |
                   set -euo pipefail
-                  if [[ "$NATIVE_RESULT" != success || "$QUALITY_RESULT" != success ]]; then
+                  if [[ "$NATIVE_RESULT" != success || "$QUALITY_RESULT" != success || "$LAYOUT_RESULT" != success ]]; then
                     echo 'A required real-execution job failed/cancelled/skipped; qualification is NOT accepted.' >&2
                     exit 1
                   fi
@@ -170,5 +235,7 @@ jobs:
             - uses: actions/upload-artifact@v4
               with:
                   name: opus-platform-exact-comparison
-                  path: comparison.txt
+                  path: |
+                      comparison.txt
+                      platform-evidence/platform-acceptance.json
                   if-no-files-found: error

@@ -183,14 +183,26 @@ const TAPS: usize = 769;
 pub(super) struct PracticalSynthesis {
     pub decoder: crate::Decoder,
     delay: Vec<i16>,
+    #[cfg(test)]
+    pub pending_prefix: Option<Box<(NativePrefixScore, crate::Decoder, crate::Decoder)>>,
 }
 
 impl PracticalSynthesis {
     #[cfg(test)]
     pub(super) fn new() -> Result<Self> {
+        Self::with_layout(crate::SampleRate::Hz48000, Channels::Stereo, DELAY)
+    }
+
+    pub(super) fn with_layout(
+        rate: crate::SampleRate,
+        channels: Channels,
+        lookahead: usize,
+    ) -> Result<Self> {
         Ok(Self {
-            decoder: crate::Decoder::new(crate::SampleRate::Hz48000, Channels::Stereo)?,
-            delay: vec![0; DELAY * 2],
+            decoder: crate::Decoder::new(rate, channels)?,
+            delay: vec![0; lookahead * super::channel_count(channels)],
+            #[cfg(test)]
+            pending_prefix: None,
         })
     }
 
@@ -201,6 +213,183 @@ impl PracticalSynthesis {
                 .map(|x| (x * 32768.0).round().clamp(-32768.0, 32767.0) as i16),
         );
         self.delay.drain(..pcm.len()).collect()
+    }
+}
+
+// One holder represents one immutable incoming synthesis state and target.
+// Configuration is explicit; replay bytes are compared exactly, never hashed.
+// Keys losslessly encode a zero suffix as the ORIGINAL payload length plus
+// the prefix through its last nonzero byte. This is injective for arbitrary
+// payloads, including raw-tail bits. Decoder input is NEVER shortened.
+type ReplayScores = std::collections::BTreeMap<
+    (u32, usize, usize, usize),
+    std::collections::BTreeMap<Vec<u8>, i128>,
+>;
+
+fn replay_key_prefix(replay: &[u8]) -> &[u8] {
+    let length = replay
+        .iter()
+        .rposition(|&byte| byte != 0)
+        .map_or(0, |last| last + 1);
+    &replay[..length]
+}
+
+#[derive(Clone)]
+#[cfg_attr(not(test), derive(Default))]
+pub(super) struct NativeScoreCache {
+    scores: ReplayScores,
+    #[cfg(test)]
+    pub calls: usize,
+    #[cfg(test)]
+    pub hits: usize,
+    #[cfg(test)]
+    pub disabled: bool,
+}
+
+#[cfg(test)]
+impl Default for NativeScoreCache {
+    fn default() -> Self {
+        Self {
+            scores: ReplayScores::new(),
+            #[cfg(test)]
+            calls: 0,
+            #[cfg(test)]
+            hits: 0,
+            #[cfg(test)]
+            disabled: std::env::var_os("MOOSICBOX_OPUS_TEST_DISABLE_NATIVE_CACHE").is_some(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl NativeScoreCache {
+    pub(super) fn sizes(&self) -> (usize, usize) {
+        (
+            self.scores
+                .values()
+                .map(std::collections::BTreeMap::len)
+                .sum(),
+            self.scores
+                .values()
+                .flat_map(std::collections::BTreeMap::keys)
+                .map(Vec::len)
+                .sum(),
+        )
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct NativePrefixScore {
+    pub incoming: crate::Decoder,
+    pub target: Vec<i16>,
+    pub cache: NativeScoreCache,
+    pub best: Option<(i128, Vec<u8>, super::EncoderConfig)>,
+}
+
+impl NativePrefixScore {
+    pub(super) fn decode(
+        &self,
+        decoder: &mut crate::Decoder,
+        config: super::EncoderConfig,
+        bytes: &[u8],
+    ) -> Result<(Vec<i16>, u32)> {
+        let mut range = crate::range::RangeDecoder::new(bytes)?;
+        let layout = crate::Configuration {
+            mode: crate::OpusMode::SilkOnly,
+            bandwidth: crate::Bandwidth::Wideband,
+            frame_size: if config.frame_size == 160 {
+                crate::FrameSize::Ms10
+            } else {
+                crate::FrameSize::Ms20
+            },
+        };
+        let mut pcm = vec![0; self.target.len()];
+        let samples = decoder.decode_silk_payload(&mut range, layout, config.channels, &mut pcm)?;
+        assert_eq!(samples * super::channel_count(config.channels), pcm.len());
+        Ok((pcm, range.ec_tell()))
+    }
+
+    #[cfg(test)]
+    pub fn branches(&self, bytes: &[u8]) -> Result<(crate::Decoder, crate::Decoder)> {
+        let (_, replay, selected) = self.best.as_ref().expect("scored prefix selected");
+        let mut actual = self.incoming.clone();
+        let mut expected = self.incoming.clone();
+        assert_eq!(
+            self.decode(&mut actual, *selected, bytes)?,
+            self.decode(&mut expected, *selected, replay)?
+        );
+        Ok((actual, expected))
+    }
+
+    #[cfg(test)]
+    pub fn verify(&self, bytes: &[u8]) -> Result<()> {
+        let (_, replay, selected) = self.best.as_ref().expect("scored prefix selected");
+        let config = *selected;
+        let mut actual = self.incoming.clone();
+        let mut expected = self.incoming.clone();
+        let a = self.decode(&mut actual, config, bytes)?;
+        let b = self.decode(&mut expected, config, replay)?;
+        assert_eq!(a, b, "actual Hybrid SILK prefix/replay PCM and entropy");
+        // Decode a following legal prefix from the two resulting states. This
+        // detects divergence in predictor, mono delay and resampler history.
+        assert_eq!(
+            self.decode(&mut actual, config, replay)?,
+            self.decode(&mut expected, config, replay)?,
+            "following prefix synthesis"
+        );
+        Ok(())
+    }
+}
+
+impl super::silk::PrefixCandidateScorer for NativePrefixScore {
+    fn score(&mut self, config: super::EncoderConfig, replay: &[u8]) -> Result<i128> {
+        let key = (
+            config.sample_rate as u32,
+            super::channel_count(config.channels),
+            config.frame_size,
+            replay.len(),
+        );
+        let stored = replay_key_prefix(replay);
+        #[cfg(test)]
+        {
+            self.cache.calls += 1;
+        }
+        let cached = self
+            .cache
+            .scores
+            .get(&key)
+            .and_then(|scores| scores.get(stored))
+            .copied();
+        let enabled = true;
+        #[cfg(test)]
+        let enabled = enabled && !self.cache.disabled;
+        let error = if let Some(error) = cached.filter(|_| enabled) {
+            #[cfg(test)]
+            {
+                self.cache.hits += 1;
+            }
+            error
+        } else {
+            let mut decoder = self.incoming.clone();
+            let (pcm, _) = self.decode(&mut decoder, config, replay)?;
+            let error = pcm
+                .iter()
+                .zip(&self.target)
+                .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
+                .sum();
+            if enabled {
+                self.cache
+                    .scores
+                    .entry(key)
+                    .or_default()
+                    .insert(stored.to_vec(), error);
+            }
+            error
+        };
+        if self.best.as_ref().is_none_or(|old| error < old.0) {
+            self.best = Some((error, replay.to_vec(), config));
+        }
+        Ok(error)
     }
 }
 
@@ -298,5 +487,32 @@ impl LowBand {
             }
         }
         output
+    }
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+    use super::replay_key_prefix;
+
+    #[test]
+    fn zero_suffix_key_is_lossless_for_arbitrary_bytes() {
+        let mut identities = std::collections::BTreeMap::new();
+        for length in 0..=8 {
+            for bits in 0..1_usize << length {
+                let input: Vec<u8> = (0..length)
+                    .map(|i| if bits & (1 << i) == 0 { 0 } else { 255 })
+                    .collect();
+                let prefix = replay_key_prefix(&input);
+                let key = (input.len(), prefix.to_vec());
+                let mut restored = prefix.to_vec();
+                restored.resize(input.len(), 0);
+                assert_eq!(restored, input);
+                if let Some(previous) = identities.insert(key, input.clone()) {
+                    assert_eq!(previous, input);
+                }
+            }
+        }
+        // Nonzero tail bytes (including raw entropy) must never be omitted.
+        assert_eq!(replay_key_prefix(&[0, 0, 1, 0, 128]), &[0, 0, 1, 0, 128]);
     }
 }

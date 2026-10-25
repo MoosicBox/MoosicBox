@@ -27,6 +27,8 @@ fn codec_only_snapshot_retains_independent_persistent_history() {
         include_bytes!("../src/silk/reference/nb_sine_mono.packet"),
         #[cfg(feature = "celt")]
         include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin"),
+        #[cfg(feature = "hybrid")]
+        include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin"),
     ];
     for packet in packets {
         let mut original = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
@@ -47,6 +49,21 @@ fn codec_only_snapshot_retains_independent_persistent_history() {
             snapshot.decode_loss(&mut actual, 960).unwrap();
             loss_control.decode_loss(&mut expected, 960).unwrap();
             assert_eq!(actual, expected);
+        }
+        // Rejected API requests are preflight failures: neither a cloned loss
+        // trajectory nor its future recovery may be changed by them.
+        for decoder in [&mut original, &mut snapshot] {
+            let mut guard = [123; 960];
+            assert!(decoder.decode(Some(&[]), &mut guard, false).is_err());
+            assert_eq!(guard, [123; 960]);
+            assert!(decoder.decode_loss(&mut guard, 1).is_err());
+            assert_eq!(guard, [123; 960]);
+            assert!(
+                decoder
+                    .decode(Some(packet), &mut guard[..1], false)
+                    .is_err()
+            );
+            assert_eq!(guard, [123; 960]);
         }
         for _ in 0..3 {
             original.decode(Some(packet), &mut actual, false).unwrap();

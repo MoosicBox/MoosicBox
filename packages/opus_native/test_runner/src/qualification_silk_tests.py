@@ -21,6 +21,91 @@ def passing(case, interleaved=False):
 
 
 class SilkTests(unittest.TestCase):
+    def test_public_interface_uses_separate_exact_test_and_markers(self):
+        self.assertEqual(silk.test_name("internal"), silk.TEST)
+        self.assertEqual(silk.test_name("public"), silk.PUBLIC_TEST)
+        with self.assertRaises(ValueError):
+            silk.test_name("invalid")
+        case = silk.cases()[0]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "public.log"
+            path.write_text(
+                passing(case)
+                .replace(silk.TEST, silk.PUBLIC_TEST)
+                .replace("internal SILK", "public SILK")
+            )
+            self.assertTrue(silk.log_passes(path, case, "public"))
+            self.assertFalse(silk.log_passes(path, case, "internal"))
+            path.write_text(passing(case))
+            self.assertFalse(silk.log_passes(path, case, "public"))
+
+    def test_public_child_command_and_filter_are_exact(self):
+        case = silk.cases()[0]
+
+        class Child:
+            def wait(self, timeout):
+                return 0
+
+        def launch(command, **kwargs):
+            self.assertEqual(
+                command[1:], [silk.PUBLIC_TEST, "--exact", "--ignored", "--nocapture"]
+            )
+            self.assertEqual(kwargs["env"]["MOOSICBOX_OPUS_SILK_CASE"], case)
+            kwargs["stdout"].write(
+                passing(case)
+                .replace(silk.TEST, silk.PUBLIC_TEST)
+                .replace("internal SILK", "public SILK")
+                .encode()
+            )
+            kwargs["stdout"].flush()
+            return Child()
+
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            silk.subprocess, "Popen", side_effect=launch
+        ):
+            result = silk.run_case(
+                Path("unit"),
+                Path("oracle"),
+                Path("media"),
+                case,
+                Path(directory),
+                1,
+                "identity",
+                interface="public",
+            )
+        self.assertEqual(result["status"], "pass")
+
+    def test_public_receipt_binds_actual_source_image_and_reference(self):
+        identity = dict(
+            source_sha256="source", executable_sha256="unit", reference_sha256="oracle"
+        )
+        with self.assertRaises(ValueError):
+            silk.verify_public_receipt(None, identity)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            receipt = dict(
+                schema="moosicbox.opus.silk-unit-build.v1",
+                profile="release",
+                source_before_sha256="source",
+                source_after_sha256="source",
+                executable_sha256="unit",
+                reference_sha256="oracle",
+                command=["cargo", "test", "--release", "--no-run"],
+                rustc_version="observed compiler",
+            )
+            path.write_text(json.dumps(receipt))
+            self.assertEqual(silk.verify_public_receipt(path, identity), receipt)
+            for key in (
+                "source_before_sha256",
+                "source_after_sha256",
+                "executable_sha256",
+                "reference_sha256",
+                "profile",
+            ):
+                path.write_text(json.dumps(dict(receipt, **{key: "wrong"})))
+                with self.subTest(key=key), self.assertRaises(ValueError):
+                    silk.verify_public_receipt(path, identity)
+
     def test_enumeration_is_192_exact_filters(self):
         cases = silk.cases()
         self.assertEqual(len(cases), 192)

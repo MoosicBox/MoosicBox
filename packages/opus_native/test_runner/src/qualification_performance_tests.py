@@ -1,5 +1,6 @@
 """Offline harness tests; no codec build/execution or network required."""
 
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -7,10 +8,76 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from qualification_performance import CASES, CANDIDATE_CASES, measure, verify_receipt
+from qualification_performance import (
+    CASES,
+    CANDIDATE_CASES,
+    measure,
+    verify_receipt,
+    performance_verdict,
+)
 
 
 class PerformanceTests(unittest.TestCase):
+    def valid_report(self):
+        rows = []
+        for case in CASES:
+            for repetition in range(2):
+                timing = dict(
+                    total_ns=200_000_000,
+                    median_ns=20_000_000,
+                    p95_ns=20_000_000,
+                    max_ns=20_000_000,
+                )
+                rows.append(
+                    dict(
+                        case=case,
+                        repetition=repetition,
+                        frames=10,
+                        audio_ns=200_000_000,
+                        debug_assertions=False,
+                        encode=copy.copy(timing),
+                        decode=copy.copy(timing),
+                        input_sha256="a" * 64,
+                        packets_sha256="b" * 64,
+                        pcm_sha256="c" * 64,
+                    )
+                )
+        return dict(
+            cases=rows,
+            frames=10,
+            repetitions=2,
+            measurement_complete=True,
+            artifact_stable=True,
+            source_before_sha256="same",
+            source_after_sha256="same",
+        )
+
+    def test_realtime_boundary_and_failure_do_not_use_rounded_derived_multiple(self):
+        report = self.valid_report()
+        self.assertTrue(performance_verdict(report)["accepted"])
+        report["cases"][0]["encode"].update(total_ns=200_000_001, max_ns=20_000_001)
+        report["cases"][0]["encode"]["audio_realtime_multiple"] = 999
+        self.assertFalse(performance_verdict(report)["accepted"])
+        report = self.valid_report()
+        report["cases"][0]["decode"].update(total_ns=400_000_000, max_ns=40_000_000)
+        self.assertFalse(performance_verdict(report)["accepted"])
+
+    def test_verdict_fails_missing_repeats_duplicate_candidate_and_changed_source(self):
+        for mutation in (
+            lambda r: r["cases"].pop(),
+            lambda r: r["cases"].append(copy.deepcopy(r["cases"][0])),
+            lambda r: r["cases"][0].update(case=CANDIDATE_CASES[0]),
+            lambda r: r.update(source_after_sha256="changed"),
+            lambda r: r.update(artifact_stable=False),
+            lambda r: r.update(measurement_complete=False),
+            lambda r: r["cases"][0].update(pcm_sha256="wrong"),
+            lambda r: r["cases"][0]["encode"].update(total_ns=float("nan")),
+            lambda r: r["cases"][0]["encode"].update(p95_ns=1),
+        ):
+            report = self.valid_report()
+            mutation(report)
+            self.assertFalse(performance_verdict(report)["accepted"])
+
     def test_child_metrics_and_linux_peak_memory_are_normalized(self):
         row = dict(
             schema="moosicbox.opus.performance-case.v1",

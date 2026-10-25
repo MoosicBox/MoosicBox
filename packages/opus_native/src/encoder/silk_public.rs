@@ -5,6 +5,17 @@ use super::*;
 #[test]
 #[ignore = "internal floor candidates only; requires reviewed media directory and pinned C oracle"]
 fn internal_practical_floor_media_matrix() {
+    practical_floor_media_matrix(false);
+}
+
+#[test]
+#[ignore = "public constructor acceptance; requires reviewed media directory and pinned C oracle"]
+fn public_practical_floor_media_matrix() {
+    practical_floor_media_matrix(true);
+}
+
+fn practical_floor_media_matrix(public: bool) {
+    let scope = if public { "public" } else { "internal" };
     let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
     let mut failures = Vec::new();
     let mut executed = 0;
@@ -39,15 +50,20 @@ fn internal_practical_floor_media_matrix() {
                                 continue;
                             }
                             executed += 1;
-                            eprintln!("internal SILK CASE START {case}");
+                            eprintln!("{scope} SILK CASE START {case}");
                             if std::panic::catch_unwind(|| {
-                                // Test-only construction of the proposed policy.
-                                // Exercise the unchanged public encode/finish lifecycle;
-                                // never claim this bypass qualifies today's constructor.
-                                let mut encoder =
-                                    super::super::Encoder::new(EncoderConfig::default()).unwrap();
-                                encoder.config = config;
-                                encoder.silk = Some(SilkEncoder::new(config).unwrap());
+                                let mut encoder = if public {
+                                    // No private overrides: constructor rejection is a
+                                    // failed public case, not an internal candidate pass.
+                                    super::super::Encoder::new(config).unwrap()
+                                } else {
+                                    let mut encoder =
+                                        super::super::Encoder::new(EncoderConfig::default())
+                                            .unwrap();
+                                    encoder.config = config;
+                                    encoder.silk = Some(SilkEncoder::new(config).unwrap());
+                                    encoder
+                                };
                                 let input: Vec<f32> = converted
                                     .iter()
                                     .map(|&x| f32::from(x) / 32768.0 * scale)
@@ -73,13 +89,53 @@ fn internal_practical_floor_media_matrix() {
     }
     assert!(executed > 0, "case filter matched no qualification cases");
     eprintln!(
-        "internal SILK matrix executed={executed} failures={}",
+        "{scope} SILK matrix executed={executed} failures={}",
         failures.len()
     );
     assert!(
         failures.is_empty(),
-        "internal candidate failures (not public qualification): {failures:?}"
+        "{scope} SILK matrix failures: {failures:?}"
     );
+}
+
+#[test]
+#[ignore = "requires reviewed media; one actual first-frame profile and exact old/new search parity"]
+fn standalone_reviewed_first_frame_search_parity() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let source = reviewed_media(&directory, "speech");
+    for rate in [12000_u32, 16000] {
+        let samples = candidate_media(&source, 8000, 1, rate, 1);
+        for (bitrate, milliseconds, scale) in [(32000, 20, 1.0_f32), (16000, 10, 0.01)] {
+            let config = EncoderConfig {
+                sample_rate: SampleRate::from_hz(rate).unwrap(),
+                channels: crate::Channels::Mono,
+                frame_size: rate as usize * milliseconds / 1000,
+                bitrate,
+            };
+            let input: Vec<_> = samples
+                .iter()
+                .take(config.frame_size)
+                .map(|&sample| f32::from(sample) / 32768.0 * scale)
+                .collect();
+            let mut optimized = SilkEncoder::new(config).unwrap();
+            let mut reference = optimized.clone();
+            reference.quantizer_cache_disabled = true;
+            let started = std::time::Instant::now();
+            let expected = reference.encode(&input).unwrap();
+            let reference_us = started.elapsed().as_micros();
+            let started = std::time::Instant::now();
+            let actual = optimized.encode(&input).unwrap();
+            eprintln!(
+                "SILK_FIRST_FRAME rate={rate} bitrate={bitrate} scale={scale} reference_us={reference_us} optimized_us={}",
+                started.elapsed().as_micros()
+            );
+            assert_eq!(actual, expected);
+            assert_eq!(optimized.history, reference.history);
+            assert_eq!(optimized.gain, reference.gain);
+            assert_eq!(optimized.previous_index, reference.previous_index);
+            assert_eq!(optimized.pcm_history, reference.pcm_history);
+        }
+    }
 }
 
 fn reviewed_media(directory: &str, kind: &str) -> Vec<i16> {
@@ -469,7 +525,17 @@ fn standalone_low_rate_stereo_independent_gains() {
                 [tone * 0.2, tone * 0.198 * sign]
             })
             .collect();
+        let mut original = encoder.clone();
+        pulse::REFERENCE.set(true);
+        let original_packet = original.encode(&input).unwrap();
+        pulse::REFERENCE.set(false);
         let packet = encoder.encode(&input).unwrap();
+        assert_eq!(packet, original_packet, "stereo kernel packet attribution");
+        assert_eq!(encoder.previous_index, original.previous_index);
+        eprintln!(
+            "stereo original kernel indices={:?}",
+            original.previous_index
+        );
         assert!(packet.len() <= 60);
         let mut decoder = crate::Decoder::new(config.sample_rate, config.channels).unwrap();
         let mut output = vec![0_i16; config.frame_size * 2];
@@ -494,5 +560,82 @@ fn standalone_low_rate_stereo_independent_gains() {
         assert_ne!(encoder.previous_index[0], encoder.previous_index[1]);
         assert!(snr > 3.0, "independent gain sign={sign} snr={snr}");
         assert!(output.iter().all(|&x| x != i16::MIN && x != i16::MAX));
+        // Continue the captured failing input for ten frames: compare both
+        // kernels under committed predictor history, not only a cold frame.
+        for frame in 1..10 {
+            pulse::REFERENCE.set(true);
+            let expected = original.encode(&input).unwrap();
+            pulse::REFERENCE.set(false);
+            let packet = encoder.encode(&input).unwrap();
+            assert_eq!(packet, expected, "stereo continuation frame={frame}");
+            assert_eq!(encoder.history, original.history);
+            assert_eq!(encoder.gain, original.gain);
+            assert_eq!(encoder.previous_index, original.previous_index);
+            assert_eq!(encoder.pcm_history, original.pcm_history);
+            assert!(packet.len() <= 60);
+            assert_eq!(
+                decoder.decode(Some(&packet), &mut output, false).unwrap(),
+                config.frame_size
+            );
+            assert!(output.iter().all(|&x| x != i16::MIN && x != i16::MAX));
+        }
+    }
+}
+
+#[test]
+#[ignore = "reviewed media paired original/convex kernel packet and state parity"]
+fn standalone_reviewed_pulse_kernel_parity() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let source = reviewed_media(&directory, "speech");
+    for rate in [8000, 12000, 16000] {
+        let samples = candidate_media(&source, 8000, 1, rate, 1);
+        for (bitrate, milliseconds, scale) in [(32000, 20, 1.0_f32), (16000, 10, 0.01)] {
+            let config = EncoderConfig {
+                sample_rate: SampleRate::from_hz(rate).unwrap(),
+                channels: crate::Channels::Mono,
+                frame_size: rate as usize * milliseconds / 1000,
+                bitrate,
+            };
+            let input: Vec<_> = samples
+                .iter()
+                .cycle()
+                .take(config.frame_size * 2)
+                .map(|&sample| f32::from(sample) / 32768.0 * scale)
+                .collect();
+            let mut before = Vec::new();
+            let mut after = Vec::new();
+            for repetition in 0..5 {
+                let mut optimized = SilkEncoder::new(config).unwrap();
+                let mut reference = optimized.clone();
+                for (frame, input) in input.chunks_exact(config.frame_size).enumerate() {
+                    let run = |encoder: &mut SilkEncoder, original| {
+                        pulse::REFERENCE.set(original);
+                        let started = std::time::Instant::now();
+                        let packet = encoder.encode(input).unwrap();
+                        (packet, started.elapsed().as_micros())
+                    };
+                    let (expected, actual) = if repetition % 2 == 0 {
+                        let expected = run(&mut reference, true);
+                        (expected, run(&mut optimized, false))
+                    } else {
+                        let actual = run(&mut optimized, false);
+                        (run(&mut reference, true), actual)
+                    };
+                    pulse::REFERENCE.set(false);
+                    if frame == 0 {
+                        before.push(expected.1);
+                        after.push(actual.1);
+                    }
+                    assert_eq!(actual.0, expected.0);
+                    assert_eq!(optimized.history, reference.history);
+                    assert_eq!(optimized.gain, reference.gain);
+                    assert_eq!(optimized.previous_index, reference.previous_index);
+                    assert_eq!(optimized.pcm_history, reference.pcm_history);
+                }
+            }
+            eprintln!(
+                "SILK_KERNEL_PAIR rate={rate} bitrate={bitrate} scale={scale} before_us={before:?} after_us={after:?}"
+            );
+        }
     }
 }

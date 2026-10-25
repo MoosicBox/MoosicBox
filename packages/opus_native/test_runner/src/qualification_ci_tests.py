@@ -11,6 +11,173 @@ import qualification_ci as ci
 
 
 class SelectionTests(unittest.TestCase):
+    def test_shards_cover_required_inventory_once(self):
+        shards = [ci.selected_live_tests(shard) for shard in ci.LIVE_SHARDS]
+        flat = [tuple(row) for shard in shards for row in shard]
+        self.assertEqual(len(flat), len(set(flat)))
+        required = {
+            row
+            for row in ci.acceptance_inventory()
+            if row[2] not in (ci.PUBLIC_MEDIA_TEST, ci.LAYOUT_TEST)
+        }
+        self.assertEqual(set(flat), required)
+        cases = [case for shard in ci.PUBLIC_SHARDS for case in ci.public_cases(shard)]
+        self.assertEqual(len(cases), 192)
+        self.assertEqual(len(set(cases)), 192)
+        self.assertTrue(
+            all(len(ci.public_cases(shard)) == 8 for shard in ci.PUBLIC_SHARDS)
+        )
+        self.assertLessEqual(max(map(len, shards)), 8)
+        with self.assertRaises(ValueError):
+            ci.selected_live_tests("live-99")
+
+    def test_compare_requires_every_coherent_shard(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for pid in ci.PLATFORMS:
+                for mode, profiles, shards in (
+                    ("native", ("debug", "release"), (None,)),
+                    ("quality", ("release",), ci.QUALITY_SHARDS),
+                ):
+                    for profile in profiles:
+                        for shard in shards:
+                            dest = root / f"{pid}-{profile}-{mode}-{shard}"
+                            dest.mkdir()
+                            row = dict(
+                                schema="moosicbox.opus.ci.v2",
+                                platform=pid,
+                                profile=profile,
+                                mode=mode,
+                                quality_shard=shard,
+                                accepted=True,
+                                revision="synthetic",
+                                source_sha256={"test": "source"},
+                                rustc=f"release: test\nhost: {pid}",
+                            )
+                            if mode == "native":
+                                (dest / "data").mkdir()
+                                (dest / "data/test.pcm").write_bytes(b"\\x01\\x00")
+                                (dest / "probe").write_bytes(pid.encode())
+                                row.update(
+                                    executable_file="probe",
+                                    executable_sha256=ci.digest(dest / "probe"),
+                                    fingerprints=ci.probe_files(dest / "data"),
+                                )
+                            elif shard == "core":
+                                ci.write_json(
+                                    dest / "quality.json",
+                                    {"accepted": True, "failures": 0},
+                                )
+                                row["quality_sha256"] = ci.digest(dest / "quality.json")
+                            else:
+                                ci.write_json(
+                                    dest / "media-transform.json", {"synthetic": True}
+                                )
+                                row.update(
+                                    required_tests=ci.selected_live_tests(shard),
+                                    media_transform_sha256=ci.digest(
+                                        dest / "media-transform.json"
+                                    ),
+                                )
+                                if shard in ci.LAYOUT_SHARDS:
+                                    row["layout_cell"] = ci.layout_cell(shard)
+                                if shard in ci.PUBLIC_SHARDS:
+                                    row["public_cases"] = ci.public_cases(shard)
+                            ci.write_json(dest / "ci.json", row)
+            with patch("builtins.print"):
+                ci.compare(argparse.Namespace(root=root))
+            summary = json.loads((root / "platform-acceptance.json").read_text())
+            self.assertEqual(len(summary["executions"]), 300)
+            public_report = root / "linux-x64-release-quality-public-0/ci.json"
+            public_original = public_report.read_text()
+            forged_public = json.loads(public_original)
+            forged_public["public_cases"] = forged_public["public_cases"][:-1]
+            ci.write_json(public_report, forged_public)
+            with self.assertRaisesRegex(RuntimeError, "public 192-case shard coverage"):
+                ci.compare(argparse.Namespace(root=root))
+            public_report.write_text(public_original)
+            report = root / "windows-x64-release-quality-live-7/ci.json"
+            original = report.read_text()
+            report.unlink()
+            with self.assertRaisesRegex(RuntimeError, "missing real executions"):
+                ci.compare(argparse.Namespace(root=root))
+            report.write_text(original)
+            forged = json.loads(original)
+            forged["required_tests"] = []
+            ci.write_json(report, forged)
+            with self.assertRaisesRegex(RuntimeError, "coverage changed"):
+                ci.compare(argparse.Namespace(root=root))
+            forged = json.loads(original)
+            forged["source_sha256"] = {"test": "different"}
+            ci.write_json(report, forged)
+            with self.assertRaisesRegex(RuntimeError, "common source"):
+                ci.compare(argparse.Namespace(root=root))
+
+    def test_public_shard_exact_filters_and_environment_mask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            execution = Mock(output=Path(directory))
+            execution.run.return_value = (
+                "test result: ok. 1 passed; 0 failed; 0 ignored;\n"
+            )
+            env = {
+                "MOOSICBOX_OPUS_SILK_CASE": "inherited-wrong-case",
+                "MOOSICBOX_OPUS_QUALIFICATION_MEDIA": "verified-media",
+            }
+            ci.live_acceptance(execution, "release", env, "public-0")
+            self.assertEqual(execution.run.call_count, 8)
+            observed = []
+            for call in execution.run.call_args_list:
+                self.assertIn(ci.PUBLIC_MEDIA_TEST, call.args[0])
+                self.assertIn("--exact", call.args[0])
+                self.assertEqual(
+                    call.kwargs["env"]["MOOSICBOX_OPUS_QUALIFICATION_MEDIA"],
+                    "verified-media",
+                )
+                observed.append(call.kwargs["env"]["MOOSICBOX_OPUS_SILK_CASE"])
+            self.assertEqual(observed, list(ci.public_cases("public-0")))
+            execution.reset_mock()
+            ci.live_acceptance(execution, "release", env, "live-0")
+            for call in execution.run.call_args_list:
+                self.assertNotIn("MOOSICBOX_OPUS_SILK_CASE", call.kwargs["env"])
+
+    def test_layout_cells_are_exact_complete_and_proved(self):
+        cells = [ci.layout_cell(shard) for shard in ci.LAYOUT_SHARDS]
+        self.assertEqual(len(set(cells)), 40)
+        self.assertEqual(
+            set(cells),
+            {
+                f"{r}:{c}:{d}:{s}"
+                for r in (24000, 48000)
+                for c in (1, 2)
+                for d in (10, 20)
+                for s in range(5)
+            },
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            execution = Mock(output=Path(directory))
+            execution.run.return_value = (
+                "test result: ok. 1 passed; 0 failed; 0 ignored;\n"
+                "layout qualification executed=1 filtered=true\n"
+            )
+            ci.live_acceptance(
+                execution,
+                "release",
+                {"MOOSICBOX_OPUS_LAYOUT_CELL": "wrong"},
+                "layout-0",
+            )
+            self.assertEqual(execution.run.call_count, 1)
+            call = execution.run.call_args
+            self.assertIn(ci.LAYOUT_TEST, call.args[0])
+            self.assertEqual(call.kwargs["env"]["MOOSICBOX_OPUS_LAYOUT_CELL"], cells[0])
+            self.assertIn("--show-output", call.args[0])
+            execution.run.return_value = (
+                "test result: ok. 1 passed; 0 failed; 0 ignored;"
+            )
+            with self.assertRaisesRegex(RuntimeError, "exactly one filtered cell"):
+                ci.live_acceptance(execution, "release", {}, "layout-0")
+
     def test_current_ignored_inventory_is_explicitly_classified(self):
         required = ci.acceptance_inventory()
         self.assertGreater(len(required), 40)
@@ -56,8 +223,8 @@ class SelectionTests(unittest.TestCase):
                 "MOOSICBOX_OPUS_HYBRID_REAL_PCM": "reviewed.pcm",
                 "MOOSICBOX_OPUS_SPEECH_WAV": "reviewed.wav",
             }
-            ci.live_acceptance(execution, "release", env)
-            required = ci.acceptance_inventory()
+            ci.live_acceptance(execution, "release", env, "live-0")
+            required = ci.selected_live_tests("live-0")
             self.assertEqual(len(execution.run.call_args_list), len(required))
             for call, (_, target, name) in zip(execution.run.call_args_list, required):
                 argv = call.args[0]

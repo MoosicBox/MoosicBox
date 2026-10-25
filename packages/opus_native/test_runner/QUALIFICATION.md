@@ -185,3 +185,104 @@ new WAV. The dedicated `.github/workflows/opus-native-qualification.yml` and
 comparison. Workflow implementation is not evidence of a successful platform run:
 remote execution still requires separate authorization and reviewed hosted media.
 The existing fixed oracle is not rebuilt, modified or used by the performance tool.
+
+## Intended-support ledger and acceptance boundaries
+
+Run the offline inventory without codec launches:
+
+```sh
+python3 -B packages/opus_native/test_runner/src/qualification_matrix_ledger.py \
+  --media-directory "$REVIEWED_MEDIA" --output "$SUPPORT_LEDGER"
+```
+
+It records 88 requested public roundtrip cells (five rates, two layouts,
+mode-legal durations), 31 real-media public-constructor requests, 36 encoded
+silence cells, the 14 default public-envelope performance cases and two explicitly
+unsupported SILK performance candidates. The SILK internal matrix is a separate
+192-cell inventory. Actual runner AST loop metadata and function hashes expose
+coverage drift. The ledger is **not** a passing report: unsupported requests stay
+failures; internal test-only construction is not public-constructor acceptance.
+Frozen cases, gain/replay, decode, long-stream and adversarial requirements retain
+runner metadata as well. The normal Cargo feature/platform and product duration
+checks remain separate required evidence, not satisfied by inventory generation.
+
+At inspection on 2026-10-25 the manifest-pinned speech/music files were available
+and hash/format verified in the explicit local directory
+`/tmp/opus-complete-oracle-20261020`. No pinned files were missing there; this is
+not a durable CI location or permission to publish. Reviewed fullband speech and
+additional rate/layout/level variants remain absent if broader public support is
+claimed. An approved remotely provisioned exact music-WAV artifact location is
+still needed for CI; never substitute a new transcode or arbitrary current media.
+
+Performance now reports `measurement_complete` separately from
+`performance_accepted`. Acceptance requires every default public case at least
+twice, identical input/packet/PCM hashes, source/image stability, valid integer
+latency statistics, and **both total encode and total decode <= audio duration**
+(at least 1x real time). Missing cases, malformed/nonfinite timing, slower phases
+or candidate-only coverage fail and return nonzero. Median/p95/max remain explicit
+observations; no prior numerical headroom promise is inferred. Proposed future
+headroom policy, requiring explicit approval: >=2x for each phase and p95 <= one
+frame duration. That proposal is not enforced or claimed as existing acceptance.
+
+Raw `wait4` peak RSS may retain a pre-exec launch footprint; identical RSS across
+all cases can be dominated by that floor. It is the measured child high-water
+mark, **not isolated codec allocation or a verified codec-memory budget**. Local
+throughput acceptance says nothing about another CPU/OS, quality or CI success.
+The historical 50-frame r3 report completed 28 measurements but its minimum
+encode multiple was about 0.1223x: it is not real-time acceptance. A current-source
+coherent release receipt and fresh run remain necessary after any codec changes.
+
+## Exact 192-case SILK command and serial shards
+
+The case product is speech/music x 8/12/16 kHz x mono/stereo x 10/20/40/60 ms x
+16/32 kbit/s per channel x scales 1/0.01. Filters are exact strings such as
+`speech/8000/1/10/16000/1`. This executes internal candidates with unchanged
+thresholds; it does not open the public guard or establish perceptual certification.
+
+```sh
+python3 -B packages/opus_native/test_runner/src/qualification_silk.py \
+  --executable "$PREBUILT_RELEASE_UNIT_TEST_IMAGE" --reference "$FIXED_ORACLE" \
+  --media-directory "$REVIEWED_MEDIA" --output-directory "$NEW_EVIDENCE_DIR" \
+  --timeout-seconds 300
+```
+
+The exact child command is
+`$PREBUILT_RELEASE_UNIT_TEST_IMAGE encoder::silk::public::internal_practical_floor_media_matrix --exact --ignored --nocapture`,
+with one generated `MOOSICBOX_OPUS_SILK_CASE` and reviewed media/reference env per
+child. No Cargo or implicit image discovery occurs. Source/compiler hashes are
+runtime observations, not retrospective build receipts.
+
+For serial bounded shards, generate repeated `--cases FILTER` arguments from
+`qualification_silk.cases()`, e.g. the 96 entries starting with `speech/`, then
+invoke the same output directory with `--resume` for the 96 `music/` entries.
+Do not run shards concurrently in one evidence directory. Focused shards return
+nonzero until all 192 pass; do not suppress that into full acceptance. Resume
+requires identical source/image/reference/media/tool/runner provenance and
+revalidates each saved passing log hash, zero exit, exact single-test execution
+and single internal case marker. Changed source needs a new evidence directory;
+failures/timeouts retain logs and do not stop later cases. All 192 verified passes
+are required for `complete=true`; that still means internal-case validation only.
+
+## Local native-prefix scoring evidence
+
+Production Hybrid prefix search now scores legal SILK candidates against an
+unweighted native-clock delayed target using cloned incoming decoder state.
+Mono scores legal trials; stereo preserves each raw-search baseline and performs
+two native-score coordinate passes, without claiming global pair optimality.
+Production selection does not depend on a scorer environment flag or the C oracle.
+
+A frozen production image passed all 40 practical-layout cells without the scorer
+opt-in flag; its 240 quality/error rows matched the preceding test-only version.
+Replay checks included 560 actual following-Hybrid prefix identity checks.
+Subsequent frame-local caching passed three cache-on/off packet/PCM/winner/state
+comparisons and two formerly failing layout cells with unchanged gate metrics.
+Cache keys losslessly represent configuration, original payload length and bytes
+through the last nonzero byte; decoder input is not trimmed. The full40 run
+predates caching and is not current-source full-matrix acceptance.
+
+Acceptance remains incomplete: the production default unit run timed out at
+200 seconds, and comprehensive public RD, product, public SILK, current-source
+debug/release, platform and performance qualification remain pending. The
+production 40-cell run took 1059.31 seconds; realtime performance is not proven.
+Existing thresholds, frozen expectations, strict duration checks and public
+constructor guards remain unchanged.

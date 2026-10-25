@@ -31,8 +31,15 @@ fn seeded_arbitrary_packets_never_panic_or_overrun() {
             );
             let mut output = vec![1234; 5760 * count + 16];
             let (audio, guard) = output.split_at_mut(5760 * count);
-            if let Ok(samples) = decoder.decode(Some(&packet), audio, false) {
-                assert!(samples <= 5760);
+            match decoder.decode(Some(&packet), audio, false) {
+                Ok(samples) => {
+                    assert!(samples <= 5760);
+                    assert!(audio[samples * count..].iter().all(|&x| x == 1234));
+                }
+                Err(_) => assert!(
+                    audio.iter().all(|&x| x == 1234),
+                    "failed decode must not publish partially synthesized PCM"
+                ),
             }
             assert_eq!(guard, &[1234; 16]);
             // Malformed packet history must not make public reset fail.

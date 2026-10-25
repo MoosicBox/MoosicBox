@@ -125,6 +125,96 @@ def measure(executable, case, frames, timeout):
         return row
 
 
+def performance_verdict(report):
+    """Local >=1x codec-throughput gate; no invented headroom or memory budget."""
+    failures = []
+    rows = report.get("cases", [])
+    repetitions = report.get("repetitions")
+    if (
+        not isinstance(repetitions, int)
+        or isinstance(repetitions, bool)
+        or repetitions < 2
+    ):
+        return dict(
+            accepted=False,
+            failures=["missing repeated-run coverage"],
+            minimum_audio_realtime_multiple=1.0,
+        )
+    expected = {
+        (case, repetition) for case in CASES for repetition in range(repetitions)
+    }
+    seen = set()
+    identities = {}
+    for row in rows:
+        key = (row.get("case"), row.get("repetition"))
+        if key in seen:
+            failures.append(f"duplicate case/repetition: {key}")
+        seen.add(key)
+        if key not in expected:
+            failures.append(f"non-public or unexpected performance case: {key}")
+        frames, audio = row.get("frames"), row.get("audio_ns")
+        integer = (
+            lambda value: isinstance(value, int)
+            and not isinstance(value, bool)
+            and value > 0
+        )
+        if (
+            not integer(frames)
+            or frames != report.get("frames")
+            or not integer(audio)
+            or audio != frames * 20_000_000
+        ):
+            failures.append(f"invalid duration: {key}")
+            continue
+        for phase in ("encode", "decode"):
+            timing = row.get(phase, {})
+            total, median, p95, maximum = (
+                timing.get(field)
+                for field in ("total_ns", "median_ns", "p95_ns", "max_ns")
+            )
+            if (
+                not all(integer(value) for value in (total, median, p95, maximum))
+                or not median <= p95 <= maximum <= total
+                or total > frames * maximum
+            ):
+                failures.append(f"invalid latency statistics: {key} {phase}")
+            elif total > audio:
+                failures.append(f"below real-time: {key} {phase}")
+        hashes = tuple(
+            row.get(field) for field in ("input_sha256", "packets_sha256", "pcm_sha256")
+        )
+        if any(
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(c not in "0123456789abcdef" for c in value)
+            for value in hashes
+        ):
+            failures.append(f"missing output identities: {key}")
+        if row.get("case") in identities and identities[row["case"]] != hashes:
+            failures.append(f"nonreproducible output: {key}")
+        identities[row.get("case")] = hashes
+        if row.get("debug_assertions") is not False:
+            failures.append(f"not a release image: {key}")
+    if seen != expected:
+        failures.append("incomplete 14-case repeated public performance coverage")
+    if (
+        report.get("measurement_complete") is not True
+        or report.get("artifact_stable") is not True
+    ):
+        failures.append("measurement incomplete or image unstable")
+    if not report.get("source_before_sha256") or report.get(
+        "source_before_sha256"
+    ) != report.get("source_after_sha256"):
+        failures.append("source identity missing or changed")
+    return dict(
+        accepted=not failures,
+        failures=failures,
+        minimum_audio_realtime_multiple=1.0,
+        latency_policy="total encode and decode each <= measured audio duration; median/p95/max retained, no headroom budget approved",
+        memory_policy="raw child high-water RSS only; launch/pre-exec floor may dominate; not isolated codec allocation proof",
+    )
+
+
 def cpu_identity():
     # CPU model is an observation, not a portable hardware equivalence claim.
     path = Path("/proc/cpuinfo")
@@ -167,6 +257,9 @@ def main():
         script_sha256=digest(__file__),
         cases=[],
         measurement_complete=False,
+        frames=args.frames,
+        repetitions=args.repetitions,
+        performance_accepted=False,
         public_envelope_only=not args.candidate_cases,
         required_qualification_blockers=[
             dict(
@@ -212,6 +305,8 @@ def main():
         report["error"] = str(error)[:1024]
         raise
     finally:
+        report["performance_verdict"] = performance_verdict(report)
+        report["performance_accepted"] = report["performance_verdict"]["accepted"]
         args.output.write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
@@ -221,11 +316,13 @@ def main():
                 output=str(args.output),
                 sha256=digest(args.output),
                 measurement_complete=True,
+                performance_accepted=report["performance_accepted"],
                 peak_memory_complete=report["peak_memory_complete"],
             )
         )
     )
+    return 0 if report["performance_accepted"] else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
