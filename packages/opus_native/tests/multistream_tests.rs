@@ -455,3 +455,116 @@ fn pinned_c_multistream_exact_pcm() {
         mismatches.join("; ")
     );
 }
+
+#[cfg(all(feature = "silk", feature = "celt"))]
+#[test]
+fn short_constituents_route_loss_and_fec_without_changing_mapping() {
+    let layout = MultistreamLayout::new(2, 1, vec![2, 0, 1, 255, 2]).unwrap();
+    let good = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin").as_slice();
+    let recovery = join_packets(&[good.to_vec(), good.to_vec()]).unwrap();
+    for fec in [false, true] {
+        for payload in [&[][..], &[0][..]] {
+            let mut decoder = MultistreamDecoder::new(SampleRate::Hz48000, layout.clone()).unwrap();
+            let mut control = MultistreamDecoder::new(SampleRate::Hz48000, layout.clone()).unwrap();
+            let mut actual = vec![123; 960 * 5];
+            let mut expected = vec![0; 960 * 5];
+            for toc in [8, 120, 248] {
+                let mut short = vec![toc];
+                short.extend_from_slice(payload);
+                let packet = join_packets(&[short.clone(), short]).unwrap();
+                assert_eq!(
+                    decoder
+                        .decode(Some(&packet), &mut actual, 960, fec)
+                        .unwrap(),
+                    960
+                );
+                assert_eq!(control.decode_loss(&mut expected, 960).unwrap(), 960);
+                assert_eq!(actual, expected);
+                assert!(
+                    actual
+                        .as_chunks::<5>()
+                        .0
+                        .iter()
+                        .all(|frame| frame[3] == 0 && frame[0] == frame[4])
+                );
+                decoder
+                    .decode(Some(&recovery), &mut actual, 960, false)
+                    .unwrap();
+                control
+                    .decode(Some(&recovery), &mut expected, 960, false)
+                    .unwrap();
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+}
+
+#[cfg(all(feature = "silk", feature = "celt"))]
+#[test]
+#[ignore = "requires explicitly selected MOOSICBOX_OPUS_REFERENCE_ORACLE"]
+fn short_constituents_match_public_c_multistream() {
+    let script = r"
+import os,pathlib,struct,sys
+sys.path.insert(0,sys.argv[1]+'/libopus/src')
+from oracle import Oracle
+with Oracle(os.environ['MOOSICBOX_OPUS_REFERENCE_ORACLE']) as o:
+ def req(op,**kw):
+  r=o.request(op,**kw); assert 'error' not in r,r; return r
+ req('multistream_decoder',rate=48000,channels=5,streams=2,coupled_streams=1,mapping=[2,0,1,255,2])
+ good=list((pathlib.Path(sys.argv[1])/'test_vectors/frozen/hybrid_fb_mono/packet.bin').read_bytes())
+ assert good[0]&3==0 and len(good)<252
+ recovery=good[:1]+[len(good)-1]+good[1:]+good
+ for fec in [False,True]:
+  for n in [0,1]:
+   for toc in [8,120,248]:
+    short=[toc,n]+[0]*n+[toc]+[0]*n
+    for packet,f in [(short,fec),(recovery,False)]:
+     r=req('multistream_decode',packet=packet,frame_size=960,fec=f)
+     assert r['samples']==960,r
+     sys.stdout.buffer.write(struct.pack('<III',len(packet),int(f),len(r['pcm']))+bytes(packet))
+     sys.stdout.buffer.write(struct.pack('<'+'h'*len(r['pcm']),*r['pcm']))
+";
+    let oracle = std::process::Command::new("python3")
+        .args(["-B", "-c", script, env!("CARGO_MANIFEST_DIR")])
+        .output()
+        .unwrap();
+    assert!(
+        oracle.status.success(),
+        "{}",
+        String::from_utf8_lossy(&oracle.stderr)
+    );
+    let layout = MultistreamLayout::new(2, 1, vec![2, 0, 1, 255, 2]).unwrap();
+    let mut decoder = MultistreamDecoder::new(SampleRate::Hz48000, layout).unwrap();
+    let mut bytes = oracle.stdout.as_slice();
+    let mut step = 0;
+    while !bytes.is_empty() {
+        let [length, fec, count] = std::array::from_fn(|i| {
+            u32::from_le_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap()) as usize
+        });
+        bytes = &bytes[12..];
+        let packet = &bytes[..length];
+        bytes = &bytes[length..];
+        let expected = bytes[..count * 2]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
+            .collect::<Vec<_>>();
+        bytes = &bytes[count * 2..];
+        let mut actual = vec![123; count];
+        assert_eq!(
+            decoder
+                .decode(Some(packet), &mut actual, 960, fec != 0)
+                .unwrap(),
+            960
+        );
+        let first = actual.iter().zip(&expected).position(|(a, b)| a != b);
+        assert!(
+            first.is_none(),
+            "step={step} first={:?}",
+            first.map(|i| (i, actual[i], expected[i]))
+        );
+        step += 1;
+    }
+    assert_eq!(step, 24);
+}

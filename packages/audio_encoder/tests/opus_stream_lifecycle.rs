@@ -101,6 +101,102 @@ impl Write for FailingSink {
 }
 
 #[test]
+fn public_auto_steady_hybrid_controls_are_transactional_and_keep_exact_tail() {
+    use moosicbox_audio_encoder::opus_stream::{EncoderMode, OpusEncodeMode};
+    use moosicbox_ogg_opus::OggOpusReader;
+
+    for frame_size in [480, 960] {
+        let encode = |reject_controls| {
+            let mut encoder = OpusStreamEncoder::new(
+                Vec::new(),
+                OpusEncodeConfig {
+                    mode: OpusEncodeMode::Auto,
+                    bitrate: 192_000,
+                    frame_size,
+                    ..config()
+                },
+            )
+            .unwrap();
+            let mut control = encoder.control().unwrap();
+            assert_eq!(control.mode, EncoderMode::Auto);
+            for (index, frames) in [frame_size, frame_size, 2457 - 2 * frame_size]
+                .into_iter()
+                .enumerate()
+            {
+                if index > 0 {
+                    control.bitrate = if index == 1 { 64_000 } else { 32_000 };
+                    if reject_controls {
+                        let mut invalid = control;
+                        invalid.bitrate = 1;
+                        let before = encoder.control();
+                        assert!(encoder.set_control(invalid).is_err());
+                        assert_eq!(encoder.control(), before);
+                    }
+                    encoder.set_control(control).unwrap();
+                }
+                let pcm: Vec<_> = (0..frames * 2)
+                    .map(|sample| (sample as f32 * 0.031).sin() * 0.1)
+                    .collect();
+                for (chunk_index, chunk) in pcm.chunks(26).enumerate() {
+                    encoder.write(chunk).unwrap_or_else(|error| {
+                        panic!(
+                            "public Auto control write: frame_size={frame_size}, block={index}, \
+                             chunk={chunk_index}, control={:?}, active={:?}, \
+                             rejected_control_probe={reject_controls}: {error}",
+                            encoder.control(),
+                            encoder.active_mode(),
+                        );
+                    });
+                }
+                assert_eq!(encoder.active_mode(), Some(EncoderMode::Hybrid));
+                if reject_controls && index == 2 {
+                    let before = encoder.control();
+                    assert!(encoder.set_control(control).is_err());
+                    assert_eq!(encoder.control(), before);
+                }
+            }
+            let bytes = encoder.finish().unwrap().unwrap();
+            assert!(encoder.finish().unwrap().is_none());
+            assert!(encoder.set_control(control).is_err());
+            bytes
+        };
+        let bytes = encode(true);
+        assert_eq!(
+            bytes,
+            encode(false),
+            "rejected controls consumed state, frame={frame_size}"
+        );
+        let mut reader = OggOpusReader::new(Cursor::new(bytes)).unwrap();
+        assert_eq!(reader.total_samples().unwrap(), 2457);
+        let mut audible = 0;
+        #[cfg(feature = "opus")]
+        let mut reference = opus::Decoder::new(48_000, opus::Channels::Stereo).unwrap();
+        #[cfg(feature = "opus")]
+        let mut reference_audible = Vec::new();
+        while let Some(packet) = reader.next_packet().unwrap() {
+            assert_eq!(packet.data[0] >> 3, if frame_size == 480 { 14 } else { 15 });
+            audible += packet.audible_samples();
+            #[cfg(feature = "opus")]
+            {
+                let mut decoded = vec![0_i16; 5760 * 2];
+                let count = reference.decode(&packet.data, &mut decoded, false).unwrap();
+                assert_eq!(count, frame_size);
+                reference_audible.extend_from_slice(
+                    &decoded
+                        [packet.trim_start as usize * 2..(count - packet.trim_end as usize) * 2],
+                );
+            }
+        }
+        assert_eq!(audible, 2457);
+        #[cfg(feature = "opus")]
+        {
+            assert_eq!(reference_audible.len(), 2457 * 2);
+            assert!(reference_audible.iter().any(|sample| *sample != 0));
+        }
+    }
+}
+
+#[test]
 fn auto_is_distinct_from_default_and_controls_require_complete_frames() {
     use moosicbox_audio_encoder::opus_stream::{EncoderMode, OpusEncodeMode};
     let mut encoder = OpusStreamEncoder::new(

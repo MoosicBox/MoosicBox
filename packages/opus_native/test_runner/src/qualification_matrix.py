@@ -1,8 +1,8 @@
 """Explicit native-vs-pinned-C qualification. Every mismatch/unsupported case fails strict mode.
 
 --diagnostic permits collecting codec failures, never claims acceptance.
-Inputs are deterministic but synthetic; use --speech-wav and --music-wav for real media.
-No fixture rewriting, tolerances, C fallback, provider access or external dependencies.
+Inputs are deterministic but synthetic; strict real media uses --media-directory.
+No fixture rewriting, C fallback, provider access or external dependencies.
 """
 
 import argparse
@@ -16,6 +16,17 @@ import subprocess
 import tempfile
 import sys
 import wave
+import platform
+import time
+
+from qualification_inputs import (
+    MANIFEST,
+    accepted,
+    quality_status,
+    verify_build_receipt,
+    verify_inputs,
+    verify_reference,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "libopus" / "src"))
 from oracle import Oracle
@@ -305,7 +316,7 @@ def quality(native_executable, reference_executable, filename, label):
     assert len(source) >= size * channels * 10 and any(source)
     rows = []
     # Opus hybrid requires a 24/48-kHz API rate; 8-kHz speech cannot exercise it.
-    modes = (1000, 1001, 1002) if rate >= 24000 else (1000, 1002)
+    modes = (0, 1000, 1001, 1002) if rate >= 24000 else (0, 1000, 1002)
     for mode in modes:
         for bitrate in sorted(
             set((16000 * channels, 32000 * channels, 64000 * channels, 128000, 256000))
@@ -324,10 +335,13 @@ def quality(native_executable, reference_executable, filename, label):
                     native.request("encoder", rate=rate, channels=channels)
                     native.request(
                         "configure",
-                        controls=[[11002, mode], [4002, bitrate], [4006, 0]],
+                        controls=([[11002, mode]] if mode else [])
+                        + [[4002, bitrate], [4006, 0]],
                     )
                     reference.request("decoder", rate=rate, channels=channels)
+                    native.request("decoder", rate=rate, channels=channels)
                     decoded = []
+                    maximum_parity_error = 0
                     encoded_bytes = 0
                     delay = None
                     for offset in range(
@@ -341,9 +355,15 @@ def quality(native_executable, reference_executable, filename, label):
                         actual_mode = packet_mode(packet)
                         if actual_mode not in row["actual_modes"]:
                             row["actual_modes"].append(actual_mode)
-                        assert (
-                            actual_mode == mode
-                        ), "native TOC mode differs from requested mode"
+                        assert actual_mode in (
+                            1000,
+                            1001,
+                            1002,
+                        ), "invalid native TOC mode"
+                        if mode:
+                            assert (
+                                actual_mode == mode
+                            ), "native TOC mode differs from requested mode"
                         encoded_bytes += len(packet)
                         if delay is None:
                             delay = native.request("lookahead")["samples"]
@@ -353,12 +373,30 @@ def quality(native_executable, reference_executable, filename, label):
                         if output["samples"] not in row["output_samples_per_channel"]:
                             row["output_samples_per_channel"].append(output["samples"])
                         assert output["samples"] == size
+                        actual = native.request(
+                            "decode", packet=packet, frame_size=size
+                        )
+                        assert actual["samples"] == output["samples"]
+                        assert (
+                            len(actual["pcm"]) == len(output["pcm"]) == size * channels
+                        )
+                        maximum_parity_error = max(
+                            maximum_parity_error,
+                            max(
+                                (
+                                    abs(a - b)
+                                    for a, b in zip(actual["pcm"], output["pcm"])
+                                ),
+                                default=0,
+                            ),
+                        )
                         decoded.extend(output["pcm"])
                     aligned = decoded[delay * channels : delay * channels + len(source)]
                     assert len(aligned) == len(source)
                     energy = sum(x * x for x in source)
                     error = sum((x - y) ** 2 for x, y in zip(source, aligned))
                     row.update(
+                        max_native_reference_error=maximum_parity_error,
                         snr_db=10 * math.log10(energy / max(1, error)),
                         lookahead_samples=delay,
                         actual_bits_per_second=encoded_bytes
@@ -368,9 +406,8 @@ def quality(native_executable, reference_executable, filename, label):
                         clipping_samples=sum(abs(x) >= 32767 for x in aligned),
                         decoded_sha256=digest(pcm_bytes(aligned)),
                     )
-                    # This detects catastrophic inversion/noise, not perceptual transparency.
-                    if row["snr_db"] <= 0:
-                        row["status"] = "nonpositive_waveform_snr"
+                    # Waveform gates are not perceptual transparency certification.
+                    row["status"] = quality_status(row["snr_db"], maximum_parity_error)
             except (
                 RuntimeError,
                 AssertionError,
@@ -650,7 +687,30 @@ def main():
     parser.add_argument("--diagnostic", action="store_true")
     parser.add_argument("--speech-wav", type=Path)
     parser.add_argument("--music-wav", type=Path)
+    parser.add_argument(
+        "--media-directory",
+        type=Path,
+        help="directory containing checksum-reviewed manifest WAVs",
+    )
+    parser.add_argument(
+        "--build-receipt",
+        type=Path,
+        help="coherent source-before/after and executable build identities",
+    )
     args = parser.parse_args()
+    started = time.perf_counter()
+    inputs = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    if args.media_directory:
+        if args.speech_wav or args.music_wav:
+            parser.error(
+                "--media-directory cannot be combined with individual WAV paths"
+            )
+        inputs, media = verify_inputs(args.media_directory)
+        args.speech_wav, args.music_wav = media["speech"], media["music"]
+    if not args.diagnostic and (not args.media_directory or not args.build_receipt):
+        parser.error(
+            "strict qualification requires --media-directory and --build-receipt"
+        )
     assert 1 <= args.frames <= 3000 and 1 <= args.long_frames <= 30000
     assert 0 <= args.adversarial_cases <= 4096
     native, reference = args.native.resolve(strict=True), args.reference.resolve(
@@ -659,9 +719,29 @@ def main():
     source_before = native_source_identity()
     native_hash = digest(native.read_bytes())
     reference_hash = digest(reference.read_bytes())
+    build_receipt = (
+        verify_build_receipt(
+            args.build_receipt, source_before, native_hash, reference_hash
+        )
+        if args.build_receipt
+        else None
+    )
+    with Oracle(reference) as oracle:
+        reference_manifest = oracle.manifest
+        verify_reference(reference_manifest, inputs)
     report = dict(
         schema="moosicbox.opus.native-qualification.v1",
         native_sha256=native_hash,
+        reference_provenance=reference_manifest,
+        input_manifest_sha256=digest(MANIFEST.read_bytes()),
+        build_receipt=build_receipt,
+        platform=dict(
+            system=platform.system(),
+            release=platform.release(),
+            machine=platform.machine(),
+            python=platform.python_version(),
+            other_platforms_executed=False,
+        ),
         reference_sha256=reference_hash,
         runtime_source_sha256=source_before,
         script_sha256=digest(Path(__file__).read_bytes()),
@@ -696,6 +776,9 @@ def main():
     failures = sum(row["status"] != "pass" for row in rows)
     # Explicit real media is required for strict qualification; missing media never silently passes.
     media_missing = len(report["real_media"]) != 2
+    if args.media_directory:
+        # Recheck whole-file media identities, not only the consumed PCM prefix.
+        verify_inputs(args.media_directory)
     source_after = native_source_identity()
     artifact_stable = native_hash == digest(
         native.read_bytes()
@@ -708,7 +791,19 @@ def main():
     report.update(
         failures=failures,
         media_missing=media_missing,
-        accepted=not failures and not media_missing and artifact_stable,
+        accepted=accepted(
+            failures,
+            media_missing,
+            artifact_stable,
+            source_before != source_after,
+            build_receipt is not None,
+        ),
+        performance=dict(
+            wall_seconds=time.perf_counter() - started,
+            scope="whole harness including IPC and C; not codec throughput",
+            codec_throughput_verified=False,
+            memory_budget_verified=False,
+        ),
         limitation="no perceptual or cross-platform acceptance; exact decoder comparisons are uncompensated",
     )
     payload = json.dumps(report, sort_keys=True, indent=2) + "\n"

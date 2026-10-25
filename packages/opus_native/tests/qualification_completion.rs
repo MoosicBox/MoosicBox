@@ -84,6 +84,48 @@ fn sustained_native_celt_reconstruction_and_loss_are_deterministic() {
     }
 }
 
+#[cfg(feature = "celt")]
+#[test]
+fn encoded_silence_stays_within_one_lsb() {
+    for channels in [Channels::Mono, Channels::Stereo] {
+        let count = if channels == Channels::Mono { 1 } else { 2 };
+        let celt = EncoderConfig {
+            channels,
+            ..EncoderConfig::default()
+        };
+        let mut cases = vec![("celt", celt, Encoder::new(celt).unwrap())];
+        cases.push(("auto", celt, Encoder::new_auto(celt).unwrap()));
+        #[cfg(feature = "silk")]
+        {
+            let silk = EncoderConfig {
+                sample_rate: SampleRate::Hz16000,
+                frame_size: 320,
+                ..celt
+            };
+            cases.push(("silk", silk, Encoder::new_silk(silk).unwrap()));
+        }
+        #[cfg(feature = "hybrid")]
+        cases.push(("hybrid", celt, Encoder::new_hybrid(celt).unwrap()));
+        for (mode, config, mut encoder) in cases {
+            let mut decoder = Decoder::new(config.sample_rate, config.channels).unwrap();
+            for frame in 0..12 {
+                let packet = encoder
+                    .encode(&vec![0.0; config.frame_size * count])
+                    .unwrap();
+                let mut pcm = vec![0; config.frame_size * count];
+                assert_eq!(
+                    decoder.decode(Some(&packet), &mut pcm, false).unwrap(),
+                    config.frame_size
+                );
+                assert!(
+                    pcm.iter().all(|&sample| i32::from(sample).abs() <= 1),
+                    "{mode} {channels:?} silence frame {frame} exceeds one LSB"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn loss_duration_and_reset_are_exact_at_all_public_rates() {
     for (rate, hz) in [

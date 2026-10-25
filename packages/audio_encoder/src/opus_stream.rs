@@ -23,15 +23,19 @@ pub enum OpusEncodeMode {
     /// Preserve the backend's default: native CELT or libopus automatic selection.
     #[default]
     Default,
-    /// Opt in to qualified native frame-boundary adaptive controls.
+    /// Opt in to qualified native frame-boundary adaptive controls (48 kHz,
+    /// 10/20 ms). Low-rate construction initially selects CELT; practical
+    /// 32..=128 kbps Fullband Hybrid controls require an already-active 48 kHz
+    /// stereo Hybrid stream. Unsupported transitions are errors, not fallbacks.
     Auto,
     /// Force native CELT transform coding (2.5/5/10/20 ms; minimum bitrate
     /// 128/64/32/32 kbps respectively, maximum 256 kbps).
     Celt,
-    /// Force native SILK predictive coding (8/12/16 kHz, 10/20 ms;
+    /// Force native SILK predictive coding (8/12/16/24/48 kHz, 10/20/40/60 ms;
     /// mono 48..=128 kbps, stereo 96..=128 kbps).
     Silk,
-    /// Force native hybrid coding (48 kHz, 10/20 ms, 128..=256 kbps).
+    /// Force native Hybrid coding (24/48 kHz, 10/20 ms, 128..=256 kbps;
+    /// 48 kHz stereo additionally supports 32..=128 kbps).
     Hybrid,
 }
 

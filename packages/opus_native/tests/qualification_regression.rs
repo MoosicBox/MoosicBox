@@ -72,7 +72,10 @@ fn deterministic_malformed_corpus_has_common_expected_outcomes() {
         &directory.0,
         "corpus",
         "outcomes",
-        (19511, 0xcb3b_6815_0643_7e13),
+        // Approved 2026-10-24: 128 one-byte-constituent records now follow
+        // upstream PLC/DTX. Independent C replacement of precisely those
+        // records reproduces this complete fingerprint (+298 bytes).
+        (19_809, 0x07bc_8c07_bd43_40e1),
     );
 }
 

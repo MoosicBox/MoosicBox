@@ -20,6 +20,38 @@ with Oracle(os.environ['MOOSICBOX_OPUS_REFERENCE_ORACLE']) as o:
   sys.stdout.buffer.write(data)
   sys.stdout.buffer.write(struct.pack('<'+'h'*len(result['pcm']),*result['pcm']))
  channels=int(sys.argv[2]); scenario=sys.argv[3]
+ if scenario=='short_fec':
+  root=pathlib.Path(sys.argv[1])
+  req('decoder',rate=48000,channels=channels)
+  for path in ['src/silk/reference/nb_sine_mono.packet',
+               'test_vectors/frozen/hybrid_fb_mono/packet.bin',
+               'test_vectors/frozen/celt_fb_mono/packet.bin']:
+   packet=list((root/path).read_bytes())
+   for size in [0,1]:
+    for toc in [8,120,248]:
+     for count in [960,1920]:
+      short=[toc]+[0]*size
+      record(short,count,True)
+      record(packet,960)
+      record(short,count,True)
+      record(packet,960)
+  sys.exit(0)
+ if scenario=='one_byte':
+  root=pathlib.Path(sys.argv[1])
+  req('decoder',rate=48000,channels=channels)
+  packets=[list((root/path).read_bytes()) for path in [
+   'src/silk/reference/nb_sine_mono.packet',
+   'test_vectors/frozen/hybrid_fb_mono/packet.bin',
+   'test_vectors/frozen/celt_fb_mono/packet.bin']]
+  for packet in packets:
+   toc=packet[0]&252
+   record([toc,0],960)
+   record(packet,960)
+   for short_toc in [8,120,248]:
+    record([short_toc,0],960); record(packet,960)
+   record([toc|2,1,0]+packet[1:],1920)
+   record(packet,960)
+  sys.exit(0)
  if scenario.startswith('fixture_'):
   root=pathlib.Path(sys.argv[1])
   mono=list((root/'test_vectors/frozen/hybrid_fb_mono/packet.bin').read_bytes())
@@ -67,6 +99,120 @@ with Oracle(os.environ['MOOSICBOX_OPUS_REFERENCE_ORACLE']) as o:
  if scenario=='cross': assert observed=={1000,1001,1002},observed
  if scenario in ['fec','cross','stereo_fec']: assert fec_calls>0
 ";
+
+#[test]
+#[ignore = "requires explicitly selected MOOSICBOX_OPUS_REFERENCE_ORACLE"]
+fn short_fec_constituents_match_reference() {
+    for channels in [Channels::Mono, Channels::Stereo] {
+        compare_reference("short_fec", channels, 0);
+    }
+}
+
+#[test]
+fn short_fec_constituents_match_explicit_loss_and_recovery() {
+    for channels in [Channels::Mono, Channels::Stereo] {
+        for packet in [
+            include_bytes!("../src/silk/reference/nb_sine_mono.packet").as_slice(),
+            include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin").as_slice(),
+            include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin").as_slice(),
+        ] {
+            for payload in [&[][..], &[0][..]] {
+                for toc in [8, 120, 248] {
+                    for count in [960, 1920] {
+                        let mut decoder = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+                        let mut control = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+                        let mut short = vec![toc];
+                        short.extend_from_slice(payload);
+                        let width = channels as usize;
+                        let mut actual = vec![123; count * width];
+                        let mut expected = vec![0; count * width];
+                        for _ in 0..2 {
+                            assert_eq!(
+                                decoder.decode(Some(&short), &mut actual, true).unwrap(),
+                                count
+                            );
+                            assert_eq!(control.decode_loss(&mut expected, count).unwrap(), count);
+                            assert_eq!(actual, expected);
+                            let mut recovered = vec![0; 960 * width];
+                            let mut reference = vec![0; 960 * width];
+                            decoder.decode(Some(packet), &mut recovered, false).unwrap();
+                            control.decode(Some(packet), &mut reference, false).unwrap();
+                            assert_eq!(recovered, reference);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires explicitly selected MOOSICBOX_OPUS_REFERENCE_ORACLE"]
+fn one_byte_constituents_match_reference() {
+    for channels in [Channels::Mono, Channels::Stereo] {
+        compare_reference("one_byte", channels, 0);
+    }
+}
+
+#[test]
+fn one_byte_constituents_match_explicit_loss_and_recovery() {
+    let packets: [&[u8]; 3] = [
+        include_bytes!("../src/silk/reference/nb_sine_mono.packet"),
+        include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin"),
+        include_bytes!("../test_vectors/frozen/celt_fb_mono/packet.bin"),
+    ];
+    for channels in [Channels::Mono, Channels::Stereo] {
+        for packet in packets {
+            let mut decoder = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+            let mut control = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+            let width = channels as usize;
+            let mut actual = vec![123; 960 * width];
+            let mut expected = vec![0; 960 * width];
+            for short_toc in [8, 120, 248] {
+                assert_eq!(
+                    decoder
+                        .decode(Some(&[short_toc, 0]), &mut actual, false)
+                        .unwrap(),
+                    960
+                );
+                assert_eq!(control.decode_loss(&mut expected, 960).unwrap(), 960);
+                assert_eq!(actual, expected);
+                decoder.decode(Some(packet), &mut actual, false).unwrap();
+                control.decode(Some(packet), &mut expected, false).unwrap();
+                assert_eq!(actual, expected, "short-constituent recovery");
+            }
+            // A one-byte first constituent must not select a new codec mode
+            // before the following real constituent is decoded.
+            let mut combined = vec![(packet[0] & !3) | 2, 1, 0];
+            combined.extend_from_slice(&packet[1..]);
+            let mut actual = vec![123; 1920 * width];
+            let mut expected = vec![0; 1920 * width];
+            assert_eq!(
+                decoder.decode(Some(&combined), &mut actual, false).unwrap(),
+                1920
+            );
+            assert_eq!(
+                control
+                    .decode_loss(&mut expected[..960 * width], 960)
+                    .unwrap(),
+                960
+            );
+            assert_eq!(
+                control
+                    .decode(Some(packet), &mut expected[960 * width..], false)
+                    .unwrap(),
+                960
+            );
+            assert_eq!(actual, expected);
+            let mut recovery = vec![0; 960 * width];
+            decoder.decode(Some(packet), &mut recovery, false).unwrap();
+            control
+                .decode(Some(packet), &mut expected[..960 * width], false)
+                .unwrap();
+            assert_eq!(recovery, expected[..960 * width]);
+        }
+    }
+}
 
 #[test_case::test_case("fixture_long40")]
 #[test_case::test_case("fixture_long60")]

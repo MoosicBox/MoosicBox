@@ -8,6 +8,7 @@ use crate::celt::fixed_point::celt_cos_norm;
 pub(super) struct Analysis {
     overlap: Vec<Vec<i32>>,
     preemphasis: Vec<i32>,
+    attack_history: Vec<Option<(i32, u64)>>,
 }
 
 fn mul(value: i32, coefficient: i16) -> i32 {
@@ -25,6 +26,7 @@ impl Analysis {
         Self {
             overlap: vec![vec![0; 120]; channels],
             preemphasis: vec![0; channels],
+            attack_history: vec![None; channels],
         }
     }
 
@@ -38,7 +40,10 @@ impl Analysis {
     ) -> (Vec<Vec<i32>>, bool) {
         let channels = self.overlap.len();
         let frames = pcm.len() / channels;
-        let transient = allow_transient && frames > 120 && has_attack(pcm, channels);
+        // Preview detection without advancing history twice: each transform
+        // below commits history alongside the samples it actually consumes.
+        let mut history = self.attack_history.clone();
+        let transient = allow_transient && frames > 120 && has_attack(pcm, channels, &mut history);
         if !transient {
             return (self.transform(pcm), false);
         }
@@ -57,6 +62,7 @@ impl Analysis {
 
     pub(super) fn transform(&mut self, pcm: &[i32]) -> Vec<Vec<i32>> {
         let channels = self.overlap.len();
+        has_attack(pcm, channels, &mut self.attack_history);
         let n = pcm.len() / channels;
         let quarter = n / 2;
         let mut result = Vec::with_capacity(channels);
@@ -120,11 +126,11 @@ impl Analysis {
 // Integer high-pass energy avoids mistaking low-frequency/DC level changes
 // for attacks. Compare adjacent 1.25 ms windows on each channel independently,
 // so an attack in one side cannot be masked by a loud steady opposite side.
-fn has_attack(pcm: &[i32], channels: usize) -> bool {
-    (0..channels).any(|channel| {
-        let mut previous_sample = pcm[channel];
-        let mut previous_energy = 0_u64;
-        let mut attack = false;
+fn has_attack(pcm: &[i32], channels: usize, history: &mut [Option<(i32, u64)>]) -> bool {
+    let mut any_attack = false;
+    for channel in 0..channels {
+        let previous = history[channel];
+        let (mut previous_sample, mut previous_energy) = previous.unwrap_or((pcm[channel], 0));
         for (index, window) in pcm.chunks_exact(60 * channels).enumerate() {
             let mut energy = 0_u64;
             for frame in window.chunks_exact(channels) {
@@ -133,12 +139,15 @@ fn has_attack(pcm: &[i32], channels: usize) -> bool {
                 energy += (difference * difference) as u64;
                 previous_sample = sample;
             }
-            // A 12 dB rise above the local floor, with a -60 dBFS floor.
-            attack |= index > 0 && energy > 16 * previous_energy.max(64);
+            // Cold-start behavior is unchanged. Once history exists, the first
+            // window can be compared with the previous packet's final window.
+            any_attack |=
+                (index > 0 || previous.is_some()) && energy > 16 * previous_energy.max(64);
             previous_energy = energy;
         }
-        attack
-    })
+        history[channel] = Some((previous_sample, previous_energy));
+    }
+    any_attack
 }
 
 // CELT transform lengths have only factors 2, 3 and 5. Decimation in time
@@ -182,6 +191,59 @@ mod tests {
     use crate::celt::fixed_point::celt_cos_norm;
 
     #[test]
+    fn frame_boundary_attack_uses_previous_quiet_packet() {
+        for channels in [1, 2] {
+            let mut analysis = Analysis::new(channels);
+            let quiet = vec![0; 960 * channels];
+            assert!(!analysis.transform_celt(&quiet, true).1);
+            let mut attack = quiet.clone();
+            for frame in 0..60 {
+                attack[frame * channels + channels - 1] =
+                    if frame % 2 == 0 { 1 << 26 } else { -(1 << 26) };
+            }
+            assert!(analysis.transform_celt(&attack, true).1);
+        }
+    }
+
+    #[test]
+    fn detector_history_advances_when_short_blocks_are_disabled() {
+        let mut analysis = Analysis::new(2);
+        assert!(analysis.overlap.iter().flatten().all(|&sample| sample == 0));
+        assert_eq!(analysis.preemphasis, [0, 0]);
+        let quiet = vec![0; 1920];
+        assert!(!analysis.transform_celt(&quiet, false).1);
+        let mut attack = quiet;
+        for frame in 0..60 {
+            attack[2 * frame + 1] = if frame % 2 == 0 { 1 << 26 } else { -(1 << 26) };
+        }
+        let mut independent = analysis.clone();
+        let (_, transient) = analysis.transform_celt(&attack, true);
+        assert!(transient);
+        for block in attack.as_chunks::<240>().0 {
+            independent.transform(block);
+        }
+        assert_eq!(analysis.overlap, independent.overlap);
+        assert_eq!(analysis.preemphasis, independent.preemphasis);
+        assert_eq!(analysis.attack_history, independent.attack_history);
+    }
+
+    #[test]
+    fn cold_start_and_steady_signal_do_not_trigger_boundary_attacks() {
+        let mut analysis = Analysis::new(2);
+        let steady: Vec<_> = (0..960)
+            .flat_map(|frame| {
+                let value = if frame % 2 == 0 { 1 << 26 } else { -(1 << 26) };
+                [value, -value]
+            })
+            .collect();
+        assert!(!analysis.transform_celt(&steady, true).1);
+        assert!(!analysis.transform_celt(&steady, true).1);
+        let mut quiet = Analysis::new(2);
+        assert!(!quiet.transform_celt(&vec![0; 1920], true).1);
+        assert!(!quiet.transform_celt(&vec![0; 1920], true).1);
+    }
+
+    #[test]
     fn transient_short_mdcts_preserve_frequency_order_and_history() {
         for channels in [1, 2] {
             for blocks in [2, 4, 8] {
@@ -215,12 +277,12 @@ mod tests {
 
     #[test]
     fn attack_detector_rejects_dc_and_detects_one_sided_attack() {
-        assert!(!has_attack(&vec![1 << 26; 960 * 2], 2));
+        assert!(!has_attack(&vec![1 << 26; 960 * 2], 2, &mut [None; 2]));
         let mut pcm = vec![1 << 26; 960 * 2];
         for frame in 240..300 {
             pcm[2 * frame + 1] = if frame % 2 == 0 { 1 << 26 } else { -(1 << 26) };
         }
-        assert!(has_attack(&pcm, 2));
+        assert!(has_attack(&pcm, 2, &mut [None; 2]));
     }
 
     #[test]

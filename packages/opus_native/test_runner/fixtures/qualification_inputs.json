@@ -1,0 +1,34 @@
+{
+  "schema": "moosicbox.opus.qualification-inputs.v1",
+  "reference_revision": "34bba701ae97c913de719b1f7c10686f62cddb15",
+  "reference_schema": "moosicbox.opus.reference.v1",
+  "media": {
+    "speech": {
+      "file": "speech-osr-8k.wav",
+      "sha256": "a4bf9becd046d7aedb6d05b6e12347a6294a44f74d263089c636fb0a2b1e6561",
+      "bytes": 538014,
+      "rate": 8000,
+      "channels": 1,
+      "source_url": "https://www.voiptroubleshooter.com/open_speech/american/OSR_us_000_0010_8k.wav",
+      "attribution": "Open Speech Repository, female Harvard sentences",
+      "license": "Source site usage conditions; not asserted to be CC licensed",
+      "license_url": "https://www.voiptroubleshooter.com/open_speech/index.html",
+      "transform": "Unmodified source WAV; qualification reads at most 30 seconds",
+      "limitation": "Narrowband speech only; no fullband speech or perceptual acceptance claim"
+    },
+    "music": {
+      "file": "music-carefree-30s.wav",
+      "sha256": "fda2b8fe120b08ebe392b715234fcb8240efab8333f68dc09f0acec25b2ac33d",
+      "bytes": 5760220,
+      "rate": 48000,
+      "channels": 2,
+      "source_url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3",
+      "source_sha256": "8433b770a630d9b1594fd484442c677907ece899a4d149954cd2e74fd733e311",
+      "attribution": "Carefree — Kevin MacLeod (incompetech.com)",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "transform": "Historical FFmpeg 9.0.1 first 30 seconds to 48000 Hz stereo pcm_s16le; exact WAV bytes must match, including header",
+      "limitation": "Lossy MP3 source, not original master; provision the reviewed derived WAV by checksum, do not silently rederive or replace it"
+    }
+  }
+}

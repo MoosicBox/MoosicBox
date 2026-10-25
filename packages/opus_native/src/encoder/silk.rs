@@ -16,6 +16,9 @@ mod completion;
 #[path = "silk_converted.rs"]
 mod converted;
 #[cfg(test)]
+#[path = "silk_public.rs"]
+mod public;
+#[cfg(test)]
 #[path = "silk_qualification.rs"]
 mod qualification;
 
@@ -189,12 +192,121 @@ impl SilkEncoder {
         }
     }
 
-    #[allow(clippy::too_many_lines)] // Transactional SILK entropy budget search.
+    // Zero input makes every open-loop LPC prediction error exactly zero.
+    // Resolve that tie using the mandatory offset excitation and committed
+    // synthesis history, not an arbitrary first spectral codebook entry.
+    fn silence_model(
+        &self,
+        input: &[i32],
+        channel: usize,
+        bandwidth: Bandwidth,
+        rate: usize,
+    ) -> Result<Model> {
+        let gain = SilkDecoder::dequantize_gain((self.previous_index[channel] - 16).max(0));
+        let order = if bandwidth == Bandwidth::Wideband {
+            16
+        } else {
+            10
+        };
+        let mut best = None;
+        let mut best_error = i128::MAX;
+        for stage1 in 0..32 {
+            let residual = vec![0; order];
+            let lsf = SilkDecoder::reconstruct_lsf(stage1, &residual, bandwidth)?;
+            let lpc = SilkDecoder::limit_lpc_coefficients(&lsf, bandwidth)?;
+            let (_, _, pcm) = quantize(QuantizerInput {
+                input,
+                lpc: &lpc,
+                history: &self.history[channel],
+                old_gain: self.gain[channel],
+                gain,
+                pitch: None,
+                previous_pcm: &self.pcm_history[channel],
+                rate,
+                bitrate: self.config.bitrate / super::channel_count(self.config.channels) as u32,
+                rate_pressure: 0,
+                optimize_pulse_cost: false,
+            });
+            let error = pcm.iter().map(|&x| i128::from(x).pow(2)).sum();
+            if error < best_error {
+                best_error = error;
+                best = Some(Model {
+                    stage1,
+                    residual,
+                    lpc,
+                });
+            }
+        }
+        Ok(best.expect("SILK spectral codebook is nonempty"))
+    }
+
     fn encode_internal(
+        &mut self,
+        pcm: &[f32],
+        shared: Option<&mut RangeEncoder>,
+        rank_prefix: bool,
+    ) -> Result<Vec<u8>> {
+        if rank_prefix
+            && self.config.channels == crate::Channels::Stereo
+            && self.config.bitrate <= 32_000
+        {
+            return self
+                .encode_model_ranked(pcm, shared.expect("ranked prefix requires entropy state"));
+        }
+        self.encode_search(pcm, shared, rank_prefix, 0)
+    }
+
+    // Every spectral combination starts from the identical committed predictor
+    // and real incoming range state. Fit and rank the transmitted reconstruction,
+    // not open-loop LPC prediction error. The baseline model is always included.
+    fn encode_model_ranked(&mut self, pcm: &[f32], shared: &mut RangeEncoder) -> Result<Vec<u8>> {
+        let mut best: Option<(i128, Self, RangeEncoder)> = None;
+        let mut failure = None;
+        for mask in 0..4 {
+            let mut candidate = self.clone();
+            let mut range = shared.clone();
+            if let Err(error) = candidate.encode_search(pcm, Some(&mut range), true, mask) {
+                failure = Some(error);
+                continue;
+            }
+            let mut distortion = 0_i128;
+            for (i, frame) in pcm.as_chunks::<2>().0.iter().enumerate() {
+                let left = (f64::from(frame[0]) * 32768.0).round() as i32;
+                let right = (f64::from(frame[1]) * 32768.0).round() as i32;
+                for (channel, target) in [left.midpoint(right), (left - right) / 2]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let history = &candidate.pcm_history[channel];
+                    let reconstructed = history[history.len() - self.config.frame_size + i];
+                    distortion += (i128::from(target) - i128::from(reconstructed)).pow(2);
+                }
+            }
+            #[cfg(test)]
+            eprintln!(
+                "prefix model mask={mask} bits={} distortion={distortion}",
+                range.tell()
+            );
+            if best.as_ref().is_none_or(|previous| distortion < previous.0) {
+                best = Some((distortion, candidate, range));
+            }
+        }
+        if let Some((_, candidate, range)) = best {
+            *self = candidate;
+            *shared = range;
+            Ok(Vec::new())
+        } else {
+            Err(failure.expect("all spectral candidates failed"))
+        }
+    }
+
+    #[allow(clippy::too_many_lines)] // Transactional SILK entropy budget search.
+    fn encode_search(
         &mut self,
         pcm: &[f32],
         mut shared: Option<&mut RangeEncoder>,
         rank_prefix: bool,
+        model_mask: u8,
     ) -> Result<Vec<u8>> {
         let rate = sample_rate(self.config.sample_rate)?;
         let bandwidth = bandwidth(self.config.sample_rate);
@@ -214,6 +326,9 @@ impl SilkEncoder {
             .iter()
             .enumerate()
             .map(|(channel, input)| {
+                if input.iter().all(|&sample| sample == 0) {
+                    return self.silence_model(input, channel, bandwidth, rate);
+                }
                 let mut analysis: Vec<i32> = self.history[channel]
                     .iter()
                     .map(|&x| {
@@ -222,7 +337,16 @@ impl SilkEncoder {
                     })
                     .collect();
                 analysis.extend_from_slice(input);
-                analyze_rate(&analysis, bandwidth, self.config.bitrate / channels as u32)
+                let bitrate = self.config.bitrate / channels as u32;
+                analyze_rate(
+                    &analysis,
+                    bandwidth,
+                    if model_mask & (1 << channel) != 0 {
+                        48_000
+                    } else {
+                        bitrate
+                    },
+                )
             })
             .collect::<Result<_>>()?;
         let pitches: Vec<_> = inputs
@@ -276,7 +400,7 @@ impl SilkEncoder {
         // without removing the equal-gain baseline. Derive the offset using
         // the actual transmitted gain table (no floating-point logarithms).
         let mut gain_offsets = vec![[0_i32; 2]];
-        if rank_prefix && channels == 2 {
+        if channels == 2 && (rank_prefix || (shared.is_none() && per_channel_bitrate <= 24_000)) {
             let energy: Vec<i128> = inputs
                 .iter()
                 .map(|input| {
@@ -315,14 +439,61 @@ impl SilkEncoder {
         // ranked stereo at all budgets and standalone low-rate coding.
         let independent_pressure =
             (rank_prefix && channels == 2) || (shared.is_none() && per_channel_bitrate <= 24_000);
-        let trials = baseline_trials + if independent_pressure { 122 } else { 0 };
-        for search_trial in 0..trials * gain_offsets.len() as i32 {
-            let trial = search_trial % trials;
-            let offsets = gain_offsets[(search_trial / trials) as usize];
+        let baseline_search_trials = baseline_trials + if independent_pressure { 122 } else { 0 };
+        // The sparse search is anchored to the first fit at gain 63. On a
+        // persistent predictor, useful fits can lie below its eight coarse
+        // refinement gains, or between them at a different pulse pressure.
+        // Cover every legal gain at each existing pressure for low-rate
+        // shared prefixes, retaining every historical candidate. Do not
+        // change standalone or accepted high-rate prefix search policy.
+        let complete_prefix_search = rank_prefix && per_channel_bitrate <= 24_000;
+        let trials = baseline_search_trials + if complete_prefix_search { 64 * 13 } else { 0 };
+        let common_trials = trials * gain_offsets.len() as i32;
+        // Refine one component while retaining the other's exact winning
+        // pulses. A shared pulse pressure cannot allocate bits independently
+        // even when both RMS gain offsets are nearly zero.
+        let coordinate_trials = if rank_prefix && channels == 2 && per_channel_bitrate <= 16_000 {
+            2 * 2 * 17 * 13
+        } else {
+            0
+        };
+        let mut coordinate_anchor = [0_i32; 2];
+        for search_trial in 0..common_trials + coordinate_trials {
+            let coordinate = search_trial >= common_trials;
+            if coordinate && best.is_none() {
+                break;
+            }
+            let trial = if coordinate {
+                search_trial - common_trials
+            } else {
+                search_trial % trials
+            };
+            let offsets = if coordinate {
+                [0; 2]
+            } else {
+                gain_offsets[(search_trial / trials) as usize]
+            };
+            let coordinate_channel = (trial / (17 * 13)) as usize % 2;
             if trial == 0 {
                 first_fit = None;
             }
-            let (gain_index, rate_pressure) = if trial >= baseline_trials + 96 {
+            if coordinate && trial % (17 * 13) == 0 {
+                coordinate_anchor.copy_from_slice(
+                    &best
+                        .as_ref()
+                        .expect("coordinate search requires a fit")
+                        .indices,
+                );
+            }
+            let (gain_index, rate_pressure) = if coordinate {
+                (
+                    coordinate_anchor[coordinate_channel] + (trial / 13) % 17 - 8,
+                    (trial % 13) as u32,
+                )
+            } else if trial >= baseline_search_trials {
+                let refinement = trial - baseline_search_trials;
+                (refinement / 13, (refinement % 13) as u32)
+            } else if trial >= baseline_trials + 96 {
                 let refinement = trial - baseline_trials - 96;
                 (
                     first_fit.unwrap_or(63) - 1 - refinement / 13,
@@ -356,9 +527,14 @@ impl SilkEncoder {
             };
             let indices: Vec<_> = (0..channels)
                 .map(|c| {
-                    (gain_index + offsets[c])
-                        .max(self.previous_index[c] - 16)
-                        .clamp(0, 63)
+                    let index = if coordinate && c != coordinate_channel {
+                        best.as_ref()
+                            .expect("coordinate search requires a fit")
+                            .indices[c]
+                    } else {
+                        gain_index + offsets[c]
+                    };
+                    index.max(self.previous_index[c] - 16).clamp(0, 63)
                 })
                 .collect();
             let gains: Vec<_> = indices
@@ -367,6 +543,13 @@ impl SilkEncoder {
                 .collect();
             let quantized: Vec<_> = (0..channels)
                 .map(|c| {
+                    if coordinate && c != coordinate_channel {
+                        return best
+                            .as_ref()
+                            .expect("coordinate search requires a fit")
+                            .quantized[c]
+                            .clone();
+                    }
                     quantize(QuantizerInput {
                         input: &inputs[c],
                         lpc: &models[c].lpc,
@@ -462,10 +645,7 @@ impl SilkEncoder {
                     .is_none_or(|previous| distortion < previous.distortion)
                 {
                     #[cfg(test)]
-                    if channels == 2
-                        && self.config.bitrate == 48_000
-                        && self.config.frame_size == rate / 50
-                    {
+                    if channels == 2 && self.config.bitrate <= 48_000 {
                         let errors: Vec<i128> = inputs
                             .iter()
                             .zip(&quantized)
@@ -486,7 +666,7 @@ impl SilkEncoder {
                             })
                             .collect();
                         eprintln!(
-                            "SILK_PREFIX_IMPROVEMENT trial={trial} offsets={offsets:?} indices={indices:?} bits={prefix_bits} distortion={distortion} errors={errors:?} clipped={clipping:?}"
+                            "SILK_PREFIX_IMPROVEMENT trial={trial} coordinate={coordinate} channel={coordinate_channel} pressure={rate_pressure} offsets={offsets:?} indices={indices:?} bits={prefix_bits} distortion={distortion} errors={errors:?} clipped={clipping:?}"
                         );
                     }
                     best = Some(PacketCandidate {

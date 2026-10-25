@@ -55,6 +55,62 @@ impl Write for Sink {
     }
 }
 #[test]
+fn public_auto_controls_keep_output_clock_and_resampler_guard_transactional() {
+    use moosicbox_audio_encoder::opus_stream::{EncoderMode, OpusEncodeMode};
+
+    let auto = OpusEncodeConfig {
+        mode: OpusEncodeMode::Auto,
+        bitrate: 192_000,
+        ..config()
+    };
+    let mut encoder = SelectedOpusEncoder::new(auto).unwrap();
+    let mut control = encoder.control().unwrap();
+    let mut bytes = encoder.encode(audio(48_000, 960)).unwrap().to_vec();
+    assert_eq!(encoder.active_mode(), Some(EncoderMode::Hybrid));
+    for (bitrate, frames) in [(64_000, 960), (32_000, 537)] {
+        control.bitrate = bitrate;
+        encoder.set_control(control).unwrap();
+        bytes.extend_from_slice(&encoder.encode(audio(48_000, frames)).unwrap());
+        assert_eq!(encoder.active_mode(), Some(EncoderMode::Hybrid));
+    }
+    let before = encoder.control();
+    assert!(encoder.set_control(control).is_err());
+    assert_eq!(encoder.control(), before);
+    bytes.extend_from_slice(&encoder.finish().unwrap());
+    assert!(encoder.finish().unwrap().is_empty());
+    assert!(encoder.set_control(control).is_err());
+    let eos = bytes
+        .windows(4)
+        .rposition(|window| window == b"OggS")
+        .unwrap();
+    let granule = u64::from_le_bytes(bytes[eos + 6..eos + 14].try_into().unwrap());
+    let pre_skip = u16::from_le_bytes(bytes[38..40].try_into().unwrap());
+    assert_eq!(granule - u64::from(pre_skip), 2457);
+
+    let encode_resampled = |reject_control| {
+        let mut encoder = SelectedOpusEncoder::new(auto).unwrap();
+        let mut bytes = encoder.encode(audio(44_100, 1)).unwrap().to_vec();
+        if reject_control {
+            let before = encoder.control();
+            assert!(encoder.set_control(control).is_err());
+            assert_eq!(encoder.control(), before);
+        }
+        bytes.extend_from_slice(&encoder.encode(audio(44_100, 2456)).unwrap());
+        bytes.extend_from_slice(&encoder.finish().unwrap());
+        bytes
+    };
+    let bytes = encode_resampled(true);
+    assert_eq!(bytes, encode_resampled(false));
+    let eos = bytes
+        .windows(4)
+        .rposition(|window| window == b"OggS")
+        .unwrap();
+    let granule = u64::from_le_bytes(bytes[eos + 6..eos + 14].try_into().unwrap());
+    let pre_skip = u16::from_le_bytes(bytes[38..40].try_into().unwrap());
+    assert_eq!(granule - u64::from(pre_skip), 2457 * 48_000 / 44_100);
+}
+
+#[test]
 fn empty_input_does_not_pin_resampler_or_input_spec() {
     let mut encoder = SelectedOpusEncoder::new(config()).unwrap();
     let mut bytes = encoder.encode(audio(44100, 0)).unwrap().to_vec();

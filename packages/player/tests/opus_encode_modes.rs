@@ -521,6 +521,93 @@ fn changing_mode_ogg_file_matches_public_c_and_player_seek() {
 }
 
 #[test]
+fn public_auto_controlled_ogg_reenters_player_with_exact_gain_and_seek() {
+    use moosicbox_audio_output::encoder::opus::EncoderMode;
+
+    let config = OpusEncodeConfig {
+        backend: OpusEncodeBackend::Native,
+        mode: OpusEncodeMode::Auto,
+        sample_rate: 48_000,
+        channels: 2,
+        frame_size: 960,
+        bitrate: 192_000,
+    };
+    let mut encoder = SelectedOpusEncoder::new(config).unwrap();
+    let mut control = encoder.control().unwrap();
+    let mut bytes = encoder.encode(input(48_000, 2, 960)).unwrap().to_vec();
+    assert_eq!(encoder.active_mode(), Some(EncoderMode::Hybrid));
+    for (bitrate, frames) in [(64_000, 960), (32_000, 537)] {
+        control.bitrate = bitrate;
+        encoder.set_control(control).unwrap();
+        bytes.extend_from_slice(&encoder.encode(input(48_000, 2, frames)).unwrap());
+        assert_eq!(encoder.active_mode(), Some(EncoderMode::Hybrid));
+    }
+    let before = encoder.control();
+    assert!(encoder.set_control(control).is_err());
+    assert_eq!(encoder.control(), before);
+    bytes.extend_from_slice(&encoder.finish().unwrap());
+    assert!(encoder.finish().unwrap().is_empty());
+    // Inspect only packets emitted by the public encoder: no synthetic packet
+    // injection or test-only native constructor participates in this regression.
+    let mut probe = moosicbox_audio_decoder::create_format_probe()
+        .probe(
+            &Hint::new(),
+            MediaSourceStream::new(Box::new(Cursor::new(bytes.clone())), Default::default()),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+    let mut audible = 0;
+    let mut packets = 0;
+    while let Some(packet) = probe.next_packet().unwrap() {
+        assert_eq!(
+            packet.data[0] >> 3,
+            15,
+            "public Auto must retain fullband Hybrid"
+        );
+        audible += packet.dur.get();
+        packets += 1;
+    }
+    assert!(packets >= 3);
+    assert_eq!(audible, 2457);
+    let decoded = play(bytes.clone(), None);
+    assert_eq!(decoded.len(), 2);
+    for plane in &decoded {
+        assert_eq!(plane.len(), 2457);
+        assert!(plane.iter().all(|sample| sample.is_finite()));
+        assert!(plane.iter().any(|sample| sample.abs() > 0.001));
+    }
+    let sought = play(bytes.clone(), Some(0.05));
+    assert_eq!(sought.len(), 2);
+    for (actual, expected) in sought.iter().zip(&decoded) {
+        assert_eq!(actual, &expected[2400..]);
+    }
+    for gain in [-1536, 1536] {
+        let gained = play(with_gain(bytes.clone(), gain), None);
+        let factor = 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0));
+        for (actual, expected) in gained.iter().zip(&decoded) {
+            assert_eq!(actual.len(), 2457);
+            for (actual, expected) in actual.iter().zip(expected) {
+                assert_eq!(*actual, *expected * factor);
+            }
+        }
+    }
+    // The existing convenience API supports steady Auto without a new scheduler.
+    let mut processor = moosicbox_player::signal_chain::SignalChainStep::new()
+        .with_decode_options(options())
+        .with_opus_encoder(config)
+        .unwrap()
+        .process(Box::new(Cursor::new(bytes)))
+        .unwrap();
+    let mut encoded = Vec::new();
+    processor.read_to_end(&mut encoded).unwrap();
+    for plane in play(encoded, None) {
+        assert_eq!(plane.len(), 2457);
+        assert!(plane.iter().any(|sample| sample.abs() > 0.001));
+    }
+}
+
+#[test]
 fn stereo_fullband_hybrid_low_bitrates_reenter_player_and_signal_chain() {
     for bitrate in [32_000, 64_000] {
         for frame_size in [480, 960] {

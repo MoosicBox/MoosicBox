@@ -63,6 +63,62 @@ async fn explicit_configurations_never_reuse_source_or_other_configuration_cache
     assert_eq!(u32::from_le_bytes(b[40..44].try_into().unwrap()), 24000);
 }
 #[switchy_async::test]
+async fn explicit_auto_transcode_keeps_clock_and_does_not_reuse_mode_cache() {
+    use moosicbox_audio_output::encoder::opus::OpusEncodeMode;
+
+    let default = config(48_000);
+    let auto = OpusEncodeConfig {
+        mode: OpusEncodeMode::Auto,
+        bitrate: 192_000,
+        ..default
+    };
+    let fixed = collect(default).await;
+    let adaptive = collect(auto).await;
+    assert_ne!(
+        adaptive, fixed,
+        "explicit Auto must not reuse Default cache"
+    );
+    assert_eq!(adaptive, collect(auto).await);
+    assert_eq!(fixed, collect(default).await);
+    let audible = |bytes: &[u8]| {
+        let eos = bytes
+            .windows(4)
+            .rposition(|window| window == b"OggS")
+            .unwrap();
+        let granule = u64::from_le_bytes(bytes[eos + 6..eos + 14].try_into().unwrap());
+        let pre_skip = u16::from_le_bytes(bytes[38..40].try_into().unwrap());
+        granule - u64::from(pre_skip)
+    };
+    assert_eq!(audible(&adaptive), audible(&fixed));
+    let result = get_audio_bytes_with_opus_encoder(source(), options(), auto)
+        .await
+        .unwrap();
+    drop(result);
+    assert_eq!(
+        adaptive,
+        collect(auto).await,
+        "cancellation must not retain Auto state"
+    );
+    let invalid = OpusEncodeConfig {
+        frame_size: 120,
+        ..auto
+    };
+    let result = get_audio_bytes_with_opus_encoder(source(), options(), invalid)
+        .await
+        .unwrap();
+    let items: Vec<_> = result.stream.collect().await;
+    assert!(items.iter().any(|item| match item {
+        Err(_) => true,
+        Ok(item) => item.is_err(),
+    }));
+    assert_eq!(
+        adaptive,
+        collect(auto).await,
+        "failed Auto must not poison valid transcode"
+    );
+}
+
+#[switchy_async::test]
 async fn invalid_configuration_is_a_terminal_stream_error_not_cached_success() {
     let _valid = collect(config(48000)).await;
     let mut invalid = config(48000);

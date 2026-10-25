@@ -846,14 +846,35 @@ impl Encoder {
             } else {
                 lowband.process(pcm)
             };
-            hybrid::encode_lowband_prefix(
-                self.silk
-                    .as_mut()
-                    .ok_or_else(|| Error::Unsupported("missing hybrid SILK state".into()))?,
-                &low,
-                &mut enc,
-                self.config.bitrate,
-            )?;
+            let silk = self
+                .silk
+                .as_mut()
+                .ok_or_else(|| Error::Unsupported("missing hybrid SILK state".into()))?;
+            let original = silk.clone();
+            let incoming = enc.clone();
+            hybrid::encode_lowband_prefix(silk, &low, &mut enc, self.config.bitrate)?;
+            if redundant.is_some() && enc.tell() as usize + 37 > bytes * 8 {
+                // Redundancy reduces storage without reducing the nominal SILK
+                // budget. Retry from the incoming predictive/entropy state, not
+                // from the failed trial, reserving the signaling bits explicitly.
+                let prefix_bytes = (bytes * 8).saturating_sub(incoming.tell() as usize + 37) / 8;
+                let retry_bitrate = ((prefix_bytes + 1) * 384_000 / internal_size) as u32;
+                let mut trial = original;
+                trial.set_bitrate(retry_bitrate.clamp(8_000, 128_000))?;
+                enc = incoming;
+                hybrid::encode_lowband_prefix(&mut trial, &low, &mut enc, self.config.bitrate)?;
+                if enc.tell() as usize + 37 > bytes * 8 {
+                    return Err(adaptive::unavailable(
+                        "hybrid transition cannot fit redundancy signaling",
+                    ));
+                }
+                trial.set_bitrate(hybrid::packet_lowband_bitrate(
+                    self.config.bitrate,
+                    self.config.channels,
+                    internal_size,
+                ))?;
+                *silk = trial;
+            }
             if enc.tell() as usize + 37 <= bytes * 8 {
                 enc.ec_enc_bit_logp(redundant.is_some(), 12)
                     .map_err(entropy)?;

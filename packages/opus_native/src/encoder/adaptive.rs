@@ -265,12 +265,51 @@ mod tests {
         );
     }
 
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "explicit oracle and real-media PCM required; budget frontier only, no public policy change"]
+    fn reference_unredundant_prefix_budget_frontier() {
+        let oracle =
+            std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE").expect("explicit oracle required");
+        let bytes = std::fs::read(
+            std::env::var_os("MOOSICBOX_OPUS_HYBRID_REAL_PCM").expect("real-media PCM required"),
+        )
+        .unwrap();
+        assert_eq!(bytes.len() % 4, 0);
+        let media: Vec<_> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| f32::from(i16::from_le_bytes(*b)) / 32768.0)
+            .collect();
+        assert!(media.len() >= 32 * 960 * 2);
+        for prefix_bytes in [31, 33, 35] {
+            let failures =
+                qualify_unredundant_case_with_budget(480, 3, &media, &oracle, Some(prefix_bytes));
+            eprintln!(
+                "prefix frontier bytes={prefix_bytes} suffix_reserve={} failures={failures:?}",
+                39 - prefix_bytes
+            );
+        }
+    }
+
     #[cfg(feature = "hybrid")]
     fn qualify_unredundant_case(
         frame_size: usize,
         shape: usize,
         media: &[f32],
         oracle: &std::ffi::OsStr,
+    ) -> Vec<String> {
+        qualify_unredundant_case_with_budget(frame_size, shape, media, oracle, None)
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn qualify_unredundant_case_with_budget(
+        frame_size: usize,
+        shape: usize,
+        media: &[f32],
+        oracle: &std::ffi::OsStr,
+        prefix_bytes: Option<usize>,
     ) -> Vec<String> {
         let mut encoder = Encoder::new_auto(EncoderConfig {
             bitrate: 64_000,
@@ -288,18 +327,24 @@ mod tests {
             };
             let pcm = candidate_hybrid_shape(shape, frame, frame_size, media);
             source.extend_from_slice(&pcm);
-            let packet = encoder
-                .encode_unredundant_candidate(
-                    &pcm,
-                    EncoderControl {
-                        bitrate,
-                        bandwidth: Bandwidth::Fullband,
-                        mode,
-                    },
-                )
-                .unwrap();
-            if matches!((shape, frame_size, frame), (3, 480, 4) | (1, 960, 16)) {
-                dump_cold_entry(&encoder, shape, frame, bitrate);
+            let trace_prefix = matches!(
+                (shape, frame_size, frame),
+                (3, 480, 4..=6) | (1, 960, 16..=18)
+            );
+            let incoming_silk = trace_prefix.then(|| encoder.silk.as_ref().unwrap().clone());
+            let previous_budget = super::super::hybrid::PREFIX_FRONTIER_BYTES.replace(prefix_bytes);
+            let packet = encoder.encode_unredundant_candidate(
+                &pcm,
+                EncoderControl {
+                    bitrate,
+                    bandwidth: Bandwidth::Fullband,
+                    mode,
+                },
+            );
+            super::super::hybrid::PREFIX_FRONTIER_BYTES.set(previous_budget);
+            let packet = packet.unwrap();
+            if let Some(incoming_silk) = incoming_silk {
+                dump_cold_entry(&encoder, shape, frame, bitrate, &packet, incoming_silk);
             }
             assert!(packet.len() <= bitrate as usize * frame_size / 384_000);
             assert_eq!(encoder.active_mode(), mode);
@@ -349,7 +394,16 @@ mod tests {
 
     /// Called only by the explicitly ignored oracle transition candidate.
     #[cfg(feature = "hybrid")]
-    fn dump_cold_entry(encoder: &Encoder, shape: usize, frame: usize, bitrate: u32) {
+    fn dump_cold_entry(
+        encoder: &Encoder,
+        shape: usize,
+        frame: usize,
+        bitrate: u32,
+        packet: &[u8],
+        mut incoming_silk: super::super::silk::SilkEncoder,
+    ) {
+        use std::fmt::Write as _;
+
         let frame_size = encoder.config.frame_size;
         let path = format!("/tmp/opus-cold-entry-{shape}-{frame_size}-{frame}.f32");
         let bytes: Vec<_> = encoder
@@ -358,6 +412,10 @@ mod tests {
             .flat_map(|sample| sample.to_le_bytes())
             .collect();
         std::fs::write(&path, bytes).unwrap();
+        // Preserve the transmitted shared prefix for stateful replay. These
+        // three-frame traces distinguish a good cold frame from a bad successor;
+        // replaying every PCM file with a fresh SILK encoder would hide that bug.
+        std::fs::write(format!("{path}.packet"), packet).unwrap();
         let prefix_bitrate = super::super::hybrid::packet_lowband_bitrate(
             bitrate,
             encoder.config.channels,
@@ -370,14 +428,40 @@ mod tests {
         // post-header tell). No SILK/private predictive state is inferred here.
         let incoming = crate::range::RangeEncoder::new(payload_bytes).unwrap();
         let channels = super::super::channel_count(encoder.config.channels);
+        let reset = matches!(frame, 4 | 16);
         let metadata = format!(
-            "format=f32le\nlayout=interleaved\nchannels={channels}\nsample_rate=16000\nsample_count={}\nsamples_per_channel={}\nshape={shape}\nsource_frame_size_48k={frame_size}\nsource_frame={frame}\npacket_bitrate={bitrate}\nprefix_bitrate={prefix_bitrate}\nprefix_budget_bytes={prefix_bytes}\nprefix_budget_bits={}\npacket_payload_bytes={payload_bytes}\nincoming_range_tell={}\nsilk_reset=true\nanalysis_history=preserved\n",
+            "format=f32le\nlayout=interleaved\nchannels={channels}\nsample_rate=16000\nsample_count={}\nsamples_per_channel={}\nshape={shape}\nsource_frame_size_48k={frame_size}\nsource_frame={frame}\npacket_bitrate={bitrate}\nprefix_bitrate={prefix_bitrate}\nprefix_budget_bytes={prefix_bytes}\nprefix_budget_bits={}\npacket_payload_bytes={payload_bytes}\nincoming_range_tell={}\nsilk_reset={reset}\nanalysis_history=preserved\n",
             encoder.adaptive_low.len(),
             encoder.adaptive_low.len() / channels,
             prefix_bytes * 8,
             incoming.tell(),
         );
         std::fs::write(format!("{path}.meta"), &metadata).unwrap();
+        if reset {
+            incoming_silk.reset();
+        }
+        incoming_silk.set_bitrate(prefix_bitrate).unwrap();
+        let mut states = format!("incoming={incoming:#?}\n");
+        for ranked in [false, true] {
+            // Both trials start from the actual pre-frame predictive snapshot,
+            // not independently reset input. Only ranked is the production
+            // choice at these bitrates; neither replay mutates the real encoder.
+            let mut silk = incoming_silk.clone();
+            let mut coder = incoming.clone();
+            let result = if ranked {
+                silk.encode_prefix_ranked(&encoder.adaptive_low, &mut coder)
+            } else {
+                silk.encode_prefix(&encoder.adaptive_low, &mut coder)
+            };
+            writeln!(
+                states,
+                "ranked={ranked} result={result:?} tell={} range={} state={coder:#?}",
+                coder.tell(),
+                coder.range()
+            )
+            .unwrap();
+        }
+        std::fs::write(format!("{path}.coder"), states).unwrap();
         eprintln!("cold entry dump {path}\n{metadata}");
     }
 

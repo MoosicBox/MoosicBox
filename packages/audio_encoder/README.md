@@ -31,7 +31,8 @@ Enable `opus-native` with default features disabled for a pure-Rust encoder and
 standalone Ogg framing. `opus_stream::OpusEncodeConfig` separates backend from
 `OpusEncodeMode`: `Default` preserves native CELT or libopus automatic selection;
 `Celt`, `Silk`, and `Hybrid` force the native constructor and reject a Libopus
-backend. There is no hidden fallback or automatic native mode adaptation.
+backend. `Auto` explicitly opts in to native frame-boundary mode controls; it
+is not a general low-bitrate adaptation policy. There is no hidden fallback.
 
 ```rust,ignore
 use moosicbox_audio_encoder::opus_stream::{
@@ -55,15 +56,18 @@ Supported native construction boundaries (not a claim of full Opus encoder parit
 | Mode   | Input rates       | Frame durations | Bitrate                                                  |
 | ------ | ----------------- | --------------- | -------------------------------------------------------- |
 | CELT   | 8/12/16/24/48 kHz | 2.5/5/10/20 ms  | Minimum 128/64/32/32 kbps respectively; maximum 256 kbps |
-| SILK   | 8/12/16 kHz       | 10/20 ms        | Mono 48–128 kbps; stereo 96–128 kbps                     |
-| Hybrid | 48 kHz            | 10/20 ms        | 128–256 kbps                                             |
+| SILK   | 8/12/16/24/48 kHz | 10/20/40/60 ms  | Mono 48–128 kbps; stereo 96–128 kbps                     |
+| Hybrid | 24/48 kHz         | 10/20 ms        | 128–256 kbps; 48 kHz stereo also admits 32–128 kbps      |
 
-Mono and stereo are supported. Lower-bitrate quantization is not currently
-supported: rejected configurations fail before writing Ogg headers. Encoder
+Mono and stereo are supported within these boundaries. Practical lower-rate
+standalone SILK and low-budget Auto mode entry/departure remain unqualified
+and rejected. Already-active 48 kHz stereo Fullband Hybrid supports steady
+32–128 kbps controls; initial low-rate Auto selects CELT. Rejected constructor
+configurations fail before writing Ogg headers. Encoder
 lookahead comes from the selected codec getter, scales to the Ogg 48-kHz clock,
 and is removed along with partial-frame padding using the actual input length.
-SILK currently uses unvoiced predictive coding; explicit selection does not imply
-adaptive mode or voiced-analysis support.
+SILK includes voiced prediction; explicit mode selection does not itself enable
+automatic adaptation.
 
 The same configuration is accepted by the audio-output `SelectedOpusEncoder`,
 player `SignalChainStep::with_opus_encoder`, and files

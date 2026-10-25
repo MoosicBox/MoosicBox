@@ -352,11 +352,11 @@ impl Decoder {
                 Self::calculate_samples(config.frame_size, self.sample_rate as u32);
             let total_samples = samples_per_frame * frames.len();
             #[cfg(not(all(feature = "silk", feature = "celt")))]
-            if frames.iter().any(|frame| frame.is_empty()) {
-                // Preflight every missing constituent before committing any good one.
+            if frames.iter().any(|frame| frame.len() <= 1) {
+                // Preflight every PLC/DTX constituent before committing any good one.
                 let mut previous = self.prev_mode;
                 for frame in &frames {
-                    if frame.is_empty() {
+                    if frame.len() <= 1 {
                         #[cfg(not(feature = "celt"))]
                         if previous == Some(OpusMode::CeltOnly) {
                             return Err(Error::UnsupportedMode(
@@ -391,7 +391,10 @@ impl Decoder {
                     (current_output_offset + samples_per_frame) * self.channels as usize;
                 let frame_output = &mut output[frame_output_start..frame_output_end];
 
-                if frame_data.is_empty() {
+                // Upstream opus_decode_frame treats zero/one-byte payloads as
+                // PLC/DTX in the previous mode, without consuming entropy or
+                // applying the incoming TOC's codec/channel transition.
+                if frame_data.len() <= 1 {
                     self.decode_loss_inner(frame_output, samples_per_frame)?;
                     current_output_offset += samples_per_frame;
                     continue;
@@ -720,6 +723,17 @@ impl Decoder {
             self.decode_loss_inner(output, prefix)?;
         }
         let offset = prefix * self.channels as usize;
+        if frames[0].len() <= 1 {
+            // opus_decode_frame treats a short FEC payload as PLC/DTX in
+            // the previous mode, after any prefix concealment. Do not parse
+            // SILK headers or reconfigure channels for absent redundancy.
+            self.decode_loss_inner(
+                &mut output[offset..offset + samples * self.channels as usize],
+                samples,
+            )?;
+            self.last_packet_samples = requested;
+            return Ok(requested);
+        }
         self.decode_silk_payload_inner(
             &mut range::RangeDecoder::new(frames[0])?,
             if config.mode == OpusMode::Hybrid {
