@@ -20,6 +20,7 @@ use actix_web::{
 pub struct HttpPolicy {
     max_body_bytes: usize,
     sensitive_path_prefixes: Vec<String>,
+    cors_origins: Vec<String>,
 }
 
 impl HttpPolicy {
@@ -29,6 +30,7 @@ impl HttpPolicy {
         Self {
             max_body_bytes,
             sensitive_path_prefixes: Vec::new(),
+            cors_origins: Vec::new(),
         }
     }
 
@@ -41,6 +43,48 @@ impl HttpPolicy {
     pub fn with_sensitive_path_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.sensitive_path_prefixes.push(prefix.into());
         self
+    }
+
+    /// Allows one exact serialized HTTP(S) origin to read cross-origin responses.
+    ///
+    /// Policies default to no cross-origin grants. This does not authorize any
+    /// application operation; same-origin requests remain usable without CORS.
+    ///
+    /// # Errors
+    /// Rejects wildcards, credentials, paths, queries and non-HTTP(S) origins.
+    pub fn with_cors_origin(mut self, origin: impl Into<String>) -> Result<Self, &'static str> {
+        let origin = origin.into();
+        let uri: actix_web::http::Uri = origin.parse().map_err(|_| "invalid CORS origin")?;
+        if !matches!(uri.scheme_str(), Some("http" | "https"))
+            || uri
+                .authority()
+                .is_none_or(|authority| authority.as_str().contains('@'))
+            || origin.contains('*')
+            || origin.contains('?')
+            || origin.contains('#')
+            || origin
+                != format!(
+                    "{}://{}",
+                    uri.scheme_str().unwrap_or_default(),
+                    uri.authority().map_or("", |a| a.as_str())
+                )
+        {
+            return Err("invalid CORS origin");
+        }
+        if !self.cors_origins.contains(&origin) {
+            self.cors_origins.push(origin);
+        }
+        Ok(self)
+    }
+
+    pub(crate) fn configure_cors(&self, mut cors: actix_cors::Cors) -> actix_cors::Cors {
+        for origin in &self.cors_origins {
+            cors = cors.allowed_origin(origin);
+        }
+        // A same-origin fetch can carry Origin too. Do not reject the request
+        // merely for lacking a cross-origin grant; omit ACAO and let the browser
+        // enforce isolation. Preflight still rejects unlisted origins.
+        cors.block_on_origin_mismatch(false)
     }
 
     /// Returns the server-wide maximum request body size.
@@ -112,6 +156,101 @@ mod tests {
     };
 
     use super::{HttpPolicy, enforce};
+
+    #[actix_web::test]
+    async fn origins_are_explicit_exact_http_origins() {
+        for origin in [
+            "*",
+            "null",
+            "https://example.test/",
+            "https://user@example.test",
+            "https://example.test?x",
+            "ftp://example.test",
+            "https://example.test/#x",
+        ] {
+            assert!(
+                HttpPolicy::new(16).with_cors_origin(origin).is_err(),
+                "{origin}"
+            );
+        }
+        assert!(
+            HttpPolicy::new(16)
+                .with_cors_origin("https://example.test")
+                .is_ok()
+        );
+        assert!(
+            HttpPolicy::new(16)
+                .with_cors_origin("http://[::1]:8080")
+                .is_ok()
+        );
+    }
+
+    #[actix_web::test]
+    async fn cors_grants_only_explicit_origins_without_blocking_same_origin_posts() {
+        let policy = HttpPolicy::new(16)
+            .with_cors_origin("https://embed.test")
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .wrap(policy.configure_cors(
+                    actix_cors::Cors::default().allowed_methods(vec!["GET", "POST"]),
+                ))
+                .route(
+                    "/",
+                    web::post().to(|| async { HttpResponse::Ok().finish() }),
+                ),
+        )
+        .await;
+        for (origin, grant) in [
+            ("https://embed.test", true),
+            ("https://other.test", false),
+            ("null", false),
+        ] {
+            let request = test::TestRequest::post()
+                .uri("/")
+                .insert_header((header::ORIGIN, origin))
+                .to_request();
+            let response = test::call_service(&app, request).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response
+                    .headers()
+                    .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+                grant
+            );
+        }
+        let denied = test::TestRequest::default()
+            .method(actix_web::http::Method::OPTIONS)
+            .uri("/")
+            .insert_header((header::ORIGIN, "https://other.test"))
+            .insert_header((header::ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+            .to_request();
+        let response = test::call_service(&app, denied).await;
+        assert!(
+            !response
+                .headers()
+                .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+        );
+        let app = test::init_service(
+            App::new()
+                .wrap(HttpPolicy::new(16).configure_cors(actix_cors::Cors::default()))
+                .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+        )
+        .await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/")
+                .insert_header((header::ORIGIN, "https://embed.test"))
+                .to_request(),
+        )
+        .await;
+        assert!(
+            !response
+                .headers()
+                .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+        );
+    }
 
     fn protected<B>(response: &actix_web::dev::ServiceResponse<B>) {
         assert_eq!(

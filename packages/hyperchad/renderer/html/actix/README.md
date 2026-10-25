@@ -103,6 +103,12 @@ When the `assets` feature is enabled, configure static asset routes via the `sta
 ### HTTP Policy
 
 HTTP protection is opt-in; existing apps retain their logging and extraction defaults.
+A selected policy also removes wildcard CORS grants. Same-origin hosting needs no
+additional configuration. Explicit trusted embedding origins can be added with
+`with_cors_origin("https://embed.example")?`; only exact HTTP(S) origins without
+credentials, paths, queries, fragments or wildcards are accepted. This grants
+browser response access, not application authorization. Non-policy applications
+retain the previous CORS behavior.
 Configure the app before starting the renderer:
 
 ```rust,ignore

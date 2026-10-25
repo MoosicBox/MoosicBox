@@ -593,7 +593,6 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
         self.handle.block_on(async move {
             let app = move || {
                 let cors = Cors::default()
-                    .allow_any_origin()
                     .allowed_methods(vec!["GET", "POST", "OPTIONS", "DELETE", "PUT", "PATCH"])
                     .allowed_headers(vec![
                         http::header::AUTHORIZATION,
@@ -624,6 +623,10 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                     ])
                     .supports_credentials()
                     .max_age(3600);
+                let cors = match &html_app.http_policy {
+                    Some(policy) => policy.configure_cors(cors),
+                    None => cors.allow_any_origin(),
+                };
 
                 #[allow(unused_mut)]
                 let mut app = App::new()
