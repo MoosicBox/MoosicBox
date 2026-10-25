@@ -3814,3 +3814,11 @@ accepted versions cannot be downgraded by a later batch. This conservative
 fallback makes safe progress but does not promise a globally maximal upgrade
 set. Cargo/network failures during optional refresh are also reported as
 held-back refresh warnings, not successful upgrades.
+
+Lockfile reconciliation constrains selected declarations to their exact planned
+versions only inside the disposable resolver snapshot. Cargo may retain older
+versions for unselected aliases or transitive consumers. These temporary exact
+requirements remain in effect during optional refresh but are never published;
+the intended manifest requirements and resolved lockfile are published instead.
+This supports incompatible upgrades without globally replacing a shared old
+package identity.

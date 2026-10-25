@@ -253,145 +253,20 @@ pub(super) fn resolve_lockfile_with_warnings(
     if original_lock.is_none() && contains_git(&root)? {
         return Err("cannot preserve Git revisions without an existing Cargo.lock; create one explicitly before upgrade".into());
     }
+    // Constrain only the selected declaration edges in the disposable snapshot.
+    // Replacing an old package ID with --precise would also replace consumers
+    // whose requirements still need that version (e.g. base64 0.22 and 0.23).
+    // Keep these constraints during optional refresh, then restore the intended
+    // manifest bytes. Exact selections satisfy the published broader requirements.
+    let unpinned = pin_selected_declarations(plan, &root)?;
     if original_lock.is_none() {
         cargo(&root, plan.offline, &["generate-lockfile".into()])?;
     } else {
-        // Never run a blind update. Apply the exact registry selections first;
-        // --precise prevents Cargo selecting a release rejected by MSRV/features.
-        for target in &plan.lock_versions {
-            let key = &target.key;
-            let selected = &target.selected;
-            let registry_source = target
-                .registry_source
-                .as_deref()
-                .ok_or("cannot establish target registry identity; no live files written")?;
-            let original_requirement = semver::VersionReq::parse(&target.previous)?;
-            let current: toml::Value =
-                toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
-            let packages = current
-                .get("package")
-                .and_then(toml::Value::as_array)
-                .ok_or("lockfile lacks packages")?;
-            let candidates = packages
-                .iter()
-                .filter(|p| {
-                    p.get("name").and_then(toml::Value::as_str) == Some(&key.name)
-                        && p.get("version")
-                            .and_then(toml::Value::as_str)
-                            .and_then(|v| semver::Version::parse(v).ok())
-                            .is_some_and(|v| original_requirement.matches(&v))
-                        && p.get("source")
-                            .and_then(toml::Value::as_str)
-                            .is_some_and(|s| super::sources::same_registry(s, registry_source))
-                })
-                .collect::<Vec<_>>();
-            let sources = candidates
-                .iter()
-                .filter_map(|p| p.get("source").and_then(toml::Value::as_str))
-                .collect::<BTreeSet<_>>();
-            if sources.len() > 1 {
-                return Err(format!("targeted resolution of '{}' from multiple registries is unsupported; no live files written", key.name).into());
-            }
-            if candidates.is_empty() {
-                // A valid declaration need not already have a locked identity.
-                // Reconcile the edited manifests, retaining Cargo's existing
-                // locks rather than running an unrestricted update. Final
-                // selection, Git and protected-identity checks still apply.
-                cargo(
-                    &root,
-                    plan.offline,
-                    &["update".into(), "--workspace".into()],
-                )?;
-                let reconciled: toml::Value =
-                    toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
-                let packages = reconciled
-                    .get("package")
-                    .and_then(toml::Value::as_array)
-                    .ok_or("lockfile lacks packages")?;
-                let matches = packages
-                    .iter()
-                    .filter(|p| {
-                        p.get("name").and_then(toml::Value::as_str) == Some(&key.name)
-                            && p.get("source")
-                                .and_then(toml::Value::as_str)
-                                .is_some_and(|s| super::sources::same_registry(s, registry_source))
-                    })
-                    .collect::<Vec<_>>();
-                if matches.len() != 1 {
-                    return Err(format!(
-                        "cannot identify reconciled registry dependency {}; no live files written",
-                        key.name
-                    )
-                    .into());
-                }
-                let package = matches[0];
-                let version = package
-                    .get("version")
-                    .and_then(toml::Value::as_str)
-                    .ok_or("lock package lacks version")?;
-                let source = package
-                    .get("source")
-                    .and_then(toml::Value::as_str)
-                    .ok_or("lock package lacks source")?;
-                if version != selected {
-                    cargo(
-                        &root,
-                        plan.offline,
-                        &[
-                            "update".into(),
-                            "--package".into(),
-                            format!("{source}#{}@{version}", key.name),
-                            "--precise".into(),
-                            selected.clone(),
-                        ],
-                    )?;
-                }
-                continue;
-            }
-            for package in candidates {
-                let version = package
-                    .get("version")
-                    .and_then(toml::Value::as_str)
-                    .ok_or("lock package lacks version")?;
-                if version == selected {
-                    continue;
-                }
-                // A preceding precise update may have merged this identity.
-                let now: toml::Value =
-                    toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
-                if !now
-                    .get("package")
-                    .and_then(toml::Value::as_array)
-                    .is_some_and(|ps| {
-                        ps.iter().any(|p| {
-                            p.get("name") == package.get("name")
-                                && p.get("version") == package.get("version")
-                                && p.get("source") == package.get("source")
-                        })
-                    })
-                {
-                    continue;
-                }
-                cargo(
-                    &root,
-                    plan.offline,
-                    &[
-                        "update".into(),
-                        "--package".into(),
-                        format!(
-                            "{}#{}@{version}",
-                            package
-                                .get("source")
-                                .and_then(toml::Value::as_str)
-                                .ok_or("lock package lacks source")?,
-                            key.name
-                        ),
-                        "--precise".into(),
-                        selected.clone(),
-                    ],
-                )?;
-            }
-        }
+        cargo(
+            &root,
+            plan.offline,
+            &["update".into(), "--workspace".into()],
+        )?;
         if plan.lockfile_policy == LockfilePolicy::Refresh {
             let current: toml::Value =
                 toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
@@ -460,8 +335,42 @@ pub(super) fn resolve_lockfile_with_warnings(
     }
     let resolved = fs::read_to_string(root.join("Cargo.lock"))?;
     validate_resolution(plan, original_lock, &resolved)?;
+    for (path, text) in unpinned {
+        fs::write(path, text)?;
+    }
     check_snapshots(plan)?;
     Ok((resolved, warnings))
+}
+
+/// Pin selected owner declarations only inside the disposable resolver snapshot.
+fn pin_selected_declarations(
+    plan: &UpgradePlan,
+    root: &Path,
+) -> Result<Vec<(PathBuf, String)>, BoxError> {
+    let mut documents = std::collections::BTreeMap::new();
+    let mut originals = std::collections::BTreeMap::new();
+    for target in &plan.lock_versions {
+        let path = root.join(target.manifest.strip_prefix(&plan.root)?);
+        if !documents.contains_key(&path) {
+            let text = fs::read_to_string(&path)?;
+            documents.insert(path.clone(), text.parse::<DocumentMut>()?);
+            originals.insert(path.clone(), text);
+        }
+        let mut item = documents
+            .get_mut(&path)
+            .ok_or("missing resolver manifest")?
+            .as_item_mut();
+        for part in &target.declaration_key {
+            item = item
+                .get_mut(part)
+                .ok_or("selected declaration missing from resolver manifest")?;
+        }
+        super::planner::replace_requirement(item, &format!("={}", target.selected))?;
+    }
+    for (path, document) in documents {
+        fs::write(path, document.to_string())?;
+    }
+    Ok(originals.into_iter().collect())
 }
 
 fn validate_resolution(
@@ -973,7 +882,23 @@ fn verify_protected(plan: &UpgradePlan, before: &str, after: &str) -> Result<(),
         }
         Ok(result)
     }
-    if identities(before, &plan.protected_names)? != identities(after, &plan.protected_names)? {
+    let previous = identities(before, &plan.protected_names)?;
+    let current = identities(after, &plan.protected_names)?;
+    // A selected alias may add a new version alongside a protected alias of
+    // the same package. Existing protected identities must still survive.
+    let selected_additions = current
+        .difference(&previous)
+        .all(|(name, version, source)| {
+            plan.lock_versions.iter().any(|target| {
+                target.key.name == *name
+                    && target.selected == *version
+                    && target
+                        .registry_source
+                        .as_deref()
+                        .is_some_and(|index| super::sources::same_registry(source, index))
+            })
+        });
+    if !previous.is_subset(&current) || !selected_additions {
         return Err("Cargo resolution would advance a pinned, excluded, unavailable or skipped dependency; no live files were written; adjust policy explicitly".into());
     }
     Ok(())

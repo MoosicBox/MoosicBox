@@ -317,6 +317,8 @@ pub struct ManifestChange {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub(crate) struct LockTarget {
     pub(crate) key: RegistryKey,
+    pub(crate) manifest: PathBuf,
+    pub(crate) declaration_key: Vec<String>,
     pub(crate) registry_source: Option<String>,
     pub(crate) previous: String,
     pub(crate) selected: String,

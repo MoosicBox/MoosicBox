@@ -384,6 +384,8 @@ pub fn plan_upgrade_with_releases(
                         lock_targets.insert(registry.clone());
                         lock_versions.insert(super::LockTarget {
                             key: registry.clone(),
+                            manifest: occurrence.owner.clone(),
+                            declaration_key: occurrence.owner_key.clone(),
                             registry_source: super::sources::registry_index(
                                 input,
                                 registry.registry.as_deref(),
@@ -840,7 +842,7 @@ fn rewrite_requirement(old: &str, version: &Version) -> Result<String, BoxError>
     Ok(format!("{operator}{next}"))
 }
 
-fn replace_requirement(item: &mut Item, requirement: &str) -> Result<(), BoxError> {
+pub(super) fn replace_requirement(item: &mut Item, requirement: &str) -> Result<(), BoxError> {
     let value = if item.is_str() {
         item.as_value_mut()
     } else {

@@ -530,6 +530,166 @@ async fn transitive_exact_pin_holds_back_conflict_but_refreshes_independent_pack
     );
 }
 
+#[switchy_async::test]
+async fn incompatible_resolution_splits_shared_versions_at_selected_declaration_edges() {
+    for inherited in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join(".cargo")).unwrap();
+        fs::write(
+            dir.path().join(".cargo/config.toml"),
+            "[source.crates-io]\nreplace-with='vendor'\n[source.vendor]\ndirectory='vendor'\n",
+        )
+        .unwrap();
+        let vendor = |name: &str, version: &str, dependencies: &str| {
+            let path = dir.path().join("vendor").join(format!("{name}-{version}"));
+            fs::create_dir_all(path.join("src")).unwrap();
+            fs::write(path.join("src/lib.rs"), "").unwrap();
+            fs::write(
+                path.join("Cargo.toml"),
+                format!(
+                    "[package]\nname='{name}'\nversion='{version}'\n[dependencies]\n{dependencies}"
+                ),
+            )
+            .unwrap();
+            fs::write(
+                path.join(".cargo-checksum.json"),
+                "{\"files\":{},\"package\":null}",
+            )
+            .unwrap();
+        };
+        vendor("codec", "0.22.1", "");
+        vendor("codec", "0.23.1", "");
+        vendor("protocol", "1.0.0", "codec='0.22'\n");
+        fs::create_dir_all(dir.path().join("member/src")).unwrap();
+        fs::write(dir.path().join("member/src/lib.rs"), "").unwrap();
+        let owner = if inherited {
+            "[workspace.dependencies]\nmodern={package='codec',version='0.22.1'}\n"
+        } else {
+            ""
+        };
+        fs::write(
+            dir.path().join("Cargo.toml"),
+            format!("[workspace]\nmembers=['member']\nresolver='2'\n{owner}"),
+        )
+        .unwrap();
+        let modern = if inherited {
+            "modern.workspace=true"
+        } else {
+            "modern={package='codec',version='0.22.1'}"
+        };
+        let manifest = dir.path().join("member/Cargo.toml");
+        fs::write(&manifest, format!("{PACKAGE}[dependencies]\n{modern}\nlegacy={{package='codec',version='=0.22.1'}}\nprotocol='1'\n")).unwrap();
+        let output = std::process::Command::new("cargo")
+            .args(["generate-lockfile", "--offline"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let original_lock = fs::read_to_string(dir.path().join("Cargo.lock")).unwrap();
+        // A newer eligible index release exists, but the injected selection
+        // deliberately chooses 0.23.1 (e.g. a feature/MSRV ceiling).
+        vendor("codec", "0.23.2", "");
+        let input = load_upgrade_input(&UpgradeOptions {
+            manifest_path: Some(dir.path().into()),
+            policy: Some(UpgradePolicy::Incompatible),
+            dependencies: vec!["modern".into()],
+            lockfile: Some(LockfilePolicy::Refresh),
+            registry_overrides: RegistryOverrides {
+                offline: Some(true),
+                ..RegistryOverrides::default()
+            },
+            ..UpgradeOptions::default()
+        })
+        .unwrap();
+        let releases = BTreeMap::from([(
+            RegistryKey {
+                name: "codec".into(),
+                registry: None,
+            },
+            vec![release("0.23.1")],
+        )]);
+        let plan = plan_upgrade_with_releases(&input, &releases).unwrap();
+        let (resolved, _) = super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
+            original_lock
+        );
+        let report = apply_upgrade_plan(&plan).await.unwrap();
+        assert!(report.applied);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
+            resolved
+        );
+        let lock: toml::Value = toml::from_str(&resolved).unwrap();
+        let packages = lock["package"].as_array().unwrap();
+        let versions = packages
+            .iter()
+            .filter(|p| p["name"].as_str() == Some("codec"))
+            .map(|p| p["version"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(versions, ["0.22.1", "0.23.1"]);
+        let protocol = packages
+            .iter()
+            .find(|p| p["name"].as_str() == Some("protocol"))
+            .unwrap();
+        assert_eq!(protocol["dependencies"][0].as_str(), Some("codec 0.22.1"));
+        let owner_path = if inherited {
+            dir.path().join("Cargo.toml")
+        } else {
+            manifest.clone()
+        };
+        let published = fs::read_to_string(owner_path).unwrap();
+        assert!(published.contains("version=\"0.23.1\""), "{published}");
+        assert!(
+            !published.contains("version='=0.23.1'"),
+            "temporary resolver pins must not escape"
+        );
+        assert!(
+            fs::read_to_string(&manifest)
+                .unwrap()
+                .contains("version='=0.22.1'")
+        );
+        let output = std::process::Command::new("cargo")
+            .args(["metadata", "--offline", "--locked", "--format-version", "1"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let resolve = metadata["resolve"]["nodes"].as_array().unwrap();
+        let member = metadata["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == "fixture")
+            .unwrap();
+        let node = resolve.iter().find(|n| n["id"] == member["id"]).unwrap();
+        for (alias, version) in [("modern", "0.23.1"), ("legacy", "0.22.1")] {
+            let edge = node["deps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["name"] == alias)
+                .unwrap();
+            let package = metadata["packages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == edge["pkg"])
+                .unwrap();
+            assert_eq!(package["version"].as_str(), Some(version));
+        }
+    }
+}
+
 #[test]
 fn compatible_precision_and_operators() {
     for (old, expected) in [
