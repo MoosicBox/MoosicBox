@@ -429,6 +429,107 @@ async fn cargo_local_directory_source_lock_only_refresh_and_git_preservation() {
     );
 }
 
+#[switchy_async::test]
+async fn transitive_exact_pin_holds_back_conflict_but_refreshes_independent_packages() {
+    let (dir, _) = fixture(&format!("{PACKAGE}[dependencies]\nrootdep='1'\n"), |_| {});
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/lib.rs"), "").unwrap();
+    fs::create_dir(dir.path().join(".cargo")).unwrap();
+    fs::write(
+        dir.path().join(".cargo/config.toml"),
+        "[source.crates-io]\nreplace-with='vendor'\n[source.vendor]\ndirectory='vendor'\n",
+    )
+    .unwrap();
+    let vendor = |name: &str, version: &str, dependencies: &str| {
+        let path = dir.path().join("vendor").join(format!("{name}-{version}"));
+        fs::create_dir_all(path.join("src")).unwrap();
+        fs::write(path.join("src/lib.rs"), "").unwrap();
+        fs::write(
+            path.join("Cargo.toml"),
+            format!(
+                "[package]\nname='{name}'\nversion='{version}'\n[dependencies]\n{dependencies}"
+            ),
+        )
+        .unwrap();
+        fs::write(
+            path.join(".cargo-checksum.json"),
+            "{\"files\":{},\"package\":null}",
+        )
+        .unwrap();
+    };
+    vendor(
+        "rootdep",
+        "1.0.0",
+        "parser='1'\nstack='1'\nindependent='1'\n",
+    );
+    vendor("parser", "1.0.0", "");
+    vendor("stack", "1.0.0", "leaf='1'\n");
+    vendor("leaf", "1.1.0", "");
+    vendor("independent", "1.0.0", "");
+    let output = std::process::Command::new("cargo")
+        .args(["generate-lockfile", "--offline"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let original = fs::read_to_string(dir.path().join("Cargo.lock")).unwrap();
+    // Models pest's new exact PSM pin, without network/cache dependencies.
+    vendor("parser", "1.1.0", "leaf='=1.0.0'\n");
+    vendor("leaf", "1.0.0", "");
+    vendor("independent", "1.1.0", "");
+    let input = load_upgrade_input(&UpgradeOptions {
+        manifest_path: Some(dir.path().into()),
+        lockfile: Some(LockfilePolicy::Refresh),
+        registry_overrides: RegistryOverrides {
+            offline: Some(true),
+            ..RegistryOverrides::default()
+        },
+        ..UpgradeOptions::default()
+    })
+    .unwrap();
+    let releases = BTreeMap::from([(
+        RegistryKey {
+            name: "rootdep".into(),
+            registry: None,
+        },
+        vec![release("1.0.0")],
+    )]);
+    let mut plan = plan_upgrade_with_releases(&input, &releases).unwrap();
+    let (resolved, warnings) = super::apply::resolve_lockfile_with_warnings(&plan).unwrap();
+    let doc: toml::Value = toml::from_str(&resolved).unwrap();
+    let packages = doc["package"].as_array().unwrap();
+    for (name, version) in [
+        ("parser", "1.0.0"),
+        ("leaf", "1.1.0"),
+        ("independent", "1.1.0"),
+    ] {
+        assert!(packages.iter().any(|p| p["name"].as_str() == Some(name) && p["version"].as_str() == Some(version)), "{name}: {resolved}");
+    }
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("parser") && w.contains("leaf")),
+        "{warnings:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
+        original
+    );
+    // Preview diagnostics survive cached resolution and apply publication.
+    plan.resolved_lockfile = Some(resolved.clone());
+    plan.report.warnings = warnings.clone();
+    let report = apply_upgrade_plan(&plan).await.unwrap();
+    assert_eq!(report.warnings, warnings);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("Cargo.lock")).unwrap(),
+        resolved
+    );
+}
+
 #[test]
 fn compatible_precision_and_operators() {
     for (old, expected) in [

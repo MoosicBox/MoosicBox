@@ -286,6 +286,8 @@ pub struct UpgradeReport {
     pub pending: bool,
     /// Explicit blockers; hard planning errors are returned as errors instead.
     pub blockers: Vec<String>,
+    /// Optional transitive updates held back to preserve resolution policies.
+    pub warnings: Vec<String>,
     /// The caller declined confirmation.
     pub cancelled: bool,
     /// Canonical Cargo workspace root.
@@ -419,7 +421,9 @@ pub async fn build_upgrade_plan(options: &UpgradeOptions) -> Result<UpgradePlan,
         if plan.lockfile_policy == LockfilePolicy::None {
             return Err("resolve-lockfile cannot be combined with lockfile policy NONE".into());
         }
-        plan.resolved_lockfile = Some(apply::resolve_lockfile(&plan)?);
+        let (lockfile, warnings) = apply::resolve_lockfile_with_warnings(&plan)?;
+        plan.resolved_lockfile = Some(lockfile);
+        plan.report.warnings.extend(warnings);
         plan.report.lockfile = LockfileStatus::Resolved;
     }
     Ok(plan)

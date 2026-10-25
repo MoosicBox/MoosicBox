@@ -358,7 +358,14 @@ mod upgrade_cli {
         let mut groups = std::collections::BTreeMap::new();
         let mut owners = std::collections::BTreeSet::new();
         let mut changed = 0;
-        let mut warnings = 0;
+        let mut warnings = report.warnings.len();
+        for message in &report.warnings {
+            write_line(
+                writer,
+                &Line::from_spans(vec![Span::styled(format!("Warning: {message}"), warning)]),
+                color,
+            )?;
+        }
         for dependency in &report.dependencies {
             let key = (
                 &dependency.manifest,

@@ -3804,3 +3804,13 @@ resolved through Git/path patches keep their requirements and sources, even with
 is reported as unavailable and preserved; unrelated dependencies still upgrade.
 Patch tables are never rewritten. Lock reconciliation is registry-qualified and
 rejects changes to protected identities and existing Git revisions before writing.
+
+Transitive refresh first attempts eligible upgrades together. If resolution would
+violate a selected version, protected source, or no-downgrade policy, Clippier
+restores the last valid isolated lockfile and retries deterministic smaller
+batches. Conflicting optional updates are held back with warnings in both JSON
+and terminal reports; requested direct selections remain mandatory. Previously
+accepted versions cannot be downgraded by a later batch. This conservative
+fallback makes safe progress but does not promise a globally maximal upgrade
+set. Cargo/network failures during optional refresh are also reported as
+held-back refresh warnings, not successful upgrades.

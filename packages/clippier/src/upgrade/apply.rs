@@ -51,12 +51,15 @@ pub async fn apply_upgrade_plan(plan: &UpgradePlan) -> Result<UpgradeReport, Box
     for (_, _, text) in &updates {
         let _: DocumentMut = text.parse()?;
     }
+    let mut resolution_warnings = Vec::new();
     let lock_path = plan.root.join("Cargo.lock");
     if plan.lockfile_policy != LockfilePolicy::None {
         let resolved = if let Some(text) = &plan.resolved_lockfile {
             text.clone()
         } else {
-            resolve_lockfile(plan)?
+            let resolution = resolve_lockfile_with_warnings(plan)?;
+            resolution_warnings = resolution.1;
+            resolution.0
         };
         let _: DocumentMut = resolved.parse()?;
         let before = plan
@@ -100,6 +103,7 @@ pub async fn apply_upgrade_plan(plan: &UpgradePlan) -> Result<UpgradeReport, Box
         .into());
     }
     let mut report = plan.report.clone();
+    report.warnings.extend(resolution_warnings);
     report.applied = true;
     report.pending = false;
     report.status = if updates.is_empty() {
@@ -184,8 +188,16 @@ fn rollback(completed: &[Published]) -> Vec<String> {
     errors
 }
 
-#[allow(clippy::too_many_lines)] // Resolution is intentionally a single isolated transaction.
+#[cfg(test)]
 pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
+    resolve_lockfile_with_warnings(plan).map(|resolution| resolution.0)
+}
+
+#[allow(clippy::too_many_lines)] // Resolution is intentionally a single isolated transaction.
+pub(super) fn resolve_lockfile_with_warnings(
+    plan: &UpgradePlan,
+) -> Result<(String, Vec<String>), BoxError> {
+    let mut warnings = Vec::new();
     check_snapshots(plan)?;
     let temporary = tempfile::tempdir()?;
     // Reproduce the ancestor configuration hierarchy, not just the root config.
@@ -238,7 +250,6 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
         .iter()
         .find(|s| s.path == plan.root.join("Cargo.lock"))
         .and_then(|s| s.contents.as_deref());
-    let original_git = git_identities(original_lock.unwrap_or_default())?;
     if original_lock.is_none() && contains_git(&root)? {
         return Err("cannot preserve Git revisions without an existing Cargo.lock; create one explicitly before upgrade".into());
     }
@@ -384,7 +395,7 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
         if plan.lockfile_policy == LockfilePolicy::Refresh {
             let current: toml::Value =
                 toml::from_str(&fs::read_to_string(root.join("Cargo.lock"))?)?;
-            let mut arguments = vec!["update".into()];
+            let mut candidates = Vec::new();
             let mut eligible_names = plan
                 .lock_targets
                 .iter()
@@ -430,9 +441,8 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                         && !plan.lock_targets.iter().any(|key| key.name == name)
                         && !plan.protected_names.iter().any(|p| p == name)
                     {
-                        arguments.push("--package".into());
-                        arguments.push(format!(
-                            "{name}@{}",
+                        candidates.push(format!(
+                            "{source}#{name}@{}",
                             package
                                 .get("version")
                                 .and_then(toml::Value::as_str)
@@ -441,25 +451,39 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
                     }
                 }
             }
-            if arguments.len() > 1 {
-                cargo(&root, plan.offline, &arguments)?;
-            }
+            let baseline = fs::read_to_string(root.join("Cargo.lock"))?;
+            // Requested direct selections are mandatory. Only the optional
+            // transitive refresh may be held back to preserve the valid graph.
+            validate_resolution(plan, original_lock, &baseline)?;
+            refresh_compatible(plan, &root, original_lock, &candidates, &mut warnings)?;
         }
     }
     let resolved = fs::read_to_string(root.join("Cargo.lock"))?;
-    if git_identities(&resolved)? != original_git && original_lock.is_some() {
+    validate_resolution(plan, original_lock, &resolved)?;
+    check_snapshots(plan)?;
+    Ok((resolved, warnings))
+}
+
+fn validate_resolution(
+    plan: &UpgradePlan,
+    original_lock: Option<&str>,
+    resolved: &str,
+) -> Result<(), BoxError> {
+    if git_identities(resolved)? != git_identities(original_lock.unwrap_or_default())?
+        && original_lock.is_some()
+    {
         return Err(
             "isolated Cargo resolution changed a skipped Git revision; no live files were written"
                 .into(),
         );
     }
     if original_lock.is_some() {
-        verify_protected(plan, original_lock.unwrap_or_default(), &resolved)?;
+        verify_protected(plan, original_lock.unwrap_or_default(), resolved)?;
     }
     if original_lock.is_some() {
-        verify_no_downgrades(original_lock.unwrap_or_default(), &resolved)?;
+        verify_no_downgrades(original_lock.unwrap_or_default(), resolved)?;
     }
-    let resolved_doc: toml::Value = toml::from_str(&resolved)?;
+    let resolved_doc: toml::Value = toml::from_str(resolved)?;
     for target in &plan.lock_versions {
         if !resolved_doc
             .get("package")
@@ -487,8 +511,81 @@ pub(super) fn resolve_lockfile(plan: &UpgradePlan) -> Result<String, BoxError> {
             .into());
         }
     }
-    check_snapshots(plan)?;
-    Ok(resolved)
+    Ok(())
+}
+
+// Try the whole eligible set first so mutually dependent upgrades can resolve
+// together. On conflict, restore exact bytes before trying smaller batches.
+// Every accepted batch must preserve both the original policy and previously
+// accepted versions. The fallback is deterministic and bounded by 2*N-1 trials;
+// it deliberately promises safe progress, not a globally maximal solution.
+fn refresh_compatible(
+    plan: &UpgradePlan,
+    root: &Path,
+    original_lock: Option<&str>,
+    candidates: &[String],
+    warnings: &mut Vec<String>,
+) -> Result<(), BoxError> {
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    let path = root.join("Cargo.lock");
+    let before = fs::read_to_string(&path)?;
+    let document: toml::Value = toml::from_str(&before)?;
+    let identities = document
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|package| {
+            Some(format!(
+                "{}#{}@{}",
+                package.get("source")?.as_str()?,
+                package.get("name")?.as_str()?,
+                package.get("version")?.as_str()?
+            ))
+        })
+        .collect::<BTreeSet<_>>();
+    // Earlier accepted batches can update/remove members of later batches.
+    // Do not invoke Cargo with stale IDs or misreport those as held back.
+    let candidates = candidates
+        .iter()
+        .filter(|id| identities.contains(*id))
+        .cloned()
+        .collect::<Vec<_>>();
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    let mut arguments = vec!["update".into()];
+    for candidate in &candidates {
+        arguments.extend(["--package".into(), candidate.clone()]);
+    }
+    let attempt = cargo(root, plan.offline, &arguments).and_then(|()| {
+        let after = fs::read_to_string(&path)?;
+        validate_resolution(plan, original_lock, &after)?;
+        verify_no_downgrades(&before, &after)
+    });
+    if let Err(error) = attempt {
+        fs::write(&path, before)?;
+        if candidates.len() == 1 {
+            warnings.push(format!(
+                "Held back transitive refresh of {}: {error}",
+                candidates[0]
+            ));
+        } else {
+            let summary = candidates
+                .iter()
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            warnings.push(format!("Held back incompatible transitive refresh batch ({} packages; {summary}): {error}; retrying smaller batches", candidates.len()));
+            let (left, right) = candidates.split_at(candidates.len() / 2);
+            refresh_compatible(plan, root, original_lock, left, warnings)?;
+            refresh_compatible(plan, root, original_lock, right, warnings)?;
+        }
+    }
+    Ok(())
 }
 
 fn cargo(root: &Path, offline: bool, arguments: &[String]) -> Result<(), BoxError> {
