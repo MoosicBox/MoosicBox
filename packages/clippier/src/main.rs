@@ -1339,6 +1339,21 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Pack unchanged feature cases into compatible, balanced CI jobs
+    ScheduleMatrix {
+        /// JSON array of fully transformed feature cases
+        file: String,
+        /// Maximum runner jobs (not a feature chunk limit)
+        #[arg(long)]
+        max_jobs: usize,
+    },
+    /// Require exactly one successful receipt for every scheduled case
+    VerifyMatrix {
+        /// JSON job plan produced by schedule-matrix
+        plan: String,
+        /// JSON array of runner receipts
+        receipts: String,
+    },
     /// Analyze unused Cargo dependencies and preview or apply removals
     #[cfg(feature = "machete")]
     Machete(machete_cli::MacheteCli),
@@ -2081,6 +2096,18 @@ async fn run() -> Result<(), BoxError> {
             } else {
                 clippier::tools::init::initialize_terminal(&root)?;
             }
+            String::new()
+        }
+        Commands::ScheduleMatrix { file, max_jobs } => {
+            let packages = serde_json::from_str(&std::fs::read_to_string(file)?)?;
+            serde_json::to_string(&clippier::matrix_schedule::schedule(packages, max_jobs)?)?
+        }
+        Commands::VerifyMatrix { plan, receipts } => {
+            let jobs: Vec<clippier::matrix_schedule::Job> =
+                serde_json::from_str(&std::fs::read_to_string(plan)?)?;
+            let receipts: Vec<clippier::matrix_schedule::Receipt> =
+                serde_json::from_str(&std::fs::read_to_string(receipts)?)?;
+            clippier::matrix_schedule::verify(&jobs, &receipts)?;
             String::new()
         }
         Commands::Dependencies {

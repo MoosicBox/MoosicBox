@@ -49,6 +49,21 @@ concurrency:
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+    scheduling-regressions:
+        name: Validate lossless case scheduling
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@stable
+            - name: Test scheduler and receipt verification
+              run: cargo test --locked -p clippier --no-default-features --test matrix_schedule_tests
+            - name: Test analysis and real case execution
+              shell: bash
+              run: |
+                  bash .github/actions/clippier/tests/analysis.sh
+                  bash .github/actions/clippier/tests/case-stack.sh
+                  bash .github/actions/clippier/tests/large-output.sh
+
     cargo-deny:
         continue-on-error: true
         runs-on: ubuntu-latest
@@ -115,6 +130,7 @@ jobs:
                   packages: ${{ github.event.inputs.packages }}
                   chunked: 15
                   max-parallel: 256
+                  stack-cases: true
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -124,25 +140,6 @@ jobs:
                   git-strategy: workflow-history
                   jq-filter: |
                       map(.toolchains |= (. // "" | split("\n") | map(select(. != "" and . != "taplo" and . != "taplo-cli")) | join("\n")))
-                      | (group_by(.name) | map({key: .[0].name, value: ([.[].os] | unique | length > 1)}) | from_entries) as $multiOs
-                      | (group_by([.name, .os]) | map({key: "\(.[0].name)|\(.[0].os)", value: length}) | from_entries) as $osCounts
-                      | to_entries
-                      | reduce .[] as $item ({result: [], counters: {}};
-                          ($item.value.name + "|" + $item.value.os) as $key |
-                          ((.counters[$key] // 0) + 1) as $idx |
-                          ($item.value.os | gsub("-latest$"; "")) as $osShort |
-                          {
-                              result: (.result + [$item.value + {
-                                  osIndex: $idx,
-                                  osCount: $osCounts[$key],
-                                  hasMultipleOs: $multiOs[$item.value.name],
-                                  osShort: $osShort,
-                                  osEmoji: (if $osShort == "ubuntu" then "🐧" elif $osShort == "macos" then "🍎" elif $osShort == "windows" then "🪟" else $osShort end)
-                              }]),
-                              counters: (.counters + {($key): $idx})
-                          }
-                      )
-                      | .result
                   ignore: |
                       **/*.md
                       **/*.txt
@@ -193,6 +190,14 @@ jobs:
                   summary-show-trigger: true
                   summary-show-jobs-details: true
                   summary-include-seed: true
+
+            - name: Save immutable case plan
+              if: success()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: clippier-case-plan
+                  path: ${{ runner.temp }}/clippier-plan
+                  if-no-files-found: error
 
     build-clippier-machete:
         name: Build Clippier machete
@@ -276,7 +281,7 @@ jobs:
                   path: validation-report.json
 
     build:
-        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}
+        name: ${{ matrix.package.name }} (${{ matrix.package.os }}, job ${{ strategy.job-index }})
         runs-on: ${{ matrix.package.os }}
 
         needs: [determine-affected-packages, build-clippier-machete]
@@ -335,45 +340,29 @@ jobs:
                   CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
               with:
                   command: run-matrix
+                  stack-cases: true
+                  case-coverage: true
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
                   run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
                   run-matrix-template-vars: |
                       {"test-command":"llvm-cov test --no-report"}
                   run-matrix-debug-shells: "fish,bash"
 
-            - name: Create coverage report
-              id: create_coverage_report
-              shell: bash
-              run: |
-                  (
-                      cargo llvm-cov report --lcov --output-path lcov.info 2>&1 || true
-                      echo $? > exit_code.txt  # Save exit code before subshell exits
-                  ) > coverage_output.txt 2>&1
-
-                  exit_code=$(cat exit_code.txt 2>/dev/null || echo "1")
-                  echo "Coverage report command exited with exit code $exit_code"
-
-                  if grep -q "no coverage data found" coverage_output.txt; then
-                      echo "No coverage files found"
-                      cat coverage_output.txt >&2
-                      echo "has_coverage=false" >> $GITHUB_OUTPUT
-                  elif [[ $exit_code -eq 1 ]]; then
-                      echo "Failed to create coverage"
-                      cat coverage_output.txt >&2
-                      echo "has_coverage=false" >> $GITHUB_OUTPUT
-                      exit $exit_code
-                  else
-                      echo "Found coverage files"
-                      cat coverage_output.txt >&2
-                      echo "has_coverage=true" >> $GITHUB_OUTPUT
-                  fi
+            - name: Upload case receipts
+              if: always() && steps.test-suite.outputs.case-receipts-path != ''
+              uses: actions/upload-artifact@v6
+              with:
+                  name: clippier-case-receipts-${{ strategy.job-index }}
+                  path: ${{ steps.test-suite.outputs.case-receipts-path }}
+                  if-no-files-found: error
 
             - name: Upload coverage reports to Codecov
-              if: steps.create_coverage_report.outputs.has_coverage == 'true'
+              if: always() && steps.test-suite.outputs.coverage-path != ''
               uses: codecov/codecov-action@v6
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: MoosicBox/MoosicBox
+                  directory: ${{ steps.test-suite.outputs.coverage-path }}
                   flags: ${{ matrix.package.name }}
                   fail_ci_if_error: false
 
@@ -382,8 +371,10 @@ jobs:
         permissions:
             actions: read
             contents: read
-        needs: [build]
+        needs: [build, determine-affected-packages]
         uses: ./.github/workflows/clippier-report.yml
+        with:
+            verify-case-plan: true
 
     build-docker-images:
         runs-on: ubuntu-latest

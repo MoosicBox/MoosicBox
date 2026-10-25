@@ -46,6 +46,16 @@ inputs:
         required: false
         default: "false"
 
+    # Case stacking preserves feature configurations instead of unioning them.
+    stack-cases:
+        description: "For features: schedule unchanged cases within max-parallel jobs. For run-matrix: execute a scheduled job."
+        required: false
+        default: "false"
+    case-coverage:
+        description: "Collect a coverage file per scheduled case using the coverage-output template variable"
+        required: false
+        default: "false"
+
     randomize:
         description: "Randomize features before chunking/spreading"
         required: false
@@ -186,7 +196,7 @@ inputs:
     matrix-properties:
         description: "Comma-separated list of properties to include in matrix"
         required: false
-        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules,cargo"
+        default: "name,path,features,requiredFeatures,os,dependencies,toolchains,ciSteps,ciToolchains,env,nightly,gitSubmodules,cargo,freshRunner"
 
     os-suffix:
         description: 'Suffix to add to OS field (e.g., "-latest")'
@@ -504,6 +514,12 @@ inputs:
         default: "true"
 
 outputs:
+    case-receipts-path:
+        description: Directory of per-case terminal receipts (upload even on failure)
+        value: ${{ steps.run-action.outputs.case-receipts-path }}
+    coverage-path:
+        description: Directory of per-case LCOV reports
+        value: ${{ steps.run-action.outputs.coverage-path }}
     release-status:
         description: "Ephemeral reconstructed release status JSON"
         value: ${{ steps.run-action.outputs.release-status }}
@@ -852,6 +868,8 @@ runs:
               INPUT_PACKAGES: ${{ inputs.packages }}
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
+              INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_CASE_COVERAGE: ${{ inputs.case-coverage }}
               INPUT_CHANGED_FILES: ${{ inputs.changed-files }}
               INPUT_GIT_STRATEGY: ${{ inputs.git-strategy }}
               INPUT_GIT_BASE: ${{ inputs.git-base }}

@@ -3,6 +3,11 @@ name: Clippier Report
 on:
     workflow_call:
         inputs:
+            verify-case-plan:
+                description: Require successful receipts for every immutable scheduled case
+                required: false
+                type: boolean
+                default: false
             artifact-name:
                 description: Name of the consolidated report artifact
                 required: false
@@ -42,7 +47,35 @@ jobs:
                   pattern: clippier-diagnostics-*
                   path: ./clippier-report/diagnostics
 
+            - uses: dtolnay/rust-toolchain@stable
+              if: inputs.verify-case-plan
+
+            - name: Download immutable case plan
+              if: inputs.verify-case-plan
+              uses: actions/download-artifact@v8
+              with:
+                  name: clippier-case-plan
+                  path: ./clippier-report/plan
+
+            - name: Download case receipts
+              if: inputs.verify-case-plan
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: clippier-case-receipts-*
+                  path: ./clippier-report/receipts
+
+            - name: Reconcile planned cases with successful execution
+              if: always() && inputs.verify-case-plan
+              shell: bash
+              run: |
+                  mkdir -p ./clippier-report/receipts
+                  find ./clippier-report/receipts -type f -name '*.json' -exec cat {} + \
+                      | jq -s . > ./clippier-report/receipts.json
+                  cargo run --locked --package clippier --no-default-features -- \
+                      verify-matrix ./clippier-report/plan/jobs.json ./clippier-report/receipts.json
+
             - name: Capture workflow job metadata
+              if: always()
               shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -56,6 +89,7 @@ jobs:
                       --jq '.jobs[]' | jq -s '{jobs: .}' > ./clippier-report/jobs.json
 
             - name: Generate workflow failure report
+              if: always()
               uses: ./.github/actions/clippier
               with:
                   command: report

@@ -58,6 +58,9 @@ mod cargo_workspace;
 /// criteria applied to their Cargo.toml properties using a flexible filter syntax.
 /// Supports logical operators (AND, OR, NOT), various comparison operators,
 /// and Unicode support.
+/// Lossless CI case scheduling and receipt reconciliation.
+pub mod matrix_schedule;
+
 pub mod package_filter;
 
 /// Shared user and workspace preferences.
@@ -408,6 +411,8 @@ pub struct ClippierConfiguration {
 pub struct ParallelizationConfig {
     /// Number of chunks to split features into
     pub chunked: u16,
+    /// Require a separate runner for every case (never stack configurations).
+    pub fresh_runner: Option<bool>,
 }
 
 /// Root configuration structure for clippier.toml files
@@ -1657,6 +1662,8 @@ pub async fn process_configs(
 /// other metadata must match. Feature lists are unioned without dropping coverage,
 /// and merged lists must fit `chunked`. Empty feature runs remain separate from
 /// feature-enabled runs. Entries are merged only until the job limit is met.
+/// This is explicit feature-union compaction, not lossless case scheduling; use
+/// [`matrix_schedule::schedule`] to retain every original configuration.
 ///
 /// # Errors
 ///
@@ -1787,6 +1794,13 @@ pub fn create_map(
         serde_json::to_value(config.name.as_deref().unwrap_or(name))?,
     );
     map.insert("features".to_string(), features.into());
+    if conf
+        .and_then(|c| c.parallelization.as_ref())
+        .and_then(|p| p.fresh_runner)
+        == Some(true)
+    {
+        map.insert("freshRunner".to_string(), true.into());
+    }
     map.insert("requiredFeatures".to_string(), required_features.into());
     map.insert(
         "nightly".to_string(),

@@ -25,6 +25,15 @@ doctests:
     label: "Doctests"
     strategy: "sequential"
 
+coverage:
+    # Collect before clear-target-2; each stacked case has its own output file.
+    commands: |
+        if [[ -n "{{vars.coverage-output}}" ]]; then
+            cargo llvm-cov report --lcov --output-path "{{vars.coverage-output}}"
+        fi
+    label: "Coverage"
+    strategy: "combined"
+
 clear-target-2:
     commands: rm -rf target
 

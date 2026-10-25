@@ -525,7 +525,7 @@ build_clippier_command() {
         [[ -n "$INPUT_OS" ]] && cmd="$cmd --os $INPUT_OS"
         [[ -n "$INPUT_OFFSET" ]] && cmd="$cmd --offset $INPUT_OFFSET"
         [[ -n "$INPUT_MAX" ]] && cmd="$cmd --max $INPUT_MAX"
-        [[ -n "$INPUT_MAX_PARALLEL" ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
+        [[ -n "$INPUT_MAX_PARALLEL" && "${INPUT_STACK_CASES:-false}" != "true" ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
         [[ -n "$INPUT_CHUNKED" ]] && cmd="$cmd --chunked $INPUT_CHUNKED"
         [[ "$INPUT_SPREAD" == "true" ]] && cmd="$cmd --spread"
         [[ "$INPUT_RANDOMIZE" == "true" ]] && cmd="$cmd --randomize"
@@ -675,10 +675,7 @@ run_clippier() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
     echo "" >&2
 
-    local output
-    output=$(eval "$cmd" | tail -1 | jq -c .)
-
-    printf '%s' "$output"
+    run_clippier_json "$cmd" || return $?
 }
 
 # Helper function to output matrix with optional jq-filter applied at the end of the pipeline
@@ -687,9 +684,20 @@ output_matrix() {
 
     if [[ -n "$INPUT_JQ_FILTER" ]]; then
         echo "🔧 Applying jq filter: $INPUT_JQ_FILTER" >&2
-        matrix_json=$(printf '%s' "$matrix_json" | jq -c "$INPUT_JQ_FILTER")
+        matrix_json=$(printf '%s' "$matrix_json" | jq -c "$INPUT_JQ_FILTER") || return $?
     fi
 
+    if [[ "$INPUT_COMMAND" == features || "$INPUT_COMMAND" == packages ]]; then
+        printf '%s' "$matrix_json" | validate_case_array || return 1
+        MATRIX_CASE_COUNT=$(printf '%s' "$matrix_json" | jq 'length') || return $?
+    fi
+    if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
+        local plan_dir="${RUNNER_TEMP}/clippier-plan"
+        mkdir -p "$plan_dir"
+        printf '%s' "$matrix_json" > "$plan_dir/cases.json"
+        "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" --max-jobs "${INPUT_MAX_PARALLEL:-256}" > "$plan_dir/jobs.json" || return $?
+        matrix_json=$(jq -c . "$plan_dir/jobs.json") || return $?
+    fi
     echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
 }
 
@@ -750,9 +758,11 @@ transform_output() {
         \"ciSteps\": .ciSteps,
         \"ciToolchains\": .ciToolchains,
         \"env\": (if .env != null then .env | gsub(\"\\n\";\" \") else null end),
+        \"freshRunner\": .freshRunner,
+        \"cargo\": .cargo,
         \"nightly\": .nightly,
         \"gitSubmodules\": .gitSubmodules
-    } | with_entries(select(.key as \$k | $properties_array | index(\$k))) | del(.. | nulls))"
+    } | with_entries(select(.key as \$k | ($properties_array | index(\$k)) or \$k == \"freshRunner\")) | del(.. | nulls))"
 
     printf '%s' "$raw_output" | jq -rc "$jq_filter"
 }
@@ -1155,6 +1165,8 @@ generate_validation_summary() {
 # =============================================================================
 
 # Source template evaluation system
+source "${SCRIPT_DIR}/lib/analysis.sh"
+source "${SCRIPT_DIR}/lib/case-stack.sh"
 source "${SCRIPT_DIR}/lib/template.sh"
 
 # Source run-matrix command implementation
@@ -1603,7 +1615,11 @@ main() {
         # Disable error trap - run_matrix_command handles its own exit codes
         # (test failures should exit 1 without triggering "Action Failed" error summary)
         set +e
-        run_matrix_command
+        if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
+            run_case_stack
+        else
+            run_matrix_command
+        fi
         local exit_code=$?
         set -e
 
@@ -1630,7 +1646,11 @@ main() {
         echo "🚀 Force full matrix mode enabled - will analyze all packages regardless of changes"
     elif should_skip_on_no_changes; then
         echo "⏭️ Skipping - no changes detected and not in force-full-matrix mode"
-        echo "matrix=[]" >> $GITHUB_OUTPUT
+        if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
+            output_matrix '[]' || return $?
+        else
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+        fi
         echo "has-changes=false" >> $GITHUB_OUTPUT
         echo "additional-checks<<EOF" >> $GITHUB_OUTPUT
         echo "{}" >> $GITHUB_OUTPUT
@@ -1646,7 +1666,7 @@ main() {
         return
     fi
 
-    RAW_OUTPUT=$(run_clippier)
+    RAW_OUTPUT=$(run_clippier) || return $?
 
     # Debug: Log raw clippier output for diagnostics
     echo "📋 Clippier raw output:" >&2
@@ -1655,7 +1675,7 @@ main() {
 
     # Validate JSON from clippier
     echo "🔍 Validating clippier JSON output..." >&2
-    if ! printf '%s' "$RAW_OUTPUT" | jq empty 2>&1; then
+    if ! printf '%s' "$RAW_OUTPUT" | jq -e -s 'length == 1' >/dev/null; then
         echo "❌ ERROR: Clippier produced invalid JSON" >&2
         echo "Full output:" >&2
         echo "$RAW_OUTPUT" >&2
@@ -1708,16 +1728,17 @@ main() {
     fi
 
     if [[ "$INPUT_COMMAND" == "features" || "$INPUT_COMMAND" == "packages" ]]; then
-        TRANSFORMED_OUTPUT=$(transform_output "$RAW_OUTPUT")
+        TRANSFORMED_OUTPUT=$(transform_output "$RAW_OUTPUT") || return $?
+        printf '%s' "$TRANSFORMED_OUTPUT" | validate_case_array || return 1
 
         # Debug: Log transformed matrix output
         echo "📋 Transformed matrix output:" >&2
         printf '%s' "$TRANSFORMED_OUTPUT" | jq -c '.[0:3]' >&2 || echo "Failed to display matrix" >&2
         echo "Matrix length: $(printf '%s' "$TRANSFORMED_OUTPUT" | jq 'length')" >&2
 
-        output_matrix "$TRANSFORMED_OUTPUT"
+        output_matrix "$TRANSFORMED_OUTPUT" || return $?
 
-        local matrix_length=$(printf '%s' "$TRANSFORMED_OUTPUT" | jq 'length')
+        local matrix_length="$MATRIX_CASE_COUNT"
         if [[ "$matrix_length" -gt 0 ]]; then
             echo "has-changes=true" >> $GITHUB_OUTPUT
         else
@@ -1768,5 +1789,6 @@ main() {
 
     echo "✅ Clippier action completed successfully"
 }
-
-main
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main
+fi

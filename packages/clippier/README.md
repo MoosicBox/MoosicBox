@@ -2305,6 +2305,53 @@ separate. If those constraints make the requested limit impossible, Clippier
 returns an error. Increase the job/chunk limit or select fewer packages instead
 of relying on cross-package merging.
 
+#### Lossless CI scheduling
+
+For CI runner limits, use case stacking instead of feature-union compaction:
+
+```bash
+clippier features . --chunked 15 --spread --seed 179293089629404 --output json > cases.json
+clippier schedule-matrix cases.json --max-jobs 256 > jobs.json
+clippier verify-matrix jobs.json receipts.json
+```
+
+Apply project filters/transforms before scheduling. Each job contains shared setup
+metadata and `cases: [{id, package}]`; `package` retains the full original case.
+Flattening the scheduled cases preserves the original multiset, including duplicate
+and empty-feature configurations. Jobs are allocated deterministically by case
+count, then cases are spread evenly within each identical setup group. Scheduling
+never unions feature lists or changes the configured test strategies.
+
+The composite action opts in with `stack-cases: true` on both `features` and
+`run-matrix`. In that mode `max-parallel` limits runner jobs after transforms,
+not feature configurations; it is not GitHub's concurrent-job setting. Every case
+uses the existing full multi-step executor in a separate process. Stacked cases
+use disposable clean Git worktrees at the checked-out commit; arbitrary setup
+scripts (`ciSteps`, `dependencies`) and submodule cases remain singleton jobs.
+Jobs with different non-feature metadata are never combined. Projects needing
+fresh-runner isolation can explicitly opt out in `clippier.toml`:
+
+```toml
+[parallelization]
+chunked = 15
+fresh-runner = true
+```
+
+Setup happens once per compatible job. Toolchains and installed dependencies may
+be shared, but source changes, build outputs, shell environment changes, summary
+state, reproduction scripts, and coverage files are isolated between stacked
+cases. Custom test steps that mutate external/global state require `fresh-runner`.
+If incompatible/singleton setups alone exceed the limit, planning fails rather
+than weakening isolation or dropping coverage.
+
+Upload `case-receipts-path` even when execution fails. `verify-matrix` requires
+exactly one successful receipt containing each unchanged planned case; missing,
+changed, duplicate, unexpected, and failed receipts are errors. Cancellation or
+setup failures cannot count as completed coverage. The Build and Test workflow
+saves the immutable plan, reconciles receipts in its reporting job, and collects
+LCOV per case before target cleanup. Analysis errors, empty stdout, and malformed
+or invalid transformed output fail instead of being treated as no changes.
+
 | Option                | Description                                                             | Default      |
 | --------------------- | ----------------------------------------------------------------------- | ------------ |
 | `--os`                | Target operating system                                                 | -            |

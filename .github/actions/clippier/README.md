@@ -17,6 +17,38 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 - 📦 **Stateless Cargo Releases** - Registry-backed status, semver preparation, verification, and dependency-ordered publishing
 - ⚡ **Smart Caching** - Automatic clippier binary caching
 
+## Lossless feature-case stacking
+
+Build and Test uses `stack-cases: true` for analysis and execution. With this
+option, `features` first generates and transforms the complete case plan, then
+`max-parallel` bounds **runner jobs** without unioning or dropping feature cases.
+Every job carries `cases: [{id, package}]`, including singleton jobs. Pass the
+whole scheduled job as `run-matrix-package-json` with `stack-cases: true`.
+
+The allocator spreads cases deterministically across identical setup groups.
+Custom setup/dependency scripts, submodules, and project
+`[parallelization] fresh-runner = true` cases stay on separate runners. Stacked
+cases run sequentially through the existing executor in separate processes and
+clean disposable checkouts; per-case results, diagnostics, and coverage remain
+separate. If incompatible setups cannot fit, analysis fails explicitly.
+
+Always upload `case-receipts-path`, including after test failure, and reconcile
+those receipts against the saved plan with `clippier verify-matrix`. Missing or
+failed cases must fail the workflow; summaries alone are not completion proof.
+`case-coverage: true` supplies a `coverage-output` template variable and exposes
+`coverage-path` for upload. See the
+[CLI scheduling contract](../../../packages/clippier/README.md#lossless-ci-scheduling)
+for compatibility rules and isolation requirements.
+
+Local regression commands (also run by Build and Test):
+
+```bash
+cargo test -p clippier --no-default-features --test matrix_schedule_tests
+bash .github/actions/clippier/tests/analysis.sh
+bash .github/actions/clippier/tests/case-stack.sh
+bash .github/actions/clippier/tests/large-output.sh
+```
+
 ## Stateless Cargo release commands
 
 Use `release-status`, `release-prepare`, `release-verify`, or `release-publish` to invoke Clippier's
