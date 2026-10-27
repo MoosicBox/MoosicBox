@@ -198,46 +198,9 @@ fn exercise_stream(backend: OpusBackend) {
 
 #[test]
 fn generic_ogg_vorbis_retains_builtin_reader() {
-    use std::{
-        io::Write,
-        process::{Command, Stdio},
-    };
-    let mut child = Command::new("ffmpeg")
-        .args([
-            "-v",
-            "error",
-            "-f",
-            "f32le",
-            "-ar",
-            "48000",
-            "-ac",
-            "1",
-            "-i",
-            "pipe:0",
-            "-c:a",
-            "libvorbis",
-            "-f",
-            "ogg",
-            "pipe:1",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("independent FFmpeg required");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&vec![0; 4800 * 4])
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let reader = open(output.stdout);
+    // Reader selection must not depend on optional encoders in the installed
+    // FFmpeg build (Homebrew's ffmpeg does not always provide libvorbis).
+    let reader = open(include_bytes!("fixtures/vorbis-silence.ogg").to_vec());
     assert_eq!(reader.format_info().short_name, "ogg");
     assert!(
         reader
