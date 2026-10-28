@@ -52,8 +52,13 @@ inputs:
         required: false
         default: "false"
 
+    matrix-max-jobs:
+        description: "Maximum jobs per emitted matrix (1–256). Does not group cases or limit concurrency. Oversized plans fail unless shard-matrix is enabled; payload limits may split earlier."
+        required: false
+        default: "256"
+
     shard-matrix:
-        description: "Route fitting plans to direct-matrix; otherwise store bounded shards and emit shard IDs in matrix."
+        description: "Opt into automatic transport routing: fitting plans use direct-matrix; oversized plans produce bounded shards and shard IDs in matrix. Never enables stacking."
         required: false
         default: "false"
 
@@ -886,6 +891,7 @@ runs:
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_MATRIX_MAX_JOBS: ${{ inputs.matrix-max-jobs }}
               INPUT_SHARD_MATRIX: ${{ inputs.shard-matrix }}
               INPUT_ALLOW_ISOLATION_OVERFLOW: ${{ inputs.allow-isolation-overflow }}
               INPUT_CASE_COVERAGE: ${{ inputs.case-coverage }}

@@ -694,6 +694,7 @@ execute_matrix_entry() {
 # Helper function to output matrix with optional jq-filter applied at the end of the pipeline
 output_matrix() {
     local matrix_json="$1"
+    matrix_max_jobs >/dev/null || return $?
 
     if [[ -n "$INPUT_JQ_FILTER" ]]; then
         echo "🔧 Applying jq filter: $INPUT_JQ_FILTER" >&2
@@ -748,13 +749,22 @@ output_matrix() {
         write_schedule_summary "$plan_dir/schedule-summary.json" "$shards" || return $?
     else
         # GitHub transport cannot silently change allocation or enable sharding.
-        printf '%s' "$matrix_json" | jq -e 'length <= 256 and (tojson | utf8bytelength) <= 200000' >/dev/null || {
-            echo 'Job plan exceeds one GitHub matrix; enable shard-matrix or adjust the stacking budget' >&2
+        printf '%s' "$matrix_json" | matrix_fits || {
+            echo "Job plan exceeds matrix-max-jobs=${INPUT_MATRIX_MAX_JOBS-256} or the $CLIPPIER_MATRIX_PAYLOAD_BYTES-byte payload budget; enable shard-matrix or adjust the plan" >&2
             return 1
         }
         if [[ "${INPUT_STACK_CASES:-false}" == true ]]; then
             write_schedule_summary "$plan_dir/schedule-summary.json" '[]' || return $?
         fi
+        local route_file
+        if [[ "${INPUT_STACK_CASES:-false}" == true ]]; then
+            route_file="$plan_dir/jobs.json"
+        else
+            route_file=$(mktemp "${RUNNER_TEMP:-/tmp}/clippier-route.XXXXXX") || return $?
+        fi
+        printf '%s' "$matrix_json" > "$route_file" || return $?
+        report_matrix_route "$route_file" "" || return $?
+        if [[ "${INPUT_STACK_CASES:-false}" != true ]]; then rm -f "$route_file"; fi
         echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
     fi
 }

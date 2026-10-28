@@ -54,14 +54,40 @@ executor for singleton and stacked jobs alike, without a `stack-cases` flag.
 Plain-package inputs continue using the legacy executor. Malformed job entries
 are rejected rather than falling back to legacy execution.
 
-The `direct-matrix` output contains the full plan when it fits within 256 jobs
+### Matrix transport policy
+
+```yaml
+shard-matrix: true      # Explicit permission to split oversized plans
+matrix-max-jobs: 256    # Default; choose any integer from 1 through 256
+```
+
+`matrix-max-jobs` limits jobs **per emitted matrix**, not total jobs, feature
+configurations, or execution concurrency. It is independent of stacking's
+`max-parallel` budget. With sharding disabled (the default), an oversized plan
+fails explicitly; the action never enables sharding or stacking on your behalf.
+With sharding enabled, a fitting plan runs directly; only oversized plans split.
+The action emits data for the caller workflow to dispatch, not new jobs itself.
+
+The conservative transport payload budget is **200,000 UTF-8 bytes** per matrix.
+This is our safety budget, not GitHub's exact output limit (which is measured in
+UTF-16 and covers the job's combined outputs). Payload size can force a split
+earlier than `matrix-max-jobs`. A single job exceeding this budget fails rather
+than being altered. GitHub's hard ceiling remains 256 entries, including the
+outer shard-ID matrix; plans requiring more than 256 shards fail explicitly.
+
+Logs and the GitHub step summary describe direct/empty/sharded routing, the
+selected limit, shard sizes, and whether job count or payload size caused the
+split. Planned runs also save `transport-summary.json` alongside allocation
+statistics. For example: `265 jobs → sharded [256,9]; ... reason: matrix job-count limit`.
+
+The `direct-matrix` output contains the full plan when it fits within `matrix-max-jobs`
 and the 200,000 UTF-8 byte transport budget; `matrix` is then `[]`. Build and Test
 runs that plan as a top-level matrix, without shard preparation jobs. Empty
 plans skip both build routes. Otherwise `direct-matrix` is `[]` and `matrix`
 contains shard IDs. The complete unchanged plan remains in
 `$RUNNER_TEMP/clippier-plan/jobs.json`, with bounded job arrays in
 `shards/<id>.json` only when needed. Upload the entire plan directory and dispatch
-each shard ID to `clippier-build-shard.yml`. Each shard contains at most 256 jobs
+each shard ID to `clippier-build-shard.yml`. Each shard contains at most `matrix-max-jobs` jobs
 and 200,000 UTF-8 bytes, keeping job outputs below GitHub's UTF-16 size limit.
 Receipt artifact names distinguish direct execution from shard IDs;
 reconciliation still checks the complete plan. Both routes use identical build

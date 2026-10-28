@@ -163,3 +163,40 @@ for count in 0 1 255 256 257; do
         grep -qx 'matrix=\[0,1\]' "$GITHUB_OUTPUT"
     fi
 done
+# Caller-selected transport limits do not change jobs or enable sharding.
+export INPUT_COMMAND=features INPUT_STACK_CASES=false INPUT_MATRIX_MAX_JOBS=2
+for shard in false true; do
+    export INPUT_SHARD_MATRIX="$shard" RUNNER_TEMP="$work/custom-$shard" GITHUB_OUTPUT="$work/custom-$shard.outputs"
+    mkdir -p "$RUNNER_TEMP"
+    output_matrix "$(jq -c '.[0:2]' "$work/compatible.json")"
+    grep -q '2 jobs → direct; matrix-max-jobs=2' "$GITHUB_STEP_SUMMARY"
+    if [[ "$shard" == false ]]; then
+        if output_matrix "$(jq -c '.[0:3]' "$work/compatible.json")"; then exit 1; fi
+        [[ ! -d "$RUNNER_TEMP/clippier-plan/shards" ]]
+    else
+        output_matrix "$(jq -c '.[0:3]' "$work/compatible.json")"
+        jq -e '.mode == "sharded" and .shard_sizes == [2,1] and .matrix_max_jobs == 2 and
+            (.reasons | index("matrix job-count limit")) != null' "$RUNNER_TEMP/clippier-plan/transport-summary.json"
+        jq -s -e --slurpfile jobs "$RUNNER_TEMP/clippier-plan/jobs.json" 'add == $jobs[0]' "$RUNNER_TEMP/clippier-plan/shards/"[0-9]*.json
+    fi
+done
+export INPUT_MATRIX_MAX_JOBS=1 INPUT_SHARD_MATRIX=true RUNNER_TEMP="$work/limit-one" GITHUB_OUTPUT="$work/limit-one.outputs"
+mkdir -p "$RUNNER_TEMP"
+output_matrix "$(jq -c '.[0:3]' "$work/compatible.json")"
+jq -e '.shard_sizes == [1,1,1]' "$RUNNER_TEMP/clippier-plan/transport-summary.json"
+# Invalid API values fail before publishing any matrix output or plan files.
+for value in '' 0 257 -1 1.5 abc 01 999999999999999999999; do
+    export INPUT_MATRIX_MAX_JOBS="$value" GITHUB_OUTPUT="$work/invalid.outputs"
+    : > "$GITHUB_OUTPUT"
+    if output_matrix '[]'; then exit 1; fi
+    [[ ! -s "$GITHUB_OUTPUT" ]]
+done
+unset INPUT_MATRIX_MAX_JOBS
+[[ $(matrix_max_jobs) == 256 ]]
+# Size-driven splitting is reported separately from the job-count limit.
+export GITHUB_OUTPUT="$work/payload-report.outputs"
+route_job_plan "$work/large.json" "$work/payload-report" > /dev/null
+# This fixture has no schedule summary, so the human-readable decision is still
+# guaranteed for callers that invoke transport directly.
+grep -q 'reason: matrix payload budget' "$GITHUB_STEP_SUMMARY"
+echo 'Configurable matrix transport limits and reporting tests passed'

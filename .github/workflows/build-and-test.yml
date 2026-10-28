@@ -135,6 +135,7 @@ jobs:
                   packages: ${{ github.event.inputs.packages }}
                   chunked: 15
                   shard-matrix: true
+                  matrix-max-jobs: 256
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
