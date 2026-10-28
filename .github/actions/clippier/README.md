@@ -40,12 +40,18 @@ Compatible cases remain stacked. Arbitrary installers are still isolated:
 identical command text does not prove runner-global side effects are safe.
 `schedule-summary.json` and `.md` record case/group counts, requested/effective
 budgets, singleton/stacked jobs, shards, and overlapping isolation reasons.
-The `matrix` output then contains shard IDs, not jobs. The complete unchanged
-plan remains in `$RUNNER_TEMP/clippier-plan/jobs.json`, with bounded job arrays
-in `shards/<id>.json`. Upload the entire plan directory and dispatch each ID to
-`clippier-build-shard.yml`. Each shard contains at most 64 jobs and 200,000 UTF-8
-bytes, keeping job outputs below GitHub's UTF-16 size limit. Receipt artifact
-names include the shard ID; reconciliation still checks the complete plan.
+The `direct-matrix` output contains the full plan when it fits within 256 jobs
+and the 200,000 UTF-8 byte transport budget; `matrix` is then `[]`. Build and Test
+runs that plan as a top-level matrix, without shard preparation jobs. Empty
+plans skip both build routes. Otherwise `direct-matrix` is `[]` and `matrix`
+contains shard IDs. The complete unchanged plan remains in
+`$RUNNER_TEMP/clippier-plan/jobs.json`, with bounded job arrays in
+`shards/<id>.json` only when needed. Upload the entire plan directory and dispatch
+each shard ID to `clippier-build-shard.yml`. Each shard contains at most 256 jobs
+and 200,000 UTF-8 bytes, keeping job outputs below GitHub's UTF-16 size limit.
+Receipt artifact names distinguish direct execution from shard IDs;
+reconciliation still checks the complete plan. Both routes use identical build
+steps, enforced by the workflow regression test.
 
 The workflow keeps job naming in jq: `jq-filter` changes execution metadata
 before scheduling, while `jq-post-filter` adds top-level naming fields afterward.

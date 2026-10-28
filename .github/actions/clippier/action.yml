@@ -53,7 +53,7 @@ inputs:
         default: "false"
 
     shard-matrix:
-        description: "Store the complete scheduled plan as bounded matrix shards; matrix output contains shard IDs. Requires stack-cases."
+        description: "Route fitting plans to direct-matrix; otherwise store bounded shards and emit shard IDs in matrix. Requires stack-cases."
         required: false
         default: "false"
 
@@ -528,6 +528,9 @@ inputs:
         default: "true"
 
 outputs:
+    direct-matrix:
+        description: "Complete job matrix when it fits; empty when sharded or no cases exist"
+        value: ${{ steps.run-action.outputs.direct-matrix }}
     case-receipts-path:
         description: Directory of per-case terminal receipts (upload even on failure)
         value: ${{ steps.run-action.outputs.case-receipts-path }}

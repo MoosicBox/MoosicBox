@@ -737,8 +737,7 @@ output_matrix() {
         [[ "${INPUT_STACK_CASES:-false}" == true ]] || return 1
         printf '%s' "$matrix_json" > "$plan_dir/jobs.json" || return $?
         local shards
-        shards=$(shard_job_plan "$plan_dir/jobs.json" "$plan_dir/shards") || return $?
-        echo "matrix=$shards" >> "$GITHUB_OUTPUT"
+        shards=$(route_job_plan "$plan_dir/jobs.json" "$plan_dir/shards") || return $?
         write_schedule_summary "$plan_dir/schedule-summary.json" "$shards" || return $?
     else
         echo "matrix=$matrix_json" >> $GITHUB_OUTPUT

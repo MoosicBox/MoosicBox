@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Partition a complete immutable job plan, without changing or dropping jobs.
-# Keep each matrix well below GitHub's 256-job and 1 MB (UTF-16) output limits.
+# Use GitHub's full 256-job matrix capacity while keeping payloads safely below
+# the 1 MB (UTF-16) job-output limit.
 shard_job_plan() {
     local plan_file="$1" shard_dir="$2"
     mkdir -p "$shard_dir" || return $?
     jq -ce '
         reduce .[] as $job ([[]];
-            if ((.[-1] | length) >= 64) or
+            if ((.[-1] | length) >= 256) or
                ((.[-1] + [$job] | tojson | utf8bytelength) > 200000)
             then . + [[$job]] else .[-1] += [$job] end)
         | map(select(length > 0))
@@ -20,6 +21,23 @@ shard_job_plan() {
         jq -c --argjson index "$index" '.[$index]' "$shard_dir/all.json" > "$shard_dir/$index.json" || return $?
     done
     jq -c '[range(length)]' "$shard_dir/all.json"
+}
+
+# Choose direct top-level execution whenever one bounded matrix can carry the
+# complete plan. The two outputs are mutually exclusive, including empty plans.
+route_job_plan() {
+    local plan_file="$1" shard_dir="$2"
+    if jq -e 'length <= 256 and (tojson | utf8bytelength) <= 200000' "$plan_file" >/dev/null; then
+        echo "direct-matrix=$(jq -c . "$plan_file")" >> "$GITHUB_OUTPUT"
+        echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+        printf '[]'
+    else
+        local shards
+        shards=$(shard_job_plan "$plan_file" "$shard_dir") || return $?
+        echo 'direct-matrix=[]' >> "$GITHUB_OUTPUT"
+        echo "matrix=$shards" >> "$GITHUB_OUTPUT"
+        printf '%s' "$shards"
+    fi
 }
 
 # Persist a machine-readable and human-readable allocation audit with the plan.
