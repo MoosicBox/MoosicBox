@@ -52,6 +52,14 @@ inputs:
         required: false
         default: "false"
 
+    shard-group-by-jq:
+        description: "Optional jq expression evaluated per job; equal JSON keys stay together when sharding is needed. Must emit exactly one key."
+        required: false
+
+    shard-name-jq:
+        description: "Optional jq expression on {id, group, group_index, group_count}; emit one nonempty single-line name. Multi-part group suffixes are automatic."
+        required: false
+
     matrix-max-jobs:
         description: "Maximum jobs per emitted matrix (1–256). Does not group cases or limit concurrency. Oversized plans fail unless shard-matrix is enabled; payload limits may split earlier."
         required: false
@@ -533,6 +541,9 @@ inputs:
         default: "true"
 
 outputs:
+    shard-matrix:
+        description: "Shard descriptors {id, name, group, group_index, group_count}; empty for direct/empty plans. Numeric matrix output remains available for compatibility."
+        value: ${{ steps.run-action.outputs.shard-matrix }}
     direct-matrix:
         description: "Complete job matrix when it fits; empty when sharded or no cases exist"
         value: ${{ steps.run-action.outputs.direct-matrix }}
@@ -891,6 +902,8 @@ runs:
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_SHARD_GROUP_BY_JQ: ${{ inputs.shard-group-by-jq }}
+              INPUT_SHARD_NAME_JQ: ${{ inputs.shard-name-jq }}
               INPUT_MATRIX_MAX_JOBS: ${{ inputs.matrix-max-jobs }}
               INPUT_SHARD_MATRIX: ${{ inputs.shard-matrix }}
               INPUT_ALLOW_ISOLATION_OVERFLOW: ${{ inputs.allow-isolation-overflow }}

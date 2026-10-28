@@ -200,3 +200,64 @@ route_job_plan "$work/large.json" "$work/payload-report" > /dev/null
 # guaranteed for callers that invoke transport directly.
 grep -q 'reason: matrix payload budget' "$GITHUB_STEP_SUMMARY"
 echo 'Configurable matrix transport limits and reporting tests passed'
+# Generic grouping: stable within groups, arbitrary nested/composite JSON keys,
+# display names independent of numeric artifact identities.
+export INPUT_MATRIX_MAX_JOBS=2 INPUT_SHARD_GROUP_BY_JQ='.os'
+export INPUT_SHARD_NAME_JQ='"🧪 " + (.group | tostring)'
+jq -n '[range(7) | {id:.,os:(if . % 2 == 0 then "linux" else "windows" end), metadata:{tier:(. % 2)}}]' > "$work/group-jobs.json"
+shard_job_plan "$work/group-jobs.json" "$work/groups" > /dev/null
+jq -e 'map(.group) == ["linux","linux","windows","windows"] and
+    map(.name) == ["🧪 linux · 1/2","🧪 linux · 2/2","🧪 windows · 1/2","🧪 windows · 2/2"] and
+    map(.id) == [0,1,2,3]' "$work/groups/manifest.json"
+jq -e 'map(map(.id)) == [[0,2],[4,6],[1,3],[5]]' "$work/groups/all.json"
+jq -s -e --slurpfile original "$work/group-jobs.json" '(add | sort_by(.id)) == $original[0]' "$work/groups/"[0-9]*.json
+for expression in '.metadata.tier' '[.os,.metadata.tier]' '{os:.os,tier:.metadata.tier}' '.missing' 'if .id < 3 then "small" else "large" end'; do
+    export INPUT_SHARD_GROUP_BY_JQ="$expression"
+    shard_job_plan "$work/group-jobs.json" "$work/generic" > /dev/null
+    jq -s -e --slurpfile original "$work/group-jobs.json" '(add | sort_by(.id)) == $original[0]' "$work/generic/"[0-9]*.json
+    # Deterministic group ordering and IDs on repeat.
+    shard_job_plan "$work/group-jobs.json" "$work/repeated-generic" > /dev/null
+    cmp "$work/generic/manifest.json" "$work/repeated-generic/manifest.json"
+done
+for expression in 'empty' '.os,.id' 'error("bad key")' '('; do
+    export INPUT_SHARD_GROUP_BY_JQ="$expression"
+    if shard_job_plan "$work/group-jobs.json" "$work/invalid-group"; then exit 1; fi
+done
+export INPUT_SHARD_GROUP_BY_JQ='.os'
+for expression in 'empty' '1' '""' '"a","b"' '"bad\nname"' '('; do
+    export INPUT_SHARD_NAME_JQ="$expression"
+    if shard_job_plan "$work/group-jobs.json" "$work/invalid-name"; then exit 1; fi
+done
+# Grouping doesn't force nested workflow calls for a fitting plan.
+export INPUT_MATRIX_MAX_JOBS=256 INPUT_SHARD_NAME_JQ='"🧪 " + .group'
+export GITHUB_OUTPUT="$work/group-direct.outputs"
+[[ $(route_job_plan "$work/group-jobs.json" "$work/group-direct") == '[]' ]]
+grep -qx 'shard-matrix=\[\]' "$GITHUB_OUTPUT"
+[[ ! -d "$work/group-direct" ]]
+# Payload limits still split each group independently and reject huge names.
+export INPUT_SHARD_GROUP_BY_JQ='"one"' INPUT_SHARD_NAME_JQ='"One"'
+shard_job_plan "$work/large.json" "$work/group-payload" > /dev/null
+jq -e 'length > 1 and all(.[]; .group == "one")' "$work/group-payload/manifest.json"
+export INPUT_SHARD_NAME_JQ='"x" * 200001'
+if shard_job_plan "$work/group-jobs.json" "$work/huge-name"; then exit 1; fi
+unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
+printf 'Grouped/named sharding tests passed\n'
+# Exercise the exact MoosicBox expressions and verify full-plan receipts after
+# regrouping: global order may change, but no case can disappear or change.
+export INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS=2
+INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-group-by-jq' "$root/../../workflows/build-and-test.yml")
+INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-name-jq' "$root/../../workflows/build-and-test.yml")
+jq -n '[range(9) | {name:"fixture",path:".",features:[],os:(["windows-latest","ubuntu-latest","macos-latest"][. % 3])}]' > "$work/os-cases.json"
+"$CLIPPIER_BIN" plan-matrix "$work/os-cases.json" > "$work/os-jobs.json"
+shard_job_plan "$work/os-jobs.json" "$work/os-shards" > /dev/null
+jq -e 'map(.name) == ["🍎 macOS builds · 1/2","🍎 macOS builds · 2/2","🐧 Linux builds · 1/2","🐧 Linux builds · 2/2","🪟 Windows builds · 1/2","🪟 Windows builds · 2/2"]' "$work/os-shards/manifest.json"
+jq '[.[][] | .cases[] | {case:.,exit_code:0}]' "$work/os-shards/all.json" > "$work/os-receipts.json"
+"$CLIPPIER_BIN" verify-matrix "$work/os-jobs.json" "$work/os-receipts.json"
+jq '.[1:]' "$work/os-receipts.json" > "$work/os-missing.json"
+if "$CLIPPIER_BIN" verify-matrix "$work/os-jobs.json" "$work/os-missing.json"; then exit 1; fi
+# Distinct arbitrary keys can exceed the outer GitHub matrix ceiling.
+export INPUT_SHARD_GROUP_BY_JQ='.id' INPUT_SHARD_NAME_JQ='"Group"' INPUT_MATRIX_MAX_JOBS=256
+jq -n '[range(257) | {id:.}]' > "$work/too-many-groups.json"
+if shard_job_plan "$work/too-many-groups.json" "$work/too-many-groups"; then exit 1; fi
+unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
+echo 'Workflow OS labels and regrouped receipt reconciliation tests passed'

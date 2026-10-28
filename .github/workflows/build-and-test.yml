@@ -97,6 +97,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             matrix: ${{ steps.analyze.outputs.matrix }}
+            shard-matrix: ${{ steps.analyze.outputs.shard-matrix }}
             direct-matrix: ${{ steps.analyze.outputs.direct-matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
             has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false }}
@@ -136,6 +137,13 @@ jobs:
                   chunked: 15
                   shard-matrix: true
                   matrix-max-jobs: 256
+                  shard-group-by-jq: .os
+                  shard-name-jq: |
+                      if .group == "ubuntu-latest" then "🐧 Linux builds"
+                      elif .group == "windows-latest" then "🪟 Windows builds"
+                      elif .group == "macos-latest" then "🍎 macOS builds"
+                      else (.group | tostring) + " builds"
+                      end
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -390,15 +398,16 @@ jobs:
                   fail_ci_if_error: false
 
     build-shards:
+        name: ${{ matrix.shard.name }}
         needs: [determine-affected-packages, build-clippier-machete]
         if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' && needs.determine-affected-packages.outputs.matrix != '[]' }}
         strategy:
             fail-fast: false
             matrix:
-                shard: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
+                shard: ${{ fromJson(needs.determine-affected-packages.outputs.shard-matrix) }}
         uses: ./.github/workflows/clippier-build-shard.yml
         with:
-            shard-id: ${{ matrix.shard }}
+            shard-id: ${{ matrix.shard.id }}
         secrets: inherit
 
     clippier-report:

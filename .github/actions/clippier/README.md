@@ -80,6 +80,62 @@ selected limit, shard sizes, and whether job count or payload size caused the
 split. Planned runs also save `transport-summary.json` alongside allocation
 statistics. For example: `265 jobs → sharded [256,9]; ... reason: matrix job-count limit`.
 
+### Generic shard grouping and names
+
+```yaml
+shard-matrix: true
+shard-group-by-jq: '.os' # Any jq expression on a job, not a reserved field name
+shard-name-jq: |
+  if .group == "ubuntu-latest" then "🐧 Linux builds"
+  elif .group == "windows-latest" then "🪟 Windows builds"
+  elif .group == "macos-latest" then "🍎 macOS builds"
+  else (.group | tostring) + " builds"
+  end
+```
+
+Grouping only applies when the complete plan exceeds transport limits; it never
+forces a fitting plan off the direct path. With no expression, existing sequential
+partitioning is preserved. Names alone do not enable grouping or sharding.
+
+`shard-group-by-jq` must emit exactly one JSON value for each job. Equal keys are
+grouped using jq equality/order, with deterministic key ordering and original job
+order within each group. Keys can be strings, numbers, booleans, null, arrays, or
+objects. For example, `.metadata.platform`, `[.os, .toolchain]`, or
+`{platform:.os, tier:.metadata.tier}` work without special property support.
+Missing properties yield null; use `// "unknown"` or `error("missing platform")`
+for an explicit alternative. Each group splits independently under count and
+payload limits. Job contents, case identities, and receipts remain unchanged;
+grouping may reorder jobs across groups but never within a group.
+
+`shard-name-jq` receives `{id, group, group_index, group_count}`. The numeric `id`
+is global and zero-based; group indices are one-based. Return exactly one
+nonempty single-line string. A ` · 1/2` suffix is automatically appended when a
+group needs multiple shards. Default names are `Build shard <id>`. Names need not
+be unique: they never determine filenames, artifact names, or receipt identity.
+Expressions that error, emit no values/multiple values, or return invalid names
+fail planning rather than silently dropping jobs. Expressions are evaluated only
+when sharding occurs, not on the direct path.
+
+The existing `matrix` output remains numeric shard IDs for compatibility. The new
+`shard-matrix` output contains descriptors; wire it into the caller like this:
+
+```yaml
+strategy:
+  matrix:
+    shard: ${{ fromJson(needs.analysis.outputs.shard-matrix) }}
+name: ${{ matrix.shard.name }}
+uses: ./.github/workflows/clippier-build-shard.yml
+with:
+  shard-id: ${{ matrix.shard.id }}
+```
+
+Forward the action's `shard-matrix` through the analysis job outputs first.
+Both outputs are `[]` on the direct/empty path. Descriptors are also saved as
+`shards/manifest.json`; transport summaries include the names and grouping keys.
+The outer descriptor matrix is itself checked against GitHub's 256-entry ceiling
+and the transport payload budget. Custom grouping may require more shards; plans
+that exceed those bounds fail rather than mixing groups or discarding jobs.
+
 The `direct-matrix` output contains the full plan when it fits within `matrix-max-jobs`
 and the 200,000 UTF-8 byte transport budget; `matrix` is then `[]`. Build and Test
 runs that plan as a top-level matrix, without shard preparation jobs. Empty
