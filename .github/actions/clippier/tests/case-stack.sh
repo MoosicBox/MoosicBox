@@ -4,7 +4,7 @@ set -eo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 mkdir -p "$work/repo" "$work/temp" "$work/action/lib"
-cp "$root"/lib/{analysis,case-stack,run-matrix,template}.sh "$work/action/lib/"
+cp "$root"/lib/{analysis,case-stack,run-matrix,shard-plan,template}.sh "$work/action/lib/"
 cp "$root/action.sh" "$work/action/action.sh"
 export GH_PAGER=cat GH_PROMPT_DISABLED=1 GIT_TERMINAL_PROMPT=0
 # No remote access, only a disposable local fixture repository.
@@ -65,3 +65,23 @@ fi
 [[ $(wc -l < "$FINAL_TRACE") == 2 ]]
 [[ $(wc -l < "$TRACE") == 5 ]]
 echo "Stack execution/isolation/failure-continuation tests passed ($work)"
+# Empty features and enabled features must be separate full invocations. Each
+# case gets a clean process and checkout, including after the middle failure.
+export INPUT_RUN_MATRIX_STEPS
+INPUT_RUN_MATRIX_STEPS=$(jq -n '{
+    check: {commands: "test \"$(cat state)\" = clean || exit 8; test -z \"${CASE_LEAK:-}\" || exit 9; export CASE_LEAK=dirty; echo dirty > state; printf \"%s\\n\" \"{{clippier.feature-flags}}\" >> \"$EXACT_TRACE\"; if [[ \"{{clippier.feature-flags}}\" == *bad* ]]; then exit 7; fi", label:"Check", strategy:"sequential"},
+    finish: {commands: "echo finalized >> \"$EXACT_FINAL\"", label:"Finalize", strategy:"combined"}
+}')
+export EXACT_TRACE="$work/exact-trace" EXACT_FINAL="$work/exact-final"
+INPUT_RUN_MATRIX_PACKAGE_JSON=$(printf '%s' "$package" | jq '. + {cases:[{id:"case-000005",package:(. + {features:[]})},{id:"case-000006",package:(. + {features:["bad"]})},{id:"case-000007",package:(. + {features:["good"]})}]}')
+root_state_before=$(cat "$work/repo/state")
+if run_case_stack >> "$work/log" 2>&1; then exit 1; fi
+[[ $(wc -l < "$EXACT_TRACE") == 3 ]]
+[[ $(wc -l < "$EXACT_FINAL") == 3 ]]
+[[ $(sed -n '1p' "$EXACT_TRACE") == '--features=fail-on-warnings' ]]
+[[ $(sed -n '2p' "$EXACT_TRACE") == '--features=fail-on-warnings,bad' ]]
+[[ $(sed -n '3p' "$EXACT_TRACE") == '--features=fail-on-warnings,good' ]]
+receipts=$(sed -n 's/^case-receipts-path=//p' "$GITHUB_OUTPUT" | tail -1)
+jq -s -e 'sort_by(.case.id) | map(.exit_code) == [0,1,0]' "$receipts"/*.json
+[[ $(cat "$work/repo/state") == "$root_state_before" ]]
+echo 'Empty/enabled feature invocations and process isolation preserved'

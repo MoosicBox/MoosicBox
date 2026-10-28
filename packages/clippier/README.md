@@ -2344,6 +2344,29 @@ cases. Custom test steps that mutate external/global state require `fresh-runner
 If incompatible/singleton setups alone exceed the limit, planning fails rather
 than weakening isolation or dropping coverage.
 
+For artifact-backed sharded execution, opt in explicitly to isolation overflow:
+
+```bash
+clippier schedule-matrix cases.json --max-jobs 256 --allow-isolation-overflow \
+    --summary-file schedule-summary.json > jobs.json
+```
+
+This raises the budget only to the minimum compatible-group count when that
+count exceeds the requested budget. It does not allocate one job per case.
+Shard the resulting unchanged jobs for GitHub transport; do not raise the
+scheduler budget merely because more matrices are available. The default CLI
+remains strict. Allocation statistics explain singleton isolation and stacking.
+
+The scheduled-run audit (seed `17931059867572`) contains 265 cases and requires
+263 jobs under the current policy: 261 singleton jobs and two two-case stacks.
+145 cases have dependency scripts, nine have custom CI steps, and six require
+submodules (these reason counts overlap). Package/OS/toolchain/environment and
+other non-feature metadata also distinguish setups. No installers were declared
+safe merely because their command strings match: package installation and custom
+scripts can mutate runner-global state that a clean Git checkout cannot reset.
+Reducing this minimum further requires an explicit, tested setup-sharing lifecycle,
+not a scheduler exception. The sharded transport preserves these restrictions.
+
 Upload `case-receipts-path` even when execution fails. `verify-matrix` requires
 exactly one successful receipt containing each unchanged planned case; missing,
 changed, duplicate, unexpected, and failed receipts are errors. Cancellation or

@@ -29,6 +29,46 @@ pub struct Job {
     pub setup: Map<String, Value>,
 }
 
+/// Auditable allocation statistics; counts describe cases, not feature unions.
+#[derive(Debug, Serialize)]
+pub struct ScheduleSummary {
+    /// Number of unchanged input cases, including duplicates.
+    pub case_count: usize,
+    /// Requested execution-job budget, independent of matrix transport limits.
+    pub requested_jobs: usize,
+    /// Smallest safe allocation under the current setup isolation policy.
+    pub minimum_jobs: usize,
+    /// Budget after explicitly permitted isolation overflow.
+    pub effective_jobs: usize,
+    /// Actual allocated jobs (never exceeds the number of cases).
+    pub execution_jobs: usize,
+    /// Jobs containing exactly one case.
+    pub singleton_jobs: usize,
+    /// Jobs containing multiple independently executed cases.
+    pub stacked_jobs: usize,
+    /// Counts of cases requiring isolation by reason; reasons can overlap.
+    pub isolation_reasons: BTreeMap<String, usize>,
+}
+
+fn isolation_reasons(setup: &Map<String, Value>) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if setup.get("freshRunner").and_then(Value::as_bool) == Some(true) {
+        reasons.push("freshRunner");
+    }
+    for field in ["ciSteps", "dependencies"] {
+        if setup
+            .get(field)
+            .is_some_and(|v| v.as_str().is_none_or(|s| !s.is_empty()))
+        {
+            reasons.push(field);
+        }
+    }
+    if setup.get("gitSubmodules").and_then(Value::as_bool) == Some(true) {
+        reasons.push("gitSubmodules");
+    }
+    reasons
+}
+
 /// Allocate cases deterministically, balancing case counts within compatible setups.
 ///
 /// Custom setup scripts and explicit `freshRunner` cases are not stacked. The
@@ -39,7 +79,25 @@ pub struct Job {
 /// * The job limit is zero or execution metadata is invalid.
 /// * Incompatible setups require more jobs than the limit.
 /// * JSON serialization fails.
-pub fn schedule(mut packages: Vec<Map<String, Value>>, limit: usize) -> Result<Vec<Job>, BoxError> {
+pub fn schedule(packages: Vec<Map<String, Value>>, limit: usize) -> Result<Vec<Job>, BoxError> {
+    Ok(schedule_with_summary(packages, limit, false)?.0)
+}
+
+/// Schedule unchanged cases, optionally exceeding the budget only for isolation.
+///
+/// When permitted, overflow raises the budget to the minimum safe group count,
+/// never to the case count. Compatible cases still stack within that budget.
+/// Arbitrary dependency/setup scripts remain isolated: identical text is not
+/// evidence that runner-global mutations are repeatable or safe to share.
+///
+/// # Errors
+///
+/// * Returns the validation and allocation errors documented by [`schedule`].
+pub fn schedule_with_summary(
+    mut packages: Vec<Map<String, Value>>,
+    limit: usize,
+    allow_isolation_overflow: bool,
+) -> Result<(Vec<Job>, ScheduleSummary), BoxError> {
     if limit == 0 {
         return Err("max-jobs must be greater than zero".into());
     }
@@ -64,25 +122,31 @@ pub fn schedule(mut packages: Vec<Map<String, Value>>, limit: usize) -> Result<V
         }
     }
     packages.sort_by_cached_key(|p| serde_json::to_string(p).unwrap_or_default());
+    let requested_jobs = limit;
+    let mut reason_counts = BTreeMap::new();
     let mut groups = BTreeMap::<String, Vec<Case>>::new();
     for (index, package) in packages.into_iter().enumerate() {
         let mut setup = package.clone();
         setup.remove("features");
         // Arbitrary setup scripts may mutate runner-global state. Be conservative
         // until the project explicitly provides a safe setup lifecycle.
-        let isolated = setup.get("freshRunner").and_then(Value::as_bool) == Some(true)
-            || ["ciSteps", "dependencies"].iter().any(|field| {
-                setup
-                    .get(*field)
-                    .is_some_and(|v| v.as_str().is_none_or(|s| !s.is_empty()))
-            })
-            || setup.get("gitSubmodules").and_then(Value::as_bool) == Some(true);
+        let reasons = isolation_reasons(&setup);
+        let isolated = !reasons.is_empty();
+        for reason in reasons {
+            *reason_counts.entry(reason.to_owned()).or_insert(0) += 1;
+        }
         let key = serde_json::to_string(&(setup, isolated.then_some(index)))?;
         groups.entry(key).or_default().push(Case {
             id: format!("case-{index:06}"),
             package,
         });
     }
+    let minimum_jobs = groups.len();
+    let limit = if allow_isolation_overflow {
+        limit.max(minimum_jobs)
+    } else {
+        limit
+    };
     if groups.len() > limit {
         return Err(format!("Cannot schedule {} incompatible setups in {limit} jobs; custom ciSteps and freshRunner cases require separate runners", groups.len()).into());
     }
@@ -114,7 +178,18 @@ pub fn schedule(mut packages: Vec<Map<String, Value>>, limit: usize) -> Result<V
             cases,
         }));
     }
-    Ok(jobs)
+    let singleton_jobs = jobs.iter().filter(|job| job.cases.len() == 1).count();
+    let summary = ScheduleSummary {
+        case_count: total,
+        requested_jobs,
+        minimum_jobs,
+        effective_jobs: limit,
+        execution_jobs: jobs.len(),
+        singleton_jobs,
+        stacked_jobs: jobs.len() - singleton_jobs,
+        isolation_reasons: reason_counts,
+    };
+    Ok((jobs, summary))
 }
 
 /// A runner's terminal receipt for a case. Missing receipts never imply success.

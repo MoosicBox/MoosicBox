@@ -66,6 +66,7 @@ jobs:
                   bash .github/actions/clippier/tests/validation.sh
                   bash .github/actions/clippier/tests/report.sh
                   bash .github/actions/clippier/tests/rust-validation.sh
+                  bash .github/actions/clippier/tests/shard-plan.sh
 
     cargo-deny:
         continue-on-error: true
@@ -97,9 +98,9 @@ jobs:
         outputs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
-            has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks).tauri.affected || false }}
+            has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false }}
             reasoning: ${{ steps.analyze.outputs.reasoning }}
-            tauri-reasoning: ${{ toJson(fromJson(steps.analyze.outputs.additional-checks).tauri) }}
+            tauri-reasoning: ${{ toJson(fromJson(steps.analyze.outputs.additional-checks || '{}').tauri) }}
             additional-checks: ${{ steps.analyze.outputs.additional-checks }}
             randomization-seed: ${{ steps.seed.outputs.value }}
             docker-matrix: ${{ steps.analyze.outputs.docker-matrix }}
@@ -134,6 +135,8 @@ jobs:
                   chunked: 15
                   max-parallel: 256
                   stack-cases: true
+                  shard-matrix: true
+                  allow-isolation-overflow: true
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -304,90 +307,16 @@ jobs:
                   path: validation-report.json
 
     build:
-        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}${{ matrix.package.stackSuffix }}
-        runs-on: ${{ matrix.package.os }}
-
         needs: [determine-affected-packages, build-clippier-machete]
-
         if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
-
         strategy:
             fail-fast: false
-
             matrix:
-                package: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
-
-        steps:
-            - name: Print matrix
-              shell: bash
-              run: echo '${{ toJson(matrix) }}'
-
-            - uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
-                  submodules: ${{ matrix.package.gitSubmodules == true }}
-
-            - name: Enable patches
-              if: ${{ github.event.inputs.edge == 'true' }}
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-                  git checkout edge
-                  git rebase master
-
-            - name: Setup CI environment
-              uses: ./.github/actions/clippier
-              with:
-                  command: setup
-                  package-json: ${{ toJson(matrix.package) }}
-                  skip-checkout: "true"
-                  rust-components: "rustfmt, clippy, llvm-tools-preview"
-
-            - name: Install cargo-llvm-cov
-              uses: taiki-e/install-action@cargo-llvm-cov
-
-            - name: Download Clippier machete
-              uses: actions/download-artifact@v8
-              with:
-                  name: ${{ matrix.package.os == 'windows-latest' && 'clippier-machete.exe' || matrix.package.os == 'macos-latest' && 'clippier-machete-macos' || 'clippier-machete-ubuntu' }}
-                  path: ~/.cargo/bin
-
-            - name: Make Clippier machete executable
-              shell: bash
-              run: chmod +x ~/.cargo/bin/clippier${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
-
-            - name: Test suite for ${{ matrix.package.name }}
-              id: test-suite
-              uses: ./.github/actions/clippier
-              env:
-                  CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
-              with:
-                  command: run-matrix
-                  stack-cases: true
-                  case-coverage: true
-                  run-matrix-package-json: ${{ toJson(matrix.package) }}
-                  run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
-                  run-matrix-template-vars: |
-                      {"test-command":"llvm-cov test --no-report"}
-                  run-matrix-debug-shells: "fish,bash"
-
-            - name: Upload case receipts
-              if: always() && steps.test-suite.outputs.case-receipts-path != ''
-              uses: actions/upload-artifact@v6
-              with:
-                  name: clippier-case-receipts-${{ strategy.job-index }}
-                  path: ${{ steps.test-suite.outputs.case-receipts-path }}
-                  if-no-files-found: error
-
-            - name: Upload coverage reports to Codecov
-              if: always() && steps.test-suite.outputs.coverage-path != ''
-              uses: codecov/codecov-action@v6
-              with:
-                  token: ${{ secrets.CODECOV_TOKEN }}
-                  slug: MoosicBox/MoosicBox
-                  directory: ${{ steps.test-suite.outputs.coverage-path }}
-                  flags: ${{ matrix.package.name }}
-                  fail_ci_if_error: false
+                shard: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
+        uses: ./.github/workflows/clippier-build-shard.yml
+        with:
+            shard-id: ${{ matrix.shard }}
+        secrets: inherit
 
     clippier-report:
         if: always()

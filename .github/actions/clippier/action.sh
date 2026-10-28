@@ -699,7 +699,17 @@ output_matrix() {
         local plan_dir="${RUNNER_TEMP}/clippier-plan"
         mkdir -p "$plan_dir"
         printf '%s' "$matrix_json" > "$plan_dir/cases.json"
-        "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" --max-jobs "${INPUT_MAX_PARALLEL:-256}" > "$plan_dir/jobs.json" || return $?
+        local overflow_args=()
+        if [[ "${INPUT_ALLOW_ISOLATION_OVERFLOW:-false}" == true ]]; then
+            [[ "${INPUT_SHARD_MATRIX:-false}" == true ]] || {
+                echo 'Isolation overflow requires sharded matrix transport' >&2
+                return 1
+            }
+            overflow_args+=(--allow-isolation-overflow)
+        fi
+        "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" \
+            --max-jobs "${INPUT_MAX_PARALLEL:-256}" "${overflow_args[@]}" \
+            --summary-file "$plan_dir/schedule-summary.json" > "$plan_dir/jobs.json" || return $?
         matrix_json=$(jq -c . "$plan_dir/jobs.json") || return $?
     fi
     if [[ -n "${INPUT_JQ_POST_FILTER:-}" ]]; then
@@ -723,7 +733,16 @@ output_matrix() {
         }
         matrix_json=$(jq -c . "$filter_dir/after.json") || return $?
     fi
-    echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
+    if [[ "${INPUT_SHARD_MATRIX:-false}" == true ]]; then
+        [[ "${INPUT_STACK_CASES:-false}" == true ]] || return 1
+        printf '%s' "$matrix_json" > "$plan_dir/jobs.json" || return $?
+        local shards
+        shards=$(shard_job_plan "$plan_dir/jobs.json" "$plan_dir/shards") || return $?
+        echo "matrix=$shards" >> "$GITHUB_OUTPUT"
+        write_schedule_summary "$plan_dir/schedule-summary.json" "$shards" || return $?
+    else
+        echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
+    fi
 }
 
 inject_custom_reasoning() {
@@ -1191,6 +1210,7 @@ generate_validation_summary() {
 
 # Source template evaluation system
 source "${SCRIPT_DIR}/lib/analysis.sh"
+source "${SCRIPT_DIR}/lib/shard-plan.sh"
 source "${SCRIPT_DIR}/lib/case-stack.sh"
 source "${SCRIPT_DIR}/lib/template.sh"
 

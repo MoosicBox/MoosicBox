@@ -32,6 +32,21 @@ cases run sequentially through the existing executor in separate processes and
 clean disposable checkouts; per-case results, diagnostics, and coverage remain
 separate. If incompatible setups cannot fit, analysis fails explicitly.
 
+Full-workspace schedules use `shard-matrix: true` with `stack-cases: true`.
+Sharding alone does not change `max-parallel`. The explicit
+`allow-isolation-overflow: true` policy raises that budget only to the minimum
+safe setup-group count when necessary; it never sets the budget to case count.
+Compatible cases remain stacked. Arbitrary installers are still isolated:
+identical command text does not prove runner-global side effects are safe.
+`schedule-summary.json` and `.md` record case/group counts, requested/effective
+budgets, singleton/stacked jobs, shards, and overlapping isolation reasons.
+The `matrix` output then contains shard IDs, not jobs. The complete unchanged
+plan remains in `$RUNNER_TEMP/clippier-plan/jobs.json`, with bounded job arrays
+in `shards/<id>.json`. Upload the entire plan directory and dispatch each ID to
+`clippier-build-shard.yml`. Each shard contains at most 64 jobs and 200,000 UTF-8
+bytes, keeping job outputs below GitHub's UTF-16 size limit. Receipt artifact
+names include the shard ID; reconciliation still checks the complete plan.
+
 The workflow keeps job naming in jq: `jq-filter` changes execution metadata
 before scheduling, while `jq-post-filter` adds top-level naming fields afterward.
 The latter may not change existing fields, cases, job order, or job count. The
@@ -57,6 +72,7 @@ bash .github/actions/clippier/tests/large-output.sh
 bash .github/actions/clippier/tests/validation.sh
 bash .github/actions/clippier/tests/report.sh
 bash .github/actions/clippier/tests/rust-validation.sh
+bash .github/actions/clippier/tests/shard-plan.sh
 ```
 
 ## Stateless Cargo release commands

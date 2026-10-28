@@ -47,6 +47,16 @@ inputs:
         default: "false"
 
     # Case stacking preserves feature configurations instead of unioning them.
+    allow-isolation-overflow:
+        description: "Raise the scheduling budget only to the minimum required by runner isolation. Requires shard-matrix."
+        required: false
+        default: "false"
+
+    shard-matrix:
+        description: "Store the complete scheduled plan as bounded matrix shards; matrix output contains shard IDs. Requires stack-cases."
+        required: false
+        default: "false"
+
     stack-cases:
         description: "For features: schedule unchanged cases within max-parallel jobs. For run-matrix: execute a scheduled job."
         required: false
@@ -873,6 +883,8 @@ runs:
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_SHARD_MATRIX: ${{ inputs.shard-matrix }}
+              INPUT_ALLOW_ISOLATION_OVERFLOW: ${{ inputs.allow-isolation-overflow }}
               INPUT_CASE_COVERAGE: ${{ inputs.case-coverage }}
               INPUT_CHANGED_FILES: ${{ inputs.changed-files }}
               INPUT_GIT_STRATEGY: ${{ inputs.git-strategy }}

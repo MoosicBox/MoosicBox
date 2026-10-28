@@ -1,0 +1,112 @@
+name: Build matrix shard
+
+on:
+    workflow_call:
+        inputs:
+            shard-id:
+                type: number
+                required: true
+
+jobs:
+    prepare:
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.matrix.outputs.value }}
+        steps:
+            - uses: actions/download-artifact@v8
+              with:
+                  name: clippier-case-plan
+                  path: plan
+            - name: Read bounded matrix shard
+              id: matrix
+              shell: bash
+              env:
+                  SHARD_ID: ${{ inputs.shard-id }}
+              run: |
+                  matrix=$(jq -ce 'if type == "array" and length > 0 and length <= 64 then . else error("Invalid matrix shard") end' "plan/shards/$SHARD_ID.json")
+                  echo "value=$matrix" >> "$GITHUB_OUTPUT"
+
+    build:
+        name: ${{ matrix.package.name }}${{ matrix.package.hasMultipleOs && format(' {0}', matrix.package.osEmoji) || '' }}${{ matrix.package.osCount > 1 && format(' {0}', matrix.package.osIndex) || '' }}${{ matrix.package.stackSuffix }}
+        runs-on: ${{ matrix.package.os }}
+
+        needs: prepare
+
+        strategy:
+            fail-fast: false
+
+            matrix:
+                package: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+        steps:
+            - name: Print matrix
+              shell: bash
+              run: echo '${{ toJson(matrix) }}'
+
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+                  submodules: ${{ matrix.package.gitSubmodules == true }}
+
+            - name: Enable patches
+              if: ${{ github.event.inputs.edge == 'true' }}
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout edge
+                  git rebase master
+
+            - name: Setup CI environment
+              uses: ./.github/actions/clippier
+              with:
+                  command: setup
+                  package-json: ${{ toJson(matrix.package) }}
+                  skip-checkout: "true"
+                  rust-components: "rustfmt, clippy, llvm-tools-preview"
+
+            - name: Install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+
+            - name: Download Clippier machete
+              uses: actions/download-artifact@v8
+              with:
+                  name: ${{ matrix.package.os == 'windows-latest' && 'clippier-machete.exe' || matrix.package.os == 'macos-latest' && 'clippier-machete-macos' || 'clippier-machete-ubuntu' }}
+                  path: ~/.cargo/bin
+
+            - name: Make Clippier machete executable
+              shell: bash
+              run: chmod +x ~/.cargo/bin/clippier${{ matrix.package.os == 'windows-latest' && '.exe' || '' }}
+
+            - name: Test suite for ${{ matrix.package.name }}
+              id: test-suite
+              uses: ./.github/actions/clippier
+              env:
+                  CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
+              with:
+                  command: run-matrix
+                  stack-cases: true
+                  case-coverage: true
+                  run-matrix-package-json: ${{ toJson(matrix.package) }}
+                  run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml
+                  run-matrix-template-vars: |
+                      {"test-command":"llvm-cov test --no-report"}
+                  run-matrix-debug-shells: "fish,bash"
+
+            - name: Upload case receipts
+              if: always() && steps.test-suite.outputs.case-receipts-path != ''
+              uses: actions/upload-artifact@v6
+              with:
+                  name: clippier-case-receipts-${{ inputs.shard-id }}-${{ strategy.job-index }}
+                  path: ${{ steps.test-suite.outputs.case-receipts-path }}
+                  if-no-files-found: error
+
+            - name: Upload coverage reports to Codecov
+              if: always() && steps.test-suite.outputs.coverage-path != ''
+              uses: codecov/codecov-action@v6
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  slug: MoosicBox/MoosicBox
+                  directory: ${{ steps.test-suite.outputs.coverage-path }}
+                  flags: ${{ matrix.package.name }}
+                  fail_ci_if_error: false
+

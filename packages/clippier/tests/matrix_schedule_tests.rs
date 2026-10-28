@@ -145,3 +145,77 @@ fn rejects_changed_duplicate_unexpected_and_failed_receipts() {
         .is_err()
     );
 }
+
+#[test]
+fn overflow_raises_only_to_minimum_and_keeps_compatible_cases_stacked() {
+    use clippier::matrix_schedule::schedule_with_summary;
+    // Reproduce the full-plan boundary: 261 isolated cases plus two pairs
+    // that may safely share runners = 265 cases but only 263 required jobs.
+    let mut input = (0..261)
+        .map(|i| {
+            let mut item = case(i, i);
+            item.insert("freshRunner".into(), json!(true));
+            item
+        })
+        .collect::<Vec<_>>();
+    for package in [261, 262] {
+        input.extend([case(0, package), case(1, package)]);
+    }
+    assert!(schedule(input.clone(), 256).is_err());
+    let (jobs, summary) = schedule_with_summary(input.clone(), 256, true).unwrap();
+    assert_eq!(summary.requested_jobs, 256);
+    assert_eq!(summary.minimum_jobs, 263);
+    assert_eq!(summary.effective_jobs, 263);
+    assert_eq!(summary.stacked_jobs, 2);
+    assert_eq!(summary.singleton_jobs, 261);
+    assert_eq!(summary.isolation_reasons["freshRunner"], 261);
+    assert_eq!(jobs.len(), 263);
+    let mut expected = input
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let mut actual = jobs
+        .iter()
+        .flat_map(|j| &j.cases)
+        .map(|c| serde_json::to_string(&c.package))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn sharding_permission_does_not_expand_a_feasible_budget() {
+    use clippier::matrix_schedule::schedule_with_summary;
+    let input = (0..300).map(|i| case(i, 0)).collect::<Vec<_>>();
+    let (jobs, summary) = schedule_with_summary(input.clone(), 3, true).unwrap();
+    assert_eq!(summary.effective_jobs, 3);
+    assert_eq!(summary.minimum_jobs, 1);
+    assert_eq!(summary.stacked_jobs, 3);
+    assert!(jobs.iter().all(|j| j.cases.len() == 100));
+    assert_eq!(
+        serde_json::to_value(jobs).unwrap(),
+        serde_json::to_value(schedule(input, 3).unwrap()).unwrap()
+    );
+    assert!(schedule_with_summary(Vec::new(), 0, true).is_err());
+    let (jobs, summary) = schedule_with_summary(Vec::new(), 3, true).unwrap();
+    assert!(jobs.is_empty());
+    assert_eq!(summary.case_count, 0);
+}
+
+#[test]
+fn identical_arbitrary_installers_are_not_implicitly_safe_to_share() {
+    use clippier::matrix_schedule::schedule_with_summary;
+    for field in ["dependencies", "ciSteps"] {
+        let mut first = case(0, 0);
+        first.insert(field.into(), json!("mutate-runner-global-state"));
+        let mut second = first.clone();
+        second.insert("features".into(), json!(["other"]));
+        let (jobs, summary) = schedule_with_summary(vec![first, second], 1, true).unwrap();
+        assert_eq!(jobs.len(), 2);
+        assert!(jobs.iter().all(|j| j.cases.len() == 1));
+        assert_eq!(summary.isolation_reasons[field], 2);
+    }
+}

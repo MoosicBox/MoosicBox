@@ -1346,6 +1346,12 @@ enum Commands {
         /// Maximum runner jobs (not a feature chunk limit)
         #[arg(long)]
         max_jobs: usize,
+        /// Permit only the minimum budget increase required by setup isolation
+        #[arg(long)]
+        allow_isolation_overflow: bool,
+        /// Write auditable allocation statistics to this JSON file
+        #[arg(long)]
+        summary_file: Option<std::path::PathBuf>,
     },
     /// Require exactly one successful receipt for every scheduled case
     VerifyMatrix {
@@ -2098,9 +2104,22 @@ async fn run() -> Result<(), BoxError> {
             }
             String::new()
         }
-        Commands::ScheduleMatrix { file, max_jobs } => {
+        Commands::ScheduleMatrix {
+            file,
+            max_jobs,
+            allow_isolation_overflow,
+            summary_file,
+        } => {
             let packages = serde_json::from_str(&std::fs::read_to_string(file)?)?;
-            serde_json::to_string(&clippier::matrix_schedule::schedule(packages, max_jobs)?)?
+            let (jobs, summary) = clippier::matrix_schedule::schedule_with_summary(
+                packages,
+                max_jobs,
+                allow_isolation_overflow,
+            )?;
+            if let Some(path) = summary_file {
+                std::fs::write(path, serde_json::to_string_pretty(&summary)?)?;
+            }
+            serde_json::to_string(&jobs)?
         }
         Commands::VerifyMatrix { plan, receipts } => {
             let jobs: Vec<clippier::matrix_schedule::Job> =
