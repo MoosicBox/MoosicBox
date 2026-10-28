@@ -84,7 +84,6 @@ jobs:
                   CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
               with:
                   command: run-matrix
-                  stack-cases: true
                   case-coverage: true
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
                   run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml

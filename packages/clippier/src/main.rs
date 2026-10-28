@@ -1339,6 +1339,14 @@ enum ReleaseCommands {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Build a job plan with one unchanged feature case per runner
+    PlanMatrix {
+        /// JSON array of fully transformed feature cases
+        file: String,
+        /// Write allocation statistics to this JSON file
+        #[arg(long)]
+        summary_file: Option<std::path::PathBuf>,
+    },
     /// Pack unchanged feature cases into compatible, balanced CI jobs
     ScheduleMatrix {
         /// JSON array of fully transformed feature cases
@@ -1355,7 +1363,7 @@ enum Commands {
     },
     /// Require exactly one successful receipt for every scheduled case
     VerifyMatrix {
-        /// JSON job plan produced by schedule-matrix
+        /// JSON job plan produced by plan-matrix or schedule-matrix
         plan: String,
         /// JSON array of runner receipts
         receipts: String,
@@ -2103,6 +2111,14 @@ async fn run() -> Result<(), BoxError> {
                 clippier::tools::init::initialize_terminal(&root)?;
             }
             String::new()
+        }
+        Commands::PlanMatrix { file, summary_file } => {
+            let packages = serde_json::from_str(&std::fs::read_to_string(file)?)?;
+            let (jobs, summary) = clippier::matrix_schedule::plan(packages)?;
+            if let Some(path) = summary_file {
+                std::fs::write(path, serde_json::to_string_pretty(&summary)?)?;
+            }
+            serde_json::to_string(&jobs)?
         }
         Commands::ScheduleMatrix {
             file,

@@ -90,3 +90,76 @@ cp "$work/boundary-257/0.json" "$work/reader/plan/shards/0.json"
 sed -n 's/^value=//p' "$work/read-output" | jq -e 'length == 256'
 if (cd "$work/reader"; SHARD_ID=missing GITHUB_OUTPUT="$work/missing-output" bash -e -o pipefail "$work/read-shard.sh"); then exit 1; fi
 echo 'Direct/sharded execution parity and reader tests passed'
+# All four public option combinations preserve cases. Only stacking may group
+# them; only sharding may transport an oversized plan across matrices.
+for stack in false true; do
+    for shard in false true; do
+        export INPUT_STACK_CASES="$stack" INPUT_SHARD_MATRIX="$shard" INPUT_MAX_PARALLEL=3
+        export INPUT_ALLOW_ISOLATION_OVERFLOW=false
+        export RUNNER_TEMP="$work/combo-$stack-$shard" GITHUB_OUTPUT="$work/combo-$stack-$shard.outputs"
+        mkdir -p "$RUNNER_TEMP"
+        if [[ "$stack" == false && "$shard" == false ]]; then
+            # Legacy direct transport remains supported for fitting matrices.
+            output_matrix "$(jq -c '.[0:3]' "$work/compatible.json")"
+            sed -n 's/^matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 3 and all(.[]; has("cases") | not)'
+            if output_matrix "$(cat "$work/compatible.json")"; then exit 1; fi
+            continue
+        fi
+        output_matrix "$(cat "$work/compatible.json")"
+        jq -e --arg stack "$stack" '
+            if $stack == "true" then length == 3 and all(.[]; .cases | length == 100)
+            else length == 300 and all(.[]; .cases | length == 1) end
+        ' "$RUNNER_TEMP/clippier-plan/jobs.json"
+        jq -e --slurpfile original "$work/compatible.json" '
+            [.[] | .cases[].package] | sort == ($original[0] | sort)
+        ' "$RUNNER_TEMP/clippier-plan/jobs.json"
+        if [[ "$shard" == true && "$stack" == false ]]; then
+            grep -qx 'matrix=\[0,1\]' "$GITHUB_OUTPUT"
+        fi
+    done
+done
+# Overflow policy is a scheduling choice, independent of matrix transport.
+export INPUT_STACK_CASES=true INPUT_SHARD_MATRIX=false INPUT_ALLOW_ISOLATION_OVERFLOW=true INPUT_MAX_PARALLEL=1
+export RUNNER_TEMP="$work/overflow-direct" GITHUB_OUTPUT="$work/overflow-direct.outputs"
+mkdir -p "$RUNNER_TEMP"
+output_matrix "$(jq -c '.[0:2]' "$work/cases.json")"
+sed -n 's/^matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 2 and all(.[]; .cases | length == 1)'
+if output_matrix "$(cat "$work/cases.json")"; then exit 1; fi
+# Execution selection follows the explicit job format, never stack-cases.
+export INPUT_STACK_CASES=false
+run_case_stack() { echo job; }
+run_matrix_command() { echo legacy; }
+for entry in '{"cases":[]}' '{"cases":null}' '{"cases":[{}]}'; do
+    export INPUT_RUN_MATRIX_PACKAGE_JSON="$entry"
+    [[ $(execute_matrix_entry) == job ]]
+done
+export INPUT_RUN_MATRIX_PACKAGE_JSON='{"name":"legacy","features":[]}'
+[[ $(execute_matrix_entry) == legacy ]]
+echo 'Independent option and execution-selection tests passed'
+# The actual CLI command builder must not turn a runner budget into legacy
+# feature unions for either opt-in. Both-off retains its existing CLI behavior.
+for stack in false true; do
+    for shard in false true; do
+        export INPUT_COMMAND=features INPUT_STACK_CASES="$stack" INPUT_SHARD_MATRIX="$shard" INPUT_MAX_PARALLEL=3
+        command=$(set +u; build_clippier_command)
+        if [[ "$stack" == false && "$shard" == false ]]; then
+            [[ "$command" == *' --max-parallel 3'* ]]
+        else
+            [[ "$command" != *' --max-parallel '* ]]
+        fi
+    done
+done
+# End-to-end sharding-only boundaries, including empty plans.
+export INPUT_COMMAND=features INPUT_STACK_CASES=false INPUT_SHARD_MATRIX=true
+for count in 0 1 255 256 257; do
+    export RUNNER_TEMP="$work/singletons-$count" GITHUB_OUTPUT="$work/singletons-$count.outputs"
+    mkdir -p "$RUNNER_TEMP"
+    output_matrix "$(jq -c --argjson count "$count" '.[:$count]' "$work/compatible.json")"
+    jq -e --argjson count "$count" 'length == $count and all(.[]; .cases | length == 1)' "$RUNNER_TEMP/clippier-plan/jobs.json"
+    if (( count <= 256 )); then
+        grep -qx 'matrix=\[\]' "$GITHUB_OUTPUT"
+        [[ ! -d "$RUNNER_TEMP/clippier-plan/shards" ]]
+    else
+        grep -qx 'matrix=\[0,1\]' "$GITHUB_OUTPUT"
+    fi
+done

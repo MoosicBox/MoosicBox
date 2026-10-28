@@ -525,7 +525,7 @@ build_clippier_command() {
         [[ -n "$INPUT_OS" ]] && cmd="$cmd --os $INPUT_OS"
         [[ -n "$INPUT_OFFSET" ]] && cmd="$cmd --offset $INPUT_OFFSET"
         [[ -n "$INPUT_MAX" ]] && cmd="$cmd --max $INPUT_MAX"
-        [[ -n "$INPUT_MAX_PARALLEL" && "${INPUT_STACK_CASES:-false}" != "true" ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
+        [[ -n "$INPUT_MAX_PARALLEL" && "${INPUT_STACK_CASES:-false}" != "true" && "${INPUT_SHARD_MATRIX:-false}" != true ]] && cmd="$cmd --max-parallel $INPUT_MAX_PARALLEL"
         [[ -n "$INPUT_CHUNKED" ]] && cmd="$cmd --chunked $INPUT_CHUNKED"
         [[ "$INPUT_SPREAD" == "true" ]] && cmd="$cmd --spread"
         [[ "$INPUT_RANDOMIZE" == "true" ]] && cmd="$cmd --randomize"
@@ -682,6 +682,15 @@ run_clippier() {
     run_clippier_json "$cmd" "$preserve_failure_output" || return $?
 }
 
+# A job plan selects the receipt-aware executor, not an allocation option.
+execute_matrix_entry() {
+    if printf '%s' "$INPUT_RUN_MATRIX_PACKAGE_JSON" | jq -e 'type == "object" and has("cases")' >/dev/null; then
+        run_case_stack
+    else
+        run_matrix_command
+    fi
+}
+
 # Helper function to output matrix with optional jq-filter applied at the end of the pipeline
 output_matrix() {
     local matrix_json="$1"
@@ -695,21 +704,20 @@ output_matrix() {
         printf '%s' "$matrix_json" | validate_case_array || return 1
         MATRIX_CASE_COUNT=$(printf '%s' "$matrix_json" | jq 'length') || return $?
     fi
-    if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
+    if [[ "${INPUT_STACK_CASES:-false}" == true || "${INPUT_SHARD_MATRIX:-false}" == true ]]; then
         local plan_dir="${RUNNER_TEMP}/clippier-plan"
         mkdir -p "$plan_dir"
         printf '%s' "$matrix_json" > "$plan_dir/cases.json"
-        local overflow_args=()
-        if [[ "${INPUT_ALLOW_ISOLATION_OVERFLOW:-false}" == true ]]; then
-            [[ "${INPUT_SHARD_MATRIX:-false}" == true ]] || {
-                echo 'Isolation overflow requires sharded matrix transport' >&2
-                return 1
-            }
-            overflow_args+=(--allow-isolation-overflow)
+        if [[ "${INPUT_STACK_CASES:-false}" == true ]]; then
+            local overflow_args=()
+            [[ "${INPUT_ALLOW_ISOLATION_OVERFLOW:-false}" != true ]] || overflow_args+=(--allow-isolation-overflow)
+            "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" \
+                --max-jobs "${INPUT_MAX_PARALLEL:-256}" "${overflow_args[@]}" \
+                --summary-file "$plan_dir/schedule-summary.json" > "$plan_dir/jobs.json" || return $?
+        else
+            "$CLIPPIER_BIN" plan-matrix "$plan_dir/cases.json" \
+                --summary-file "$plan_dir/schedule-summary.json" > "$plan_dir/jobs.json" || return $?
         fi
-        "$CLIPPIER_BIN" schedule-matrix "$plan_dir/cases.json" \
-            --max-jobs "${INPUT_MAX_PARALLEL:-256}" "${overflow_args[@]}" \
-            --summary-file "$plan_dir/schedule-summary.json" > "$plan_dir/jobs.json" || return $?
         matrix_json=$(jq -c . "$plan_dir/jobs.json") || return $?
     fi
     if [[ -n "${INPUT_JQ_POST_FILTER:-}" ]]; then
@@ -734,12 +742,19 @@ output_matrix() {
         matrix_json=$(jq -c . "$filter_dir/after.json") || return $?
     fi
     if [[ "${INPUT_SHARD_MATRIX:-false}" == true ]]; then
-        [[ "${INPUT_STACK_CASES:-false}" == true ]] || return 1
         printf '%s' "$matrix_json" > "$plan_dir/jobs.json" || return $?
         local shards
         shards=$(route_job_plan "$plan_dir/jobs.json" "$plan_dir/shards") || return $?
         write_schedule_summary "$plan_dir/schedule-summary.json" "$shards" || return $?
     else
+        # GitHub transport cannot silently change allocation or enable sharding.
+        printf '%s' "$matrix_json" | jq -e 'length <= 256 and (tojson | utf8bytelength) <= 200000' >/dev/null || {
+            echo 'Job plan exceeds one GitHub matrix; enable shard-matrix or adjust the stacking budget' >&2
+            return 1
+        }
+        if [[ "${INPUT_STACK_CASES:-false}" == true ]]; then
+            write_schedule_summary "$plan_dir/schedule-summary.json" '[]' || return $?
+        fi
         echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
     fi
 }
@@ -1659,11 +1674,7 @@ main() {
         # Disable error trap - run_matrix_command handles its own exit codes
         # (test failures should exit 1 without triggering "Action Failed" error summary)
         set +e
-        if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
-            run_case_stack
-        else
-            run_matrix_command
-        fi
+        execute_matrix_entry
         local exit_code=$?
         set -e
 
@@ -1690,7 +1701,7 @@ main() {
         echo "🚀 Force full matrix mode enabled - will analyze all packages regardless of changes"
     elif should_skip_on_no_changes; then
         echo "⏭️ Skipping - no changes detected and not in force-full-matrix mode"
-        if [[ "${INPUT_STACK_CASES:-false}" == "true" ]]; then
+        if [[ "${INPUT_STACK_CASES:-false}" == true || "${INPUT_SHARD_MATRIX:-false}" == true ]]; then
             output_matrix '[]' || return $?
         else
             echo "matrix=[]" >> $GITHUB_OUTPUT

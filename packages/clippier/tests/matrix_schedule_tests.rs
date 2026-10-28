@@ -219,3 +219,38 @@ fn identical_arbitrary_installers_are_not_implicitly_safe_to_share() {
         assert_eq!(summary.isolation_reasons[field], 2);
     }
 }
+
+#[test]
+fn singleton_planning_is_lossless_and_shares_stable_ids_with_scheduling() {
+    use clippier::matrix_schedule::plan;
+    for size in [0, 1, 255, 256, 257, 300] {
+        let mut input = (0..size).map(|i| case(i, 0)).collect::<Vec<_>>();
+        if size > 1 {
+            input[1] = input[0].clone(); // Duplicate configurations still need distinct receipts.
+        }
+        let (jobs, summary) = plan(input.clone()).unwrap();
+        assert_eq!(jobs.len(), size);
+        assert!(jobs.iter().all(|job| job.cases.len() == 1));
+        assert_eq!(summary.stacked_jobs, 0);
+        let planned = jobs
+            .iter()
+            .flat_map(|job| job.cases.clone())
+            .collect::<Vec<_>>();
+        let mut scheduled = schedule(input, 3)
+            .unwrap()
+            .into_iter()
+            .flat_map(|job| job.cases)
+            .collect::<Vec<_>>();
+        scheduled.sort_by(|a, b| a.id.cmp(&b.id));
+        assert_eq!(planned, scheduled);
+        let receipts = planned
+            .into_iter()
+            .map(|case| Receipt { case, exit_code: 0 })
+            .collect::<Vec<_>>();
+        verify(&jobs, &receipts).unwrap();
+        if size > 0 {
+            assert!(verify(&jobs, &receipts[1..]).is_err());
+        }
+    }
+    assert!(plan(vec![json!({"name":"invalid"}).as_object().unwrap().clone()]).is_err());
+}

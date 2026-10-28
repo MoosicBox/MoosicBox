@@ -134,10 +134,7 @@ jobs:
                   # Basic configuration
                   packages: ${{ github.event.inputs.packages }}
                   chunked: 15
-                  max-parallel: 256
-                  stack-cases: true
                   shard-matrix: true
-                  allow-isolation-overflow: true
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -366,7 +363,6 @@ jobs:
                   CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
               with:
                   command: run-matrix
-                  stack-cases: true
                   case-coverage: true
                   run-matrix-package-json: ${{ toJson(matrix.package) }}
                   run-matrix-steps-file: .github/clippier/run-matrix/rust-validation.yml

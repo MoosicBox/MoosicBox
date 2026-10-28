@@ -19,11 +19,11 @@ A powerful, flexible GitHub Action for generating CI matrices and analyzing pack
 
 ## Lossless feature-case stacking
 
-Build and Test uses `stack-cases: true` for analysis and execution. With this
+Callers can opt into `stack-cases: true` for analysis. With this
 option, `features` first generates and transforms the complete case plan, then
 `max-parallel` bounds **runner jobs** without unioning or dropping feature cases.
 Every job carries `cases: [{id, package}]`, including singleton jobs. Pass the
-whole scheduled job as `run-matrix-package-json` with `stack-cases: true`.
+whole job as `run-matrix-package-json`; execution detects its format automatically.
 
 The allocator spreads cases deterministically across identical setup groups.
 Custom setup/dependency scripts, submodules, and project
@@ -32,14 +32,28 @@ cases run sequentially through the existing executor in separate processes and
 clean disposable checkouts; per-case results, diagnostics, and coverage remain
 separate. If incompatible setups cannot fit, analysis fails explicitly.
 
-Full-workspace schedules use `shard-matrix: true` with `stack-cases: true`.
-Sharding alone does not change `max-parallel`. The explicit
-`allow-isolation-overflow: true` policy raises that budget only to the minimum
-safe setup-group count when necessary; it never sets the budget to case count.
-Compatible cases remain stacked. Arbitrary installers are still isolated:
-identical command text does not prove runner-global side effects are safe.
-`schedule-summary.json` and `.md` record case/group counts, requested/effective
-budgets, singleton/stacked jobs, shards, and overlapping isolation reasons.
+Stacking and matrix sharding are independent opt-ins. Build and Test enables
+`shard-matrix: true` without stacking: every case gets its own runner job.
+`clippier plan-matrix` constructs these singleton jobs without a scheduling budget.
+Enable `stack-cases: true` to group compatible cases within `max-parallel` jobs,
+with or without sharding. Neither option requires the other. With both off,
+legacy plain-package matrices remain supported. Without sharding, a plan that
+exceeds the single-matrix count or payload budget fails with a clear error.
+
+When either option is enabled, feature generation preserves the original cases:
+`max-parallel` is not forwarded to legacy feature-combining logic. Only stacking
+uses it as an execution-job budget. `allow-isolation-overflow: true` applies only
+to stacking, and raises that budget only to the minimum safe setup-group count;
+it does not require or enable sharding. Arbitrary installers remain isolated.
+`schedule-summary.json` and `.md` record allocation statistics and shard count.
+For singleton plans, all budget/count fields describe the one-case-per-job
+allocation rather than an optimization budget.
+
+`run-matrix` detects the explicit `cases` job format and uses the receipt-aware
+executor for singleton and stacked jobs alike, without a `stack-cases` flag.
+Plain-package inputs continue using the legacy executor. Malformed job entries
+are rejected rather than falling back to legacy execution.
+
 The `direct-matrix` output contains the full plan when it fits within 256 jobs
 and the 200,000 UTF-8 byte transport budget; `matrix` is then `[]`. Build and Test
 runs that plan as a top-level matrix, without shard preparation jobs. Empty

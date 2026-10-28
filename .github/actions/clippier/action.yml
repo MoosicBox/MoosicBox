@@ -48,17 +48,17 @@ inputs:
 
     # Case stacking preserves feature configurations instead of unioning them.
     allow-isolation-overflow:
-        description: "Raise the scheduling budget only to the minimum required by runner isolation. Requires shard-matrix."
+        description: "Raise the scheduling budget only to the minimum required by runner isolation. Only applies to stack-cases."
         required: false
         default: "false"
 
     shard-matrix:
-        description: "Route fitting plans to direct-matrix; otherwise store bounded shards and emit shard IDs in matrix. Requires stack-cases."
+        description: "Route fitting plans to direct-matrix; otherwise store bounded shards and emit shard IDs in matrix."
         required: false
         default: "false"
 
     stack-cases:
-        description: "For features: schedule unchanged cases within max-parallel jobs. For run-matrix: execute a scheduled job."
+        description: "Group unchanged cases into compatible jobs within max-parallel. Independent of shard-matrix; run-matrix detects job plans automatically."
         required: false
         default: "false"
     case-coverage:

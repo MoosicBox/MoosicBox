@@ -69,6 +69,78 @@ fn isolation_reasons(setup: &Map<String, Value>) -> Vec<&'static str> {
     reasons
 }
 
+// Shared identity construction is independent of allocation and transport.
+fn prepare_cases(mut packages: Vec<Map<String, Value>>) -> Result<Vec<Case>, BoxError> {
+    for package in &packages {
+        if package.contains_key("cases") || package.contains_key("caseId") {
+            return Err("Input contains scheduler-owned fields".into());
+        }
+        for field in ["name", "path", "os"] {
+            if package
+                .get(field)
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                return Err(format!("Missing or invalid matrix {field}").into());
+            }
+        }
+        if !package
+            .get("features")
+            .is_some_and(|v| v.as_array().is_some_and(|a| a.iter().all(Value::is_string)))
+        {
+            return Err("Matrix features must be an array of strings".into());
+        }
+    }
+    packages.sort_by_cached_key(|p| serde_json::to_string(p).unwrap_or_default());
+    Ok(packages
+        .into_iter()
+        .enumerate()
+        .map(|(index, package)| Case {
+            id: format!("case-{index:06}"),
+            package,
+        })
+        .collect())
+}
+
+/// Build a deterministic job plan with exactly one unchanged case per runner.
+/// No scheduling budget or stacking policy is applied.
+///
+/// # Errors
+///
+/// * Execution metadata is invalid or contains scheduler-owned fields.
+pub fn plan(packages: Vec<Map<String, Value>>) -> Result<(Vec<Job>, ScheduleSummary), BoxError> {
+    let cases = prepare_cases(packages)?;
+    let count = cases.len();
+    let mut reasons = BTreeMap::new();
+    let jobs = cases
+        .into_iter()
+        .map(|case| {
+            let mut setup = case.package.clone();
+            setup.remove("features");
+            for reason in isolation_reasons(&setup) {
+                *reasons.entry(reason.to_owned()).or_insert(0) += 1;
+            }
+            Job {
+                setup,
+                cases: vec![case],
+            }
+        })
+        .collect();
+    Ok((
+        jobs,
+        ScheduleSummary {
+            case_count: count,
+            requested_jobs: count,
+            minimum_jobs: count,
+            effective_jobs: count,
+            execution_jobs: count,
+            singleton_jobs: count,
+            stacked_jobs: 0,
+            isolation_reasons: reasons,
+        },
+    ))
+}
+
 /// Allocate cases deterministically, balancing case counts within compatible setups.
 ///
 /// Custom setup scripts and explicit `freshRunner` cases are not stacked. The
@@ -94,38 +166,19 @@ pub fn schedule(packages: Vec<Map<String, Value>>, limit: usize) -> Result<Vec<J
 ///
 /// * Returns the validation and allocation errors documented by [`schedule`].
 pub fn schedule_with_summary(
-    mut packages: Vec<Map<String, Value>>,
+    packages: Vec<Map<String, Value>>,
     limit: usize,
     allow_isolation_overflow: bool,
 ) -> Result<(Vec<Job>, ScheduleSummary), BoxError> {
     if limit == 0 {
         return Err("max-jobs must be greater than zero".into());
     }
-    for package in &packages {
-        if package.contains_key("cases") || package.contains_key("caseId") {
-            return Err("Input contains scheduler-owned fields".into());
-        }
-        for field in ["name", "path", "os"] {
-            if package
-                .get(field)
-                .and_then(Value::as_str)
-                .is_none_or(str::is_empty)
-            {
-                return Err(format!("Missing or invalid matrix {field}").into());
-            }
-        }
-        if !package
-            .get("features")
-            .is_some_and(|v| v.as_array().is_some_and(|a| a.iter().all(Value::is_string)))
-        {
-            return Err("Matrix features must be an array of strings".into());
-        }
-    }
-    packages.sort_by_cached_key(|p| serde_json::to_string(p).unwrap_or_default());
+    let cases = prepare_cases(packages)?;
     let requested_jobs = limit;
     let mut reason_counts = BTreeMap::new();
     let mut groups = BTreeMap::<String, Vec<Case>>::new();
-    for (index, package) in packages.into_iter().enumerate() {
+    for (index, case) in cases.into_iter().enumerate() {
+        let package = &case.package;
         let mut setup = package.clone();
         setup.remove("features");
         // Arbitrary setup scripts may mutate runner-global state. Be conservative
@@ -136,10 +189,7 @@ pub fn schedule_with_summary(
             *reason_counts.entry(reason.to_owned()).or_insert(0) += 1;
         }
         let key = serde_json::to_string(&(setup, isolated.then_some(index)))?;
-        groups.entry(key).or_default().push(Case {
-            id: format!("case-{index:06}"),
-            package,
-        });
+        groups.entry(key).or_default().push(case);
     }
     let minimum_jobs = groups.len();
     let limit = if allow_isolation_overflow {
