@@ -10,52 +10,29 @@ on:
             node-kind:
                 type: string
                 required: true
+            node-json:
+                type: string
+                required: true
 
 jobs:
-    prepare:
-        runs-on: ubuntu-latest
-        outputs:
-            matrix: ${{ steps.matrix.outputs.value }}
-        steps:
-            - uses: actions/checkout@v6
-            - uses: actions/download-artifact@v8
-              with:
-                  name: clippier-case-plan
-                  path: plan
-            - name: Read bounded child matrix
-              id: matrix
-              shell: bash
-              env:
-                  NODE_ID: ${{ inputs.node-id }}
-                  NODE_KIND: ${{ inputs.node-kind }}
-              run: |
-                  # Validate even leaf/invalid inputs before selecting a branch.
-                  [[ "$NODE_KIND" == group || "$NODE_KIND" == leaf ]] || { echo 'Invalid node kind' >&2; exit 1; }
-                  matrix=$(python3 .github/actions/clippier/lib/shard_tree.py read plan/hierarchy "$NODE_ID" "$NODE_KIND" --remaining-levels 5)
-                  if [[ "$NODE_KIND" == group ]]; then
-                      echo "value=$matrix" >> "$GITHUB_OUTPUT"
-                  else
-                      echo 'value=[]' >> "$GITHUB_OUTPUT"
-                  fi
-
     children:
         if: inputs.node-kind == 'group'
-        needs: prepare
         name: ${{ matrix.child.name }}
         strategy:
             fail-fast: false
             matrix:
-                child: ${{ fromJson(needs.prepare.outputs.matrix) }}
+                child: ${{ fromJson(inputs.node-json).children }}
         uses: ./.github/workflows/clippier-build-group-5.yml
         with:
             node-id: ${{ matrix.child.id }}
             node-kind: ${{ matrix.child.kind }}
+            node-json: ${{ toJson(matrix.child) }}
         secrets: inherit
 
     leaf:
         if: inputs.node-kind == 'leaf'
-        needs: prepare
-        uses: ./.github/workflows/clippier-build-shard.yml
+        uses: ./.github/workflows/clippier-build-leaf.yml
         with:
             node-id: ${{ inputs.node-id }}
+            jobs-json: ${{ toJson(fromJson(inputs.node-json).jobs) }}
         secrets: inherit

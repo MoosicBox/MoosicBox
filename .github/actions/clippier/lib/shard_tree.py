@@ -272,8 +272,85 @@ def validate(tree, jobs=None):
         raise ValueError("Hierarchy altered, duplicated or omitted execution jobs")
 
 
-def leaves_for_preview(tree):
-    return [node for node in tree["nodes"].values() if node["kind"] == "leaf"]
+def routing(tree, jobs):
+    """Inline bounded routing only; full execution metadata stays in the artifact."""
+    validate(tree, jobs)
+    indices = {}
+    for index, job in enumerate(jobs):
+        indices.setdefault(encode(job), []).append(index)
+
+    def visit(descriptor):
+        node = tree["nodes"][descriptor["id"]]
+        result = dict(descriptor)
+        if node["kind"] == "group":
+            result["children"] = [visit(child) for child in node["values"]]
+        else:
+            result["jobs"] = []
+            for job in node["values"]:
+                index = indices[encode(job)].pop(0)
+                label = job.get("name", "Build")
+                if job.get("hasMultipleOs"):
+                    label += " " + job.get("osEmoji", "")
+                if job.get("osCount", 0) > 1:
+                    label += " " + str(job.get("osIndex", ""))
+                label += job.get("stackSuffix", "")
+                result["jobs"].append(
+                    dict(
+                        index=index,
+                        os=job["os"],
+                        name=label,
+                        gitSubmodules=job.get("gitSubmodules", False),
+                    )
+                )
+        values = result.get("children", result.get("jobs"))
+        if not fits(values, node["limit"]):
+            raise ValueError(
+                "Inline routing exceeds matrix transport budget; reduce names/groups or use flat sharding"
+            )
+        # Account for JSON escaping when forwarded as a workflow input string.
+        if (
+            len(encode(json.dumps(result, ensure_ascii=False, indent=2)).encode())
+            > PAYLOAD
+        ):
+            raise ValueError(
+                "Inline routing input exceeds escaped payload budget; use flat sharding or reduce hierarchy"
+            )
+        return result
+
+    roots = [visit(root) for root in tree["roots"]]
+    if not fits(roots, tree["matrix_max_jobs"]):
+        raise ValueError(
+            "Inline root routing exceeds transport budget; use flat sharding"
+        )
+    return roots
+
+
+def resolve_job(directory, node_id, reference):
+    """Validate transport references on the actual build runner, before setup."""
+    if not re.fullmatch(r"node-[0-9a-f]{24}", node_id):
+        raise ValueError("Invalid node ID")
+    tree = json.loads((directory / "tree.json").read_text())
+    jobs = json.loads((directory.parent / "jobs.json").read_text())
+    roots = routing(tree, jobs)
+
+    def find(items):
+        for item in items:
+            if item["id"] == node_id:
+                return item
+            found = find(item.get("children", []))
+            if found is not None:
+                return found
+        return None
+
+    leaf = find(roots)
+    if not isinstance(reference, dict) or type(reference.get("index")) is not int:
+        raise ValueError("Invalid job reference/index")
+    if leaf is None or leaf["kind"] != "leaf" or reference not in leaf["jobs"]:
+        raise ValueError("Unexpected, altered or misplaced job reference")
+    index = reference["index"]
+    if type(index) is not int:
+        raise ValueError("Invalid job index")
+    return jobs[index]
 
 
 def preview(tree):
@@ -298,7 +375,7 @@ def preview(tree):
         show(root, 0)
     lines += [
         "",
-        f"Preparation jobs: {len(tree['nodes']) + len(leaves_for_preview(tree))}. Concurrency is controlled separately.",
+        "Preparation jobs: 0 (inline routing). Concurrency is controlled separately.",
         "Parts split on job/descriptor count or the conservative 200000-byte payload budget.",
     ]
     return "\n".join(lines) + "\n"
@@ -317,6 +394,10 @@ def main():
     create.add_argument("--caller-depth", type=int, default=1)
     entry = commands.add_parser("entry")
     entry.add_argument("--caller-depth", type=int, default=1)
+    resolve = commands.add_parser("resolve")
+    resolve.add_argument("directory", type=Path)
+    resolve.add_argument("node_id")
+    resolve.add_argument("reference", help="JSON job reference")
     read = commands.add_parser("read")
     read.add_argument("directory", type=Path)
     read.add_argument("node_id")
@@ -327,6 +408,13 @@ def main():
         capacity(args.caller_depth)
         print(dispatcher_name(args.caller_depth))
         return
+    if args.command == "resolve":
+        print(
+            encode(
+                resolve_job(args.directory, args.node_id, json.loads(args.reference))
+            )
+        )
+        return
     if args.command == "plan":
         tree = plan(
             json.loads(args.jobs.read_text()),
@@ -334,6 +422,7 @@ def main():
             args.max_jobs,
             args.caller_depth,
         )
+        roots = routing(tree, json.loads(args.jobs.read_text()))
         if args.destination.exists():
             raise ValueError(
                 "Hierarchy destination already exists; use a fresh plan directory"
@@ -344,9 +433,10 @@ def main():
             staging = Path(temporary) / "tree"
             staging.mkdir()
             (staging / "tree.json").write_text(encode(tree))
+            (staging / "routing.json").write_text(encode(roots))
             (staging / "preview.md").write_text(preview(tree))
             os.rename(staging, args.destination)
-        print(encode(tree["roots"]))
+        print(encode(roots))
     else:
         if not re.fullmatch(r"node-[0-9a-f]{24}", args.node_id):
             raise ValueError("Invalid node ID")

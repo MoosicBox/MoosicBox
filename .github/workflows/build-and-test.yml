@@ -428,6 +428,7 @@ jobs:
         with:
             node-id: ${{ matrix.group.id }}
             node-kind: ${{ matrix.group.kind }}
+            node-json: ${{ toJson(matrix.group) }}
         secrets: inherit
 
     clippier-report:

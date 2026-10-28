@@ -270,19 +270,10 @@ output_matrix "$(cat "$work/os-cases.json")"
 grep -qx 'matrix=\[\]' "$GITHUB_OUTPUT"
 grep -qx 'direct-matrix=\[\]' "$GITHUB_OUTPUT"
 sed -n 's/^hierarchy-matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 3 and all(.[]; .kind == "group")'
-# Invoke the exact dispatcher scripts, not a second implementation of readers.
-yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-group.yml" > "$work/read-group.sh"
-yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-shard.yml" > "$work/read-leaf.sh"
-mkdir -p "$work/nested-reader/.github/actions/clippier/lib"
-cp "$root/lib/shard_capacity.py" "$work/nested-reader/.github/actions/clippier/lib/"
-cp "$root/lib/shard_tree.py" "$work/nested-reader/.github/actions/clippier/lib/"
-cp -r "$RUNNER_TEMP/clippier-plan" "$work/nested-reader/plan"
-while read -r node; do
-    (cd "$work/nested-reader"; NODE_ID="$node" NODE_KIND=group GITHUB_OUTPUT="$work/group-read.outputs" bash -e -o pipefail "$work/read-group.sh")
-done < <(jq -r '.roots[].id' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json")
-while read -r node; do
-    (cd "$work/nested-reader"; NODE_ID="$node" SHARD_ID=-1 GITHUB_OUTPUT="$work/leaf-read.outputs" bash -e -o pipefail "$work/read-leaf.sh")
-done < <(jq -r '.nodes[] | select(.kind == "leaf") | .id' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json")
+# Dispatchers expand inputs directly and never allocate preparation runners.
+! grep -q 'runs-on:' "$root/../../workflows/clippier-build-group.yml"
+! grep -q 'prepare:' "$root/../../workflows/clippier-build-leaf.yml"
+jq -e 'length == 3 and all(.[]; .children | length > 0)' "$RUNNER_TEMP/clippier-plan/hierarchy/routing.json"
 jq '[.nodes[] | select(.kind == "leaf") | .values[] | .cases[] | {case:.,exit_code:0}]' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json" > "$work/nested-receipts.json"
 "$CLIPPIER_BIN" verify-matrix "$RUNNER_TEMP/clippier-plan/jobs.json" "$work/nested-receipts.json"
 jq '[.[] | select(.case.package.os != "windows-latest")]' "$work/nested-receipts.json" > "$work/missing-os-receipts.json"

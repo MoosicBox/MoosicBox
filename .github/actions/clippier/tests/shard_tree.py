@@ -228,75 +228,127 @@ class HierarchyTests(unittest.TestCase):
 
         collect("build-and-test.yml")
         self.assertLessEqual(len(unique), GITHUB_UNIQUE_WORKFLOWS)
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory)
+        for entry in range(1, tree.MAX_GROUP_LEVELS + 1):
+            text = (workflows / dispatcher_name(entry)).read_text()
+            self.assertNotIn("runs-on:", text)
+            self.assertNotIn("prepare:", text)
+            self.assertIn("fromJson(inputs.node-json)", text)
+
+    def test_inline_routing_and_resolve(self):
+        for depth in range(1, tree.MAX_GROUP_LEVELS + 1):
+            source = jobs(5)
+            source.append(copy.deepcopy(source[0]))
+            manifest = tree.plan(source, [{"group-by-jq": ".os"}] * depth)
+            routes = tree.routing(manifest, source)
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary) / "hierarchy"
+                directory.mkdir()
+                (directory / "tree.json").write_text(tree.encode(manifest))
+                (directory.parent / "jobs.json").write_text(tree.encode(source))
+
+                def check(items):
+                    for item in items:
+                        if item["kind"] == "group":
+                            check(item["children"])
+                        else:
+                            for ref in item["jobs"]:
+                                self.assertEqual(
+                                    tree.resolve_job(directory, item["id"], ref),
+                                    source[ref["index"]],
+                                )
+                                for field, value in (
+                                    ("index", 999),
+                                    ("os", "wrong"),
+                                    ("name", "changed"),
+                                ):
+                                    bad = dict(ref, **{field: value})
+                                    with self.assertRaises(ValueError):
+                                        tree.resolve_job(directory, item["id"], bad)
+
+                check(routes)
+        huge = tree.plan(
+            jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 110000'}] * 2
+        )
+        with self.assertRaises(ValueError):
+            tree.routing(huge, jobs(1))
+
+    def test_leaf_lifecycle_parity_and_resolver_script(self):
+        workflows = ROOT.parents[1] / "workflows"
+
+        def steps(filename):
+            return json.loads(
+                subprocess.run(
+                    ["yq", "-o=json", ".jobs.build.steps", str(workflows / filename)],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                ).stdout
+            )
+
+        # All execution steps after resolution must stay equivalent to the
+        # established flat lifecycle, apart from reference/name expressions.
+        flat = steps("clippier-build-shard.yml")
+        nested = steps("clippier-build-leaf.yml")
+
+        def normalize(value):
+            text = json.dumps(value, sort_keys=True)
+            for old, new in (
+                ("steps.resolve.outputs.package", "toJson(matrix.package)"),
+                ("fromJson(toJson(matrix.package)).name", "matrix.package.name"),
+                ("matrix.job.os", "matrix.package.os"),
+                (
+                    "inputs.node-id != '' && inputs.node-id || inputs.shard-id",
+                    "inputs.node-id",
+                ),
+            ):
+                text = text.replace(old, new)
+            return text
+
+        self.assertEqual(normalize(flat[2:]), normalize(nested[4:]))
+        source = jobs(2)
+        manifest = tree.plan(source, [{"group-by-jq": ".os"}])
+        routes = tree.routing(manifest, source)
+        script = next(s["run"] for s in nested if s.get("id") == "resolve")
+        with tempfile.TemporaryDirectory() as temporary:
+            import os
+
+            base = Path(temporary)
             lib = base / ".github/actions/clippier/lib"
             lib.mkdir(parents=True)
             for filename in ("shard_tree.py", "shard_capacity.py"):
                 (lib / filename).write_text((ROOT / "lib" / filename).read_text())
-            artifact = base / "plan/hierarchy"
-            artifact.mkdir(parents=True)
-            source = jobs(3)
-            (base / "plan/jobs.json").write_text(tree.encode(source))
-            for depth in range(1, tree.MAX_GROUP_LEVELS + 1):
-                manifest = tree.plan(source, [{"group-by-jq": ".os"}] * depth)
-                (artifact / "tree.json").write_text(tree.encode(manifest))
-                for entry in range(1, tree.MAX_GROUP_LEVELS + 1):
-                    result = subprocess.run(
-                        [
-                            "yq",
-                            "-r",
-                            '.jobs.prepare.steps[] | select(.id == "matrix") | .run',
-                            str(workflows / dispatcher_name(entry)),
-                        ],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
-                    script = result.stdout
-                    import os
-
-                    for node in manifest["nodes"].values():
-                        output = base / "outputs"
-                        output.write_text("")
-                        env = dict(
-                            os.environ,
-                            NODE_ID=node["id"],
-                            NODE_KIND=node["kind"],
-                            GITHUB_OUTPUT=str(output),
-                        )
-                        read = subprocess.run(
-                            ["bash", "-e", "-o", "pipefail", "-c", script],
-                            cwd=base,
-                            env=env,
-                            capture_output=True,
-                            text=True,
-                        )
-                        required = depth - node["level"] + 1
-                        self.assertEqual(
-                            read.returncode == 0,
-                            required <= tree.capacity(entry),
-                            read.stderr,
-                        )
-                        if read.returncode:
-                            self.assertEqual(output.read_text(), "")
-                # Leaf reader's remaining capacity must reject undersized entries.
-            broken = copy.deepcopy(manifest)
-            broken["roots"][0]["kind"] = "leaf"
-            (artifact / "tree.json").write_text(tree.encode(broken))
-            failed = subprocess.run(
-                [
-                    "python3",
-                    str(lib / "shard_tree.py"),
-                    "read",
-                    str(artifact),
-                    broken["roots"][0]["id"],
-                    "either",
-                ],
+            directory = base / "clippier-plan/hierarchy"
+            directory.mkdir(parents=True)
+            (directory / "tree.json").write_text(tree.encode(manifest))
+            (directory.parent / "jobs.json").write_text(tree.encode(source))
+            output = base / "outputs"
+            env = dict(
+                os.environ,
+                NODE_ID=routes[0]["id"],
+                JOB_REFERENCE=tree.encode(routes[0]["jobs"][0]),
+                RUNNER_TEMP=str(base),
+                GITHUB_OUTPUT=str(output),
+            )
+            result = subprocess.run(
+                ["bash", "-e", "-o", "pipefail", "-c", script],
+                cwd=base,
+                env=env,
                 capture_output=True,
             )
-            self.assertNotEqual(failed.returncode, 0)
-            self.assertEqual(failed.stdout, b"")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                json.loads(output.read_text().removeprefix("package=")), source[0]
+            )
+            output.write_text("")
+            env["NODE_ID"] = "../invalid"
+            result = subprocess.run(
+                ["bash", "-e", "-o", "pipefail", "-c", script],
+                cwd=base,
+                env=env,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(output.read_text(), "")
 
     def test_configuration_and_expression_errors(self):
         for levels in (
@@ -387,7 +439,7 @@ class HierarchyTests(unittest.TestCase):
                 self.assertNotEqual(read.returncode, 0)
                 self.assertEqual(read.stdout, b"")
             self.assertIn(
-                "Preparation jobs: 3", (base / "hierarchy/preview.md").read_text()
+                "Preparation jobs: 0", (base / "hierarchy/preview.md").read_text()
             )
             config.write_text('[{"group-by-jq":"empty"}]')
             failed = subprocess.run(

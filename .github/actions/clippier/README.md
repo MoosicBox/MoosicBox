@@ -148,21 +148,37 @@ uses: ./.github/workflows/clippier-build-group.yml
 with:
   node-id: ${{ matrix.group.id }}
   node-kind: ${{ matrix.group.kind }}
+  node-json: ${{ toJson(matrix.group) }}
 secrets: inherit
 ```
 
 Skip that job when `hierarchy-matrix` is `[]`. Direct and flat-shard outputs are
-`[]` in nested mode, preventing double dispatch. Each group dispatcher calls the next statically declared adapter for child
-groups; leaf nodes call the existing shard workflow and unchanged build lifecycle. These are real workflow calls, not just labels,
-but GitHub controls the exact UI presentation. All sibling matrices use
-`fail-fast: false`; the final full-plan receipt reconciliation runs even when a
-preparation job, build, or entire subtree fails. Node IDs namespace artifacts.
+`[]` in nested mode, preventing double dispatch. Each group dispatcher expands
+its inline `children` input with `fromJSON`;
+leaf nodes call `clippier-build-leaf.yml` with compact job references. Neither
+allocates a preparation runner. The original flat shard adapter retains its
+artifact-backed preparation path for compatibility.
 
-The versioned `hierarchy/tree.json` artifact is built and validated before
-publication, including exact job-multiset equality, references, node types,
-reachability, depth and all matrix bounds. Readers validate it again against
-`jobs.json`, reject invalid IDs/path traversal and select only the expected node
-type. Grouping never changes the complete job plan used for receipt verification.
+**These calls do not create guaranteed collapsible folders in GitHub's native
+jobs sidebar.** GitHub may show flattened paths even for nested workflow calls.
+Choose hierarchy for organization/routing, not an assumed UI-folder feature.
+There is no custom report silently substituted for the native view.
+
+Each build runner downloads the immutable plan and resolves its numeric job
+reference against the complete validated tree **before setup or test execution**.
+References carry only runner selection and display metadata; feature lists and
+execution configuration remain in the artifact. Duplicate configurations get
+separate indices. Altered or misplaced references fail; full-plan receipts still
+catch duplicate execution, missing builds, and missing entire subtrees. Node IDs
+namespace receipt artifacts. Siblings use `fail-fast: false`; reconciliation runs
+even when a subtree fails.
+
+`hierarchy/routing.json` contains the compact nested routing descriptors;
+`hierarchy/tree.json` remains the validated logical manifest. Root matrices,
+every child matrix, and escaped serialized workflow inputs are checked against
+the transport budget before publishing outputs. Extremely large routing trees
+fail explicitly with guidance to use flat sharding; there is no silent switch
+back to preparation runners or a different grouping hierarchy.
 
 #### Depth budget and static workflow entries
 
@@ -196,8 +212,8 @@ that caller's dispatch job:
 `hierarchy-entry` reports the required filename for inspection, but cannot be
 passed dynamically to GitHub's `uses:`. Local preview accepts `--caller-depth`.
 Call-depth declarations cannot discover external callers automatically: the
-caller must supply its real depth and wire the matching entry. Readers enforce
-the remaining static capacity before dispatch. Too-deep requests fail before
+caller must supply its real depth and wire the matching entry. Planning validates capacity before publication; build runners revalidate the
+complete plan and their assigned references before setup. Too-deep requests fail before
 publishing hierarchy outputs and report the budget calculation.
 
 The shared budget lives in `lib/shard_capacity.py`. The YAML adapters are generated
@@ -223,7 +239,7 @@ cat preview-plan/preview.md
 ```
 
 Use a fresh destination. Preview output shows the full grouping tree, part sizes,
-effective limits, split reasons and preparation-job overhead (one per tree node plus one per leaf executor).
+effective limits, split reasons and zero separate preparation jobs for inline nested routing.
 It does not set execution concurrency. Actual UI presentation, inherited
 permissions/secrets and cancellation propagation still require a real GitHub
 smoke run; local tests/actionlint are not remote execution proof.
