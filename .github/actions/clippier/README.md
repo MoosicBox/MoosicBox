@@ -82,8 +82,8 @@ statistics. For example: `265 jobs → sharded [256,9]; ... reason: matrix job-c
 
 ### Actual nested workflow groups
 
-Use `shard-levels` to request one or two explicit reusable-workflow grouping
-levels. Unlike flat sharding, nested mode preserves the requested hierarchy even
+Use `shard-levels` to request explicit reusable-workflow grouping levels up to
+the available GitHub workflow-call budget. Unlike flat sharding, nested mode preserves the requested hierarchy even
 when the complete job plan would fit directly. Empty plans make no calls.
 
 ```yaml
@@ -152,9 +152,8 @@ secrets: inherit
 ```
 
 Skip that job when `hierarchy-matrix` is `[]`. Direct and flat-shard outputs are
-`[]` in nested mode, preventing double dispatch. Two levels call the group
-workflow, then the existing shard workflow, then the unchanged build lifecycle;
-one level uses the leaf branch. These are real workflow calls, not just labels,
+`[]` in nested mode, preventing double dispatch. Each group dispatcher calls the next statically declared adapter for child
+groups; leaf nodes call the existing shard workflow and unchanged build lifecycle. These are real workflow calls, not just labels,
 but GitHub controls the exact UI presentation. All sibling matrices use
 `fail-fast: false`; the final full-plan receipt reconciliation runs even when a
 preparation job, build, or entire subtree fails. Node IDs namespace artifacts.
@@ -164,6 +163,53 @@ publication, including exact job-multiset equality, references, node types,
 reachability, depth and all matrix bounds. Readers validate it again against
 `jobs.json`, reject invalid IDs/path traversal and select only the expected node
 type. Grouping never changes the complete job plan used for receipt verification.
+
+#### Depth budget and static workflow entries
+
+A top-level caller supports **eight grouping levels**: GitHub's ten workflow
+levels minus the caller minus the final build executor. The limit follows the
+static call graph, including conditional leaf branches, not just the runtime
+path taken by a shallow plan. The adapters are an acyclic chain; self-recursion
+and dynamic `uses:` expressions are not used.
+
+The only additional setting is for callers embedded inside other reusable
+workflows:
+
+```yaml
+shard-caller-depth: 2 # top-level workflow -> this caller
+```
+
+This leaves seven grouping levels. Use the corresponding **literal** entry in
+that caller's dispatch job:
+
+| Caller workflow depth | Static `uses:` filename      | Available grouping levels |
+| --------------------- | ---------------------------- | ------------------------- |
+| 1 (default)           | `clippier-build-group.yml`   | 8                         |
+| 2                     | `clippier-build-group-2.yml` | 7                         |
+| 3                     | `clippier-build-group-3.yml` | 6                         |
+| 4                     | `clippier-build-group-4.yml` | 5                         |
+| 5                     | `clippier-build-group-5.yml` | 4                         |
+| 6                     | `clippier-build-group-6.yml` | 3                         |
+| 7                     | `clippier-build-group-7.yml` | 2                         |
+| 8                     | `clippier-build-group-8.yml` | 1                         |
+
+`hierarchy-entry` reports the required filename for inspection, but cannot be
+passed dynamically to GitHub's `uses:`. Local preview accepts `--caller-depth`.
+Call-depth declarations cannot discover external callers automatically: the
+caller must supply its real depth and wire the matching entry. Readers enforce
+the remaining static capacity before dispatch. Too-deep requests fail before
+publishing hierarchy outputs and report the budget calculation.
+
+The shared budget lives in `lib/shard_capacity.py`. The YAML adapters are generated
+by `generate-dispatchers.py`, committed before execution, and checked for drift
+with `python3 .github/actions/clippier/generate-dispatchers.py --check`. Never edit
+generated adapters directly. Graph tests count every static branch, detect cycles,
+and check this repository's reachable workflows against GitHub's 50-unique-workflow
+limit. Other callers must include their own additional workflows in that count.
+Platform reference: https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+
+This extends grouping depth, not root pagination: overflowing the root matrix
+still fails explicitly instead of inserting an unrequested execution level.
 
 #### Local preview
 
@@ -177,7 +223,7 @@ cat preview-plan/preview.md
 ```
 
 Use a fresh destination. Preview output shows the full grouping tree, part sizes,
-effective limits, split reasons and preparation-job overhead (one per tree node).
+effective limits, split reasons and preparation-job overhead (one per tree node plus one per leaf executor).
 It does not set execution concurrency. Actual UI presentation, inherited
 permissions/secrets and cancellation propagation still require a real GitHub
 smoke run; local tests/actionlint are not remote execution proof.

@@ -52,8 +52,13 @@ inputs:
         required: false
         default: "false"
 
+    shard-caller-depth:
+        description: "Workflow depth of the caller dispatching root groups (top-level=1). Choose the matching static entry documented in hierarchy-entry. Leaves reserve one executor call."
+        default: "1"
+        required: false
+
     shard-levels:
-        description: "YAML array of one or two {group-by-jq, name-jq?, matrix-max-jobs?} levels. Requests actual nested workflow groups even for small plans. Requires shard-matrix; cannot mix with flat grouping/naming. Caller must wire the hierarchy dispatcher."
+        description: "YAML array of {group-by-jq, name-jq?, matrix-max-jobs?} levels, up to the GitHub call-depth budget. Requests actual nested workflow groups even for small plans. Requires shard-matrix; cannot mix with flat grouping/naming. Caller must wire the hierarchy dispatcher."
         required: false
 
     shard-group-by-jq:
@@ -545,6 +550,9 @@ inputs:
         default: "true"
 
 outputs:
+    hierarchy-entry:
+        description: "Required static workflow entry filename for shard-caller-depth. Informational: GitHub uses targets must be literal, not expressions."
+        value: ${{ steps.run-action.outputs.hierarchy-entry }}
     hierarchy-matrix:
         description: "Root descriptors for explicit nested mode; empty otherwise. Dispatch using clippier-build-group.yml."
         value: ${{ steps.run-action.outputs.hierarchy-matrix }}
@@ -909,6 +917,7 @@ runs:
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_SHARD_CALLER_DEPTH: ${{ inputs.shard-caller-depth }}
               INPUT_SHARD_LEVELS: ${{ inputs.shard-levels }}
               INPUT_SHARD_GROUP_BY_JQ: ${{ inputs.shard-group-by-jq }}
               INPUT_SHARD_NAME_JQ: ${{ inputs.shard-name-jq }}

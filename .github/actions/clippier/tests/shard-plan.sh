@@ -274,10 +274,11 @@ sed -n 's/^hierarchy-matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 3 and all(.
 yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-group.yml" > "$work/read-group.sh"
 yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-shard.yml" > "$work/read-leaf.sh"
 mkdir -p "$work/nested-reader/.github/actions/clippier/lib"
+cp "$root/lib/shard_capacity.py" "$work/nested-reader/.github/actions/clippier/lib/"
 cp "$root/lib/shard_tree.py" "$work/nested-reader/.github/actions/clippier/lib/"
 cp -r "$RUNNER_TEMP/clippier-plan" "$work/nested-reader/plan"
 while read -r node; do
-    (cd "$work/nested-reader"; NODE_ID="$node" GITHUB_OUTPUT="$work/group-read.outputs" bash -e -o pipefail "$work/read-group.sh")
+    (cd "$work/nested-reader"; NODE_ID="$node" NODE_KIND=group GITHUB_OUTPUT="$work/group-read.outputs" bash -e -o pipefail "$work/read-group.sh")
 done < <(jq -r '.roots[].id' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json")
 while read -r node; do
     (cd "$work/nested-reader"; NODE_ID="$node" SHARD_ID=-1 GITHUB_OUTPUT="$work/leaf-read.outputs" bash -e -o pipefail "$work/read-leaf.sh")
@@ -302,3 +303,17 @@ if output_matrix '[]'; then exit 1; fi
 [[ ! -s "$GITHUB_OUTPUT" ]]
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_LEVELS INPUT_MATRIX_MAX_JOBS
 echo 'Nested API, static dispatcher readers, stacking and subtree receipt tests passed'
+# Embedded caller budget is forwarded through the public action API, not only
+# supported by direct Python callers. Explicit capacity failures publish nothing.
+export INPUT_SHARD_LEVELS='[{"group-by-jq":".os"},{"group-by-jq":".name"}]' INPUT_SHARD_MATRIX=true INPUT_STACK_CASES=false
+export INPUT_SHARD_CALLER_DEPTH=8 RUNNER_TEMP="$work/too-deep" GITHUB_OUTPUT="$work/too-deep.outputs"
+mkdir -p "$RUNNER_TEMP"
+: > "$GITHUB_OUTPUT"
+if output_matrix "$(cat "$work/os-cases.json")"; then exit 1; fi
+[[ ! -s "$GITHUB_OUTPUT" && ! -d "$RUNNER_TEMP/clippier-plan/hierarchy" ]]
+export INPUT_SHARD_CALLER_DEPTH=7 RUNNER_TEMP="$work/embedded" GITHUB_OUTPUT="$work/embedded.outputs"
+mkdir -p "$RUNNER_TEMP"
+output_matrix "$(cat "$work/os-cases.json")"
+grep -qx 'hierarchy-entry=clippier-build-group-7.yml' "$GITHUB_OUTPUT"
+unset INPUT_SHARD_LEVELS INPUT_SHARD_CALLER_DEPTH
+echo 'Embedded caller depth API tests passed'

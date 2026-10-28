@@ -117,10 +117,11 @@ route_nested_plan() {
     max_jobs=$(matrix_max_jobs) || return $?
     levels=$(mktemp "${RUNNER_TEMP:-/tmp}/clippier-levels.XXXXXX") || return $?
     printf '%s' "$INPUT_SHARD_LEVELS" | yq -o=json '.' > "$levels" || return $?
-    roots=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" plan "$plan_file" "$levels" "$directory" --max-jobs "$max_jobs") || return $?
+    roots=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" plan "$plan_file" "$levels" "$directory" --max-jobs "$max_jobs" --caller-depth "${INPUT_SHARD_CALLER_DEPTH:-1}") || return $?
     rm -f "$levels"
     cat "$directory/preview.md" >&2
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$directory/preview.md" >> "$GITHUB_STEP_SUMMARY"; fi
+    echo "hierarchy-entry=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" entry --caller-depth "${INPUT_SHARD_CALLER_DEPTH:-1}")" >> "$GITHUB_OUTPUT"
     echo "hierarchy-matrix=$roots" >> "$GITHUB_OUTPUT"
     echo 'direct-matrix=[]' >> "$GITHUB_OUTPUT"
     echo 'shard-matrix=[]' >> "$GITHUB_OUTPUT"

@@ -15,6 +15,15 @@ import subprocess
 import sys
 import tempfile
 
+# Also supports importlib-based tests and local preview invocation.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from shard_capacity import (
+    MAX_GROUP_LEVELS,
+    GITHUB_WORKFLOW_LEVELS,
+    capacity,
+    dispatcher_name,
+)
+
 CEILING = 256
 PAYLOAD = 200000  # Conservative UTF-8 transport budget, not GitHub's exact limit.
 
@@ -63,11 +72,15 @@ def jq(expression, value, context):
     return values[0]
 
 
-def configuration(levels, default):
+def configuration(levels, default, caller_depth=1):
     limit_value(default)
-    if not isinstance(levels, list) or not 1 <= len(levels) <= 2:
+    available = capacity(caller_depth)
+    if not isinstance(levels, list) or not levels:
+        raise ValueError("shard-levels must be a nonempty array")
+    if len(levels) > available:
         raise ValueError(
-            "shard-levels must contain one or two levels (static dispatcher depth)"
+            f"Requested {len(levels)} grouping levels; only {available} available: "
+            f"GitHub limit {GITHUB_WORKFLOW_LEVELS} minus caller depth {caller_depth} minus executor 1"
         )
     for i, level in enumerate(levels, 1):
         if not isinstance(level, dict) or set(level) - {
@@ -84,8 +97,8 @@ def configuration(levels, default):
         limit_value(level.get("matrix-max-jobs", default))
 
 
-def plan(jobs, levels, default=256):
-    configuration(levels, default)
+def plan(jobs, levels, default=256, caller_depth=1):
+    configuration(levels, default, caller_depth)
     if not isinstance(jobs, list) or any(not isinstance(j, dict) for j in jobs):
         raise ValueError("Job plan must be an array of objects")
     nodes = {}
@@ -191,7 +204,7 @@ def validate(tree, jobs=None):
         type(tree.get("version")) is not int
         or tree.get("version") != 1
         or type(tree.get("depth")) is not int
-        or tree.get("depth") not in (1, 2)
+        or not 1 <= tree.get("depth") <= MAX_GROUP_LEVELS
     ):
         raise ValueError("Unsupported hierarchy schema/depth")
     nodes = tree["nodes"]
@@ -259,6 +272,10 @@ def validate(tree, jobs=None):
         raise ValueError("Hierarchy altered, duplicated or omitted execution jobs")
 
 
+def leaves_for_preview(tree):
+    return [node for node in tree["nodes"].values() if node["kind"] == "leaf"]
+
+
 def preview(tree):
     lines = ["## Nested workflow plan", ""]
 
@@ -281,7 +298,7 @@ def preview(tree):
         show(root, 0)
     lines += [
         "",
-        f"Preparation jobs: {len(tree['nodes'])}. Concurrency is controlled separately.",
+        f"Preparation jobs: {len(tree['nodes']) + len(leaves_for_preview(tree))}. Concurrency is controlled separately.",
         "Parts split on job/descriptor count or the conservative 200000-byte payload budget.",
     ]
     return "\n".join(lines) + "\n"
@@ -297,16 +314,25 @@ def main():
     )
     create.add_argument("destination", type=Path)
     create.add_argument("--max-jobs", type=int, default=256)
+    create.add_argument("--caller-depth", type=int, default=1)
+    entry = commands.add_parser("entry")
+    entry.add_argument("--caller-depth", type=int, default=1)
     read = commands.add_parser("read")
     read.add_argument("directory", type=Path)
     read.add_argument("node_id")
     read.add_argument("kind", choices=("group", "leaf", "either"))
+    read.add_argument("--remaining-levels", type=int, default=MAX_GROUP_LEVELS)
     args = parser.parse_args()
+    if args.command == "entry":
+        capacity(args.caller_depth)
+        print(dispatcher_name(args.caller_depth))
+        return
     if args.command == "plan":
         tree = plan(
             json.loads(args.jobs.read_text()),
             json.loads(args.levels.read_text()),
             args.max_jobs,
+            args.caller_depth,
         )
         if args.destination.exists():
             raise ValueError(
@@ -327,6 +353,16 @@ def main():
         tree = json.loads((args.directory / "tree.json").read_text())
         validate(tree, json.loads((args.directory.parent / "jobs.json").read_text()))
         node = tree["nodes"][args.node_id]
+        if (
+            type(args.remaining_levels) is not int
+            or not 1 <= args.remaining_levels <= MAX_GROUP_LEVELS
+        ):
+            raise ValueError("Invalid dispatcher capacity")
+        required = tree["depth"] - node["level"] + 1
+        if required > args.remaining_levels:
+            raise ValueError(
+                f"Node requires {required} grouping levels; this static entry supports {args.remaining_levels}"
+            )
         if args.kind != "either" and node["kind"] != args.kind:
             raise ValueError("Unexpected node type")
         print(encode(node["values"]))

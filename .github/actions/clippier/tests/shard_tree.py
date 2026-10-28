@@ -91,7 +91,7 @@ class HierarchyTests(unittest.TestCase):
 
     def test_randomized_losslessness(self):
         randomizer = random.Random(1841)
-        for _ in range(12):
+        for iteration in range(16):
             source = jobs(randomizer.randrange(1, 35))
             for job in source:
                 job.update(
@@ -106,6 +106,13 @@ class HierarchyTests(unittest.TestCase):
                     "matrix-max-jobs": randomizer.randrange(1, 6),
                 },
             ]
+            depth = 1 + iteration % tree.MAX_GROUP_LEVELS
+            if depth == 1:
+                levels = [levels[1]]
+            else:
+                levels = (
+                    levels[:1] + [{"group-by-jq": ".name"}] * (depth - 2) + levels[1:]
+                )
             manifest = tree.plan(source, levels)
             tree.validate(manifest, source)
             self.assertEqual(manifest, tree.plan(source, levels))
@@ -148,11 +155,154 @@ class HierarchyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Root descriptor"):
             tree.plan(source, [{"group-by-jq": ".name", "name-jq": '"🎵" * 20000'}])
 
+    def test_every_depth_and_caller_budget(self):
+        for caller in range(1, tree.MAX_GROUP_LEVELS + 1):
+            available = tree.capacity(caller)
+            for depth in range(1, available + 1):
+                levels = [{"group-by-jq": ".os"}] * depth
+                source = jobs(5)
+                manifest = tree.plan(source, levels, caller_depth=caller)
+                tree.validate(manifest, source)
+                self.assertEqual(manifest["depth"], depth)
+                self.assertEqual(len(manifest["nodes"]), depth)
+            with self.assertRaisesRegex(ValueError, "only.*available"):
+                tree.plan(
+                    [], [{"group-by-jq": ".os"}] * (available + 1), caller_depth=caller
+                )
+        for caller in (0, -1, True, 9, "1"):
+            with self.assertRaises(ValueError):
+                tree.plan([], [{"group-by-jq": ".os"}], caller_depth=caller)
+        for depth in (0, -1, True, 9):
+            manifest = tree.plan(jobs(1), [{"group-by-jq": ".os"}])
+            manifest["depth"] = depth
+            with self.assertRaises(ValueError):
+                tree.validate(manifest)
+
+    def test_deep_partitioning_and_corruption(self):
+        for depth in range(1, tree.MAX_GROUP_LEVELS + 1):
+            source = jobs(7)
+            levels = [{"group-by-jq": ".os"} for _ in range(depth)]
+            levels[-1]["matrix-max-jobs"] = 2
+            manifest = tree.plan(source, levels)
+            tree.validate(manifest, source)
+            self.assertEqual([len(n["values"]) for n in leaves(manifest)], [2, 2, 2, 1])
+            bad = copy.deepcopy(manifest)
+            leaf = leaves(bad)[0]
+            leaf["level"] += 1
+            with self.assertRaises(ValueError):
+                tree.validate(bad, source)
+
+    def test_generated_graph_and_actual_dispatcher_readers(self):
+        import re
+        from shard_capacity import (
+            dispatcher_name,
+            GITHUB_WORKFLOW_LEVELS,
+            GITHUB_UNIQUE_WORKFLOWS,
+        )
+
+        generator = ROOT / "generate-dispatchers.py"
+        subprocess.run(["python3", str(generator), "--check"], check=True)
+        workflows = ROOT.parents[1] / "workflows"
+
+        # Count static call targets, including skipped leaf branches: no cycles,
+        # no dynamic targets, maximum caller-to-executor path stays within 10.
+        def walk(name, path):
+            self.assertNotIn(name, path)
+            text = (workflows / name).read_text()
+            targets = re.findall(r"uses: \./\.github/workflows/([^\s]+)", text)
+            lengths = [walk(target, path + [name]) for target in targets]
+            return 1 + max(lengths, default=0)
+
+        for entry in range(1, tree.MAX_GROUP_LEVELS + 1):
+            longest = walk(dispatcher_name(entry), [])
+            self.assertEqual(entry + longest, GITHUB_WORKFLOW_LEVELS)
+        unique = set()
+
+        def collect(name):
+            for target in re.findall(
+                r"uses: \./\.github/workflows/([^\s]+)", (workflows / name).read_text()
+            ):
+                if target not in unique:
+                    unique.add(target)
+                    collect(target)
+
+        collect("build-and-test.yml")
+        self.assertLessEqual(len(unique), GITHUB_UNIQUE_WORKFLOWS)
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            lib = base / ".github/actions/clippier/lib"
+            lib.mkdir(parents=True)
+            for filename in ("shard_tree.py", "shard_capacity.py"):
+                (lib / filename).write_text((ROOT / "lib" / filename).read_text())
+            artifact = base / "plan/hierarchy"
+            artifact.mkdir(parents=True)
+            source = jobs(3)
+            (base / "plan/jobs.json").write_text(tree.encode(source))
+            for depth in range(1, tree.MAX_GROUP_LEVELS + 1):
+                manifest = tree.plan(source, [{"group-by-jq": ".os"}] * depth)
+                (artifact / "tree.json").write_text(tree.encode(manifest))
+                for entry in range(1, tree.MAX_GROUP_LEVELS + 1):
+                    result = subprocess.run(
+                        [
+                            "yq",
+                            "-r",
+                            '.jobs.prepare.steps[] | select(.id == "matrix") | .run',
+                            str(workflows / dispatcher_name(entry)),
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+                    script = result.stdout
+                    import os
+
+                    for node in manifest["nodes"].values():
+                        output = base / "outputs"
+                        output.write_text("")
+                        env = dict(
+                            os.environ,
+                            NODE_ID=node["id"],
+                            NODE_KIND=node["kind"],
+                            GITHUB_OUTPUT=str(output),
+                        )
+                        read = subprocess.run(
+                            ["bash", "-e", "-o", "pipefail", "-c", script],
+                            cwd=base,
+                            env=env,
+                            capture_output=True,
+                            text=True,
+                        )
+                        required = depth - node["level"] + 1
+                        self.assertEqual(
+                            read.returncode == 0,
+                            required <= tree.capacity(entry),
+                            read.stderr,
+                        )
+                        if read.returncode:
+                            self.assertEqual(output.read_text(), "")
+                # Leaf reader's remaining capacity must reject undersized entries.
+            broken = copy.deepcopy(manifest)
+            broken["roots"][0]["kind"] = "leaf"
+            (artifact / "tree.json").write_text(tree.encode(broken))
+            failed = subprocess.run(
+                [
+                    "python3",
+                    str(lib / "shard_tree.py"),
+                    "read",
+                    str(artifact),
+                    broken["roots"][0]["id"],
+                    "either",
+                ],
+                capture_output=True,
+            )
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertEqual(failed.stdout, b"")
+
     def test_configuration_and_expression_errors(self):
         for levels in (
             [],
             {},
-            [{"group-by-jq": "."}] * 3,
+            [{"group-by-jq": "."}] * (tree.MAX_GROUP_LEVELS + 1),
             [{"group-by-jq": ".", "typo": 1}],
             [{"group-by-jq": ""}],
             [{"group-by-jq": ".", "matrix-max-jobs": True}],
@@ -237,7 +387,7 @@ class HierarchyTests(unittest.TestCase):
                 self.assertNotEqual(read.returncode, 0)
                 self.assertEqual(read.stdout, b"")
             self.assertIn(
-                "Preparation jobs: 2", (base / "hierarchy/preview.md").read_text()
+                "Preparation jobs: 3", (base / "hierarchy/preview.md").read_text()
             )
             config.write_text('[{"group-by-jq":"empty"}]')
             failed = subprocess.run(

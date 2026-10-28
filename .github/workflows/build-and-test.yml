@@ -67,6 +67,7 @@ jobs:
                   bash .github/actions/clippier/tests/report.sh
                   bash .github/actions/clippier/tests/rust-validation.sh
                   bash .github/actions/clippier/tests/shard-plan.sh
+                  PYTHONDONTWRITEBYTECODE=1 python3 .github/actions/clippier/generate-dispatchers.py --check
                   PYTHONDONTWRITEBYTECODE=1 python3 .github/actions/clippier/tests/shard_tree.py
 
     cargo-deny:
