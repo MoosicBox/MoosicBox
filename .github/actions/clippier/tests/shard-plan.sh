@@ -244,9 +244,11 @@ unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 printf 'Grouped/named sharding tests passed\n'
 # Exercise the exact MoosicBox expressions and verify full-plan receipts after
 # regrouping: global order may change, but no case can disappear or change.
+yq -o=json '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with' "$root/../../workflows/build-and-test.yml" | jq -e '.["shard-matrix"] == true and .["matrix-max-jobs"] == 256 and (has("shard-levels") | not)'
+yq -o=json '.jobs' "$root/../../workflows/build-and-test.yml" | jq -e '(has("build-groups") | not) and .["clippier-report"].needs == ["build", "build-shards", "determine-affected-packages"]'
 export INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS=2
-INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml" | yq -r '.[0].group-by-jq')
-INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml" | yq -r '.[0].name-jq')
+INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-group-by-jq' "$root/../../workflows/build-and-test.yml")
+INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-name-jq' "$root/../../workflows/build-and-test.yml")
 jq -n '[range(9) | {name:"fixture",path:".",features:[],os:(["windows-latest","ubuntu-latest","macos-latest"][. % 3])}]' > "$work/os-cases.json"
 "$CLIPPIER_BIN" plan-matrix "$work/os-cases.json" > "$work/os-jobs.json"
 shard_job_plan "$work/os-jobs.json" "$work/os-shards" > /dev/null
@@ -261,9 +263,9 @@ jq -n '[range(257) | {id:.}]' > "$work/too-many-groups.json"
 if shard_job_plan "$work/too-many-groups.json" "$work/too-many-groups"; then exit 1; fi
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 echo 'Workflow OS labels and regrouped receipt reconciliation tests passed'
-# Explicit nested mode uses real YAML API, even when all jobs fit directly.
+# Nested grouping remains opt-in for other callers, independent of this workflow.
 export INPUT_SHARD_LEVELS INPUT_SHARD_MATRIX=true INPUT_STACK_CASES=false INPUT_MATRIX_MAX_JOBS=256
-INPUT_SHARD_LEVELS=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml")
+INPUT_SHARD_LEVELS='[{"group-by-jq":".os"},{"group-by-jq":".name"}]'
 export RUNNER_TEMP="$work/nested" GITHUB_OUTPUT="$work/nested.outputs"
 mkdir -p "$RUNNER_TEMP"
 output_matrix "$(cat "$work/os-cases.json")"

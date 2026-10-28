@@ -100,7 +100,6 @@ jobs:
         outputs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             shard-matrix: ${{ steps.analyze.outputs.shard-matrix }}
-            hierarchy-matrix: ${{ steps.analyze.outputs.hierarchy-matrix }}
             direct-matrix: ${{ steps.analyze.outputs.direct-matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
             has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false }}
@@ -140,16 +139,14 @@ jobs:
                   chunked: 15
                   shard-matrix: true
                   matrix-max-jobs: 256
-                  shard-levels: |
-                      - group-by-jq: '.os'
-                        name-jq: |
-                          if .group == "ubuntu-latest" then "🐧 Linux builds"
-                          elif .group == "windows-latest" then "🪟 Windows builds"
-                          elif .group == "macos-latest" then "🍎 macOS builds"
-                          else (.group | tostring) + " builds"
-                          end
-                      - group-by-jq: '.name'
-                        name-jq: '.group'
+                  # Keep this workflow flat: one OS grouping, no package hierarchy.
+                  shard-group-by-jq: .os
+                  shard-name-jq: |
+                      if .group == "ubuntu-latest" then "🐧 Linux builds"
+                      elif .group == "windows-latest" then "🪟 Windows builds"
+                      elif .group == "macos-latest" then "🍎 macOS builds"
+                      else (.group | tostring) + " builds"
+                      end
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -416,27 +413,12 @@ jobs:
             shard-id: ${{ matrix.shard.id }}
         secrets: inherit
 
-    build-groups:
-        name: ${{ matrix.group.name }}
-        needs: [determine-affected-packages, build-clippier-machete]
-        if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' && needs.determine-affected-packages.outputs.hierarchy-matrix != '[]' }}
-        strategy:
-            fail-fast: false
-            matrix:
-                group: ${{ fromJson(needs.determine-affected-packages.outputs.hierarchy-matrix) }}
-        uses: ./.github/workflows/clippier-build-group.yml
-        with:
-            node-id: ${{ matrix.group.id }}
-            node-kind: ${{ matrix.group.kind }}
-            node-json: ${{ toJson(matrix.group) }}
-        secrets: inherit
-
     clippier-report:
         if: always()
         permissions:
             actions: read
             contents: read
-        needs: [build, build-shards, build-groups, determine-affected-packages]
+        needs: [build, build-shards, determine-affected-packages]
         uses: ./.github/workflows/clippier-report.yml
         with:
             verify-case-plan: true
