@@ -25,7 +25,7 @@ from shard_capacity import (
 )
 
 CEILING = 256
-PAYLOAD = 200000  # Conservative UTF-8 transport budget, not GitHub's exact limit.
+from output_budget import PAYLOAD, utf16_bytes, validate_outputs
 
 
 def encode(value):
@@ -33,7 +33,10 @@ def encode(value):
 
 
 def fits(values, limit, budget=PAYLOAD):
-    return len(values) <= limit and len(encode(values).encode()) <= budget
+    return (
+        len(values) <= limit
+        and utf16_bytes(encode(values)) + utf16_bytes("hierarchy-matrix") <= budget
+    )
 
 
 def limit_value(value):
@@ -153,7 +156,7 @@ def plan(jobs, levels, default=256, caller_depth=1):
                     raise ValueError(
                         f"Level {depth + 1}: name must be a nonempty single-line string"
                     )
-                if len(name.encode()) > PAYLOAD:
+                if utf16_bytes(name) > PAYLOAD:
                     raise ValueError(
                         f"Level {depth + 1}: name exceeds descriptor payload budget"
                     )
@@ -166,7 +169,10 @@ def plan(jobs, levels, default=256, caller_depth=1):
                 reasons = []
                 if len(values) > limit:
                     reasons.append("matrix job/descriptor-count limit")
-                if len(encode(values).encode()) > PAYLOAD:
+                if (
+                    utf16_bytes(encode(values)) + utf16_bytes("hierarchy-matrix")
+                    > PAYLOAD
+                ):
                     reasons.append("matrix payload budget")
                 nodes[node_id] = dict(
                     **descriptor,
@@ -309,7 +315,7 @@ def routing(tree, jobs):
             )
         # Account for JSON escaping when forwarded as a workflow input string.
         if (
-            len(encode(json.dumps(result, ensure_ascii=False, indent=2)).encode())
+            utf16_bytes(encode(json.dumps(result, ensure_ascii=False, indent=2)))
             > PAYLOAD
         ):
             raise ValueError(
@@ -322,6 +328,15 @@ def routing(tree, jobs):
         raise ValueError(
             "Inline root routing exceeds transport budget; use flat sharding"
         )
+    validate_outputs(
+        {
+            "hierarchy-matrix": encode(roots),
+            "hierarchy-entry": dispatcher_name(8),
+            "direct-matrix": "[]",
+            "shard-matrix": "[]",
+            "matrix": "[]",
+        }
+    )
     return roots
 
 
@@ -376,7 +391,7 @@ def preview(tree):
     lines += [
         "",
         "Preparation jobs: 0 (inline routing). Concurrency is controlled separately.",
-        "Parts split on job/descriptor count or the conservative 200000-byte payload budget.",
+        "Parts split on job/descriptor count or combined UTF-16 output budget (1 MiB minus 64 KiB reserve).",
     ]
     return "\n".join(lines) + "\n"
 

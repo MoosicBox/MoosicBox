@@ -68,12 +68,20 @@ fails explicitly; the action never enables sharding or stacking on your behalf.
 With sharding enabled, a fitting plan runs directly; only oversized plans split.
 The action emits data for the caller workflow to dispatch, not new jobs itself.
 
-The conservative transport payload budget is **200,000 UTF-8 bytes** per matrix.
-This is our safety budget, not GitHub's exact output limit (which is measured in
-UTF-16 and covers the job's combined outputs). Payload size can force a split
-earlier than `matrix-max-jobs`. A single job exceeding this budget fails rather
-than being altered. GitHub's hard ceiling remains 256 entries, including the
-outer shard-ID matrix; plans requiring more than 256 shards fail explicitly.
+Transport sizing uses **UTF-16 bytes**, matching GitHub's documented job-output
+accounting: 1 MiB per producing job. We reserve an explicit **64 KiB** for unrelated
+outputs/bookkeeping, leaving **983,040 bytes** for the combined transport outputs
+(including keys, empty routing outputs and duplicate aliases). The 256-entry matrix
+limit is independent. A single oversized job fails rather than being altered.
+Flat shard preparation checks its complete declared output; Build and Test checks
+**all declared analysis job outputs**, including reasoning, additional checks and
+Docker metadata, before publishing the plan artifact. If that combined mapping
+exceeds the budget, analysis fails explicitly instead of publishing an unsafe plan.
+Other callers must likewise validate their own complete job output mapping with
+`lib/output_budget.py`; the action cannot discover caller-defined aliases or
+outputs from unrelated steps. GitHub's separate 50 MiB whole-run output limit
+still applies; per-job checks do not prove that arbitrary caller workflows fit it.
+The outer shard matrix remains limited to 256 entries.
 
 Logs and the GitHub step summary describe direct/empty/sharded routing, the
 selected limit, shard sizes, and whether job count or payload size caused the
@@ -125,7 +133,7 @@ Per-level `matrix-max-jobs` overrides the global value for that level's outgoing
 matrix: child calls for intermediate groups, execution jobs for leaf groups.
 Count/payload overflow partitions a logical group into clearly named parts,
 never mixes grouping keys, and never rewrites tests. Every matrix is checked
-against the conservative 200,000 UTF-8 byte payload budget. A single oversized
+against the UTF-16 combined job-output budget. A single oversized
 job/descriptor fails. The root descriptor matrix must itself fit the global
 limit; if there are too many root parts, planning fails with a clear message.
 Root pagination would require another statically wired dispatcher level; this
@@ -301,14 +309,14 @@ and the transport payload budget. Custom grouping may require more shards; plans
 that exceed those bounds fail rather than mixing groups or discarding jobs.
 
 The `direct-matrix` output contains the full plan when it fits within `matrix-max-jobs`
-and the 200,000 UTF-8 byte transport budget; `matrix` is then `[]`. Build and Test
+and the UTF-16 combined transport-output budget; `matrix` is then `[]`. Build and Test
 runs that plan as a top-level matrix, without shard preparation jobs. Empty
 plans skip both build routes. Otherwise `direct-matrix` is `[]` and `matrix`
 contains shard IDs. The complete unchanged plan remains in
 `$RUNNER_TEMP/clippier-plan/jobs.json`, with bounded job arrays in
 `shards/<id>.json` only when needed. Upload the entire plan directory and dispatch
 each shard ID to `clippier-build-shard.yml`. Each shard contains at most `matrix-max-jobs` jobs
-and 200,000 UTF-8 bytes, keeping job outputs below GitHub's UTF-16 size limit.
+and a matrix output that fits the UTF-16 producer budget.
 Receipt artifact names distinguish direct execution from shard IDs;
 reconciliation still checks the complete plan. Both routes use identical build
 steps, enforced by the workflow regression test.

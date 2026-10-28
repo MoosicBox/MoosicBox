@@ -227,6 +227,28 @@ jobs:
                   summary-show-jobs-details: true
                   summary-include-seed: true
 
+            - name: Validate combined job output budget
+              shell: bash
+              run: |
+                  cat > "$RUNNER_TEMP/clippier-job-outputs.json" <<'CLIPPIER_OUTPUT_JSON'
+                  {
+                    "matrix": ${{ toJson(format('{0}', steps.analyze.outputs.matrix)) }},
+                    "shard-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.shard-matrix)) }},
+                    "direct-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.direct-matrix)) }},
+                    "has-changes": ${{ toJson(format('{0}', steps.analyze.outputs.has-changes)) }},
+                    "has-tauri-changes": ${{ toJson(format('{0}', fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false)) }},
+                    "reasoning": ${{ toJson(format('{0}', steps.analyze.outputs.reasoning)) }},
+                    "tauri-reasoning": ${{ toJson(format('{0}', toJson(fromJson(steps.analyze.outputs.additional-checks || '{}').tauri))) }},
+                    "additional-checks": ${{ toJson(format('{0}', steps.analyze.outputs.additional-checks)) }},
+                    "randomization-seed": ${{ toJson(format('{0}', steps.seed.outputs.value)) }},
+                    "docker-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.docker-matrix)) }},
+                    "has-docker-changes": ${{ toJson(format('{0}', steps.analyze.outputs.has-docker-changes)) }},
+                    "docker-count": ${{ toJson(format('{0}', steps.analyze.outputs.docker-count)) }},
+                    "docker-packages-list": ${{ toJson(format('{0}', steps.analyze.outputs.docker-packages-list)) }}
+                  }
+                  CLIPPIER_OUTPUT_JSON
+                  python3 .github/actions/clippier/lib/output_budget.py "$RUNNER_TEMP/clippier-job-outputs.json"
+
             - name: Save immutable case plan
               if: success()
               uses: actions/upload-artifact@v6

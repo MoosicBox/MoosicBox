@@ -36,6 +36,15 @@ jobs:
                       [[ "$SHARD_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid shard ID' >&2; exit 1; }
                       matrix=$(jq -ce 'if type == "array" and length > 0 and length <= 256 then . else error("Invalid matrix shard") end' "plan/shards/$SHARD_ID.json")
                   fi
+                  printf '%s' "$matrix" > "$RUNNER_TEMP/clippier-shard-matrix.json"
+                  python3 - <<'PYOUTPUT'
+                  import os, sys
+                  from pathlib import Path
+                  sys.path.insert(0, '.github/actions/clippier/lib')
+                  from output_budget import validate_outputs
+                  value = (Path(os.environ['RUNNER_TEMP']) / 'clippier-shard-matrix.json').read_text()
+                  print(f"Matrix output: {validate_outputs({'matrix': value})} UTF-16 bytes")
+                  PYOUTPUT
                   echo "value=$matrix" >> "$GITHUB_OUTPUT"
 
     build:

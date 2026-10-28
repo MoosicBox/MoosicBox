@@ -54,22 +54,89 @@ class HierarchyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Root descriptor"):
             tree.plan(source, [{"group-by-jq": ".name"}])
 
+    def test_combined_output_accounting(self):
+        import output_budget as budget
+
+        self.assertEqual(budget.utf16_bytes("aé🎵"), 8)
+        exact = {"matrix": "x" * ((budget.PAYLOAD - 12) // 2)}
+        self.assertEqual(budget.validate_outputs(exact), budget.PAYLOAD)
+        with self.assertRaises(ValueError):
+            budget.validate_outputs({"matrix": exact["matrix"] + "x"})
+        # Aliases and unrelated metadata count individually, even when equal.
+        value = "x" * 250000
+        for outputs in (
+            {"matrix": value, "direct-matrix": value},
+            {"matrix": value, "reasoning": value},
+        ):
+            with self.assertRaises(ValueError):
+                budget.validate_outputs(outputs)
+        for outputs in (
+            {"a": 'é🎵\\"\n'},
+            exact,
+            {"matrix": value, "reasoning": value},
+        ):
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; jq -c "$CLIPPIER_OUTPUT_JQ outputbytes"',
+                    "test",
+                    str(ROOT / "lib/shard-plan.sh"),
+                ],
+                input=json.dumps(outputs),
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(int(result.stdout), budget.output_bytes(outputs))
+
+    def test_analysis_guard_covers_every_declared_output(self):
+        workflow = json.loads(
+            subprocess.run(
+                [
+                    "yq",
+                    "-o=json",
+                    ".jobs.determine-affected-packages",
+                    str(ROOT.parents[1] / "workflows/build-and-test.yml"),
+                ],
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout
+        )
+        script = next(
+            s["run"]
+            for s in workflow["steps"]
+            if s.get("name") == "Validate combined job output budget"
+        )
+        import re
+
+        checked = dict(re.findall(r'^  "([^"]+)": (.*?)(?:,)?$', script, re.MULTILINE))
+        self.assertEqual(set(checked), set(workflow["outputs"]))
+        for key, expression in workflow["outputs"].items():
+            self.assertEqual(
+                checked[key].rstrip(","),
+                "${{ toJson(format('{0}', " + expression[3:-3].strip() + ")) }}",
+            )
+
     def test_payload_and_unicode(self):
         value = {"emoji": '🎵\\"'}
-        size = len(tree.encode([value]).encode())
+        size = tree.utf16_bytes(tree.encode([value])) + tree.utf16_bytes(
+            "hierarchy-matrix"
+        )
         self.assertEqual(tree.partition([value], 1, size), [[value]])
         with self.assertRaises(ValueError):
             tree.partition([value], 1, size - 1)
         source = jobs(6)
         for job in source:
-            job["payload"] = "🎵" * 20000
+            job["payload"] = "🎵" * 100000
         manifest = tree.plan(source, [{"group-by-jq": ".os"}, {"group-by-jq": ".name"}])
         self.assertEqual([len(n["values"]) for n in leaves(manifest)], [2, 2, 2])
-        source[0]["payload"] = "x" * 200001
+        source[0]["payload"] = "x" * 500000
         with self.assertRaises(ValueError):
             tree.plan(source, [{"group-by-jq": ".os"}])
         with self.assertRaises(ValueError):
-            tree.plan(jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 200001'}])
+            tree.plan(jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 500000'}])
 
     def test_generic_keys_and_order(self):
         source = jobs(8)
@@ -143,7 +210,7 @@ class HierarchyTests(unittest.TestCase):
             job["name"] = str(job["id"])
         levels = [
             {"group-by-jq": ".os"},
-            {"group-by-jq": ".name", "name-jq": '"🎵" * 20000'},
+            {"group-by-jq": ".name", "name-jq": '"🎵" * 100000'},
         ]
         manifest = tree.plan(source, levels)
         self.assertEqual(len(manifest["roots"]), 2)
@@ -153,7 +220,7 @@ class HierarchyTests(unittest.TestCase):
             self.assertIn("matrix payload budget", node["split_reasons"])
             self.assertTrue(tree.fits(node["values"], 256))
         with self.assertRaisesRegex(ValueError, "Root descriptor"):
-            tree.plan(source, [{"group-by-jq": ".name", "name-jq": '"🎵" * 20000'}])
+            tree.plan(source, [{"group-by-jq": ".name", "name-jq": '"🎵" * 100000'}])
 
     def test_every_depth_and_caller_budget(self):
         for caller in range(1, tree.MAX_GROUP_LEVELS + 1):
@@ -267,7 +334,7 @@ class HierarchyTests(unittest.TestCase):
 
                 check(routes)
         huge = tree.plan(
-            jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 110000'}] * 2
+            jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 250000'}] * 2
         )
         with self.assertRaises(ValueError):
             tree.routing(huge, jobs(1))
@@ -315,7 +382,7 @@ class HierarchyTests(unittest.TestCase):
             base = Path(temporary)
             lib = base / ".github/actions/clippier/lib"
             lib.mkdir(parents=True)
-            for filename in ("shard_tree.py", "shard_capacity.py"):
+            for filename in ("shard_tree.py", "shard_capacity.py", "output_budget.py"):
                 (lib / filename).write_text((ROOT / "lib" / filename).read_text())
             directory = base / "clippier-plan/hierarchy"
             directory.mkdir(parents=True)

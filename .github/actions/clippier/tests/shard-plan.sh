@@ -22,7 +22,7 @@ jq -s -e --slurpfile jobs "$work/clippier-plan/jobs.json" 'add == $jobs[0]' "$wo
 [[ $(sed -n 's/^matrix=//p' "$GITHUB_OUTPUT" | jq 'length') == 2 ]]
 for shard in "$work/clippier-plan/shards/"[0-9]*.json; do
     jq -e 'length <= 256' "$shard"
-    [[ $(wc -c < "$shard") -le 200001 ]]
+    python3 "$root/lib/output_budget.py" <(jq -c '{matrix:tojson}' "$shard")
 done
 # Transport must not disable stacking when the original budget is feasible.
 export INPUT_MAX_PARALLEL=3
@@ -41,10 +41,10 @@ jq -e --slurpfile jobs "$RUNNER_TEMP/clippier-plan/jobs.json" '. == $jobs[0]' "$
 jq '[.[0].cases[] | {case:.,exit_code:0}]' "$work/clippier-plan/shards/0.json" > "$work/incomplete-receipts.json"
 if "$CLIPPIER_BIN" verify-matrix "$work/clippier-plan/jobs.json" "$work/incomplete-receipts.json"; then exit 1; fi
 # Size, not only job count, limits shard output. Preserve multibyte data too.
-jq -n '[range(12) | {payload:("🎵" * 10000),id:.}]' > "$work/large.json"
+jq -n '[range(30) | {payload:("🎵" * 10000),id:.}]' > "$work/large.json"
 shard_job_plan "$work/large.json" "$work/large-shards" > /dev/null
 jq -s -e --slurpfile jobs "$work/large.json" 'add == $jobs[0]' "$work/large-shards/"[0-9]*.json
-jq -n '[{payload:("x" * 200001)}]' > "$work/oversize.json"
+jq -n '[{payload:("x" * 500000)}]' > "$work/oversize.json"
 if shard_job_plan "$work/oversize.json" "$work/oversize-shards"; then exit 1; fi
 printf '[]' > "$work/empty.json"
 [[ $(shard_job_plan "$work/empty.json" "$work/empty-shards") == '[]' ]]
@@ -84,7 +84,8 @@ jq -e --slurpfile shard "$work/shard-steps.json" '
 ' "$work/direct-steps.json"
 # The actual reusable reader must accept a full 256-job shard, not the old 64.
 yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-shard.yml" > "$work/read-shard.sh"
-mkdir -p "$work/reader/plan/shards"
+mkdir -p "$work/reader/plan/shards" "$work/reader/.github/actions/clippier/lib"
+cp "$root/lib/output_budget.py" "$work/reader/.github/actions/clippier/lib/"
 cp "$work/boundary-257/0.json" "$work/reader/plan/shards/0.json"
 (cd "$work/reader"; SHARD_ID=0 GITHUB_OUTPUT="$work/read-output" bash -e -o pipefail "$work/read-shard.sh")
 sed -n 's/^value=//p' "$work/read-output" | jq -e 'length == 256'
@@ -238,7 +239,7 @@ grep -qx 'shard-matrix=\[\]' "$GITHUB_OUTPUT"
 export INPUT_SHARD_GROUP_BY_JQ='"one"' INPUT_SHARD_NAME_JQ='"One"'
 shard_job_plan "$work/large.json" "$work/group-payload" > /dev/null
 jq -e 'length > 1 and all(.[]; .group == "one")' "$work/group-payload/manifest.json"
-export INPUT_SHARD_NAME_JQ='"x" * 200001'
+export INPUT_SHARD_NAME_JQ='"x" * 500000'
 if shard_job_plan "$work/group-jobs.json" "$work/huge-name"; then exit 1; fi
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 printf 'Grouped/named sharding tests passed\n'
@@ -263,6 +264,15 @@ jq -n '[range(257) | {id:.}]' > "$work/too-many-groups.json"
 if shard_job_plan "$work/too-many-groups.json" "$work/too-many-groups"; then exit 1; fi
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 echo 'Workflow OS labels and regrouped receipt reconciliation tests passed'
+# Full-workspace shape: 220 Linux jobs exceed the old UTF-8 cutoff but fit
+# the actual producer budget; the global 265-job plan still needs OS sharding.
+export INPUT_MATRIX_MAX_JOBS=256 INPUT_SHARD_GROUP_BY_JQ='.os'
+export INPUT_SHARD_NAME_JQ='.group'
+jq -n '[range(265) | {id:.,os:(if . < 220 then "ubuntu-latest" elif . < 243 then "macos-latest" else "windows-latest" end),payload:("x" * 1050)}]' > "$work/full-workspace.json"
+shard_job_plan "$work/full-workspace.json" "$work/full-workspace-shards" > /dev/null
+jq -e 'map(.jobs | length) == [23,220,22]' "$work/full-workspace-shards/grouped.json"
+jq -e --slurpfile jobs "$work/full-workspace.json" 'sort_by(.id) == ($jobs[0] | sort_by(.id))' <(jq 'add' "$work/full-workspace-shards/all.json")
+unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 # Nested grouping remains opt-in for other callers, independent of this workflow.
 export INPUT_SHARD_LEVELS INPUT_SHARD_MATRIX=true INPUT_STACK_CASES=false INPUT_MATRIX_MAX_JOBS=256
 INPUT_SHARD_LEVELS='[{"group-by-jq":".os"},{"group-by-jq":".name"}]'
