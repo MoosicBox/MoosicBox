@@ -101,6 +101,7 @@ jobs:
             matrix: ${{ steps.analyze.outputs.matrix }}
             shard-matrix: ${{ steps.analyze.outputs.shard-matrix }}
             direct-matrix: ${{ steps.analyze.outputs.direct-matrix }}
+            hierarchy-matrix: ${{ steps.analyze.outputs.hierarchy-matrix }}
             has-changes: ${{ steps.analyze.outputs.has-changes }}
             has-tauri-changes: ${{ fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false }}
             reasoning: ${{ steps.analyze.outputs.reasoning }}
@@ -139,14 +140,11 @@ jobs:
                   chunked: 15
                   shard-matrix: true
                   matrix-max-jobs: 256
-                  # Keep this workflow flat: one OS grouping, no package hierarchy.
-                  shard-group-by-jq: .os
-                  shard-name-jq: |
-                      if .group == "ubuntu-latest" then "🐧 Linux builds"
-                      elif .group == "windows-latest" then "🪟 Windows builds"
-                      elif .group == "macos-latest" then "🍎 macOS builds"
-                      else (.group | tostring) + " builds"
-                      end
+                  # Group only packages with multiple feature/OS variants.
+                  shard-singletons-direct: true
+                  shard-levels: |
+                      - group-by-jq: '[.name, .path]'
+                        name-jq: '.group[0]'
                   spread: true
                   randomize: true
                   seed: ${{ steps.seed.outputs.value }}
@@ -235,6 +233,7 @@ jobs:
                     "matrix": ${{ toJson(format('{0}', steps.analyze.outputs.matrix)) }},
                     "shard-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.shard-matrix)) }},
                     "direct-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.direct-matrix)) }},
+                    "hierarchy-matrix": ${{ toJson(format('{0}', steps.analyze.outputs.hierarchy-matrix)) }},
                     "has-changes": ${{ toJson(format('{0}', steps.analyze.outputs.has-changes)) }},
                     "has-tauri-changes": ${{ toJson(format('{0}', fromJson(steps.analyze.outputs.additional-checks || '{}').tauri.affected || false)) }},
                     "reasoning": ${{ toJson(format('{0}', steps.analyze.outputs.reasoning)) }},
@@ -435,12 +434,26 @@ jobs:
             shard-id: ${{ matrix.shard.id }}
         secrets: inherit
 
+    build-groups:
+        name: ${{ matrix.group.name }}
+        needs: [determine-affected-packages, build-clippier-machete]
+        if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' && needs.determine-affected-packages.outputs.hierarchy-matrix != '[]' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                group: ${{ fromJson(needs.determine-affected-packages.outputs.hierarchy-matrix) }}
+        uses: ./.github/workflows/clippier-build-leaf.yml
+        with:
+            node-id: ${{ matrix.group.id }}
+            jobs-json: ${{ toJson(matrix.group.jobs) }}
+        secrets: inherit
+
     clippier-report:
         if: always()
         permissions:
             actions: read
             contents: read
-        needs: [build, build-shards, determine-affected-packages]
+        needs: [build, build-shards, build-groups, determine-affected-packages]
         uses: ./.github/workflows/clippier-report.yml
         with:
             verify-case-plan: true

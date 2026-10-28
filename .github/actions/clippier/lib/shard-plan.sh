@@ -111,6 +111,14 @@ shard_job_plan() {
 
 # Validate nested API before case planning or matrix publication.
 validate_shard_levels() {
+    if [[ "${INPUT_SHARD_SINGLETONS_DIRECT:-false}" != true && "${INPUT_SHARD_SINGLETONS_DIRECT:-false}" != false ]]; then
+        echo 'shard-singletons-direct must be true or false' >&2
+        return 1
+    fi
+    if [[ "${INPUT_SHARD_SINGLETONS_DIRECT:-false}" == true && -z "${INPUT_SHARD_LEVELS:-}" ]]; then
+        echo 'shard-singletons-direct requires exactly one shard level' >&2
+        return 1
+    fi
     [[ -n "${INPUT_SHARD_LEVELS:-}" ]] || return 0
     if [[ "${INPUT_SHARD_MATRIX:-false}" != true || -n "${INPUT_SHARD_GROUP_BY_JQ:-}" || -n "${INPUT_SHARD_NAME_JQ:-}" ]]; then
         echo 'shard-levels requires shard-matrix: true and cannot be combined with flat shard grouping/naming' >&2
@@ -124,16 +132,22 @@ route_nested_plan() {
     max_jobs=$(matrix_max_jobs) || return $?
     levels=$(mktemp "${RUNNER_TEMP:-/tmp}/clippier-levels.XXXXXX") || return $?
     printf '%s' "$INPUT_SHARD_LEVELS" | yq -o=json '.' > "$levels" || return $?
-    roots=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" plan "$plan_file" "$levels" "$directory" --max-jobs "$max_jobs" --caller-depth "${INPUT_SHARD_CALLER_DEPTH:-1}") || return $?
+    local singleton_args=()
+    [[ "${INPUT_SHARD_SINGLETONS_DIRECT:-false}" != true ]] || singleton_args+=(--singletons-direct)
+    roots=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" plan "$plan_file" "$levels" "$directory" --max-jobs "$max_jobs" --caller-depth "${INPUT_SHARD_CALLER_DEPTH:-1}" "${singleton_args[@]}") || return $?
     rm -f "$levels"
     cat "$directory/preview.md" >&2
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$directory/preview.md" >> "$GITHUB_STEP_SUMMARY"; fi
     echo "hierarchy-entry=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" entry --caller-depth "${INPUT_SHARD_CALLER_DEPTH:-1}")" >> "$GITHUB_OUTPUT"
     echo "hierarchy-matrix=$roots" >> "$GITHUB_OUTPUT"
-    echo 'direct-matrix=[]' >> "$GITHUB_OUTPUT"
+    echo "direct-matrix=$(cat "$directory/direct.json")" >> "$GITHUB_OUTPUT"
     echo 'shard-matrix=[]' >> "$GITHUB_OUTPUT"
     echo 'matrix=[]' >> "$GITHUB_OUTPUT"
-    jq -c '[.nodes[] | select(.kind == "leaf") | .id]' "$directory/tree.json"
+    if [[ "${INPUT_SHARD_SINGLETONS_DIRECT:-false}" == true ]]; then
+        printf '%s' "$roots" | jq -c 'map(.id)'
+    else
+        jq -c '[.nodes[] | select(.kind == "leaf") | .id]' "$directory/tree.json"
+    fi
 }
 
 # Choose direct top-level execution whenever one bounded matrix can carry the

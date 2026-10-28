@@ -243,13 +243,13 @@ export INPUT_SHARD_NAME_JQ='"x" * 500000'
 if shard_job_plan "$work/group-jobs.json" "$work/huge-name"; then exit 1; fi
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 printf 'Grouped/named sharding tests passed\n'
-# Exercise the exact MoosicBox expressions and verify full-plan receipts after
+# Keep OS grouping available and verify full-plan receipts after
 # regrouping: global order may change, but no case can disappear or change.
-yq -o=json '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with' "$root/../../workflows/build-and-test.yml" | jq -e '.["shard-matrix"] == true and .["matrix-max-jobs"] == 256 and (has("shard-levels") | not)'
-yq -o=json '.jobs' "$root/../../workflows/build-and-test.yml" | jq -e '(has("build-groups") | not) and .["clippier-report"].needs == ["build", "build-shards", "determine-affected-packages"]'
+yq -o=json '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with' "$root/../../workflows/build-and-test.yml" | jq -e '.["shard-matrix"] == true and .["matrix-max-jobs"] == 256 and .["shard-singletons-direct"] == true and has("shard-levels")'
+yq -o=json '.jobs' "$root/../../workflows/build-and-test.yml" | jq -e 'has("build-groups") and .["clippier-report"].needs == ["build", "build-shards", "build-groups", "determine-affected-packages"]'
 export INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS=2
-INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-group-by-jq' "$root/../../workflows/build-and-test.yml")
-INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-name-jq' "$root/../../workflows/build-and-test.yml")
+INPUT_SHARD_GROUP_BY_JQ='.os'
+INPUT_SHARD_NAME_JQ='if .group == "ubuntu-latest" then "🐧 Linux builds" elif .group == "windows-latest" then "🪟 Windows builds" elif .group == "macos-latest" then "🍎 macOS builds" else (.group | tostring) + " builds" end'
 jq -n '[range(9) | {name:"fixture",path:".",features:[],os:(["windows-latest","ubuntu-latest","macos-latest"][. % 3])}]' > "$work/os-cases.json"
 "$CLIPPIER_BIN" plan-matrix "$work/os-cases.json" > "$work/os-jobs.json"
 shard_job_plan "$work/os-jobs.json" "$work/os-shards" > /dev/null
@@ -320,3 +320,35 @@ output_matrix "$(cat "$work/os-cases.json")"
 grep -qx 'hierarchy-entry=clippier-build-group-7.yml' "$GITHUB_OUTPUT"
 unset INPUT_SHARD_LEVELS INPUT_SHARD_CALLER_DEPTH
 echo 'Embedded caller depth API tests passed'
+
+# Actual Build and Test presentation: repeated packages group, singletons direct.
+export INPUT_STACK_CASES=false INPUT_SHARD_MATRIX=true INPUT_SHARD_SINGLETONS_DIRECT=true INPUT_MATRIX_MAX_JOBS=256
+INPUT_SHARD_LEVELS=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml")
+export INPUT_SHARD_LEVELS RUNNER_TEMP="$work/package-presentation" GITHUB_OUTPUT="$work/package-presentation.outputs"
+mkdir -p "$RUNNER_TEMP"
+jq -n '[{name:"repeated",path:".",os:"ubuntu-latest",features:["a"]}, {name:"solo",path:".",os:"ubuntu-latest",features:[]}, {name:"repeated",path:".",os:"windows-latest",features:["b"]}]' > "$work/package-cases.json"
+output_matrix "$(cat "$work/package-cases.json")"
+sed -n 's/^direct-matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 1 and .[0].name == "solo"' > /dev/null
+sed -n 's/^hierarchy-matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 1 and .[0].name == "repeated" and (.[0].jobs | length) == 2' > /dev/null
+grep -qx 'matrix=\[\]' "$GITHUB_OUTPUT"
+grep -qx 'shard-matrix=\[\]' "$GITHUB_OUTPUT"
+jq '[.[].cases[] | {case:.,exit_code:0}]' "$RUNNER_TEMP/clippier-plan/jobs.json" > "$work/package-receipts.json"
+"$CLIPPIER_BIN" verify-matrix "$RUNNER_TEMP/clippier-plan/jobs.json" "$work/package-receipts.json"
+# An entire grouped subtree or the direct singleton cannot silently disappear.
+for package in repeated solo; do
+    jq --arg package "$package" '[.[] | select(.case.package.name != $package)]' "$work/package-receipts.json" > "$work/package-missing.json"
+    if "$CLIPPIER_BIN" verify-matrix "$RUNNER_TEMP/clippier-plan/jobs.json" "$work/package-missing.json"; then exit 1; fi
+done
+# Conflicting/invalid requests fail before publishing any routing outputs.
+for invalid in no-level bad-boolean two-levels; do
+    export GITHUB_OUTPUT="$work/package-$invalid.outputs"
+    : > "$GITHUB_OUTPUT"
+    case "$invalid" in
+        no-level) INPUT_SHARD_LEVELS='' INPUT_SHARD_SINGLETONS_DIRECT=true output_matrix '[]' && exit 1 ;;
+        bad-boolean) INPUT_SHARD_SINGLETONS_DIRECT=maybe output_matrix '[]' && exit 1 ;;
+        two-levels) INPUT_SHARD_LEVELS='[{"group-by-jq":".name"},{"group-by-jq":".os"}]' output_matrix '[]' && exit 1 ;;
+    esac
+    [[ ! -s "$GITHUB_OUTPUT" ]]
+done
+unset INPUT_SHARD_SINGLETONS_DIRECT INPUT_SHARD_LEVELS INPUT_MATRIX_MAX_JOBS
+echo 'Conditional package grouping, direct singletons and complete receipts passed'

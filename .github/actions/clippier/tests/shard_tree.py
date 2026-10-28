@@ -54,6 +54,59 @@ class HierarchyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Root descriptor"):
             tree.plan(source, [{"group-by-jq": ".name"}])
 
+    def test_conditional_singleton_presentation(self):
+        from collections import Counter
+
+        for count in (0, 1, 2, 8, 257):
+            source = jobs(count)
+            for i, job in enumerate(source):
+                job.update(
+                    name=("solo" if i == 0 else "multi"),
+                    path=".",
+                    os=("linux" if i % 2 else "windows"),
+                )
+            manifest = tree.plan(
+                source, [{"group-by-jq": "[.name,.path]", "name-jq": ".group[0]"}]
+            )
+            roots, direct = tree.presentation(manifest, source, True)
+            self.assertEqual(len(direct), min(count, 2) if count <= 2 else 1)
+            indices = [ref["index"] for root in roots for ref in root["jobs"]]
+            self.assertEqual(
+                Counter(map(tree.encode, source)),
+                Counter(map(tree.encode, direct + [source[i] for i in indices])),
+            )
+            self.assertTrue(all(root["name"].startswith("multi") for root in roots))
+            # Parts of a repeated key stay grouped even when that part has one job.
+            if count == 257:
+                tiny = tree.plan(source, [{"group-by-jq": ".name"}], 255)
+                groups, singles = tree.presentation(tiny, source, True)
+                self.assertEqual([len(g["jobs"]) for g in groups], [255, 1])
+                self.assertEqual(len(singles), 1)
+        # Same display name at different paths denotes separate packages.
+        source = [dict(job, path=str(i)) for i, job in enumerate(jobs(2))]
+        manifest = tree.plan(source, [{"group-by-jq": "[.name,.path]"}])
+        self.assertEqual(tree.presentation(manifest, source, True), ([], source))
+        # Mode is explicit: ordinary nested routing keeps singleton groups.
+        groups, direct = tree.presentation(manifest, source)
+        self.assertEqual((len(groups), len(direct)), (2, 0))
+        nested = tree.plan(jobs(2), [{"group-by-jq": ".name"}, {"group-by-jq": ".os"}])
+        with self.assertRaises(ValueError):
+            tree.presentation(nested, jobs(2), True)
+
+    def test_singleton_combined_budget_and_duplicate_jobs(self):
+        source = [
+            dict(j, name=str(i), payload="x" * 5000) for i, j in enumerate(jobs(100))
+        ]
+        manifest = tree.plan(source, [{"group-by-jq": ".name"}])
+        with self.assertRaisesRegex(ValueError, "Combined job outputs"):
+            tree.presentation(manifest, source, True)
+        # Identical repeated jobs still receive distinct global references.
+        source = [jobs(1)[0]] * 3
+        manifest = tree.plan(source, [{"group-by-jq": ".name"}])
+        groups, direct = tree.presentation(manifest, source, True)
+        self.assertEqual(direct, [])
+        self.assertEqual([r["index"] for r in groups[0]["jobs"]], [0, 1, 2])
+
     def test_combined_output_accounting(self):
         import output_budget as budget
 

@@ -61,6 +61,11 @@ inputs:
         description: "YAML array of {group-by-jq, name-jq?, matrix-max-jobs?} levels, up to the GitHub call-depth budget. Requests actual nested workflow groups even for small plans. Requires shard-matrix; cannot mix with flat grouping/naming. Caller must wire the hierarchy dispatcher."
         required: false
 
+    shard-singletons-direct:
+        description: "With exactly one shard-level, run keys having one job directly; keep repeated keys grouped even for fitting plans. Caller must dispatch both direct-matrix and hierarchy-matrix. Oversized singleton/combined outputs fail explicitly."
+        required: false
+        default: "false"
+
     shard-group-by-jq:
         description: "Optional jq expression evaluated per job; equal JSON keys stay together when sharding is needed. Must emit exactly one key."
         required: false
@@ -918,6 +923,7 @@ runs:
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
               INPUT_SHARD_CALLER_DEPTH: ${{ inputs.shard-caller-depth }}
+              INPUT_SHARD_SINGLETONS_DIRECT: ${{ inputs.shard-singletons-direct }}
               INPUT_SHARD_LEVELS: ${{ inputs.shard-levels }}
               INPUT_SHARD_GROUP_BY_JQ: ${{ inputs.shard-group-by-jq }}
               INPUT_SHARD_NAME_JQ: ${{ inputs.shard-name-jq }}

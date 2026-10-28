@@ -340,6 +340,48 @@ def routing(tree, jobs):
     return roots
 
 
+def presentation(tree, jobs, singletons_direct=False):
+    """Keep repeated root keys grouped; optionally route true singletons directly.
+
+    A split part containing one job is not a singleton: count the complete key.
+    The full tree stays intact for validation and full-plan receipt reconciliation.
+    """
+    roots = routing(tree, jobs)
+    direct = []
+    if singletons_direct:
+        if tree["depth"] != 1:
+            raise ValueError("shard-singletons-direct requires exactly one shard level")
+        counts = {}
+        for root in roots:
+            node = tree["nodes"][root["id"]]
+            key = encode(node["path"])
+            counts[key] = counts.get(key, 0) + len(node["values"])
+        grouped = []
+        indices = []
+        for root in roots:
+            node = tree["nodes"][root["id"]]
+            if counts[encode(node["path"])] == 1:
+                indices.append(root["jobs"][0]["index"])
+            else:
+                grouped.append(root)
+        roots = grouped
+        direct = [jobs[index] for index in sorted(indices)]
+        if len(direct) > tree["matrix_max_jobs"]:
+            raise ValueError(
+                "Direct singletons exceed matrix-max-jobs; disable shard-singletons-direct or reduce the plan"
+            )
+    validate_outputs(
+        {
+            "hierarchy-matrix": encode(roots),
+            "direct-matrix": encode(direct),
+            "hierarchy-entry": dispatcher_name(8),
+            "shard-matrix": "[]",
+            "matrix": "[]",
+        }
+    )
+    return roots, direct
+
+
 def resolve_job(directory, node_id, reference):
     """Validate transport references on the actual build runner, before setup."""
     if not re.fullmatch(r"node-[0-9a-f]{24}", node_id):
@@ -407,6 +449,7 @@ def main():
     create.add_argument("destination", type=Path)
     create.add_argument("--max-jobs", type=int, default=256)
     create.add_argument("--caller-depth", type=int, default=1)
+    create.add_argument("--singletons-direct", action="store_true")
     entry = commands.add_parser("entry")
     entry.add_argument("--caller-depth", type=int, default=1)
     resolve = commands.add_parser("resolve")
@@ -437,7 +480,9 @@ def main():
             args.max_jobs,
             args.caller_depth,
         )
-        roots = routing(tree, json.loads(args.jobs.read_text()))
+        roots, direct = presentation(
+            tree, json.loads(args.jobs.read_text()), args.singletons_direct
+        )
         if args.destination.exists():
             raise ValueError(
                 "Hierarchy destination already exists; use a fresh plan directory"
@@ -449,7 +494,11 @@ def main():
             staging.mkdir()
             (staging / "tree.json").write_text(encode(tree))
             (staging / "routing.json").write_text(encode(roots))
-            (staging / "preview.md").write_text(preview(tree))
+            (staging / "direct.json").write_text(encode(direct))
+            (staging / "preview.md").write_text(
+                preview(tree)
+                + f"\nDispatch: {len(roots)} groups, {len(direct)} direct singleton jobs.\n"
+            )
             os.rename(staging, args.destination)
         print(encode(roots))
     else:

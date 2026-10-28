@@ -88,6 +88,40 @@ selected limit, shard sizes, and whether job count or payload size caused the
 split. Planned runs also save `transport-summary.json` alongside allocation
 statistics. For example: `265 jobs → sharded [256,9]; ... reason: matrix job-count limit`.
 
+### Package groups with direct singleton builds
+
+Build and Test uses one presentation level keyed by package identity, not OS.
+Packages with multiple feature/OS jobs get a group; packages with exactly one job
+run in the top-level build matrix. No jobs are stacked or merged.
+
+```yaml
+shard-matrix: true
+shard-singletons-direct: true
+shard-levels: |
+  - group-by-jq: '[.name, .path]'
+    name-jq: '.group[0]'
+```
+
+`shard-singletons-direct` is opt-in and requires exactly one `shard-levels`
+entry. It works with arbitrary grouping keys. Multiplicity is counted across the
+entire key: a one-job overflow part stays grouped if its key has other jobs.
+Groups are honored even when the complete plan fits directly. Existing flat
+sharding and deeper hierarchy defaults are unchanged.
+
+Dispatch `direct-matrix` with the normal top-level executor. Dispatch each
+`hierarchy-matrix` entry directly to `clippier-build-leaf.yml`, passing `node-id`
+and `jobs-json: ${{ toJson(matrix.group.jobs) }}`. No intermediate workflow wrapper
+or preparation runner is needed. Both matrices may be nonempty; skip empty
+routes. Reconciliation must depend on **both** routes with `always()` and verify
+the complete immutable plan. The tree retains singleton nodes for validation;
+`routing.json` contains dispatched groups and `direct.json` contains unchanged
+direct jobs. Receipt namespaces distinguish the routes. Child build labels keep
+OS and variant indexes.
+
+Direct singleton count, group descriptors and combined UTF-16 outputs must fit
+the configured limits; overflow fails before route publication, without silently
+regrouping singletons. GitHub still controls native sidebar rendering/collapsing.
+
 ### Actual nested workflow groups
 
 Use `shard-levels` to request explicit reusable-workflow grouping levels up to
