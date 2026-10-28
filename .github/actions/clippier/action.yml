@@ -52,6 +52,10 @@ inputs:
         required: false
         default: "false"
 
+    shard-levels:
+        description: "YAML array of one or two {group-by-jq, name-jq?, matrix-max-jobs?} levels. Requests actual nested workflow groups even for small plans. Requires shard-matrix; cannot mix with flat grouping/naming. Caller must wire the hierarchy dispatcher."
+        required: false
+
     shard-group-by-jq:
         description: "Optional jq expression evaluated per job; equal JSON keys stay together when sharding is needed. Must emit exactly one key."
         required: false
@@ -541,6 +545,9 @@ inputs:
         default: "true"
 
 outputs:
+    hierarchy-matrix:
+        description: "Root descriptors for explicit nested mode; empty otherwise. Dispatch using clippier-build-group.yml."
+        value: ${{ steps.run-action.outputs.hierarchy-matrix }}
     shard-matrix:
         description: "Shard descriptors {id, name, group, group_index, group_count}; empty for direct/empty plans. Numeric matrix output remains available for compatibility."
         value: ${{ steps.run-action.outputs.shard-matrix }}
@@ -902,6 +909,7 @@ runs:
               INPUT_SKIP_IF: ${{ inputs.skip-if }}
               INPUT_INCLUDE_IF: ${{ inputs.include-if }}
               INPUT_STACK_CASES: ${{ inputs.stack-cases }}
+              INPUT_SHARD_LEVELS: ${{ inputs.shard-levels }}
               INPUT_SHARD_GROUP_BY_JQ: ${{ inputs.shard-group-by-jq }}
               INPUT_SHARD_NAME_JQ: ${{ inputs.shard-name-jq }}
               INPUT_MATRIX_MAX_JOBS: ${{ inputs.matrix-max-jobs }}

@@ -1,0 +1,51 @@
+name: Nested build group
+
+on:
+    workflow_call:
+        inputs:
+            node-id:
+                type: string
+                required: true
+            node-kind:
+                type: string
+                required: true
+
+jobs:
+    prepare:
+        if: inputs.node-kind == 'group'
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.matrix.outputs.value }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/download-artifact@v8
+              with:
+                  name: clippier-case-plan
+                  path: plan
+            - name: Read bounded child matrix
+              id: matrix
+              shell: bash
+              env:
+                  NODE_ID: ${{ inputs.node-id }}
+              run: |
+                  matrix=$(python3 .github/actions/clippier/lib/shard_tree.py read plan/hierarchy "$NODE_ID" group)
+                  echo "value=$matrix" >> "$GITHUB_OUTPUT"
+
+    children:
+        needs: prepare
+        name: ${{ matrix.child.name }}
+        strategy:
+            fail-fast: false
+            matrix:
+                child: ${{ fromJson(needs.prepare.outputs.matrix) }}
+        uses: ./.github/workflows/clippier-build-shard.yml
+        with:
+            node-id: ${{ matrix.child.id }}
+        secrets: inherit
+
+    leaf:
+        if: inputs.node-kind == 'leaf'
+        uses: ./.github/workflows/clippier-build-shard.yml
+        with:
+            node-id: ${{ inputs.node-id }}
+        secrets: inherit

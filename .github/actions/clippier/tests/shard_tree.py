@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Deterministic hierarchy invariants and real artifact reader regressions."""
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import random
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location("tree", ROOT / "lib/shard_tree.py")
+tree = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(tree)
+
+
+def jobs(count):
+    return [
+        dict(id=i, os="linux", name="package", features=[str(i)]) for i in range(count)
+    ]
+
+
+def leaves(manifest):
+    return [n for n in manifest["nodes"].values() if n["kind"] == "leaf"]
+
+
+class HierarchyTests(unittest.TestCase):
+    def test_leaf_boundaries(self):
+        for limit in (1, 2, 256):
+            for count in sorted({0, 1, max(0, limit - 1), limit, limit + 1}):
+                with self.subTest(limit=limit, count=count):
+                    levels = [
+                        {"group-by-jq": ".os"},
+                        {"group-by-jq": ".name", "matrix-max-jobs": limit},
+                    ]
+                    manifest = tree.plan(jobs(count), levels)
+                    tree.validate(manifest, jobs(count))
+                    self.assertTrue(
+                        all(len(n["values"]) <= limit for n in leaves(manifest))
+                    )
+                    self.assertEqual(len(manifest["nodes"]) == 0, count == 0)
+
+    def test_parent_overflow_and_root_rejection(self):
+        source = jobs(257)
+        for job in source:
+            job["name"] = str(job["id"])
+        manifest = tree.plan(source, [{"group-by-jq": ".os"}, {"group-by-jq": ".name"}])
+        self.assertEqual(len(manifest["roots"]), 2)
+        self.assertEqual(
+            [len(manifest["nodes"][r["id"]]["values"]) for r in manifest["roots"]],
+            [256, 1],
+        )
+        with self.assertRaisesRegex(ValueError, "Root descriptor"):
+            tree.plan(source, [{"group-by-jq": ".name"}])
+
+    def test_payload_and_unicode(self):
+        value = {"emoji": '🎵\\"'}
+        size = len(tree.encode([value]).encode())
+        self.assertEqual(tree.partition([value], 1, size), [[value]])
+        with self.assertRaises(ValueError):
+            tree.partition([value], 1, size - 1)
+        source = jobs(6)
+        for job in source:
+            job["payload"] = "🎵" * 20000
+        manifest = tree.plan(source, [{"group-by-jq": ".os"}, {"group-by-jq": ".name"}])
+        self.assertEqual([len(n["values"]) for n in leaves(manifest)], [2, 2, 2])
+        source[0]["payload"] = "x" * 200001
+        with self.assertRaises(ValueError):
+            tree.plan(source, [{"group-by-jq": ".os"}])
+        with self.assertRaises(ValueError):
+            tree.plan(jobs(1), [{"group-by-jq": ".os", "name-jq": '"x" * 200001'}])
+
+    def test_generic_keys_and_order(self):
+        source = jobs(8)
+        keys = [None, False, 1, "1", [1, "x"], {"a": 1, "b": 2}, {"b": 2, "a": 1}, 1.0]
+        for job, key in zip(source, keys):
+            job["key"] = key
+        manifest = tree.plan(
+            source, [{"group-by-jq": ".key", "name-jq": '"same label"'}]
+        )
+        self.assertEqual(len(manifest["roots"]), 6)
+        tree.validate(manifest, source)
+        for leaf in leaves(manifest):
+            ids = [j["id"] for j in leaf["values"]]
+            self.assertEqual(ids, sorted(ids))
+        self.assertEqual(
+            manifest,
+            tree.plan(source, [{"group-by-jq": ".key", "name-jq": '"same label"'}]),
+        )
+
+    def test_randomized_losslessness(self):
+        randomizer = random.Random(1841)
+        for _ in range(12):
+            source = jobs(randomizer.randrange(1, 35))
+            for job in source:
+                job.update(
+                    os=randomizer.choice(["linux", "windows"]),
+                    name=str(randomizer.randrange(3)),
+                )
+            source.append(copy.deepcopy(source[0]))
+            levels = [
+                {"group-by-jq": ".os"},
+                {
+                    "group-by-jq": "[.name,.os]",
+                    "matrix-max-jobs": randomizer.randrange(1, 6),
+                },
+            ]
+            manifest = tree.plan(source, levels)
+            tree.validate(manifest, source)
+            self.assertEqual(manifest, tree.plan(source, levels))
+            renamed = tree.plan(
+                source, [dict(level, **{"name-jq": '"renamed"'}) for level in levels]
+            )
+            self.assertEqual(set(manifest["nodes"]), set(renamed["nodes"]))
+
+    def test_single_level_and_root_boundaries(self):
+        for limit in (1, 2, 256):
+            for count in sorted({0, 1, max(0, limit - 1), limit, limit + 1}):
+                source = jobs(count)
+                for job in source:
+                    job["key"] = job["id"]
+                if count > limit:
+                    with self.assertRaisesRegex(ValueError, "Root descriptor"):
+                        tree.plan(source, [{"group-by-jq": ".key"}], limit)
+                else:
+                    manifest = tree.plan(source, [{"group-by-jq": ".key"}], limit)
+                    self.assertTrue(
+                        all(n["kind"] == "leaf" for n in manifest["nodes"].values())
+                    )
+                    tree.validate(manifest, source)
+
+    def test_descriptor_payload_splitting(self):
+        source = jobs(4)
+        for job in source:
+            job["name"] = str(job["id"])
+        levels = [
+            {"group-by-jq": ".os"},
+            {"group-by-jq": ".name", "name-jq": '"🎵" * 20000'},
+        ]
+        manifest = tree.plan(source, levels)
+        self.assertEqual(len(manifest["roots"]), 2)
+        for descriptor in manifest["roots"]:
+            node = manifest["nodes"][descriptor["id"]]
+            self.assertEqual(len(node["values"]), 2)
+            self.assertIn("matrix payload budget", node["split_reasons"])
+            self.assertTrue(tree.fits(node["values"], 256))
+        with self.assertRaisesRegex(ValueError, "Root descriptor"):
+            tree.plan(source, [{"group-by-jq": ".name", "name-jq": '"🎵" * 20000'}])
+
+    def test_configuration_and_expression_errors(self):
+        for levels in (
+            [],
+            {},
+            [{"group-by-jq": "."}] * 3,
+            [{"group-by-jq": ".", "typo": 1}],
+            [{"group-by-jq": ""}],
+            [{"group-by-jq": ".", "matrix-max-jobs": True}],
+        ):
+            with self.assertRaises(ValueError):
+                tree.plan([], levels)
+        for expression in ("empty", ".os,.name", "(", 'error("private value")'):
+            with self.assertRaises(ValueError) as error:
+                tree.plan(jobs(1), [{"group-by-jq": expression}])
+            self.assertNotIn("private value", str(error.exception))
+        for expression in ('""', '"a\\nb"', "1", "empty", '"a","b"'):
+            with self.assertRaises(ValueError):
+                tree.plan(jobs(1), [{"group-by-jq": ".os", "name-jq": expression}])
+
+    def test_corrupt_tree(self):
+        original = tree.plan(
+            jobs(3), [{"group-by-jq": ".os"}, {"group-by-jq": ".name"}]
+        )
+        for mutation in (
+            "missing",
+            "unreachable",
+            "cycle",
+            "type",
+            "version",
+            "path",
+            "changed",
+            "duplicate",
+        ):
+            manifest = copy.deepcopy(original)
+            root = manifest["nodes"][manifest["roots"][0]["id"]]
+            leaf = leaves(manifest)[0]
+            if mutation == "missing":
+                del manifest["nodes"][leaf["id"]]
+            elif mutation == "unreachable":
+                manifest["nodes"]["node-" + "a" * 24] = copy.deepcopy(leaf)
+            elif mutation == "cycle":
+                root["values"] = manifest["roots"]
+            elif mutation == "type":
+                leaf["kind"] = "group"
+            elif mutation == "version":
+                manifest["version"] = 99
+            elif mutation == "path":
+                leaf["path"][0] = "wrong parent"
+            elif mutation == "changed":
+                leaf["values"][0]["features"] = []
+            else:
+                root["values"].append(copy.deepcopy(root["values"][0]))
+            with self.assertRaises((ValueError, KeyError)):
+                tree.validate(manifest, jobs(3))
+
+    def test_real_cli_atomicity_reader_and_preview(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source, config = base / "jobs.json", base / "levels.json"
+            source.write_text(json.dumps(jobs(3)))
+            config.write_text('[{"group-by-jq":".os"},{"group-by-jq":".name"}]')
+            cli = ["python3", str(ROOT / "lib/shard_tree.py")]
+            result = subprocess.run(
+                cli + ["plan", str(source), str(config), str(base / "hierarchy")],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads((base / "hierarchy/tree.json").read_text())
+            for node in manifest["nodes"].values():
+                read = subprocess.run(
+                    cli + ["read", str(base / "hierarchy"), node["id"], node["kind"]],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(read.returncode, 0, read.stderr)
+                self.assertEqual(json.loads(read.stdout), node["values"])
+            for node_id, kind in (
+                ("../jobs", "leaf"),
+                ("node-" + "f" * 24, "leaf"),
+                (manifest["roots"][0]["id"], "leaf"),
+            ):
+                read = subprocess.run(
+                    cli + ["read", str(base / "hierarchy"), node_id, kind],
+                    capture_output=True,
+                )
+                self.assertNotEqual(read.returncode, 0)
+                self.assertEqual(read.stdout, b"")
+            self.assertIn(
+                "Preparation jobs: 2", (base / "hierarchy/preview.md").read_text()
+            )
+            config.write_text('[{"group-by-jq":"empty"}]')
+            failed = subprocess.run(
+                cli + ["plan", str(source), str(config), str(base / "failed")],
+                capture_output=True,
+            )
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertFalse((base / "failed").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -694,6 +694,7 @@ execute_matrix_entry() {
 # Helper function to output matrix with optional jq-filter applied at the end of the pipeline
 output_matrix() {
     local matrix_json="$1"
+    validate_shard_levels || return $?
     matrix_max_jobs >/dev/null || return $?
 
     if [[ -n "$INPUT_JQ_FILTER" ]]; then

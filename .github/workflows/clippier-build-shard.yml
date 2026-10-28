@@ -5,7 +5,12 @@ on:
         inputs:
             shard-id:
                 type: number
-                required: true
+                required: false
+                default: -1
+            node-id:
+                type: string
+                required: false
+                default: ""
 
 jobs:
     prepare:
@@ -13,6 +18,7 @@ jobs:
         outputs:
             matrix: ${{ steps.matrix.outputs.value }}
         steps:
+            - uses: actions/checkout@v6
             - uses: actions/download-artifact@v8
               with:
                   name: clippier-case-plan
@@ -22,8 +28,14 @@ jobs:
               shell: bash
               env:
                   SHARD_ID: ${{ inputs.shard-id }}
+                  NODE_ID: ${{ inputs.node-id }}
               run: |
-                  matrix=$(jq -ce 'if type == "array" and length > 0 and length <= 256 then . else error("Invalid matrix shard") end' "plan/shards/$SHARD_ID.json")
+                  if [[ -n "$NODE_ID" ]]; then
+                      matrix=$(python3 .github/actions/clippier/lib/shard_tree.py read plan/hierarchy "$NODE_ID" leaf)
+                  else
+                      [[ "$SHARD_ID" =~ ^[0-9]+$ ]] || { echo 'Invalid shard ID' >&2; exit 1; }
+                      matrix=$(jq -ce 'if type == "array" and length > 0 and length <= 256 then . else error("Invalid matrix shard") end' "plan/shards/$SHARD_ID.json")
+                  fi
                   echo "value=$matrix" >> "$GITHUB_OUTPUT"
 
     build:
@@ -95,7 +107,7 @@ jobs:
               if: always() && steps.test-suite.outputs.case-receipts-path != ''
               uses: actions/upload-artifact@v6
               with:
-                  name: clippier-case-receipts-${{ inputs.shard-id }}-${{ strategy.job-index }}
+                  name: clippier-case-receipts-${{ inputs.node-id != '' && inputs.node-id || inputs.shard-id }}-${{ strategy.job-index }}
                   path: ${{ steps.test-suite.outputs.case-receipts-path }}
                   if-no-files-found: error
 

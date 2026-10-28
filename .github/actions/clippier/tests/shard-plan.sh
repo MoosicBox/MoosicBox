@@ -245,8 +245,8 @@ printf 'Grouped/named sharding tests passed\n'
 # Exercise the exact MoosicBox expressions and verify full-plan receipts after
 # regrouping: global order may change, but no case can disappear or change.
 export INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS=2
-INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-group-by-jq' "$root/../../workflows/build-and-test.yml")
-INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-name-jq' "$root/../../workflows/build-and-test.yml")
+INPUT_SHARD_GROUP_BY_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml" | yq -r '.[0].group-by-jq')
+INPUT_SHARD_NAME_JQ=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml" | yq -r '.[0].name-jq')
 jq -n '[range(9) | {name:"fixture",path:".",features:[],os:(["windows-latest","ubuntu-latest","macos-latest"][. % 3])}]' > "$work/os-cases.json"
 "$CLIPPIER_BIN" plan-matrix "$work/os-cases.json" > "$work/os-jobs.json"
 shard_job_plan "$work/os-jobs.json" "$work/os-shards" > /dev/null
@@ -261,3 +261,44 @@ jq -n '[range(257) | {id:.}]' > "$work/too-many-groups.json"
 if shard_job_plan "$work/too-many-groups.json" "$work/too-many-groups"; then exit 1; fi
 unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_NAME_JQ INPUT_MATRIX_MAX_JOBS
 echo 'Workflow OS labels and regrouped receipt reconciliation tests passed'
+# Explicit nested mode uses real YAML API, even when all jobs fit directly.
+export INPUT_SHARD_LEVELS INPUT_SHARD_MATRIX=true INPUT_STACK_CASES=false INPUT_MATRIX_MAX_JOBS=256
+INPUT_SHARD_LEVELS=$(yq -r '.jobs.determine-affected-packages.steps[] | select(.id == "analyze") | .with.shard-levels' "$root/../../workflows/build-and-test.yml")
+export RUNNER_TEMP="$work/nested" GITHUB_OUTPUT="$work/nested.outputs"
+mkdir -p "$RUNNER_TEMP"
+output_matrix "$(cat "$work/os-cases.json")"
+grep -qx 'matrix=\[\]' "$GITHUB_OUTPUT"
+grep -qx 'direct-matrix=\[\]' "$GITHUB_OUTPUT"
+sed -n 's/^hierarchy-matrix=//p' "$GITHUB_OUTPUT" | jq -e 'length == 3 and all(.[]; .kind == "group")'
+# Invoke the exact dispatcher scripts, not a second implementation of readers.
+yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-group.yml" > "$work/read-group.sh"
+yq -r '.jobs.prepare.steps[] | select(.id == "matrix") | .run' "$root/../../workflows/clippier-build-shard.yml" > "$work/read-leaf.sh"
+mkdir -p "$work/nested-reader/.github/actions/clippier/lib"
+cp "$root/lib/shard_tree.py" "$work/nested-reader/.github/actions/clippier/lib/"
+cp -r "$RUNNER_TEMP/clippier-plan" "$work/nested-reader/plan"
+while read -r node; do
+    (cd "$work/nested-reader"; NODE_ID="$node" GITHUB_OUTPUT="$work/group-read.outputs" bash -e -o pipefail "$work/read-group.sh")
+done < <(jq -r '.roots[].id' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json")
+while read -r node; do
+    (cd "$work/nested-reader"; NODE_ID="$node" SHARD_ID=-1 GITHUB_OUTPUT="$work/leaf-read.outputs" bash -e -o pipefail "$work/read-leaf.sh")
+done < <(jq -r '.nodes[] | select(.kind == "leaf") | .id' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json")
+jq '[.nodes[] | select(.kind == "leaf") | .values[] | .cases[] | {case:.,exit_code:0}]' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json" > "$work/nested-receipts.json"
+"$CLIPPIER_BIN" verify-matrix "$RUNNER_TEMP/clippier-plan/jobs.json" "$work/nested-receipts.json"
+jq '[.[] | select(.case.package.os != "windows-latest")]' "$work/nested-receipts.json" > "$work/missing-os-receipts.json"
+if "$CLIPPIER_BIN" verify-matrix "$RUNNER_TEMP/clippier-plan/jobs.json" "$work/missing-os-receipts.json"; then exit 1; fi
+# Empty nested plans and nested stacking retain the same API contract.
+export RUNNER_TEMP="$work/nested-empty" GITHUB_OUTPUT="$work/nested-empty.outputs"
+mkdir -p "$RUNNER_TEMP"
+output_matrix '[]'
+grep -qx 'hierarchy-matrix=\[\]' "$GITHUB_OUTPUT"
+export RUNNER_TEMP="$work/nested-stacks" GITHUB_OUTPUT="$work/nested-stacks.outputs" INPUT_STACK_CASES=true INPUT_MAX_PARALLEL=3
+mkdir -p "$RUNNER_TEMP"
+output_matrix "$(cat "$work/compatible.json")"
+jq -e '[.nodes[] | select(.kind == "leaf") | .values[] | .cases | length] == [100,100,100]' "$RUNNER_TEMP/clippier-plan/hierarchy/tree.json"
+# Conflicts fail before writing outputs, never silently flatten.
+export INPUT_SHARD_GROUP_BY_JQ='.os' GITHUB_OUTPUT="$work/conflict.outputs"
+: > "$GITHUB_OUTPUT"
+if output_matrix '[]'; then exit 1; fi
+[[ ! -s "$GITHUB_OUTPUT" ]]
+unset INPUT_SHARD_GROUP_BY_JQ INPUT_SHARD_LEVELS INPUT_MATRIX_MAX_JOBS
+echo 'Nested API, static dispatcher readers, stacking and subtree receipt tests passed'

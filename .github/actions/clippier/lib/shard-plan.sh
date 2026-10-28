@@ -102,11 +102,42 @@ shard_job_plan() {
     jq -c '[range(length)]' "$shard_dir/all.json"
 }
 
+# Validate nested API before case planning or matrix publication.
+validate_shard_levels() {
+    [[ -n "${INPUT_SHARD_LEVELS:-}" ]] || return 0
+    if [[ "${INPUT_SHARD_MATRIX:-false}" != true || -n "${INPUT_SHARD_GROUP_BY_JQ:-}" || -n "${INPUT_SHARD_NAME_JQ:-}" ]]; then
+        echo 'shard-levels requires shard-matrix: true and cannot be combined with flat shard grouping/naming' >&2
+        return 1
+    fi
+}
+
+route_nested_plan() {
+    local plan_file="$1" directory="$2" levels roots max_jobs
+    validate_shard_levels || return $?
+    max_jobs=$(matrix_max_jobs) || return $?
+    levels=$(mktemp "${RUNNER_TEMP:-/tmp}/clippier-levels.XXXXXX") || return $?
+    printf '%s' "$INPUT_SHARD_LEVELS" | yq -o=json '.' > "$levels" || return $?
+    roots=$(python3 "$SCRIPT_DIR/lib/shard_tree.py" plan "$plan_file" "$levels" "$directory" --max-jobs "$max_jobs") || return $?
+    rm -f "$levels"
+    cat "$directory/preview.md" >&2
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then cat "$directory/preview.md" >> "$GITHUB_STEP_SUMMARY"; fi
+    echo "hierarchy-matrix=$roots" >> "$GITHUB_OUTPUT"
+    echo 'direct-matrix=[]' >> "$GITHUB_OUTPUT"
+    echo 'shard-matrix=[]' >> "$GITHUB_OUTPUT"
+    echo 'matrix=[]' >> "$GITHUB_OUTPUT"
+    jq -c '[.nodes[] | select(.kind == "leaf") | .id]' "$directory/tree.json"
+}
+
 # Choose direct top-level execution whenever one bounded matrix can carry the
 # complete plan. The two outputs are mutually exclusive, including empty plans.
 route_job_plan() {
     local plan_file="$1" shard_dir="$2"
     matrix_max_jobs >/dev/null || return $?
+    if [[ -n "${INPUT_SHARD_LEVELS:-}" ]]; then
+        route_nested_plan "$plan_file" "$(dirname "$shard_dir")/hierarchy"
+        return $?
+    fi
+    echo 'hierarchy-matrix=[]' >> "$GITHUB_OUTPUT"
     if matrix_fits "$plan_file"; then
         echo "direct-matrix=$(jq -c . "$plan_file")" >> "$GITHUB_OUTPUT"
         echo 'shard-matrix=[]' >> "$GITHUB_OUTPUT"

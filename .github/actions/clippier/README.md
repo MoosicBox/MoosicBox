@@ -80,6 +80,108 @@ selected limit, shard sizes, and whether job count or payload size caused the
 split. Planned runs also save `transport-summary.json` alongside allocation
 statistics. For example: `265 jobs → sharded [256,9]; ... reason: matrix job-count limit`.
 
+### Actual nested workflow groups
+
+Use `shard-levels` to request one or two explicit reusable-workflow grouping
+levels. Unlike flat sharding, nested mode preserves the requested hierarchy even
+when the complete job plan would fit directly. Empty plans make no calls.
+
+```yaml
+shard-matrix: true
+matrix-max-jobs: 256
+shard-levels: |
+  - group-by-jq: '.os'
+    name-jq: |
+      if .group == "ubuntu-latest" then "🐧 Linux builds"
+      elif .group == "windows-latest" then "🪟 Windows builds"
+      elif .group == "macos-latest" then "🍎 macOS builds"
+      else (.group | tostring) + " builds"
+      end
+  - group-by-jq: '.name'
+    name-jq: '.group'
+    matrix-max-jobs: 256
+```
+
+Each grouping expression evaluates against an unchanged execution job and must
+return exactly one JSON key. Keys are compared/ordered using jq; composite keys
+such as `[.toolchain, .metadata.architecture]`, objects, null, booleans and numbers
+are supported. Missing fields yield null: use `// "unknown"` or `error("missing")`
+for an explicit policy. Original order is preserved within each group. To group
+package families, use an expression such as
+`if .name | startswith("hyperchad") then "HyperChad" else .name end`.
+
+`name-jq` receives `{group, path, level, job_count, part_index, part_count}`.
+`path` contains ancestor keys and the current key; levels and part indices are
+one-based. `job_count` counts all jobs in the logical group before partitioning.
+The default name is the key rendered as a string/JSON. Names must be nonempty
+single-line strings. Overflow automatically adds ` · 1/2` suffixes. Names never
+become filesystem paths or receipt identities; duplicate names are allowed.
+Unknown options, invalid expressions, multiple/empty jq results and invalid
+limits fail planning. Expressions have a 30-second evaluation timeout and errors
+do not print job/environment data. Do not put secrets in grouping keys or names:
+those values are intentionally present in plan artifacts and previews.
+
+Per-level `matrix-max-jobs` overrides the global value for that level's outgoing
+matrix: child calls for intermediate groups, execution jobs for leaf groups.
+Count/payload overflow partitions a logical group into clearly named parts,
+never mixes grouping keys, and never rewrites tests. Every matrix is checked
+against the conservative 200,000 UTF-8 byte payload budget. A single oversized
+job/descriptor fails. The root descriptor matrix must itself fit the global
+limit; if there are too many root parts, planning fails with a clear message.
+Root pagination would require another statically wired dispatcher level; this
+implementation does not silently invent that extra depth or flatten groups.
+
+Nested mode requires `shard-matrix: true` and cannot be combined with flat
+`shard-group-by-jq`/`shard-name-jq`. Stacking remains independently optional.
+Without `shard-levels`, all existing direct/flat behavior is preserved.
+
+Forward the action's `hierarchy-matrix` through the analysis job's outputs and
+wire actual group calls (Build and Test already does this):
+
+```yaml
+name: ${{ matrix.group.name }}
+strategy:
+  fail-fast: false
+  matrix:
+    group: ${{ fromJson(needs.analysis.outputs.hierarchy-matrix) }}
+uses: ./.github/workflows/clippier-build-group.yml
+with:
+  node-id: ${{ matrix.group.id }}
+  node-kind: ${{ matrix.group.kind }}
+secrets: inherit
+```
+
+Skip that job when `hierarchy-matrix` is `[]`. Direct and flat-shard outputs are
+`[]` in nested mode, preventing double dispatch. Two levels call the group
+workflow, then the existing shard workflow, then the unchanged build lifecycle;
+one level uses the leaf branch. These are real workflow calls, not just labels,
+but GitHub controls the exact UI presentation. All sibling matrices use
+`fail-fast: false`; the final full-plan receipt reconciliation runs even when a
+preparation job, build, or entire subtree fails. Node IDs namespace artifacts.
+
+The versioned `hierarchy/tree.json` artifact is built and validated before
+publication, including exact job-multiset equality, references, node types,
+reachability, depth and all matrix bounds. Readers validate it again against
+`jobs.json`, reject invalid IDs/path traversal and select only the expected node
+type. Grouping never changes the complete job plan used for receipt verification.
+
+#### Local preview
+
+The same planner used by CI can run locally with Python 3 and jq (no provider
+access). Convert configuration with the action's existing yq dependency:
+
+```bash
+yq -o=json '.' levels.yml > levels.json
+python3 .github/actions/clippier/lib/shard_tree.py plan jobs.json levels.json preview-plan --max-jobs 256
+cat preview-plan/preview.md
+```
+
+Use a fresh destination. Preview output shows the full grouping tree, part sizes,
+effective limits, split reasons and preparation-job overhead (one per tree node).
+It does not set execution concurrency. Actual UI presentation, inherited
+permissions/secrets and cancellation propagation still require a real GitHub
+smoke run; local tests/actionlint are not remote execution proof.
+
 ### Generic shard grouping and names
 
 ```yaml
@@ -175,6 +277,7 @@ bash .github/actions/clippier/tests/validation.sh
 bash .github/actions/clippier/tests/report.sh
 bash .github/actions/clippier/tests/rust-validation.sh
 bash .github/actions/clippier/tests/shard-plan.sh
+PYTHONDONTWRITEBYTECODE=1 python3 .github/actions/clippier/tests/shard_tree.py
 ```
 
 ## Stateless Cargo release commands
