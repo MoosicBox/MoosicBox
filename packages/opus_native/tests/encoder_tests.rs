@@ -1,4 +1,5 @@
 //! Native encoder contracts and independent public-libopus interoperability.
+#![cfg(feature = "celt")]
 #![allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,

@@ -60,6 +60,10 @@ int main(void){
 
 fn oracle() -> PathBuf {
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("libopus/opus");
+    assert!(
+        source.join(".git").exists() && source.join("celt/entenc.c").is_file(),
+        "pinned libopus submodule is not initialized; run git submodule update --init packages/opus_native/libopus/opus"
+    );
     let revision = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(&source)

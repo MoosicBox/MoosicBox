@@ -366,7 +366,13 @@ Always upload `case-receipts-path`, including after test failure, and reconcile
 those receipts against the saved plan with `clippier verify-matrix`. Missing or
 failed cases must fail the workflow; summaries alone are not completion proof.
 `case-coverage: true` supplies a `coverage-output` template variable and exposes
-`coverage-path` for upload. See the
+`coverage-path` for upload. The Rust validation suite only accepts absent LLVM
+coverage when an exact-feature, successful test enumeration independently proves
+there are zero tests (including configurations with no eligible test targets).
+It records `<case>.lcov.status.json` instead of fabricating an LCOV file. Any
+nonempty test listing, corrupt profile, unexpected report error, partial report,
+or failed enumeration remains a failure. This does not skip compilation, tests,
+Clippy or receipt reconciliation. See the
 [CLI scheduling contract](../../../packages/clippier/README.md#lossless-ci-scheduling)
 for compatibility rules and isolation requirements.
 

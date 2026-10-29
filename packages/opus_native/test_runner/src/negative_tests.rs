@@ -318,12 +318,29 @@ fn baseline_rejects_forged_aggregate_and_contradictory_max_error() {
 
 #[test]
 fn sequence_aggregate_cannot_change_without_ordered_packet_evidence() {
-    let root = test_vectors_dir();
-    let (entries, _) = corpus::inventory(&root).unwrap();
     let id = "sequences/celt_fb_mono";
-    let record = case(&root, id, &entries[id]);
     let mut document = baseline_document();
-    document[1] = record;
+    // Aggregate validation is independent of which codecs this binary enables.
+    // Construct ordered synthetic packet evidence so even a SILK-only build
+    // reaches the aggregate check, rather than the unsupported-codec branch.
+    let count = required::CASES
+        .iter()
+        .find(|(candidate, _, _)| *candidate == id)
+        .unwrap()
+        .2;
+    let template = document[1]["packets"][0].clone();
+    let packets = (0..count)
+        .map(|index| {
+            let mut packet = template.clone();
+            packet["packet_index"] = json!(index);
+            packet
+        })
+        .collect::<Vec<_>>();
+    document[1]["id"] = json!(id);
+    document[1]["kind"] = json!("sequence");
+    document[1]["reproduce"] = json!(["--case", id]);
+    document[1]["actual_pcm_sha256"] = json!(output_identity(&packets));
+    document[1]["packets"] = json!(packets);
     let status = document[1]["status"].as_str().unwrap().to_owned();
     document[2]["statuses"] = json!({status:1});
     let original_packets = document[1]["packets"].clone();

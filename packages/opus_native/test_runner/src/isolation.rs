@@ -343,11 +343,16 @@ mod tests {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap();
+        // This probe copies and hashes the debug test executable three times.
+        // Keep its setup allowance separate from the short supervisor deadline
+        // test above (large instrumented binaries are slow on shared disks).
+        let output = supervise(process, Duration::from_secs(60)).unwrap();
         assert!(
-            supervise(process, Duration::from_secs(5))
-                .unwrap()
-                .status
-                .success()
+            !output.timed_out && output.status.success(),
+            "snapshot probe failed: status={}, timeout={}, stderr={}",
+            output.status,
+            output.timed_out,
+            String::from_utf8_lossy(&output.stderr)
         );
         drop(snapshot);
         assert!(!path.exists());

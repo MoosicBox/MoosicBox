@@ -166,7 +166,9 @@ pub struct Decoder {
 
     #[allow(dead_code)]
     prev_mode: Option<OpusMode>,
+    #[cfg(feature = "celt")]
     prev_redundancy: bool,
+    #[cfg(all(feature = "silk", feature = "celt"))]
     frame_redundancy: bool,
     #[cfg_attr(not(any(feature = "silk", feature = "celt")), allow(dead_code))]
     last_packet_samples: usize,
@@ -230,7 +232,9 @@ impl Decoder {
             celt_packet_channels: None,
 
             prev_mode: None,
+            #[cfg(feature = "celt")]
             prev_redundancy: false,
+            #[cfg(all(feature = "silk", feature = "celt"))]
             frame_redundancy: false,
             last_packet_samples: 0,
 
@@ -386,7 +390,10 @@ impl Decoder {
                     current_output_offset += samples_per_frame;
                     continue;
                 }
-                self.frame_redundancy = false;
+                #[cfg(all(feature = "silk", feature = "celt"))]
+                {
+                    self.frame_redundancy = false;
+                }
                 #[cfg(all(feature = "silk", feature = "celt"))]
                 let transition = if self.prev_mode.is_some_and(|previous| {
                     (previous == OpusMode::CeltOnly) != (config.mode == OpusMode::CeltOnly)
@@ -483,6 +490,7 @@ impl Decoder {
                     self.fade_transition_head(&old, frame_output)?;
                 }
                 self.prev_mode = Some(config.mode);
+                #[cfg(feature = "celt")]
                 if config.mode == OpusMode::CeltOnly {
                     self.prev_redundancy = false;
                 }

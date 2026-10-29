@@ -1,0 +1,2 @@
+# The range-encoder interoperability test builds its oracle from this pinned source.
+git-submodules = true

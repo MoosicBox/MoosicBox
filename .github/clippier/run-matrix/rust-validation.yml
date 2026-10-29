@@ -29,13 +29,7 @@ coverage:
     # Collect before clear-target-2; each stacked case has its own output file.
     commands: |
         if [[ -n "{{vars.coverage-output}}" ]]; then
-            # With only fail-on-warnings, this facade contains no executable
-            # code or tests. LLVM correctly emits no coverage mapping for it.
-            if [[ "{{matrix.package.name}}" == moosicbox && "{{clippier.all-features}}" == fail-on-warnings ]]; then
-                echo "No executable code to cover in the no-feature moosicbox facade"
-            else
-                cargo llvm-cov report --lcov --output-path "{{vars.coverage-output}}"
-            fi
+            {{if matrix.package.env}}{{matrix.package.env}} {{endif}}bash "$GITHUB_WORKSPACE/.github/clippier/run-matrix/coverage.sh" "{{vars.coverage-output}}" {{if matrix.package.nightly}}+nightly {{endif}}--no-default-features {{clippier.feature-flags}}{{if matrix.package.cargo}} {{matrix.package.cargo}}{{endif}}
         fi
     label: "Coverage"
     strategy: "combined"
