@@ -82,11 +82,7 @@ jobs:
                   RUN_ID: ${{ github.run_id }}
                   REPOSITORY: ${{ github.repository }}
               run: |
-                  mkdir -p ./clippier-report
-                  gh api --paginate \
-                      -H "Accept: application/vnd.github+json" \
-                      "/repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
-                      --jq '.jobs[]' | jq -s '{jobs: .}' > ./clippier-report/jobs.json
+                  bash .github/actions/clippier/lib/workflow-job-health.sh capture ./clippier-report/jobs.json
 
             - name: Generate workflow failure report
               if: always()
@@ -109,9 +105,7 @@ jobs:
                       echo ""
                       echo "### Job health"
                       echo ""
-                      echo "| Job | Conclusion | URL |"
-                      echo "| --- | --- | --- |"
-                      jq -r '.jobs[] | select(.name != "Generate Clippier Report") | "| \(.name | gsub("\\|"; "\\|")) | \(.conclusion // .status) | [Open job](\(.html_url)) |"' ./clippier-report/jobs.json
+                      bash .github/actions/clippier/lib/workflow-job-health.sh render ./clippier-report/jobs.json
                   } | tee -a "$GITHUB_STEP_SUMMARY" >> ./clippier-report/report.md
 
                   jq -n \
@@ -120,7 +114,7 @@ jobs:
                       --argjson runId "$GITHUB_RUN_ID" \
                       --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
                       --slurpfile jobs ./clippier-report/jobs.json \
-                      '{repository: $repository, workflow: $workflow, run_id: $runId, run_attempt: $runAttempt, jobs: $jobs[0].jobs}' \
+                      '{repository: $repository, workflow: $workflow, run_id: $runId, run_attempt: $runAttempt, jobs: $jobs[0].jobs, job_metadata_available: $jobs[0].metadata_available}' \
                       > ./clippier-report/manifest.json
 
             - name: Upload consolidated Clippier report
