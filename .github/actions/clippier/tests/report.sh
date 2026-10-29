@@ -31,4 +31,12 @@ for directory in missing empty; do
     grep -q 'results are unavailable' "$work/report.md"
     if grep -q 'All tests passed' "$work/report.md"; then exit 1; fi
 done
+# Successful recorded diagnostics do not prove all planned jobs ran.
+export INPUT_RUN_MATRIX_WORKING_DIRECTORY="$work/success"
+mkdir -p "$work/success"
+printf '%s\n' '[{"package":"fixture","label":"Tests","total_runs":1,"total_passed":1,"total_failed":0,"failures":[]}]' > "$work/success/clippier-diagnostics-success.json"
+(run_matrix_aggregate_failures_command)
+grep -q 'No failures in the 1 recorded test categories' "$work/report.md"
+grep -q 'checkout failures, cancellations, or missing cases' "$work/report.md"
+if grep -q 'All tests passed' "$work/report.md"; then exit 1; fi
 echo 'Nested diagnostics report regression tests passed'

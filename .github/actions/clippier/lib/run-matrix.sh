@@ -1793,9 +1793,9 @@ run_matrix_aggregate_failures_command() {
     echo "📊 Summary: $total_failures total failures across $packages_with_failures packages"
 
     if [[ "$packages_with_failures" -eq 0 ]]; then
-        write_aggregate_content "# ✅ Workflow-Wide Test Results"
+        write_aggregate_content "# Recorded Clippier Test Results"
         write_aggregate_content ""
-        write_aggregate_content "**Status**: All tests passed across all $total_packages test categories!"
+        write_aggregate_content "**Status**: No failures in the $total_packages recorded test categories. This does not prove workflow completion: check job health and planned-case receipt reconciliation for checkout failures, cancellations, or missing cases."
         # Set outputs
         if [[ -n "$AGGREGATE_OUTPUT_FILE" ]]; then
             echo "aggregate-summary-path=$AGGREGATE_OUTPUT_FILE" >> $GITHUB_OUTPUT
