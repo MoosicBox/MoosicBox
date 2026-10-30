@@ -142,6 +142,7 @@ pub async fn serve_with_triggers(
             .app_data(web::PayloadConfig::new(crate::triggers::MAX_BODY_BYTES))
             .route("/hooks/github", web::post().to(github_hook))
             .route("/hooks/generic", web::post().to(generic_hook))
+            .route("/v1/artifacts/inspect", web::post().to(inspect_artifact))
             .route("/v1/artifacts", web::post().to(artifact_transfer))
             .route("/v1/rpc", web::post().to(rpc))
     })
@@ -182,9 +183,21 @@ async fn artifact_transfer(
         &identity,
         Envelope {
             version: crate::protocol::PROTOCOL_VERSION,
-            request: crate::protocol::Request::ArtifactAccess {
-                attempt_id: body.attempt_id.clone(),
-                producer_task: body.producer_task.clone(),
+            request: if let Some(instance) = request
+                .headers()
+                .get(crate::transfer::WORKER_INSTANCE_HEADER)
+                .and_then(|value| value.to_str().ok())
+            {
+                crate::protocol::Request::ArtifactAccessFor {
+                    instance: instance.into(),
+                    attempt_id: body.attempt_id.clone(),
+                    producer_task: body.producer_task.clone(),
+                }
+            } else {
+                crate::protocol::Request::ArtifactAccess {
+                    attempt_id: body.attempt_id.clone(),
+                    producer_task: body.producer_task.clone(),
+                }
             },
         },
         now.as_secs(),
@@ -199,6 +212,73 @@ async fn artifact_transfer(
         return HttpResponse::InternalServerError().finish();
     };
     crate::transfer::transfer(&service.artifact_root, producer, &body).map_or_else(
+        |_| HttpResponse::BadRequest().finish(),
+        |response| HttpResponse::Ok().json(response),
+    )
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ArtifactInspection {
+    pub run_id: String,
+    pub task_id: String,
+    pub attempt_id: String,
+    pub name: String,
+    pub offset: u64,
+}
+
+#[allow(clippy::future_not_send)]
+async fn inspect_artifact(
+    service: web::Data<Service>,
+    request: HttpRequest,
+    body: web::Json<ArtifactInspection>,
+) -> HttpResponse {
+    let authorized = header(&request, "authorization")
+        .strip_prefix("Bearer ")
+        .is_some_and(|value| {
+            service.tokens.iter().any(|(secret, identity)| {
+                matches!(identity, Identity::Admin) && equal_token(secret, value)
+            })
+        });
+    if !authorized {
+        return HttpResponse::Unauthorized().finish();
+    }
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return HttpResponse::InternalServerError().finish();
+    };
+    let Ok(mut coordinator) = service.coordinator.lock() else {
+        return HttpResponse::ServiceUnavailable().finish();
+    };
+    let response = coordinator.handle(
+        &Identity::Admin,
+        Envelope {
+            version: crate::protocol::PROTOCOL_VERSION,
+            request: crate::protocol::Request::InspectArtifact {
+                run_id: body.run_id.clone(),
+                task_id: body.task_id.clone(),
+                attempt_id: body.attempt_id.clone(),
+            },
+        },
+        now.as_secs(),
+    );
+    let Response::Data { value } = response else {
+        return HttpResponse::Forbidden().finish();
+    };
+    let Some(producer) = value
+        .get("producer_attempt_id")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return HttpResponse::InternalServerError().finish();
+    };
+    let transfer = crate::transfer::TransferRequest {
+        attempt_id: body.attempt_id.clone(),
+        producer_task: Some(body.task_id.clone()),
+        name: body.name.clone(),
+        offset: body.offset,
+        data: Vec::new(),
+        finish: false,
+    };
+    crate::transfer::transfer(&service.artifact_root, producer, &transfer).map_or_else(
         |_| HttpResponse::BadRequest().finish(),
         |response| HttpResponse::Ok().json(response),
     )

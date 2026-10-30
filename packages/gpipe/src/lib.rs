@@ -36,6 +36,12 @@ pub mod coordinator;
 /// Native command execution with bounded output and cancellation.
 #[cfg(feature = "runtime")]
 pub mod executor;
+/// Actual MoosicBox case planning and run evidence integration.
+#[cfg(feature = "runtime")]
+pub mod moosicbox;
+/// Bounded authenticated operator API client.
+#[cfg(feature = "runtime")]
+pub mod operator;
 /// Resolved, validated native execution plans.
 #[cfg(feature = "runtime")]
 pub mod plan;
@@ -48,6 +54,7 @@ pub mod providers;
 /// Authenticated coordinator HTTP service.
 #[cfg(feature = "runtime")]
 pub mod server;
+
 /// Explicit file artifact transport for task dependencies.
 #[cfg(feature = "runtime")]
 pub mod transfer;

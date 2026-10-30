@@ -343,7 +343,15 @@ fn isolated_workers_transfer_only_direct_dependency_artifacts() {
         CONTENTS
     );
     assert!(!consumer_workspace.join("output/payload.txt").exists());
-    assert_forbidden_transfers(&fixture.url, &attempt_id);
+    let instance: Value = serde_json::from_reader(
+        std::fs::File::open(fixture.temp.path().join("consumer/worker-instance.json")).unwrap(),
+    )
+    .unwrap();
+    assert_forbidden_transfers(
+        &fixture.url,
+        &attempt_id,
+        instance["instance_id"].as_str().unwrap(),
+    );
     std::fs::write(consumer_workspace.join("consumer-release"), "release").unwrap();
     consumer.finish();
     let view = fixture.inspect();
@@ -367,7 +375,7 @@ fn isolated_workers_transfer_only_direct_dependency_artifacts() {
     assert!(!fixture.source.join("incoming").exists());
 }
 
-fn assert_forbidden_transfers(url: &str, attempt_id: &str) {
+fn assert_forbidden_transfers(url: &str, attempt_id: &str, instance: &str) {
     let client = reqwest::blocking::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -385,6 +393,7 @@ fn assert_forbidden_transfers(url: &str, attempt_id: &str) {
     let response = client
         .post(format!("{url}/v1/artifacts"))
         .bearer_auth(CONSUMER_TOKEN)
+        .header(gpipe::transfer::WORKER_INSTANCE_HEADER, instance)
         .json(&authorized)
         .send()
         .unwrap();

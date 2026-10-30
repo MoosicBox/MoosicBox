@@ -310,7 +310,11 @@ fn dynamic_generator_publishes_child_and_seals_but_waits_for_child_execution() {
     assert_eq!(expanded["sealed"], true);
     assert_eq!(expanded["tasks"]["generator"], "SUCCEEDED");
     assert_eq!(expanded["tasks"]["child"], "PENDING");
-    assert_eq!(expanded["plan"]["tasks"]["child"], child);
+    let expected: gpipe::plan::Task = serde_json::from_value(child.clone()).unwrap();
+    assert_eq!(
+        expanded["plan"]["tasks"]["child"],
+        serde_json::to_value(expected).unwrap()
+    );
     assert_eq!(expanded["attempts"].as_object().unwrap().len(), 1);
     let generator = expanded["attempts"]
         .as_object()
@@ -322,7 +326,10 @@ fn dynamic_generator_publishes_child_and_seals_but_waits_for_child_execution() {
     assert_eq!(generator["status"], "COMPLETED");
     assert_eq!(generator["report"]["success"], true);
     // This retained payload distinguishes CompleteGenerated from ordinary completion.
-    assert_eq!(generator["generated"], generated);
+    let mut expected_generated = generated;
+    expected_generated["tasks"]["child"] =
+        serde_json::to_value(serde_json::from_value::<gpipe::plan::Task>(child).unwrap()).unwrap();
+    assert_eq!(generator["generated"], expected_generated);
     fixture.work_once();
     let final_view = fixture.inspect(&run_id);
     assert_eq!(final_view["status"], "SUCCEEDED");

@@ -29,6 +29,42 @@ pub struct ServerConfig {
 pub struct RepositoryPolicy {
     /// Exact commit hashes approved to execute.
     pub revisions: BTreeSet<String>,
+    /// Optional administrator-approved envelope for worker-generated tasks.
+    /// Omission retains the generator's restrictive placement/resource ceilings.
+    #[serde(default)]
+    pub generation: Option<GenerationPolicy>,
+}
+
+/// Admission ceilings for generated work, not operating-system resource enforcement.
+///
+/// Every allowed label key must be present with an allowed value; extra keys are
+/// rejected. This permits cross-platform generation without inheriting planner labels.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GenerationPolicy {
+    /// Required placement keys and their authorized values.
+    pub allowed_labels: BTreeMap<String, BTreeSet<String>>,
+    /// Maximum CPU units per generated task.
+    pub max_cpu: u32,
+    /// Maximum memory MiB per generated task.
+    pub max_memory_mb: u64,
+    /// Maximum attempts per generated task.
+    pub max_attempts: u32,
+    /// Maximum cumulative generated tasks in a run, across all generators/batches.
+    pub max_tasks: u32,
+}
+
+/// Persisted administrator overlay on configured worker authorization.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum WorkerMode {
+    /// Admit work under the configured worker policy.
+    #[default]
+    Active,
+    /// Stop new admissions, but allow existing attempts to finish.
+    Draining,
+    /// Stop admissions and request cancellation of active attempts.
+    Revoked,
 }
 
 /// Worker permissions are configured by the coordinator, not self-asserted.
@@ -39,7 +75,9 @@ pub struct WorkerPolicy {
     pub token_env: String,
     /// Allowed repository identifiers.
     pub repositories: BTreeSet<String>,
-    /// Trusted placement labels, such as os and architecture.
+    /// Trusted exact-match placement labels. Distinguish execution environment
+    /// (for example `runner-os=ubuntu`) from physical host (`host-os=nixos`);
+    /// neither is inferred or substituted by the coordinator.
     pub labels: BTreeMap<String, String>,
     /// Maximum admitted CPU units.
     pub cpu: u32,
@@ -90,6 +128,85 @@ pub struct Envelope {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 pub enum Request {
+    /// Register/renew a worker-created incarnation ID (1..=256 nonblank bytes,
+    /// no control characters). Returns Heartbeat with the registration deadline;
+    /// cancel is false: poll attempt cancellation separately with `HeartbeatFor`.
+    /// A different instance cannot take over until both registration and active
+    /// attempt leases expire. Opt-in is permanent: unbound operations fail closed.
+    RegisterWorker {
+        /// Unique incarnation identity; retain with pending completion evidence.
+        instance: String,
+    },
+    /// Claim or replay the one active assignment for this registered instance.
+    /// Requires a live registration; never adopts another incarnation's attempt.
+    ClaimFor {
+        /// Exact registered incarnation identity.
+        instance: String,
+    },
+    /// Renew an exact-instance attempt lease and poll cancellation.
+    /// Requires a live registration. Cancellation never extends the attempt lease.
+    HeartbeatFor {
+        /// Exact registered incarnation identity.
+        instance: String,
+        /// Attempt identity.
+        attempt_id: String,
+    },
+    /// Deliver exact-instance terminal evidence; identical retries are accepted.
+    /// May acknowledge/replay after registration expiry, but never after another
+    /// instance registers. Expired/cancelled attempts return Fenced.
+    CompleteFor {
+        /// Exact registered incarnation identity.
+        instance: String,
+        /// Attempt identity.
+        attempt_id: String,
+        /// Terminal evidence.
+        report: Report,
+    },
+    /// Atomically complete a generator and publish its authorized task batch.
+    /// Registration-expiry and replay rules are the same as `CompleteFor`.
+    CompleteGeneratedFor {
+        /// Exact registered incarnation identity.
+        instance: String,
+        /// Attempt identity.
+        attempt_id: String,
+        /// Successful terminal evidence.
+        report: Report,
+        /// New tasks directly depending on the generator.
+        tasks: BTreeMap<String, Task>,
+        /// Close further expansion after this batch.
+        seal: bool,
+    },
+    /// Authorize artifact transfer for an exact-instance live assignment.
+    /// Requires a live registration as well as the normal artifact access checks.
+    ArtifactAccessFor {
+        /// Exact registered incarnation identity.
+        instance: String,
+        /// Consumer attempt identity.
+        attempt_id: String,
+        /// Successful direct dependency task, or None to publish own artifacts.
+        producer_task: Option<String>,
+    },
+    /// Persist a worker admission overlay. Revocation requests cancellation but
+    /// retains reservations until exact-instance acknowledgement or lease expiry.
+    SetWorkerMode {
+        /// Configured worker identity.
+        worker: String,
+        /// New admission mode; reactivation never clears sticky cancellations.
+        mode: WorkerMode,
+    },
+    /// Administrator-only read authorization for one exact completed attempt.
+    /// Failed reports are allowed for diagnostics, even if a retry is pending.
+    /// Returns `Data {producer_attempt_id, run_id, task_id}`; this grants only
+    /// download access, never artifact publication or mutation. The data plane
+    /// must bind GET/manifest scope to these exact identities separately.
+    InspectArtifact {
+        /// Exact retained run identity.
+        run_id: String,
+        /// Exact task identity within that run.
+        task_id: String,
+        /// Exact completed attempt belonging to that run and task.
+        attempt_id: String,
+    },
     /// Submit an immutable plan with a caller-owned idempotency key.
     Submit {
         /// Submission identity.
@@ -231,4 +348,51 @@ pub enum Response {
         /// Secret-safe reason.
         message: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_policy_defaults_and_strict_generation_configuration() {
+        let policy: RepositoryPolicy = serde_json::from_value(serde_json::json!({
+            "revisions": ["a".repeat(40)]
+        }))
+        .unwrap();
+        assert!(policy.generation.is_none());
+        assert!(
+            serde_json::from_value::<RepositoryPolicy>(serde_json::json!({
+                "revisions": [], "generation": {
+                    "allowed_labels": {"os": ["macos", "windows"]},
+                    "max_cpu": 4, "max_memory_mb": 512, "max_attempts": 2,
+                    "max_tasks": 20, "privileged": true
+                }
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn instance_operations_round_trip_and_reject_unknown_fields() {
+        let operation = Request::HeartbeatFor {
+            instance: "boot-unique".into(),
+            attempt_id: "attempt-1".into(),
+        };
+        let value = serde_json::to_value(&operation).unwrap();
+        assert_eq!(value["type"], "HEARTBEAT_FOR");
+        assert_eq!(value["attempt_id"], "attempt-1");
+        let decoded: Request = serde_json::from_value(value).unwrap();
+        assert!(
+            matches!(decoded, Request::HeartbeatFor { instance, .. } if instance == "boot-unique")
+        );
+        assert!(
+            serde_json::from_value::<Request>(serde_json::json!({
+                "type": "REGISTER_WORKER", "instance": "a", "worker": "another"
+            }))
+            .is_err()
+        );
+        let legacy: Request = serde_json::from_value(serde_json::json!({"type": "CLAIM"})).unwrap();
+        assert!(matches!(legacy, Request::Claim));
+    }
 }

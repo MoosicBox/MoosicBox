@@ -14,9 +14,10 @@ use rusqlite::{Connection, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    plan::{Plan, Task},
+    plan::{Plan, Task, TaskWhen},
     protocol::{
         Assignment, Envelope, Identity, PROTOCOL_VERSION, Report, Request, Response, ServerConfig,
+        WorkerMode,
     },
 };
 
@@ -39,7 +40,7 @@ pub const MAX_APPROVALS: usize = 4_096;
 /// Maximum serialized generated task batch. Reserved twice (plan and replay).
 pub const MAX_GENERATED_BYTES: usize = 2 * 1_048_576;
 const REPORT_RESERVATION: usize = 6 * MAX_REPORT_BYTES + 65_536;
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const MAX_KEY_BYTES: usize = 256;
 
 /// SQLite-backed coordinator using administrator-supplied placement policy.
@@ -53,7 +54,9 @@ pub struct Coordinator {
     state_limit: usize,
 }
 
-/// Version-one durable state. Counters never reuse identities, including after restart.
+/// Version-two durable state. Version one is migrated transactionally on open.
+/// Counters never reuse identities, including after restart. Older coordinators
+/// reject version two rather than silently ignoring instance fences or overlays.
 #[derive(Default, Serialize, Deserialize)]
 struct State {
     next_run: u64,
@@ -61,6 +64,16 @@ struct State {
     runs: BTreeMap<String, Run>,
     submissions: BTreeMap<String, Submission>,
     approvals: BTreeMap<String, std::collections::BTreeSet<String>>,
+    #[serde(default)]
+    workers: BTreeMap<String, WorkerRegistration>,
+    #[serde(default)]
+    worker_modes: BTreeMap<String, WorkerMode>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WorkerRegistration {
+    instance_id: String,
+    lease_until: u64,
 }
 
 /// Original submission, kept separately because dynamic expansion changes the plan.
@@ -109,6 +122,8 @@ enum TaskStatus {
 struct Attempt {
     task_id: String,
     worker: String,
+    #[serde(default)]
+    instance_id: Option<String>,
     lease_until: u64,
     status: AttemptStatus,
     report: Option<Report>,
@@ -139,6 +154,9 @@ enum AttemptStatus {
 impl Coordinator {
     /// Open or initialize a durable coordinator database.
     ///
+    /// Version-one state is upgraded atomically to version two. This is a one-way
+    /// migration: older coordinators must not serve this database afterward.
+    ///
     /// # Errors
     /// * SQLite cannot open, lock, initialize, or read the database.
     /// * The stored schema version or JSON state is unsupported or corrupt.
@@ -161,6 +179,14 @@ impl Coordinator {
                 params![SCHEMA_VERSION, initial],
             )
             .map_err(db_error)?;
+        // New fields have serde defaults. Publish the schema fence atomically
+        // with validation, so old handles cannot silently ignore durable policy.
+        transaction
+            .execute(
+                "UPDATE gpipe_state SET version = ?1 WHERE id = 1 AND version = 1",
+                [SCHEMA_VERSION],
+            )
+            .map_err(db_error)?;
         let _ = load(&transaction)?;
         transaction.commit().map_err(db_error)?;
         Ok(Self {
@@ -180,7 +206,9 @@ impl Coordinator {
     /// and 4,096 persisted approvals. Limit errors roll back, including completion
     /// reports from already admitted attempts are budgeted; history is never pruned.
     /// Repeated Claims return the worker's existing active assignment without
-    /// extending its lease. Policy-revoked assignments return no assignment and
+    /// extending its lease. Legacy Claim replays an already cancelled assignment
+    /// solely for cancellation polling/acknowledgement; `ClaimFor` returns none.
+    /// Policy-revoked assignments return no assignment and
     /// request cancellation on Heartbeat, retaining the reservation until ack/expiry.
     /// Generated completion atomically publishes only new downstream tasks, with
     /// the generator's required labels and no higher CPU/memory/retry ceilings.
@@ -224,7 +252,8 @@ impl Coordinator {
         let mut state = load(&transaction)?;
         expire(&mut state, now);
         revalidate_active(&mut state, &self.config);
-        let response = dispatch(&mut state, &self.config, identity, envelope.request, now)?;
+        let response =
+            dispatch_worker_request(&mut state, &self.config, identity, envelope.request, now)?;
         check_state_limits(&state)?;
         let reserved = completion_reservations(&state)?;
         let json = bounded_json(
@@ -337,7 +366,13 @@ fn authorize(identity: &Identity, request: &Request) -> Result<(), String> {
     match (identity, request) {
         (
             Identity::Admin,
-            Request::Claim
+            Request::RegisterWorker { .. }
+            | Request::ClaimFor { .. }
+            | Request::HeartbeatFor { .. }
+            | Request::CompleteFor { .. }
+            | Request::CompleteGeneratedFor { .. }
+            | Request::ArtifactAccessFor { .. }
+            | Request::Claim
             | Request::Heartbeat { .. }
             | Request::Complete { .. }
             | Request::ArtifactAccess { .. }
@@ -345,7 +380,13 @@ fn authorize(identity: &Identity, request: &Request) -> Result<(), String> {
         ) => Err("worker identity required".into()),
         (
             Identity::Worker(_),
-            Request::Claim
+            Request::RegisterWorker { .. }
+            | Request::ClaimFor { .. }
+            | Request::HeartbeatFor { .. }
+            | Request::CompleteFor { .. }
+            | Request::CompleteGeneratedFor { .. }
+            | Request::ArtifactAccessFor { .. }
+            | Request::Claim
             | Request::Heartbeat { .. }
             | Request::Complete { .. }
             | Request::ArtifactAccess { .. }
@@ -365,6 +406,197 @@ fn run_mut<'a>(state: &'a mut State, id: &str) -> Result<&'a mut Run, String> {
     state.runs.get_mut(id).ok_or_else(|| "unknown run".into())
 }
 
+enum WorkerRequest {
+    Register(String),
+    Bound {
+        instance_id: String,
+        request: Request,
+    },
+    Legacy(Request),
+}
+
+impl From<Request> for WorkerRequest {
+    fn from(request: Request) -> Self {
+        match request {
+            Request::RegisterWorker { instance } => Self::Register(instance),
+            Request::ClaimFor { instance } => Self::Bound {
+                instance_id: instance,
+                request: Request::Claim,
+            },
+            Request::HeartbeatFor {
+                instance,
+                attempt_id,
+            } => Self::Bound {
+                instance_id: instance,
+                request: Request::Heartbeat { attempt_id },
+            },
+            Request::CompleteFor {
+                instance,
+                attempt_id,
+                report,
+            } => Self::Bound {
+                instance_id: instance,
+                request: Request::Complete { attempt_id, report },
+            },
+            Request::CompleteGeneratedFor {
+                instance,
+                attempt_id,
+                report,
+                tasks,
+                seal,
+            } => Self::Bound {
+                instance_id: instance,
+                request: Request::CompleteGenerated {
+                    attempt_id,
+                    report,
+                    tasks,
+                    seal,
+                },
+            },
+            Request::ArtifactAccessFor {
+                instance,
+                attempt_id,
+                producer_task,
+            } => Self::Bound {
+                instance_id: instance,
+                request: Request::ArtifactAccess {
+                    attempt_id,
+                    producer_task,
+                },
+            },
+            request => Self::Legacy(request),
+        }
+    }
+}
+
+/// Session checks happen before dispatch, so legacy credentials cannot operate on
+/// an opted-in identity's attempts, including idempotent terminal replays.
+#[allow(clippy::too_many_lines)]
+fn dispatch_worker_request(
+    state: &mut State,
+    config: &ServerConfig,
+    identity: &Identity,
+    request: Request,
+    now: u64,
+) -> Result<Response, String> {
+    let Identity::Worker(worker) = identity else {
+        return dispatch(state, config, identity, request, now);
+    };
+    match WorkerRequest::from(request) {
+        WorkerRequest::Register(instance_id) => {
+            if !config.workers.contains_key(worker) {
+                return Err("unknown worker".into());
+            }
+            if instance_id.trim().is_empty()
+                || instance_id.len() > MAX_KEY_BYTES
+                || instance_id.chars().any(char::is_control)
+            {
+                return Err("invalid worker instance identity".into());
+            }
+            let same = state
+                .workers
+                .get(worker)
+                .is_some_and(|registration| registration.instance_id == instance_id);
+            if !same
+                && (state
+                    .workers
+                    .get(worker)
+                    .is_some_and(|registration| registration.lease_until > now)
+                    || state.runs.values().any(|run| {
+                        run.attempts.values().any(|attempt| {
+                            attempt.worker == *worker && attempt.status == AttemptStatus::Active
+                        })
+                    }))
+            {
+                return Err("worker instance or attempt lease is still live".into());
+            }
+            let lease_until = now.checked_add(LEASE_SECS).ok_or("lease clock overflow")?;
+            let lease_until = if same {
+                lease_until.max(state.workers[worker].lease_until)
+            } else {
+                lease_until
+            };
+            state.workers.insert(
+                worker.clone(),
+                WorkerRegistration {
+                    instance_id,
+                    lease_until,
+                },
+            );
+            Ok(Response::Heartbeat {
+                cancel: false,
+                lease_until,
+            })
+        }
+        WorkerRequest::Bound {
+            instance_id,
+            request,
+        } => {
+            let registration = state
+                .workers
+                .get(worker)
+                .ok_or("worker registration required")?;
+            if registration.instance_id != instance_id {
+                return Err("stale worker instance".into());
+            }
+            // A terminal acknowledgement is allowed after registration expiry;
+            // it cannot revive a lease or mutate another instance's attempt.
+            if matches!(
+                request,
+                Request::Claim | Request::Heartbeat { .. } | Request::ArtifactAccess { .. }
+            ) && registration.lease_until <= now
+            {
+                return Err("worker registration expired".into());
+            }
+            let attempt_id = match &request {
+                Request::Heartbeat { attempt_id }
+                | Request::Complete { attempt_id, .. }
+                | Request::CompleteGenerated { attempt_id, .. }
+                | Request::ArtifactAccess { attempt_id, .. } => Some(attempt_id),
+                _ => None,
+            };
+            if let Some(id) = attempt_id {
+                let (run, _) = find_attempt(state, identity, id)?;
+                if run.attempts[id].instance_id.as_deref() != Some(instance_id.as_str()) {
+                    return Err("attempt belongs to another worker instance".into());
+                }
+            }
+            // Bound clients must not receive cancelled work as a fresh claim.
+            // Legacy Claim retains its historical same-attempt replay solely
+            // for cancellation polling/acknowledgement, never new admission.
+            if matches!(request, Request::Claim)
+                && state.runs.values().any(|run| {
+                    run.status == RunStatus::Cancelled
+                        && run.attempts.values().any(|attempt| {
+                            attempt.worker == *worker && attempt.status == AttemptStatus::Active
+                        })
+                })
+            {
+                return Ok(Response::Assignment { assignment: None });
+            }
+            let response = dispatch(state, config, identity, request, now)?;
+            // Renew only a live registration; completion replay must not resurrect
+            // an expired process incarnation.
+            let registration = state
+                .workers
+                .get_mut(worker)
+                .ok_or("worker registration required")?;
+            if registration.lease_until > now {
+                registration.lease_until = registration
+                    .lease_until
+                    .max(now.checked_add(LEASE_SECS).ok_or("lease clock overflow")?);
+            }
+            Ok(response)
+        }
+        WorkerRequest::Legacy(request) => {
+            if state.workers.contains_key(worker) {
+                return Err("instance-bound worker operation required".into());
+            }
+            dispatch(state, config, identity, request, now)
+        }
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn dispatch(
     state: &mut State,
@@ -374,6 +606,44 @@ fn dispatch(
     now: u64,
 ) -> Result<Response, String> {
     match request {
+        Request::RegisterWorker { .. }
+        | Request::ClaimFor { .. }
+        | Request::HeartbeatFor { .. }
+        | Request::CompleteFor { .. }
+        | Request::CompleteGeneratedFor { .. }
+        | Request::ArtifactAccessFor { .. } => Err("worker session dispatch required".into()),
+        Request::InspectArtifact {
+            run_id,
+            task_id,
+            attempt_id,
+        } => {
+            let run = state.runs.get(&run_id).ok_or("unknown run")?;
+            let attempt = run
+                .attempts
+                .get(&attempt_id)
+                .ok_or("unknown attempt in run")?;
+            if attempt.task_id != task_id || !run.plan.tasks.contains_key(&task_id) {
+                return Err("attempt does not belong to requested task".into());
+            }
+            if attempt.status != AttemptStatus::Completed || attempt.report.is_none() {
+                return Err(
+                    "artifact inspection requires a completed attempt with retained report".into(),
+                );
+            }
+            Ok(Response::Data {
+                value: serde_json::json!({
+                    "producer_attempt_id": attempt_id, "run_id": run_id, "task_id": task_id,
+                }),
+            })
+        }
+        Request::SetWorkerMode { worker, mode } => {
+            if !config.workers.contains_key(&worker) {
+                return Err("unknown worker".into());
+            }
+            state.worker_modes.insert(worker, mode);
+            revalidate_active(state, config);
+            Ok(Response::Ok)
+        }
         Request::Submit { key, plan, dynamic } => {
             if key.trim().is_empty() || key.len() > MAX_KEY_BYTES {
                 return Err("submission key must contain 1..=256 bytes and be nonblank".into());
@@ -511,7 +781,7 @@ fn dispatch(
             report,
             tasks,
             seal,
-        } => complete_generated(state, identity, &attempt_id, report, tasks, seal),
+        } => complete_generated(state, config, identity, &attempt_id, report, tasks, seal),
         Request::Complete { attempt_id, report } => {
             let (run, task) = find_attempt(state, identity, &attempt_id)?;
             let attempt = run.attempts.get_mut(&attempt_id).ok_or("unknown attempt")?;
@@ -554,8 +824,10 @@ fn dispatch(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn complete_generated(
     state: &mut State,
+    config: &ServerConfig,
     identity: &Identity,
     attempt_id: &str,
     report: Report,
@@ -606,6 +878,23 @@ fn complete_generated(
     }) {
         return Err("attempt is not an authorized task generator".into());
     }
+    let generation = config
+        .repositories
+        .get(&run.plan.repository)
+        .and_then(|policy| policy.generation.as_ref());
+    if let Some(policy) = generation {
+        let previous: usize = run
+            .attempts
+            .values()
+            .filter_map(|attempt| attempt.generated.as_ref())
+            .map(|completion| completion.tasks.len())
+            .sum();
+        if previous.saturating_add(generated.tasks.len())
+            > usize::try_from(policy.max_tasks).unwrap_or(usize::MAX)
+        {
+            return Err("generated tasks exceed repository task-count policy".into());
+        }
+    }
     for (id, task) in &generated.tasks {
         if run.plan.tasks.contains_key(id) {
             return Err("generated tasks must use new task identities".into());
@@ -613,21 +902,39 @@ fn complete_generated(
         if !task.needs.contains(&generator_id) {
             return Err("generated tasks must directly depend on their generator".into());
         }
-        // Generated work cannot broaden placement or delegate generation again,
-        // nor raise resource/retry ceilings beyond its approved generator.
-        if !generator
-            .labels
-            .iter()
-            .all(|(key, value)| task.labels.get(key) == Some(value))
-            || task.cpu > generator.cpu
-            || task.memory_mb > generator.memory_mb
-            || task.max_attempts > generator.max_attempts
+        // The envelope is coordinator configuration, never generator output.
+        let allowed = generation.map_or_else(
+            || {
+                generator
+                    .labels
+                    .iter()
+                    .all(|(key, value)| task.labels.get(key) == Some(value))
+                    && task.cpu <= generator.cpu
+                    && task.memory_mb <= generator.memory_mb
+                    && task.max_attempts <= generator.max_attempts
+            },
+            |policy| {
+                task.labels.len() == policy.allowed_labels.len()
+                    && policy.allowed_labels.iter().all(|(key, values)| {
+                        task.labels
+                            .get(key)
+                            .is_some_and(|value| values.contains(value))
+                    })
+                    && task.cpu <= policy.max_cpu
+                    && task.memory_mb <= policy.max_memory_mb
+                    && task.max_attempts <= policy.max_attempts
+            },
+        );
+        if !allowed
             || task
                 .steps
                 .iter()
                 .any(|step| step.env.contains_key("GPIPE_TASKS_OUTPUT"))
         {
-            return Err("generated task exceeds generator placement/resource/retry policy".into());
+            return Err(
+                "generated task exceeds placement/resource/retry policy or delegates generation"
+                    .into(),
+            );
         }
     }
     // expand validates the entire bounded candidate before changing the plan.
@@ -800,6 +1107,7 @@ fn revalidate_active(state: &mut State, config: &ServerConfig) {
         {
             let task = &run.plan.tasks[&attempt.task_id];
             let allowed = approved
+                && state.worker_modes.get(&attempt.worker) != Some(&WorkerMode::Revoked)
                 && config.workers.get(&attempt.worker).is_some_and(|policy| {
                     policy.repositories.contains(&run.plan.repository)
                         && task
@@ -851,6 +1159,7 @@ fn refresh(run: &mut Run) {
             .iter()
             .filter(|(id, status)| {
                 **status == TaskStatus::Pending
+                    && run.plan.tasks[*id].when == TaskWhen::Success
                     && run.plan.tasks[*id].needs.iter().any(|dep| {
                         matches!(
                             run.tasks[dep],
@@ -891,8 +1200,9 @@ fn claim(
     };
     // A sequential worker may have lost the Claim response. Replay the exact
     // durable assignment, including its original deadline, before considering
-    // new work. An active cancellation reservation is replayed too; the worker
-    // must heartbeat and acknowledge it before claiming something else.
+    // new work. Legacy cancellation replay is only the existing reservation,
+    // never new admission. Bound ClaimFor suppresses cancelled replay above.
+    // Policy-revoked reservations always return no assignment.
     for (run_id, run) in &state.runs {
         if let Some((attempt_id, attempt)) = run.attempts.iter().find(|(_, attempt)| {
             attempt.worker == *worker && attempt.status == AttemptStatus::Active
@@ -912,6 +1222,13 @@ fn claim(
                 }),
             });
         }
+    }
+    if state
+        .worker_modes
+        .get(worker)
+        .is_some_and(|mode| *mode != WorkerMode::Active)
+    {
+        return Ok(Response::Assignment { assignment: None });
     }
     let policy = config.workers.get(worker).ok_or("unknown worker")?;
     for (run_id, run) in &mut state.runs {
@@ -934,10 +1251,12 @@ fn claim(
         }
         for (task_id, task) in &run.plan.tasks {
             if run.tasks[task_id] != TaskStatus::Pending
-                || !task
-                    .needs
-                    .iter()
-                    .all(|dep| run.tasks[dep] == TaskStatus::Succeeded)
+                || !task.needs.iter().all(|dep| match task.when {
+                    TaskWhen::Success => run.tasks[dep] == TaskStatus::Succeeded,
+                    TaskWhen::Always => {
+                        !matches!(run.tasks[dep], TaskStatus::Pending | TaskStatus::Running)
+                    }
+                })
                 || !task
                     .labels
                     .iter()
@@ -954,6 +1273,10 @@ fn claim(
                 Attempt {
                     task_id: task_id.clone(),
                     worker: worker.clone(),
+                    instance_id: state
+                        .workers
+                        .get(worker)
+                        .map(|registration| registration.instance_id.clone()),
                     lease_until,
                     status: AttemptStatus::Active,
                     report: None,
@@ -1005,6 +1328,7 @@ mod tests {
             repositories: BTreeMap::from([(
                 "repo".into(),
                 RepositoryPolicy {
+                    generation: None,
                     revisions: ["a".repeat(40)].into(),
                 },
             )]),
@@ -1014,6 +1338,7 @@ mod tests {
 
     fn task() -> Task {
         Task {
+            when: TaskWhen::Success,
             needs: vec![],
             steps: vec![CommandStep {
                 shell: "sh".into(),
@@ -1720,6 +2045,7 @@ mod tests {
                 Attempt {
                     task_id: "build".into(),
                     worker: "one".into(),
+                    instance_id: None,
                     lease_until: 0,
                     status: AttemptStatus::Expired,
                     report: None,
@@ -2058,6 +2384,10 @@ mod tests {
                 // owner's active lease or free its reservation.
                 if cancelled {
                     assert_eq!(claim(&mut c, now).unwrap().attempt_id, attempt.attempt_id);
+                    let state = load(&c.connection).unwrap();
+                    let retained = &state.runs[&id].attempts[&attempt.attempt_id];
+                    assert!(matches!(retained.status, AttemptStatus::Active));
+                    assert_eq!(retained.lease_until, attempt.lease_until);
                 }
                 fenced(
                     call(&mut c, &worker(), request.clone(), now),
@@ -2214,6 +2544,7 @@ mod tests {
             Attempt {
                 task_id: "build".into(),
                 worker: "two".into(),
+                instance_id: None,
                 lease_until: 0,
                 status: AttemptStatus::Completed,
                 report: Some(Report {
@@ -2316,6 +2647,7 @@ mod tests {
                 Attempt {
                     task_id: "build".into(),
                     worker: "two".into(),
+                    instance_id: None,
                     lease_until: 0,
                     status: AttemptStatus::Expired,
                     report: None,
@@ -2505,11 +2837,767 @@ mod tests {
     }
 
     #[test]
+    fn always_finalizer_waits_for_terminal_dependencies_and_retains_failure() {
+        for outcome in [
+            TaskStatus::Failed,
+            TaskStatus::Cancelled,
+            TaskStatus::Blocked,
+        ] {
+            let mut c = memory();
+            let mut p = plan();
+            let mut finalizer = task();
+            finalizer.when = TaskWhen::Always;
+            finalizer.needs = vec!["build".into(), "dependent".into()];
+            let mut dependent = task();
+            dependent.needs = vec!["build".into()];
+            p.tasks.insert("dependent".into(), dependent);
+            p.tasks.insert("finalizer".into(), finalizer);
+            let id = submit(&mut c, "finalize", p, false);
+            let build = claim(&mut c, 0).unwrap();
+            assert_eq!(build.task_id, "build");
+            assert!(matches!(
+                call(&mut c, &Identity::Worker("two".into()), Request::Claim, 0),
+                Response::Assignment { assignment: None }
+            ));
+            // Exercise every terminal non-success state, including transitive
+            // blocking; the scheduler must not confuse blocked with pending.
+            let mut state = load(&c.connection).unwrap();
+            let run = state.runs.get_mut(&id).unwrap();
+            run.attempts.get_mut(&build.attempt_id).unwrap().status = AttemptStatus::Completed;
+            run.tasks.insert("build".into(), outcome);
+            refresh(run);
+            store(&c, &state);
+            let finalizer = claim(&mut c, 1).unwrap();
+            assert_eq!(finalizer.task_id, "finalizer");
+            ok(complete(&mut c, &finalizer.attempt_id, true, 2));
+            assert_eq!(inspect(&mut c, &id, 2)["status"], "FAILED");
+        }
+    }
+
+    #[test]
+    fn cancellation_never_starts_always_tasks_or_replays_running_work() {
+        let mut c = memory();
+        let mut p = plan();
+        let mut finalizer = task();
+        finalizer.when = TaskWhen::Always;
+        finalizer.needs = vec!["build".into()];
+        p.tasks.insert("finalizer".into(), finalizer);
+        let id = submit(&mut c, "cancel", p, false);
+        assert!(matches!(
+            register(&mut c, "cancel-instance", 0),
+            Response::Heartbeat { .. }
+        ));
+        let Response::Assignment {
+            assignment: Some(build),
+        } = session(&mut c, "cancel-instance", Request::Claim, 0)
+        else {
+            panic!("expected assignment");
+        };
+        ok(admin(&mut c, Request::Cancel { run_id: id.clone() }, 1));
+        assert!(matches!(
+            session(&mut c, "cancel-instance", Request::Claim, 1),
+            Response::Assignment { assignment: None }
+        ));
+        assert!(matches!(
+            session(
+                &mut c,
+                "cancel-instance",
+                Request::Heartbeat {
+                    attempt_id: build.attempt_id.clone()
+                },
+                1
+            ),
+            Response::Heartbeat {
+                cancel: true,
+                lease_until: LEASE_SECS
+            }
+        ));
+        fenced(
+            session(
+                &mut c,
+                "cancel-instance",
+                Request::Complete {
+                    attempt_id: build.attempt_id.clone(),
+                    report: Report {
+                        success: false,
+                        log: "done".into(),
+                    },
+                },
+                2,
+            ),
+            &build.attempt_id,
+        );
+        assert!(matches!(
+            session(&mut c, "cancel-instance", Request::Claim, 2),
+            Response::Assignment { assignment: None }
+        ));
+        assert_eq!(inspect(&mut c, &id, 2)["status"], "CANCELLED");
+    }
+
+    fn session(c: &mut Coordinator, instance: &str, request: Request, now: u64) -> Response {
+        let instance = instance.to_owned();
+        let request = match request {
+            Request::Claim => Request::ClaimFor { instance },
+            Request::Heartbeat { attempt_id } => Request::HeartbeatFor {
+                instance,
+                attempt_id,
+            },
+            Request::Complete { attempt_id, report } => Request::CompleteFor {
+                instance,
+                attempt_id,
+                report,
+            },
+            Request::CompleteGenerated {
+                attempt_id,
+                report,
+                tasks,
+                seal,
+            } => Request::CompleteGeneratedFor {
+                instance,
+                attempt_id,
+                report,
+                tasks,
+                seal,
+            },
+            Request::ArtifactAccess {
+                attempt_id,
+                producer_task,
+            } => Request::ArtifactAccessFor {
+                instance,
+                attempt_id,
+                producer_task,
+            },
+            // Invalid administrator operations remain unbound and must fail
+            // normal worker authorization; there is no generic wrapper bypass.
+            request => request,
+        };
+        call(c, &worker(), request, now)
+    }
+
+    fn register(c: &mut Coordinator, instance: &str, now: u64) -> Response {
+        call(
+            c,
+            &worker(),
+            Request::RegisterWorker {
+                instance: instance.into(),
+            },
+            now,
+        )
+    }
+
+    #[test]
+    fn instances_cannot_steal_live_attempts_and_fence_legacy_and_old_replays() {
+        let database = Database::new();
+        let mut c = database.open();
+        submit(&mut c, "instances", plan(), false);
+        assert!(matches!(
+            register(&mut c, "a", 0),
+            Response::Heartbeat { .. }
+        ));
+        let Response::Assignment {
+            assignment: Some(a),
+        } = session(&mut c, "a", Request::Claim, 0)
+        else {
+            panic!("expected instance assignment");
+        };
+        error(register(&mut c, "b", 1));
+        error(call(&mut c, &worker(), Request::Claim, 1));
+        error(session(&mut c, "b", Request::Claim, 1));
+        let heartbeat = Request::Heartbeat {
+            attempt_id: a.attempt_id.clone(),
+        };
+        assert!(matches!(
+            session(&mut c, "a", heartbeat.clone(), 30),
+            Response::Heartbeat {
+                lease_until: 90,
+                cancel: false
+            }
+        ));
+        error(register(&mut c, "b", 60));
+        drop(c);
+        let mut c = database.open();
+        error(register(&mut c, "b", 61));
+        assert!(matches!(
+            register(&mut c, "b", 90),
+            Response::Heartbeat { .. }
+        ));
+        error(session(&mut c, "a", heartbeat, 90));
+        let completion = Request::Complete {
+            attempt_id: a.attempt_id.clone(),
+            report: Report {
+                success: true,
+                log: String::new(),
+            },
+        };
+        error(session(&mut c, "a", completion.clone(), 90));
+        error(session(&mut c, "b", completion, 90));
+        let Response::Assignment {
+            assignment: Some(b),
+        } = session(&mut c, "b", Request::Claim, 90)
+        else {
+            panic!("expected replacement after expiry");
+        };
+        assert_ne!(a.attempt_id, b.attempt_id);
+        let completion = Request::Complete {
+            attempt_id: b.attempt_id,
+            report: Report {
+                success: true,
+                log: String::new(),
+            },
+        };
+        ok(session(&mut c, "b", completion.clone(), 91));
+        ok(session(&mut c, "b", completion, 200));
+        error(session(
+            &mut c,
+            "b",
+            Request::Cancel { run_id: a.run_id },
+            200,
+        ));
+        error(admin(
+            &mut c,
+            Request::RegisterWorker {
+                instance: "admin".into(),
+            },
+            200,
+        ));
+    }
+
+    #[test]
+    fn registered_workers_cannot_bypass_instance_checks_on_any_assignment_operation() {
+        let mut c = memory();
+        submit(&mut c, "bound-generator", generator_plan(), true);
+        assert!(matches!(
+            register(&mut c, "incarnation", 0),
+            Response::Heartbeat { .. }
+        ));
+        let Response::Assignment {
+            assignment: Some(a),
+        } = session(&mut c, "incarnation", Request::Claim, 0)
+        else {
+            panic!("expected generator assignment");
+        };
+        let operations = [
+            Request::Claim,
+            Request::Heartbeat {
+                attempt_id: a.attempt_id.clone(),
+            },
+            Request::Complete {
+                attempt_id: a.attempt_id.clone(),
+                report: Report {
+                    success: true,
+                    log: String::new(),
+                },
+            },
+            generated_request(&a.attempt_id, true),
+            Request::ArtifactAccess {
+                attempt_id: a.attempt_id.clone(),
+                producer_task: None,
+            },
+        ];
+        let before = serde_json::to_value(load(&c.connection).unwrap()).unwrap();
+        for operation in operations {
+            error(call(&mut c, &worker(), operation.clone(), 1));
+            error(session(&mut c, "wrong-instance", operation, 1));
+            assert_eq!(
+                serde_json::to_value(load(&c.connection).unwrap()).unwrap(),
+                before
+            );
+        }
+        assert!(matches!(
+            session(
+                &mut c,
+                "incarnation",
+                Request::ArtifactAccess {
+                    attempt_id: a.attempt_id.clone(),
+                    producer_task: None
+                },
+                1
+            ),
+            Response::Data { .. }
+        ));
+        ok(session(
+            &mut c,
+            "incarnation",
+            generated_request(&a.attempt_id, true),
+            2,
+        ));
+        ok(session(
+            &mut c,
+            "incarnation",
+            generated_request(&a.attempt_id, true),
+            100,
+        ));
+        error(call(
+            &mut c,
+            &worker(),
+            generated_request(&a.attempt_id, true),
+            100,
+        ));
+        error(session(&mut c, "incarnation", Request::Claim, 100));
+    }
+
+    #[test]
+    fn registration_cannot_adopt_a_live_legacy_attempt() {
+        let mut c = memory();
+        submit(&mut c, "legacy", plan(), false);
+        let a = claim(&mut c, 0).unwrap();
+        error(register(&mut c, "new", 1));
+        ok(complete(&mut c, &a.attempt_id, true, 2));
+        assert!(matches!(
+            register(&mut c, "new", 2),
+            Response::Heartbeat { .. }
+        ));
+        error(complete(&mut c, &a.attempt_id, true, 3));
+        error(session(
+            &mut c,
+            "new",
+            Request::Complete {
+                attempt_id: a.attempt_id,
+                report: Report {
+                    success: true,
+                    log: String::new(),
+                },
+            },
+            3,
+        ));
+    }
+
+    #[test]
+    fn drain_and_revoke_overlay_survive_restart_and_retain_reservations() {
+        for acknowledge in [false, true] {
+            let database = Database::new();
+            let mut c = database.open();
+            let id = submit(&mut c, "overlay", plan(), false);
+            let a = claim(&mut c, 0).unwrap();
+            ok(admin(
+                &mut c,
+                Request::SetWorkerMode {
+                    worker: "one".into(),
+                    mode: WorkerMode::Draining,
+                },
+                1,
+            ));
+            assert!(matches!(
+                call(
+                    &mut c,
+                    &worker(),
+                    Request::Heartbeat {
+                        attempt_id: a.attempt_id.clone()
+                    },
+                    1
+                ),
+                Response::Heartbeat { cancel: false, .. }
+            ));
+            error(call(
+                &mut c,
+                &worker(),
+                Request::SetWorkerMode {
+                    worker: "one".into(),
+                    mode: WorkerMode::Active,
+                },
+                1,
+            ));
+            ok(admin(
+                &mut c,
+                Request::SetWorkerMode {
+                    worker: "one".into(),
+                    mode: WorkerMode::Revoked,
+                },
+                2,
+            ));
+            drop(c);
+            let mut c = database.open();
+            assert!(claim(&mut c, 3).is_none());
+            assert!(matches!(
+                call(
+                    &mut c,
+                    &worker(),
+                    Request::Heartbeat {
+                        attempt_id: a.attempt_id.clone()
+                    },
+                    3
+                ),
+                Response::Heartbeat {
+                    cancel: true,
+                    lease_until: 61
+                }
+            ));
+            let state = load(&c.connection).unwrap();
+            assert!(matches!(
+                state.runs[&id].attempts[&a.attempt_id].status,
+                AttemptStatus::Active
+            ));
+            assert_eq!(state.worker_modes["one"], WorkerMode::Revoked);
+            if acknowledge {
+                fenced(complete(&mut c, &a.attempt_id, false, 4), &a.attempt_id);
+            } else {
+                assert!(claim(&mut c, 61).is_none());
+            }
+            assert!(claim(&mut c, 62).is_none());
+            ok(admin(
+                &mut c,
+                Request::SetWorkerMode {
+                    worker: "one".into(),
+                    mode: WorkerMode::Draining,
+                },
+                62,
+            ));
+            assert!(claim(&mut c, 62).is_none());
+            ok(admin(
+                &mut c,
+                Request::SetWorkerMode {
+                    worker: "one".into(),
+                    mode: WorkerMode::Active,
+                },
+                62,
+            ));
+            assert!(claim(&mut c, 62).is_some());
+        }
+    }
+
+    #[test]
+    fn generation_envelope_allows_cross_platform_without_delegating_privilege() {
+        for mode in 0..9 {
+            let mut c = memory();
+            c.config.repositories.get_mut("repo").unwrap().generation =
+                Some(crate::protocol::GenerationPolicy {
+                    allowed_labels: BTreeMap::from([(
+                        "os".into(),
+                        ["macos".into(), "windows".into()].into(),
+                    )]),
+                    max_cpu: 4,
+                    max_memory_mb: 512,
+                    max_attempts: 3,
+                    max_tasks: 2,
+                });
+            let mut p = generator_plan();
+            p.tasks
+                .get_mut("build")
+                .unwrap()
+                .labels
+                .insert("os".into(), "linux".into());
+            let id = submit(&mut c, "cross-platform", p, true);
+            let a = claim(&mut c, 0).unwrap();
+            let before = inspect(&mut c, &id, 0);
+            let mut child = task();
+            child.needs = vec!["build".into()];
+            child.labels.insert("os".into(), "macos".into());
+            child.cpu = 4;
+            child.memory_mb = 512;
+            child.max_attempts = 3;
+            match mode {
+                1 => {
+                    child.labels.clear();
+                }
+                2 => {
+                    child.labels.insert("os".into(), "linux".into());
+                }
+                3 => {
+                    child.labels.insert("privileged".into(), "yes".into());
+                }
+                4 => child.cpu += 1,
+                5 => child.memory_mb += 1,
+                6 => child.max_attempts += 1,
+                7 => {
+                    child.steps[0]
+                        .env
+                        .insert("GPIPE_TASKS_OUTPUT".into(), "anything".into());
+                }
+                _ => {}
+            }
+            let mut windows = child.clone();
+            windows.labels.insert("os".into(), "windows".into());
+            let mut tasks =
+                BTreeMap::from([("mac".into(), child.clone()), ("win".into(), windows)]);
+            if mode == 8 {
+                tasks.insert("extra".into(), child);
+            }
+            let request = Request::CompleteGenerated {
+                attempt_id: a.attempt_id,
+                report: Report {
+                    success: true,
+                    log: String::new(),
+                },
+                tasks,
+                seal: true,
+            };
+            if mode == 0 {
+                ok(call(&mut c, &worker(), request.clone(), 1));
+                ok(call(&mut c, &worker(), request, 2));
+                assert!(claim(&mut c, 2).is_none());
+                let after = inspect(&mut c, &id, 2);
+                assert_eq!(after["plan"]["tasks"]["mac"]["labels"]["os"], "macos");
+                assert_eq!(after["plan"]["tasks"]["win"]["labels"]["os"], "windows");
+            } else {
+                error(call(&mut c, &worker(), request, 1));
+                assert_eq!(inspect(&mut c, &id, 1), before);
+            }
+        }
+    }
+
+    #[test]
+    fn finalizer_runs_after_exhausted_retries_not_between_attempts() {
+        let mut c = memory();
+        let mut p = plan();
+        let mut finalizer = task();
+        finalizer.when = TaskWhen::Always;
+        finalizer.needs = vec!["build".into()];
+        p.tasks.insert("cleanup".into(), finalizer);
+        let id = submit(&mut c, "retry-finalizer", p, false);
+        let first = claim(&mut c, 0).unwrap();
+        ok(complete(&mut c, &first.attempt_id, false, 1));
+        let second = claim(&mut c, 2).unwrap();
+        assert_eq!(second.task_id, "build");
+        ok(complete(&mut c, &second.attempt_id, false, 3));
+        let cleanup = claim(&mut c, 4).unwrap();
+        assert_eq!(cleanup.task_id, "cleanup");
+        ok(complete(&mut c, &cleanup.attempt_id, true, 5));
+        assert_eq!(inspect(&mut c, &id, 5)["status"], "FAILED");
+    }
+
+    #[test]
+    fn generation_task_limit_is_cumulative_across_generators() {
+        let mut c = memory();
+        c.config.repositories.get_mut("repo").unwrap().generation =
+            Some(crate::protocol::GenerationPolicy {
+                allowed_labels: BTreeMap::new(),
+                max_cpu: 2,
+                max_memory_mb: 128,
+                max_attempts: 2,
+                max_tasks: 1,
+            });
+        let mut p = generator_plan();
+        p.tasks.insert("other".into(), p.tasks["build"].clone());
+        let id = submit(&mut c, "cumulative", p, true);
+        let first = claim(&mut c, 0).unwrap();
+        ok(call(
+            &mut c,
+            &worker(),
+            generated_request(&first.attempt_id, false),
+            1,
+        ));
+        let child = claim(&mut c, 2).unwrap();
+        assert_eq!(child.task_id, "child");
+        ok(complete(&mut c, &child.attempt_id, true, 3));
+        let other = claim(&mut c, 4).unwrap();
+        assert_eq!(other.task_id, "other");
+        let before = inspect(&mut c, &id, 4);
+        let mut task = task();
+        task.needs = vec!["other".into()];
+        error(call(
+            &mut c,
+            &worker(),
+            Request::CompleteGenerated {
+                attempt_id: other.attempt_id,
+                report: Report {
+                    success: true,
+                    log: String::new(),
+                },
+                tasks: BTreeMap::from([("second-child".into(), task)]),
+                seal: true,
+            },
+            5,
+        ));
+        assert_eq!(inspect(&mut c, &id, 5), before);
+    }
+
+    #[test]
+    fn registration_only_lease_and_admin_reactivation_do_not_bypass_fencing() {
+        let mut c = memory();
+        assert!(matches!(
+            register(&mut c, "a", 10),
+            Response::Heartbeat {
+                lease_until: 70,
+                ..
+            }
+        ));
+        assert!(matches!(
+            register(&mut c, "a", 0),
+            Response::Heartbeat {
+                lease_until: 70,
+                ..
+            }
+        ));
+        error(register(&mut c, "b", 69));
+        assert!(matches!(
+            register(&mut c, "b", 70),
+            Response::Heartbeat { .. }
+        ));
+        submit(&mut c, "sticky", plan(), false);
+        let Response::Assignment {
+            assignment: Some(a),
+        } = session(&mut c, "b", Request::Claim, 70)
+        else {
+            panic!("expected assignment");
+        };
+        ok(admin(
+            &mut c,
+            Request::SetWorkerMode {
+                worker: "one".into(),
+                mode: WorkerMode::Revoked,
+            },
+            71,
+        ));
+        ok(admin(
+            &mut c,
+            Request::SetWorkerMode {
+                worker: "one".into(),
+                mode: WorkerMode::Active,
+            },
+            72,
+        ));
+        assert!(matches!(
+            session(
+                &mut c,
+                "b",
+                Request::Heartbeat {
+                    attempt_id: a.attempt_id.clone()
+                },
+                72
+            ),
+            Response::Heartbeat {
+                cancel: true,
+                lease_until: 130
+            }
+        ));
+        assert!(matches!(
+            session(&mut c, "b", Request::Claim, 72),
+            Response::Assignment { assignment: None }
+        ));
+        error(register(&mut c, "a", 72));
+        assert!(matches!(
+            session(
+                &mut c,
+                "b",
+                Request::Complete {
+                    attempt_id: a.attempt_id,
+                    report: Report {
+                        success: false,
+                        log: String::new()
+                    }
+                },
+                73
+            ),
+            Response::Fenced { .. }
+        ));
+    }
+
+    #[test]
+    fn version_one_state_migrates_defaults_and_publishes_downgrade_fence() {
+        let database = Database::new();
+        let mut c = database.open();
+        let id = submit(&mut c, "migration", plan(), false);
+        let a = claim(&mut c, 0).unwrap();
+        let mut value = serde_json::to_value(load(&c.connection).unwrap()).unwrap();
+        value.as_object_mut().unwrap().remove("workers");
+        value.as_object_mut().unwrap().remove("worker_modes");
+        value["runs"][&id]["attempts"][&a.attempt_id]
+            .as_object_mut()
+            .unwrap()
+            .remove("instance_id");
+        value["runs"][&id]["plan"]["tasks"]["build"]
+            .as_object_mut()
+            .unwrap()
+            .remove("when");
+        value["submissions"]["migration"]["plan"]["tasks"]["build"]
+            .as_object_mut()
+            .unwrap()
+            .remove("when");
+        c.connection
+            .execute(
+                "UPDATE gpipe_state SET version = 1, json = ?1",
+                [value.to_string()],
+            )
+            .unwrap();
+        drop(c);
+        let mut c = database.open();
+        let version: u32 = c
+            .connection
+            .query_row("SELECT version FROM gpipe_state", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        let state = load(&c.connection).unwrap();
+        assert!(state.workers.is_empty());
+        assert!(state.worker_modes.is_empty());
+        assert!(
+            state.runs[&id].attempts[&a.attempt_id]
+                .instance_id
+                .is_none()
+        );
+        assert_eq!(state.runs[&id].plan.tasks["build"].when, TaskWhen::Success);
+        ok(complete(&mut c, &a.attempt_id, true, 1));
+    }
+
+    #[test]
+    fn admin_artifact_inspection_is_exact_completed_attempt_scoped_and_read_only() {
+        for success in [false, true] {
+            let mut c = memory();
+            let mut p = plan();
+            p.tasks.insert("other".into(), task());
+            let id = submit(&mut c, "admin-artifact", p, false);
+            let other_run = submit(&mut c, "different-run", plan(), false);
+            let a = claim(&mut c, 0).unwrap();
+            let request = Request::InspectArtifact {
+                run_id: id.clone(),
+                task_id: "build".into(),
+                attempt_id: a.attempt_id.clone(),
+            };
+            error(admin(&mut c, request.clone(), 0));
+            error(call(&mut c, &worker(), request.clone(), 0));
+            ok(complete(&mut c, &a.attempt_id, success, 1));
+            let before = serde_json::to_value(load(&c.connection).unwrap()).unwrap();
+            let data = access_data(admin(&mut c, request.clone(), 2));
+            assert_eq!(
+                data,
+                serde_json::json!({
+                    "producer_attempt_id": a.attempt_id, "run_id": id, "task_id": "build",
+                })
+            );
+            assert_eq!(
+                serde_json::to_value(load(&c.connection).unwrap()).unwrap(),
+                before
+            );
+            error(call(&mut c, &worker(), request.clone(), 2));
+            for (run_id, task_id, attempt_id) in [
+                (other_run, "build".to_owned(), a.attempt_id.clone()),
+                (id.clone(), "other".to_owned(), a.attempt_id.clone()),
+                (id.clone(), "missing".to_owned(), a.attempt_id.clone()),
+                (id.clone(), "build".to_owned(), "unknown-attempt".to_owned()),
+            ] {
+                error(admin(
+                    &mut c,
+                    Request::InspectArtifact {
+                        run_id,
+                        task_id,
+                        attempt_id,
+                    },
+                    2,
+                ));
+            }
+            // Even a later run cancellation does not hide a completed diagnostic.
+            ok(admin(&mut c, Request::Cancel { run_id: id }, 3));
+            assert!(matches!(admin(&mut c, request, 3), Response::Data { .. }));
+        }
+        let mut c = memory();
+        let id = submit(&mut c, "expired-artifact", plan(), false);
+        let a = claim(&mut c, 0).unwrap();
+        error(admin(
+            &mut c,
+            Request::InspectArtifact {
+                run_id: id,
+                task_id: "build".into(),
+                attempt_id: a.attempt_id,
+            },
+            LEASE_SECS,
+        ));
+    }
+
+    #[test]
     fn unsupported_database_schema_and_counter_exhaustion_fail_closed() {
         let database = Database::new();
         let mut c = database.open();
         c.connection
-            .execute("UPDATE gpipe_state SET version = 2", [])
+            .execute("UPDATE gpipe_state SET version = 3", [])
             .unwrap();
         error(admin(&mut c, Request::List, 0));
         drop(c);

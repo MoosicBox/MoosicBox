@@ -315,6 +315,7 @@ mod tests {
                         tasks: BTreeMap::from([(
                             "test".into(),
                             Task {
+                                when: crate::plan::TaskWhen::default(),
                                 needs: vec![],
                                 steps: vec![CommandStep {
                                     shell: "sh".into(),

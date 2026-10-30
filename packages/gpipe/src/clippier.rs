@@ -281,6 +281,7 @@ impl MatrixPlan {
                 tasks.insert(
                     case.id.clone(),
                     Task {
+                        when: crate::plan::TaskWhen::default(),
                         needs: Vec::new(),
                         steps: recipe.steps,
                         labels: recipe.labels,

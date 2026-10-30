@@ -6,6 +6,62 @@ HTTP protocol, native workers, resolved JSON plans, dynamic task generation, and
 Clippier case import. No Docker is required. This is an implementation under
 acceptance testing, **not a production CI cutover or full workflow replacement**.
 
+## Native MoosicBox validation (opt-in)
+
+Build the shared runner with
+`cargo build -p clippier --no-default-features --features native-ci,cargo-workspace,machete,git-diff`
+and gPipe with `cargo build -p gpipe --features runtime`.
+`clippier ci-plan --case CASE.json --profile PROFILE.json` compiles an unchanged
+matrix case; `clippier ci-run --plan PLAN.json --workspace CHECKOUT --output OUTPUT`
+executes it, retaining receipts and hashed stage logs after validation failures.
+Parity tests pin the stages and relevant semantics of
+`.github/clippier/run-matrix/rust-validation.yml`. Existing GitHub Actions retain
+their original execution path; no production cutover is enabled.
+
+`gpipe prepare-moosicbox JOBS.json PROFILE.json --repository REPO --revision EXACT_SHA --seed SEED --clippier /absolute/clippier`
+returns a reproducible manifest and executable `plan`. Submit that plan through the
+existing coordinator command. Profile fields: `toolchain` (`system` for preinstalled
+Nix tools), `coverage`, `clippier_executable` (absolute), `allow_setup`,
+`base_revision` (exact SHA), `scope`, and `packages`. Preparation records original
+jobs/cases, source/base, seed, profile, suite/helper digests and executable digest;
+worker invocation checks the executable digest before execution. Checkout remains
+detached at the approved revision. Worker environment is deliberately configured,
+not inherited wholesale. Unsupported setup fails closed; `free_disk_space` is
+never run on desktops. `taplo` is explicitly classified outside this Rust suite.
+
+`gpipe verify-ci-run PREPARED.json --url URL --token-env ADMIN_ENV RUN_ID`
+downloads authenticated completed-attempt artifacts, independently checks SHA-256,
+and gates success on exact run/revision/plan/cases, stages, helper snapshots and
+required coverage evidence. Task exit status or receipt-shaped log text alone
+cannot satisfy this gate. Downloads are bounded to 64 MiB individually and in
+aggregate. `verify-moosicbox` validates previously authenticated offline evidence;
+it does not prove arbitrary supplied JSON came from the coordinator.
+
+`GPIPE_ARTIFACTS_ALWAYS` publishes diagnostics after validation failure without
+changing the failure into success. Cancellation/lease loss still fences uploads.
+Task `when: ALWAYS` enables finalizers after terminal dependency failure; explicit
+run cancellation stops all new work. Repository `generation` policy authorizes
+bounded cross-platform generation independently of generator placement. Worker
+incarnation registration fences duplicate identities across directories; admin
+`SET_WORKER_MODE` supports `ACTIVE`, `DRAINING`, and `REVOKED`. Directory bundles
+preserve regular-file execute bits with traversal/symlink/size guards. Workers
+remain trusted processes, not sandboxes; reservations are not OS resource limits.
+
+### Current native acceptance
+
+A real `moosicbox_assert` Linux case (seed 42) passed the complete shared suite
+through a local coordinator and detached worker: Clippy, instrumented tests,
+doctests, strict coverage, isolated target generations, workspace formatting and
+Clippier machete. The authoritative verifier checked 24 downloaded artifacts.
+This Nix desktop used the original `ubuntu` matrix runner-family label: it proves
+this dependency-free Rust case on Nix, **not** Ubuntu setup parity.
+
+Dependency-heavy/nightly cases, full-workspace accounting, other native platforms
+and hosted execution remain unproved. Global cargo-deny, feature propagation and
+scheduling checks, durable provider reporting, machine-wide slot accounting,
+source synchronization, retention operations and hosted provisioning remain
+separate integration gates. Coverage-disabled profiles do not prove coverage parity.
+
 ## Trust and deployment model
 
 - Workers execute trusted commands as their desktop/service account, **not in a

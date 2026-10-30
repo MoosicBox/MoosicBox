@@ -61,6 +61,10 @@ mod cargo_workspace;
 /// Lossless CI case scheduling and receipt reconciliation.
 pub mod matrix_schedule;
 
+/// Provider-independent native CI planning, execution and evidence.
+#[cfg(feature = "native-ci")]
+pub mod native_ci;
+
 pub mod package_filter;
 
 /// Shared user and workspace preferences.

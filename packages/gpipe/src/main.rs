@@ -58,6 +58,33 @@ enum Command {
         #[arg(long)]
         seed: Option<u64>,
     },
+    /// Prepare an exact `MoosicBox` suite using the shared Clippier native executor.
+    PrepareMoosicbox {
+        jobs: PathBuf,
+        profile: PathBuf,
+        #[arg(long)]
+        repository: String,
+        #[arg(long)]
+        revision: String,
+        #[arg(long)]
+        seed: u64,
+        #[arg(long)]
+        clippier: PathBuf,
+    },
+    /// Verify run/revision/attempt-bound native suite evidence.
+    VerifyMoosicbox {
+        prepared: PathBuf,
+        inspection: PathBuf,
+    },
+    /// Download and verify authoritative completed-attempt CI evidence.
+    VerifyCiRun {
+        prepared: PathBuf,
+        #[arg(long)]
+        url: String,
+        #[arg(long, default_value = "GPIPE_ADMIN_TOKEN")]
+        token_env: String,
+        run_id: String,
+    },
     /// Validate a resolved JSON execution plan without executing it.
     Validate { plan: PathBuf },
     /// Submit a plan with a stable idempotency key.
@@ -223,6 +250,7 @@ fn verify_clippier(jobs: &PathBuf, receipts: &PathBuf, seed: Option<u64>) -> Res
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // Explicit one-arm-per-command CLI dispatch.
 fn run() -> Result<(), String> {
     match Cli::parse().command {
         Command::Serve { config, triggers } => {
@@ -257,6 +285,54 @@ fn run() -> Result<(), String> {
             receipts,
             seed,
         } => verify_clippier(&jobs, &receipts, seed),
+        Command::PrepareMoosicbox {
+            jobs,
+            profile,
+            repository,
+            revision,
+            seed,
+            clippier,
+        } => {
+            let prepared = gpipe::moosicbox::prepare(
+                &read_json(&jobs)?,
+                &repository,
+                &revision,
+                seed,
+                &clippier,
+                &read_json(&profile)?,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&prepared).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
+        Command::VerifyMoosicbox {
+            prepared,
+            inspection,
+        } => {
+            let verified =
+                gpipe::moosicbox::verify(&read_json(&prepared)?, &read_json(&inspection)?)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&verified).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
+        Command::VerifyCiRun {
+            prepared,
+            url,
+            token_env,
+            run_id,
+        } => {
+            let client = gpipe::operator::OperatorClient::new(&url, &token_env)?;
+            let verified = client.verify_ci(&read_json(&prepared)?, &run_id)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&verified).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
         Command::Validate { plan } => {
             let plan: Plan = read_json(&plan)?;
             plan.validate()?;

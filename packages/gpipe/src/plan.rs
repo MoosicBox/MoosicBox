@@ -40,10 +40,25 @@ pub struct Plan {
     pub tasks: BTreeMap<String, Task>,
 }
 
+/// Dependency outcome required before scheduling a task.
+/// Explicit run cancellation prevents both modes from starting new work.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TaskWhen {
+    /// All dependencies must succeed.
+    #[default]
+    Success,
+    /// All dependencies must be terminal, including failed, blocked or cancelled.
+    Always,
+}
+
 /// A resolved schedulable unit with sequential command steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Task {
-    /// Distinct task IDs that must complete successfully before this task runs.
+    /// Dependency outcome policy; omitted values preserve success-only scheduling.
+    #[serde(default)]
+    pub when: TaskWhen,
+    /// Distinct task IDs that must settle according to `when` before this task runs.
     pub needs: Vec<String>,
     /// Commands executed in order on the same worker.
     pub steps: Vec<CommandStep>,
@@ -173,9 +188,10 @@ impl Plan {
     ///
     /// ```
     /// use std::collections::BTreeMap;
-    /// use gpipe::plan::{CommandStep, Plan, Task};
+    /// use gpipe::plan::{CommandStep, Plan, Task, TaskWhen};
     ///
     /// let build = Task {
+    ///     when: TaskWhen::Success,
     ///     needs: vec![],
     ///     steps: vec![CommandStep {
     ///         shell: "sh".into(), run: "echo ready".into(),
@@ -327,6 +343,7 @@ mod tests {
 
     fn task(needs: &[&str]) -> Task {
         Task {
+            when: TaskWhen::Success,
             needs: needs.iter().map(|id| (*id).into()).collect(),
             steps: vec![CommandStep {
                 shell: "sh".into(),
@@ -347,6 +364,20 @@ mod tests {
             revision: "a".repeat(40),
             tasks: BTreeMap::from([("build".into(), task(&[]))]),
         }
+    }
+
+    #[test]
+    fn task_when_defaults_to_success_and_round_trips_always() {
+        let mut value = serde_json::to_value(task(&[])).unwrap();
+        value.as_object_mut().unwrap().remove("when");
+        let legacy: Task = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(legacy.when, TaskWhen::Success);
+        value["when"] = serde_json::json!("ALWAYS");
+        let always: Task = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(always.when, TaskWhen::Always);
+        assert_eq!(serde_json::to_value(always).unwrap()["when"], "ALWAYS");
+        value["when"] = serde_json::json!("sometimes");
+        assert!(serde_json::from_value::<Task>(value).is_err());
     }
 
     #[test]

@@ -129,6 +129,7 @@ default = [
     "upgrade",
     "versioning",
 ]
+native-ci = ["dep:serde_yaml", "dep:sha2"]
 
 machete = [
     "dep:bmux_tui",

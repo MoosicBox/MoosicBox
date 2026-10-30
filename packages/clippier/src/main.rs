@@ -1361,6 +1361,24 @@ enum Commands {
         #[arg(long)]
         summary_file: Option<std::path::PathBuf>,
     },
+    /// Compile one unchanged CI case into the shared native validation plan.
+    #[cfg(feature = "native-ci")]
+    CiPlan {
+        #[arg(long)]
+        case: PathBuf,
+        #[arg(long)]
+        profile: PathBuf,
+    },
+    /// Execute a compiled native CI plan and persist evidence even on failure.
+    #[cfg(feature = "native-ci")]
+    CiRun {
+        #[arg(long)]
+        plan: PathBuf,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Require exactly one successful receipt for every scheduled case
     VerifyMatrix {
         /// JSON job plan produced by plan-matrix or schedule-matrix
@@ -2136,6 +2154,27 @@ async fn run() -> Result<(), BoxError> {
                 std::fs::write(path, serde_json::to_string_pretty(&summary)?)?;
             }
             serde_json::to_string(&jobs)?
+        }
+        #[cfg(feature = "native-ci")]
+        Commands::CiPlan { case, profile } => {
+            let case = serde_json::from_slice(&std::fs::read(case)?)?;
+            let profile = serde_json::from_slice(&std::fs::read(profile)?)?;
+            let plan = clippier::native_ci::plan(&case, &profile)?;
+            serde_json::to_string_pretty(&plan)?
+        }
+        #[cfg(feature = "native-ci")]
+        Commands::CiRun {
+            plan,
+            workspace,
+            output,
+        } => {
+            let plan = serde_json::from_slice(&std::fs::read(plan)?)?;
+            let receipt = clippier::native_ci::execute(&plan, &workspace, &output)?;
+            if receipt.exit_code != 0 {
+                println!("{}", serde_json::to_string_pretty(&receipt)?);
+                return Err("native CI validation failed; evidence retained".into());
+            }
+            serde_json::to_string_pretty(&receipt)?
         }
         Commands::VerifyMatrix { plan, receipts } => {
             let jobs: Vec<clippier::matrix_schedule::Job> =

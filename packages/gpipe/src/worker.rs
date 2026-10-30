@@ -7,7 +7,7 @@
 //! persisted and transmitted. The worker token is redacted, but arbitrary credentials
 //! (including transformed/encoded tokens) cannot be detected reliably.
 //! Reports retain the last 16 step stream tails (384 UTF-8 bytes per stream) within
-//! a 16 KiB total report cap; outer JSON truncation is explicitly marked. The
+//! a 16 KiB total report cap; reports remain valid JSON when truncated. The
 //! worker does not install tools, initialize submodules, or fetch remote objects.
 //! Unix spool publication uses file/directory fsync; Windows uses file sync and
 //! same-volume `MoveFileExW` `WRITE_THROUGH`. Protect the state directory with an
@@ -41,12 +41,14 @@
 //!
 //! Explicit task `GPIPE_ARTIFACTS` declarations use `ArtifactSpec::from_steps`.
 //! Inputs download after checkout; successful command outputs upload before any
-//! generated graph is read or completion is spooled. Errors fail completion with
-//! no graph. Heartbeats/watchdog cover all phases. Cancellation is checked between
-//! files; the transfer API has no chunk cancellation hook, so an in-flight file
-//! can finish after lease loss (each HTTP request uses the 3 second client limit).
-//! No new commands or claims execute under that lost lease; coordinator fences
-//! transfer authorization. This module never logs transfer errors or credentials.
+//! generated graph is read or completion is spooled. `GPIPE_ARTIFACTS_ALWAYS`
+//! selects evidence outputs published even after a command/executor failure;
+//! failed evidence uploads retain the original typed outcome and stream tails.
+//! No graph is delivered on failure. Heartbeats/watchdog cover all phases.
+//! Upload cancellation is checked before every chunk, retry and finalization;
+//! in-flight HTTP requests and downloads still require coordinator fencing.
+//! Requests carry the durable incarnation header for artifact authorization.
+//! This module never logs transfer errors or credentials.
 
 use std::{
     collections::BTreeMap,
@@ -77,6 +79,7 @@ struct Rpc {
     client: Client,
     endpoint: Url,
     token: String,
+    instance_id: Option<String>,
 }
 
 impl Rpc {
@@ -98,7 +101,28 @@ impl Rpc {
             client,
             endpoint,
             token,
+            instance_id: None,
         })
+    }
+
+    fn bind_instance(&mut self, instance_id: String) -> Result<(), String> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            crate::transfer::WORKER_INSTANCE_HEADER,
+            instance_id
+                .parse()
+                .map_err(|_| "invalid worker instance header")?,
+        );
+        self.client = Client::builder()
+            .redirect(Policy::none())
+            .no_proxy()
+            .connect_timeout(RPC_TIMEOUT)
+            .timeout(RPC_TIMEOUT)
+            .default_headers(headers)
+            .build()
+            .map_err(|_| "cannot initialize bound worker HTTP client")?;
+        self.instance_id = Some(instance_id);
+        Ok(())
     }
 
     fn call(&self, request: &Request, once: bool) -> Result<Response, String> {
@@ -123,6 +147,7 @@ impl Rpc {
     }
 
     fn call_once(&self, request: Request) -> Result<Response, RpcFailure> {
+        let request = bind_request(request, self.instance_id.as_deref());
         let response = self
             .client
             .post(self.endpoint.clone())
@@ -168,6 +193,46 @@ impl Rpc {
             retryable: false,
             not_sent: false,
         })
+    }
+}
+
+fn bind_request(request: Request, instance: Option<&str>) -> Request {
+    let Some(instance) = instance else {
+        return request;
+    };
+    let instance = instance.to_owned();
+    match request {
+        Request::Claim => Request::ClaimFor { instance },
+        Request::Heartbeat { attempt_id } => Request::HeartbeatFor {
+            instance,
+            attempt_id,
+        },
+        Request::Complete { attempt_id, report } => Request::CompleteFor {
+            instance,
+            attempt_id,
+            report,
+        },
+        Request::CompleteGenerated {
+            attempt_id,
+            report,
+            tasks,
+            seal,
+        } => Request::CompleteGeneratedFor {
+            instance,
+            attempt_id,
+            report,
+            tasks,
+            seal,
+        },
+        Request::ArtifactAccess {
+            attempt_id,
+            producer_task,
+        } => Request::ArtifactAccessFor {
+            instance,
+            attempt_id,
+            producer_task,
+        },
+        request => request,
     }
 }
 
@@ -497,32 +562,239 @@ fn archive_fenced(directory: &Path, attempt_id: &str, bytes: &[u8]) -> Result<()
     sync_directory(directory)
 }
 
-/// Run an authenticated pull worker, replaying durable completion before claiming.
+/// Local admission checks; no installation, deletion or tool execution is performed.
+#[derive(Clone, Debug, Default)]
+pub struct WorkerPreflight {
+    /// Minimum free bytes required on the workspace filesystem; zero disables.
+    pub minimum_free_bytes: u64,
+    /// Administrator-approved absolute executable file paths required locally.
+    pub tools: Vec<PathBuf>,
+}
+
+/// Check local disk and tool paths without coordinator access or filesystem mutation.
 ///
-/// `once` flushes pending completion and polls once, executing at most one assignment.
-/// Temporary network failures retry with 1..30 second capped exponential backoff,
-/// except in `once` mode. Ambiguous unkeyed claims stop without replay.
-/// Commands must not print secrets: bounded output is persisted and transmitted.
-/// Worker token and secret-like explicit environment values are redacted from logs;
-/// this is not a substitute for keeping credentials out of command output.
+/// The worker directory must already exist. On platforms without
+/// disk querying support a nonzero minimum fails explicitly.
 ///
 /// # Errors
-///
-/// * Configuration, token, worker directory or exclusive lock is invalid/unavailable.
-/// * RPC fails, is oversized, malformed or returns an unexpected response.
-/// * Completion cannot be durably persisted or acknowledged (retry on next invocation).
-/// * An assignment identity is unsafe; no filesystem path is derived from it.
-pub fn run(config: &WorkerConfig, once: bool) -> Result<(), String> {
+/// * Invalid environment, missing/non-directory workspace, insufficient disk,
+///   unavailable disk query, or a missing/nonabsolute/nonexecutable tool path.
+pub fn preflight(config: &WorkerConfig, checks: &WorkerPreflight) -> Result<(), String> {
     validate_environment(&config.environment)?;
-    let rpc = Rpc::new(config)?;
+    let directory =
+        fs::canonicalize(&config.directory).map_err(|_| "worker directory unavailable")?;
+    if !directory.is_dir() {
+        return Err("worker directory must be a directory".into());
+    }
+    if checks.minimum_free_bytes != 0 && available_bytes(&directory)? < checks.minimum_free_bytes {
+        return Err("worker disk free space is below configured minimum".into());
+    }
+    for tool in &checks.tools {
+        if !tool.is_absolute() {
+            return Err("preflight tool paths must be absolute".into());
+        }
+        let metadata = fs::metadata(tool).map_err(|_| "required local tool unavailable")?;
+        if !metadata.is_file() {
+            return Err("required local tool is not a regular file".into());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if metadata.permissions().mode() & 0o111 == 0 {
+                return Err("required local tool is not executable".into());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn available_bytes(directory: &Path) -> Result<u64, String> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(directory.as_os_str().as_bytes())
+        .map_err(|_| "invalid worker directory")?;
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: path is NUL terminated and stats points to writable statvfs storage.
+    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return Err("cannot query worker disk free space".into());
+    }
+    // SAFETY: successful statvfs initialized stats.
+    let stats = unsafe { stats.assume_init() };
+    let bytes = u128::from(stats.f_bavail) * u128::from(stats.f_frsize);
+    Ok(u64::try_from(bytes).unwrap_or(u64::MAX))
+}
+
+#[cfg(windows)]
+fn available_bytes(directory: &Path) -> Result<u64, String> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetDiskFreeSpaceExW(
+            directory: *const u16,
+            available: *mut u64,
+            total: *mut u64,
+            free: *mut u64,
+        ) -> i32;
+    }
+    let mut path: Vec<u16> = directory.as_os_str().encode_wide().collect();
+    if path.contains(&0) {
+        return Err("invalid worker directory".into());
+    }
+    path.push(0);
+    let mut available = 0;
+    // SAFETY: path is NUL terminated; available is writable. Other outputs are optional.
+    if unsafe {
+        GetDiskFreeSpaceExW(
+            path.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err("cannot query worker disk free space".into());
+    }
+    Ok(available)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn available_bytes(_: &Path) -> Result<u64, String> {
+    Err("disk preflight is unsupported on this platform".into())
+}
+
+/// Run with explicit local admission checks, repeated before each claim.
+///
+/// # Errors
+/// * Any error documented by [`preflight`] or [`run`].
+pub fn run_with_preflight(
+    config: &WorkerConfig,
+    once: bool,
+    checks: &WorkerPreflight,
+) -> Result<(), String> {
+    run_inner(config, once, checks)
+}
+
+/// Run an instance-bound authenticated worker with no optional preflight minimum.
+///
+/// Replays pending completion under its persisted incarnation before renewing
+/// registration. Clean restarts retain that identity; existing lock/crash-recovery
+/// files require operator recovery and are never automatically removed. `once`
+/// executes at most one assignment.
+/// Ambiguous claims are never replayed. Commands must not print credentials.
+///
+/// # Errors
+/// * Invalid configuration/token/directory, exclusive lock or recovery conflict.
+/// * Registration, RPC, checkout, durable completion or assignment validation fails.
+pub fn run(config: &WorkerConfig, once: bool) -> Result<(), String> {
+    run_inner(config, once, &WorkerPreflight::default())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InstanceRecord {
+    coordinator: String,
+    token_env: String,
+    instance_id: String,
+}
+
+fn restore_instance(directory: &Path, config: &WorkerConfig, rpc: &mut Rpc) -> Result<(), String> {
+    let path = directory.join("worker-instance.json");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err("cannot inspect persisted worker instance".into()),
+    };
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 4096 {
+        return Err("invalid persisted worker instance; explicit recovery required".into());
+    }
+    let record: InstanceRecord = serde_json::from_reader(
+        File::open(path)
+            .map_err(|_| "cannot open worker instance")?
+            .take(4097),
+    )
+    .map_err(|_| "invalid persisted worker instance")?;
+    if record.coordinator != rpc.endpoint.as_str()
+        || record.token_env != config.token_env
+        || record.instance_id.is_empty()
+        || record.instance_id.len() > 256
+        || record.instance_id.chars().any(char::is_control)
+    {
+        return Err("persisted worker instance does not match configuration".into());
+    }
+    rpc.bind_instance(record.instance_id)
+}
+
+fn create_instance(directory: &Path, config: &WorkerConfig, rpc: &mut Rpc) -> Result<(), String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "invalid system clock")?
+        .as_nanos();
+    let instance_id = format!("{}-{now}", std::process::id());
+    let record = InstanceRecord {
+        coordinator: rpc.endpoint.to_string(),
+        token_env: config.token_env.clone(),
+        instance_id: instance_id.clone(),
+    };
+    let temporary = directory.join("worker-instance.tmp");
+    let mut file = private_file(&temporary)
+        .map_err(|_| "worker-instance.tmp requires explicit crash recovery")?;
+    serde_json::to_writer(&mut file, &record).map_err(|_| "cannot persist worker instance")?;
+    file.sync_all().map_err(|_| "cannot sync worker instance")?;
+    fs::rename(temporary, directory.join("worker-instance.json"))
+        .map_err(|_| "cannot publish worker instance")?;
+    sync_directory(directory)?;
+    rpc.bind_instance(instance_id)
+}
+
+fn register_instance(rpc: &Rpc, once: bool) -> Result<(), String> {
+    let instance_id = rpc
+        .instance_id
+        .clone()
+        .ok_or("worker instance is missing")?;
+    match rpc.call(
+        &Request::RegisterWorker {
+            instance: instance_id,
+        },
+        once,
+    )? {
+        Response::Heartbeat {
+            cancel: false,
+            lease_until,
+        } if lease_millis(lease_until) > 0 => Ok(()),
+        _ => Err("worker registration rejected or expired".into()),
+    }
+}
+
+fn run_inner(config: &WorkerConfig, once: bool, checks: &WorkerPreflight) -> Result<(), String> {
+    validate_environment(&config.environment)?;
+    let mut rpc = Rpc::new(config)?;
     let directory = Path::new(&config.directory);
     private_directory(directory)?;
     let directory = fs::canonicalize(directory).map_err(|_| "cannot resolve worker directory")?;
     let _lock = lock(&directory)?;
+    if directory
+        .join("worker-instance.tmp")
+        .try_exists()
+        .map_err(|_| "cannot inspect instance recovery file")?
+    {
+        return Err("worker-instance.tmp requires explicit crash recovery".into());
+    }
+    restore_instance(&directory, config, &mut rpc)?;
+    // Replay pending evidence under the exact durable incarnation first. A
+    // clean restart retains that identity: replacing it would conflict with
+    // its still-live registration lease, even after terminal acknowledgement.
+    // The exclusive lock prevents concurrent owners; retained attempt workspace
+    // checks still prevent a replayed active assignment from executing twice.
+    flush(&directory, config, &rpc, once)?;
+    if rpc.instance_id.is_none() {
+        create_instance(&directory, config, &mut rpc)?;
+    }
     private_directory(&directory.join("attempts"))?;
     private_directory(&directory.join("empty-template"))?;
     loop {
         flush(&directory, config, &rpc, once)?;
+        preflight(config, checks)?;
+        register_instance(&rpc, once)?;
         let Response::Assignment { assignment } = rpc.call(&Request::Claim, once)? else {
             return Err("unexpected claim response".into());
         };
@@ -549,7 +821,16 @@ pub fn run(config: &WorkerConfig, once: bool) -> Result<(), String> {
             if once {
                 return Ok(());
             }
-            thread::sleep(Duration::from_secs(config.poll_secs.clamp(1, 300)));
+            // Keep this incarnation live even when the configured idle poll is
+            // longer than the coordinator's registration lease. Failure stops
+            // rather than silently running under an expired registration.
+            let mut remaining = config.poll_secs.clamp(1, 300);
+            while remaining > 0 {
+                let interval = remaining.min(10);
+                thread::sleep(Duration::from_secs(interval));
+                remaining -= interval;
+                register_instance(&rpc, true)?;
+            }
         }
     }
 }
@@ -629,10 +910,8 @@ fn perform(
             Ok(mut completion) => {
                 completion.generated = None;
                 completion.report.success = false;
-                completion.report.log = bounded_log(
-                    &format!("attempt cancelled or lease lost\n{}", completion.report.log),
-                    false,
-                );
+                completion.report.log =
+                    annotate_log(&completion.report.log, "attempt cancelled or lease lost");
                 completion
             }
             Err(_) => Completion {
@@ -695,11 +974,14 @@ fn checkout_and_execute(
     }
     let spec = crate::transfer::ArtifactSpec::from_steps(&assignment.task.steps)
         .map_err(|_| "invalid or conflicting explicit artifact declarations".to_owned())?;
+    let always = crate::transfer::ArtifactSpec::from_always_steps(&assignment.task.steps)
+        .map_err(|_| "invalid or conflicting failure evidence declarations".to_owned())?;
+    validate_output_policies(&spec, &always)?;
     let steps = merge_environment(&assignment.task.steps, &config.environment)?;
     let secrets = output_secrets(&rpc.token, &config.environment, &assignment.task.steps);
     let transfer =
         |upload: bool| transfer_artifacts(rpc, assignment, &workspace, &spec, cancelled, upload);
-    Ok(artifact_execution(
+    Ok(artifact_execution_with_evidence(
         &assignment.task,
         &workspace,
         cancelled,
@@ -710,7 +992,28 @@ fn checkout_and_execute(
                 .map_err(|_| "executor failed (details withheld)".to_owned())
         },
         || transfer(true),
+        || transfer_artifacts(rpc, assignment, &workspace, &always, cancelled, true),
     ))
+}
+
+fn validate_output_policies(
+    normal: &crate::transfer::ArtifactSpec,
+    always: &crate::transfer::ArtifactSpec,
+) -> Result<(), String> {
+    normal.validate()?;
+    always.validate()?;
+    let mut combined = normal.clone();
+    for output in &always.outputs {
+        // The same immutable artifact may be declared under both policies.
+        // Upload replay is checksum-verified; different paths for one name
+        // remain a conflict rather than silently selecting either source.
+        if !combined.outputs.contains(output) {
+            combined.outputs.push(output.clone());
+        }
+    }
+    combined
+        .validate()
+        .map_err(|_| "conflicting artifact output names".to_owned())
 }
 
 fn transfer_artifacts(
@@ -721,13 +1024,14 @@ fn transfer_artifacts(
     cancelled: &AtomicBool,
     upload: bool,
 ) -> Result<(), String> {
-    // Bound cancellation latency to one file transfer plus its HTTP timeout.
-    // Transfer API currently has no per-chunk cancellation callback.
+    // Upload cancellation is checked before every chunk/finalization; downloads
+    // remain bounded by one file transfer plus its HTTP timeout.
     let count = if upload {
         spec.outputs.len()
     } else {
         spec.inputs.len()
     };
+    let mut failed = false;
     for index in 0..count {
         if cancelled.load(Ordering::Acquire) {
             return Err("attempt cancelled or lease lost".into());
@@ -743,34 +1047,44 @@ fn transfer_artifacts(
                 outputs: vec![],
             }
         };
-        let operation = if upload {
-            crate::transfer::upload
+        let result = if upload {
+            crate::transfer::upload_guarded(
+                &rpc.client,
+                rpc.endpoint.as_str(),
+                &rpc.token,
+                &assignment.attempt_id,
+                workspace,
+                &single,
+                || cancelled.load(Ordering::Acquire),
+            )
         } else {
-            crate::transfer::download
+            crate::transfer::download(
+                &rpc.client,
+                rpc.endpoint.as_str(),
+                &rpc.token,
+                &assignment.attempt_id,
+                workspace,
+                &single,
+            )
         };
-        operation(
-            &rpc.client,
-            rpc.endpoint.as_str(),
-            &rpc.token,
-            &assignment.attempt_id,
-            workspace,
-            &single,
-        )
-        .map_err(|_| {
-            if upload {
-                "artifact upload failed (details withheld)"
-            } else {
-                "artifact download failed (details withheld)"
+        if result.is_err() {
+            if !upload {
+                return Err("artifact download failed (details withheld)".to_owned());
             }
-            .to_owned()
-        })?;
+            // A missing receipt must not suppress remaining stage logs/coverage.
+            failed = true;
+        }
     }
     if cancelled.load(Ordering::Acquire) {
         return Err("attempt cancelled or lease lost".into());
     }
+    if failed {
+        return Err("artifact upload failed (details withheld)".to_owned());
+    }
     Ok(())
 }
 
+#[cfg(test)]
 fn artifact_execution(
     task: &crate::plan::Task,
     workspace: &Path,
@@ -778,6 +1092,26 @@ fn artifact_execution(
     download: impl FnOnce() -> Result<(), String>,
     execute: impl FnOnce() -> Result<Report, String>,
     upload: impl FnOnce() -> Result<(), String>,
+) -> Completion {
+    artifact_execution_with_evidence(
+        task,
+        workspace,
+        cancelled,
+        download,
+        execute,
+        upload,
+        || Ok(()),
+    )
+}
+
+fn artifact_execution_with_evidence(
+    task: &crate::plan::Task,
+    workspace: &Path,
+    cancelled: &AtomicBool,
+    download: impl FnOnce() -> Result<(), String>,
+    execute: impl FnOnce() -> Result<Report, String>,
+    upload: impl FnOnce() -> Result<(), String>,
+    evidence: impl FnOnce() -> Result<(), String>,
 ) -> Completion {
     let failed = |message: &str| Completion {
         report: Report {
@@ -795,22 +1129,25 @@ fn artifact_execution(
     if cancelled.load(Ordering::Acquire) {
         return failed("attempt cancelled or lease lost");
     }
-    let Ok(mut report) = execute() else {
-        return failed("executor failed (details withheld)");
-    };
-    if report.success && !cancelled.load(Ordering::Acquire) && upload().is_err() {
+    let mut report =
+        execute().unwrap_or_else(|_| failed("executor failed (details withheld)").report);
+    // Evidence is attempted even after an executor infrastructure error, but
+    // cancellation never grants permission to publish stale attempt data.
+    let command_succeeded = report.success;
+    if !cancelled.load(Ordering::Acquire) && evidence().is_err() {
         report.success = false;
-        report.log = bounded_log(
-            &format!("artifact upload failed (details withheld)\n{}", report.log),
-            false,
+        report.log = annotate_log(
+            &report.log,
+            "failure evidence upload failed (details withheld)",
         );
+    }
+    if command_succeeded && !cancelled.load(Ordering::Acquire) && upload().is_err() {
+        report.success = false;
+        report.log = annotate_log(&report.log, "artifact upload failed (details withheld)");
     }
     if cancelled.load(Ordering::Acquire) {
         report.success = false;
-        report.log = bounded_log(
-            &format!("attempt cancelled or lease lost\n{}", report.log),
-            false,
-        );
+        report.log = annotate_log(&report.log, "attempt cancelled or lease lost");
     }
     finish_execution(report, task, workspace)
 }
@@ -914,7 +1251,7 @@ fn finish_execution(mut report: Report, task: &crate::plan::Task, workspace: &Pa
             Ok(generated) => Some(generated),
             Err(message) => {
                 report.success = false;
-                report.log = bounded_log(&format!("{message}\n{}", report.log), false);
+                report.log = annotate_log(&report.log, &message);
                 None
             }
         }
@@ -1145,34 +1482,83 @@ fn execution_report(result: &crate::executor::ExecutionResult, secrets: &[&str])
             };
             serde_json::json!({
                 "step": step.step_index, "success": step.success,
+                "outcome": step.outcome, "exit_code": step.exit_code,
+                "stdout_complete": step.stdout.complete, "stderr_complete": step.stderr.complete,
                 "stdout": tail(&step.stdout.text), "stderr": tail(&step.stderr.text),
                 "stdout_truncated": step.stdout.truncated || step.stdout.text.len() > 384,
                 "stderr_truncated": step.stderr.truncated || step.stderr.text.len() > 384,
             })
         })
         .collect();
-    let value =
-        serde_json::json!({"success": result.success, "omitted_steps": omitted, "steps": steps});
-    let mut output = BoundedOutput::default();
-    let _ = serde_json::to_writer(&mut output, &value);
-    let text = redact_secrets(
-        &String::from_utf8_lossy(&output.bytes),
-        secrets,
-        output.truncated,
-    );
+    let value = serde_json::json!({"success": result.success, "outcome": result.outcome,
+        "exit_code": result.exit_code, "omitted_steps": omitted, "steps": steps});
     Report {
         success: result.success,
-        log: bounded_log(&text, output.truncated),
+        log: bounded_report_json(value),
     }
+}
+
+// Bound the serialized representation, not raw text: JSON escaping can expand
+// each byte sixfold. Never cut a serialized JSON document in the middle.
+fn bounded_report_json(mut value: serde_json::Value) -> String {
+    loop {
+        let text = serde_json::to_string(&value).expect("JSON value serialization");
+        if text.len() <= LOG_LIMIT {
+            return text;
+        }
+        value["report_truncated"] = true.into();
+        let mut reduced = false;
+        if let Some(steps) = value["steps"].as_array_mut() {
+            for step in steps {
+                for stream in ["stdout", "stderr"] {
+                    if let Some(text) = step[stream].as_str().filter(|text| !text.is_empty()) {
+                        let mut start = text.len() / 2 + 1;
+                        while !text.is_char_boundary(start) {
+                            start += 1;
+                        }
+                        step[stream] = text[start..].into();
+                        step[format!("{stream}_truncated")] = true.into();
+                        reduced = true;
+                    }
+                }
+            }
+        }
+        if !reduced {
+            // Metadata here is bounded (16 steps and fixed diagnostic messages).
+            return serde_json::json!({"success": value["success"],
+                "outcome": value["outcome"], "exit_code": value["exit_code"],
+                "report_truncated": true})
+            .to_string();
+        }
+    }
+}
+
+fn annotate_log(log: &str, message: &str) -> String {
+    if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(log)
+        && value.is_object()
+    {
+        let diagnostics = value
+            .as_object_mut()
+            .expect("object")
+            .entry("diagnostics")
+            .or_insert_with(|| serde_json::json!([]));
+        if let Some(items) = diagnostics.as_array_mut() {
+            items.push(message.into());
+        }
+        return bounded_report_json(value);
+    }
+    bounded_log(&format!("{message}\n{log}"), false)
 }
 
 const LOG_LIMIT: usize = 16 * 1024;
 
+#[cfg(test)]
 #[derive(Default)]
 struct BoundedOutput {
     bytes: Vec<u8>,
     truncated: bool,
 }
+#[cfg(test)]
 impl Write for BoundedOutput {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         let remaining = LOG_LIMIT.saturating_sub(self.bytes.len());
@@ -1343,6 +1729,7 @@ mod tests {
 
     fn generator_task(marker: Option<&str>) -> crate::plan::Task {
         crate::plan::Task {
+            when: crate::plan::TaskWhen::default(),
             needs: vec![],
             labels: BTreeMap::new(),
             cpu: 1,
@@ -1357,6 +1744,305 @@ mod tests {
                     .unwrap_or_default(),
             }],
         }
+    }
+
+    #[test]
+    fn requests_bind_to_actual_typed_instance_operations() {
+        assert!(matches!(bind_request(Request::Claim, Some("boot")),
+            Request::ClaimFor { instance } if instance == "boot"));
+        assert!(
+            matches!(bind_request(Request::Heartbeat { attempt_id: "a".into() }, Some("boot")),
+            Request::HeartbeatFor { instance, attempt_id } if instance == "boot" && attempt_id == "a")
+        );
+        assert!(
+            matches!(bind_request(Request::Complete { attempt_id: "a".into(),
+            report: Report { success: false, log: "failed".into() } }, Some("boot")),
+            Request::CompleteFor { instance, report, .. } if instance == "boot" && !report.success)
+        );
+        assert!(
+            matches!(bind_request(Request::ArtifactAccess { attempt_id: "a".into(), producer_task: None }, Some("boot")),
+            Request::ArtifactAccessFor { instance, .. } if instance == "boot")
+        );
+        assert!(matches!(bind_request(Request::Claim, None), Request::Claim));
+    }
+
+    fn local_config(directory: &Path) -> WorkerConfig {
+        WorkerConfig {
+            coordinator: "https://example.invalid/v1/rpc".into(),
+            token_env: "TOKEN".into(),
+            directory: directory.to_str().unwrap().into(),
+            repositories: BTreeMap::new(),
+            environment: BTreeMap::new(),
+            poll_secs: 1,
+        }
+    }
+
+    fn local_rpc() -> Rpc {
+        Rpc {
+            client: Client::builder().no_proxy().build().unwrap(),
+            endpoint: rpc_url("https://example.invalid").unwrap(),
+            token: "test-token".into(),
+            instance_id: None,
+        }
+    }
+
+    #[test]
+    fn preflight_checks_tools_and_disk_without_installing_or_removing() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = local_config(temp.path());
+        assert!(preflight(&config, &WorkerPreflight::default()).is_ok());
+        assert!(
+            preflight(
+                &config,
+                &WorkerPreflight {
+                    minimum_free_bytes: u64::MAX,
+                    tools: vec![]
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            preflight(
+                &config,
+                &WorkerPreflight {
+                    minimum_free_bytes: 0,
+                    tools: vec!["relative/tool".into()]
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            preflight(
+                &config,
+                &WorkerPreflight {
+                    minimum_free_bytes: 0,
+                    tools: vec![temp.path().join("missing")]
+                }
+            )
+            .is_err()
+        );
+        assert!(!temp.path().join("missing").exists());
+        fs::write(temp.path().join("keep"), "evidence").unwrap();
+        assert!(
+            preflight(
+                &config,
+                &WorkerPreflight {
+                    minimum_free_bytes: u64::MAX,
+                    tools: vec![]
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(
+            fs::read_to_string(temp.path().join("keep")).unwrap(),
+            "evidence"
+        );
+    }
+
+    #[test]
+    fn instance_records_restore_exact_replay_identity_and_deny_other_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut config = local_config(temp.path());
+        let mut original = local_rpc();
+        create_instance(temp.path(), &config, &mut original).unwrap();
+        let mut restored = local_rpc();
+        restore_instance(temp.path(), &config, &mut restored).unwrap();
+        assert_eq!(restored.instance_id, original.instance_id);
+        config.token_env = "OTHER_TOKEN".into();
+        assert!(restore_instance(temp.path(), &config, &mut restored).is_err());
+        fs::write(temp.path().join("worker.lock"), "stale-owner").unwrap();
+        assert!(lock(temp.path()).is_err());
+        assert_eq!(
+            fs::read_to_string(temp.path().join("worker.lock")).unwrap(),
+            "stale-owner"
+        );
+    }
+
+    #[test]
+    fn artifact_policies_share_only_exact_output_declarations() {
+        use crate::transfer::{ArtifactOutput, ArtifactSpec};
+        let normal = ArtifactSpec {
+            inputs: vec![],
+            outputs: vec![ArtifactOutput {
+                name: "receipt".into(),
+                path: "evidence/receipt.json".into(),
+            }],
+        };
+        assert!(validate_output_policies(&normal, &normal).is_ok());
+        let mut different_path = normal.clone();
+        different_path.outputs[0].path = "other/receipt.json".into();
+        assert!(validate_output_policies(&normal, &different_path).is_err());
+        let mut internally_duplicated = normal.clone();
+        internally_duplicated
+            .outputs
+            .push(normal.outputs[0].clone());
+        assert!(validate_output_policies(&normal, &internally_duplicated).is_err());
+        let mut distinct_name = normal.clone();
+        distinct_name.outputs[0].name = "receipt-copy".into();
+        // Existing artifact semantics permit publishing a file under two names.
+        assert!(validate_output_policies(&normal, &distinct_name).is_ok());
+    }
+
+    #[test]
+    fn failure_evidence_preserves_typed_command_failure_and_upload_diagnostic() {
+        let temp = tempfile::tempdir().unwrap();
+        for evidence_fails in [false, true] {
+            let called = std::cell::Cell::new(false);
+            let completion = artifact_execution_with_evidence(
+                &generator_task(None),
+                temp.path(),
+                &AtomicBool::new(false),
+                || Ok(()),
+                || {
+                    Ok(Report {
+                        success: false,
+                        log: serde_json::json!({
+                            "success": false, "outcome": "FAILED", "exit_code": 42,
+                            "steps": [{"stderr": "compiler diagnostic"}]
+                        })
+                        .to_string(),
+                    })
+                },
+                || panic!("normal output after command failure"),
+                || {
+                    called.set(true);
+                    if evidence_fails {
+                        Err("secret error".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(called.get());
+            assert!(!completion.report.success);
+            let value: serde_json::Value = serde_json::from_str(&completion.report.log).unwrap();
+            assert_eq!(value["exit_code"], 42);
+            assert_eq!(value["outcome"], "FAILED");
+            assert_eq!(value["steps"][0]["stderr"], "compiler diagnostic");
+            assert_eq!(value.get("diagnostics").is_some(), evidence_fails);
+            assert!(!completion.report.log.contains("secret error"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn real_failed_executor_uploads_evidence_and_never_normal_outputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut task = generator_task(None);
+        task.steps[0].run =
+            "printf 'stage failed\\n' > stage.log; printf 'compiler error\\n' >&2; exit 23".into();
+        task.steps[0].timeout_secs = 5;
+        let cancelled = AtomicBool::new(false);
+        let evidence = std::cell::Cell::new(false);
+        let completion = artifact_execution_with_evidence(
+            &task,
+            temp.path(),
+            &cancelled,
+            || Ok(()),
+            || {
+                crate::executor::execute(&task.steps, temp.path(), &cancelled)
+                    .map(|result| execution_report(&result, &[]))
+            },
+            || panic!("normal output after real failed command"),
+            || {
+                evidence.set(true);
+                assert_eq!(
+                    fs::read_to_string(temp.path().join("stage.log")).unwrap(),
+                    "stage failed\n"
+                );
+                Err("upload unavailable".into())
+            },
+        );
+        assert!(evidence.get());
+        assert!(!completion.report.success);
+        let value: serde_json::Value = serde_json::from_str(&completion.report.log).unwrap();
+        assert_eq!(value["outcome"], "FAILED");
+        assert_eq!(value["exit_code"], 23);
+        assert!(
+            value["steps"][0]["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("compiler error")
+        );
+        assert!(value["diagnostics"].is_array());
+    }
+
+    #[test]
+    fn executor_infrastructure_error_still_attempts_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let evidence = std::cell::Cell::new(false);
+        let completion = artifact_execution_with_evidence(
+            &generator_task(None),
+            temp.path(),
+            &AtomicBool::new(false),
+            || Ok(()),
+            || Err("secret infrastructure error".into()),
+            || panic!("normal outputs after executor error"),
+            || {
+                evidence.set(true);
+                Ok(())
+            },
+        );
+        assert!(evidence.get());
+        assert!(!completion.report.success);
+        assert!(!completion.report.log.contains("secret"));
+    }
+
+    #[test]
+    fn cancellation_after_execution_prevents_all_uploads() {
+        let temp = tempfile::tempdir().unwrap();
+        let cancelled = AtomicBool::new(false);
+        let completion = artifact_execution_with_evidence(
+            &generator_task(None),
+            temp.path(),
+            &cancelled,
+            || Ok(()),
+            || {
+                cancelled.store(true, Ordering::Release);
+                Ok(Report {
+                    success: false,
+                    log: r#"{"outcome":"CANCELLED","exit_code":null,"steps":[]}"#.into(),
+                })
+            },
+            || panic!("normal stale upload"),
+            || panic!("stale evidence upload"),
+        );
+        assert!(!completion.report.success);
+        assert!(serde_json::from_str::<serde_json::Value>(&completion.report.log).is_ok());
+    }
+
+    #[test]
+    fn escaped_streams_stay_bounded_valid_json_with_typed_outcome() {
+        let result = crate::executor::ExecutionResult {
+            success: false,
+            outcome: crate::executor::ExecutionOutcome::TimedOut,
+            exit_code: None,
+            steps: (0..16)
+                .map(|step_index| crate::executor::StepResult {
+                    step_index,
+                    success: false,
+                    outcome: crate::executor::ExecutionOutcome::TimedOut,
+                    exit_code: None,
+                    stdout: crate::executor::LogTail {
+                        text: "\u{0001}".repeat(384),
+                        truncated: false,
+                        complete: true,
+                    },
+                    stderr: crate::executor::LogTail {
+                        text: "\u{0002}".repeat(384),
+                        truncated: false,
+                        complete: false,
+                    },
+                })
+                .collect(),
+        };
+        let report = execution_report(&result, &[]);
+        assert!(report.log.len() <= LOG_LIMIT);
+        let value: serde_json::Value = serde_json::from_str(&report.log).unwrap();
+        assert_eq!(value["outcome"], "TIMED_OUT");
+        assert!(value["exit_code"].is_null());
+        assert_eq!(value["steps"][15]["outcome"], "TIMED_OUT");
+        assert_eq!(value["report_truncated"], true);
     }
 
     #[test]

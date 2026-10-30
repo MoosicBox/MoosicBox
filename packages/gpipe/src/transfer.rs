@@ -30,7 +30,8 @@
 //! enabled. Requests have a 30-second timeout and at most three transient-error
 //! attempts. Per-artifact lock acquisition waits at most three seconds. No bearer
 //! tokens, URLs, server bodies, or raw HTTP errors are exposed
-//! in returned diagnostics. Calls do not yet accept a cancellation flag: parent
+//! in returned diagnostics. [`upload_guarded`] checks cancellation before every
+//! chunk, retry and finalization; in-flight requests cannot be revoked. Parent
 //! must keep lease renewal running and fence completion if the lease is lost.
 
 use std::{
@@ -43,9 +44,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::plan::CommandStep;
 use reqwest::{Url, blocking::Client};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+/// Header binding artifact HTTP requests to the registered worker incarnation.
+///
+/// The server must authorize via `Request::ArtifactAccessFor` using this value;
+/// legacy requests without it remain subject to coordinator policy.
+pub const WORKER_INSTANCE_HEADER: &str = "x-gpipe-worker-instance";
 
 /// Largest raw byte chunk accepted or returned by the protocol.
 pub const CHUNK_BYTES: usize = 64 * 1024;
@@ -64,7 +72,8 @@ static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 pub struct ArtifactSpec {
     /// Files to materialize before commands execute.
     pub inputs: Vec<ArtifactInput>,
-    /// Files to publish after successful commands, before reporting success.
+    /// Files to publish after execution under the declaration's outcome policy.
+    /// `GPIPE_ARTIFACTS` requires success; `GPIPE_ARTIFACTS_ALWAYS` does not.
     pub outputs: Vec<ArtifactOutput>,
 }
 
@@ -86,7 +95,8 @@ pub struct ArtifactInput {
 pub struct ArtifactOutput {
     /// Unique artifact name within this producer attempt.
     pub name: String,
-    /// Portable relative path to an existing regular file.
+    /// Files to publish under the selected policy; paths must already exist.
+    /// Directory trees require explicit [`pack_directory`] before upload.
     pub path: String,
 }
 
@@ -98,9 +108,27 @@ impl ArtifactSpec {
     /// # Errors
     /// * JSON is oversized/malformed, declarations conflict, or validation fails.
     pub fn from_steps(steps: &[crate::plan::CommandStep]) -> Result<Self, String> {
+        Self::from_steps_key(steps, "GPIPE_ARTIFACTS")
+    }
+
+    /// Read failure evidence outputs from explicit `GPIPE_ARTIFACTS_ALWAYS` entries.
+    /// These files are published after execution regardless of command outcome,
+    /// but never after cancellation or lease loss. Inputs are forbidden.
+    ///
+    /// # Errors
+    /// * Malformed, oversized, conflicting or invalid declarations, or any inputs.
+    pub fn from_always_steps(steps: &[CommandStep]) -> Result<Self, String> {
+        let spec = Self::from_steps_key(steps, "GPIPE_ARTIFACTS_ALWAYS")?;
+        if !spec.inputs.is_empty() {
+            return Err("GPIPE_ARTIFACTS_ALWAYS accepts outputs only".to_owned());
+        }
+        Ok(spec)
+    }
+
+    fn from_steps_key(steps: &[CommandStep], key: &str) -> Result<Self, String> {
         let mut selected: Option<Self> = None;
         for step in steps {
-            if let Some(json) = step.env.get("GPIPE_ARTIFACTS") {
+            if let Some(json) = step.env.get(key) {
                 if json.len() > MAX_SPEC_BYTES {
                     return Err("artifact specification exceeds 64 KiB".to_owned());
                 }
@@ -517,6 +545,24 @@ pub fn upload(
     workspace: &Path,
     spec: &ArtifactSpec,
 ) -> Result<(), String> {
+    upload_guarded(client, url, token, attempt_id, workspace, spec, || false)
+}
+
+/// Upload outputs while checking cancellation before every chunk and finalization.
+/// An in-flight HTTP request cannot be revoked; coordinator authorization remains
+/// the final fence against expired attempts.
+///
+/// # Errors
+/// * Cancellation, or any error documented by [`upload`].
+pub fn upload_guarded(
+    client: &Client,
+    url: &str,
+    token: &str,
+    attempt_id: &str,
+    workspace: &Path,
+    spec: &ArtifactSpec,
+    cancelled: impl Fn() -> bool,
+) -> Result<(), String> {
     spec.validate()?;
     identifier(attempt_id)?;
     let endpoint = endpoint(url)?;
@@ -529,7 +575,10 @@ pub fn upload(
     }
     for output in &spec.outputs {
         send_file(&workspace, output, |offset, data, finish| {
-            rpc(
+            if cancelled() {
+                return Err("artifact upload cancelled".to_owned());
+            }
+            rpc_guarded(
                 client,
                 &endpoint,
                 token,
@@ -541,6 +590,7 @@ pub fn upload(
                     data,
                     finish,
                 },
+                &cancelled,
             )
         })?;
     }
@@ -664,12 +714,25 @@ fn rpc(
     token: &str,
     request: &TransferRequest,
 ) -> Result<TransferResponse, String> {
+    rpc_guarded(client, endpoint, token, request, &|| false)
+}
+
+fn rpc_guarded(
+    client: &Client,
+    endpoint: &Url,
+    token: &str,
+    request: &TransferRequest,
+    cancelled: &impl Fn() -> bool,
+) -> Result<TransferResponse, String> {
     let body =
         serde_json::to_vec(request).map_err(|_| "cannot encode artifact request".to_owned())?;
     if body.len() > MAX_BODY_BYTES {
         return Err("oversized artifact request".to_owned());
     }
     for attempt in 0..3 {
+        if cancelled() {
+            return Err("artifact transfer cancelled".to_owned());
+        }
         let response = client
             .post(endpoint.clone())
             .bearer_auth(token)
@@ -1031,6 +1094,280 @@ fn sync_directory(_: &Path) -> Result<(), String> {
     Ok(())
 }
 #[allow(clippy::needless_pass_by_value)]
+const BUNDLE_MAGIC: &[u8; 8] = b"GPIPEB01";
+const MAX_BUNDLE_FILES: usize = 4096;
+const MAX_BUNDLE_MANIFEST: usize = 1024 * 1024;
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BundleEntry {
+    path: String,
+    bytes: u64,
+    sha256: String,
+    // Only portable ordinary permission bits, never setuid/setgid/sticky.
+    mode: u32,
+}
+
+fn bundle_entries(
+    root: &Path,
+    relative: &str,
+    entries: &mut Vec<BundleEntry>,
+    visited: &mut usize,
+) -> Result<(), String> {
+    if relative.split('/').count() > 64 {
+        return Err("bundle directory depth exceeded".into());
+    }
+    let directory = root.join(relative);
+    checked_path(&directory, false)?;
+    let mut children = Vec::new();
+    for child in fs::read_dir(directory).map_err(io_error)? {
+        if children.len() >= MAX_BUNDLE_FILES {
+            return Err("too many bundle directory entries".into());
+        }
+        children.push(child.map_err(io_error)?);
+    }
+    children.sort_by_key(std::fs::DirEntry::file_name);
+    for child in children {
+        *visited += 1;
+        if *visited > MAX_BUNDLE_FILES {
+            return Err("too many bundle directory entries".into());
+        }
+        let name = child
+            .file_name()
+            .into_string()
+            .map_err(|_| "non-UTF-8 bundle path")?;
+        let path = if relative.is_empty() {
+            name
+        } else {
+            format!("{relative}/{name}")
+        };
+        relative_path(&path)?;
+        checked_path(&child.path(), false)?;
+        let metadata = fs::symlink_metadata(child.path()).map_err(io_error)?;
+        if metadata.is_dir() {
+            bundle_entries(root, &path, entries, visited)?;
+        } else if metadata.is_file() {
+            if entries.len() >= MAX_BUNDLE_FILES {
+                return Err("too many bundle files".into());
+            }
+            let bytes = entries
+                .iter()
+                .try_fold(metadata.len(), |sum, entry| sum.checked_add(entry.bytes))
+                .ok_or("bundle size overflow")?;
+            if bytes > MAX_FILE_BYTES {
+                return Err("bundle exceeds 256 MiB".into());
+            }
+            let mut file = regular(&child.path(), false)?;
+            #[cfg(unix)]
+            let mode = {
+                use std::os::unix::fs::PermissionsExt;
+                metadata.permissions().mode() & 0o777
+            };
+            #[cfg(not(unix))]
+            let mode = if metadata.permissions().readonly() {
+                0o444
+            } else {
+                0o644
+            };
+            entries.push(BundleEntry {
+                path,
+                bytes: metadata.len(),
+                sha256: hash_file(&mut file)?,
+                mode,
+            });
+        } else {
+            return Err("bundle accepts regular files only".into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_bundle(entries: &[BundleEntry], header_bytes: u64) -> Result<u64, String> {
+    if entries.len() > MAX_BUNDLE_FILES {
+        return Err("too many bundle files".into());
+    }
+    let mut total = header_bytes;
+    let mut paths = BTreeSet::new();
+    let mut previous = None;
+    for entry in entries {
+        relative_path(&entry.path)?;
+        if !valid_digest(&entry.sha256) || entry.mode & !0o777 != 0 {
+            return Err("invalid bundle file metadata".into());
+        }
+        if previous.is_some_and(|path: &str| path >= entry.path.as_str()) {
+            return Err("bundle manifest must be strictly sorted".into());
+        }
+        previous = Some(entry.path.as_str());
+        let path = entry.path.to_ascii_lowercase();
+        if paths.iter().any(|previous: &String| {
+            previous == &path
+                || path.starts_with(&format!("{previous}/"))
+                || previous.starts_with(&format!("{path}/"))
+        }) {
+            return Err("overlapping bundle paths".into());
+        }
+        paths.insert(path);
+        total = total
+            .checked_add(entry.bytes)
+            .ok_or("bundle size overflow")?;
+        if total > MAX_FILE_BYTES {
+            return Err("bundle exceeds 256 MiB".into());
+        }
+    }
+    Ok(total)
+}
+
+/// Pack a directory as a deterministic `GPIPEB01` bundle.
+///
+/// Uses a sorted JSON file manifest followed by raw file bytes. Includes SHA-256 and ordinary Unix permissions
+/// (including executable bits); excludes timestamps, owners and empty directories.
+/// The output must not exist or be inside the source. No compression/dependencies.
+///
+/// # Errors
+/// * Unsafe/nonportable paths, symlinks/reparse points, special files, IO errors,
+///   changed source, over 4096 directory entries, depth over 64, manifest over 1 MiB, or total
+///   bundle over 256 MiB. Trusted local filesystem writers must remain quiescent.
+pub fn pack_directory(source: &Path, output: &Path) -> Result<(), String> {
+    let root = workspace_root(source)?;
+    let output = absolute(output)?;
+    checked_path(&output, true)?;
+    if output.starts_with(&root) {
+        return Err("bundle output cannot be inside source".into());
+    }
+    let mut entries = Vec::new();
+    bundle_entries(&root, "", &mut entries, &mut 0)?;
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+    let manifest = serde_json::to_vec(&entries).map_err(|_| "cannot serialize bundle manifest")?;
+    if manifest.len() > MAX_BUNDLE_MANIFEST {
+        return Err("bundle manifest too large".into());
+    }
+    validate_bundle(&entries, 16 + manifest.len() as u64)?;
+    let parent = output.parent().ok_or("bundle output lacks parent")?;
+    let (temp, mut file) = Temporary::create(parent)?;
+    file.write_all(BUNDLE_MAGIC).map_err(io_error)?;
+    file.write_all(&(manifest.len() as u64).to_le_bytes())
+        .map_err(io_error)?;
+    file.write_all(&manifest).map_err(io_error)?;
+    for entry in &entries {
+        let mut input = regular(&workspace_file(&root, &entry.path, false)?, false)?;
+        if input.metadata().map_err(io_error)?.len() != entry.bytes
+            || hash_file(&mut input)? != entry.sha256
+        {
+            return Err("bundle source changed".into());
+        }
+        input.seek(SeekFrom::Start(0)).map_err(io_error)?;
+        let mut digest = Sha256::new();
+        let mut remaining = entry.bytes;
+        let mut buffer = vec![0; CHUNK_BYTES];
+        while remaining > 0 {
+            let count = usize::try_from(remaining.min(CHUNK_BYTES as u64))
+                .map_err(|_| "bundle size overflow")?;
+            input.read_exact(&mut buffer[..count]).map_err(io_error)?;
+            digest.update(&buffer[..count]);
+            file.write_all(&buffer[..count]).map_err(io_error)?;
+            remaining -= count as u64;
+        }
+        if hex(&digest.finalize()) != entry.sha256
+            || input.metadata().map_err(io_error)?.len() != entry.bytes
+        {
+            return Err("bundle source changed".into());
+        }
+    }
+    file.sync_all().map_err(io_error)?;
+    // No overwrite: hard-link publication matches the artifact transfer contract.
+    fs::hard_link(&temp.0, &output).map_err(io_error)?;
+    sync_directory(parent)
+}
+
+/// Extract a bounded bundle into a new directory, never overwriting existing data.
+///
+/// All manifest paths, sizes and modes are validated before creating destinations.
+/// Checks every file digest, denies traversal/symlinks/reparse points, preserves
+/// ordinary executable bits on Unix and rejects executable modes on non-Unix
+/// rather than silently losing them. Does not execute any bundled content.
+///
+/// # Errors
+/// * Invalid/truncated/oversized bundle, unsupported mode, checksum mismatch,
+///   unsafe paths, existing destination, or filesystem errors. A partially written
+///   destination is retained on failure for explicit operator recovery, not reused.
+/// * Concurrent hostile filesystem mutation is outside the trusted worker contract.
+pub fn unpack_directory(bundle: &Path, destination: &Path) -> Result<(), String> {
+    let bundle = absolute(bundle)?;
+    checked_path(&bundle, false)?;
+    let mut file = regular(&bundle, false)?;
+    let size = file.metadata().map_err(io_error)?.len();
+    if size > MAX_FILE_BYTES {
+        return Err("bundle exceeds 256 MiB".into());
+    }
+    let mut magic = [0_u8; 8];
+    file.read_exact(&mut magic).map_err(io_error)?;
+    if &magic != BUNDLE_MAGIC {
+        return Err("unsupported bundle format".into());
+    }
+    let mut length = [0_u8; 8];
+    file.read_exact(&mut length).map_err(io_error)?;
+    let length =
+        usize::try_from(u64::from_le_bytes(length)).map_err(|_| "bundle manifest too large")?;
+    if length > MAX_BUNDLE_MANIFEST {
+        return Err("bundle manifest too large".into());
+    }
+    let mut manifest = vec![0; length];
+    file.read_exact(&mut manifest).map_err(io_error)?;
+    let entries: Vec<BundleEntry> =
+        serde_json::from_slice(&manifest).map_err(|_| "invalid bundle manifest")?;
+    if validate_bundle(&entries, 16 + length as u64)? != size {
+        return Err("bundle length mismatch".into());
+    }
+    #[cfg(not(unix))]
+    if entries.iter().any(|entry| entry.mode & 0o111 != 0) {
+        return Err("executable bundle modes require Unix".into());
+    }
+    let destination = absolute(destination)?;
+    checked_path(&destination, true)?;
+    let mut builder = DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(&destination).map_err(io_error)?;
+    for entry in entries {
+        let path = prepare_destination(&destination, &entry.path)?;
+        let mut output = new_file(&path, false).map_err(io_error)?;
+        let mut digest = Sha256::new();
+        let mut remaining = entry.bytes;
+        let mut buffer = vec![0; CHUNK_BYTES];
+        while remaining > 0 {
+            let count = usize::try_from(remaining.min(CHUNK_BYTES as u64))
+                .map_err(|_| "bundle size overflow")?;
+            file.read_exact(&mut buffer[..count]).map_err(io_error)?;
+            digest.update(&buffer[..count]);
+            output.write_all(&buffer[..count]).map_err(io_error)?;
+            remaining -= count as u64;
+        }
+        if hex(&digest.finalize()) != entry.sha256 {
+            return Err("bundle checksum mismatch".into());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            output
+                .set_permissions(fs::Permissions::from_mode(entry.mode))
+                .map_err(io_error)?;
+        }
+        #[cfg(not(unix))]
+        {
+            let mut permissions = output.metadata().map_err(io_error)?.permissions();
+            permissions.set_readonly(entry.mode & 0o222 == 0);
+            output.set_permissions(permissions).map_err(io_error)?;
+        }
+        output.sync_all().map_err(io_error)?;
+    }
+    sync_directory(&destination)
+}
+
+// Takes ownership as a map_err adapter while exposing only secret-safe metadata.
+#[allow(clippy::needless_pass_by_value)]
 fn io_error(error: io::Error) -> String {
     format!(
         "artifact filesystem operation failed ({:?}, OS code {:?})",
@@ -1043,6 +1380,168 @@ fn io_error(error: io::Error) -> String {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    #[test]
+    fn bundles_are_deterministic_and_round_trip_nested_regular_files() {
+        let fixture = Fixture::new();
+        let source = fixture.0.join("source");
+        fs::create_dir_all(source.join("logs")).unwrap();
+        fs::write(source.join("receipt.json"), b"{\"success\":false}").unwrap();
+        fs::write(source.join("logs/test.log"), b"actual failure\n").unwrap();
+        fs::write(source.join("empty"), b"").unwrap();
+        let first = fixture.0.join("first.bundle");
+        let second = fixture.0.join("second.bundle");
+        pack_directory(&source, &first).unwrap();
+        pack_directory(&source, &second).unwrap();
+        assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap());
+        let destination = fixture.0.join("unpacked");
+        unpack_directory(&first, &destination).unwrap();
+        assert_eq!(
+            fs::read(destination.join("logs/test.log")).unwrap(),
+            b"actual failure\n"
+        );
+        assert_eq!(fs::read(destination.join("empty")).unwrap(), b"");
+        assert!(unpack_directory(&first, &destination).is_err());
+        assert!(pack_directory(&source, &source.join("self.bundle")).is_err());
+        assert!(pack_directory(&source, &first).is_err());
+    }
+
+    fn malformed_bundle(fixture: &Fixture, entries: &serde_json::Value, payload: &[u8]) -> PathBuf {
+        let path = fixture.0.join("malformed.bundle");
+        let manifest = serde_json::to_vec(entries).unwrap();
+        let mut bytes = BUNDLE_MAGIC.to_vec();
+        bytes.extend_from_slice(&(manifest.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&manifest);
+        bytes.extend_from_slice(payload);
+        fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    #[test]
+    fn bundle_extraction_rejects_traversal_overlap_oversize_modes_and_corruption() {
+        for path in [
+            "../escape",
+            "/absolute",
+            "a/../escape",
+            "a\\escape",
+            ".git/config",
+        ] {
+            let fixture = Fixture::new();
+            let input = malformed_bundle(
+                &fixture,
+                &serde_json::json!([
+                    {"path":path,"bytes":0,"sha256":hash_bytes(b""),"mode":384}
+                ]),
+                b"",
+            );
+            let destination = fixture.0.join("output");
+            assert!(unpack_directory(&input, &destination).is_err(), "{path}");
+            assert!(!destination.exists());
+        }
+        for entries in [
+            serde_json::json!([
+                {"path":"a","bytes":0,"sha256":hash_bytes(b""),"mode":384},
+                {"path":"a/b","bytes":0,"sha256":hash_bytes(b""),"mode":384}]),
+            serde_json::json!([{ "path":"a","bytes":MAX_FILE_BYTES,"sha256":hash_bytes(b""),"mode":384 }]),
+            serde_json::json!([{ "path":"a","bytes":0,"sha256":hash_bytes(b""),"mode":4095 }]),
+        ] {
+            let fixture = Fixture::new();
+            let input = malformed_bundle(&fixture, &entries, b"");
+            let destination = fixture.0.join("output");
+            assert!(unpack_directory(&input, &destination).is_err());
+            assert!(!destination.exists());
+        }
+        let fixture = Fixture::new();
+        let input = malformed_bundle(
+            &fixture,
+            &serde_json::json!([
+                {"path":"a","bytes":1,"sha256":hash_bytes(b"x"),"mode":384}
+            ]),
+            b"y",
+        );
+        assert!(unpack_directory(&input, &fixture.0.join("output")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundles_deny_symlinks_and_preserve_executable_permissions() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let fixture = Fixture::new();
+        let source = fixture.0.join("source");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("runner"), b"#!/bin/sh\nexit 1\n").unwrap();
+        fs::set_permissions(source.join("runner"), fs::Permissions::from_mode(0o751)).unwrap();
+        let bundle = fixture.0.join("valid.bundle");
+        pack_directory(&source, &bundle).unwrap();
+        let destination = fixture.0.join("output");
+        unpack_directory(&bundle, &destination).unwrap();
+        assert_eq!(
+            fs::metadata(destination.join("runner"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o751
+        );
+        symlink("runner", source.join("alias")).unwrap();
+        assert!(pack_directory(&source, &fixture.0.join("bad.bundle")).is_err());
+        let alias = fixture.0.join("alias");
+        symlink(&destination, &alias).unwrap();
+        assert!(unpack_directory(&bundle, &alias.join("child")).is_err());
+        assert!(!destination.join("child").exists());
+    }
+
+    #[test]
+    fn cancelled_upload_never_starts_an_http_request() {
+        let fixture = Fixture::new();
+        fs::write(fixture.0.join("receipt.json"), b"{}").unwrap();
+        let client = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .build()
+            .unwrap();
+        let spec = ArtifactSpec {
+            inputs: vec![],
+            outputs: vec![ArtifactOutput {
+                name: "receipt".into(),
+                path: "receipt.json".into(),
+            }],
+        };
+        let result = upload_guarded(
+            &client,
+            "http://127.0.0.1:1",
+            "test-token",
+            "attempt-1",
+            &fixture.0,
+            &spec,
+            || true,
+        );
+        assert_eq!(result.unwrap_err(), "artifact upload cancelled");
+    }
+
+    #[test]
+    fn always_declarations_accept_outputs_only_and_reject_conflicts() {
+        let mut step = CommandStep {
+            shell: "sh".into(),
+            run: "false".into(),
+            timeout_secs: 1,
+            env: BTreeMap::from([(
+                "GPIPE_ARTIFACTS_ALWAYS".into(),
+                r#"{"outputs":[{"name":"receipt","path":"receipt.json"}]}"#.into(),
+            )]),
+        };
+        let spec = ArtifactSpec::from_always_steps(&[step.clone()]).unwrap();
+        assert_eq!(spec.outputs.len(), 1);
+        assert_eq!(
+            ArtifactSpec::from_steps(&[step.clone()]).unwrap().outputs,
+            [] as [ArtifactOutput; 0]
+        );
+        step.env.insert(
+            "GPIPE_ARTIFACTS_ALWAYS".into(),
+            r#"{"inputs":[{"task":"t","name":"n","path":"p"}]}"#.into(),
+        );
+        assert!(ArtifactSpec::from_always_steps(&[step]).is_err());
+    }
 
     struct Fixture(PathBuf);
     impl Fixture {
