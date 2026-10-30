@@ -1,5 +1,69 @@
 # Generic Pipelines - Execution Plan
 
+## Current distributed-orchestration milestone (2026-10-29)
+
+This section supersedes the historical translation-first execution plan below.
+The user selected native workers first; configurable coordinator location and
+repository trust; desktop-account workers; explicit installation steps; multiple
+repositories under one owner; dynamic Clippier plans; CLI/API; build/test/lint;
+Linux/macOS/Windows design; no Docker or paid hosted fallback. Live acceptance is
+currently limited by explicit user instruction to this local Linux machine.
+
+### Implemented and locally verified
+
+- [x] Resolved plan validation and atomic graph expansion.
+  - Proof: `packages/gpipe/src/plan.rs`, including bounded non-recursive DAG tests.
+- [x] Durable coordinator, scoped authentication, revision approvals, resource
+  admission, leases, retries, cancellation and fenced/idempotent completion.
+  - Proof: `coordinator.rs`, `protocol.rs`, `server.rs`; restart/replay/revocation
+    and settlement-capacity unit tests, `tests/native_e2e.rs`.
+- [x] Outbound native worker with exact source checkout, isolated workspace,
+  explicit environment/tool installation commands, bounded results and spooling.
+  - Proof: `worker.rs`, `executor.rs`; process cleanup tests and
+    `tests/cancellation_e2e.rs`. Resource reservations are not OS-enforced limits.
+- [x] Signed webhook to approved-revision execution.
+  - Proof: `triggers.rs`, HTTP routes and `tests/webhook_e2e.rs`.
+- [x] Attempt-scoped dynamic generation with atomic completion and graph sealing.
+  - Proof: `CompleteGenerated`, `tests/dynamic_e2e.rs` (success and invalid output).
+- [x] Explicit dependency artifact transport across isolated workers.
+  - Proof: `transfer.rs`, scoped `ArtifactAccess`, worker integration and
+    `tests/artifact_e2e.rs`. Digest verification and path/no-clobber checks;
+    no automatic retention/disposal yet.
+- [x] Lossless Clippier case import, receipt verifier and conservative native Rust
+  recipes, including explicit system-toolchain execution on this Nix host.
+  - Proof: `clippier.rs`, CLI import/verify/recipe commands and
+    `tests/clippier_e2e.rs`. This is not full MoosicBox CI parity.
+- [x] Administrator-side GitHub/GitLab dispatch/status/cancel API clients.
+  - Proof: `providers.rs` request/schema/security tests, free-eligibility guards
+    and ambiguous-dispatch outcomes. This does not prove hosted execution.
+
+### Open completion gates — do not mark the entire product complete
+
+- [ ] Durable hosted-capacity scheduler integration, bootstrap definitions,
+  short-lived worker enrollment, accounting and automatic reconciliation/status
+  publication. API clients alone are insufficient.
+- [ ] Full MoosicBox command/setup/coverage parity and run-bound receipt aggregation;
+  equal-coverage cold/warm benchmarks against existing CI.
+- [ ] Measured batching/cache affinity/critical-path optimization and multi-repo
+  fairness; current placement is deterministic capability/resource matching.
+- [ ] Operator CLI for drain/enrollment/revocation/log following, history archival,
+  pagination and automatic artifact/workspace retention/disposal.
+- [ ] Worker-instance fencing across separate state directories using one token;
+  full crash recovery beyond fail-closed workspace/lock diagnostics.
+- [ ] Native Windows/macOS acceptance and real GitHub/GitLab mixed execution.
+  Deferred by current local-only testing scope; no credentials were requested.
+- [ ] Controlled full-CI shadow comparison, explicitly approved cutover and rollback.
+
+Local validation checkpoint: `cargo test -p gpipe --features runtime` passed
+148 unit tests, 8 integration tests and 2 doctests; `cargo test -p gpipe_ast`
+passed 81 unit tests and 3 doctests; strict affected-package Clippy passed.
+See the implementation handoff for final formatting/build verification.
+No hosted workflows, remote machines, production CI, commits or pushes were changed.
+
+---
+
+## Historical translation-first plan
+
 ## Executive Summary
 
 Create a universal CI/CD workflow tool that can execute and translate between different workflow formats, including a new generic workflow format that is backend-agnostic. The tool introduces a generic workflow format that allows users to write workflows once and run them on any supported backend (GitHub Actions, GitLab CI, local execution, etc.). Backend-specific functionality is supported through conditional execution blocks. The tool should handle workflow translation on-the-fly or through persisted generic representations, with first-class support for local execution without containerization.

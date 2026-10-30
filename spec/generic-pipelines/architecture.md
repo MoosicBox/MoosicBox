@@ -1,5 +1,14 @@
 # Generic Pipelines Architecture
 
+> **2026-10-29 scope revision:** distributed orchestration is the primary product.
+> One durable coordinator schedules resolved tasks across native pull workers;
+> GitHub/GitLab capacity adapters follow the same execution boundary. Workflow
+> translation below is historical design, not the current runtime architecture.
+> The coordinator owns run state, trust, leases and results; Clippier owns Rust
+> case planning. No Docker, no automatic paid fallback, no initial deployments,
+> dashboard or coordinator failover. See [plan.md](plan.md) for milestone evidence
+> and [the runtime README](../../packages/gpipe/README.md) for actual APIs.
+
 ## System Overview
 
 Generic Pipelines is a universal CI/CD workflow orchestration tool that enables:

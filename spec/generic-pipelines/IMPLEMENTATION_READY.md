@@ -1,5 +1,11 @@
 # Implementation Ready Checklist
 
+> Historical workflow-translation checklist. The 2026-10-29 user-approved
+> direction prioritizes distributed native orchestration; these entries do not
+> describe implemented CLI commands or completed hosted integration. See the
+> current execution milestone at the top of [plan.md](plan.md) and
+> [the runtime README](../../packages/gpipe/README.md).
+
 ## ✅ All Critical Decisions Resolved
 
 The Generic Pipelines (gpipe) project is now ready for implementation. All ambiguities from the original specification have been resolved through comprehensive Q&A sessions.

@@ -4,20 +4,15 @@
 
 //! # Generic Pipelines (gpipe)
 //!
-//! Universal CI/CD workflow orchestration tool. Currently provides type definitions and AST.
-//! Planned: execution and translation across multiple backends.
+//! Native pull-worker orchestration behind the opt-in `runtime` feature, plus
+//! workflow authoring types behind `ast`. Runtime execution uses resolved JSON
+//! plans, not automatic interpretation of arbitrary GitHub/GitLab YAML.
 //!
-//! ## Features
-//!
-//! ### Implemented
-//! * Workflow AST - Complete abstract syntax tree types for workflow definitions
-//! * Type Safety - Fully typed Rust data structures with serde support
-//!
-//! ### Planned
-//! * Parse and execute generic workflow formats
-//! * Translate workflows between different CI/CD platforms
-//! * Local execution without containerization
-//! * Backend-agnostic workflow definitions
+//! The runtime includes durable SQLite coordination, authenticated HTTP workers,
+//! exact-revision native execution, dynamic graph generation, explicit artifacts,
+//! Clippier case adapters, and administrator-side hosted-provider API clients.
+//! Hosted capacity provisioning, full workflow parity and cross-platform live
+//! acceptance remain separate integration milestones. See the package README.
 
 /// Abstract syntax tree types for workflow definitions.
 ///
@@ -28,3 +23,38 @@
 /// Enable the `ast` feature to access this module.
 #[cfg(feature = "ast")]
 pub use gpipe_ast as ast;
+
+/// Explicit local content-addressed artifacts.
+#[cfg(feature = "runtime")]
+pub mod artifacts;
+/// Lossless Clippier case-plan import and receipt validation.
+#[cfg(feature = "runtime")]
+pub mod clippier;
+/// Durable transactional orchestration state.
+#[cfg(feature = "runtime")]
+pub mod coordinator;
+/// Native command execution with bounded output and cancellation.
+#[cfg(feature = "runtime")]
+pub mod executor;
+/// Resolved, validated native execution plans.
+#[cfg(feature = "runtime")]
+pub mod plan;
+/// Versioned coordinator and worker messages and configuration.
+#[cfg(feature = "runtime")]
+pub mod protocol;
+/// Hosted provider API adapters with conservative dispatch outcomes.
+#[cfg(feature = "runtime")]
+pub mod providers;
+/// Authenticated coordinator HTTP service.
+#[cfg(feature = "runtime")]
+pub mod server;
+/// Explicit file artifact transport for task dependencies.
+#[cfg(feature = "runtime")]
+pub mod transfer;
+/// Native outbound-polling worker.
+#[cfg(feature = "runtime")]
+pub mod worker;
+
+/// Signed webhook validation and trusted pipeline template resolution.
+#[cfg(feature = "runtime")]
+pub mod triggers;

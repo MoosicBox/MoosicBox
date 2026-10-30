@@ -7105,7 +7105,16 @@ dependencies = [
 name = "gpipe"
 version = "0.5.0"
 dependencies = [
+ "actix-web",
+ "clap",
  "gpipe_ast",
+ "libc",
+ "reqwest 0.13.5",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
 ]
 
 [[package]]

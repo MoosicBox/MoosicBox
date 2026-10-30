@@ -2,6 +2,28 @@
 
 Record of key decisions made during specification refinement.
 
+## ADR-014: Distributed orchestration first
+
+**Date:** 2026-10-29
+**Status:** Accepted by explicit user direction
+**Decision:** Prioritize a durable coordinator and native outbound-polling workers,
+with resolved execution plans, configurable per-repository revision trust, dynamic
+case planning, and later hosted execution adapters. Coordinator placement is
+configurable; one active coordinator initially. Build/test/lint, multiple
+repositories under one owner, CLI/API and Linux/macOS/Windows are in scope.
+No Docker, automatic paid fallback, dashboard, deployment/publishing semantics,
+automatic failover or arbitrary workflow-translation compatibility is required.
+Workers may use normal desktop accounts and explicit tool installation steps.
+**Supersedes:** ADR-005/013 for distributed runtime behavior; local worker process
+execution remains sequential per worker, while independent workers execute in
+parallel. ADR-001 does not impose runtime stage barriers: dependency readiness
+controls execution. Earlier translation/expression decisions remain historical
+and are not implemented runtime semantics.
+**Acceptance scope:** User currently authorizes local implementation/testing on
+this Linux host only. Hosted/native other-platform acceptance remains unverified.
+**Evidence:** Current milestone at the top of `plan.md`, runtime README and
+`packages/gpipe/tests/` product-path tests. This ADR is not a completion verdict.
+
 ## ADR-001: Sequential Phase Execution
 
 **Date:** 2025-01-09
