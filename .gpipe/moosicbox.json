@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "repository": "moosicbox",
+  "selection": {
+    "packages": ["moosicbox_assert"],
+    "os": "ubuntu",
+    "seed": 42
+  },
+  "validation": {
+    "toolchain": "system",
+    "coverage": true,
+    "allow_setup": false
+  },
+  "execution": {
+    "cpu": 1,
+    "memory_mb": 4096,
+    "timeout_secs": 1200
+  }
+}

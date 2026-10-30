@@ -20,6 +20,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Plan, deploy, submit or verify a source-bound native pipeline.
+    Pipeline {
+        #[command(subcommand)]
+        command: PipelineCommand,
+    },
     /// Run the coordinator (loopback HTTP; use a TLS proxy for remote access).
     Serve {
         #[arg(long)]
@@ -253,6 +258,7 @@ fn verify_clippier(jobs: &PathBuf, receipts: &PathBuf, seed: Option<u64>) -> Res
 #[allow(clippy::too_many_lines)] // Explicit one-arm-per-command CLI dispatch.
 fn run() -> Result<(), String> {
     match Cli::parse().command {
+        Command::Pipeline { command } => pipeline(command),
         Command::Serve { config, triggers } => {
             let config: ServerConfig = read_json(&config)?;
             let triggers = triggers.as_ref().map(read_json).transpose()?;
@@ -397,6 +403,130 @@ fn run() -> Result<(), String> {
             token_env,
             request,
         } => rpc(&url, &token_env, read_json(&request)?),
+    }
+}
+
+#[derive(Subcommand)]
+enum PipelineCommand {
+    /// Resolve a definition and configuration from an exact git revision.
+    Plan {
+        definition: PathBuf,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        revision: String,
+        #[arg(long)]
+        base_revision: String,
+        #[arg(long)]
+        clippier: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Deploy a loopback coordinator and one sequential compatible native worker.
+    Run {
+        prepared: PathBuf,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        state: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// Submit the exact prepared plan to an explicitly selected coordinator.
+    Submit {
+        prepared: PathBuf,
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        token_env: String,
+        #[arg(long)]
+        key: String,
+    },
+    /// Retain attempt evidence and require authoritative successful CI verification.
+    Verify {
+        prepared: PathBuf,
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        token_env: String,
+        #[arg(long)]
+        run_id: String,
+        #[arg(long)]
+        output: PathBuf,
+    },
+    #[command(name = "__host", hide = true)]
+    Host {
+        prepared: PathBuf,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        state: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
+}
+
+fn pipeline(command: PipelineCommand) -> Result<(), String> {
+    use gpipe::{operator::OperatorClient, pipeline};
+    match command {
+        PipelineCommand::Plan {
+            definition,
+            workspace,
+            revision,
+            base_revision,
+            clippier,
+            output,
+        } => {
+            pipeline::MoosicBoxClippierAdapter::plan(
+                &definition,
+                &workspace,
+                &revision,
+                &base_revision,
+                &clippier,
+                &output,
+            )?;
+            println!("{}", output.join("prepared.json").display());
+            Ok(())
+        }
+        PipelineCommand::Run {
+            prepared,
+            workspace,
+            state,
+            output,
+        } => pipeline::run(&prepared, &workspace, &state, &output),
+        PipelineCommand::Submit {
+            prepared,
+            url,
+            token_env,
+            key,
+        } => {
+            let prepared = pipeline::load(&prepared)?;
+            let client = OperatorClient::new(&url, &token_env)?;
+            let run_id = pipeline::submit(&prepared, &client, &key)?;
+            println!("{}", serde_json::json!({"run_id": run_id}));
+            Ok(())
+        }
+        PipelineCommand::Verify {
+            prepared,
+            url,
+            token_env,
+            run_id,
+            output,
+        } => {
+            let prepared = pipeline::load(&prepared)?;
+            pipeline::verify(
+                &prepared,
+                &OperatorClient::new(&url, &token_env)?,
+                &run_id,
+                &output,
+            )
+        }
+        PipelineCommand::Host {
+            prepared,
+            workspace,
+            state,
+            output,
+        } => pipeline::host(&prepared, &workspace, &state, &output),
     }
 }
 

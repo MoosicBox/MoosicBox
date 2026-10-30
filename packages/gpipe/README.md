@@ -6,6 +6,57 @@ HTTP protocol, native workers, resolved JSON plans, dynamic task generation, and
 Clippier case import. No Docker is required. This is an implementation under
 acceptance testing, **not a production CI cutover or full workflow replacement**.
 
+## Checked-in native pipeline
+
+`.gpipe/moosicbox.json` defines the selected packages, runner family, seed,
+validation profile and native deployment capacity/deadline. Its initial selection
+is deliberately small (`moosicbox_assert`), but it uses the normal Clippier planner,
+gPipe coordinator, native worker, artifact transport and authoritative verifier.
+There is no Python orchestration harness or separate GitHub execution recipe.
+
+Build Clippier with `native-ci,cargo-workspace,machete,git-diff,transforms-vendored`
+and gPipe with `runtime`, then invoke:
+
+```sh
+target/debug/gpipe pipeline plan .gpipe/moosicbox.json \
+  --workspace "$PWD" --revision "$(git rev-parse HEAD)" \
+  --base-revision "$(git rev-parse HEAD)" \
+  --clippier "$PWD/target/debug/clippier" --output /tmp/moosicbox-pipeline
+
+target/debug/gpipe pipeline run /tmp/moosicbox-pipeline/prepared.json \
+  --workspace "$PWD" --state /tmp/moosicbox-pipeline-new-state \
+  --output /tmp/moosicbox-pipeline
+```
+
+`plan` reads the definition from the requested commit, not from uncommitted files.
+Commit the definition before running these commands; otherwise planning deliberately
+fails. It resolves selected feature cases and records provenance. `run` deploys an
+ephemeral loopback coordinator and worker, executes the resolved tasks and verifies
+their downloaded evidence. Use fresh state on every native deployment. This is a
+real **single-host** topology, not a distributed deployment or hosted capacity
+scheduler. Existing `serve`, `worker`, `inspect`, and `cancel` commands remain
+available for independently managed services. `pipeline submit` and `pipeline verify`
+use an explicitly configured coordinator; run their `--help` for arguments.
+
+### Run on GitHub
+
+`.github/workflows/gpipe-pipeline.yml` only provisions tools, builds binaries,
+invokes `pipeline plan` / `pipeline run`, and uploads evidence after success or
+failure. No public endpoint, repository secrets, Docker or desktop connection is
+required. Existing production CI remains unchanged. Select **Actions → gPipe pipeline
+→ Run workflow** and choose the implementation branch after pushing it.
+GitHub requires the manual workflow to exist on the default branch before dispatch
+is available. Once registered: `gh workflow run gpipe-pipeline.yml --ref bcode/gpipe`.
+Nothing dispatches automatically on push or PR.
+
+Artifacts retain plans, receipts, task-stage logs, coverage and verification results
+for seven days, excluding coordinator state/configuration and source checkouts.
+Raw coordinator and worker process logs remain in the private `--state` directory
+and are not uploaded. A green job
+requires successful evidence verification. GitHub runner loss or hard cancellation
+can prevent final artifact upload. A small selected pipeline passing is not full
+workspace, dependency-setup, cross-platform or remote-worker acceptance.
+
 ## Native MoosicBox validation (opt-in)
 
 Build the shared runner with

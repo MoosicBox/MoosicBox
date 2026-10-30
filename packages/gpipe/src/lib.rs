@@ -42,6 +42,9 @@ pub mod moosicbox;
 /// Bounded authenticated operator API client.
 #[cfg(feature = "runtime")]
 pub mod operator;
+/// Source-bound pipeline planning and single-host native lifecycle.
+#[cfg(feature = "runtime")]
+pub mod pipeline;
 /// Resolved, validated native execution plans.
 #[cfg(feature = "runtime")]
 pub mod plan;
