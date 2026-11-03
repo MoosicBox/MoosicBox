@@ -4223,7 +4223,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_table_exists() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4252,7 +4252,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_list_tables() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4311,7 +4311,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_get_table_columns() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4369,7 +4369,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_column_exists() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4410,7 +4410,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_get_table_info() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4448,7 +4448,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_get_table_info_empty() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4463,7 +4463,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4518,7 +4518,7 @@ mod tests {
         }
 
         #[cfg(feature = "raw-sql")]
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_varchar_length_preservation() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4576,7 +4576,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_sqlx_savepoint_basic() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4599,7 +4599,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_sqlx_savepoint_release() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4621,7 +4621,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_sqlx_savepoint_rollback() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4643,7 +4643,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_sqlx_savepoint_after_transaction_commit() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -4666,7 +4666,7 @@ mod tests {
             assert!(matches!(result, Err(DatabaseError::TransactionCommitted)));
         }
 
-        #[switchy_async::test]
+        #[tokio::test]
         async fn test_mysql_sqlx_savepoint_after_transaction_rollback() {
             let Some(url) = get_mysql_test_url() else {
                 return;

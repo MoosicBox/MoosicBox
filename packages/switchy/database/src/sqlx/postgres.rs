@@ -3898,7 +3898,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_table_exists() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -3925,7 +3925,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_column_metadata() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -3979,7 +3979,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_constraints() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4033,7 +4033,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_type_mapping() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4097,7 +4097,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_default_values() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4152,7 +4152,7 @@ mod tests {
     }
 
     #[cfg(feature = "raw-sql")]
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_transaction_isolation() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4205,7 +4205,7 @@ mod tests {
             .unwrap();
     }
 
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_savepoint_basic() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4228,7 +4228,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_savepoint_release() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4250,7 +4250,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_savepoint_rollback() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4272,7 +4272,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_savepoint_after_transaction_commit() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -4295,7 +4295,7 @@ mod tests {
         assert!(matches!(result, Err(DatabaseError::TransactionCommitted)));
     }
 
-    #[switchy_async::test]
+    #[tokio::test]
     async fn test_postgres_sqlx_savepoint_after_transaction_rollback() {
         let Some(url) = get_postgres_test_url() else {
             return;
