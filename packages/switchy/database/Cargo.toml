@@ -75,6 +75,7 @@ pretty_assertions = { workspace = true }
 rust_decimal_macros = { workspace = true }
 switchy_async = { workspace = true, features = [
     "macros",
+    "net",
     "sync",
     "time",
     "tokio",
