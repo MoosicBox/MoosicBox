@@ -89,6 +89,12 @@ async fn create_unique_upsert_test_schema(
     db: &dyn Database,
     table_name: &str,
 ) -> Result<(), switchy_database::DatabaseError> {
+    // Drop leftovers from an earlier run that panicked before cleanup.
+    db.drop_table(table_name)
+        .if_exists(true)
+        .execute(db)
+        .await?;
+
     create_table(table_name)
         .column(Column {
             name: "item_key".to_string(),

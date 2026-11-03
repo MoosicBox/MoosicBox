@@ -2851,15 +2851,21 @@ async fn update_and_get_rows(
     // Start a transaction to ensure atomicity
     let mut tx = connection.begin().await?;
 
-    // Step 1: SELECT the IDs of rows that will be updated (with FOR UPDATE lock)
+    // Step 1: SELECT the keys of rows that will be updated (with FOR UPDATE lock)
+    let keys = primary_key_names(&mut tx, table_name).await?;
+    let key_list = keys
+        .iter()
+        .map(|key| crate::query::render_identifier(key, '`'))
+        .collect::<Vec<_>>()
+        .join(", ");
     let id_select_query = format!(
-        "SELECT id FROM {table_name} {} {} FOR UPDATE",
+        "SELECT {key_list} FROM {table_name} {} {} FOR UPDATE",
         build_where_clause(filters),
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
-        "Running ID select before update query: {id_select_query} with params: {:?}",
+        "Running key select before update query: {id_select_query} with params: {:?}",
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
@@ -2869,7 +2875,7 @@ async fn update_and_get_rows(
         filter_params.as_deref(),
     )?;
 
-    // Get the IDs of rows to be updated
+    // Get the keys of rows to be updated
     let id_rows: Vec<MySqlRow> = id_select_bound.fetch_all(&mut *tx).await?;
 
     if id_rows.is_empty() {
@@ -2878,32 +2884,56 @@ async fn update_and_get_rows(
         return Ok(vec![]);
     }
 
-    // Extract IDs
-    let ids: Vec<i64> = id_rows
-        .into_iter()
-        .map(|row| row.get::<i64, _>("id"))
-        .collect();
+    // Extract each row's key, before and after the update (the update may
+    // assign key columns).
+    let mut old_keys = Vec::with_capacity(id_rows.len());
+    let mut old_params = Vec::new();
+    let mut new_keys = Vec::with_capacity(id_rows.len());
+    let mut new_params = Vec::new();
+    for row in &id_rows {
+        let mut old_key = Vec::with_capacity(keys.len());
+        let mut new_key = Vec::with_capacity(keys.len());
+        for key in &keys {
+            let value = MySqlDatabaseValue::from(column_value(&row.try_get_raw(key.as_str())?));
+            old_key.push("?".to_string());
+            old_params.push(value.clone());
+            if let Some((_, assigned)) = values
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            {
+                new_key.push(assigned.deref().to_param());
+                new_params.extend(
+                    assigned
+                        .params()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .cloned()
+                        .map(MySqlDatabaseValue::from),
+                );
+            } else {
+                new_key.push("?".to_string());
+                new_params.push(value);
+            }
+        }
+        old_keys.push(old_key);
+        new_keys.push(new_key);
+    }
 
-    // Step 2: Perform the UPDATE using the collected IDs
+    // Step 2: Perform the UPDATE using the collected keys
     let update_query = format!(
-        "UPDATE {table_name} {} WHERE id IN ({})",
+        "UPDATE {table_name} {} WHERE {}",
         build_set_clause(values),
-        ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
+        key_match_clause(&keys, &old_keys)
     );
 
-    // Prepare parameters: first update values, then IDs
+    // Prepare parameters: first update values, then keys
     let update_values = values
         .iter()
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
 
-    let id_params: Vec<MySqlDatabaseValue> = ids
-        .iter()
-        .map(|&id| MySqlDatabaseValue::from(crate::DatabaseValue::Int64(id)))
-        .collect();
-
-    let all_update_params = [update_values, id_params.clone()].concat();
+    let all_update_params = [update_values, old_params].concat();
 
     log::trace!("Running update query: {update_query} with params: {all_update_params:?}");
 
@@ -2915,13 +2945,13 @@ async fn update_and_get_rows(
 
     // Step 3: SELECT the updated rows
     let final_select_query = format!(
-        "SELECT * FROM {table_name} WHERE id IN ({})",
-        ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
+        "SELECT * FROM {table_name} WHERE {}",
+        key_match_clause(&keys, &new_keys)
     );
 
     let final_select_bound = bind_values(
         sqlx::query(sqlx::AssertSqlSafe(final_select_query.clone())),
-        Some(&id_params),
+        Some(&new_params),
     )?;
     let updated_rows: Vec<MySqlRow> = final_select_bound.fetch_all(&mut *tx).await?;
 
@@ -3414,6 +3444,137 @@ async fn find_row(
         .transpose()
 }
 
+/// A primary key column of a `MySQL` table.
+struct KeyColumn {
+    name: String,
+    auto_increment: bool,
+}
+
+/// The primary key columns of `table_name` (optionally `schema.table`), in
+/// key order. Tables without a primary key fall back to an auto-increment
+/// `id` column, the historical convention of the `RETURNING` emulation.
+async fn primary_key_columns(
+    connection: &mut MySqlConnection,
+    table_name: &str,
+) -> Result<Vec<KeyColumn>, SqlxDatabaseError> {
+    let unquoted = table_name.replace('`', "");
+    let (schema, name) = match unquoted.split_once('.') {
+        Some((schema, name)) => (Some(schema.to_string()), name.to_string()),
+        None => (None, unquoted),
+    };
+    let query = r"
+        SELECT CAST(COLUMN_NAME AS CHAR) AS COLUMN_NAME, CAST(EXTRA AS CHAR) AS EXTRA
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = COALESCE(?, DATABASE())
+            AND TABLE_NAME = ?
+            AND COLUMN_KEY = 'PRI'
+        ORDER BY ORDINAL_POSITION
+    ";
+
+    let rows: Vec<(String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(query.to_string()))
+        .bind(schema)
+        .bind(name)
+        .fetch_all(&mut *connection)
+        .await?;
+
+    Ok(if rows.is_empty() {
+        vec![KeyColumn {
+            name: "id".to_string(),
+            auto_increment: true,
+        }]
+    } else {
+        rows.into_iter()
+            .map(|(name, extra)| KeyColumn {
+                name,
+                auto_increment: extra.to_ascii_lowercase().contains("auto_increment"),
+            })
+            .collect()
+    })
+}
+
+async fn primary_key_names(
+    connection: &mut MySqlConnection,
+    table_name: &str,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    Ok(primary_key_columns(connection, table_name)
+        .await?
+        .into_iter()
+        .map(|key| key.name)
+        .collect())
+}
+
+/// `key IN (...)` (or `(a, b) IN ((...), ...)` for composite keys) matching
+/// the given rendered key tuples.
+fn key_match_clause(keys: &[String], tuples: &[Vec<String>]) -> String {
+    fn group(parts: &[String]) -> String {
+        if parts.len() == 1 {
+            parts[0].clone()
+        } else {
+            format!("({})", parts.join(", "))
+        }
+    }
+
+    let columns = keys
+        .iter()
+        .map(|key| crate::query::render_identifier(key, '`'))
+        .collect::<Vec<_>>();
+    format!(
+        "{} IN ({})",
+        group(&columns),
+        tuples
+            .iter()
+            .map(|tuple| group(tuple))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// A `WHERE` filter locating the row just inserted with `values`: by each
+/// inserted primary key value, or the generated id for an unassigned
+/// auto-increment key column.
+fn inserted_row_filter(
+    keys: &[KeyColumn],
+    values: &[(&str, Box<dyn Expression>)],
+    last_insert_id: u64,
+) -> (String, Vec<MySqlDatabaseValue>) {
+    let mut clauses = Vec::with_capacity(keys.len());
+    let mut params = Vec::new();
+    for key in keys {
+        let column = crate::query::render_identifier(&key.name, '`');
+        let assigned = values
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(&key.name));
+        match assigned {
+            Some((_, value)) => {
+                clauses.push(format!("{column} = {}", value.deref().to_param()));
+                params.extend(
+                    value
+                        .params()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .cloned()
+                        .map(MySqlDatabaseValue::from),
+                );
+            }
+            None if key.auto_increment => {
+                clauses.push(format!("{column} = ?"));
+                #[allow(clippy::cast_possible_wrap)] // Auto-increment ids fit in i64.
+                params.push(DatabaseValue::Int64(last_insert_id as i64).into());
+            }
+            // An unassigned, non-generated key column (for example a
+            // defaulted one) cannot be located; the other key columns still
+            // narrow the match.
+            None => {}
+        }
+    }
+    if clauses.is_empty() {
+        #[allow(clippy::cast_possible_wrap)] // Auto-increment ids fit in i64.
+        params.push(DatabaseValue::Int64(last_insert_id as i64).into());
+        clauses.push("`id` = ?".to_string());
+    }
+    (clauses.join(" AND "), params)
+}
+
 async fn insert_and_get_row(
     connection: &mut MySqlConnection,
     table_name: &str,
@@ -3451,17 +3612,17 @@ async fn insert_and_get_row(
     )?;
     let result = insert_bound.execute(&mut *tx).await?;
 
-    // Get the ID of the inserted row
-    let inserted_id = result.last_insert_id();
+    // Step 2: SELECT the inserted row by its primary key to get all columns
+    let keys = primary_key_columns(&mut tx, table_name).await?;
+    let (filter, params) = inserted_row_filter(&keys, values, result.last_insert_id());
+    let select_query = format!("SELECT * FROM {table_name} WHERE {filter}");
 
-    // Step 2: SELECT the inserted row to get all columns
-    let select_query = format!("SELECT * FROM {table_name} WHERE id = ?");
+    log::trace!("Running select after insert query: {select_query} with params: {params:?}");
 
-    log::trace!("Running select after insert query: {select_query} with id: {inserted_id}");
-
-    #[allow(clippy::cast_possible_wrap)]
-    let select_bound =
-        sqlx::query(sqlx::AssertSqlSafe(select_query.clone())).bind(inserted_id as i64);
+    let select_bound = bind_values(
+        sqlx::query(sqlx::AssertSqlSafe(select_query.clone())),
+        Some(&params),
+    )?;
     let inserted_row: MySqlRow = select_bound.fetch_one(&mut *tx).await?;
 
     // Step 3: Commit the transaction
@@ -3790,9 +3951,14 @@ async fn upsert_and_get_row(
     .await?
     {
         Some(row) => {
-            let updated = update_and_get_row(connection, table_name, values, filters, limit)
+            let Some(updated) = update_and_get_rows(connection, table_name, values, filters, limit)
                 .await?
-                .unwrap();
+                .into_iter()
+                .next()
+            else {
+                // The row disappeared between the lookup and the update.
+                return insert_and_get_row(connection, table_name, values).await;
+            };
 
             let str1 = format!("{row:?}");
             let str2 = format!("{updated:?}");

@@ -1208,7 +1208,9 @@ pub async fn init_postgres_raw_native_tls(
     config
         .host(&creds.host)
         .dbname(&creds.name)
-        .user(&creds.user);
+        .user(&creds.user)
+        // Match sqlx, which always starts sessions in UTC.
+        .options("-c TimeZone=UTC");
 
     if let Some(port) = creds.port {
         config.port(port);
@@ -1264,7 +1266,9 @@ pub async fn init_postgres_raw_openssl(
     config
         .host(&creds.host)
         .dbname(&creds.name)
-        .user(&creds.user);
+        .user(&creds.user)
+        // Match sqlx, which always starts sessions in UTC.
+        .options("-c TimeZone=UTC");
 
     if let Some(port) = creds.port {
         config.port(port);
@@ -1316,7 +1320,9 @@ pub async fn init_postgres_raw_no_tls(
     config
         .host(&creds.host)
         .dbname(&creds.name)
-        .user(&creds.user);
+        .user(&creds.user)
+        // Match sqlx, which always starts sessions in UTC.
+        .options("-c TimeZone=UTC");
 
     if let Some(port) = creds.port {
         config.port(port);

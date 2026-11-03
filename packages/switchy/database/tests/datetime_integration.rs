@@ -1499,6 +1499,8 @@ mod postgres_raw_datetime_tests {
 
             let mut cfg = deadpool_postgres::Config::new();
             cfg.url = Some(url.clone());
+            // Match sqlx, which always starts sessions in UTC.
+            cfg.options = Some("-c TimeZone=UTC".to_string());
 
             let pool = if url.contains("sslmode=require") {
                 let connector = native_tls::TlsConnector::builder()

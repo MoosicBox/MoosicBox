@@ -308,17 +308,12 @@ fn postgres_raw(
     if let Some(name) = postgres_application_name(params, options) {
         config.application_name(name);
     }
-    let startup = postgres_startup_options(options);
-    if !startup.is_empty() {
-        let mut startup_str = String::new();
-        for (key, value) in startup {
-            if !startup_str.is_empty() {
-                startup_str.push(' ');
-            }
-            write!(startup_str, "-c {key}={value}").ok();
-        }
-        config.options(startup_str);
+    // Match sqlx, which always starts sessions in UTC.
+    let mut startup_str = String::from("-c TimeZone=UTC");
+    for (key, value) in postgres_startup_options(options) {
+        write!(startup_str, " -c {key}={value}").ok();
     }
+    config.options(startup_str);
     if let Some(mode) = ssl_mode {
         config.ssl_mode(match mode {
             SslMode::Disable => tokio_postgres::config::SslMode::Disable,
