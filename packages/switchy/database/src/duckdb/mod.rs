@@ -3133,6 +3133,17 @@ impl Database for DuckDbDatabase {
         .await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::duckdb(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -3754,6 +3765,17 @@ impl Database for DuckDbTransaction {
             duckdb_list_relations(conn, &schema)
         })
         .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::duckdb(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

@@ -856,6 +856,17 @@ impl Database for MySqlSqlxDatabase {
         super::mysql_introspection::mysql_sqlx_list_relations(&mut connection, schema).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::mysql(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -1366,6 +1377,17 @@ impl Database for MysqlSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
         super::mysql_introspection::mysql_sqlx_list_relations(&mut *tx, schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::mysql(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

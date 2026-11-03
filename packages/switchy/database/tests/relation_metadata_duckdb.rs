@@ -302,3 +302,24 @@ async fn query_builder_keeps_placeholders_aligned_for_new_null_variants() {
     assert!(rows[0].get("d").unwrap().is_null());
     assert_eq!(rows[0].get("s").unwrap().as_str(), Some("after"));
 }
+
+#[test_log::test(switchy_async::test)]
+async fn lists_builtin_and_user_routines() {
+    use switchy_database::schema::RoutineKind;
+    let db = setup();
+    db.exec_raw("CREATE MACRO app.add_one(x) AS x + 1")
+        .await
+        .unwrap();
+    let all = db.list_routines(None).await.unwrap();
+    let lower = all.iter().find(|r| r.name == "lower").unwrap();
+    assert!(lower.builtin);
+    assert!(
+        all.iter()
+            .any(|r| r.name == "sum" && r.kind == RoutineKind::Aggregate)
+    );
+    let app = db.list_routines(Some("app")).await.unwrap();
+    let add_one = app.iter().find(|r| r.name == "add_one").unwrap();
+    assert!(!add_one.builtin);
+    assert_eq!(add_one.schema.as_deref(), Some("app"));
+    assert_eq!(add_one.arguments.as_deref(), Some("x"));
+}

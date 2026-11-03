@@ -424,9 +424,35 @@ async fn check_builder_nulls(db: &dyn Database, table: &str) {
     db.exec_raw(&format!("DROP TABLE {table}")).await.unwrap();
 }
 
+async fn check_routines(db: &dyn Database, s: &str) {
+    use switchy_database::schema::RoutineKind;
+    exec_all(
+        db,
+        &[format!(
+            "CREATE FUNCTION {s}.add_one(x integer) RETURNS integer \
+             LANGUAGE sql AS 'SELECT x + 1'"
+        )],
+    )
+    .await;
+    let routines = db.list_routines(Some(s)).await.unwrap();
+    let add_one = routines.iter().find(|r| r.name == "add_one").unwrap();
+    assert_eq!(add_one.kind, RoutineKind::Function);
+    assert_eq!(add_one.arguments.as_deref(), Some("x integer"));
+    assert_eq!(add_one.result.as_deref(), Some("integer"));
+    assert!(!add_one.builtin);
+    let visible = db.list_routines(None).await.unwrap();
+    assert!(visible.iter().any(|r| r.name == "lower" && r.builtin));
+    assert!(
+        visible
+            .iter()
+            .any(|r| r.name == "count" && r.kind == RoutineKind::Aggregate)
+    );
+}
+
 async fn run_all(db: &dyn Database, schema: &str) {
     setup(db, schema).await;
     check_introspection(db, schema).await;
+    check_routines(db, schema).await;
     check_decoding(db, schema).await;
     teardown(db, schema).await;
     check_builder_nulls(db, &format!("{schema}_builder_nulls")).await;

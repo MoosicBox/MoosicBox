@@ -843,6 +843,17 @@ impl Database for PostgresDatabase {
         super::introspection::postgres_list_relations(client_ref, schema).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::postgres(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -1316,6 +1327,17 @@ impl Database for PostgresTransaction {
     ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
         let client_ref: &Client = &*self.client.lock().await;
         super::introspection::postgres_list_relations(client_ref, schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::postgres(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

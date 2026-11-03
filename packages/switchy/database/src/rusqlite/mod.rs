@@ -1444,6 +1444,18 @@ impl Database for RusqliteDatabase {
         rusqlite_list_relations(&*connection.lock().await, schema)
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let _ = schema;
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::sqlite(), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -1984,6 +1996,18 @@ impl Database for RusqliteTransaction {
         schema: Option<&str>,
     ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
         rusqlite_list_relations(&*self.connection.lock().await, schema)
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let _ = schema;
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::sqlite(), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

@@ -361,6 +361,14 @@ impl Database for SimulationDatabase {
         self.inner.list_relations(schema).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        self.inner.list_routines(schema).await
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,

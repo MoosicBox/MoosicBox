@@ -1017,6 +1017,18 @@ impl Database for SqliteSqlxDatabase {
         .map_err(Into::into)
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let _ = schema;
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::sqlite(), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -3929,6 +3941,18 @@ impl Database for SqliteSqlxTransaction {
         sqlx_sqlite_list_relations(&mut *tx, schema)
             .await
             .map_err(Into::into)
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let _ = schema;
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::sqlite(), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

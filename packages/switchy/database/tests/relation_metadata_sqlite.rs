@@ -26,6 +26,18 @@ const SETUP: &str = "
     CREATE VIEW thing_names AS SELECT t.id, p.name FROM things t JOIN parents p ON p.id = t.parent_id;
 ";
 
+async fn check_routines(db: &dyn Database) {
+    use switchy_database::schema::RoutineKind;
+    let routines = db.list_routines(None).await.unwrap();
+    let lower = routines.iter().find(|r| r.name == "lower").unwrap();
+    assert!(lower.builtin);
+    assert_eq!(lower.kind, RoutineKind::Function);
+    // SQLite reports window-capable aggregates (like count) as window functions.
+    assert!(routines.iter().any(|r| {
+        r.name == "count" && matches!(r.kind, RoutineKind::Aggregate | RoutineKind::Window)
+    }));
+}
+
 async fn check_relations(db: &dyn Database) {
     db.exec_raw(SETUP).await.unwrap();
 
@@ -228,6 +240,11 @@ mod rusqlite_backend {
     }
 
     #[tokio::test]
+    async fn routines() {
+        check_routines(&db()).await;
+    }
+
+    #[tokio::test]
     async fn values_and_raw_results() {
         check_values(&db()).await;
     }
@@ -338,6 +355,11 @@ mod sqlx_backend {
     #[tokio::test]
     async fn relations() {
         check_relations(&db().await).await;
+    }
+
+    #[tokio::test]
+    async fn routines() {
+        check_routines(&db().await).await;
     }
 
     #[tokio::test]

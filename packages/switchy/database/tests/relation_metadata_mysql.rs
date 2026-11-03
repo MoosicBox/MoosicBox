@@ -547,3 +547,34 @@ async fn mysql_query_raw_result_reports_columns_positionally() {
 
     db.exec_raw("DROP TABLE relmeta_result").await.unwrap();
 }
+
+#[test_log::test(tokio::test)]
+async fn mysql_lists_stored_routines() {
+    use switchy_database::schema::RoutineKind;
+    let Some(db) = get_database().await else {
+        return;
+    };
+    db.exec_raw("DROP FUNCTION IF EXISTS relmeta_add_one")
+        .await
+        .unwrap();
+    db.exec_raw("CREATE FUNCTION relmeta_add_one(x INT) RETURNS INT DETERMINISTIC RETURN x + 1")
+        .await
+        .unwrap();
+    let routines = db.list_routines(None).await.unwrap();
+    let add_one = routines
+        .iter()
+        .find(|r| r.name == "relmeta_add_one")
+        .unwrap();
+    assert_eq!(add_one.kind, RoutineKind::Function);
+    // MySQL renders `x int`, MariaDB `x int(11)`.
+    assert!(
+        add_one
+            .arguments
+            .as_deref()
+            .is_some_and(|arguments| arguments.starts_with("x int")),
+        "{:?}",
+        add_one.arguments
+    );
+    assert!(!add_one.builtin);
+    db.exec_raw("DROP FUNCTION relmeta_add_one").await.unwrap();
+}

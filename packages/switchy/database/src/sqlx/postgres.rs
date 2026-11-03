@@ -934,6 +934,17 @@ impl Database for PostgresSqlxDatabase {
         super::postgres_introspection::postgres_sqlx_list_relations(&mut conn, schema).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::postgres(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -1428,6 +1439,17 @@ impl Database for PostgresSqlxTransaction {
         let mut lock = self.transaction.lock().await;
         let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
         super::postgres_introspection::postgres_sqlx_list_relations(tx, schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
+        let result = self
+            .query_raw_result(&crate::schema::routines_sql::postgres(schema), &[])
+            .await?;
+        Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
     #[cfg(feature = "schema")]

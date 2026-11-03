@@ -2389,6 +2389,28 @@ pub trait Database: Send + Sync + std::fmt::Debug {
             .collect())
     }
 
+    /// List functions and procedures: those in `schema`, or with `None` the
+    /// ones visible by default (the search path, the current database, or all
+    /// functions where the backend has no per-schema functions).
+    ///
+    /// Built-in functions are included where the backend's catalog lists them
+    /// (`PostgreSQL`, `SQLite`, `DuckDB`); `MySQL` lists stored routines only.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot list routines
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_routines(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<schema::RoutineInfo>, DatabaseError> {
+        let _ = schema;
+        Err(DatabaseError::UnsupportedOperation("list_routines".into()))
+    }
+
     /// Get columns, indexes and foreign keys of a table or view in any schema
     ///
     /// Returns `None` if the relation doesn't exist. Views report their

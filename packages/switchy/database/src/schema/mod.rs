@@ -1490,6 +1490,161 @@ impl RelationSummary {
     }
 }
 
+/// Kind of routine returned by [`Database::list_routines`](crate::Database::list_routines)
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum RoutineKind {
+    /// A scalar function (including macros)
+    Function,
+    /// An aggregate function
+    Aggregate,
+    /// A window function
+    Window,
+    /// A stored procedure
+    Procedure,
+    /// A backend-specific kind, by its catalog name
+    Other(String),
+}
+
+impl RoutineKind {
+    /// Interpret a catalog kind code or name (`f`/`s`/`scalar`, `a`, `w`,
+    /// `p`, `FUNCTION`, `PROCEDURE`, `macro`, ...)
+    #[must_use]
+    pub fn from_catalog(kind: &str) -> Self {
+        match kind.to_ascii_lowercase().as_str() {
+            "f" | "s" | "scalar" | "function" | "macro" => Self::Function,
+            "a" | "aggregate" => Self::Aggregate,
+            "w" | "window" => Self::Window,
+            "p" | "procedure" => Self::Procedure,
+            _ => Self::Other(kind.to_string()),
+        }
+    }
+}
+
+/// A function or procedure returned by
+/// [`Database::list_routines`](crate::Database::list_routines)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoutineInfo {
+    /// Schema containing the routine, where the backend has schemas
+    pub schema: Option<String>,
+    /// Routine name
+    pub name: String,
+    /// Kind of routine
+    pub kind: RoutineKind,
+    /// Argument list as the database renders it (`a integer, b text`), where
+    /// available
+    pub arguments: Option<String>,
+    /// Result type as the database renders it, where available
+    pub result: Option<String>,
+    /// Whether the database provides it (rather than a user)
+    pub builtin: bool,
+}
+
+/// Catalog SQL for [`Database::list_routines`](crate::Database::list_routines),
+/// returning `schema, name, kind, arguments, result, builtin` as text, with
+/// `builtin` as `'true'` or `'false'`
+pub mod routines_sql {
+    fn literal(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    /// `PostgreSQL`: `pg_proc`, for `schema` or every schema on the search
+    /// path (including `pg_catalog`), without internal and trigger functions
+    #[must_use]
+    pub fn postgres(schema: Option<&str>) -> String {
+        let filter = schema.map_or_else(
+            || "n.nspname = ANY (pg_catalog.current_schemas(true))".to_string(),
+            |schema| format!("n.nspname = {}", literal(schema)),
+        );
+        format!(
+            "SELECT n.nspname::text, p.proname::text, p.prokind::text, \
+             pg_catalog.pg_get_function_identity_arguments(p.oid)::text, \
+             pg_catalog.pg_get_function_result(p.oid)::text, \
+             CASE WHEN n.nspname IN ('pg_catalog', 'information_schema') \
+             THEN 'true' ELSE 'false' END \
+             FROM pg_catalog.pg_proc p \
+             JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace \
+             WHERE {filter} \
+             AND p.prorettype NOT IN ('pg_catalog.internal'::regtype, 'pg_catalog.trigger'::regtype) \
+             ORDER BY 2"
+        )
+    }
+
+    /// `MySQL`/`MariaDB`: stored routines in `schema` or the current database
+    /// (built-in functions are not listed in the catalog)
+    #[must_use]
+    pub fn mysql(schema: Option<&str>) -> String {
+        let database = schema.map_or_else(|| "DATABASE()".to_string(), literal);
+        format!(
+            "SELECT r.ROUTINE_SCHEMA, r.ROUTINE_NAME, r.ROUTINE_TYPE, \
+             (SELECT GROUP_CONCAT(CONCAT(a.PARAMETER_NAME, ' ', a.DTD_IDENTIFIER) \
+             ORDER BY a.ORDINAL_POSITION SEPARATOR ', ') \
+             FROM information_schema.PARAMETERS a \
+             WHERE a.SPECIFIC_SCHEMA = r.ROUTINE_SCHEMA AND a.SPECIFIC_NAME = r.SPECIFIC_NAME \
+             AND a.ORDINAL_POSITION > 0), \
+             r.DTD_IDENTIFIER, 'false' \
+             FROM information_schema.ROUTINES r \
+             WHERE r.ROUTINE_SCHEMA = {database} ORDER BY r.ROUTINE_NAME"
+        )
+    }
+
+    /// `SQLite`: every function the connection knows (`pragma_function_list`;
+    /// `SQLite` functions are not per schema)
+    #[must_use]
+    pub fn sqlite() -> String {
+        "SELECT DISTINCT NULL, name, type, NULL, NULL, \
+         CASE builtin WHEN 1 THEN 'true' ELSE 'false' END \
+         FROM pragma_function_list ORDER BY name"
+            .to_string()
+    }
+
+    /// `DuckDB`: scalar, aggregate, and macro functions (`duckdb_functions()`)
+    #[must_use]
+    pub fn duckdb(schema: Option<&str>) -> String {
+        let filter = schema.map_or_else(String::new, |schema| {
+            format!(" AND schema_name = {}", literal(schema))
+        });
+        format!(
+            "SELECT DISTINCT schema_name, function_name, function_type, \
+             array_to_string(parameters, ', '), return_type, \
+             CASE WHEN internal THEN 'true' ELSE 'false' END \
+             FROM duckdb_functions() \
+             WHERE function_type IN ('scalar', 'aggregate', 'macro'){filter} \
+             ORDER BY function_name"
+        )
+    }
+}
+
+/// Map rows of a [`routines_sql`] query to [`RoutineInfo`]s, skipping rows
+/// without a name
+#[must_use]
+pub fn routines_from_rows(rows: &[Vec<crate::DatabaseValue>]) -> Vec<RoutineInfo> {
+    fn text(value: Option<&crate::DatabaseValue>) -> Option<String> {
+        use crate::DatabaseValue as V;
+        match value? {
+            V::String(text) | V::StringOpt(Some(text)) | V::Other { text, .. } => {
+                Some(text.clone())
+            }
+            V::Bytes(bytes) | V::BytesOpt(Some(bytes)) => {
+                Some(String::from_utf8_lossy(bytes).into_owned())
+            }
+            _ => None,
+        }
+    }
+    rows.iter()
+        .filter_map(|row| {
+            Some(RoutineInfo {
+                schema: text(row.first()).filter(|schema| !schema.is_empty()),
+                name: text(row.get(1))?,
+                kind: RoutineKind::from_catalog(&text(row.get(2)).unwrap_or_default()),
+                arguments: text(row.get(3)),
+                result: text(row.get(4)).filter(|result| !result.is_empty()),
+                builtin: text(row.get(5)).is_some_and(|builtin| builtin == "true"),
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
