@@ -61,19 +61,10 @@ where
     ///
     /// * Returns [`ParseError`] if the non-null value fails to convert to type `T`
     fn to_value_type(self) -> Result<Option<T>, ParseError> {
-        match self {
-            DatabaseValue::Null
-            | DatabaseValue::BoolOpt(None)
-            | DatabaseValue::StringOpt(None)
-            | DatabaseValue::Int64Opt(None)
-            | DatabaseValue::UInt64Opt(None)
-            | DatabaseValue::Real64Opt(None)
-            | DatabaseValue::Real32Opt(None) => Ok(None),
-            #[cfg(feature = "decimal")]
-            DatabaseValue::DecimalOpt(None) => Ok(None),
-            #[cfg(feature = "uuid")]
-            DatabaseValue::UuidOpt(None) => Ok(None),
-            _ => self.to_value_type().map(|inner| Some(inner)),
+        if self.is_null() {
+            Ok(None)
+        } else {
+            self.to_value_type().map(|inner| Some(inner))
         }
     }
 
@@ -847,6 +838,9 @@ impl ToValueType<chrono::DateTime<chrono::Utc>> for &DatabaseValue {
     fn to_value_type(self) -> Result<chrono::DateTime<chrono::Utc>, ParseError> {
         match self {
             DatabaseValue::DateTime(naive_dt) => Ok(naive_dt.and_utc()),
+            DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => {
+                Ok(dt.with_timezone(&chrono::Utc))
+            }
             DatabaseValue::String(datetime_str) => {
                 // First try RFC3339 (ISO 8601 with timezone)
                 if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(datetime_str) {

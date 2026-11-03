@@ -997,6 +997,66 @@ impl Database for SqliteSqlxDatabase {
         Ok(columns.iter().any(|col| col.name == column_name))
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        sqlx_sqlite_list_schemas(self.get_connection_internal().await?.lock().await.as_mut())
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        sqlx_sqlite_list_relations(
+            self.get_connection_internal().await?.lock().await.as_mut(),
+            schema,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        sqlx_sqlite_get_relation_info(
+            self.get_connection_internal().await?.lock().await.as_mut(),
+            relation,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        sqlx_sqlite_get_view_definition(
+            self.get_connection_internal().await?.lock().await.as_mut(),
+            relation,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        sqlx_sqlite_query_raw_result(
+            self.get_connection_internal().await?.lock().await.as_mut(),
+            query,
+            params,
+        )
+        .await
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1038,9 +1098,12 @@ impl Database for SqliteSqlxDatabase {
     }
 }
 
+/// Decode a `SQLite` value. `BLOB` values decode as [`DatabaseValue::Bytes`];
+/// values of unknown types fall back to text, then bytes.
+///
 /// # Errors
 ///
-/// Will return `Err` if column type was invalid.
+/// Will return `Err` if the value could not be decoded as its reported type.
 pub fn column_value(value: &SqliteValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
     if value.is_null() {
         return Ok(DatabaseValue::Null);
@@ -1057,9 +1120,12 @@ pub fn column_value(value: &SqliteValueRef<'_>) -> Result<DatabaseValue, sqlx::E
             Ok(DatabaseValue::String(owned.try_decode()?))
         }
         "TIMESTAMP" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: value.type_info().name().to_string(),
-        }),
+        "BLOB" => Ok(DatabaseValue::Bytes(owned.try_decode()?)),
+        // Never fail on unknown types: prefer text, then raw bytes.
+        _ => owned.try_decode::<String>().map_or_else(
+            |_| owned.try_decode::<Vec<u8>>().map(DatabaseValue::Bytes),
+            |text| Ok(DatabaseValue::String(text)),
+        ),
     }
 }
 
@@ -1442,6 +1508,20 @@ where
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
                 }
+                DatabaseValue::Bytes(value) | DatabaseValue::BytesOpt(Some(value)) => {
+                    query = query.bind(value.as_slice());
+                }
+                other => {
+                    // Null-like values were inlined as NULL unless the query builder
+                    // emitted a placeholder for them.
+                    if other.is_null() {
+                        if !crate::query::Expression::is_null(other) {
+                            query = query.bind(Option::<String>::None);
+                        }
+                    } else {
+                        query = query.bind(crate::sqlite_common::sqlite_text_for_value(other));
+                    }
+                }
             }
         }
     }
@@ -1644,6 +1724,11 @@ async fn sqlite_sqlx_exec_create_table(
                     query.push('\'');
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                other => {
+                    let literal = crate::sqlite_common::sqlite_literal_for_value(other)
+                        .unwrap_or_else(|| "NULL".to_string());
+                    query.push_str(&literal);
                 }
             }
         }
@@ -2541,6 +2626,8 @@ fn sqlite_modify_create_table_sql(
             crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
             crate::DatabaseValue::NowPlus(_) => return Err(SqlxDatabaseError::InvalidRequest),
+            other => crate::sqlite_common::sqlite_literal_for_value(other)
+                .ok_or(SqlxDatabaseError::InvalidRequest)?,
         };
 
         write!(new_column_def, " DEFAULT {default_str}").unwrap();
@@ -3819,6 +3906,75 @@ impl Database for SqliteSqlxTransaction {
         Ok(columns.iter().any(|col| col.name == column_name))
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        sqlx_sqlite_list_schemas(&mut *tx).await.map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        sqlx_sqlite_list_relations(&mut *tx, schema)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        sqlx_sqlite_get_relation_info(&mut *tx, relation)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        sqlx_sqlite_get_view_definition(&mut *tx, relation)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "raw-sql")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        sqlx_sqlite_query_raw_result(&mut *tx, query, params).await
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -4114,47 +4270,6 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
 // SQLite introspection helper functions (Phase 16.4)
 
 #[cfg(feature = "schema")]
-fn sqlite_type_to_data_type(sqlite_type: &str) -> crate::schema::DataType {
-    let normalized_type = sqlite_type.to_uppercase();
-
-    match normalized_type.as_str() {
-        "INTEGER" => crate::schema::DataType::BigInt,
-        "TEXT" => crate::schema::DataType::Text,
-        "REAL" | "DOUBLE" | "FLOAT" => crate::schema::DataType::Double,
-        "BLOB" => crate::schema::DataType::Blob,
-        "BOOLEAN" | "BOOL" => crate::schema::DataType::Bool,
-        "DATE" => crate::schema::DataType::Date,
-        "DATETIME" => crate::schema::DataType::DateTime,
-        "TIMESTAMP" => crate::schema::DataType::Timestamp,
-        "JSON" => crate::schema::DataType::Json,
-        _ => crate::schema::DataType::Custom(sqlite_type.to_string()),
-    }
-}
-
-#[cfg(feature = "schema")]
-fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseValue> {
-    default_str.and_then(|s| {
-        if s == "NULL" {
-            Some(crate::DatabaseValue::Null)
-        } else if s.starts_with('\'') && s.ends_with('\'') {
-            // String literal
-            let content = &s[1..s.len() - 1];
-            Some(crate::DatabaseValue::String(content.to_string()))
-        } else if let Ok(num) = s.parse::<i64>() {
-            Some(crate::DatabaseValue::Int64(num))
-        } else if let Ok(real) = s.parse::<f64>() {
-            Some(crate::DatabaseValue::Real64(real))
-        } else if s == "0" || s.to_uppercase() == "FALSE" {
-            Some(crate::DatabaseValue::Bool(false))
-        } else if s == "1" || s.to_uppercase() == "TRUE" {
-            Some(crate::DatabaseValue::Bool(true))
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(feature = "schema")]
 async fn sqlx_sqlite_table_exists(
     executor: &mut SqliteConnection,
     table_name: &str,
@@ -4192,91 +4307,161 @@ async fn sqlx_sqlite_get_table_columns(
     executor: &mut SqliteConnection,
     table_name: &str,
 ) -> Result<Vec<crate::schema::ColumnInfo>, SqlxDatabaseError> {
+    sqlx_sqlite_get_relation_columns(executor, None, table_name).await
+}
+
+/// Columns of a table or view. `schema` of `None` uses unqualified PRAGMA lookup.
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_get_relation_columns(
+    executor: &mut SqliteConnection,
+    schema: Option<&str>,
+    table_name: &str,
+) -> Result<Vec<crate::schema::ColumnInfo>, SqlxDatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_parse_default_value, sqlite_pragma_sql, sqlite_sql_has_autoincrement,
+        sqlite_type_to_data_type,
+    };
+
     let mut columns = Vec::new();
 
-    let pragma_query = format!("PRAGMA table_info({})", quote_schema_identifier(table_name));
-    let rows = sqlx::query(sqlx::AssertSqlSafe(pragma_query.clone()))
+    let pragma_query = sqlite_pragma_sql(schema, "table_info", table_name);
+    let rows = sqlx::query(sqlx::AssertSqlSafe(pragma_query))
         .fetch_all(&mut *executor)
         .await?;
 
+    let mut create_sql: Option<Option<String>> = None;
+
     for row in rows {
-        let cid: i32 = row.get(0);
-        let name: String = row.get(1);
-        let type_str: String = row.get(2);
-        let notnull: i32 = row.get(3);
-        let dflt_value: Option<String> = row.get(4);
-        let pk: i32 = row.get(5);
-
-        let data_type = sqlite_type_to_data_type(&type_str);
-
-        let default_value = parse_default_value(dflt_value);
+        let cid: i32 = row.try_get(0)?;
+        let name: String = row.try_get(1)?;
+        let type_str: Option<String> = row.try_get(2)?;
+        let type_str = type_str.unwrap_or_default();
+        let notnull: i32 = row.try_get(3)?;
+        let dflt_value: Option<String> = row.try_get(4)?;
+        let pk: i32 = row.try_get(5)?;
 
         let auto_increment = if pk > 0 {
             // Check if this column has AUTOINCREMENT in the CREATE TABLE statement
-            check_sqlite_sqlx_autoincrement(executor, table_name, &name).await?
+            if create_sql.is_none() {
+                create_sql = Some(
+                    sqlx_sqlite_catalog_entry(executor, schema, table_name)
+                        .await?
+                        .and_then(|(_, sql)| sql),
+                );
+            }
+            create_sql
+                .as_ref()
+                .and_then(Option::as_deref)
+                .is_some_and(|sql| sqlite_sql_has_autoincrement(sql, &name))
         } else {
             false
         };
 
         columns.push(crate::schema::ColumnInfo {
+            data_type: sqlite_type_to_data_type(&type_str),
+            native_type: type_str,
             name,
-            data_type,
             nullable: notnull == 0,
             is_primary_key: pk > 0,
             auto_increment,
-            default_value,
-            ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // Convert 0-based cid to 1-based ordinal
+            default_value: sqlite_parse_default_value(dflt_value.as_deref()),
+            ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // 0-based cid to 1-based ordinal
         });
     }
 
     Ok(columns)
 }
 
+/// Look up a table or view in the catalog of `schema`, returning its `type` and `sql`.
 #[cfg(feature = "schema")]
-async fn check_sqlite_sqlx_autoincrement(
+async fn sqlx_sqlite_catalog_entry(
     executor: &mut SqliteConnection,
-    table_name: &str,
-    column_name: &str,
-) -> Result<bool, SqlxDatabaseError> {
-    // Query the CREATE TABLE statement from sqlite_master
-    let sql: Option<String> =
-        sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
-            .bind(table_name)
-            .fetch_optional(executor)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
+    schema: Option<&str>,
+    name: &str,
+) -> Result<Option<(String, Option<String>)>, SqlxDatabaseError> {
+    let query = format!(
+        "SELECT type, sql FROM {} WHERE type IN ('table', 'view') AND name = ?",
+        crate::sqlite_common::sqlite_catalog_table_for(schema)
+    );
+    let row = sqlx::query(sqlx::AssertSqlSafe(query))
+        .bind(name)
+        .fetch_optional(executor)
+        .await?;
+    row.map(|row| Ok((row.try_get(0)?, row.try_get(1)?)))
+        .transpose()
+}
 
-    if let Some(create_sql) = sql {
-        // Parse the CREATE TABLE statement for AUTOINCREMENT
-        // Look for pattern: column_name TYPE PRIMARY KEY AUTOINCREMENT
-        let normalized_sql = create_sql.to_uppercase();
-        let normalized_column = column_name.to_uppercase();
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_list_schemas(
+    executor: &mut SqliteConnection,
+) -> Result<Vec<crate::schema::SchemaInfo>, SqlxDatabaseError> {
+    let rows = sqlx::query(crate::sqlite_common::SQLITE_LIST_SCHEMAS_SQL)
+        .fetch_all(executor)
+        .await?;
+    rows.iter()
+        .map(|row| {
+            let name: String = row.try_get(1)?;
+            Ok(crate::sqlite_common::sqlite_schema_info(&name))
+        })
+        .collect()
+}
 
-        // Find the column definition
-        if let Some(column_start) = normalized_sql.find(&normalized_column) {
-            // Get the portion from the column name onwards
-            let column_portion = &normalized_sql[column_start..];
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_list_relations(
+    executor: &mut SqliteConnection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationSummary>, SqlxDatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_list_relations_sql, sqlite_relation_kind, sqlite_schema_or_default,
+    };
 
-            // Look for PRIMARY KEY followed by AUTOINCREMENT
-            if column_portion.contains("PRIMARY KEY") {
-                // Find PRIMARY KEY position relative to column start
-                if let Some(pk_pos) = column_portion.find("PRIMARY KEY") {
-                    // Get text after PRIMARY KEY
-                    let after_pk = &column_portion[pk_pos + "PRIMARY KEY".len()..];
+    let schema = sqlite_schema_or_default(schema);
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sqlite_list_relations_sql(schema)))
+        .fetch_all(executor)
+        .await?;
+    rows.iter()
+        .map(|row| {
+            let name: String = row.try_get(0)?;
+            let kind: String = row.try_get(1)?;
+            Ok(crate::schema::RelationSummary {
+                schema: Some(schema.to_string()),
+                kind: sqlite_relation_kind(&kind, &name),
+                name,
+                comment: None,
+                estimated_rows: None,
+            })
+        })
+        .collect()
+}
 
-                    // Check if AUTOINCREMENT appears before the next comma or closing paren
-                    let end_pos = after_pk
-                        .find(',')
-                        .unwrap_or_else(|| after_pk.find(')').unwrap_or(after_pk.len()));
-                    let column_rest = &after_pk[..end_pos];
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_get_relation_info(
+    executor: &mut SqliteConnection,
+    relation: &crate::schema::RelationRef,
+) -> Result<Option<crate::schema::TableInfo>, SqlxDatabaseError> {
+    let schema = crate::sqlite_common::sqlite_schema_or_default(relation.schema.as_deref());
+    let Some((kind, _)) = sqlx_sqlite_catalog_entry(executor, Some(schema), &relation.name).await?
+    else {
+        return Ok(None);
+    };
+    let kind = crate::sqlite_common::sqlite_relation_kind(&kind, &relation.name);
+    sqlx_sqlite_build_table_info(executor, Some(schema), &relation.name, kind)
+        .await
+        .map(Some)
+}
 
-                    return Ok(column_rest.contains("AUTOINCREMENT"));
-                }
-            }
-        }
-    }
-
-    Ok(false)
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_get_view_definition(
+    executor: &mut SqliteConnection,
+    relation: &crate::schema::RelationRef,
+) -> Result<Option<String>, SqlxDatabaseError> {
+    let schema = crate::sqlite_common::sqlite_schema_or_default(relation.schema.as_deref());
+    Ok(
+        sqlx_sqlite_catalog_entry(executor, Some(schema), &relation.name)
+            .await?
+            .filter(|(kind, _)| kind == "view")
+            .and_then(|(_, sql)| sql),
+    )
 }
 
 #[cfg(feature = "schema")]
@@ -4284,97 +4469,119 @@ async fn sqlx_sqlite_get_table_info(
     executor: &mut SqliteConnection,
     table_name: &str,
 ) -> Result<Option<crate::schema::TableInfo>, SqlxDatabaseError> {
-    use std::collections::BTreeMap;
-
     // First check if table exists
     if !sqlx_sqlite_table_exists(executor, table_name).await? {
         return Ok(None);
     }
+    let mut info = sqlx_sqlite_build_table_info(
+        executor,
+        None,
+        table_name,
+        crate::schema::RelationKind::Table,
+    )
+    .await?;
+    info.schema = Some(crate::sqlite_common::SQLITE_DEFAULT_SCHEMA.to_string());
+    Ok(Some(info))
+}
+
+/// Build complete relation info (columns, indexes and foreign keys).
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_build_table_info(
+    executor: &mut SqliteConnection,
+    schema: Option<&str>,
+    table_name: &str,
+    kind: crate::schema::RelationKind,
+) -> Result<crate::schema::TableInfo, SqlxDatabaseError> {
+    use crate::sqlite_common::sqlite_pragma_sql;
+    use std::collections::BTreeMap;
 
     // Get columns
-    let columns = sqlx_sqlite_get_table_columns(executor, table_name).await?;
+    let columns = sqlx_sqlite_get_relation_columns(executor, schema, table_name).await?;
     let mut column_map = BTreeMap::new();
     for column in columns {
         column_map.insert(column.name.clone(), column);
     }
 
-    // Get indexes
     let mut indexes = BTreeMap::new();
-    let index_query = format!("PRAGMA index_list({})", quote_schema_identifier(table_name));
-    let index_rows = sqlx::query(sqlx::AssertSqlSafe(index_query.clone()))
-        .fetch_all(&mut *executor)
-        .await?;
+    let mut foreign_keys = BTreeMap::new();
 
-    for row in index_rows {
-        let index_name: String = row.get(1);
-        let unique: i32 = row.get(2);
-        let origin: String = row.get(3);
-
-        // Get index columns
-        let index_info_query = format!(
-            "PRAGMA index_info({})",
-            quote_schema_identifier(&index_name)
-        );
-        let column_rows = sqlx::query(sqlx::AssertSqlSafe(index_info_query.clone()))
+    if !kind.is_view() {
+        // Get indexes
+        let index_query = sqlite_pragma_sql(schema, "index_list", table_name);
+        let index_rows = sqlx::query(sqlx::AssertSqlSafe(index_query))
             .fetch_all(&mut *executor)
             .await?;
 
-        let mut index_columns = Vec::new();
-        for col_row in column_rows {
-            let column_name: String = col_row.get(2);
-            index_columns.push(column_name);
+        for row in index_rows {
+            let index_name: String = row.try_get(1)?;
+            let unique: i32 = row.try_get(2)?;
+            let origin: String = row.try_get(3)?;
+
+            // Get index columns
+            let index_info_query = sqlite_pragma_sql(schema, "index_info", &index_name);
+            let column_rows = sqlx::query(sqlx::AssertSqlSafe(index_info_query))
+                .fetch_all(&mut *executor)
+                .await?;
+
+            let mut index_columns = Vec::new();
+            for col_row in column_rows {
+                // NULL for expression index columns
+                let column_name: Option<String> = col_row.try_get(2)?;
+                if let Some(column_name) = column_name {
+                    index_columns.push(column_name);
+                }
+            }
+
+            indexes.insert(
+                index_name.clone(),
+                crate::schema::IndexInfo {
+                    name: index_name,
+                    unique: unique == 1,
+                    columns: index_columns,
+                    is_primary: origin == "pk",
+                },
+            );
         }
 
-        indexes.insert(
-            index_name.clone(),
-            crate::schema::IndexInfo {
-                name: index_name,
-                unique: unique == 1,
-                columns: index_columns,
-                is_primary: origin == "pk",
-            },
-        );
+        // Get foreign keys
+        let fk_query = sqlite_pragma_sql(schema, "foreign_key_list", table_name);
+        let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query))
+            .fetch_all(&mut *executor)
+            .await?;
+
+        for row in fk_rows {
+            let id: i32 = row.try_get(0)?;
+            let table: String = row.try_get(2)?;
+            let from: String = row.try_get(3)?;
+            // NULL means the referenced table's primary key
+            let to: Option<String> = row.try_get(4)?;
+            let on_update: String = row.try_get(5)?;
+            let on_delete: String = row.try_get(6)?;
+
+            let constraint_name = format!("fk_{table_name}_{id}");
+            foreign_keys.insert(
+                constraint_name.clone(),
+                crate::schema::ForeignKeyInfo {
+                    name: constraint_name,
+                    column: from,
+                    referenced_table: table,
+                    referenced_column: to.unwrap_or_default(),
+                    on_update: Some(on_update),
+                    on_delete: Some(on_delete),
+                },
+            );
+        }
     }
 
-    // Get foreign keys
-    let mut foreign_keys = BTreeMap::new();
-    let fk_query = format!(
-        "PRAGMA foreign_key_list({})",
-        quote_schema_identifier(table_name)
-    );
-    let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.clone()))
-        .fetch_all(&mut *executor)
-        .await?;
-
-    for row in fk_rows {
-        let id: i32 = row.get(0);
-        let _seq: i32 = row.get(1);
-        let table: String = row.get(2);
-        let from: String = row.get(3);
-        let to: String = row.get(4);
-        let on_update: String = row.get(5);
-        let on_delete: String = row.get(6);
-
-        let constraint_name = format!("fk_{table_name}_{id}");
-        foreign_keys.insert(
-            constraint_name.clone(),
-            crate::schema::ForeignKeyInfo {
-                name: constraint_name,
-                column: from,
-                referenced_table: table,
-                referenced_column: to,
-                on_update: Some(on_update),
-                on_delete: Some(on_delete),
-            },
-        );
-    }
-
-    Ok(Some(crate::schema::TableInfo {
+    Ok(crate::schema::TableInfo {
         name: table_name.to_string(),
+        schema: schema.map(ToString::to_string),
+        kind,
+        comment: None,
         columns: column_map,
         indexes,
         foreign_keys,
-    }))
+    })
 }
 
 #[cfg(all(test, feature = "schema"))]
@@ -4885,6 +5092,157 @@ mod introspection_tests {
     }
 }
 
+/// Bind raw parameters for a `SQLite` query (`Now`/`NowPlus` must already be transformed).
+#[cfg(feature = "raw-sql")]
+fn sqlite_bind_raw_params<'q>(
+    mut query_builder: Query<'q, Sqlite, SqliteArguments>,
+    params: &'q [crate::DatabaseValue],
+) -> Result<Query<'q, Sqlite, SqliteArguments>, DatabaseError> {
+    for param in params {
+        query_builder = match param {
+            crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
+            crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
+            crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
+            crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
+            crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
+            crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n.map(i64::from)),
+            crate::DatabaseValue::String(s) => query_builder.bind(s),
+            crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+            crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
+            crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+            crate::DatabaseValue::UInt8(n) => {
+                let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt8Opt(n) => {
+                let signed = n.and_then(|v| i8::try_from(v).ok());
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt16(n) => {
+                let signed = i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt16Opt(n) => {
+                let signed = n.and_then(|v| i16::try_from(v).ok());
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt32(n) => {
+                let signed = i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt32Opt(n) => {
+                let signed = n.and_then(|v| i32::try_from(v).ok());
+                query_builder.bind(signed)
+            }
+            crate::DatabaseValue::UInt64(n) => {
+                query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
+            }
+            crate::DatabaseValue::UInt64Opt(n) => {
+                query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
+            }
+            crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
+            crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+            crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
+            crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
+            #[cfg(feature = "decimal")]
+            crate::DatabaseValue::DecimalOpt(d) => {
+                query_builder.bind(d.as_ref().map(ToString::to_string))
+            }
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+            #[cfg(feature = "uuid")]
+            crate::DatabaseValue::UuidOpt(u) => {
+                query_builder.bind(u.as_ref().map(ToString::to_string))
+            }
+            crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+            crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+            crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
+            crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+            crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                // These should never reach here due to query transformation
+                return Err(DatabaseError::QueryFailed(
+                    "Now/NowPlus parameters should be handled by query transformation".to_string(),
+                ));
+            }
+            crate::DatabaseValue::Bytes(b) => query_builder.bind(b.clone()),
+            crate::DatabaseValue::BytesOpt(b) => query_builder.bind(b.clone()),
+            other => query_builder.bind(crate::sqlite_common::sqlite_text_for_value(other)),
+        };
+    }
+    Ok(query_builder)
+}
+
+/// Execute a raw parameterized query, returning positional rows with column metadata.
+///
+/// Column names come from the prepared statement, so they are present even when
+/// no rows are returned. Type names are sqlx's `SQLite` type names derived from
+/// the declared column types (`None` for untyped expressions).
+#[cfg(feature = "raw-sql")]
+async fn sqlx_sqlite_query_raw_result(
+    connection: &mut SqliteConnection,
+    query: &str,
+    params: &[crate::DatabaseValue],
+) -> Result<crate::QueryResult, DatabaseError> {
+    let (transformed_query, filtered_params) = sqlite_transform_query_for_params(query, params)?;
+
+    let mut columns: Vec<crate::ResultColumn> = match (&mut *connection)
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            transformed_query.clone(),
+        )))
+        .await
+    {
+        Ok(statement) => statement
+            .columns()
+            .iter()
+            .map(|column| crate::ResultColumn {
+                name: column.name().to_string(),
+                type_name: Some(column.type_info().name())
+                    .filter(|name| *name != "NULL")
+                    .map(ToString::to_string),
+            })
+            .collect(),
+        Err(e) => return Err(DatabaseError::QueryFailed(e.to_string())),
+    };
+
+    let query_builder = sqlite_bind_raw_params(
+        sqlx::query::<Sqlite>(sqlx::AssertSqlSafe(transformed_query.clone())),
+        &filtered_params,
+    )?;
+    let result = query_builder
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    if let Some(first) = result.first()
+        && first.columns().len() != columns.len()
+    {
+        columns = first
+            .columns()
+            .iter()
+            .map(|column| crate::ResultColumn {
+                name: column.name().to_string(),
+                type_name: None,
+            })
+            .collect();
+    }
+
+    let mut rows = Vec::with_capacity(result.len());
+    for row in &result {
+        let mut values = Vec::with_capacity(columns.len());
+        for index in 0..row.columns().len() {
+            let raw = row
+                .try_get_raw(index)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            values.push(column_value(&raw).map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+        }
+        rows.push(values);
+    }
+
+    Ok(crate::QueryResult { columns, rows })
+}
+
 #[cfg(feature = "raw-sql")]
 fn sqlite_transform_query_for_params(
     query: &str,
@@ -5060,6 +5418,9 @@ impl SqliteSqlxDatabase {
                             .to_string(),
                     ));
                 }
+                crate::DatabaseValue::Bytes(b) => query_builder.bind(b.clone()),
+                crate::DatabaseValue::BytesOpt(b) => query_builder.bind(b.clone()),
+                other => query_builder.bind(crate::sqlite_common::sqlite_text_for_value(other)),
             };
         }
 
@@ -5091,79 +5452,7 @@ impl SqliteSqlxDatabase {
         let mut query_builder = sqlx::query::<Sqlite>(sqlx::AssertSqlSafe(transformed_query));
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
-        for param in &filtered_params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => {
-                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt8Opt(n) => {
-                    let signed = n.and_then(|v| i8::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt16(n) => {
-                    let signed =
-                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt16Opt(n) => {
-                    let signed = n.and_then(|v| i16::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt32(n) => {
-                    let signed =
-                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt32Opt(n) => {
-                    let signed = n.and_then(|v| i32::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt64(n) => {
-                    query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
-                }
-                crate::DatabaseValue::UInt64Opt(n) => {
-                    query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
-                }
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => {
-                    query_builder.bind(d.as_ref().map(ToString::to_string))
-                }
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => {
-                    query_builder.bind(u.as_ref().map(ToString::to_string))
-                }
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-        }
+        query_builder = sqlite_bind_raw_params(query_builder, &filtered_params)?;
 
         let result = query_builder
             .fetch_all(&mut *connection)
@@ -5331,6 +5620,9 @@ impl SqliteSqlxTransaction {
                     // NowPlus should not be bound as parameter - it should be a SQL expression
                     panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
+                crate::DatabaseValue::Bytes(b) => query_builder.bind(b.clone()),
+                crate::DatabaseValue::BytesOpt(b) => query_builder.bind(b.clone()),
+                other => query_builder.bind(crate::sqlite_common::sqlite_text_for_value(other)),
             };
         }
 
@@ -5357,81 +5649,14 @@ impl SqliteSqlxTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
         let mut query_builder: Query<'_, Sqlite, SqliteArguments> =
-            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query));
 
         // Add parameters in order - SQLite uses ? placeholders
-        for param in params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(i64::from(*n)),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n.map(i64::from)),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => {
-                    let signed = i8::try_from(*n).map_err(|_| DatabaseError::UInt8Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt8Opt(n) => {
-                    let signed = n.and_then(|v| i8::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt16(n) => {
-                    let signed =
-                        i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt16Opt(n) => {
-                    let signed = n.and_then(|v| i16::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt32(n) => {
-                    let signed =
-                        i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?;
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt32Opt(n) => {
-                    let signed = n.and_then(|v| i32::try_from(v).ok());
-                    query_builder.bind(signed)
-                }
-                crate::DatabaseValue::UInt64(n) => {
-                    query_builder.bind(i64::try_from(*n).unwrap_or(i64::MAX))
-                }
-                crate::DatabaseValue::UInt64Opt(n) => {
-                    query_builder.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX)))
-                }
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(f64::from(*r)),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r.map(f64::from)),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(d.to_string()),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => {
-                    query_builder.bind(d.as_ref().map(ToString::to_string))
-                }
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => {
-                    query_builder.bind(u.as_ref().map(ToString::to_string))
-                }
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
-                }
-            };
-        }
+        query_builder = sqlite_bind_raw_params(query_builder, &filtered_params)?;
 
         let result = {
             let mut transaction_guard = self.transaction.lock().await;

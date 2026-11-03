@@ -55,6 +55,12 @@ use thiserror::Error;
 #[cfg(feature = "creds")]
 pub mod creds;
 
+mod connect;
+pub mod target;
+
+pub use connect::init_with_options;
+pub use target::{AccessMode, ConnectOptions, ConnectionTarget, ConnectionUrlError, SslMode};
+
 /// Create a database connection builder.
 #[must_use]
 pub const fn builder() -> DatabaseConnectionBuilder {
@@ -180,7 +186,9 @@ impl TursoConnectionBuilder {
 ///
 /// Contains host, database name, username, and optional password
 /// for establishing database connections.
-#[allow(unused)]
+///
+/// The `Debug` representation redacts the password.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Credentials {
     host: String,
     port: Option<u16>,
@@ -189,10 +197,22 @@ pub struct Credentials {
     password: Option<String>,
 }
 
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("name", &self.name)
+            .field("user", &self.user)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
 /// Errors that can occur when parsing database credentials from a URL
 #[derive(Debug, Error)]
 pub enum CredentialsParseError {
-    /// URL does not contain `://` separator
+    /// URL is malformed (no `://` separator, invalid port or percent-encoding)
     #[error("Invalid URL format")]
     InvalidUrl,
     /// Host component is missing or empty in the URL
@@ -204,7 +224,7 @@ pub enum CredentialsParseError {
     /// Username component is missing or empty in the URL
     #[error("Missing username")]
     MissingUsername,
-    /// URL scheme is not supported (must be postgres, postgresql, or mysql)
+    /// URL scheme is not supported (must be postgres, postgresql, mysql, or mariadb)
     #[error("Unsupported scheme: {0}")]
     UnsupportedScheme(String),
 }
@@ -231,17 +251,22 @@ impl Credentials {
     /// Parse credentials from a database URL
     ///
     /// Supports formats like:
-    /// * `postgres://user:pass@host:port/dbname`
-    /// * `mysql://user:pass@host:port/dbname`
-    /// * `sqlite://path/to/db.sqlite`
+    /// * `postgres://user:pass@host:port/dbname` (also `postgresql://`)
+    /// * `mysql://user:pass@host:port/dbname` (also `mariadb://`)
+    ///
+    /// User, password, host and database name are percent-decoded. Unlike
+    /// [`ConnectionTarget::from_url`], a user, host and database name are
+    /// required and query parameters are ignored.
     ///
     /// # Errors
     ///
-    /// * [`CredentialsParseError::InvalidUrl`] when `url` does not contain `://`
+    /// * [`CredentialsParseError::InvalidUrl`] when `url` does not contain `://`, or has an
+    ///   invalid port or percent-encoding
     /// * [`CredentialsParseError::MissingDatabase`] when the database path segment is absent or empty
     /// * [`CredentialsParseError::MissingUsername`] when the username segment is absent or empty
     /// * [`CredentialsParseError::MissingHost`] when the host segment is absent or empty
-    /// * [`CredentialsParseError::UnsupportedScheme`] when the URL scheme is not one of `postgres`, `postgresql`, or `mysql`
+    /// * [`CredentialsParseError::UnsupportedScheme`] when the URL scheme is not one of `postgres`,
+    ///   `postgresql`, `mysql`, or `mariadb`
     ///
     /// # Examples
     ///
@@ -258,55 +283,32 @@ impl Credentials {
     /// assert_eq!(creds.password(), Some("secret"));
     /// ```
     pub fn from_url(url: &str) -> Result<Self, CredentialsParseError> {
-        // Simple URL parsing without external dependencies
         let url = url.trim();
 
-        // Find scheme
         let scheme_end = url.find("://").ok_or(CredentialsParseError::InvalidUrl)?;
         let scheme = &url[..scheme_end];
-        let rest = &url[scheme_end + 3..];
 
-        match scheme {
-            "postgres" | "postgresql" | "mysql" => {
-                // Format: user:pass@host:port/dbname
-                let (auth_host, dbname) = rest
-                    .rsplit_once('/')
-                    .ok_or(CredentialsParseError::MissingDatabase)?;
+        match scheme.to_ascii_lowercase().as_str() {
+            "postgres" | "postgresql" | "mysql" | "mariadb" => {
+                let parts = target::parse_network(&url[scheme_end + 1..])
+                    .map_err(|_| CredentialsParseError::InvalidUrl)?;
 
-                let Some((auth, host_port)) = auth_host.rsplit_once('@') else {
-                    return Err(CredentialsParseError::MissingUsername);
-                };
-
-                let (user, password) = if let Some((user, pass)) = auth.split_once(':') {
-                    (user, Some(pass.to_string()))
-                } else {
-                    (auth, None)
-                };
-
-                // Split host and port
-                let (host, port) = if let Some((h, p)) = host_port.rsplit_once(':') {
-                    p.parse::<u16>()
-                        .map_or((host_port, None), |port_num| (h, Some(port_num)))
-                } else {
-                    (host_port, None)
-                };
-
-                if user.is_empty() {
+                if parts.user.is_empty() {
                     return Err(CredentialsParseError::MissingUsername);
                 }
-                if host.is_empty() {
+                if parts.host.is_empty() {
                     return Err(CredentialsParseError::MissingHost);
                 }
-                if dbname.is_empty() {
+                if parts.database.is_empty() {
                     return Err(CredentialsParseError::MissingDatabase);
                 }
 
                 Ok(Self::new(
-                    host.to_string(),
-                    port,
-                    dbname.to_string(),
-                    user.to_string(),
-                    password,
+                    parts.host,
+                    parts.port,
+                    parts.database,
+                    parts.user,
+                    parts.password,
                 ))
             }
             _ => Err(CredentialsParseError::UnsupportedScheme(scheme.to_string())),
@@ -379,9 +381,24 @@ pub enum InitDbError {
     #[cfg(feature = "duckdb")]
     #[error(transparent)]
     InitDuckDb(#[from] InitDuckDbError),
+    /// Error initializing `MySQL` via sqlx
+    #[cfg(feature = "mysql-sqlx")]
+    #[error(transparent)]
+    InitMySql(#[from] InitMySqlSqlxError),
     /// Credentials were required but not provided
     #[error("Credentials are required")]
     CredentialsRequired,
+    /// The target's database driver is not compiled into this build
+    #[error("No {driver} driver is enabled; enable one of these crate features: {features}")]
+    DriverNotEnabled {
+        /// Driver family of the requested target (e.g. `postgres`)
+        driver: &'static str,
+        /// Crate features that would provide the driver
+        features: &'static str,
+    },
+    /// A requested connection option cannot be applied by the selected backend
+    #[error("Unsupported connection option: {0}")]
+    UnsupportedOption(String),
     /// Generic database error
     #[error(transparent)]
     Database(#[from] switchy_database::DatabaseError),
@@ -664,39 +681,48 @@ pub fn init_duckdb_with_options(
     db_location: Option<&std::path::Path>,
     config: switchy_database::duckdb::DuckDbConfig,
 ) -> Result<Box<dyn Database>, InitDuckDbError> {
+    open_duckdb(db_location, false, config, 5)
+}
+
+/// Open `pool_size` `DuckDB` connections (shared in deterministic mode).
+#[cfg(feature = "duckdb")]
+fn open_duckdb(
+    db_location: Option<&std::path::Path>,
+    read_only: bool,
+    config: switchy_database::duckdb::DuckDbConfig,
+    pool_size: usize,
+) -> Result<Box<dyn Database>, InitDuckDbError> {
     use std::sync::Arc;
 
     use switchy_async::sync::Mutex;
     use switchy_database::duckdb::DuckDbMode;
 
-    const CONNECTION_POOL_SIZE: u8 = 5;
+    let open = || -> Result<::duckdb::Connection, InitDuckDbError> {
+        Ok(match db_location {
+            Some(path) if read_only => {
+                let flags =
+                    ::duckdb::Config::default().access_mode(::duckdb::AccessMode::ReadOnly)?;
+                ::duckdb::Connection::open_with_flags(path, flags)?
+            }
+            Some(path) => ::duckdb::Connection::open(path)?,
+            None if read_only => {
+                return Err(InitDuckDbError::InvalidConfig(
+                    "an in-memory DuckDB database cannot be opened read-only".to_string(),
+                ));
+            }
+            None => ::duckdb::Connection::open_in_memory()?,
+        })
+    };
 
+    let pool_size = pool_size.max(1);
     let connections = match config.mode {
         DuckDbMode::Deterministic => {
-            let conn = if let Some(path) = db_location {
-                ::duckdb::Connection::open(path)?
-            } else {
-                ::duckdb::Connection::open_in_memory()?
-            };
-            let shared = Arc::new(Mutex::new(conn));
-            let mut connections = Vec::new();
-            for _ in 0..CONNECTION_POOL_SIZE {
-                connections.push(Arc::clone(&shared));
-            }
-            connections
+            let shared = Arc::new(Mutex::new(open()?));
+            (0..pool_size).map(|_| Arc::clone(&shared)).collect()
         }
-        DuckDbMode::Pooled => {
-            let mut connections = Vec::new();
-            for _ in 0..CONNECTION_POOL_SIZE {
-                let conn = if let Some(path) = db_location {
-                    ::duckdb::Connection::open(path)?
-                } else {
-                    ::duckdb::Connection::open_in_memory()?
-                };
-                connections.push(Arc::new(Mutex::new(conn)));
-            }
-            connections
-        }
+        DuckDbMode::Pooled => (0..pool_size)
+            .map(|_| open().map(|conn| Arc::new(Mutex::new(conn))))
+            .collect::<Result<Vec<_>, _>>()?,
     };
 
     Ok(Box::new(
@@ -714,9 +740,6 @@ pub fn init_duckdb_with_options(
 ///   `SWITCHY_DUCKDB_CONSISTENCY` is set to an unsupported value
 /// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the read-only `DuckDB` connections fails
 ///
-/// # Panics
-///
-/// * If the `DuckDB` access mode configuration fails (should not happen)
 #[cfg(feature = "duckdb")]
 pub fn init_duckdb_read_only(
     db_location: &std::path::Path,
@@ -730,50 +753,12 @@ pub fn init_duckdb_read_only(
 ///
 /// * Propagates [`InitDuckDbError::DuckDb`] when opening one of the read-only `DuckDB` connections fails
 ///
-/// # Panics
-///
-/// * If the `DuckDB` access mode configuration fails (should not happen)
 #[cfg(feature = "duckdb")]
 pub fn init_duckdb_read_only_with_options(
     db_location: &std::path::Path,
     config: switchy_database::duckdb::DuckDbConfig,
 ) -> Result<Box<dyn Database>, InitDuckDbError> {
-    use std::sync::Arc;
-
-    use switchy_async::sync::Mutex;
-    use switchy_database::duckdb::DuckDbMode;
-
-    const CONNECTION_POOL_SIZE: u8 = 5;
-
-    let connections = match config.mode {
-        DuckDbMode::Deterministic => {
-            let flags = ::duckdb::Config::default()
-                .access_mode(::duckdb::AccessMode::ReadOnly)
-                .expect("Failed to set DuckDB access mode");
-            let conn = ::duckdb::Connection::open_with_flags(db_location, flags)?;
-            let shared = Arc::new(Mutex::new(conn));
-            let mut connections = Vec::new();
-            for _ in 0..CONNECTION_POOL_SIZE {
-                connections.push(Arc::clone(&shared));
-            }
-            connections
-        }
-        DuckDbMode::Pooled => {
-            let mut connections = Vec::new();
-            for _ in 0..CONNECTION_POOL_SIZE {
-                let flags = ::duckdb::Config::default()
-                    .access_mode(::duckdb::AccessMode::ReadOnly)
-                    .expect("Failed to set DuckDB access mode");
-                let conn = ::duckdb::Connection::open_with_flags(db_location, flags)?;
-                connections.push(Arc::new(Mutex::new(conn)));
-            }
-            connections
-        }
-    };
-
-    Ok(Box::new(
-        switchy_database::duckdb::DuckDbDatabase::new_with_config(connections, config),
-    ))
+    open_duckdb(Some(db_location), true, config, 5)
 }
 
 /// Initializes a `SQLite` database connection using rusqlite.
@@ -806,19 +791,7 @@ pub fn init_sqlite_rusqlite(
     }
 
     let db_url = db_location.map_or_else(
-        || {
-            use std::sync::atomic::AtomicU64;
-
-            static ID: AtomicU64 = AtomicU64::new(0);
-
-            let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-
-            format!("file:rusqlite_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true")
-        },
+        || unique_memory_db_uri("rusqlite"),
         |p| p.to_string_lossy().into_owned(),
     );
 
@@ -833,6 +806,22 @@ pub fn init_sqlite_rusqlite(
     Ok(Box::new(switchy_database::rusqlite::RusqliteDatabase::new(
         connections,
     )))
+}
+
+/// A unique shared-cache in-memory `SQLite` URI, so every pooled connection sees the same
+/// private database.
+#[cfg(any(feature = "sqlite-rusqlite", feature = "sqlite-sqlx"))]
+fn unique_memory_db_uri(prefix: &str) -> String {
+    use std::sync::atomic::AtomicU64;
+
+    static ID: AtomicU64 = AtomicU64::new(0);
+
+    let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+
+    format!("file:{prefix}_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true")
 }
 
 /// How a typed `SQLite` opener may access storage.
@@ -1033,18 +1022,7 @@ pub async fn init_sqlite_sqlx(
             .filename(db_location)
             .create_if_missing(true)
     } else {
-        use std::sync::atomic::AtomicU64;
-
-        static ID: AtomicU64 = AtomicU64::new(0);
-
-        let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let db_url = format!("file:sqlx_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true");
-
-        connect_options.filename(db_url)
+        connect_options.filename(unique_memory_db_uri("sqlx"))
     };
 
     let pool = SqlitePoolOptions::new()

@@ -394,7 +394,9 @@ pub trait Expression: Send + Sync + Debug {
         self.values().map(|x| {
             x.into_iter()
                 .filter(|value| {
-                    !value.is_null()
+                    // Use the builder's notion of NULL (which values render inline as
+                    // `NULL`), not the broader inherent `DatabaseValue::is_null`.
+                    !Expression::is_null(*value)
                         && !matches!(value, DatabaseValue::Now | DatabaseValue::NowPlus(_))
                 })
                 .collect::<Vec<_>>()

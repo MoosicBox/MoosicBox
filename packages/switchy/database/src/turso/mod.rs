@@ -111,6 +111,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+#[cfg(any(feature = "raw-sql", feature = "schema"))]
+mod introspection;
 /// Transaction support for Turso database
 pub mod transaction;
 
@@ -447,7 +449,7 @@ impl From<TursoValue> for DatabaseValue {
             TursoValue::Integer(i) => Self::Int64(i),
             TursoValue::Real(f) => Self::Real64(f),
             TursoValue::Text(s) => Self::String(s),
-            TursoValue::Blob(_) => unimplemented!("Blob types are not supported yet"),
+            TursoValue::Blob(bytes) => Self::Bytes(bytes),
         }
     }
 }
@@ -519,6 +521,66 @@ pub(crate) fn database_value_to_turso_value(
         DatabaseValue::DateTime(dt) => {
             Ok(TursoValue::Text(dt.format("%Y-%m-%d %H:%M:%S").to_string()))
         }
+        DatabaseValue::Bytes(bytes) | DatabaseValue::BytesOpt(Some(bytes)) => {
+            Ok(TursoValue::Blob(bytes.clone()))
+        }
+        DatabaseValue::Date(date) | DatabaseValue::DateOpt(Some(date)) => {
+            Ok(TursoValue::Text(date.format("%Y-%m-%d").to_string()))
+        }
+        DatabaseValue::Time(time) | DatabaseValue::TimeOpt(Some(time)) => {
+            Ok(TursoValue::Text(time.format("%H:%M:%S%.f").to_string()))
+        }
+        DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => {
+            Ok(TursoValue::Text(dt.to_rfc3339()))
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(json) | DatabaseValue::JsonOpt(Some(json)) => {
+            Ok(TursoValue::Text(json.to_string()))
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::JsonOpt(None) => Ok(TursoValue::Null),
+        DatabaseValue::BytesOpt(None)
+        | DatabaseValue::DateOpt(None)
+        | DatabaseValue::TimeOpt(None)
+        | DatabaseValue::DateTimeTzOpt(None) => Ok(TursoValue::Null),
+        DatabaseValue::Other { text, .. } => Ok(TursoValue::Text(text.clone())),
+    }
+}
+
+/// Render a value as an inline `SQLite` literal for DDL contexts (e.g. column defaults).
+///
+/// Returns `None` for values that have no literal representation here (e.g. `Now`).
+#[cfg(feature = "schema")]
+fn new_variant_sql_literal(value: &DatabaseValue) -> Option<String> {
+    use std::fmt::Write as _;
+
+    let quote = |text: &str| format!("'{}'", text.replace('\'', "''"));
+    match value {
+        DatabaseValue::Bytes(bytes) | DatabaseValue::BytesOpt(Some(bytes)) => {
+            let mut literal = String::with_capacity(bytes.len() * 2 + 3);
+            literal.push_str("X'");
+            for byte in bytes {
+                let _ = write!(literal, "{byte:02X}");
+            }
+            literal.push('\'');
+            Some(literal)
+        }
+        DatabaseValue::Date(date) | DatabaseValue::DateOpt(Some(date)) => {
+            Some(quote(&date.format("%Y-%m-%d").to_string()))
+        }
+        DatabaseValue::Time(time) | DatabaseValue::TimeOpt(Some(time)) => {
+            Some(quote(&time.format("%H:%M:%S%.f").to_string()))
+        }
+        DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => {
+            Some(quote(&dt.to_rfc3339()))
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(json) | DatabaseValue::JsonOpt(Some(json)) => {
+            Some(quote(&json.to_string()))
+        }
+        DatabaseValue::Other { text, .. } => Some(quote(text)),
+        value if value.is_null() => Some("NULL".to_string()),
+        _ => None,
     }
 }
 
@@ -778,23 +840,10 @@ impl<T: crate::query::Expression + ?Sized> ToSql for T {
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
-                DatabaseValue::Null
-                | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::StringOpt(None)
-                | DatabaseValue::Int8Opt(None)
-                | DatabaseValue::Int16Opt(None)
-                | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt8Opt(None)
-                | DatabaseValue::UInt16Opt(None)
-                | DatabaseValue::UInt32Opt(None)
-                | DatabaseValue::UInt64Opt(None)
-                | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
-                #[cfg(feature = "decimal")]
-                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
-                #[cfg(feature = "uuid")]
-                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
+                // Render NULL inline exactly for the values `Expression::params`
+                // excludes from binding, so placeholders and bound values stay
+                // aligned. Other null-like variants are bound as NULL via `?`.
+                value if crate::query::Expression::is_null(value) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
                 DatabaseValue::NowPlus(interval) => {
                     let modifiers = format_sqlite_interval(interval);
@@ -1876,27 +1925,12 @@ impl crate::Database for TursoDatabase {
 
     #[cfg(feature = "schema")]
     async fn table_exists(&self, table: &str) -> Result<bool, crate::DatabaseError> {
-        let query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
-        let rows = self
-            .query_raw_params_internal(query, &[DatabaseValue::String(table.to_string())])
-            .await?;
-        Ok(!rows.is_empty())
+        introspection::table_exists(&*self.connection().await?, table).await
     }
 
     #[cfg(feature = "schema")]
     async fn list_tables(&self) -> Result<Vec<String>, crate::DatabaseError> {
-        let query =
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-        let rows = self.query_raw_internal(query).await?;
-
-        Ok(rows
-            .into_iter()
-            .filter_map(|row| row.get("name"))
-            .filter_map(|v| match v {
-                DatabaseValue::String(s) => Some(s),
-                _ => None,
-            })
-            .collect())
+        introspection::list_tables(&*self.connection().await?).await
     }
 
     #[cfg(feature = "schema")]
@@ -1904,26 +1938,7 @@ impl crate::Database for TursoDatabase {
         &self,
         table: &str,
     ) -> Result<Option<crate::schema::TableInfo>, crate::DatabaseError> {
-        if !self.table_exists(table).await? {
-            return Ok(None);
-        }
-
-        let columns = self.get_table_columns(table).await?;
-
-        let columns_map = columns
-            .into_iter()
-            .map(|col| (col.name.clone(), col))
-            .collect();
-
-        let indexes = get_table_indexes(self, table).await?;
-        let foreign_keys = get_table_foreign_keys(self, table).await?;
-
-        Ok(Some(crate::schema::TableInfo {
-            name: table.to_string(),
-            columns: columns_map,
-            indexes,
-            foreign_keys,
-        }))
+        introspection::relation_info(&*self.connection().await?, None, table, true).await
     }
 
     #[cfg(feature = "schema")]
@@ -1931,86 +1946,62 @@ impl crate::Database for TursoDatabase {
         &self,
         table: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, crate::DatabaseError> {
-        let query = format!("PRAGMA table_info({table})");
-        let rows = self.query_raw_internal(&query).await?;
-
-        let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
-        let create_sql_rows = self
-            .query_raw_params_internal(
-                create_sql_query,
-                &[DatabaseValue::String(table.to_string())],
-            )
-            .await?;
-
-        let create_sql = create_sql_rows
-            .into_iter()
-            .find_map(|row| match row.get("sql") {
-                Some(DatabaseValue::String(s)) => Some(s),
-                _ => None,
-            });
-
-        let mut columns = Vec::new();
-
-        for row in rows {
-            let ordinal = match row.get("cid") {
-                Some(DatabaseValue::Int64(i)) => {
-                    u32::try_from(i).unwrap_or_else(|_| u32::try_from(columns.len()).unwrap_or(0))
-                }
-                _ => u32::try_from(columns.len()).unwrap_or(0),
-            };
-
-            let name = match row.get("name") {
-                Some(DatabaseValue::String(s)) => s.clone(),
-                _ => continue,
-            };
-
-            let type_str = match row.get("type") {
-                Some(DatabaseValue::String(s)) => s.clone(),
-                _ => String::from("TEXT"),
-            };
-
-            let not_null = match row.get("notnull") {
-                Some(DatabaseValue::Int64(i)) => i != 0,
-                _ => false,
-            };
-
-            let is_pk = match row.get("pk") {
-                Some(DatabaseValue::Int64(i)) => i != 0,
-                _ => false,
-            };
-
-            let default_value = match row.get("dflt_value") {
-                Some(DatabaseValue::String(s)) => Some(s.clone()),
-                _ => None,
-            };
-
-            let data_type = sqlite_type_to_data_type(&type_str);
-            let default_val = parse_default_value(default_value.as_deref());
-
-            let auto_increment = if is_pk {
-                check_autoincrement_in_sql(create_sql.as_deref(), &name)
-            } else {
-                false
-            };
-
-            columns.push(crate::schema::ColumnInfo {
-                name,
-                data_type,
-                nullable: !not_null,
-                is_primary_key: is_pk,
-                auto_increment,
-                default_value: default_val,
-                ordinal_position: ordinal + 1,
-            });
-        }
-
-        Ok(columns)
+        introspection::table_columns(&*self.connection().await?, table).await
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(&self, table: &str, column: &str) -> Result<bool, crate::DatabaseError> {
         let columns = self.get_table_columns(table).await?;
         Ok(columns.iter().any(|col| col.name == column))
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, crate::DatabaseError> {
+        introspection::list_schemas(&*self.connection().await?).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, crate::DatabaseError> {
+        introspection::list_relations(&*self.connection().await?, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, crate::DatabaseError> {
+        introspection::relation_info(
+            &*self.connection().await?,
+            relation.schema.as_deref(),
+            &relation.name,
+            false,
+        )
+        .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, crate::DatabaseError> {
+        introspection::view_definition(
+            &*self.connection().await?,
+            relation.schema.as_deref(),
+            &relation.name,
+        )
+        .await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<crate::QueryResult, crate::DatabaseError> {
+        introspection::query_result(&*self.connection().await?, query, params).await
     }
 }
 
@@ -2196,6 +2187,12 @@ async fn exec_create_table(
                     query.push('\'');
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                // Bytes, Date, Time, DateTimeTz, Json, Other and their nullable forms
+                other => {
+                    query.push_str(
+                        &new_variant_sql_literal(other).unwrap_or_else(|| "NULL".to_string()),
+                    );
                 }
             }
         }
@@ -2595,6 +2592,8 @@ fn modify_create_table_sql(
                     "NowPlus not supported in ModifyColumn DEFAULT".to_string(),
                 ));
             }
+            // Bytes, Date, Time, DateTimeTz, Json, Other and their nullable forms
+            other => new_variant_sql_literal(other).unwrap_or_else(|| "NULL".to_string()),
         };
 
         write!(new_column_def, " DEFAULT {default_str}").unwrap();
@@ -3225,24 +3224,6 @@ async fn exec_alter_table(
 }
 
 #[cfg(feature = "schema")]
-fn sqlite_type_to_data_type(sqlite_type: &str) -> crate::schema::DataType {
-    let normalized_type = sqlite_type.to_uppercase();
-
-    match normalized_type.as_str() {
-        "INTEGER" => crate::schema::DataType::BigInt,
-        "TEXT" => crate::schema::DataType::Text,
-        "REAL" | "DOUBLE" | "FLOAT" => crate::schema::DataType::Double,
-        "BLOB" => crate::schema::DataType::Blob,
-        "BOOLEAN" | "BOOL" => crate::schema::DataType::Bool,
-        "DATE" => crate::schema::DataType::Date,
-        "DATETIME" => crate::schema::DataType::DateTime,
-        "TIMESTAMP" => crate::schema::DataType::Timestamp,
-        "JSON" => crate::schema::DataType::Json,
-        _ => crate::schema::DataType::Custom(sqlite_type.to_string()),
-    }
-}
-
-#[cfg(feature = "schema")]
 fn parse_default_value(default_str: Option<&str>) -> Option<crate::DatabaseValue> {
     default_str.and_then(|s| {
         if s == "NULL" {
@@ -3291,166 +3272,6 @@ fn check_autoincrement_in_sql(create_sql: Option<&str>, column_name: &str) -> bo
     }
 
     false
-}
-
-#[cfg(feature = "schema")]
-async fn get_table_indexes(
-    db: &TursoDatabase,
-    table: &str,
-) -> Result<std::collections::BTreeMap<String, crate::schema::IndexInfo>, crate::DatabaseError> {
-    use crate::schema::IndexInfo;
-    use std::collections::BTreeMap;
-
-    let index_query = "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?";
-    let index_rows = db
-        .query_raw_params_internal(index_query, &[DatabaseValue::String(table.to_string())])
-        .await?;
-
-    let mut indexes = BTreeMap::new();
-
-    for index_row in index_rows {
-        let index_name = match index_row.get("name") {
-            Some(DatabaseValue::String(s)) => s.clone(),
-            _ => continue,
-        };
-
-        let Some(DatabaseValue::String(sql)) = index_row.get("sql") else {
-            let is_primary = index_name.starts_with("sqlite_autoindex_");
-            indexes.insert(
-                index_name.clone(),
-                IndexInfo {
-                    name: index_name,
-                    unique: false,
-                    columns: Vec::new(),
-                    is_primary,
-                },
-            );
-            continue;
-        };
-
-        let is_unique = sql.to_uppercase().contains("UNIQUE");
-        let is_primary = index_name.starts_with("sqlite_autoindex_");
-
-        let index_columns = sql
-            .find('(')
-            .and_then(|start| {
-                sql.rfind(')').map(|end| {
-                    let cols_str = &sql[start + 1..end];
-                    cols_str
-                        .split(',')
-                        .map(|s| s.trim().trim_matches('`').trim_matches('"').to_string())
-                        .collect()
-                })
-            })
-            .unwrap_or_default();
-
-        indexes.insert(
-            index_name.clone(),
-            IndexInfo {
-                name: index_name,
-                unique: is_unique,
-                columns: index_columns,
-                is_primary,
-            },
-        );
-    }
-
-    Ok(indexes)
-}
-
-/// Retrieves foreign key constraints for a table by parsing CREATE TABLE SQL.
-///
-/// # Known Limitations
-///
-/// * **Composite foreign keys**: Multiple columns are captured as a single string.
-///   Example: `FOREIGN KEY (a, b) REFERENCES t(x, y)` → column = "a, b"
-///   This matches `PRAGMA foreign_key_list` behavior in rusqlite/sqlx.
-///
-/// * **MATCH clauses**: Not captured or validated.
-///   Example: `REFERENCES t(id) MATCH SIMPLE` → `MATCH SIMPLE` ignored
-///
-/// * **DEFERRABLE clauses**: Not captured.
-///   Example: `REFERENCES t(id) DEFERRABLE INITIALLY DEFERRED` → clause ignored
-///
-/// * **Validation**: Does not verify that referenced tables/columns exist.
-///
-/// These limitations are acceptable because:
-/// 1. `SQLite`'s `PRAGMA foreign_key_list` also doesn't split composite keys
-/// 2. `MATCH`/`DEFERRABLE` are rarely used in `SQLite` applications
-/// 3. Validation happens at constraint enforcement time, not introspection
-///
-/// # Errors
-///
-/// Returns `DatabaseError` if query to `sqlite_master` fails.
-#[cfg(feature = "schema")]
-async fn get_table_foreign_keys(
-    db: &TursoDatabase,
-    table: &str,
-) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, crate::DatabaseError>
-{
-    use crate::schema::ForeignKeyInfo;
-    use std::collections::BTreeMap;
-
-    let create_sql_query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
-    let create_sql_rows = db
-        .query_raw_params_internal(
-            create_sql_query,
-            &[DatabaseValue::String(table.to_string())],
-        )
-        .await?;
-
-    let create_sql = create_sql_rows
-        .into_iter()
-        .find_map(|row| match row.get("sql") {
-            Some(DatabaseValue::String(s)) => Some(s),
-            _ => None,
-        });
-
-    let mut foreign_keys = BTreeMap::new();
-
-    if let Some(sql) = create_sql {
-        for cap in FK_PATTERN.captures_iter(&sql) {
-            let column = strip_identifier_quotes(&cap[1]);
-            let referenced_table = strip_identifier_quotes(&cap[2]);
-            let referenced_column = strip_identifier_quotes(&cap[3]);
-
-            let fk_actions = &cap[4];
-
-            let on_update = ON_UPDATE_PATTERN.captures(fk_actions).and_then(|c| {
-                let action = c[1].to_uppercase();
-                if action == "NO ACTION" {
-                    None
-                } else {
-                    Some(action)
-                }
-            });
-
-            let on_delete = ON_DELETE_PATTERN.captures(fk_actions).and_then(|c| {
-                let action = c[1].to_uppercase();
-                if action == "NO ACTION" {
-                    None
-                } else {
-                    Some(action)
-                }
-            });
-
-            let fk_name = format!("{table}_{column}_{referenced_table}_{referenced_column}");
-
-            foreign_keys.insert(
-                fk_name.clone(),
-                ForeignKeyInfo {
-                    name: fk_name,
-                    column,
-                    referenced_table,
-                    referenced_column,
-                    on_update,
-                    on_delete,
-                },
-            );
-        }
-    }
-
-    Ok(foreign_keys)
 }
 
 /// Strips quotes from `SQLite` identifiers and unescapes internal quotes.
@@ -3519,7 +3340,7 @@ impl TursoDatabase {
 }
 
 impl TursoDatabase {
-    #[cfg(any(feature = "raw-sql", feature = "schema"))]
+    #[cfg(feature = "raw-sql")]
     pub(crate) async fn query_raw_params_internal(
         &self,
         query: &str,

@@ -348,6 +348,44 @@ impl Database for SimulationDatabase {
         self.inner.column_exists(table_name, column_name).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        self.inner.list_schemas().await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        self.inner.list_relations(schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        self.inner.get_relation_info(relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        self.inner.get_view_definition(relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        self.inner.query_raw_result(query, params).await
+    }
+
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
         self.query_raw_internal(query).await

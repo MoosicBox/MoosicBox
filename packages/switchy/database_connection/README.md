@@ -174,6 +174,37 @@ let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
 let db = switchy_database_connection::init(None, Some(creds)).await?;
 ```
 
+### Connection URLs and Options
+
+`ConnectionTarget::from_url` parses `postgres://`/`postgresql://`, `mysql://`/`mariadb://`,
+`sqlite:`/`sqlite://`/`file:`/`:memory:` and `duckdb:`/`duckdb://` URLs (percent-decoding
+user, password, host and database; parsing `sslmode`/`ssl-mode` and other query
+parameters). `init_with_options` opens the target with the best enabled backend and
+applies `ConnectOptions` natively:
+
+```rust
+use std::time::Duration;
+use switchy_database_connection::{ConnectOptions, ConnectionTarget, init_with_options};
+
+let target = ConnectionTarget::from_url("postgres://viewer:p%40ss@localhost/app?sslmode=prefer")?;
+let options = ConnectOptions::new()
+    .read_only()                              // default_transaction_read_only / READ ONLY session / read-only open
+    .statement_timeout(Duration::from_secs(30)) // PostgreSQL statement_timeout, MySQL max_execution_time
+    .application_name("my-tool");             // PostgreSQL only
+let db = init_with_options(&target, &options).await?;
+```
+
+| Option              | PostgreSQL                         | MySQL/MariaDB                                        | SQLite                  | DuckDB                 |
+| ------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------- | ---------------------- |
+| `read_only()`       | `default_transaction_read_only=on` | `SET SESSION TRANSACTION READ ONLY`                  | `SQLITE_OPEN_READ_ONLY` | `AccessMode::ReadOnly` |
+| `statement_timeout` | `statement_timeout` startup option | `max_execution_time` (MariaDB: `max_statement_time`) | ignored                 | ignored                |
+| `application_name`  | `application_name`                 | ignored                                              | ignored                 | ignored                |
+| `pool_size`         | pool max size                      | pool max size                                        | connection count        | connection count       |
+
+Read-only in-memory databases are rejected. If no backend for the target's driver is
+compiled in, `InitDbError::DriverNotEnabled` is returned. `init_with_options` never
+substitutes the `simulator` database.
+
 ### Environment Variables
 
 The package supports multiple ways to provide credentials:

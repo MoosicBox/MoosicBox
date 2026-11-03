@@ -1306,6 +1306,12 @@ pub struct ColumnInfo {
     pub default_value: Option<DatabaseValue>,
     /// Position/ordinal of the column in the table (1-based)
     pub ordinal_position: u32,
+    /// The database's exact native type name for this column
+    ///
+    /// Examples: `timestamp with time zone`, `integer[]`, `jsonb`,
+    /// `varchar(255)`, `bigint unsigned` or the name of a user-defined enum.
+    /// Use this for display or for types that map to [`DataType::Custom`].
+    pub native_type: String,
 }
 
 /// Information about a database index
@@ -1338,11 +1344,20 @@ pub struct ForeignKeyInfo {
     pub on_delete: Option<String>,
 }
 
-/// Complete information about a database table
+/// Complete information about a database table or view
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableInfo {
     /// Table name
     pub name: String,
+    /// Schema containing the relation
+    ///
+    /// Backends report the resolved schema name where known (e.g. `public`,
+    /// `main`, the current `MySQL` database); `None` when unknown.
+    pub schema: Option<String>,
+    /// Kind of relation (table, view, ...)
+    pub kind: RelationKind,
+    /// Relation comment, where the backend supports comments
+    pub comment: Option<String>,
     /// All columns in the table, indexed by column name for fast lookup
     pub columns: BTreeMap<String, ColumnInfo>,
     /// All indexes on the table, indexed by index name
@@ -1351,9 +1366,160 @@ pub struct TableInfo {
     pub foreign_keys: BTreeMap<String, ForeignKeyInfo>,
 }
 
+/// Information about a schema (namespace) in the database
+///
+/// `PostgreSQL` schemas, `MySQL` databases, `SQLite` attached databases and
+/// `DuckDB` schemas are all reported as schemas.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SchemaInfo {
+    /// Schema name
+    pub name: String,
+    /// Whether this is the connection's default schema (used when no schema is given)
+    pub is_default: bool,
+    /// Whether this is a system/catalog schema (e.g. `pg_catalog`, `information_schema`)
+    pub is_system: bool,
+}
+
+/// A reference to a relation (table, view, ...), optionally schema-qualified
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RelationRef {
+    /// Schema containing the relation; `None` means the connection's default schema
+    pub schema: Option<String>,
+    /// Relation name
+    pub name: String,
+}
+
+impl RelationRef {
+    /// Reference a relation in the connection's default schema
+    #[must_use]
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            schema: None,
+            name: name.into(),
+        }
+    }
+
+    /// Reference a relation in a specific schema
+    #[must_use]
+    pub fn with_schema(schema: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            schema: Some(schema.into()),
+            name: name.into(),
+        }
+    }
+}
+
+impl From<&str> for RelationRef {
+    fn from(name: &str) -> Self {
+        Self::new(name)
+    }
+}
+
+impl std::fmt::Display for RelationRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(schema) = &self.schema {
+            write!(f, "{schema}.")?;
+        }
+        f.write_str(&self.name)
+    }
+}
+
+/// The kind of a database relation
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[non_exhaustive]
+pub enum RelationKind {
+    /// An ordinary table
+    #[default]
+    Table,
+    /// A (non-materialized) view
+    View,
+    /// A materialized view (`PostgreSQL`)
+    MaterializedView,
+    /// A foreign table (`PostgreSQL` FDW)
+    ForeignTable,
+    /// A system/catalog table
+    SystemTable,
+    /// Any other backend-specific relation kind, with its native name
+    Other(String),
+}
+
+impl RelationKind {
+    /// Whether this relation is a view or materialized view
+    #[must_use]
+    pub const fn is_view(&self) -> bool {
+        matches!(self, Self::View | Self::MaterializedView)
+    }
+}
+
+impl std::fmt::Display for RelationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Table => "table",
+            Self::View => "view",
+            Self::MaterializedView => "materialized view",
+            Self::ForeignTable => "foreign table",
+            Self::SystemTable => "system table",
+            Self::Other(kind) => kind,
+        })
+    }
+}
+
+/// Summary of a relation returned by [`Database::list_relations`]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelationSummary {
+    /// Schema containing the relation, where known
+    pub schema: Option<String>,
+    /// Relation name
+    pub name: String,
+    /// Kind of relation
+    pub kind: RelationKind,
+    /// Relation comment, where the backend supports comments
+    pub comment: Option<String>,
+    /// Approximate row count from catalog statistics (never an exact `COUNT(*)`)
+    pub estimated_rows: Option<u64>,
+}
+
+impl RelationSummary {
+    /// A [`RelationRef`] identifying this relation
+    #[must_use]
+    pub fn relation_ref(&self) -> RelationRef {
+        RelationRef {
+            schema: self.schema.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relation_ref_constructors_and_display() {
+        let plain = RelationRef::new("users");
+        assert_eq!(plain.schema, None);
+        assert_eq!(plain.to_string(), "users");
+        let qualified = RelationRef::with_schema("app", "users");
+        assert_eq!(qualified.schema.as_deref(), Some("app"));
+        assert_eq!(qualified.to_string(), "app.users");
+        assert_eq!(RelationRef::from("users"), plain);
+    }
+
+    #[test]
+    fn relation_kind_display_and_view_detection() {
+        assert_eq!(
+            RelationKind::MaterializedView.to_string(),
+            "materialized view"
+        );
+        assert_eq!(
+            RelationKind::Other("sequence".into()).to_string(),
+            "sequence"
+        );
+        assert!(RelationKind::View.is_view());
+        assert!(RelationKind::MaterializedView.is_view());
+        assert!(!RelationKind::Table.is_view());
+        assert_eq!(RelationKind::default(), RelationKind::Table);
+    }
 
     #[test]
     fn test_drop_table_builder_default() {

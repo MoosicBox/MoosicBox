@@ -1320,6 +1320,66 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
+            Self::Bytes(bytes) => {
+                hasher.update(b"BYTES:");
+                hasher.update(bytes);
+            }
+            Self::BytesOpt(opt) => {
+                hasher.update(b"BYTESOPT:");
+                if let Some(bytes) = opt {
+                    hasher.update(bytes);
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::Date(d) => {
+                hasher.update(b"DATE:");
+                hasher.update(d.to_string().as_bytes());
+            }
+            Self::DateOpt(opt) => {
+                hasher.update(b"DATEOPT:");
+                if let Some(d) = opt {
+                    hasher.update(d.to_string().as_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::Time(t) => {
+                hasher.update(b"TIME:");
+                hasher.update(t.to_string().as_bytes());
+            }
+            Self::TimeOpt(opt) => {
+                hasher.update(b"TIMEOPT:");
+                if let Some(t) = opt {
+                    hasher.update(t.to_string().as_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::DateTimeTz(dt) => {
+                hasher.update(b"DTTZ:");
+                hasher.update(dt.to_rfc3339().as_bytes());
+            }
+            Self::DateTimeTzOpt(opt) => {
+                hasher.update(b"DTTZOPT:");
+                if let Some(dt) = opt {
+                    hasher.update(dt.to_rfc3339().as_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
+            Self::Other { type_name, text } => {
+                hasher.update(b"OTHER:");
+                hasher.update(type_name.as_bytes());
+                hasher.update(b":");
+                hasher.update(text.as_bytes());
+            }
+            // Feature-gated variants (e.g. `json`) enabled through feature unification
+            #[allow(unreachable_patterns)]
+            other => {
+                hasher.update(b"DEBUG:");
+                hasher.update(format!("{other:?}").as_bytes());
+            }
         }
     }
 }

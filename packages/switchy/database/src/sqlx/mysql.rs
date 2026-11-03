@@ -328,19 +328,8 @@ impl<T: Expression + ?Sized> ToSql for T {
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
-                DatabaseValue::Null
-                | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::StringOpt(None)
-                | DatabaseValue::Int8Opt(None)
-                | DatabaseValue::Int16Opt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt64Opt(None)
-                | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
-                #[cfg(feature = "decimal")]
-                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
-                #[cfg(feature = "uuid")]
-                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
+                // Every null-like variant is inlined; `bind_values` skips them
+                value if value.is_null() => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
                 DatabaseValue::NowPlus(interval) => format_mysql_now_plus(interval),
                 _ => "?".to_string(),
@@ -848,6 +837,65 @@ impl Database for MySqlSqlxDatabase {
         .await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        super::mysql_introspection::mysql_sqlx_list_schemas(&mut connection).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        super::mysql_introspection::mysql_sqlx_list_relations(&mut connection, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        super::mysql_introspection::mysql_sqlx_get_relation_info(&mut connection, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        super::mysql_introspection::mysql_sqlx_get_view_definition(&mut connection, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        if let Some(result) = mysql_query_raw_result(&mut connection, query, params).await? {
+            return Ok(result);
+        }
+        drop(connection);
+        Ok(crate::QueryResult::from_rows(
+            self.query_raw_params_internal(query, params).await?,
+        ))
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1297,6 +1345,76 @@ impl Database for MysqlSqlxTransaction {
             .await
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_list_schemas(&mut *tx).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_list_relations(&mut *tx, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_get_relation_info(&mut *tx, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_get_view_definition(&mut *tx, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        {
+            let mut transaction_guard = self.transaction.lock().await;
+            let tx = transaction_guard
+                .as_mut()
+                .ok_or(DatabaseError::TransactionCommitted)?;
+            if let Some(result) = mysql_query_raw_result(&mut *tx, query, params).await? {
+                return Ok(result);
+            }
+        }
+        Ok(crate::QueryResult::from_rows(
+            self.query_raw_params_internal(query, params).await?,
+        ))
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1516,11 +1634,14 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
         let rows = self.query_raw_internal(&query).await?;
 
         if let Some(row) = rows.first() {
-            // MySQL might return as integer (1/0) or boolean
-            match row.columns.first() {
-                Some((_, crate::DatabaseValue::Bool(has_deps))) => return Ok(*has_deps),
-                Some((_, crate::DatabaseValue::Int64(n))) => return Ok(*n != 0),
-                _ => {}
+            // MySQL/MariaDB might return any integer width (1/0) or a boolean
+            if let Some((_, value)) = row.columns.first() {
+                if let Some(has_deps) = value.as_bool() {
+                    return Ok(has_deps);
+                }
+                if let Some(n) = value.as_i64() {
+                    return Ok(n != 0);
+                }
             }
         }
 
@@ -1733,6 +1854,34 @@ async fn mysql_sqlx_exec_create_table(
                     query.push('\'');
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                DatabaseValue::BytesOpt(None)
+                | DatabaseValue::DateOpt(None)
+                | DatabaseValue::TimeOpt(None)
+                | DatabaseValue::DateTimeTzOpt(None) => {
+                    query.push_str("NULL");
+                }
+                #[cfg(feature = "json")]
+                DatabaseValue::JsonOpt(None) => {
+                    query.push_str("NULL");
+                }
+                DatabaseValue::Bytes(_)
+                | DatabaseValue::BytesOpt(Some(_))
+                | DatabaseValue::Date(_)
+                | DatabaseValue::DateOpt(Some(_))
+                | DatabaseValue::Time(_)
+                | DatabaseValue::TimeOpt(Some(_))
+                | DatabaseValue::DateTimeTz(_)
+                | DatabaseValue::DateTimeTzOpt(Some(_))
+                | DatabaseValue::Other { .. } => {
+                    query.push_str(&mysql_value_literal(default).unwrap_or_default());
+                }
+                #[cfg(feature = "json")]
+                DatabaseValue::Json(_) | DatabaseValue::JsonOpt(Some(_)) => {
+                    // MySQL only accepts JSON defaults as parenthesized expressions
+                    query.push('(');
+                    query.push_str(&mysql_value_literal(default).unwrap_or_default());
+                    query.push(')');
                 }
             }
         }
@@ -2307,12 +2456,18 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                             | crate::DatabaseValue::UuidOpt(Some(u)) => {
                                 format!("'{u}'")
                             }
-                            _ => {
-                                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
-                                    type_name: "Unsupported default value type for MODIFY COLUMN"
-                                        .to_string(),
-                                }));
-                            }
+                            other => match mysql_value_literal(other) {
+                                Some(literal) => literal,
+                                None => {
+                                    return Err(SqlxDatabaseError::Sqlx(
+                                        sqlx::Error::TypeNotFound {
+                                            type_name:
+                                                "Unsupported default value type for MODIFY COLUMN"
+                                                    .to_string(),
+                                        },
+                                    ));
+                                }
+                            },
                         };
                         format!(" DEFAULT {val_str}")
                     }
@@ -2337,54 +2492,261 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
     Ok(())
 }
 
-fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
-    if value.is_null() {
-        return Ok(DatabaseValue::Null);
+/// Render raw bytes as a `0x`-prefixed hex string.
+fn hex_string(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+
+    let mut out = String::with_capacity(2 + bytes.len() * 2);
+    out.push_str("0x");
+    for byte in bytes {
+        let _ = write!(out, "{byte:02x}");
     }
-    let owned = sqlx::ValueRef::to_owned(value);
-    match value.type_info().name() {
-        // MySQL boolean types (TINYINT(1) is used for booleans)
-        "BOOLEAN" | "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
-        "TINYINT" => Ok(DatabaseValue::Int8(owned.try_decode()?)),
-        // MySQL integer types - decode based on SQL type
-        "SMALLINT" => Ok(DatabaseValue::Int16(owned.try_decode()?)),
-        "MEDIUMINT" | "INT" | "INTEGER" => Ok(DatabaseValue::Int32(owned.try_decode()?)),
-        #[cfg(feature = "decimal")]
-        "DECIMAL" => Ok(DatabaseValue::Decimal(owned.try_decode()?)),
-        "BIGINT" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
-        // MySQL floating point types
-        "FLOAT" | "DOUBLE" | "REAL" | "NUMERIC" => Ok(DatabaseValue::Real64(owned.try_decode()?)),
-        // MySQL string types
-        "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" | "BINARY"
-        | "VARBINARY" | "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
-            Ok(DatabaseValue::String(owned.try_decode()?))
+    out
+}
+
+/// Escape a string for use inside a single-quoted `MySQL` string literal.
+#[cfg(feature = "schema")]
+fn escape_mysql_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "''")
+}
+
+/// Render a SQL literal for values that have no dedicated rendering elsewhere
+/// (binary, date/time, JSON and [`DatabaseValue::Other`] values).
+///
+/// Offset-aware date/times are rendered in UTC because `MySQL` `DATETIME` and
+/// `TIMESTAMP` literals carry no offset.
+#[cfg(feature = "schema")]
+fn mysql_value_literal(value: &DatabaseValue) -> Option<String> {
+    Some(match value {
+        value if value.is_null() => "NULL".to_string(),
+        DatabaseValue::Bytes(bytes) | DatabaseValue::BytesOpt(Some(bytes)) => {
+            let hex = hex_string(bytes);
+            format!("X'{}'", &hex[2..])
         }
-        // MySQL date/time types
-        "DATE" | "TIME" | "DATETIME" | "YEAR" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
-        "TIMESTAMP" => {
-            // MySQL TIMESTAMP is UTC-based, try different datetime types
-            // First try NaiveDateTime directly
-            owned.try_decode::<chrono::NaiveDateTime>().map_or_else(
-                |_| {
-                    owned
-                        .try_decode::<chrono::DateTime<chrono::Utc>>()
-                        .map_or_else(
-                            |_| match owned.try_decode::<chrono::DateTime<chrono::Local>>() {
-                                Ok(dt) => Ok(DatabaseValue::DateTime(dt.naive_local())),
-                                Err(e) => Err(e), // Give up and return the decode error
-                            },
-                            |dt| Ok(DatabaseValue::DateTime(dt.naive_utc())),
-                        )
-                },
-                |dt| Ok(DatabaseValue::DateTime(dt)),
+        DatabaseValue::Date(date) | DatabaseValue::DateOpt(Some(date)) => {
+            format!("'{}'", date.format("%Y-%m-%d"))
+        }
+        DatabaseValue::Time(time) | DatabaseValue::TimeOpt(Some(time)) => {
+            format!("'{}'", time.format("%H:%M:%S%.f"))
+        }
+        DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => {
+            format!("'{}'", dt.naive_utc().format("%Y-%m-%d %H:%M:%S%.f"))
+        }
+        DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S%.f")),
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(json) | DatabaseValue::JsonOpt(Some(json)) => {
+            format!("'{}'", escape_mysql_string(&json.to_string()))
+        }
+        DatabaseValue::Other { text, .. } => format!("'{}'", escape_mysql_string(text)),
+        _ => return None,
+    })
+}
+
+/// Bind a single raw-SQL parameter.
+///
+/// New value kinds bind natively where `MySQL` has an equivalent:
+/// * [`DatabaseValue::Bytes`] binds as a binary string (`BLOB`)
+/// * [`DatabaseValue::Date`]/[`DatabaseValue::Time`] bind as `DATE`/`TIME`
+/// * [`DatabaseValue::DateTimeTz`] binds as a UTC `DATETIME` (`MySQL` has no offset type)
+/// * `Json` and [`DatabaseValue::Other`] bind as text (the server casts text to `JSON`
+///   and most other types on assignment)
+fn bind_raw_param<'q>(
+    query_builder: Query<'q, MySql, MySqlArguments>,
+    param: &'q DatabaseValue,
+) -> Result<Query<'q, MySql, MySqlArguments>, DatabaseError> {
+    Ok(match param {
+        DatabaseValue::Int8(n) => query_builder.bind(*n),
+        DatabaseValue::Int8Opt(n) => query_builder.bind(n),
+        DatabaseValue::Int16(n) => query_builder.bind(*n),
+        DatabaseValue::Int16Opt(n) => query_builder.bind(n),
+        DatabaseValue::Int32(n) => query_builder.bind(*n),
+        DatabaseValue::Int32Opt(n) => query_builder.bind(n),
+        DatabaseValue::String(s) => query_builder.bind(s),
+        DatabaseValue::StringOpt(s) => query_builder.bind(s),
+        DatabaseValue::Int64(n) => query_builder.bind(*n),
+        DatabaseValue::Int64Opt(n) => query_builder.bind(n),
+        DatabaseValue::UInt8(n) => query_builder.bind(*n),
+        DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
+        DatabaseValue::UInt16(n) => query_builder.bind(*n),
+        DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
+        DatabaseValue::UInt32(n) => query_builder.bind(*n),
+        DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
+        DatabaseValue::UInt64(n) => query_builder.bind(*n),
+        DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
+        DatabaseValue::Real64(r) => query_builder.bind(*r),
+        DatabaseValue::Real64Opt(r) => query_builder.bind(r),
+        DatabaseValue::Real32(r) => query_builder.bind(*r),
+        DatabaseValue::Real32Opt(r) => query_builder.bind(r),
+        #[cfg(feature = "decimal")]
+        DatabaseValue::Decimal(d) => query_builder.bind(*d),
+        #[cfg(feature = "decimal")]
+        DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
+        #[cfg(feature = "uuid")]
+        DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
+        #[cfg(feature = "uuid")]
+        DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
+        DatabaseValue::Bool(b) => query_builder.bind(*b),
+        DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+        DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+        DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+        DatabaseValue::Bytes(bytes) => query_builder.bind(bytes.as_slice()),
+        DatabaseValue::BytesOpt(bytes) => query_builder.bind(bytes.as_deref()),
+        DatabaseValue::Date(date) => query_builder.bind(*date),
+        DatabaseValue::DateOpt(date) => query_builder.bind(*date),
+        DatabaseValue::Time(time) => query_builder.bind(*time),
+        DatabaseValue::TimeOpt(time) => query_builder.bind(*time),
+        DatabaseValue::DateTimeTz(dt) => query_builder.bind(dt.naive_utc()),
+        DatabaseValue::DateTimeTzOpt(dt) => query_builder.bind(dt.map(|dt| dt.naive_utc())),
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(json) => query_builder.bind(json.to_string()),
+        #[cfg(feature = "json")]
+        DatabaseValue::JsonOpt(json) => {
+            query_builder.bind(json.as_ref().map(serde_json::Value::to_string))
+        }
+        DatabaseValue::Other { text, .. } => query_builder.bind(text.as_str()),
+        DatabaseValue::Now | DatabaseValue::NowPlus(_) => {
+            // These should never reach here due to query transformation
+            return Err(DatabaseError::QueryFailed(
+                "Now/NowPlus parameters should be handled by query transformation".to_string(),
+            ));
+        }
+    })
+}
+
+/// Build an [`DatabaseValue::Other`] from a value's raw bytes.
+///
+/// Text-format values (and text-like binary-protocol values such as `DECIMAL`)
+/// are reported verbatim; anything that isn't valid UTF-8, or when `force_hex`
+/// is set, is rendered as `0x`-prefixed hex.
+fn other_value(type_name: &str, owned: &sqlx::mysql::MySqlValue, force_hex: bool) -> DatabaseValue {
+    let bytes = owned.try_decode_unchecked::<Vec<u8>>().unwrap_or_default();
+    let text = if force_hex {
+        hex_string(&bytes)
+    } else {
+        String::from_utf8(bytes).unwrap_or_else(|e| hex_string(e.as_bytes()))
+    };
+    DatabaseValue::Other {
+        type_name: type_name.to_string(),
+        text,
+    }
+}
+
+/// Decode `MySQL` `TIMESTAMP` values (UTC-based) as naive date/times.
+///
+/// `TIMESTAMP` deliberately keeps decoding to [`DatabaseValue::DateTime`]
+/// (as it always has) rather than [`DatabaseValue::DateTimeTz`]: the server
+/// converts to the session time zone and sends no offset, so there is no
+/// offset to preserve.
+fn decode_mysql_timestamp(owned: &sqlx::mysql::MySqlValue) -> Option<DatabaseValue> {
+    owned
+        .try_decode::<chrono::NaiveDateTime>()
+        .ok()
+        .or_else(|| {
+            owned
+                .try_decode::<chrono::DateTime<chrono::Utc>>()
+                .ok()
+                .map(|dt| dt.naive_utc())
+        })
+        .or_else(|| {
+            owned
+                .try_decode::<chrono::DateTime<chrono::Local>>()
+                .ok()
+                .map(|dt| dt.naive_local())
+        })
+        .map(DatabaseValue::DateTime)
+}
+
+/// Decode a value whose `MySQL` type has a native [`DatabaseValue`] mapping.
+///
+/// Returns `None` for unknown types and for values the driver can't decode into
+/// the mapped Rust type (e.g. zero dates or out-of-range `TIME` values).
+fn decode_known_value(type_name: &str, owned: &sqlx::mysql::MySqlValue) -> Option<DatabaseValue> {
+    Some(match type_name {
+        // MySQL boolean types (TINYINT(1) is used for booleans)
+        "BOOLEAN" | "BOOL" => DatabaseValue::Bool(owned.try_decode().ok()?),
+        "TINYINT" => DatabaseValue::Int8(owned.try_decode().ok()?),
+        "TINYINT UNSIGNED" => DatabaseValue::UInt8(owned.try_decode().ok()?),
+        "SMALLINT" => DatabaseValue::Int16(owned.try_decode().ok()?),
+        "SMALLINT UNSIGNED" => DatabaseValue::UInt16(owned.try_decode().ok()?),
+        "MEDIUMINT" | "INT" | "INTEGER" => DatabaseValue::Int32(owned.try_decode().ok()?),
+        "MEDIUMINT UNSIGNED" | "INT UNSIGNED" => DatabaseValue::UInt32(owned.try_decode().ok()?),
+        "BIGINT" => DatabaseValue::Int64(owned.try_decode().ok()?),
+        "BIGINT UNSIGNED" => DatabaseValue::UInt64(owned.try_decode().ok()?),
+        #[cfg(feature = "decimal")]
+        "DECIMAL" => DatabaseValue::Decimal(owned.try_decode().ok()?),
+        "FLOAT" => DatabaseValue::Real64(
+            owned
+                .try_decode::<f64>()
+                .ok()
+                .or_else(|| owned.try_decode::<f32>().ok().map(f64::from))?,
+        ),
+        "DOUBLE" | "REAL" | "NUMERIC" => DatabaseValue::Real64(owned.try_decode().ok()?),
+        // MySQL string types (non-binary collation) and ENUM/SET labels
+        "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" | "ENUM" | "SET" => {
+            DatabaseValue::String(owned.try_decode_unchecked().ok()?)
+        }
+        // The driver names `_bin`-collated text columns (and `MariaDB` JSON) like binary
+        // types; only the true `binary` collation (rejected by `String`) is binary data
+        "BINARY" | "VARBINARY" | "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
+            owned.try_decode::<String>().map_or_else(
+                |_| owned.try_decode_unchecked().ok().map(DatabaseValue::Bytes),
+                |text| Some(DatabaseValue::String(text)),
+            )?
+        }
+        "DATE" => DatabaseValue::Date(owned.try_decode().ok()?),
+        "TIME" => match owned.try_decode::<chrono::NaiveTime>() {
+            Ok(time) => DatabaseValue::Time(time),
+            // Negative or >= 24h durations can't be represented by NaiveTime
+            Err(_) => DatabaseValue::Other {
+                type_name: type_name.to_string(),
+                text: owned
+                    .try_decode::<sqlx::mysql::types::MySqlTime>()
+                    .ok()?
+                    .to_string(),
+            },
+        },
+        "DATETIME" => DatabaseValue::DateTime(owned.try_decode().ok()?),
+        "TIMESTAMP" => decode_mysql_timestamp(owned)?,
+        "YEAR" => DatabaseValue::UInt16(owned.try_decode_unchecked().ok()?),
+        "BIT" => DatabaseValue::UInt64(owned.try_decode_unchecked().ok()?),
+        #[cfg(feature = "json")]
+        "JSON" => {
+            let bytes = owned.try_decode_unchecked::<Vec<u8>>().ok()?;
+            serde_json::from_slice(&bytes).map_or_else(
+                |_| DatabaseValue::String(String::from_utf8_lossy(&bytes).into_owned()),
+                DatabaseValue::Json,
             )
         }
-        // MySQL JSON type
-        "JSON" => Ok(DatabaseValue::String(owned.try_decode()?)),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: value.type_info().name().to_string(),
-        }),
+        #[cfg(not(feature = "json"))]
+        "JSON" => DatabaseValue::String(owned.try_decode_unchecked().ok()?),
+        "NULL" => DatabaseValue::Null,
+        _ => return None,
+    })
+}
+
+/// Decode a column value. Never fails: values without a native mapping (or
+/// that can't be represented by one) become [`DatabaseValue::Other`].
+fn column_value(value: &MySqlValueRef<'_>) -> DatabaseValue {
+    if value.is_null() {
+        return DatabaseValue::Null;
     }
+    let owned = sqlx::ValueRef::to_owned(value);
+    let type_info = value.type_info();
+    let type_name = type_info.name();
+    decode_known_value(type_name, &owned).unwrap_or_else(|| {
+        let mut other = other_value(type_name, &owned, type_name == "GEOMETRY");
+        // Zero dates are sent as empty values in the binary protocol
+        if let DatabaseValue::Other { text, .. } = &mut other
+            && text.is_empty()
+        {
+            match type_name {
+                "DATE" => "0000-00-00".clone_into(text),
+                "DATETIME" | "TIMESTAMP" => "0000-00-00 00:00:00".clone_into(text),
+                _ => {}
+            }
+        }
+        other
+    })
 }
 
 fn from_row(column_names: &[String], row: &MySqlRow) -> Result<crate::Row, SqlxDatabaseError> {
@@ -2393,7 +2755,7 @@ fn from_row(column_names: &[String], row: &MySqlRow) -> Result<crate::Row, SqlxD
     for column in column_names {
         columns.push((
             column.clone(),
-            column_value(&row.try_get_raw(column.as_str())?)?,
+            column_value(&row.try_get_raw(column.as_str())?),
         ));
     }
 
@@ -2749,6 +3111,12 @@ where
                 DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
+                }
+                // Remaining null-like variants are inlined as NULL by `to_sql`
+                value if value.is_null() => (),
+                value => {
+                    query = bind_raw_param(query, value)
+                        .map_err(|_| SqlxDatabaseError::InvalidRequest)?;
                 }
             }
         }
@@ -3451,6 +3819,64 @@ impl Expression for MySqlDatabaseValue {
     }
 }
 
+/// Run a raw query through a prepared statement, returning column metadata
+/// (names and native type names, even for zero rows) and positionally decoded
+/// rows that preserve column order and duplicate names.
+///
+/// Returns `Ok(None)` when the statement can't be prepared (some statements
+/// can't use the binary protocol); callers fall back to the unprepared path.
+#[cfg(feature = "raw-sql")]
+async fn mysql_query_raw_result(
+    connection: &mut MySqlConnection,
+    query: &str,
+    params: &[crate::DatabaseValue],
+) -> Result<Option<crate::QueryResult>, DatabaseError> {
+    let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
+
+    let Ok(statement) = connection
+        .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(
+            transformed_query,
+        )))
+        .await
+    else {
+        return Ok(None);
+    };
+
+    let columns = statement
+        .columns()
+        .iter()
+        .map(|column| crate::ResultColumn {
+            name: column.name().to_string(),
+            type_name: Some(column.type_info().name().to_string()),
+        })
+        .collect::<Vec<_>>();
+
+    let mut query_builder = statement.query();
+    for param in &filtered_params {
+        query_builder = bind_raw_param(query_builder, param)?;
+    }
+
+    let rows = query_builder
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    let rows = rows
+        .iter()
+        .map(|row| {
+            (0..row.len())
+                .map(|index| {
+                    row.try_get_raw(index)
+                        .map(|value| column_value(&value))
+                        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(Some(crate::QueryResult { columns, rows }))
+}
+
 #[cfg(feature = "raw-sql")]
 fn mysql_transform_query_for_params(
     query: &str,
@@ -3545,49 +3971,7 @@ impl MySqlSqlxDatabase {
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
+            query_builder = bind_raw_param(query_builder, param)?;
         }
 
         let result = query_builder
@@ -3618,49 +4002,7 @@ impl MySqlSqlxDatabase {
 
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
+            query_builder = bind_raw_param(query_builder, param)?;
         }
 
         let result = query_builder
@@ -3758,52 +4100,15 @@ impl MysqlSqlxTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
 
-        // Add parameters in order - MySQL uses ? placeholders
-        for param in params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
-                }
-            };
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query));
+
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
+            query_builder = bind_raw_param(query_builder, param)?;
         }
 
         let result = {
@@ -3829,52 +4134,15 @@ impl MysqlSqlxTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
-            sqlx::query(sqlx::AssertSqlSafe((query).to_string()));
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) = mysql_transform_query_for_params(query, params)?;
 
-        // Add parameters in order - MySQL uses ? placeholders
-        for param in params {
-            query_builder = match param {
-                crate::DatabaseValue::Int8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::String(s) => query_builder.bind(s),
-                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
-                crate::DatabaseValue::Int64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::Int64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt8(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt8Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt16(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt16Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt32(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt32Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::UInt64(n) => query_builder.bind(*n),
-                crate::DatabaseValue::UInt64Opt(n) => query_builder.bind(n),
-                crate::DatabaseValue::Real64(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real64Opt(r) => query_builder.bind(r),
-                crate::DatabaseValue::Real32(r) => query_builder.bind(*r),
-                crate::DatabaseValue::Real32Opt(r) => query_builder.bind(r),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::Decimal(d) => query_builder.bind(*d),
-                #[cfg(feature = "decimal")]
-                crate::DatabaseValue::DecimalOpt(d) => query_builder.bind(d),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::Uuid(u) => query_builder.bind(u.to_string()),
-                #[cfg(feature = "uuid")]
-                crate::DatabaseValue::UuidOpt(u) => query_builder.bind(u.map(|x| x.to_string())),
-                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
-                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
-                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
-                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
-                }
-            };
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(sqlx::AssertSqlSafe(transformed_query));
+
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
+            query_builder = bind_raw_param(query_builder, param)?;
         }
 
         let result = {

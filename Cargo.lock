@@ -14603,6 +14603,8 @@ dependencies = [
  "chrono",
  "fallible-iterator 0.2.0",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
  "uuid",
 ]
 
@@ -18367,6 +18369,7 @@ dependencies = [
  "rusqlite",
  "rust_decimal",
  "rust_decimal_macros",
+ "serde_json",
  "sqlx",
  "sqlx-postgres",
  "switchy_async",
@@ -18394,6 +18397,7 @@ dependencies = [
  "openssl",
  "postgres-native-tls",
  "postgres-openssl",
+ "pretty_assertions",
  "rusqlite",
  "sqlx",
  "switchy_async",
@@ -18401,6 +18405,7 @@ dependencies = [
  "switchy_env",
  "test-log",
  "thiserror 2.0.21",
+ "tokio",
  "tokio-postgres",
 ]
 

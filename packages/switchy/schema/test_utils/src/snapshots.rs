@@ -744,5 +744,25 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         }
         #[cfg(feature = "uuid")]
         DatabaseValue::UuidOpt(None) => serde_json::Value::Null,
+        DatabaseValue::Bytes(bytes) | DatabaseValue::BytesOpt(Some(bytes)) => {
+            serde_json::Value::Array(bytes.into_iter().map(serde_json::Value::from).collect())
+        }
+        DatabaseValue::Date(d) | DatabaseValue::DateOpt(Some(d)) => {
+            serde_json::Value::String(d.to_string())
+        }
+        DatabaseValue::Time(t) | DatabaseValue::TimeOpt(Some(t)) => {
+            serde_json::Value::String(t.to_string())
+        }
+        DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => {
+            serde_json::Value::String(dt.to_rfc3339())
+        }
+        DatabaseValue::BytesOpt(None)
+        | DatabaseValue::DateOpt(None)
+        | DatabaseValue::TimeOpt(None)
+        | DatabaseValue::DateTimeTzOpt(None) => serde_json::Value::Null,
+        DatabaseValue::Other { text, .. } => serde_json::Value::String(text),
+        // Feature-gated variants (e.g. `json`) enabled through feature unification
+        #[allow(unreachable_patterns)]
+        other => serde_json::Value::String(format!("{other:?}")),
     }
 }

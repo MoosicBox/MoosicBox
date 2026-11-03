@@ -7,7 +7,7 @@
 //! must emulate this functionality using transactions and additional queries.
 
 use std::sync::Arc;
-use switchy_database::query::{Expression, FilterableQuery};
+use switchy_database::query::FilterableQuery;
 use switchy_database::schema::{Column, DataType, create_table};
 use switchy_database::{Database, DatabaseValue};
 

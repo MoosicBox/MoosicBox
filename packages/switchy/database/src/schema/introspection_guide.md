@@ -58,14 +58,16 @@ connection.execute("PRAGMA table_info(users)", [])?;
 
 ### 4. Attached Databases
 
-**Issue**: `table_exists()` searches ALL attached databases, which may be unexpected.
+**Behavior**: The table-oriented methods operate on the `main` schema. Attached
+databases are reported as schemas by `list_schemas()` (`PRAGMA database_list`;
+`main` is the default, `temp` is flagged as a system schema).
 
 ```sql
 ATTACH DATABASE 'other.db' AS other;
--- table_exists('users') will find users in main OR other database
 ```
 
-**Solution**: Use fully qualified names if precision is needed, or detach unused databases.
+**Solution**: Address attached databases with
+`list_relations(Some("other"))` and `get_relation_info(&RelationRef::with_schema("other", "users"))`.
 
 ### 5. Type Affinity vs Storage Class
 
@@ -80,19 +82,33 @@ INSERT INTO test (num) VALUES ('hello'); -- Allowed! Stores as TEXT
 
 ## PostgreSQL-Specific Pitfalls
 
-### 1. Schema Awareness - Public Schema Only
+### 1. Schema Awareness - Default Schema vs. Relation APIs
 
-**Issue**: Current implementation only searches the 'public' schema.
+**Behavior**: The table-oriented methods (`table_exists`, `list_tables`,
+`get_table_info`, `get_table_columns`, `column_exists`) operate on the
+connection's default schema (`current_schema()`, normally `public`).
 
 ```sql
 CREATE SCHEMA myapp;
 CREATE TABLE myapp.users (id SERIAL);
--- table_exists('users') returns false - not in public schema!
+-- table_exists('users') returns false unless myapp is the current schema
 ```
 
-**Workaround**: Ensure all application tables are in 'public' schema, or modify search queries.
+**Solution**: Use the multi-schema relation APIs, which work for every backend:
 
-**Future Enhancement**: Support schema-qualified table names or configurable schema search.
+```rust,ignore
+use switchy_database::schema::RelationRef;
+
+for schema in db.list_schemas().await? {          // pg_namespace
+    if schema.is_system { continue; }
+    for rel in db.list_relations(Some(&schema.name)).await? {
+        // tables, views, materialized views, foreign tables,
+        // with comments and reltuples-based row estimates
+    }
+}
+let info = db.get_relation_info(&RelationRef::with_schema("myapp", "users")).await?;
+let sql = db.get_view_definition(&RelationRef::with_schema("myapp", "active_users")).await?;
+```
 
 ### 2. Case Sensitivity - Identifier Folding
 
@@ -321,6 +337,17 @@ let conn2 = Connection::open_in_memory()?;
 **Current Behavior**: Index columns are extracted by parsing the SQL string from the `sql` column of `duckdb_indexes()`. This works for simple indexes but may not correctly parse complex index expressions.
 
 ## Cross-Backend Pitfalls
+
+### 0. Unknown and Custom Types
+
+Introspection never fails on an unrecognized native type: such columns map to
+`DataType::Custom(native_name)`. `ColumnInfo::native_type` always carries the
+database's exact type name (e.g. `timestamp with time zone`, `integer[]`,
+`enum('a','b')`, a user-defined enum or domain name), which is the right value
+to display. Likewise, row decoding never fails on an unknown column type: values
+without a dedicated `DatabaseValue` variant decode to
+`DatabaseValue::Other { type_name, text }` (or `DatabaseValue::Bytes` for raw
+binary data).
 
 ### 1. Data Type Mapping Inconsistencies
 

@@ -18,14 +18,17 @@ group = "switchy"
 
 [dependencies]
 moosicbox_assert   = { workspace = true }
-moosicbox_profiles = { workspace = true, features = ["api"] }
+moosicbox_profiles = { workspace = true }
 
 switchy_async = { workspace = true, features = ["sync", "tokio"] }
 switchy_time  = { workspace = true, features = ["chrono", "std"] }
 
 # DB Dependencies
-duckdb   = { workspace = true, optional = true }
-rusqlite = { workspace = true, optional = true, features = ["backup"] }
+duckdb = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true, features = [
+    "backup",
+    "column_decltype",
+] }
 
 # sqlx dependencies
 sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"] }
@@ -59,6 +62,9 @@ rust_decimal = { workspace = true, optional = true, features = [
 
 # UUID support
 uuid = { workspace = true, optional = true }
+
+# JSON support
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -227,4 +233,5 @@ cascade      = ["schema"]
 schema       = []
 
 decimal = ["dep:rust_decimal", "sqlx?/rust_decimal"]
+json    = ["dep:serde_json", "sqlx?/json", "tokio-postgres?/with-serde_json-1"]
 uuid    = ["dep:uuid", "sqlx?/uuid"]

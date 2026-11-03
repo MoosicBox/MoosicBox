@@ -331,6 +331,42 @@ async fn inspect_schema(db: &dyn Database) -> Result<(), DatabaseError> {
 }
 ```
 
+#### Schemas, Views and Other Relations
+
+The table-oriented methods above use the connection's default schema. The
+relation methods work across schemas and include views, materialized views
+and foreign tables:
+
+```rust
+use switchy_database::{Database, DatabaseError, schema::RelationRef};
+
+async fn browse(db: &dyn Database) -> Result<(), DatabaseError> {
+    for schema in db.list_schemas().await? {
+        if schema.is_system {
+            continue;
+        }
+        for relation in db.list_relations(Some(&schema.name)).await? {
+            println!(
+                "{}.{} [{}] ~{:?} rows",
+                schema.name, relation.name, relation.kind, relation.estimated_rows
+            );
+            if let Some(info) = db.get_relation_info(&relation.relation_ref()).await? {
+                for column in info.columns.values() {
+                    // `native_type` is the database's exact type name
+                    println!("  {} {}", column.name, column.native_type);
+                }
+            }
+            if relation.kind.is_view() {
+                let sql = db.get_view_definition(&relation.relation_ref()).await?;
+                println!("  definition: {sql:?}");
+            }
+        }
+    }
+    let _ = RelationRef::with_schema("public", "users");
+    Ok(())
+}
+```
+
 ### Raw SQL Queries
 
 ```rust
@@ -359,6 +395,13 @@ async fn raw_queries(db: &dyn Database) -> Result<(), DatabaseError> {
         DatabaseValue::String("The Beatles".to_string()),
     ];
     db.exec_raw_params("INSERT INTO tracks (title, artist) VALUES (?, ?)", &params).await?;
+
+    // Positional result set with column metadata (names + native type names),
+    // available even when no rows are returned; duplicate names are preserved
+    let result = db.query_raw_result("SELECT 1 AS a, 2 AS a", &[]).await?;
+    for column in &result.columns {
+        println!("{} {:?}", column.name, column.type_name);
+    }
 
     Ok(())
 }
@@ -408,6 +451,7 @@ and platform-dependent; benchmark before enabling it.
 - `simulator` - Database simulator for testing
 - `decimal` - Decimal type support (rust_decimal)
 - `uuid` - UUID type support
+- `json` - JSON value support (`DatabaseValue::Json`, serde_json)
 - `api` - Actix-web integration for web APIs
 
 ### Placeholder Features
@@ -472,6 +516,11 @@ The `DatabaseValue` enum supports the following types:
 - **Decimal**: `Decimal` (with `decimal` feature)
 - **UUID**: `Uuid` (with `uuid` feature)
 - **DateTime**: `DateTime`, `Now`, `NowPlus`
+- **Date/Time**: `Date`, `Time`, `DateTimeTz` (offset-aware) and their `*Opt` variants
+- **Binary**: `Bytes`, `BytesOpt`
+- **JSON**: `Json`, `JsonOpt` (with `json` feature)
+- **Fallback**: `Other { type_name, text }` for native types without a dedicated variant
+  (row decoding never fails on unknown column types)
 - **Null**: `Null`
 
 The `schema::DataType` enum provides database-agnostic type definitions:
@@ -496,8 +545,9 @@ The core `Database` trait provides:
 - Query builder methods (`select`, `insert`, `update`, `delete`, `upsert`)
 - Schema methods (`create_table`, `drop_table`, `create_index`, `alter_table`) - requires `schema` feature
 - Execution methods (`query`, `query_first`, `exec_update`, `exec_insert`, etc.)
-- Raw SQL methods (`query_raw`, `query_raw_params`, `exec_raw`, `exec_raw_params`)
-- Introspection methods (`table_exists`, `column_exists`, `get_table_info`, `list_tables`) - requires `schema` feature
+- Raw SQL methods (`query_raw`, `query_raw_params`, `query_raw_result`, `exec_raw`, `exec_raw_params`)
+- Introspection methods (`table_exists`, `column_exists`, `get_table_info`, `list_tables`,
+  `list_schemas`, `list_relations`, `get_relation_info`, `get_view_definition`) - requires `schema` feature
 - Transaction method (`begin_transaction`)
 
 ### DatabaseTransaction Trait

@@ -826,6 +826,54 @@ impl Database for PostgresDatabase {
         postgres_column_exists(client_ref, table_name, column_name).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_list_schemas(client_ref).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_list_relations(client_ref, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_get_relation_info(client_ref, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_get_view_definition(client_ref, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        query_raw_result_on(client_ref, query, params).await
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
@@ -1253,6 +1301,49 @@ impl Database for PostgresTransaction {
     ) -> Result<bool, DatabaseError> {
         let client_ref: &Client = &*self.client.lock().await;
         postgres_column_exists(client_ref, table_name, column_name).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        super::introspection::postgres_list_schemas(client_ref).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        super::introspection::postgres_list_relations(client_ref, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        super::introspection::postgres_get_relation_info(client_ref, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        super::introspection::postgres_get_view_definition(client_ref, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        query_raw_result_on(client_ref, query, params).await
     }
 
     #[cfg(feature = "raw-sql")]
@@ -1812,6 +1903,12 @@ async fn postgres_exec_create_table(
                     query.push_str("timestamp '");
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                other => {
+                    query.push_str(
+                        &crate::postgres_common::extended_value_literal(other)
+                            .unwrap_or_else(|| "NULL".to_string()),
+                    );
                 }
             }
         }
@@ -3259,12 +3356,32 @@ impl Expression for PgDatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        self.0.is_null()
+        Expression::is_null(&self.0)
     }
 
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
     }
+}
+
+/// Decode any non-NULL value from its binary wire representation; never fails.
+///
+/// Types without a dedicated [`DatabaseValue`] variant become
+/// [`DatabaseValue::Other`] (see [`crate::postgres_common::decode_binary_value`]).
+fn generic_from_sql(ty: &tokio_postgres::types::Type, raw: &[u8]) -> DatabaseValue {
+    use crate::postgres_common::{TypeShape, canonical_type_name, decode_binary_value};
+    use tokio_postgres::types::Kind;
+
+    let type_name = canonical_type_name(Some(ty.oid()), ty.name());
+    let (decode_oid, shape) = match ty.kind() {
+        Kind::Array(_) => (ty.oid(), TypeShape::Array),
+        Kind::Composite(_) => (ty.oid(), TypeShape::Composite),
+        Kind::Range(_) => (ty.oid(), TypeShape::Range),
+        // Domains use their base type's wire format
+        Kind::Domain(base) => (base.oid(), TypeShape::Scalar),
+        _ => (ty.oid(), TypeShape::Scalar),
+    };
+    decode_binary_value(decode_oid, &type_name, shape, raw)
 }
 
 impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
@@ -3277,8 +3394,9 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             "int2" => Self::Int64(int2_from_sql(raw)?.into()),
             "int4" => Self::Int64(int4_from_sql(raw)?.into()),
             "bool" => Self::Bool(bool_from_sql(raw)?),
-            "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
-            | "int8" => Self::Int64(int8_from_sql(raw)?),
+            "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial" | "int8" => {
+                Self::Int64(int8_from_sql(raw)?)
+            }
             "float4" => Self::Real32(float4_from_sql(raw)?),
             "real" | "double precision" | "float8" => Self::Real64(float8_from_sql(raw)?),
             "varchar" | "bpchar" | "char(n)" | "text" | "name" | "citext" => {
@@ -3292,11 +3410,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
             "uuid" => Self::Uuid(uuid::Uuid::from_sql(ty, raw)?),
             #[cfg(feature = "decimal")]
             "numeric" => Self::Decimal(rust_decimal::Decimal::from_sql(ty, raw)?),
-            other => {
-                return Err(Box::new(PostgresDatabaseError::TypeNotFound {
-                    type_name: other.to_string(),
-                }));
-            }
+            _ => generic_from_sql(ty, raw),
         })
     }
 
@@ -3331,8 +3445,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                 })
                 .transpose()?
                 .unwrap_or(Self::Null),
-            "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
-            | "int8" => raw
+            "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial" | "int8" => raw
                 .map(|raw| {
                     Ok::<_, Box<dyn std::error::Error + Sync + Send>>(Self::Int64(int8_from_sql(
                         raw,
@@ -3398,11 +3511,7 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
                 })
                 .transpose()?
                 .unwrap_or(Self::Null),
-            other => {
-                return Err(Box::new(PostgresDatabaseError::TypeNotFound {
-                    type_name: other.to_string(),
-                }));
-            }
+            _ => raw.map_or(Self::Null, |raw| generic_from_sql(ty, raw)),
         })
     }
 
@@ -3434,6 +3543,10 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             && let DatabaseValue::String(_) = &self.0
         {
             // Use text format for interval strings
+            return tokio_postgres::types::Format::Text;
+        }
+        // `Other` values carry PostgreSQL text representations
+        if let DatabaseValue::Other { .. } = &self.0 {
             return tokio_postgres::types::Format::Text;
         }
         // Default to binary format for everything else
@@ -3510,6 +3623,34 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
                 .naive_utc()
                 .to_sql(ty, out)?,
             DatabaseValue::DateTime(value) => value.to_sql(ty, out)?,
+            DatabaseValue::BytesOpt(None)
+            | DatabaseValue::DateOpt(None)
+            | DatabaseValue::TimeOpt(None)
+            | DatabaseValue::DateTimeTzOpt(None) => IsNull::Yes,
+            #[cfg(feature = "json")]
+            DatabaseValue::JsonOpt(None) => IsNull::Yes,
+            DatabaseValue::Bytes(value) | DatabaseValue::BytesOpt(Some(value)) => {
+                value.as_slice().to_sql(ty, out)?
+            }
+            DatabaseValue::Date(value) | DatabaseValue::DateOpt(Some(value)) => {
+                value.to_sql(ty, out)?
+            }
+            DatabaseValue::Time(value) | DatabaseValue::TimeOpt(Some(value)) => {
+                value.to_sql(ty, out)?
+            }
+            DatabaseValue::DateTimeTz(value) | DatabaseValue::DateTimeTzOpt(Some(value)) => {
+                value.to_sql(ty, out)?
+            }
+            #[cfg(feature = "json")]
+            DatabaseValue::Json(value) | DatabaseValue::JsonOpt(Some(value)) => {
+                value.to_sql(ty, out)?
+            }
+            // Sent in text format (see `encode_format`) so the server parses it
+            // as the parameter's inferred type.
+            DatabaseValue::Other { text, .. } => {
+                out.extend_from_slice(text.as_bytes());
+                IsNull::No
+            }
         })
     }
 
@@ -3524,6 +3665,57 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
         log::trace!("to_sql: ty={}, {ty:?}", ty.name());
         self.to_sql_checked(ty, out)
     }
+}
+
+/// Execute a raw query, describing its result columns via a prepared statement.
+///
+/// Values are decoded positionally so duplicate column names are preserved.
+#[cfg(feature = "raw-sql")]
+async fn query_raw_result_on(
+    client: &Client,
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<crate::QueryResult, DatabaseError> {
+    let (transformed_query, filtered_params) = postgres_transform_query_for_params(query, params);
+    let statement = client
+        .prepare(&transformed_query)
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+    let columns = statement
+        .columns()
+        .iter()
+        .map(|column| crate::ResultColumn {
+            name: column.name().to_string(),
+            type_name: Some(crate::postgres_common::canonical_type_name(
+                Some(column.type_().oid()),
+                column.type_().name(),
+            )),
+        })
+        .collect();
+    let pg_params: Vec<PgDatabaseValue> = filtered_params
+        .into_iter()
+        .map(PgDatabaseValue::from)
+        .collect();
+    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+        .iter()
+        .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
+    let rows = client
+        .query(&statement, &param_refs[..])
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(detailed_pg_error(&e)))?;
+    let rows = rows
+        .iter()
+        .map(|row| {
+            (0..row.len())
+                .map(|index| {
+                    row.try_get::<_, DatabaseValue>(index)
+                        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(crate::QueryResult { columns, rows })
 }
 
 #[cfg(feature = "raw-sql")]

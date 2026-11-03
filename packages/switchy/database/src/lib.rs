@@ -78,14 +78,49 @@
 //!
 //! * **Computed/Generated Columns**: Not currently supported for introspection
 //! * **Complex Default Values**: Function calls and expressions may not be parsed correctly
-//! * **Custom Types**: User-defined types map to closest standard type
-//! * **Views**: Currently not supported - only tables are introspected
+//! * **Custom Types**: Types without a matching [`schema::DataType`] variant map to
+//!   [`schema::DataType::Custom`]; [`schema::ColumnInfo::native_type`] always carries the
+//!   database's exact type name
+//! * **Views**: The table-oriented methods (`list_tables`, `get_table_info`, ...) only see
+//!   tables in the default schema; use the relation methods below for views and other schemas
 //! * **Triggers**: Trigger information is not included in table info
+//!
+//! ### Multi-Schema Relation Introspection
+//!
+//! * [`Database::list_schemas`] - enumerate schemas (`PostgreSQL` schemas, `MySQL`
+//!   databases, `SQLite` attached databases, `DuckDB` schemas)
+//! * [`Database::list_relations`] - tables, views, materialized views and foreign tables
+//!   in a schema, with comments and cheap row estimates where available
+//! * [`Database::get_relation_info`] - columns, indexes and foreign keys of any relation
+//! * [`Database::get_view_definition`] - the SQL text of a view
+//!
+//! ```rust,no_run
+//! # #[cfg(feature = "schema")]
+//! # {
+//! # use switchy_database::{Database, DatabaseError, schema::RelationRef};
+//! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
+//! for schema in db.list_schemas().await? {
+//!     if schema.is_system {
+//!         continue;
+//!     }
+//!     for relation in db.list_relations(Some(&schema.name)).await? {
+//!         println!("{}.{} ({})", schema.name, relation.name, relation.kind);
+//!     }
+//! }
+//! let info = db
+//!     .get_relation_info(&RelationRef::with_schema("public", "users"))
+//!     .await?;
+//! # Ok(())
+//! # }
+//! # }
+//! ```
 //!
 //! ### Common Pitfalls
 //!
 //! * **Case Sensitivity**: `PostgreSQL` folds unquoted identifiers to lowercase
-//! * **Schema Awareness**: `PostgreSQL` searches `search_path`, others use default schema
+//! * **Schema Awareness**: Table-oriented methods use the connection's default schema
+//!   (`PostgreSQL` `current_schema()`); pass a [`schema::RelationRef`] to the relation
+//!   methods to address other schemas
 //! * **Auto-increment Detection**: Implementation varies significantly between backends
 //! * **NULL vs NOT NULL**: `SQLite` PRIMARY KEY doesn't imply NOT NULL (unlike other DBs)
 //!
@@ -151,6 +186,9 @@ pub mod executable;
 #[cfg(feature = "postgres-raw")]
 /// `PostgreSQL` database backend implementation
 pub mod postgres;
+#[cfg(feature = "postgres")]
+/// Shared `PostgreSQL` catalog SQL and decoding helpers (raw and sqlx backends)
+pub(crate) mod postgres_common;
 /// Database profiles management for multi-database support
 pub mod profiles;
 #[cfg(feature = "sqlite-rusqlite")]
@@ -159,6 +197,9 @@ pub mod rusqlite;
 #[cfg(feature = "simulator")]
 /// Database simulator for testing
 pub mod simulator;
+#[cfg(feature = "_sqlite")]
+/// Shared helpers for `SQLite`-family backends
+pub(crate) mod sqlite_common;
 #[cfg(feature = "sqlx")]
 /// Database backends using `SQLx` library
 pub mod sqlx;
@@ -205,7 +246,7 @@ pub struct SqliteChangeObservation {
 }
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::sql_interval::SqlInterval;
 use query::{
@@ -289,6 +330,46 @@ pub enum DatabaseValue {
     Now,
     /// Specific date/time value
     DateTime(NaiveDateTime),
+    /// Non-nullable binary data (`BLOB`, `BYTEA`, `VARBINARY`, ...)
+    Bytes(Vec<u8>),
+    /// Nullable binary data
+    BytesOpt(Option<Vec<u8>>),
+    /// Non-nullable calendar date without time or time zone (`DATE`)
+    Date(NaiveDate),
+    /// Nullable calendar date
+    DateOpt(Option<NaiveDate>),
+    /// Non-nullable time of day without date or time zone (`TIME`)
+    Time(NaiveTime),
+    /// Nullable time of day
+    TimeOpt(Option<NaiveTime>),
+    /// Non-nullable date/time with an explicit UTC offset
+    ///
+    /// Backends that historically decode `TIMESTAMP WITH TIME ZONE` columns as
+    /// [`DatabaseValue::DateTime`] (normalized to UTC) keep doing so for
+    /// compatibility; this variant is produced where the driver reports a
+    /// value with an offset that cannot be represented by an existing variant
+    /// and can always be bound as a query parameter.
+    DateTimeTz(DateTime<FixedOffset>),
+    /// Nullable date/time with an explicit UTC offset
+    DateTimeTzOpt(Option<DateTime<FixedOffset>>),
+    #[cfg(feature = "json")]
+    /// Non-nullable JSON document (requires `json` feature)
+    Json(serde_json::Value),
+    #[cfg(feature = "json")]
+    /// Nullable JSON document (requires `json` feature)
+    JsonOpt(Option<serde_json::Value>),
+    /// Last-resort representation of a value whose native type has no
+    /// dedicated variant.
+    ///
+    /// Row decoding never fails on unknown column types; instead the value is
+    /// rendered as text (using the driver's text representation where
+    /// available) and tagged with the database's native type name.
+    Other {
+        /// The database's native type name (e.g. `interval`, `int4[]`, `mood`)
+        type_name: String,
+        /// Text representation of the value
+        text: String,
+    },
 }
 
 impl DatabaseValue {
@@ -452,6 +533,104 @@ impl DatabaseValue {
         }
     }
 
+    /// Returns `true` if this value represents SQL `NULL`
+    ///
+    /// This includes [`DatabaseValue::Null`] and every `*Opt(None)` variant.
+    ///
+    /// Note: this is broader than the query builder's
+    /// [`Expression::is_null`](crate::query::Expression::is_null), which decides
+    /// which values are rendered inline as `NULL` rather than bound as parameters.
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
+        match self {
+            Self::Null
+            | Self::StringOpt(None)
+            | Self::BoolOpt(None)
+            | Self::Int8Opt(None)
+            | Self::Int16Opt(None)
+            | Self::Int32Opt(None)
+            | Self::Int64Opt(None)
+            | Self::UInt8Opt(None)
+            | Self::UInt16Opt(None)
+            | Self::UInt32Opt(None)
+            | Self::UInt64Opt(None)
+            | Self::Real64Opt(None)
+            | Self::Real32Opt(None)
+            | Self::BytesOpt(None)
+            | Self::DateOpt(None)
+            | Self::TimeOpt(None)
+            | Self::DateTimeTzOpt(None) => true,
+            #[cfg(feature = "decimal")]
+            Self::DecimalOpt(None) => true,
+            #[cfg(feature = "uuid")]
+            Self::UuidOpt(None) => true,
+            #[cfg(feature = "json")]
+            Self::JsonOpt(None) => true,
+            _ => false,
+        }
+    }
+
+    /// Extracts a byte slice if this value is a `Bytes` type
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Self::Bytes(value) | Self::BytesOpt(Some(value)) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts a `NaiveDate` value if this value is a `Date` type
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_date(&self) -> Option<NaiveDate> {
+        match self {
+            Self::Date(value) | Self::DateOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// Extracts a `NaiveTime` value if this value is a `Time` type
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_time(&self) -> Option<NaiveTime> {
+        match self {
+            Self::Time(value) | Self::TimeOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// Extracts an offset-aware date/time if this value is a `DateTimeTz` type
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_datetime_tz(&self) -> Option<DateTime<FixedOffset>> {
+        match self {
+            Self::DateTimeTz(value) | Self::DateTimeTzOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// Extracts a JSON value reference if this value is a `Json` type
+    #[cfg(feature = "json")]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_json(&self) -> Option<&serde_json::Value> {
+        match self {
+            Self::Json(value) | Self::JsonOpt(Some(value)) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts the native type name and text of an [`DatabaseValue::Other`] value
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_other(&self) -> Option<(&str, &str)> {
+        match self {
+            Self::Other { type_name, text } => Some((type_name, text)),
+            _ => None,
+        }
+    }
+
     /// Extracts a boolean value if this value is a `Bool` type
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
@@ -542,6 +721,55 @@ impl From<f64> for DatabaseValue {
 impl From<rust_decimal::Decimal> for DatabaseValue {
     fn from(val: rust_decimal::Decimal) -> Self {
         Self::Decimal(val)
+    }
+}
+
+impl From<Vec<u8>> for DatabaseValue {
+    fn from(val: Vec<u8>) -> Self {
+        Self::Bytes(val)
+    }
+}
+
+impl From<&[u8]> for DatabaseValue {
+    fn from(val: &[u8]) -> Self {
+        Self::Bytes(val.to_vec())
+    }
+}
+
+impl From<NaiveDate> for DatabaseValue {
+    fn from(val: NaiveDate) -> Self {
+        Self::Date(val)
+    }
+}
+
+impl From<NaiveTime> for DatabaseValue {
+    fn from(val: NaiveTime) -> Self {
+        Self::Time(val)
+    }
+}
+
+impl From<NaiveDateTime> for DatabaseValue {
+    fn from(val: NaiveDateTime) -> Self {
+        Self::DateTime(val)
+    }
+}
+
+impl From<DateTime<FixedOffset>> for DatabaseValue {
+    fn from(val: DateTime<FixedOffset>) -> Self {
+        Self::DateTimeTz(val)
+    }
+}
+
+impl From<DateTime<chrono::Utc>> for DatabaseValue {
+    fn from(val: DateTime<chrono::Utc>) -> Self {
+        Self::DateTimeTz(val.fixed_offset())
+    }
+}
+
+#[cfg(feature = "json")]
+impl From<serde_json::Value> for DatabaseValue {
+    fn from(val: serde_json::Value) -> Self {
+        Self::Json(val)
     }
 }
 
@@ -899,6 +1127,130 @@ impl TryFrom<DatabaseValue> for uuid::Uuid {
             DatabaseValue::Uuid(value) | DatabaseValue::UuidOpt(Some(value)) => Ok(value),
             _ => Err(TryFromError::CouldNotConvert("Uuid".into())),
         }
+    }
+}
+
+impl TryFrom<DatabaseValue> for Vec<u8> {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Bytes(value) | DatabaseValue::BytesOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("Vec<u8>".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for NaiveDate {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Date(value) | DatabaseValue::DateOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("NaiveDate".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for NaiveTime {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Time(value) | DatabaseValue::TimeOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("NaiveTime".into())),
+        }
+    }
+}
+
+impl TryFrom<DatabaseValue> for DateTime<FixedOffset> {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::DateTimeTz(value) | DatabaseValue::DateTimeTzOpt(Some(value)) => {
+                Ok(value)
+            }
+            _ => Err(TryFromError::CouldNotConvert(
+                "DateTime<FixedOffset>".into(),
+            )),
+        }
+    }
+}
+
+#[cfg(feature = "json")]
+impl TryFrom<DatabaseValue> for serde_json::Value {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Json(value) | DatabaseValue::JsonOpt(Some(value)) => Ok(value),
+            _ => Err(TryFromError::CouldNotConvert("serde_json::Value".into())),
+        }
+    }
+}
+
+/// Metadata describing a single column of a raw query result set
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResultColumn {
+    /// Column name (or alias) as reported by the database
+    pub name: String,
+    /// Native type name reported by the driver, when available
+    ///
+    /// For `SQLite`-family backends this is the declared type of the source
+    /// column and is `None` for expressions without a declared type.
+    pub type_name: Option<String>,
+}
+
+/// An ordered, positional raw query result set with column metadata
+///
+/// Unlike [`Row`], values are stored positionally so duplicate column names
+/// (e.g. from joins) are preserved. `columns` is populated even when the
+/// query returns no rows on backends that can describe a statement.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct QueryResult {
+    /// Result set columns in select-list order
+    pub columns: Vec<ResultColumn>,
+    /// Result rows; each row has exactly `columns.len()` values in column order
+    pub rows: Vec<Vec<DatabaseValue>>,
+}
+
+impl QueryResult {
+    /// Build a result from decoded [`Row`]s, deriving column names from the first row
+    ///
+    /// Column type names are unknown (`None`). When `rows` is empty the result
+    /// has no columns.
+    #[must_use]
+    pub fn from_rows(rows: Vec<Row>) -> Self {
+        let columns = rows
+            .first()
+            .map(|row| {
+                row.columns
+                    .iter()
+                    .map(|(name, _)| ResultColumn {
+                        name: name.clone(),
+                        type_name: None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let rows = rows
+            .into_iter()
+            .map(|row| row.columns.into_iter().map(|(_, value)| value).collect())
+            .collect();
+        Self { columns, rows }
+    }
+
+    /// Convert the positional result into name-keyed [`Row`]s
+    #[must_use]
+    pub fn into_rows(self) -> Vec<Row> {
+        let names: Vec<String> = self.columns.into_iter().map(|c| c.name).collect();
+        self.rows
+            .into_iter()
+            .map(|values| Row {
+                columns: names.iter().cloned().zip(values).collect(),
+            })
+            .collect()
     }
 }
 
@@ -1848,12 +2200,12 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// This method queries the appropriate system catalog for each database backend:
     /// - **SQLite**: Queries `sqlite_master` table for table existence
-    /// - **PostgreSQL**: Queries `information_schema.tables` with schema awareness (defaults to 'public')
+    /// - **PostgreSQL**: Queries the catalog for the connection's default schema (`current_schema()`)
     /// - **MySQL**: Queries `information_schema.tables` for current database
     ///
     /// # Backend-Specific Behavior
     ///
-    /// - **PostgreSQL**: Only searches in 'public' schema by default
+    /// - **PostgreSQL**: Only searches the default schema; use [`get_relation_info`](Self::get_relation_info) for others
     /// - **MySQL**: Uses `DATABASE()` function to limit to current database
     /// - **SQLite**: Searches all attached databases
     ///
@@ -1871,7 +2223,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// # Backend-Specific Behavior
     ///
     /// - **`SQLite`**: Queries `sqlite_master` table, excludes tables starting with `sqlite_`
-    /// - **`PostgreSQL`**: Queries `pg_tables` for tables in the 'public' schema
+    /// - **`PostgreSQL`**: Queries tables in the default schema (`current_schema()`)
     /// - **`MySQL`**: Queries `information_schema.tables` for the current database
     ///
     /// # Errors
@@ -1909,14 +2261,14 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// - **Computed/Generated Columns**: Not supported for introspection
     /// - **Complex Default Values**: Function calls and expressions may not parse correctly
-    /// - **Custom Types**: User-defined types map to closest standard type or return `UnsupportedDataType` error
-    /// - **Views**: Only tables are introspected, not views
+    /// - **Custom Types**: Types without a matching variant map to [`schema::DataType::Custom`];
+    ///   [`schema::ColumnInfo::native_type`] always has the exact native type name
+    /// - **Views**: Only tables in the default schema; use [`get_relation_info`](Self::get_relation_info) for views and other schemas
     /// - **Auto-increment Detection**: Limited implementation (`SQLite` requires additional parsing)
     ///
     /// # Errors
     ///
     /// * If the database query fails
-    /// * If an unsupported data type is encountered (`DatabaseError::UnsupportedDataType`)
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
@@ -1948,7 +2300,6 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// # Errors
     ///
     /// * If the database query fails
-    /// * If an unsupported data type is encountered
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
@@ -1977,6 +2328,110 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         table_name: &str,
         column_name: &str,
     ) -> Result<bool, DatabaseError>;
+
+    /// List the schemas (namespaces) visible to the current connection
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_namespace`; `pg_catalog`, `information_schema` and
+    ///   `pg_toast*`/`pg_temp*` are system schemas; the default is `current_schema()`
+    /// * **`MySQL`**: `information_schema.schemata`; `mysql`, `sys`,
+    ///   `performance_schema` and `information_schema` are system schemas; the
+    ///   default is `DATABASE()`
+    /// * **`SQLite`/Turso**: `PRAGMA database_list`; `main` is the default and
+    ///   `temp` is reported as a system schema
+    /// * **`DuckDB`**: `information_schema.schemata` of the current catalog
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot enumerate schemas
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<schema::SchemaInfo>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation("list_schemas".into()))
+    }
+
+    /// List tables, views and other relations in a schema
+    ///
+    /// `schema` of `None` means the connection's default schema. Includes
+    /// tables, views, materialized views and foreign tables where the backend
+    /// supports them. `estimated_rows` is populated from cheap catalog
+    /// statistics only (never a `COUNT(*)`) and may be stale or `None`.
+    ///
+    /// The default implementation only supports the default schema and
+    /// reports [`list_tables`](Self::list_tables) as plain tables.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot list the requested schema
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<schema::RelationSummary>, DatabaseError> {
+        if schema.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "list_relations for a non-default schema".into(),
+            ));
+        }
+        Ok(self
+            .list_tables()
+            .await?
+            .into_iter()
+            .map(|name| schema::RelationSummary {
+                schema: None,
+                name,
+                kind: schema::RelationKind::Table,
+                comment: None,
+                estimated_rows: None,
+            })
+            .collect())
+    }
+
+    /// Get columns, indexes and foreign keys of a table or view in any schema
+    ///
+    /// Returns `None` if the relation doesn't exist. Views report their
+    /// columns; indexes and foreign keys are empty for relations that can't
+    /// have them.
+    ///
+    /// The default implementation only supports the default schema and
+    /// delegates to [`get_table_info`](Self::get_table_info).
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot introspect the requested schema
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &schema::RelationRef,
+    ) -> Result<Option<schema::TableInfo>, DatabaseError> {
+        if relation.schema.is_some() {
+            return Err(DatabaseError::UnsupportedOperation(
+                "get_relation_info for a non-default schema".into(),
+            ));
+        }
+        self.get_table_info(&relation.name).await
+    }
+
+    /// Get the SQL definition of a view or materialized view
+    ///
+    /// Returns `None` if the relation doesn't exist or isn't a view.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot read view definitions
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        _relation: &schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "get_view_definition".into(),
+        ))
+    }
 
     /// Execute raw SQL query and return results
     /// Available on both Database and `DatabaseTransaction` traits for flexibility
@@ -2045,6 +2500,33 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ) -> Result<Vec<Row>, DatabaseError> {
         Err(DatabaseError::UnsupportedOperation(
             "query_raw_params not implemented for this backend".to_string(),
+        ))
+    }
+
+    /// Query raw SQL with parameters and return a positional result set with column metadata
+    ///
+    /// Column order and duplicate column names are preserved. Backends that
+    /// can describe statements populate [`QueryResult::columns`] (including
+    /// native type names) even when no rows are returned.
+    ///
+    /// The default implementation is derived from
+    /// [`query_raw_params`](Self::query_raw_params): column names come from the
+    /// first row, type names are `None`, and columns are empty when no rows are
+    /// returned.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if query fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<QueryResult, DatabaseError> {
+        Ok(QueryResult::from_rows(
+            self.query_raw_params(query, params).await?,
         ))
     }
 
@@ -2786,33 +3268,35 @@ mod tests {
         #[test_log::test]
         fn test_is_null_for_null() {
             let val = DatabaseValue::Null;
-            assert!(val.is_null());
+            assert!(Expression::is_null(&val));
         }
 
         #[test_log::test]
         fn test_is_null_for_opt_none_variants() {
-            assert!(DatabaseValue::BoolOpt(None).is_null());
-            assert!(DatabaseValue::Real64Opt(None).is_null());
-            assert!(DatabaseValue::Real32Opt(None).is_null());
-            assert!(DatabaseValue::StringOpt(None).is_null());
-            assert!(DatabaseValue::Int64Opt(None).is_null());
-            assert!(DatabaseValue::UInt64Opt(None).is_null());
+            assert!(Expression::is_null(&DatabaseValue::BoolOpt(None)));
+            assert!(Expression::is_null(&DatabaseValue::Real64Opt(None)));
+            assert!(Expression::is_null(&DatabaseValue::Real32Opt(None)));
+            assert!(Expression::is_null(&DatabaseValue::StringOpt(None)));
+            assert!(Expression::is_null(&DatabaseValue::Int64Opt(None)));
+            assert!(Expression::is_null(&DatabaseValue::UInt64Opt(None)));
         }
 
         #[test_log::test]
         fn test_is_null_for_opt_some_variants() {
-            assert!(!DatabaseValue::BoolOpt(Some(true)).is_null());
-            assert!(!DatabaseValue::Real64Opt(Some(1.0)).is_null());
+            assert!(!Expression::is_null(&DatabaseValue::BoolOpt(Some(true))));
+            assert!(!Expression::is_null(&DatabaseValue::Real64Opt(Some(1.0))));
             assert!(!DatabaseValue::StringOpt(Some("test".to_string())).is_null());
-            assert!(!DatabaseValue::Int64Opt(Some(42)).is_null());
+            assert!(!Expression::is_null(&DatabaseValue::Int64Opt(Some(42))));
         }
 
         #[test_log::test]
         fn test_is_null_for_non_null_values() {
-            assert!(!DatabaseValue::Bool(true).is_null());
-            assert!(!DatabaseValue::String("test".to_string()).is_null());
-            assert!(!DatabaseValue::Int64(42).is_null());
-            assert!(!DatabaseValue::Now.is_null());
+            assert!(!Expression::is_null(&DatabaseValue::Bool(true)));
+            assert!(!Expression::is_null(&DatabaseValue::String(
+                "test".to_string()
+            )));
+            assert!(!Expression::is_null(&DatabaseValue::Int64(42)));
+            assert!(!Expression::is_null(&DatabaseValue::Now));
         }
 
         #[test_log::test]
@@ -3039,7 +3523,7 @@ mod tests {
         #[test_log::test]
         fn test_is_null_for_real32_opt_variants() {
             // Real32Opt(None) should be null
-            assert!(DatabaseValue::Real32Opt(None).is_null());
+            assert!(Expression::is_null(&DatabaseValue::Real32Opt(None)));
             // Real32Opt(Some) should NOT be null
             assert!(!DatabaseValue::Real32Opt(Some(1.5f32)).is_null());
         }
@@ -3268,6 +3752,110 @@ mod tests {
             let val = DatabaseValue::Real64Opt(Some(std::f64::consts::PI));
             let result: f64 = val.try_into().unwrap();
             assert!((result - std::f64::consts::PI).abs() < 0.00001);
+        }
+    }
+
+    mod new_value_variant_tests {
+        use super::*;
+
+        #[test_log::test]
+        fn is_null_covers_all_null_like_variants() {
+            assert!(DatabaseValue::Null.is_null());
+            assert!(DatabaseValue::BytesOpt(None).is_null());
+            assert!(DatabaseValue::DateOpt(None).is_null());
+            assert!(DatabaseValue::TimeOpt(None).is_null());
+            assert!(DatabaseValue::DateTimeTzOpt(None).is_null());
+            assert!(DatabaseValue::Int16Opt(None).is_null());
+            assert!(!DatabaseValue::Bytes(vec![]).is_null());
+            assert!(!DatabaseValue::String(String::new()).is_null());
+            assert!(
+                !DatabaseValue::Other {
+                    type_name: "interval".into(),
+                    text: "1 day".into(),
+                }
+                .is_null()
+            );
+        }
+
+        #[test_log::test]
+        fn accessors_and_conversions_round_trip() {
+            let date = NaiveDate::from_ymd_opt(2024, 2, 29).unwrap();
+            let time = NaiveTime::from_hms_micro_opt(13, 14, 15, 123_456).unwrap();
+            let tz = DateTime::parse_from_rfc3339("2024-02-29T13:14:15+05:30").unwrap();
+
+            let bytes: DatabaseValue = vec![0_u8, 1, 255].into();
+            assert_eq!(bytes.as_bytes(), Some(&[0_u8, 1, 255][..]));
+            assert_eq!(Vec::<u8>::try_from(bytes).unwrap(), vec![0, 1, 255]);
+            assert_eq!(DatabaseValue::from(&b"ab"[..]).as_bytes(), Some(&b"ab"[..]));
+
+            assert_eq!(DatabaseValue::from(date).as_date(), Some(date));
+            assert_eq!(DatabaseValue::DateOpt(Some(date)).as_date(), Some(date));
+            assert_eq!(
+                NaiveDate::try_from(DatabaseValue::Date(date)).unwrap(),
+                date
+            );
+
+            assert_eq!(DatabaseValue::from(time).as_time(), Some(time));
+            assert_eq!(
+                NaiveTime::try_from(DatabaseValue::Time(time)).unwrap(),
+                time
+            );
+
+            assert_eq!(DatabaseValue::from(tz).as_datetime_tz(), Some(tz));
+            assert_eq!(
+                DateTime::<FixedOffset>::try_from(DatabaseValue::DateTimeTzOpt(Some(tz))).unwrap(),
+                tz
+            );
+            let utc = tz.with_timezone(&chrono::Utc);
+            assert_eq!(DatabaseValue::from(utc).as_datetime_tz(), Some(tz));
+
+            let other = DatabaseValue::Other {
+                type_name: "int4[]".into(),
+                text: "{1,2}".into(),
+            };
+            assert_eq!(other.as_other(), Some(("int4[]", "{1,2}")));
+            assert_eq!(other.as_str(), None);
+            assert!(NaiveDate::try_from(other).is_err());
+        }
+
+        #[cfg(feature = "json")]
+        #[test_log::test]
+        fn json_accessors() {
+            let value = serde_json::json!({"a": [1, 2]});
+            let db_value = DatabaseValue::from(value.clone());
+            assert_eq!(db_value.as_json(), Some(&value));
+            assert!(DatabaseValue::JsonOpt(None).is_null());
+            assert_eq!(serde_json::Value::try_from(db_value).unwrap(), value);
+        }
+
+        #[test_log::test]
+        fn query_result_preserves_order_and_duplicates() {
+            let rows = vec![Row {
+                columns: vec![
+                    ("a".to_string(), DatabaseValue::Int64(1)),
+                    ("a".to_string(), DatabaseValue::Int64(2)),
+                ],
+            }];
+            let result = QueryResult::from_rows(rows.clone());
+            assert_eq!(
+                result.columns,
+                vec![
+                    ResultColumn {
+                        name: "a".into(),
+                        type_name: None,
+                    },
+                    ResultColumn {
+                        name: "a".into(),
+                        type_name: None,
+                    },
+                ]
+            );
+            assert_eq!(
+                result.rows,
+                vec![vec![DatabaseValue::Int64(1), DatabaseValue::Int64(2)]]
+            );
+            assert_eq!(result.into_rows(), rows);
+            assert_eq!(QueryResult::from_rows(vec![]), QueryResult::default());
         }
     }
 }

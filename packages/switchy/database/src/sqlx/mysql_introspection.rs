@@ -31,9 +31,13 @@
 //!
 //! # MySQL-Specific Data Type Mappings
 //!
-//! `MySQL` has extensive data type support. Our mapping to [`DataType`](crate::schema::DataType):
+//! `MySQL` has extensive data type support. Our mapping to [`DataType`](crate::schema::DataType)
+//! is derived from `COLUMN_TYPE` (falling back to `DATA_TYPE`). The exact
+//! `COLUMN_TYPE` (e.g. `int(10) unsigned`, `enum('a','b')`) is always reported in
+//! [`ColumnInfo::native_type`].
 //!
 //! ## Integer Types
+//! - `TINYINT(1)` → `Bool`
 //! - `TINYINT`, `SMALLINT` → `SmallInt` (8-bit, 16-bit)
 //! - `MEDIUMINT`, `INT`, `INTEGER` → `Int` (24-bit, 32-bit)
 //! - `BIGINT` → `BigInt` (64-bit)
@@ -43,34 +47,31 @@
 //! - `DOUBLE`, `REAL` → `Double` (64-bit float)
 //!
 //! ## Fixed Point Types
-//! - `DECIMAL`, `NUMERIC` → `Decimal(38, 10)` (default precision)
+//! - `DECIMAL(p,s)`, `NUMERIC(p,s)` → `Decimal(p, s)` (`Decimal(38, 10)` when unparseable)
 //!
 //! ## String Types
-//! - `CHAR`, `VARCHAR` → `VarChar(length)` or `VarChar(255)` if no length
+//! - `CHAR(n)` → `Char(n)`, `VARCHAR(n)` → `VarChar(n)`
 //! - `TEXT`, `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT` → `Text`
 //!
-//! ## Other Types
-//! - `BOOLEAN`, `BOOL` → `Bool` (stored as `TINYINT(1)`)
-//! - `DATE`, `TIME`, `DATETIME`, `TIMESTAMP` → `DateTime`
+//! ## Binary Types
+//! - `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB` → `Blob`
+//! - `BINARY(n)`, `VARBINARY(n)` → `Binary(Some(n))`
 //!
-//! ## Unsupported Types
-//! Types that generate `UnsupportedDataType` errors:
-//! - `BINARY`, `VARBINARY` (binary data)
-//! - `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB` (binary large objects)
-//! - `BIT` (bit field)
-//! - `ENUM` (enumeration)
-//! - `SET` (set of values)
-//! - `JSON` (`MySQL` 5.7+ JSON type)
-//! - `GEOMETRY` and spatial types
-//! - `YEAR` (year type)
+//! ## Date/Time Types
+//! - `DATE` → `Date`, `TIME` → `Time`, `DATETIME` → `DateTime`, `TIMESTAMP` → `Timestamp`
+//!
+//! ## Other Types
+//! - `JSON` → `Json` (`MariaDB` reports `JSON` columns as `longtext`)
+//! - `BIT`, `ENUM`, `SET`, `YEAR`, `GEOMETRY` and any other type →
+//!   `Custom(column_type)`; introspection never fails on unknown types
 //!
 //! # MySQL-Specific Behavior
 //!
 //! ## Database Scope
-//! `MySQL` is database-aware but not schema-aware (unlike PostgreSQL):
-//! - Uses `DATABASE()` function to limit queries to current database
-//! - No schema concept - tables exist directly in databases
-//! - Introspection limited to currently connected database
+//! `MySQL` databases are reported as schemas:
+//! - The table-oriented methods use `DATABASE()` (the connected database)
+//! - The relation methods accept any database name as the schema
+//! - `information_schema`, `mysql`, `performance_schema` and `sys` are system schemas
 //!
 //! ## Case Sensitivity
 //! Table and column name case sensitivity depends on the filesystem:
@@ -138,68 +139,216 @@ use std::collections::BTreeMap;
 
 use crate::{
     DatabaseError, DatabaseValue,
-    schema::{ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, TableInfo},
+    schema::{
+        ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, RelationKind, RelationRef,
+        RelationSummary, SchemaInfo, TableInfo,
+    },
 };
 
-use sqlx::{MySqlConnection, Row};
+use sqlx::{MySqlConnection, Row, mysql::MySqlRow};
+
+/// Schemas (databases) that `MySQL`/`MariaDB` use for their own catalogs.
+const MYSQL_SYSTEM_SCHEMAS: [&str; 4] =
+    ["information_schema", "mysql", "performance_schema", "sys"];
+
+fn map_err(error: sqlx::Error) -> DatabaseError {
+    DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(error))
+}
+
+/// Whether `name` is a `MySQL`/`MariaDB` system schema.
+fn is_mysql_system_schema(name: &str) -> bool {
+    MYSQL_SYSTEM_SCHEMAS
+        .iter()
+        .any(|system| system.eq_ignore_ascii_case(name))
+}
+
+/// Read an unsigned integer column regardless of the exact integer width/signedness
+/// reported by the server (`MySQL` and `MariaDB` differ in `information_schema` types).
+fn get_lenient_u64(row: &MySqlRow, column: &str) -> Option<u64> {
+    row.try_get::<Option<u64>, _>(column)
+        .ok()
+        .flatten()
+        .or_else(|| {
+            row.try_get::<Option<u32>, _>(column)
+                .ok()
+                .flatten()
+                .map(u64::from)
+        })
+        .or_else(|| {
+            row.try_get::<Option<i64>, _>(column)
+                .ok()
+                .flatten()
+                .and_then(|value| u64::try_from(value).ok())
+        })
+        .or_else(|| {
+            row.try_get::<Option<i32>, _>(column)
+                .ok()
+                .flatten()
+                .and_then(|value| u64::try_from(value).ok())
+        })
+}
+
+fn get_string(row: &MySqlRow, column: &str) -> Result<String, DatabaseError> {
+    row.try_get(column).map_err(map_err)
+}
+
+fn get_opt_string(row: &MySqlRow, column: &str) -> Option<String> {
+    row.try_get::<Option<String>, _>(column).ok().flatten()
+}
+
+/// Map an `information_schema.tables.TABLE_TYPE` value to a [`RelationKind`].
+fn mysql_relation_kind(schema: &str, table_type: &str) -> RelationKind {
+    match table_type.to_ascii_uppercase().as_str() {
+        "BASE TABLE" | "SYSTEM VERSIONED" if is_mysql_system_schema(schema) => {
+            RelationKind::SystemTable
+        }
+        "BASE TABLE" | "SYSTEM VERSIONED" | "TEMPORARY" => RelationKind::Table,
+        "VIEW" => RelationKind::View,
+        "SYSTEM VIEW" => RelationKind::SystemTable,
+        _ => RelationKind::Other(table_type.to_ascii_lowercase()),
+    }
+}
+
+/// Normalize a `TABLE_COMMENT` value (empty comments and `MySQL`'s `VIEW`
+/// placeholder comment on views are reported as `None`).
+fn mysql_relation_comment(kind: &RelationKind, comment: Option<String>) -> Option<String> {
+    comment.filter(|comment| !comment.is_empty() && (!kind.is_view() || comment != "VIEW"))
+}
+
+/// List all databases visible to the connection as schemas
+///
+/// # Errors
+///
+/// * If the `information_schema.schemata` query fails
+pub async fn mysql_sqlx_list_schemas(
+    conn: &mut MySqlConnection,
+) -> Result<Vec<SchemaInfo>, DatabaseError> {
+    let query = "SELECT
+        CAST(SCHEMA_NAME AS CHAR) AS SCHEMA_NAME,
+        CAST(COALESCE(SCHEMA_NAME = DATABASE(), 0) AS SIGNED) AS IS_DEFAULT
+    FROM information_schema.schemata
+    ORDER BY SCHEMA_NAME";
+
+    let rows = sqlx::query(sqlx::AssertSqlSafe(query.to_string()))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(map_err)?;
+
+    rows.iter()
+        .map(|row| {
+            let name = get_string(row, "SCHEMA_NAME")?;
+            let is_default = row.try_get::<i64, _>("IS_DEFAULT").map_err(map_err)? != 0;
+            Ok(SchemaInfo {
+                is_system: is_mysql_system_schema(&name),
+                name,
+                is_default,
+            })
+        })
+        .collect()
+}
+
+/// Fetch relation summaries from `information_schema.tables`, optionally
+/// restricted to a single relation name. `schema` of `None` means `DATABASE()`.
+async fn fetch_relations(
+    conn: &mut MySqlConnection,
+    schema: Option<&str>,
+    name: Option<&str>,
+) -> Result<Vec<RelationSummary>, DatabaseError> {
+    let mut query = "SELECT
+        CAST(TABLE_SCHEMA AS CHAR) AS TABLE_SCHEMA,
+        CAST(TABLE_NAME AS CHAR) AS TABLE_NAME,
+        CAST(TABLE_TYPE AS CHAR) AS TABLE_TYPE,
+        CAST(TABLE_COMMENT AS CHAR) AS TABLE_COMMENT,
+        TABLE_ROWS
+    FROM information_schema.tables
+    WHERE TABLE_SCHEMA = COALESCE(?, DATABASE())"
+        .to_string();
+    if name.is_some() {
+        query.push_str(" AND TABLE_NAME = ?");
+    }
+    query.push_str(" ORDER BY TABLE_NAME");
+
+    let mut statement = sqlx::query(sqlx::AssertSqlSafe(query)).bind(schema);
+    if let Some(name) = name {
+        statement = statement.bind(name);
+    }
+    let rows = statement.fetch_all(&mut *conn).await.map_err(map_err)?;
+
+    rows.iter()
+        .map(|row| {
+            let schema = get_string(row, "TABLE_SCHEMA")?;
+            let table_type = get_opt_string(row, "TABLE_TYPE").unwrap_or_default();
+            let kind = mysql_relation_kind(&schema, &table_type);
+            let comment = mysql_relation_comment(&kind, get_opt_string(row, "TABLE_COMMENT"));
+            let estimated_rows = if kind.is_view() {
+                None
+            } else {
+                get_lenient_u64(row, "TABLE_ROWS")
+            };
+            Ok(RelationSummary {
+                name: get_string(row, "TABLE_NAME")?,
+                schema: Some(schema),
+                kind,
+                comment,
+                estimated_rows,
+            })
+        })
+        .collect()
+}
+
+/// List tables and views in a database (`None` = `DATABASE()`)
+///
+/// # Errors
+///
+/// * If the `information_schema.tables` query fails
+pub async fn mysql_sqlx_list_relations(
+    conn: &mut MySqlConnection,
+    schema: Option<&str>,
+) -> Result<Vec<RelationSummary>, DatabaseError> {
+    fetch_relations(conn, schema, None).await
+}
 
 /// Check if a table exists in the current `MySQL` database
+///
+/// # Errors
+///
+/// * If the `information_schema.tables` query fails
 pub async fn mysql_sqlx_table_exists(
-    conn: &mut sqlx::MySqlConnection,
+    conn: &mut MySqlConnection,
     table_name: &str,
 ) -> Result<bool, DatabaseError> {
     // Note: We don't use LOWER() here because:
     // 1. MySQL's table name case-sensitivity depends on the filesystem and lower_case_table_names setting
     // 2. Using LOWER() with bind parameters can cause issues with collation and query optimization
-    // 3. Most MySQL installations are case-insensitive by default (lower_case_table_names=1 or 2)
-    // 4. The query should match the exact case stored in information_schema
-    let query = "SELECT EXISTS (
-        SELECT 1 FROM information_schema.tables
-        WHERE table_schema = DATABASE() AND table_name = ?
-    )";
-
-    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
-        .bind(table_name)
-        .fetch_one(&mut *conn)
-        .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-    let exists: i64 = row
-        .try_get(0)
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-    Ok(exists != 0)
+    // 3. The query should match the exact case stored in information_schema
+    Ok(!fetch_relations(conn, None, Some(table_name))
+        .await?
+        .is_empty())
 }
 
-/// List all table names in the current `MySQL` database
+/// List all table (and view) names in the current `MySQL` database
+///
+/// # Errors
+///
+/// * If the `information_schema.tables` query fails
 pub async fn mysql_sqlx_list_tables(
     conn: &mut MySqlConnection,
 ) -> Result<Vec<String>, DatabaseError> {
-    let query = "SELECT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY TABLE_NAME";
-
-    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-    let mut tables = Vec::new();
-    for row in rows {
-        let table_name: String = row
-            .try_get("TABLE_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-        tables.push(table_name);
-    }
-
-    Ok(tables)
+    Ok(fetch_relations(conn, None, None)
+        .await?
+        .into_iter()
+        .map(|relation| relation.name)
+        .collect())
 }
 
-/// Get column information for a `MySQL` table
-pub async fn mysql_sqlx_get_table_columns(
-    conn: &mut sqlx::MySqlConnection,
+/// Get column information for a table or view (`schema` of `None` = `DATABASE()`)
+async fn fetch_columns(
+    conn: &mut MySqlConnection,
+    schema: Option<&str>,
     table_name: &str,
 ) -> Result<Vec<ColumnInfo>, DatabaseError> {
     let query = "SELECT
-        COLUMN_NAME,
+        CAST(COLUMN_NAME AS CHAR) AS COLUMN_NAME,
         CAST(DATA_TYPE AS CHAR) AS DATA_TYPE,
         CAST(COLUMN_TYPE AS CHAR) AS COLUMN_TYPE,
         CHARACTER_MAXIMUM_LENGTH,
@@ -209,67 +358,58 @@ pub async fn mysql_sqlx_get_table_columns(
         CAST(EXTRA AS CHAR) AS EXTRA,
         ORDINAL_POSITION
     FROM information_schema.columns
-    WHERE table_schema = DATABASE() AND table_name = ?
+    WHERE TABLE_SCHEMA = COALESCE(?, DATABASE()) AND TABLE_NAME = ?
     ORDER BY ORDINAL_POSITION";
 
-    let rows = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
+    let rows = sqlx::query(sqlx::AssertSqlSafe(query.to_string()))
+        .bind(schema)
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        .map_err(map_err)?;
 
-    // Get primary key columns for this table
-    let pk_query = "SELECT COLUMN_NAME
+    let pk_query = "SELECT CAST(COLUMN_NAME AS CHAR) AS COLUMN_NAME
     FROM information_schema.key_column_usage
-    WHERE table_schema = DATABASE()
-      AND table_name = ?
-      AND constraint_name = 'PRIMARY'";
+    WHERE TABLE_SCHEMA = COALESCE(?, DATABASE())
+      AND TABLE_NAME = ?
+      AND CONSTRAINT_NAME = 'PRIMARY'";
 
-    let pk_rows = sqlx::query(sqlx::AssertSqlSafe((pk_query).to_string()))
+    let pk_rows = sqlx::query(sqlx::AssertSqlSafe(pk_query.to_string()))
+        .bind(schema)
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        .map_err(map_err)?;
 
     let primary_key_columns: Vec<String> = pk_rows
         .iter()
-        .map(|row| row.try_get::<String, _>("COLUMN_NAME").unwrap_or_default())
+        .filter_map(|row| get_opt_string(row, "COLUMN_NAME"))
         .collect();
 
-    let mut columns = Vec::new();
+    let mut columns = Vec::with_capacity(rows.len());
 
     for row in rows {
-        let column_name: String = row
-            .try_get("COLUMN_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        let column_name = get_string(&row, "COLUMN_NAME")?;
+        let data_type_str = get_opt_string(&row, "DATA_TYPE").unwrap_or_default();
+        let column_type_str =
+            get_opt_string(&row, "COLUMN_TYPE").unwrap_or_else(|| data_type_str.clone());
+        let char_max_length = get_lenient_u64(&row, "CHARACTER_MAXIMUM_LENGTH")
+            .and_then(|length| i64::try_from(length).ok());
 
-        let data_type_str: String = row
-            .try_get("DATA_TYPE")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let column_type_str: String = row
-            .try_get("COLUMN_TYPE")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let char_max_length: Option<i64> = row.try_get("CHARACTER_MAXIMUM_LENGTH").ok();
-
-        // Use column_type for more accurate type detection
         let data_type =
             mysql_column_type_to_data_type(&column_type_str, &data_type_str, char_max_length);
 
-        let is_nullable_str: String = row
-            .try_get("IS_NULLABLE")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-        let nullable = is_nullable_str.to_uppercase() == "YES";
+        let nullable = get_opt_string(&row, "IS_NULLABLE")
+            .is_some_and(|value| value.eq_ignore_ascii_case("YES"));
 
-        let ordinal_position: u32 = row
-            .try_get::<u32, _>("ORDINAL_POSITION")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        let ordinal_position = get_lenient_u64(&row, "ORDINAL_POSITION")
+            .and_then(|position| u32::try_from(position).ok())
+            .unwrap_or_default();
 
-        let default_value: Option<String> = row.try_get("COLUMN_DEFAULT").ok();
+        let default_value = get_opt_string(&row, "COLUMN_DEFAULT");
         let parsed_default = default_value.as_deref().and_then(parse_mysql_default_value);
 
-        let extra: String = row.try_get("EXTRA").unwrap_or_default();
+        let extra = get_opt_string(&row, "EXTRA").unwrap_or_default();
         let auto_increment = extra.to_uppercase().contains("AUTO_INCREMENT");
 
         let is_primary_key = primary_key_columns.contains(&column_name);
@@ -282,15 +422,32 @@ pub async fn mysql_sqlx_get_table_columns(
             auto_increment,
             default_value: parsed_default,
             ordinal_position,
+            native_type: column_type_str,
         });
     }
 
     Ok(columns)
 }
 
+/// Get column information for a `MySQL` table in the current database
+///
+/// # Errors
+///
+/// * If the `information_schema` queries fail
+pub async fn mysql_sqlx_get_table_columns(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+) -> Result<Vec<ColumnInfo>, DatabaseError> {
+    fetch_columns(conn, None, table_name).await
+}
+
 /// Check if a column exists in a `MySQL` table
+///
+/// # Errors
+///
+/// * If the `information_schema.columns` query fails
 pub async fn mysql_sqlx_column_exists(
-    conn: &mut sqlx::MySqlConnection,
+    conn: &mut MySqlConnection,
     table_name: &str,
     column_name: &str,
 ) -> Result<bool, DatabaseError> {
@@ -303,85 +460,72 @@ pub async fn mysql_sqlx_column_exists(
         AND column_name = ?
     )";
 
-    let row = sqlx::query(sqlx::AssertSqlSafe((query).to_string()))
+    let row = sqlx::query(sqlx::AssertSqlSafe(query.to_string()))
         .bind(table_name)
         .bind(column_name)
         .fetch_one(&mut *conn)
         .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        .map_err(map_err)?;
 
-    let exists: i64 = row
-        .try_get(0)
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+    let exists: i64 = row.try_get(0).map_err(map_err)?;
 
     Ok(exists != 0)
 }
 
-/// Get comprehensive table information for a `MySQL` table
-pub async fn mysql_sqlx_get_table_info(
-    conn: &mut sqlx::MySqlConnection,
+/// Get index information for a relation
+async fn fetch_indexes(
+    conn: &mut MySqlConnection,
+    schema: Option<&str>,
     table_name: &str,
-) -> Result<Option<TableInfo>, DatabaseError> {
-    // First check if table exists
-    if !mysql_sqlx_table_exists(conn, table_name).await? {
-        return Ok(None);
-    }
-
-    // Get columns
-    let columns = mysql_sqlx_get_table_columns(conn, table_name).await?;
-    let mut columns_map = BTreeMap::new();
-    for column in columns {
-        columns_map.insert(column.name.clone(), column);
-    }
-
-    // Get indexes
-    let index_query = "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME
+) -> Result<BTreeMap<String, IndexInfo>, DatabaseError> {
+    let index_query = "SELECT
+        CAST(INDEX_NAME AS CHAR) AS INDEX_NAME,
+        NON_UNIQUE,
+        CAST(COLUMN_NAME AS CHAR) AS COLUMN_NAME
     FROM information_schema.STATISTICS
-    WHERE table_schema = DATABASE() AND table_name = ?
+    WHERE TABLE_SCHEMA = COALESCE(?, DATABASE()) AND TABLE_NAME = ?
     ORDER BY INDEX_NAME, SEQ_IN_INDEX";
 
-    let index_rows = sqlx::query(sqlx::AssertSqlSafe((index_query).to_string()))
+    let index_rows = sqlx::query(sqlx::AssertSqlSafe(index_query.to_string()))
+        .bind(schema)
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        .map_err(map_err)?;
 
     let mut indexes_map: BTreeMap<String, IndexInfo> = BTreeMap::new();
     for row in index_rows {
-        let index_name: String = row
-            .try_get("INDEX_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        let index_name = get_string(&row, "INDEX_NAME")?;
+        let non_unique = get_lenient_u64(&row, "NON_UNIQUE").unwrap_or(1);
+        // Functional index parts have a NULL column name
+        let Some(column_name) = get_opt_string(&row, "COLUMN_NAME") else {
+            continue;
+        };
 
-        let non_unique: i64 = row
-            .try_get("NON_UNIQUE")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let column_name: String = row
-            .try_get("COLUMN_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let is_primary = index_name == "PRIMARY";
-        let unique = non_unique == 0;
-
-        if let Some(existing_index) = indexes_map.get_mut(&index_name) {
-            existing_index.columns.push(column_name);
-        } else {
-            indexes_map.insert(
-                index_name.clone(),
-                IndexInfo {
-                    name: index_name,
-                    unique,
-                    columns: vec![column_name],
-                    is_primary,
-                },
-            );
-        }
+        indexes_map
+            .entry(index_name.clone())
+            .or_insert_with(|| IndexInfo {
+                is_primary: index_name == "PRIMARY",
+                name: index_name,
+                unique: non_unique == 0,
+                columns: vec![],
+            })
+            .columns
+            .push(column_name);
     }
 
-    // Get foreign keys
+    Ok(indexes_map)
+}
+
+/// Get foreign key information for a relation
+async fn fetch_foreign_keys(
+    conn: &mut MySqlConnection,
+    schema: Option<&str>,
+    table_name: &str,
+) -> Result<BTreeMap<String, ForeignKeyInfo>, DatabaseError> {
     let fk_query = "SELECT
         CAST(kcu.CONSTRAINT_NAME AS CHAR) AS CONSTRAINT_NAME,
-        kcu.COLUMN_NAME,
+        CAST(kcu.COLUMN_NAME AS CHAR) AS COLUMN_NAME,
         CAST(kcu.REFERENCED_TABLE_NAME AS CHAR) AS REFERENCED_TABLE_NAME,
         CAST(kcu.REFERENCED_COLUMN_NAME AS CHAR) AS REFERENCED_COLUMN_NAME,
         CAST(rc.UPDATE_RULE AS CHAR) AS UPDATE_RULE,
@@ -390,79 +534,146 @@ pub async fn mysql_sqlx_get_table_info(
     JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
         ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
         AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
-    WHERE kcu.table_schema = DATABASE()
-      AND kcu.table_name = ?
+    WHERE kcu.TABLE_SCHEMA = COALESCE(?, DATABASE())
+      AND kcu.TABLE_NAME = ?
       AND kcu.REFERENCED_TABLE_NAME IS NOT NULL";
 
-    let fk_rows = sqlx::query(sqlx::AssertSqlSafe((fk_query).to_string()))
+    let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.to_string()))
+        .bind(schema)
         .bind(table_name)
         .fetch_all(&mut *conn)
         .await
-        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        .map_err(map_err)?;
 
     let mut foreign_keys_map = BTreeMap::new();
     for row in fk_rows {
-        let constraint_name: String = row
-            .try_get("CONSTRAINT_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let column_name: String = row
-            .try_get("COLUMN_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let referenced_table: String = row
-            .try_get("REFERENCED_TABLE_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let referenced_column: String = row
-            .try_get("REFERENCED_COLUMN_NAME")
-            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
-
-        let update_rule: Option<String> = row.try_get("UPDATE_RULE").ok();
-        let delete_rule: Option<String> = row.try_get("DELETE_RULE").ok();
-
+        let constraint_name = get_string(&row, "CONSTRAINT_NAME")?;
         foreign_keys_map.insert(
             constraint_name.clone(),
             ForeignKeyInfo {
                 name: constraint_name,
-                column: column_name,
-                referenced_table,
-                referenced_column,
-                on_update: update_rule,
-                on_delete: delete_rule,
+                column: get_string(&row, "COLUMN_NAME")?,
+                referenced_table: get_string(&row, "REFERENCED_TABLE_NAME")?,
+                referenced_column: get_string(&row, "REFERENCED_COLUMN_NAME")?,
+                on_update: get_opt_string(&row, "UPDATE_RULE"),
+                on_delete: get_opt_string(&row, "DELETE_RULE"),
             },
         );
     }
 
+    Ok(foreign_keys_map)
+}
+
+/// Get columns, indexes and foreign keys of a table or view in any database
+///
+/// # Errors
+///
+/// * If the `information_schema` queries fail
+pub async fn mysql_sqlx_get_relation_info(
+    conn: &mut MySqlConnection,
+    relation: &RelationRef,
+) -> Result<Option<TableInfo>, DatabaseError> {
+    let schema = relation.schema.as_deref();
+    let Some(summary) = fetch_relations(conn, schema, Some(&relation.name))
+        .await?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+
+    // Use the resolved names so later queries don't depend on DATABASE() again
+    let resolved_schema = summary.schema.as_deref().or(schema);
+    let columns = fetch_columns(conn, resolved_schema, &summary.name)
+        .await?
+        .into_iter()
+        .map(|column| (column.name.clone(), column))
+        .collect();
+    let indexes = fetch_indexes(conn, resolved_schema, &summary.name).await?;
+    let foreign_keys = fetch_foreign_keys(conn, resolved_schema, &summary.name).await?;
+
     Ok(Some(TableInfo {
-        name: table_name.to_string(),
-        columns: columns_map,
-        indexes: indexes_map,
-        foreign_keys: foreign_keys_map,
+        name: summary.name,
+        schema: summary.schema,
+        kind: summary.kind,
+        comment: summary.comment,
+        columns,
+        indexes,
+        foreign_keys,
     }))
 }
 
-/// Map `MySQL` data types to our `DataType` enum
-fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i64>) -> DataType {
-    match mysql_type.to_uppercase().as_str() {
+/// Get comprehensive table information for a `MySQL` table in the current database
+///
+/// # Errors
+///
+/// * If the `information_schema` queries fail
+pub async fn mysql_sqlx_get_table_info(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+) -> Result<Option<TableInfo>, DatabaseError> {
+    mysql_sqlx_get_relation_info(conn, &RelationRef::new(table_name)).await
+}
+
+/// Get the `SELECT` text of a view from `information_schema.views`
+///
+/// Returns `None` if the relation isn't a view. `MySQL` reports an empty
+/// definition when the user lacks the `SHOW VIEW` privilege.
+///
+/// # Errors
+///
+/// * If the `information_schema.views` query fails
+pub async fn mysql_sqlx_get_view_definition(
+    conn: &mut MySqlConnection,
+    relation: &RelationRef,
+) -> Result<Option<String>, DatabaseError> {
+    let query = "SELECT CAST(VIEW_DEFINITION AS CHAR) AS VIEW_DEFINITION
+    FROM information_schema.views
+    WHERE TABLE_SCHEMA = COALESCE(?, DATABASE()) AND TABLE_NAME = ?";
+
+    let row = sqlx::query(sqlx::AssertSqlSafe(query.to_string()))
+        .bind(relation.schema.as_deref())
+        .bind(&relation.name)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(map_err)?;
+
+    Ok(row.map(|row| get_opt_string(&row, "VIEW_DEFINITION").unwrap_or_default()))
+}
+
+/// Parse the first `(a)` or `(a,b)` numeric arguments from a column type
+fn type_args(column_type: &str) -> Vec<u32> {
+    column_type
+        .find('(')
+        .and_then(|start| {
+            column_type[start + 1..]
+                .find(')')
+                .map(|end| &column_type[start + 1..start + 1 + end])
+        })
+        .map(|args| {
+            args.split(',')
+                .filter_map(|arg| arg.trim().parse::<u32>().ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Map `MySQL` `DATA_TYPE` values to our `DataType` enum
+fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i64>) -> Option<DataType> {
+    let length = || {
+        char_max_length
+            .filter(|length| *length > 0)
+            .and_then(|length| u16::try_from(length).ok())
+    };
+    Some(match mysql_type.to_ascii_uppercase().as_str() {
         "TINYINT" | "SMALLINT" => DataType::SmallInt,
         "MEDIUMINT" | "INT" | "INTEGER" => DataType::Int,
         "BIGINT" => DataType::BigInt,
         "FLOAT" => DataType::Real,
-        "DOUBLE" | "REAL" => DataType::Double,
+        "DOUBLE" | "REAL" | "DOUBLE PRECISION" => DataType::Double,
         "DECIMAL" | "NUMERIC" => DataType::Decimal(38, 10),
-        "CHAR" => match char_max_length {
-            Some(length) if length > 0 && length <= i64::from(u16::MAX) => {
-                DataType::Char(u16::try_from(length).unwrap_or(1))
-            }
-            _ => DataType::Char(1),
-        },
-        "VARCHAR" => match char_max_length {
-            Some(length) if length > 0 && length <= i64::from(u16::MAX) => {
-                DataType::VarChar(u16::try_from(length).unwrap_or(255))
-            }
-            _ => DataType::VarChar(255),
-        },
+        "CHAR" => DataType::Char(length().unwrap_or(1)),
+        "VARCHAR" => DataType::VarChar(length().unwrap_or(255)),
         "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => DataType::Text,
         "BOOLEAN" | "BOOL" => DataType::Bool,
         "DATE" => DataType::Date,
@@ -472,41 +683,56 @@ fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i64>) -> Da
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => DataType::Blob,
         "BINARY" | "VARBINARY" => DataType::Binary(None),
         "JSON" => DataType::Json,
-        _ => DataType::Custom(mysql_type.to_string()),
-    }
+        "UUID" => DataType::Uuid,
+        "INET4" | "INET6" => DataType::Inet,
+        _ => return None,
+    })
 }
 
-/// Convert `MySQL` `COLUMN_TYPE` to `DataType` (more accurate than `DATA_TYPE` for boolean and sized types)
+/// Convert `MySQL` `COLUMN_TYPE` to `DataType` (more accurate than `DATA_TYPE` for
+/// boolean and sized types). Unknown types map to `DataType::Custom(column_type)`.
 fn mysql_column_type_to_data_type(
     column_type: &str,
     data_type: &str,
     char_max_length: Option<i64>,
 ) -> DataType {
-    let column_type_upper = column_type.to_uppercase();
+    let column_type_upper = column_type.trim().to_ascii_uppercase();
+    let base = column_type_upper
+        .split(['(', ' '])
+        .next()
+        .unwrap_or_default();
+    let args = type_args(&column_type_upper);
 
-    // Handle BOOLEAN as TINYINT(1)
-    if column_type_upper == "TINYINT(1)" {
-        return DataType::Bool;
+    match (base, args.as_slice()) {
+        // BOOLEAN is stored as TINYINT(1)
+        ("TINYINT", [1]) if column_type_upper == "TINYINT(1)" => return DataType::Bool,
+        ("VARCHAR", [length]) => {
+            if let Ok(length) = u16::try_from(*length) {
+                return DataType::VarChar(length);
+            }
+        }
+        ("CHAR", [length]) => {
+            if let Ok(length) = u16::try_from(*length) {
+                return DataType::Char(length);
+            }
+        }
+        ("DECIMAL" | "NUMERIC", [precision, scale]) => {
+            if let (Ok(precision), Ok(scale)) = (u8::try_from(*precision), u8::try_from(*scale)) {
+                return DataType::Decimal(precision, scale);
+            }
+        }
+        ("DECIMAL" | "NUMERIC", [precision]) => {
+            if let Ok(precision) = u8::try_from(*precision) {
+                return DataType::Decimal(precision, 0);
+            }
+        }
+        ("BINARY" | "VARBINARY", [length]) => return DataType::Binary(Some(*length)),
+        _ => {}
     }
 
-    // Extract length from VARCHAR(n) in COLUMN_TYPE
-    if column_type_upper.starts_with("VARCHAR(")
-        && let Some(end) = column_type.find(')')
-        && let Ok(len) = column_type[8..end].parse::<u16>()
-    {
-        return DataType::VarChar(len);
-    }
-
-    // Extract length from CHAR(n) in COLUMN_TYPE
-    if column_type_upper.starts_with("CHAR(")
-        && let Some(end) = column_type.find(')')
-        && let Ok(len) = column_type[5..end].parse::<u16>()
-    {
-        return DataType::Char(len);
-    }
-
-    // Fall back to original type mapping
     mysql_type_to_data_type(data_type, char_max_length)
+        .or_else(|| mysql_type_to_data_type(base, char_max_length))
+        .unwrap_or_else(|| DataType::Custom(column_type.to_string()))
 }
 
 /// Parse `MySQL` default values into `DatabaseValue`
@@ -517,7 +743,7 @@ fn parse_mysql_default_value(default_str: &str) -> Option<DatabaseValue> {
 
     // Handle MySQL specific defaults
     match default_str.to_uppercase().as_str() {
-        "CURRENT_TIMESTAMP" | "NOW()" => Some(DatabaseValue::Now),
+        "CURRENT_TIMESTAMP" | "CURRENT_TIMESTAMP()" | "NOW()" => Some(DatabaseValue::Now),
         _ => {
             // Handle quoted string literals
             if default_str.starts_with('\'') && default_str.ends_with('\'') {
@@ -537,5 +763,105 @@ fn parse_mysql_default_value(default_str: &str) -> Option<DatabaseValue> {
             // For other complex expressions, return None
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn map(column_type: &str, data_type: &str) -> DataType {
+        mysql_column_type_to_data_type(column_type, data_type, None)
+    }
+
+    #[test]
+    fn maps_column_types() {
+        assert_eq!(map("tinyint(1)", "tinyint"), DataType::Bool);
+        assert_eq!(map("tinyint(4)", "tinyint"), DataType::SmallInt);
+        assert_eq!(map("int(10) unsigned", "int"), DataType::Int);
+        assert_eq!(map("bigint unsigned", "bigint"), DataType::BigInt);
+        assert_eq!(map("varchar(255)", "varchar"), DataType::VarChar(255));
+        assert_eq!(map("char(3)", "char"), DataType::Char(3));
+        assert_eq!(map("decimal(10,2)", "decimal"), DataType::Decimal(10, 2));
+        assert_eq!(map("decimal(8)", "decimal"), DataType::Decimal(8, 0));
+        assert_eq!(
+            map("varbinary(16)", "varbinary"),
+            DataType::Binary(Some(16))
+        );
+        assert_eq!(map("longblob", "longblob"), DataType::Blob);
+        assert_eq!(map("date", "date"), DataType::Date);
+        assert_eq!(map("time(3)", "time"), DataType::Time);
+        assert_eq!(map("datetime(6)", "datetime"), DataType::DateTime);
+        assert_eq!(map("timestamp", "timestamp"), DataType::Timestamp);
+        assert_eq!(map("json", "json"), DataType::Json);
+        assert_eq!(map("double", "double"), DataType::Double);
+        assert_eq!(map("float", "float"), DataType::Real);
+    }
+
+    #[test]
+    fn unknown_types_map_to_custom_native_type() {
+        assert_eq!(
+            map("enum('a','b')", "enum"),
+            DataType::Custom("enum('a','b')".to_string())
+        );
+        assert_eq!(
+            map("set('x')", "set"),
+            DataType::Custom("set('x')".to_string())
+        );
+        assert_eq!(map("bit(8)", "bit"), DataType::Custom("bit(8)".to_string()));
+        assert_eq!(map("year", "year"), DataType::Custom("year".to_string()));
+        assert_eq!(
+            map("geometry", "geometry"),
+            DataType::Custom("geometry".to_string())
+        );
+        assert_eq!(map("", ""), DataType::Custom(String::new()));
+    }
+
+    #[test]
+    fn relation_kinds_and_comments() {
+        assert_eq!(
+            mysql_relation_kind("app", "BASE TABLE"),
+            RelationKind::Table
+        );
+        assert_eq!(mysql_relation_kind("app", "VIEW"), RelationKind::View);
+        assert_eq!(
+            mysql_relation_kind("information_schema", "SYSTEM VIEW"),
+            RelationKind::SystemTable
+        );
+        assert_eq!(
+            mysql_relation_kind("mysql", "BASE TABLE"),
+            RelationKind::SystemTable
+        );
+        assert_eq!(
+            mysql_relation_kind("app", "SEQUENCE"),
+            RelationKind::Other("sequence".to_string())
+        );
+        assert_eq!(
+            mysql_relation_comment(&RelationKind::View, Some("VIEW".to_string())),
+            None
+        );
+        assert_eq!(
+            mysql_relation_comment(&RelationKind::Table, Some(String::new())),
+            None
+        );
+        assert_eq!(
+            mysql_relation_comment(&RelationKind::Table, Some("users".to_string())),
+            Some("users".to_string())
+        );
+        assert!(is_mysql_system_schema("PERFORMANCE_SCHEMA"));
+        assert!(!is_mysql_system_schema("app"));
+    }
+
+    #[test]
+    fn parses_defaults() {
+        assert_eq!(
+            parse_mysql_default_value("current_timestamp()"),
+            Some(DatabaseValue::Now)
+        );
+        assert_eq!(
+            parse_mysql_default_value("'abc'"),
+            Some(DatabaseValue::String("abc".to_string()))
+        );
+        assert_eq!(parse_mysql_default_value("NULL"), None);
     }
 }

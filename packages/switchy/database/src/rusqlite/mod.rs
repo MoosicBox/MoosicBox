@@ -757,7 +757,9 @@ pub enum RusqliteDatabaseError {
     /// Error from the underlying `rusqlite` driver
     #[error(transparent)]
     Rusqlite(#[from] rusqlite::Error),
-    /// A BLOB result requires a bounded or explicitly cast projection.
+    /// A typed query-builder BLOB result requires a bounded or explicitly cast projection.
+    ///
+    /// Raw SQL queries decode BLOBs as [`DatabaseValue::Bytes`] instead.
     #[error("BLOB result is unsupported; use a typed bounded projection")]
     UnsupportedBlob,
     /// Returned row did not contain an ID column
@@ -1427,6 +1429,49 @@ impl Database for RusqliteDatabase {
         rusqlite_column_exists(&*connection.lock().await, table_name, column_name)
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_list_schemas(&*connection.lock().await)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_list_relations(&*connection.lock().await, schema)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_get_relation_info(&*connection.lock().await, relation)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_get_view_definition(&*connection.lock().await, relation)
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_query_raw_result(&*connection.lock().await, query, params)
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1928,6 +1973,44 @@ impl Database for RusqliteTransaction {
         rusqlite_column_exists(&*self.connection.lock().await, table_name, column_name)
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        rusqlite_list_schemas(&*self.connection.lock().await)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        rusqlite_list_relations(&*self.connection.lock().await, schema)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        rusqlite_get_relation_info(&*self.connection.lock().await, relation)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        rusqlite_get_view_definition(&*self.connection.lock().await, relation)
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        rusqlite_query_raw_result(&*self.connection.lock().await, query, params)
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -2238,12 +2321,23 @@ impl From<Value> for DatabaseValue {
             Value::Integer(value) => Self::Int64(value),
             Value::Real(value) => Self::Real64(value),
             Value::Text(value) => Self::String(value),
-            Value::Blob(_value) => unimplemented!("Blob types are not supported yet"),
+            Value::Blob(value) => Self::Bytes(value),
         }
     }
 }
 
-fn from_row(_column_names: &[String], row: &Row<'_>) -> Result<crate::Row, RusqliteDatabaseError> {
+fn from_row(column_names: &[String], row: &Row<'_>) -> Result<crate::Row, RusqliteDatabaseError> {
+    from_row_inner(column_names, row, false)
+}
+
+/// Decode a row. Typed query-builder results reject unbounded BLOBs (callers must
+/// use a bounded or cast projection); raw SQL results decode BLOBs as
+/// [`DatabaseValue::Bytes`].
+fn from_row_inner(
+    _column_names: &[String],
+    row: &Row<'_>,
+    allow_blobs: bool,
+) -> Result<crate::Row, RusqliteDatabaseError> {
     // SQLite may reprepare a cached statement when it is stepped after a schema change.
     // Read metadata from the stepped row, not the statement before execution.
     let columns = row
@@ -2253,7 +2347,7 @@ fn from_row(_column_names: &[String], row: &Row<'_>) -> Result<crate::Row, Rusql
         .enumerate()
         .map(|(index, name)| {
             let value = row.get::<_, Value>(index)?;
-            if matches!(value, Value::Blob(_)) {
+            if !allow_blobs && matches!(value, Value::Blob(_)) {
                 return Err(RusqliteDatabaseError::UnsupportedBlob);
             }
             Ok((name.to_owned(), value.into()))
@@ -2462,6 +2556,11 @@ fn rusqlite_exec_create_table(
                     query.push('\'');
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                other => {
+                    let literal = crate::sqlite_common::sqlite_literal_for_value(other)
+                        .unwrap_or_else(|| "NULL".to_string());
+                    query.push_str(&literal);
                 }
             }
         }
@@ -3449,6 +3548,8 @@ fn modify_create_table_sql(
             crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
             crate::DatabaseValue::NowPlus(_) => return Err(RusqliteDatabaseError::InvalidRequest),
+            other => crate::sqlite_common::sqlite_literal_for_value(other)
+                .ok_or(RusqliteDatabaseError::InvalidRequest)?,
         };
 
         write!(new_column_def, " DEFAULT {default_str}").unwrap();
@@ -4184,6 +4285,56 @@ fn bind_values_inner(
                         i += 1;
                     }
                 }
+                DatabaseValue::Bytes(value) | DatabaseValue::BytesOpt(Some(value)) => {
+                    statement.raw_bind_parameter(i, value.as_slice())?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::BytesOpt(None)
+                | DatabaseValue::DateOpt(None)
+                | DatabaseValue::TimeOpt(None)
+                | DatabaseValue::DateTimeTzOpt(None) => {
+                    // Bind NULL unless the query builder already inlined it.
+                    if bind_nulls || !crate::query::Expression::is_null(&**value) {
+                        statement.raw_bind_parameter(i, rusqlite::types::Null)?;
+                        if !constant_inc {
+                            i += 1;
+                        }
+                    }
+                }
+                #[cfg(feature = "json")]
+                DatabaseValue::JsonOpt(None) => {
+                    if bind_nulls || !crate::query::Expression::is_null(&**value) {
+                        statement.raw_bind_parameter(i, rusqlite::types::Null)?;
+                        if !constant_inc {
+                            i += 1;
+                        }
+                    }
+                }
+                #[cfg(feature = "json")]
+                DatabaseValue::Json(_) | DatabaseValue::JsonOpt(Some(_)) => {
+                    let text =
+                        crate::sqlite_common::sqlite_text_for_value(value).unwrap_or_default();
+                    statement.raw_bind_parameter(i, text)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Date(_)
+                | DatabaseValue::DateOpt(Some(_))
+                | DatabaseValue::Time(_)
+                | DatabaseValue::TimeOpt(Some(_))
+                | DatabaseValue::DateTimeTz(_)
+                | DatabaseValue::DateTimeTzOpt(Some(_))
+                | DatabaseValue::Other { .. } => {
+                    let text =
+                        crate::sqlite_common::sqlite_text_for_value(value).unwrap_or_default();
+                    statement.raw_bind_parameter(i, text)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
             }
             if constant_inc {
                 i += 1;
@@ -4195,14 +4346,93 @@ fn bind_values_inner(
     }
 }
 
+/// Execute a raw parameterized query, returning positional rows with column metadata.
+///
+/// Column names and declared types come from the prepared statement, so they are
+/// present even when no rows are returned.
+#[cfg(feature = "raw-sql")]
+fn rusqlite_query_raw_result(
+    connection: &Connection,
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<crate::QueryResult, DatabaseError> {
+    let (transformed_query, filtered_params) = sqlite_transform_query_for_params(query, params)?;
+
+    let mut stmt = connection
+        .prepare(&transformed_query)
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    let rusqlite_params: Vec<RusqliteDatabaseValue> =
+        filtered_params.iter().map(|p| p.clone().into()).collect();
+    bind_values_raw(&mut stmt, Some(&rusqlite_params), 0)
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    let mut columns: Vec<crate::ResultColumn> = stmt
+        .columns()
+        .iter()
+        .map(|column| crate::ResultColumn {
+            name: column.name().to_string(),
+            type_name: column.decl_type().map(ToString::to_string),
+        })
+        .collect();
+
+    let mut rows = stmt.raw_query();
+    let mut result_rows = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
+    {
+        // A cached statement may be reprepared after a schema change; refresh names.
+        if result_rows.is_empty() {
+            let stmt_ref = row.as_ref();
+            if stmt_ref.column_count() != columns.len() {
+                columns = stmt_ref
+                    .column_names()
+                    .into_iter()
+                    .map(|name| crate::ResultColumn {
+                        name: name.to_string(),
+                        type_name: None,
+                    })
+                    .collect();
+            }
+        }
+        let values = (0..columns.len())
+            .map(|index| row.get::<_, Value>(index).map(DatabaseValue::from))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+        result_rows.push(values);
+    }
+
+    Ok(crate::QueryResult {
+        columns,
+        rows: result_rows,
+    })
+}
+
 fn to_rows(
     column_names: &[String],
+    rows: Rows<'_>,
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    to_rows_inner(column_names, rows, false)
+}
+
+/// Like [`to_rows`], but decodes BLOB values as [`DatabaseValue::Bytes`] (raw SQL paths).
+fn to_rows_raw(
+    column_names: &[String],
+    rows: Rows<'_>,
+) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
+    to_rows_inner(column_names, rows, true)
+}
+
+fn to_rows_inner(
+    column_names: &[String],
     mut rows: Rows<'_>,
+    allow_blobs: bool,
 ) -> Result<Vec<crate::Row>, RusqliteDatabaseError> {
     let mut results = vec![];
 
     while let Some(row) = rows.next()? {
-        results.push(from_row(column_names, row)?);
+        results.push(from_row_inner(column_names, row, allow_blobs)?);
     }
 
     log::trace!(
@@ -5154,54 +5384,26 @@ fn rusqlite_list_tables(connection: &Connection) -> Result<Vec<String>, Database
 }
 
 #[cfg(feature = "schema")]
-fn sqlite_type_to_data_type(sqlite_type: &str) -> crate::schema::DataType {
-    let normalized_type = sqlite_type.to_uppercase();
-
-    match normalized_type.as_str() {
-        "INTEGER" => crate::schema::DataType::BigInt,
-        "TEXT" => crate::schema::DataType::Text,
-        "REAL" | "DOUBLE" | "FLOAT" => crate::schema::DataType::Double,
-        "BLOB" => crate::schema::DataType::Blob,
-        "BOOLEAN" | "BOOL" => crate::schema::DataType::Bool,
-        "DATE" => crate::schema::DataType::Date,
-        "DATETIME" => crate::schema::DataType::DateTime,
-        "TIMESTAMP" => crate::schema::DataType::Timestamp,
-        "JSON" => crate::schema::DataType::Json,
-        _ => crate::schema::DataType::Custom(sqlite_type.to_string()),
-    }
-}
-
-#[cfg(feature = "schema")]
-fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseValue> {
-    default_str.and_then(|s| {
-        if s == "NULL" {
-            Some(crate::DatabaseValue::Null)
-        } else if s.starts_with('\'') && s.ends_with('\'') {
-            // String literal
-            let content = &s[1..s.len() - 1];
-            Some(crate::DatabaseValue::String(content.to_string()))
-        } else if let Ok(num) = s.parse::<i64>() {
-            Some(crate::DatabaseValue::Int64(num))
-        } else if let Ok(real) = s.parse::<f64>() {
-            Some(crate::DatabaseValue::Real64(real))
-        } else if s == "0" || s.to_uppercase() == "FALSE" {
-            Some(crate::DatabaseValue::Bool(false))
-        } else if s == "1" || s.to_uppercase() == "TRUE" {
-            Some(crate::DatabaseValue::Bool(true))
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(feature = "schema")]
 fn rusqlite_get_table_columns(
     connection: &Connection,
     table_name: &str,
 ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-    use crate::schema::ColumnInfo;
+    rusqlite_get_relation_columns(connection, None, table_name)
+}
 
-    let query = format!("PRAGMA table_info(\"{}\")", table_name.replace('"', "\"\""));
+/// Columns of a table or view. `schema` of `None` uses unqualified PRAGMA lookup.
+#[cfg(feature = "schema")]
+fn rusqlite_get_relation_columns(
+    connection: &Connection,
+    schema: Option<&str>,
+    table_name: &str,
+) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+    use crate::schema::ColumnInfo;
+    use crate::sqlite_common::{
+        sqlite_parse_default_value, sqlite_pragma_sql, sqlite_type_to_data_type,
+    };
+
+    let query = sqlite_pragma_sql(schema, "table_info", table_name);
     let mut stmt = connection
         .prepare_cached(&query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -5209,39 +5411,47 @@ fn rusqlite_get_table_columns(
     let column_rows = stmt
         .query_map([], |row| {
             Ok((
-                row.get::<_, u32>(0)?,            // cid (ordinal position)
-                row.get::<_, String>(1)?,         // name
-                row.get::<_, String>(2)?,         // type
-                row.get::<_, bool>(3)?,           // notnull
-                row.get::<_, Option<String>>(4)?, // dflt_value
-                row.get::<_, bool>(5)?,           // pk (primary key)
+                row.get::<_, u32>(0)?,                                // cid (ordinal position)
+                row.get::<_, String>(1)?,                             // name
+                row.get::<_, Option<String>>(2)?.unwrap_or_default(), // declared type
+                row.get::<_, bool>(3)?,                               // notnull
+                row.get::<_, Option<String>>(4)?,                     // dflt_value
+                row.get::<_, bool>(5)?,                               // pk (primary key)
             ))
         })
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     let mut columns = Vec::new();
+    let mut create_sql: Option<Option<String>> = None;
 
     for column_result in column_rows {
         let (ordinal, name, type_str, not_null, default_value, is_pk) =
             column_result.map_err(RusqliteDatabaseError::Rusqlite)?;
 
-        let data_type = sqlite_type_to_data_type(&type_str);
-        let default_val = parse_default_value(default_value);
-
         let auto_increment = if is_pk {
             // Check if this column has AUTOINCREMENT in the CREATE TABLE statement
-            check_sqlite_autoincrement(connection, table_name, &name)?
+            if create_sql.is_none() {
+                create_sql = Some(
+                    rusqlite_catalog_entry(connection, schema, table_name)?
+                        .and_then(|(_, sql)| sql),
+                );
+            }
+            create_sql
+                .as_ref()
+                .and_then(Option::as_deref)
+                .is_some_and(|sql| crate::sqlite_common::sqlite_sql_has_autoincrement(sql, &name))
         } else {
             false
         };
 
         columns.push(ColumnInfo {
+            data_type: sqlite_type_to_data_type(&type_str),
+            native_type: type_str,
             name,
-            data_type,
             nullable: !not_null,
             is_primary_key: is_pk,
             auto_increment,
-            default_value: default_val,
+            default_value: sqlite_parse_default_value(default_value.as_deref()),
             ordinal_position: ordinal + 1, // Convert 0-based to 1-based
         });
     }
@@ -5249,56 +5459,104 @@ fn rusqlite_get_table_columns(
     Ok(columns)
 }
 
+/// Look up a table or view in the catalog of `schema`, returning its `type` and `sql`.
 #[cfg(feature = "schema")]
-fn check_sqlite_autoincrement(
+fn rusqlite_catalog_entry(
     connection: &Connection,
-    table_name: &str,
-    column_name: &str,
-) -> Result<bool, RusqliteDatabaseError> {
+    schema: Option<&str>,
+    name: &str,
+) -> Result<Option<(String, Option<String>)>, DatabaseError> {
     use rusqlite::OptionalExtension as _;
 
-    // Query the CREATE TABLE statement from sqlite_master
-    let query = "SELECT sql FROM sqlite_master WHERE type='table' AND name=?";
+    let query = format!(
+        "SELECT type, sql FROM {} WHERE type IN ('table', 'view') AND name = ?",
+        crate::sqlite_common::sqlite_catalog_table_for(schema)
+    );
     let mut stmt = connection
-        .prepare_cached(query)
+        .prepare_cached(&query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    let sql: Option<String> = stmt
-        .query_row([table_name], |row| row.get(0))
+    Ok(stmt
+        .query_row([name], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })
         .optional()
+        .map_err(RusqliteDatabaseError::Rusqlite)?)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_list_schemas(
+    connection: &Connection,
+) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+    let mut stmt = connection
+        .prepare(crate::sqlite_common::SQLITE_LIST_SCHEMAS_SQL)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    if let Some(create_sql) = sql {
-        // Parse the CREATE TABLE statement for AUTOINCREMENT
-        // Look for pattern: column_name TYPE PRIMARY KEY AUTOINCREMENT
-        let normalized_sql = create_sql.to_uppercase();
-        let normalized_column = column_name.to_uppercase();
-
-        // Find the column definition
-        if let Some(column_start) = normalized_sql.find(&normalized_column) {
-            // Get the portion from the column name onwards
-            let column_portion = &normalized_sql[column_start..];
-
-            // Look for PRIMARY KEY followed by AUTOINCREMENT
-            if column_portion.contains("PRIMARY KEY") {
-                // Find PRIMARY KEY position relative to column start
-                if let Some(pk_pos) = column_portion.find("PRIMARY KEY") {
-                    // Get text after PRIMARY KEY
-                    let after_pk = &column_portion[pk_pos + "PRIMARY KEY".len()..];
-
-                    // Check if AUTOINCREMENT appears before the next comma or closing paren
-                    let end_pos = after_pk
-                        .find(',')
-                        .unwrap_or_else(|| after_pk.find(')').unwrap_or(after_pk.len()));
-                    let column_rest = &after_pk[..end_pos];
-
-                    return Ok(column_rest.contains("AUTOINCREMENT"));
-                }
-            }
-        }
+    let names = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let mut schemas = Vec::new();
+    for name in names {
+        let name = name.map_err(RusqliteDatabaseError::Rusqlite)?;
+        schemas.push(crate::sqlite_common::sqlite_schema_info(&name));
     }
+    Ok(schemas)
+}
 
-    Ok(false)
+#[cfg(feature = "schema")]
+fn rusqlite_list_relations(
+    connection: &Connection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_list_relations_sql, sqlite_relation_kind, sqlite_schema_or_default,
+    };
+
+    let schema = sqlite_schema_or_default(schema);
+    let mut stmt = connection
+        .prepare(&sqlite_list_relations_sql(schema))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let mut relations = Vec::new();
+    for row in rows {
+        let (name, kind) = row.map_err(RusqliteDatabaseError::Rusqlite)?;
+        relations.push(crate::schema::RelationSummary {
+            schema: Some(schema.to_string()),
+            kind: sqlite_relation_kind(&kind, &name),
+            name,
+            comment: None,
+            estimated_rows: None,
+        });
+    }
+    Ok(relations)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_get_relation_info(
+    connection: &Connection,
+    relation: &crate::schema::RelationRef,
+) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+    let schema = crate::sqlite_common::sqlite_schema_or_default(relation.schema.as_deref());
+    let Some((kind, _)) = rusqlite_catalog_entry(connection, Some(schema), &relation.name)? else {
+        return Ok(None);
+    };
+    let kind = crate::sqlite_common::sqlite_relation_kind(&kind, &relation.name);
+    rusqlite_build_table_info(connection, Some(schema), &relation.name, kind).map(Some)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_get_view_definition(
+    connection: &Connection,
+    relation: &crate::schema::RelationRef,
+) -> Result<Option<String>, DatabaseError> {
+    let schema = crate::sqlite_common::sqlite_schema_or_default(relation.schema.as_deref());
+    Ok(
+        rusqlite_catalog_entry(connection, Some(schema), &relation.name)?
+            .filter(|(kind, _)| kind == "view")
+            .and_then(|(_, sql)| sql),
+    )
 }
 
 #[cfg(feature = "schema")]
@@ -5314,14 +5572,18 @@ fn rusqlite_column_exists(
 #[cfg(feature = "schema")]
 fn rusqlite_referenced_primary_key(
     connection: &Connection,
+    schema: Option<&str>,
     table: &str,
     sequence: i64,
 ) -> Result<String, DatabaseError> {
     // SQLite reports NULL for REFERENCES table with no column list.
     // Resolve by primary-key ordinal, not table column order.
-    let target = table.replace('"', "\"\"");
     let mut statement = connection
-        .prepare_cached(&format!("PRAGMA table_info(\"{target}\")"))
+        .prepare_cached(&crate::sqlite_common::sqlite_pragma_sql(
+            schema,
+            "table_info",
+            table,
+        ))
         .map_err(RusqliteDatabaseError::Rusqlite)?;
     let keys = statement
         .query_map([], |row| {
@@ -5344,122 +5606,144 @@ fn rusqlite_get_table_info(
     connection: &Connection,
     table_name: &str,
 ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-    use crate::schema::{ForeignKeyInfo, IndexInfo, TableInfo};
-    use std::collections::BTreeMap;
-
     // First check if table exists
     if !rusqlite_table_exists(connection, table_name)? {
         return Ok(None);
     }
+    let mut info = rusqlite_build_table_info(
+        connection,
+        None,
+        table_name,
+        crate::schema::RelationKind::Table,
+    )?;
+    info.schema = Some(crate::sqlite_common::SQLITE_DEFAULT_SCHEMA.to_string());
+    Ok(Some(info))
+}
+
+/// Build complete relation info (columns, indexes and foreign keys).
+#[cfg(feature = "schema")]
+fn rusqlite_build_table_info(
+    connection: &Connection,
+    schema: Option<&str>,
+    table_name: &str,
+    kind: crate::schema::RelationKind,
+) -> Result<crate::schema::TableInfo, DatabaseError> {
+    use crate::schema::{ForeignKeyInfo, IndexInfo, TableInfo};
+    use crate::sqlite_common::sqlite_pragma_sql;
+    use std::collections::BTreeMap;
 
     // Get columns
-    let columns_list = rusqlite_get_table_columns(connection, table_name)?;
+    let columns_list = rusqlite_get_relation_columns(connection, schema, table_name)?;
     let mut columns = BTreeMap::new();
     for col in columns_list {
         columns.insert(col.name.clone(), col);
     }
 
-    // Get indexes
-    let index_query = format!("PRAGMA index_list(\"{}\")", table_name.replace('"', "\"\""));
-    let mut index_stmt = connection
-        .prepare_cached(&index_query)
-        .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    let index_rows = index_stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(1)?, // name
-                row.get::<_, bool>(2)?,   // unique
-                row.get::<_, String>(3)?, // origin ('c' for CREATE INDEX, 'u' for UNIQUE, 'pk' for PRIMARY KEY)
-            ))
-        })
-        .map_err(RusqliteDatabaseError::Rusqlite)?;
-
     let mut indexes = BTreeMap::new();
-    for index_result in index_rows {
-        let (index_name, is_unique, origin) =
-            index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+    let mut foreign_keys = BTreeMap::new();
 
-        // Get index columns
-        let index_info_query =
-            format!("PRAGMA index_info(\"{}\")", index_name.replace('"', "\"\""));
-        let mut index_info_stmt = connection
-            .prepare_cached(&index_info_query)
+    if !kind.is_view() {
+        // Get indexes
+        let index_query = sqlite_pragma_sql(schema, "index_list", table_name);
+        let mut index_stmt = connection
+            .prepare_cached(&index_query)
             .map_err(RusqliteDatabaseError::Rusqlite)?;
 
-        let index_column_rows = index_info_stmt
-            .query_map([], |row| row.get::<_, String>(2)) // column name
+        let index_rows = index_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(1)?, // name
+                    row.get::<_, bool>(2)?,   // unique
+                    row.get::<_, String>(3)?, // origin ('c' for CREATE INDEX, 'u' for UNIQUE, 'pk' for PRIMARY KEY)
+                ))
+            })
             .map_err(RusqliteDatabaseError::Rusqlite)?;
 
-        let mut index_columns = Vec::new();
-        for col_result in index_column_rows {
-            index_columns.push(col_result.map_err(RusqliteDatabaseError::Rusqlite)?);
+        for index_result in index_rows {
+            let (index_name, is_unique, origin) =
+                index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            // Get index columns
+            let index_info_query = sqlite_pragma_sql(schema, "index_info", &index_name);
+            let mut index_info_stmt = connection
+                .prepare_cached(&index_info_query)
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            let index_column_rows = index_info_stmt
+                .query_map([], |row| row.get::<_, Option<String>>(2)) // column name (NULL for expressions)
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            let mut index_columns = Vec::new();
+            for col_result in index_column_rows {
+                if let Some(column) = col_result.map_err(RusqliteDatabaseError::Rusqlite)? {
+                    index_columns.push(column);
+                }
+            }
+
+            indexes.insert(
+                index_name.clone(),
+                IndexInfo {
+                    name: index_name,
+                    unique: is_unique,
+                    columns: index_columns,
+                    is_primary: origin == "pk",
+                },
+            );
         }
 
-        indexes.insert(
-            index_name.clone(),
-            IndexInfo {
-                name: index_name,
-                unique: is_unique,
-                columns: index_columns,
-                is_primary: origin == "pk",
-            },
-        );
+        // Get foreign keys
+        let fk_query = sqlite_pragma_sql(schema, "foreign_key_list", table_name);
+        let mut fk_stmt = connection
+            .prepare_cached(&fk_query)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let fk_rows = fk_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(2)?,         // table (referenced table)
+                    row.get::<_, String>(3)?,         // from (column in current table)
+                    row.get::<_, Option<String>>(4)?, // NULL means the referenced primary key
+                    row.get::<_, String>(5)?,         // on_update
+                    row.get::<_, String>(6)?,         // on_delete
+                    row.get::<_, i64>(1)?,            // sequence within a composite foreign key
+                ))
+            })
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        for fk_result in fk_rows {
+            let (referenced_table, column, referenced_column, on_update, on_delete, sequence) =
+                fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+            let referenced_column = if let Some(column) = referenced_column {
+                column
+            } else {
+                rusqlite_referenced_primary_key(connection, schema, &referenced_table, sequence)?
+            };
+
+            let fk_name = format!("{table_name}_{column}_{referenced_table}_{referenced_column}");
+
+            foreign_keys.insert(
+                fk_name.clone(),
+                ForeignKeyInfo {
+                    name: fk_name,
+                    column,
+                    referenced_table,
+                    referenced_column,
+                    on_update: (on_update != "NO ACTION").then_some(on_update),
+                    on_delete: (on_delete != "NO ACTION").then_some(on_delete),
+                },
+            );
+        }
     }
 
-    // Get foreign keys
-    let fk_query = format!(
-        "PRAGMA foreign_key_list(\"{}\")",
-        table_name.replace('"', "\"\"")
-    );
-    let mut fk_stmt = connection
-        .prepare_cached(&fk_query)
-        .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    let fk_rows = fk_stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(2)?,         // table (referenced table)
-                row.get::<_, String>(3)?,         // from (column in current table)
-                row.get::<_, Option<String>>(4)?, // NULL means the referenced primary key
-                row.get::<_, String>(5)?,         // on_update
-                row.get::<_, String>(6)?,         // on_delete
-                row.get::<_, i64>(1)?,            // sequence within a composite foreign key
-            ))
-        })
-        .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-    let mut foreign_keys = BTreeMap::new();
-    for fk_result in fk_rows {
-        let (referenced_table, column, referenced_column, on_update, on_delete, sequence) =
-            fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
-        let referenced_column = if let Some(column) = referenced_column {
-            column
-        } else {
-            rusqlite_referenced_primary_key(connection, &referenced_table, sequence)?
-        };
-
-        let fk_name = format!("{table_name}_{column}_{referenced_table}_{referenced_column}");
-
-        foreign_keys.insert(
-            fk_name.clone(),
-            ForeignKeyInfo {
-                name: fk_name,
-                column,
-                referenced_table,
-                referenced_column,
-                on_update: (on_update != "NO ACTION").then_some(on_update),
-                on_delete: (on_delete != "NO ACTION").then_some(on_delete),
-            },
-        );
-    }
-
-    Ok(Some(TableInfo {
+    Ok(TableInfo {
         name: table_name.to_string(),
+        schema: schema.map(ToString::to_string),
+        kind,
+        comment: None,
         columns,
         indexes,
         foreign_keys,
-    }))
+    })
 }
 
 #[cfg(feature = "raw-sql")]
@@ -5526,7 +5810,7 @@ impl RusqliteDatabase {
 
         // Materialize rows before releasing the connection lease.
         let result =
-            to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            to_rows_raw(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
         drop(stmt);
         drop(connection);
         result
@@ -5620,7 +5904,7 @@ impl RusqliteDatabase {
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Execute and use existing to_rows helper
-        let result = to_rows(&column_names, stmt.raw_query())
+        let result = to_rows_raw(&column_names, stmt.raw_query())
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
         drop(stmt);
         drop(connection_guard);
@@ -5663,7 +5947,7 @@ impl RusqliteTransaction {
 
         // Materialize rows before releasing the connection lease.
         let result =
-            to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
+            to_rows_raw(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()));
         drop(stmt);
         drop(connection);
         result
@@ -5735,7 +6019,7 @@ impl RusqliteTransaction {
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Execute and use existing to_rows helper
-        let result = to_rows(&column_names, stmt.raw_query())
+        let result = to_rows_raw(&column_names, stmt.raw_query())
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
         drop(stmt);
         drop(connection_guard);

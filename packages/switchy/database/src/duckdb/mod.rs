@@ -515,23 +515,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 )
             }
             ExpressionType::DatabaseValue(value) => match value {
-                DatabaseValue::Null
-                | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::StringOpt(None)
-                | DatabaseValue::Int8Opt(None)
-                | DatabaseValue::Int16Opt(None)
-                | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt8Opt(None)
-                | DatabaseValue::UInt16Opt(None)
-                | DatabaseValue::UInt32Opt(None)
-                | DatabaseValue::UInt64Opt(None)
-                | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::Real32Opt(None) => "NULL".to_string(),
-                #[cfg(feature = "decimal")]
-                DatabaseValue::DecimalOpt(None) => "NULL".to_string(),
-                #[cfg(feature = "uuid")]
-                DatabaseValue::UuidOpt(None) => "NULL".to_string(),
+                null if null.is_null() => "NULL".to_string(),
                 // Convert the instant to UTC before dropping its timezone.
                 DatabaseValue::Now => "timezone('UTC', NOW())".to_string(),
                 DatabaseValue::NowPlus(interval) => {
@@ -574,6 +558,17 @@ impl From<DuckDbDatabaseError> for DatabaseError {
     }
 }
 
+/// Convert a `DuckDB` [`Value`] into a [`DatabaseValue`] without loss where possible.
+///
+/// * `BLOB` becomes [`DatabaseValue::Bytes`], `DATE` [`DatabaseValue::Date`] and
+///   `TIME` [`DatabaseValue::Time`].
+/// * `TIMESTAMP` and `TIMESTAMP WITH TIME ZONE` both decode to
+///   [`DatabaseValue::DateTime`] in UTC (the driver reports `TIMESTAMPTZ` as a UTC
+///   instant without an offset), preserving the historical behavior of this backend.
+/// * `DECIMAL` becomes [`DatabaseValue::Decimal`] with the `decimal` feature.
+/// * Types without a dedicated variant (`INTERVAL`, `LIST`, `STRUCT`, `MAP`, `ENUM`,
+///   out-of-range `HUGEINT`, `DECIMAL` without the `decimal` feature, ...) decode to
+///   [`DatabaseValue::Other`] with `DuckDB`-style text.
 impl From<Value> for DatabaseValue {
     fn from(value: Value) -> Self {
         match value {
@@ -589,76 +584,260 @@ impl From<Value> for DatabaseValue {
             Value::UBigInt(v) => Self::UInt64(v),
             Value::Float(v) => Self::Real32(v),
             Value::Double(v) => Self::Real64(v),
-            Value::Text(v) | Value::Enum(v) => Self::String(v),
-            #[allow(clippy::cast_possible_truncation)]
-            Value::HugeInt(v) => Self::Int64(v as i64),
-            Value::Decimal(v) => {
-                // Lossy: convert to f64
-                use std::str::FromStr as _;
-                Self::Real64(f64::from_str(&v.to_string()).unwrap_or(0.0))
+            Value::Text(v) => Self::String(v),
+            Value::HugeInt(v) => i64::try_from(v).map_or_else(
+                |_| Self::Other {
+                    type_name: "HUGEINT".to_string(),
+                    text: v.to_string(),
+                },
+                Self::Int64,
+            ),
+            #[cfg(feature = "decimal")]
+            Value::Decimal(v) => Self::Decimal(v),
+            #[cfg(not(feature = "decimal"))]
+            Value::Decimal(v) => Self::Other {
+                type_name: "DECIMAL".to_string(),
+                text: v.to_string(),
+            },
+            Value::Timestamp(unit, value) => {
+                duckdb_timestamp(unit, value).map_or(Self::Null, Self::DateTime)
             }
-            Value::Timestamp(_, micros) => {
-                // Microseconds since epoch -> NaiveDateTime
-                let secs = micros / 1_000_000;
-                let nsecs = u32::try_from((micros % 1_000_000) * 1000).unwrap_or(0);
-                chrono::DateTime::from_timestamp(secs, nsecs)
-                    .map_or(Self::Null, |dt| Self::DateTime(dt.naive_utc()))
-            }
-            Value::Date32(days) => {
-                // Days since epoch -> NaiveDateTime at midnight
-                chrono::NaiveDate::from_num_days_from_ce_opt(days + 719_163)
-                    .map_or(Self::Null, |d| {
-                        Self::DateTime(d.and_hms_opt(0, 0, 0).unwrap_or_default())
-                    })
-            }
-            Value::Time64(_, micros) => {
-                // Lossy: time-only value stored as string
-                let secs = micros / 1_000_000;
-                let mins = secs / 60;
-                let hours = mins / 60;
-                Self::String(format!("{:02}:{:02}:{:02}", hours, mins % 60, secs % 60))
-            }
-            Value::Blob(v) => {
-                log::warn!("Lossy conversion: DuckDB Blob -> String (hex-encoded)");
-                let mut hex = String::with_capacity(v.len() * 2);
-                for b in &v {
-                    write!(hex, "{b:02x}").unwrap();
-                }
-                Self::String(hex)
-            }
-            Value::Interval {
-                months,
-                days,
-                nanos,
-            } => {
-                log::warn!("Lossy conversion: DuckDB Interval -> String");
-                Self::String(format!("{months} months {days} days {nanos} nanoseconds"))
-            }
-            Value::List(values) => {
-                log::warn!("Lossy conversion: DuckDB List -> String (JSON-like)");
-                let items: Vec<String> = values.into_iter().map(|v| format!("{v:?}")).collect();
-                Self::String(format!("[{}]", items.join(", ")))
-            }
-            Value::Array(values) => {
-                log::warn!("Lossy conversion: DuckDB Array -> String (JSON-like)");
-                let items: Vec<String> = values.into_iter().map(|v| format!("{v:?}")).collect();
-                Self::String(format!("[{}]", items.join(", ")))
-            }
-            Value::Struct(map) => {
-                log::warn!("Lossy conversion: DuckDB Struct -> String (JSON-like)");
-                let items: Vec<String> = map.iter().map(|(k, v)| format!("{k}: {v:?}")).collect();
-                Self::String(format!("{{{}}}", items.join(", ")))
-            }
-            Value::Map(map) => {
-                log::warn!("Lossy conversion: DuckDB Map -> String (JSON-like)");
-                let items: Vec<String> = map.iter().map(|(k, v)| format!("{k:?}: {v:?}")).collect();
-                Self::String(format!("{{{}}}", items.join(", ")))
-            }
-            Value::Union(inner) => {
-                log::warn!("Lossy conversion: DuckDB Union -> inner value");
-                (*inner).into()
-            }
+            Value::Date32(days) => duckdb_date(days).map_or(Self::Null, Self::Date),
+            Value::Time64(unit, value) => duckdb_time(unit, value).map_or(Self::Null, Self::Time),
+            Value::Blob(v) => Self::Bytes(v),
+            Value::Union(inner) => (*inner).into(),
+            other @ (Value::Interval { .. }
+            | Value::List(_)
+            | Value::Array(_)
+            | Value::Struct(_)
+            | Value::Map(_)
+            | Value::Enum(_)) => Self::Other {
+                type_name: duckdb_value_kind_name(&other).to_string(),
+                text: duckdb_value_text(&other),
+            },
         }
+    }
+}
+
+/// Days since the Unix epoch to a calendar date.
+fn duckdb_date(days: i32) -> Option<chrono::NaiveDate> {
+    chrono::NaiveDate::from_num_days_from_ce_opt(days.checked_add(719_163)?)
+}
+
+/// A `TIME` value in `unit`s since midnight to a time of day.
+fn duckdb_time(unit: ::duckdb::types::TimeUnit, value: i64) -> Option<chrono::NaiveTime> {
+    let nanos = duckdb_unit_to_nanos(unit, value);
+    let secs = u32::try_from(nanos.div_euclid(1_000_000_000)).ok()?;
+    let frac = u32::try_from(nanos.rem_euclid(1_000_000_000)).ok()?;
+    chrono::NaiveTime::from_num_seconds_from_midnight_opt(secs, frac)
+}
+
+/// A `TIMESTAMP` value in `unit`s since the Unix epoch to a UTC date/time.
+fn duckdb_timestamp(unit: ::duckdb::types::TimeUnit, value: i64) -> Option<chrono::NaiveDateTime> {
+    let nanos = duckdb_unit_to_nanos(unit, value);
+    let secs = i64::try_from(nanos.div_euclid(1_000_000_000)).ok()?;
+    let frac = u32::try_from(nanos.rem_euclid(1_000_000_000)).ok()?;
+    chrono::DateTime::from_timestamp(secs, frac).map(|dt| dt.naive_utc())
+}
+
+const fn duckdb_unit_to_nanos(unit: ::duckdb::types::TimeUnit, value: i64) -> i128 {
+    use ::duckdb::types::TimeUnit;
+    let value = value as i128;
+    match unit {
+        TimeUnit::Second => value * 1_000_000_000,
+        TimeUnit::Millisecond => value * 1_000_000,
+        TimeUnit::Microsecond => value * 1000,
+        TimeUnit::Nanosecond => value,
+    }
+}
+
+/// Generic `DuckDB` type name for a [`Value`] variant without a dedicated mapping.
+const fn duckdb_value_kind_name(value: &Value) -> &'static str {
+    match value {
+        Value::Interval { .. } => "INTERVAL",
+        Value::List(_) => "LIST",
+        Value::Array(_) => "ARRAY",
+        Value::Struct(_) => "STRUCT",
+        Value::Map(_) => "MAP",
+        Value::Enum(_) => "ENUM",
+        Value::Union(_) => "UNION",
+        Value::HugeInt(_) => "HUGEINT",
+        Value::Decimal(_) => "DECIMAL",
+        Value::Blob(_) => "BLOB",
+        _ => "UNKNOWN",
+    }
+}
+
+/// Render an `INTERVAL` the way `DuckDB` prints it (e.g. `1 year 2 months 3 days 04:05:06`).
+fn duckdb_interval_text(months: i32, days: i32, nanos: i64) -> String {
+    let mut parts = Vec::new();
+    let years = months / 12;
+    let months = months % 12;
+    let plural = |n: i64, unit: &str| {
+        if n.abs() == 1 {
+            format!("{n} {unit}")
+        } else {
+            format!("{n} {unit}s")
+        }
+    };
+    if years != 0 {
+        parts.push(plural(i64::from(years), "year"));
+    }
+    if months != 0 {
+        parts.push(plural(i64::from(months), "month"));
+    }
+    if days != 0 {
+        parts.push(plural(i64::from(days), "day"));
+    }
+    if nanos != 0 || parts.is_empty() {
+        let sign = if nanos < 0 { "-" } else { "" };
+        let total_micros = (nanos / 1000).unsigned_abs();
+        let micros = total_micros % 1_000_000;
+        let total_secs = total_micros / 1_000_000;
+        let mut time = format!(
+            "{sign}{:02}:{:02}:{:02}",
+            total_secs / 3600,
+            (total_secs / 60) % 60,
+            total_secs % 60
+        );
+        if micros != 0 {
+            write!(time, ".{micros:06}").unwrap();
+        }
+        parts.push(time);
+    }
+    parts.join(" ")
+}
+
+/// Render a [`Value`] as text, mirroring `DuckDB`'s own display format.
+fn duckdb_value_text(value: &Value) -> String {
+    fn nested(value: &Value) -> String {
+        match value {
+            Value::Text(s) | Value::Enum(s) => format!("'{}'", s.replace('\'', "''")),
+            other => duckdb_value_text(other),
+        }
+    }
+    match value {
+        Value::Null => "NULL".to_string(),
+        Value::Boolean(v) => v.to_string(),
+        Value::TinyInt(v) => v.to_string(),
+        Value::SmallInt(v) => v.to_string(),
+        Value::Int(v) => v.to_string(),
+        Value::BigInt(v) => v.to_string(),
+        Value::HugeInt(v) => v.to_string(),
+        Value::UTinyInt(v) => v.to_string(),
+        Value::USmallInt(v) => v.to_string(),
+        Value::UInt(v) => v.to_string(),
+        Value::UBigInt(v) => v.to_string(),
+        Value::Float(v) => v.to_string(),
+        Value::Double(v) => v.to_string(),
+        Value::Decimal(v) => v.to_string(),
+        Value::Text(v) | Value::Enum(v) => v.clone(),
+        Value::Blob(bytes) => {
+            let mut out = String::with_capacity(bytes.len() * 4);
+            for b in bytes {
+                if b.is_ascii_graphic() && *b != b'\\' {
+                    out.push(char::from(*b));
+                } else {
+                    write!(out, "\\x{b:02X}").unwrap();
+                }
+            }
+            out
+        }
+        Value::Timestamp(unit, v) => {
+            duckdb_timestamp(*unit, *v).map_or_else(|| v.to_string(), |dt| dt.to_string())
+        }
+        Value::Date32(days) => {
+            duckdb_date(*days).map_or_else(|| days.to_string(), |d| d.to_string())
+        }
+        Value::Time64(unit, v) => {
+            duckdb_time(*unit, *v).map_or_else(|| v.to_string(), |t| t.to_string())
+        }
+        Value::Interval {
+            months,
+            days,
+            nanos,
+        } => duckdb_interval_text(*months, *days, *nanos),
+        Value::List(values) | Value::Array(values) => format!(
+            "[{}]",
+            values.iter().map(nested).collect::<Vec<_>>().join(", ")
+        ),
+        Value::Struct(map) => format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(k, v)| format!("'{k}': {}", duckdb_value_text(v)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Value::Map(map) => format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(k, v)| format!("{}={}", duckdb_value_text(k), duckdb_value_text(v)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Value::Union(inner) => duckdb_value_text(inner),
+    }
+}
+
+/// Native `DuckDB`-style type name for a result column's Arrow type.
+#[cfg(feature = "raw-sql")]
+fn duckdb_arrow_type_name(data_type: &::duckdb::arrow::datatypes::DataType) -> String {
+    use ::duckdb::arrow::datatypes::{DataType as Arrow, TimeUnit};
+    match data_type {
+        Arrow::Null => "NULL".to_string(),
+        Arrow::Boolean => "BOOLEAN".to_string(),
+        Arrow::Int8 => "TINYINT".to_string(),
+        Arrow::Int16 => "SMALLINT".to_string(),
+        Arrow::Int32 => "INTEGER".to_string(),
+        Arrow::Int64 => "BIGINT".to_string(),
+        Arrow::UInt8 => "UTINYINT".to_string(),
+        Arrow::UInt16 => "USMALLINT".to_string(),
+        Arrow::UInt32 => "UINTEGER".to_string(),
+        Arrow::UInt64 => "UBIGINT".to_string(),
+        Arrow::Float16 | Arrow::Float32 => "FLOAT".to_string(),
+        Arrow::Float64 => "DOUBLE".to_string(),
+        Arrow::Utf8 | Arrow::LargeUtf8 | Arrow::Utf8View => "VARCHAR".to_string(),
+        Arrow::Binary | Arrow::LargeBinary | Arrow::BinaryView | Arrow::FixedSizeBinary(_) => {
+            "BLOB".to_string()
+        }
+        Arrow::Date32 | Arrow::Date64 => "DATE".to_string(),
+        Arrow::Time32(_) | Arrow::Time64(_) => "TIME".to_string(),
+        Arrow::Timestamp(_, Some(_)) => "TIMESTAMP WITH TIME ZONE".to_string(),
+        Arrow::Timestamp(TimeUnit::Second, None) => "TIMESTAMP_S".to_string(),
+        Arrow::Timestamp(TimeUnit::Millisecond, None) => "TIMESTAMP_MS".to_string(),
+        Arrow::Timestamp(TimeUnit::Nanosecond, None) => "TIMESTAMP_NS".to_string(),
+        Arrow::Timestamp(TimeUnit::Microsecond, None) => "TIMESTAMP".to_string(),
+        Arrow::Decimal32(p, s)
+        | Arrow::Decimal64(p, s)
+        | Arrow::Decimal128(p, s)
+        | Arrow::Decimal256(p, s) => format!("DECIMAL({p},{s})"),
+        Arrow::Interval(_) | Arrow::Duration(_) => "INTERVAL".to_string(),
+        Arrow::List(field)
+        | Arrow::LargeList(field)
+        | Arrow::ListView(field)
+        | Arrow::LargeListView(field) => format!("{}[]", duckdb_arrow_type_name(field.data_type())),
+        Arrow::FixedSizeList(field, size) => {
+            format!("{}[{size}]", duckdb_arrow_type_name(field.data_type()))
+        }
+        Arrow::Struct(fields) => format!(
+            "STRUCT({})",
+            fields
+                .iter()
+                .map(|f| format!("{} {}", f.name(), duckdb_arrow_type_name(f.data_type())))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Arrow::Map(entries, _) => match entries.data_type() {
+            Arrow::Struct(kv) if kv.len() == 2 => format!(
+                "MAP({}, {})",
+                duckdb_arrow_type_name(kv[0].data_type()),
+                duckdb_arrow_type_name(kv[1].data_type())
+            ),
+            _ => "MAP".to_string(),
+        },
+        Arrow::Dictionary(_, _) => "ENUM".to_string(),
+        Arrow::Union(_, _) => "UNION".to_string(),
+        other => format!("{other:?}"),
     }
 }
 
@@ -836,41 +1015,7 @@ fn bind_values_inner(
         for value in values {
             match &**value {
                 DatabaseValue::Now | DatabaseValue::NowPlus(..) => (),
-                DatabaseValue::Null
-                | DatabaseValue::StringOpt(None)
-                | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::Int8Opt(None)
-                | DatabaseValue::Int16Opt(None)
-                | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt8Opt(None)
-                | DatabaseValue::UInt16Opt(None)
-                | DatabaseValue::UInt32Opt(None)
-                | DatabaseValue::UInt64Opt(None)
-                | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::Real32Opt(None) => {
-                    if bind_nulls {
-                        statement
-                            .raw_bind_parameter(i, Option::<i32>::None)
-                            .map_err(DuckDbDatabaseError::DuckDb)?;
-                        if !constant_inc {
-                            i += 1;
-                        }
-                    }
-                }
-                #[cfg(feature = "decimal")]
-                DatabaseValue::DecimalOpt(None) => {
-                    if bind_nulls {
-                        statement
-                            .raw_bind_parameter(i, Option::<i32>::None)
-                            .map_err(DuckDbDatabaseError::DuckDb)?;
-                        if !constant_inc {
-                            i += 1;
-                        }
-                    }
-                }
-                #[cfg(feature = "uuid")]
-                DatabaseValue::UuidOpt(None) => {
+                null if null.is_null() => {
                     if bind_nulls {
                         statement
                             .raw_bind_parameter(i, Option::<i32>::None)
@@ -1002,6 +1147,42 @@ fn bind_values_inner(
                         i += 1;
                     }
                 }
+                DatabaseValue::Bytes(v) | DatabaseValue::BytesOpt(Some(v)) => {
+                    statement
+                        .raw_bind_parameter(i, v.as_slice())
+                        .map_err(DuckDbDatabaseError::DuckDb)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Date(_)
+                | DatabaseValue::DateOpt(Some(_))
+                | DatabaseValue::Time(_)
+                | DatabaseValue::TimeOpt(Some(_))
+                | DatabaseValue::DateTimeTz(_)
+                | DatabaseValue::DateTimeTzOpt(Some(_))
+                | DatabaseValue::Other { .. } => {
+                    // Bound as ISO-8601 / native text; DuckDB casts it to the
+                    // target column type.
+                    let text = duckdb_text_param(value).unwrap_or_default();
+                    statement
+                        .raw_bind_parameter(i, text)
+                        .map_err(DuckDbDatabaseError::DuckDb)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                #[cfg(feature = "json")]
+                DatabaseValue::Json(v) | DatabaseValue::JsonOpt(Some(v)) => {
+                    statement
+                        .raw_bind_parameter(i, v.to_string())
+                        .map_err(DuckDbDatabaseError::DuckDb)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                // Remaining `*Opt(None)` variants are covered by the `is_null` arm
+                _ => {}
             }
             if constant_inc {
                 i += 1;
@@ -1010,6 +1191,26 @@ fn bind_values_inner(
         Ok(i - 1)
     } else {
         Ok(0)
+    }
+}
+
+/// Text form used to bind or inline values that `DuckDB` accepts as casts from `VARCHAR`.
+fn duckdb_text_param(value: &DatabaseValue) -> Option<String> {
+    match value {
+        DatabaseValue::Date(v) | DatabaseValue::DateOpt(Some(v)) => {
+            Some(v.format("%Y-%m-%d").to_string())
+        }
+        DatabaseValue::Time(v) | DatabaseValue::TimeOpt(Some(v)) => {
+            Some(v.format("%H:%M:%S%.f").to_string())
+        }
+        DatabaseValue::DateTime(v) => Some(v.format("%Y-%m-%d %H:%M:%S%.f").to_string()),
+        DatabaseValue::DateTimeTz(v) | DatabaseValue::DateTimeTzOpt(Some(v)) => {
+            Some(v.format("%Y-%m-%d %H:%M:%S%.f%:z").to_string())
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(v) | DatabaseValue::JsonOpt(Some(v)) => Some(v.to_string()),
+        DatabaseValue::Other { text, .. } => Some(text.clone()),
+        _ => None,
     }
 }
 
@@ -1514,8 +1715,21 @@ fn duckdb_default_value_sql(value: &DatabaseValue) -> String {
             let interval_str = format_duckdb_interval(interval);
             format!("(timezone('UTC', NOW()) + INTERVAL '{interval_str}')")
         }
-        DatabaseValue::DateTime(v) => format!("'{v}'"),
-        _ => "NULL".to_string(),
+        DatabaseValue::Bytes(v) | DatabaseValue::BytesOpt(Some(v)) => {
+            let mut hex = String::with_capacity(v.len() * 2);
+            for b in v {
+                write!(hex, "{b:02X}").unwrap();
+            }
+            format!("unhex('{hex}')")
+        }
+        #[cfg(feature = "decimal")]
+        DatabaseValue::Decimal(v) | DatabaseValue::DecimalOpt(Some(v)) => v.to_string(),
+        #[cfg(feature = "uuid")]
+        DatabaseValue::Uuid(v) | DatabaseValue::UuidOpt(Some(v)) => format!("'{v}'"),
+        other => duckdb_text_param(other).map_or_else(
+            || "NULL".to_string(),
+            |text| format!("'{}'", text.replace('\'', "''")),
+        ),
     }
 }
 
@@ -1746,43 +1960,69 @@ fn build_alter_table_sqls(statement: &crate::schema::AlterTableStatement<'_>) ->
     sqls
 }
 
+/// Map a `DuckDB` type name (as reported by `information_schema.columns.data_type`)
+/// to a [`crate::schema::DataType`].
+///
+/// Never fails: types without a matching variant map to `DataType::Custom` with
+/// the native name preserved.
 #[cfg(feature = "schema")]
-#[allow(clippy::cast_possible_truncation)]
 fn duckdb_type_str_to_data_type(type_str: &str) -> crate::schema::DataType {
     use crate::schema::DataType;
 
-    let upper = type_str.to_uppercase();
-    let upper = upper.trim();
+    let upper = type_str.trim().to_uppercase();
+    let upper = upper.as_str();
+
+    // Arrays: `T[]` (list) and `T[n]` (fixed-size array)
+    if upper.ends_with(']')
+        && let Some(open) = upper.rfind('[')
+    {
+        let size = &upper[open + 1..upper.len() - 1];
+        if size.is_empty() || size.chars().all(|c| c.is_ascii_digit()) {
+            return DataType::Array(Box::new(duckdb_type_str_to_data_type(
+                &type_str.trim()[..open],
+            )));
+        }
+    }
 
     match upper {
-        "BOOLEAN" | "BOOL" => DataType::Bool,
+        "BOOLEAN" | "BOOL" | "LOGICAL" => DataType::Bool,
         "TINYINT" | "INT1" => DataType::TinyInt,
         "SMALLINT" | "INT2" | "SHORT" => DataType::SmallInt,
         "INTEGER" | "INT" | "INT4" | "SIGNED" => DataType::Int,
         "BIGINT" | "INT8" | "LONG" => DataType::BigInt,
         "REAL" | "FLOAT" | "FLOAT4" => DataType::Real,
         "DOUBLE" | "FLOAT8" => DataType::Double,
-        "TEXT" | "STRING" => DataType::Text,
+        "TEXT" | "STRING" | "VARCHAR" | "BPCHAR" | "CHAR" => DataType::Text,
         "BLOB" | "BYTEA" | "BINARY" | "VARBINARY" => DataType::Blob,
         "DATE" => DataType::Date,
         "TIME" => DataType::Time,
-        "TIMESTAMP" | "DATETIME" | "TIMESTAMP WITH TIME ZONE" | "TIMESTAMPTZ" => {
-            DataType::Timestamp
-        }
+        "TIMESTAMP"
+        | "DATETIME"
+        | "TIMESTAMP WITH TIME ZONE"
+        | "TIMESTAMPTZ"
+        | "TIMESTAMP_S"
+        | "TIMESTAMP_MS"
+        | "TIMESTAMP_NS" => DataType::Timestamp,
         "UUID" => DataType::Uuid,
         "JSON" => DataType::Json,
         _ => {
-            if upper.starts_with("VARCHAR") || upper.starts_with("TEXT(") {
-                extract_type_param(upper).map_or(DataType::Text, |n| DataType::VarChar(n as u16))
-            } else if upper.starts_with("CHAR(") {
-                extract_type_param(upper).map_or(DataType::Text, |n| DataType::Char(n as u16))
-            } else if upper.starts_with("DECIMAL") || upper.starts_with("NUMERIC") {
-                extract_two_type_params(upper).map_or(DataType::Decimal(18, 3), |(p, s)| {
-                    DataType::Decimal(p as u8, s as u8)
-                })
-            } else if upper.ends_with("[]") {
-                let inner = upper.trim_end_matches("[]");
-                DataType::Array(Box::new(duckdb_type_str_to_data_type(inner)))
+            if upper.starts_with("VARCHAR(") || upper.starts_with("TEXT(") {
+                extract_type_param(upper)
+                    .and_then(|n| u16::try_from(n).ok())
+                    .map_or(DataType::Text, DataType::VarChar)
+            } else if upper.starts_with("CHAR(") || upper.starts_with("BPCHAR(") {
+                extract_type_param(upper)
+                    .and_then(|n| u16::try_from(n).ok())
+                    .map_or(DataType::Text, DataType::Char)
+            } else if upper == "DECIMAL" || upper == "NUMERIC" {
+                DataType::Decimal(18, 3)
+            } else if upper.starts_with("DECIMAL(") || upper.starts_with("NUMERIC(") {
+                extract_two_type_params(upper)
+                    .and_then(|(p, s)| Some((u8::try_from(p).ok()?, u8::try_from(s).ok()?)))
+                    .map_or_else(
+                        || DataType::Custom(type_str.to_string()),
+                        |(p, s)| DataType::Decimal(p, s),
+                    )
             } else {
                 DataType::Custom(type_str.to_string())
             }
@@ -1839,80 +2079,236 @@ fn extract_index_columns_from_sql(sql: &str) -> Vec<String> {
 // Shared introspection helpers (used by both DuckDbDatabase and DuckDbTransaction)
 // ---------------------------------------------------------------------------
 
+/// Resolve an optional schema name to the effective schema (`current_schema()` when `None`).
+#[cfg(feature = "schema")]
+fn duckdb_resolve_schema(
+    conn: &Connection,
+    schema: Option<&str>,
+) -> Result<String, DuckDbDatabaseError> {
+    if let Some(schema) = schema {
+        return Ok(schema.to_string());
+    }
+    Ok(conn.query_row("SELECT current_schema()", [], |row| row.get::<_, String>(0))?)
+}
+
+/// List the schemas of the current database plus the built-in catalog schemas.
+#[cfg(feature = "schema")]
+fn duckdb_list_schemas(
+    conn: &Connection,
+) -> Result<Vec<crate::schema::SchemaInfo>, DuckDbDatabaseError> {
+    let default_schema = duckdb_resolve_schema(conn, None)?;
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT schema_name FROM duckdb_schemas() \
+         WHERE database_name = current_database() \
+            OR (database_name = 'system' \
+                AND schema_name IN ('information_schema', 'pg_catalog')) \
+         ORDER BY schema_name",
+    )?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let mut schemas = Vec::new();
+    for row in rows {
+        let name = row?;
+        schemas.push(crate::schema::SchemaInfo {
+            is_default: name == default_schema,
+            is_system: matches!(name.as_str(), "information_schema" | "pg_catalog"),
+            name,
+        });
+    }
+    Ok(schemas)
+}
+
+/// SQL selecting `name`, `kind`, `comment`, `estimated_rows` for tables and views
+/// in schema `?1`; the optional `extra` predicate may reference `name`.
+#[cfg(feature = "schema")]
+fn duckdb_relations_sql(extra: &str) -> String {
+    format!(
+        "SELECT name, kind, comment, estimated_rows FROM ( \
+             SELECT table_name AS name, 'table' AS kind, comment, \
+                    estimated_size AS estimated_rows \
+             FROM duckdb_tables() \
+             WHERE database_name = current_database() AND schema_name = $1 AND NOT internal \
+             UNION ALL \
+             SELECT view_name AS name, 'view' AS kind, comment, NULL AS estimated_rows \
+             FROM duckdb_views() \
+             WHERE database_name = current_database() AND schema_name = $1 AND NOT internal \
+         ) relations {extra} ORDER BY name"
+    )
+}
+
+#[cfg(feature = "schema")]
+fn duckdb_relation_kind(kind: &str) -> crate::schema::RelationKind {
+    match kind {
+        "table" => crate::schema::RelationKind::Table,
+        "view" => crate::schema::RelationKind::View,
+        other => crate::schema::RelationKind::Other(other.to_string()),
+    }
+}
+
+/// List tables and views in `schema` with comments and estimated row counts.
+#[cfg(feature = "schema")]
+fn duckdb_list_relations(
+    conn: &Connection,
+    schema: &str,
+) -> Result<Vec<crate::schema::RelationSummary>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(&duckdb_relations_sql(""))?;
+    let rows = stmt.query_map([schema], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<i64>>(3)?,
+        ))
+    })?;
+    let mut relations = Vec::new();
+    for row in rows {
+        let (name, kind, comment, estimated_rows) = row?;
+        relations.push(crate::schema::RelationSummary {
+            schema: Some(schema.to_string()),
+            name,
+            kind: duckdb_relation_kind(&kind),
+            comment,
+            estimated_rows: estimated_rows.and_then(|n| u64::try_from(n).ok()),
+        });
+    }
+    Ok(relations)
+}
+
+/// Look up the kind and comment of a single relation.
+#[cfg(feature = "schema")]
+fn duckdb_relation_meta(
+    conn: &Connection,
+    schema: &str,
+    name: &str,
+) -> Result<Option<(crate::schema::RelationKind, Option<String>)>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(&duckdb_relations_sql("WHERE name = $2"))?;
+    let mut rows = stmt.query([schema, name])?;
+    if let Some(row) = rows.next()? {
+        let kind: String = row.get(1)?;
+        let comment: Option<String> = row.get(2)?;
+        Ok(Some((duckdb_relation_kind(&kind), comment)))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Get the `CREATE VIEW` SQL of a view.
+#[cfg(feature = "schema")]
+fn duckdb_view_definition(
+    conn: &Connection,
+    schema: &str,
+    name: &str,
+) -> Result<Option<String>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(
+        "SELECT sql FROM duckdb_views() \
+         WHERE database_name = current_database() AND schema_name = ? AND view_name = ?",
+    )?;
+    let mut rows = stmt.query([schema, name])?;
+    if let Some(row) = rows.next()? {
+        Ok(row.get::<_, Option<String>>(0)?)
+    } else {
+        Ok(None)
+    }
+}
+
+/// Whether a table or view exists in `schema` (`information_schema.tables`).
+#[cfg(feature = "schema")]
+fn duckdb_table_exists(
+    conn: &Connection,
+    schema: &str,
+    table_name: &str,
+) -> Result<bool, DuckDbDatabaseError> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM information_schema.tables \
+         WHERE table_catalog = current_database() AND table_schema = ? AND table_name = ?",
+        [schema, table_name],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+/// Names from `information_schema.tables` in `schema` (tables and views).
+#[cfg(feature = "schema")]
+fn duckdb_list_table_names(
+    conn: &Connection,
+    schema: &str,
+) -> Result<Vec<String>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(
+        "SELECT table_name FROM information_schema.tables \
+         WHERE table_catalog = current_database() AND table_schema = ? ORDER BY table_name",
+    )?;
+    let rows = stmt.query_map([schema], |row| row.get::<_, String>(0))?;
+    let mut tables = Vec::new();
+    for row in rows {
+        tables.push(row?);
+    }
+    Ok(tables)
+}
+
 /// Query primary key columns for a table using `duckdb_constraints()`.
 #[cfg(feature = "schema")]
 fn query_primary_key_columns(
     conn: &Connection,
+    schema: &str,
     table_name: &str,
 ) -> Result<std::collections::BTreeSet<String>, DuckDbDatabaseError> {
     let mut pk_cols = std::collections::BTreeSet::new();
     // Use unnest() to flatten the constraint_column_names list into individual rows
-    let mut stmt = conn
-        .prepare(
-            "SELECT unnest(constraint_column_names) AS col_name \
-             FROM duckdb_constraints() \
-             WHERE table_name = ? AND schema_name = 'main' \
-             AND constraint_type = 'PRIMARY KEY'",
-        )
-        .map_err(DuckDbDatabaseError::DuckDb)?;
-    let rows = stmt
-        .query_map([table_name], |row| row.get::<_, String>(0))
-        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let mut stmt = conn.prepare(
+        "SELECT unnest(constraint_column_names) AS col_name \
+         FROM duckdb_constraints() \
+         WHERE database_name = current_database() AND schema_name = ? AND table_name = ? \
+         AND constraint_type = 'PRIMARY KEY'",
+    )?;
+    let rows = stmt.query_map([schema, table_name], |row| row.get::<_, String>(0))?;
     for row in rows {
-        let col_name = row.map_err(DuckDbDatabaseError::DuckDb)?;
-        pk_cols.insert(col_name);
+        pk_cols.insert(row?);
     }
     Ok(pk_cols)
 }
 
-/// Query foreign key constraints for a table using `duckdb_constraints()`.
+/// Query foreign key constraints for a table using `information_schema`.
 #[cfg(feature = "schema")]
 fn query_foreign_keys(
     conn: &Connection,
+    schema: &str,
     table_name: &str,
 ) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, DuckDbDatabaseError>
 {
     let mut fk_map = std::collections::BTreeMap::new();
-    // DuckDB's duckdb_constraints() returns FK info with constraint_column_names
-    // and referenced table info encoded in expression. We need to query the
-    // information_schema for more structured FK data.
-    let mut stmt = conn
-        .prepare(
-            "SELECT kcu.column_name, \
-                    ccu.table_name AS referenced_table, \
-                    ccu.column_name AS referenced_column, \
-                    rc.update_rule, \
-                    rc.delete_rule, \
-                    tc.constraint_name \
-             FROM information_schema.table_constraints tc \
-             JOIN information_schema.key_column_usage kcu \
-                 ON tc.constraint_name = kcu.constraint_name \
-                 AND tc.table_schema = kcu.table_schema \
-             JOIN information_schema.referential_constraints rc \
-                 ON tc.constraint_name = rc.constraint_name \
-                 AND tc.table_schema = rc.constraint_schema \
-             JOIN information_schema.key_column_usage ccu \
-                 ON rc.unique_constraint_name = ccu.constraint_name \
-                 AND rc.unique_constraint_schema = ccu.constraint_schema \
-             WHERE tc.table_name = ? AND tc.table_schema = 'main' \
-                 AND tc.constraint_type = 'FOREIGN KEY'",
-        )
-        .map_err(DuckDbDatabaseError::DuckDb)?;
-    let rows = stmt
-        .query_map([table_name], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-            ))
-        })
-        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let mut stmt = conn.prepare(
+        "SELECT kcu.column_name, \
+                ccu.table_name AS referenced_table, \
+                ccu.column_name AS referenced_column, \
+                rc.update_rule, \
+                rc.delete_rule, \
+                tc.constraint_name \
+         FROM information_schema.table_constraints tc \
+         JOIN information_schema.key_column_usage kcu \
+             ON tc.constraint_name = kcu.constraint_name \
+             AND tc.table_schema = kcu.table_schema \
+         JOIN information_schema.referential_constraints rc \
+             ON tc.constraint_name = rc.constraint_name \
+             AND tc.table_schema = rc.constraint_schema \
+         JOIN information_schema.key_column_usage ccu \
+             ON rc.unique_constraint_name = ccu.constraint_name \
+             AND rc.unique_constraint_schema = ccu.constraint_schema \
+         WHERE tc.table_catalog = current_database() \
+             AND tc.table_schema = ? AND tc.table_name = ? \
+             AND tc.constraint_type = 'FOREIGN KEY'",
+    )?;
+    let rows = stmt.query_map([schema, table_name], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+        ))
+    })?;
     for row in rows {
         let (column, referenced_table, referenced_column, on_update, on_delete, constraint_name) =
-            row.map_err(DuckDbDatabaseError::DuckDb)?;
+            row?;
         fk_map.insert(
             constraint_name.clone(),
             crate::schema::ForeignKeyInfo {
@@ -1936,114 +2332,200 @@ fn query_foreign_keys(
     Ok(fk_map)
 }
 
-/// Get column info with primary key and auto-increment detection.
+/// Get column info (tables and views) with primary key and auto-increment detection.
 #[cfg(feature = "schema")]
 fn duckdb_get_table_columns(
     conn: &Connection,
+    schema: &str,
     table_name: &str,
 ) -> Result<Vec<crate::schema::ColumnInfo>, DuckDbDatabaseError> {
-    let pk_cols = query_primary_key_columns(conn, table_name)?;
+    let pk_cols = query_primary_key_columns(conn, schema, table_name)?;
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT column_name, data_type, is_nullable, column_default, ordinal_position \
-             FROM information_schema.columns \
-             WHERE table_name = ? AND table_schema = 'main' \
-             ORDER BY ordinal_position",
-        )
-        .map_err(DuckDbDatabaseError::DuckDb)?;
-    let rows = stmt
-        .query_map([table_name], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, i32>(4)?,
-            ))
-        })
-        .map_err(DuckDbDatabaseError::DuckDb)?;
+    let mut stmt = conn.prepare(
+        "SELECT column_name, data_type, is_nullable, column_default, ordinal_position \
+         FROM information_schema.columns \
+         WHERE table_catalog = current_database() AND table_schema = ? AND table_name = ? \
+         ORDER BY ordinal_position",
+    )?;
+    let rows = stmt.query_map([schema, table_name], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i32>(4)?,
+        ))
+    })?;
 
     let mut columns = Vec::new();
     for row in rows {
-        let (name, type_str, nullable_str, default_str, ordinal) =
-            row.map_err(DuckDbDatabaseError::DuckDb)?;
+        let (name, type_str, nullable_str, default_str, ordinal) = row?;
 
         // Detect auto-increment from nextval() default pattern
         let auto_increment = default_str.as_ref().is_some_and(|d| d.contains("nextval("));
 
         columns.push(crate::schema::ColumnInfo {
-            name: name.clone(),
+            is_primary_key: pk_cols.contains(&name),
+            name,
             data_type: duckdb_type_str_to_data_type(&type_str),
             nullable: nullable_str == "YES",
-            is_primary_key: pk_cols.contains(&name),
             auto_increment,
             default_value: default_str.map(DatabaseValue::String),
-            #[allow(clippy::cast_sign_loss)]
-            ordinal_position: ordinal as u32,
+            ordinal_position: u32::try_from(ordinal).unwrap_or_default(),
+            native_type: type_str,
         });
     }
 
     Ok(columns)
 }
 
-/// Get complete table info including columns, indexes, and foreign keys.
+/// Get complete relation info including columns, indexes, and foreign keys.
+///
+/// Returns `None` if no table or view named `name` exists in `schema`.
 #[cfg(feature = "schema")]
-fn duckdb_get_table_info(
+fn duckdb_get_relation_info(
     conn: &Connection,
-    table_name: &str,
-) -> Result<crate::schema::TableInfo, DuckDbDatabaseError> {
-    let columns = duckdb_get_table_columns(conn, table_name)?;
-    let pk_cols = query_primary_key_columns(conn, table_name)?;
-    let mut col_map = std::collections::BTreeMap::new();
-    for col in columns {
-        col_map.insert(col.name.clone(), col);
-    }
+    schema: &str,
+    name: &str,
+) -> Result<Option<crate::schema::TableInfo>, DuckDbDatabaseError> {
+    let Some((kind, comment)) = duckdb_relation_meta(conn, schema, name)? else {
+        return Ok(None);
+    };
 
-    // Indexes via duckdb_indexes()
+    let columns = duckdb_get_table_columns(conn, schema, name)?;
+    let col_map = columns
+        .into_iter()
+        .map(|col| (col.name.clone(), col))
+        .collect::<std::collections::BTreeMap<_, _>>();
+
     let mut idx_map = std::collections::BTreeMap::new();
-    let mut stmt = conn
-        .prepare(
+
+    let foreign_keys = if kind == crate::schema::RelationKind::Table {
+        let pk_cols = query_primary_key_columns(conn, schema, name)?;
+        let mut stmt = conn.prepare(
             "SELECT index_name, is_unique, sql FROM duckdb_indexes() \
-             WHERE table_name = ? AND schema_name = 'main'",
-        )
-        .map_err(DuckDbDatabaseError::DuckDb)?;
-    let idx_rows = stmt
-        .query_map([table_name], |row| {
+             WHERE database_name = current_database() AND schema_name = ? AND table_name = ?",
+        )?;
+        let idx_rows = stmt.query_map([schema, name], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, bool>(1)?,
-                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(2)?,
             ))
-        })
-        .map_err(DuckDbDatabaseError::DuckDb)?;
-    for row in idx_rows {
-        let (name, unique, sql) = row.map_err(DuckDbDatabaseError::DuckDb)?;
-        let idx_columns = extract_index_columns_from_sql(&sql);
-        // Detect primary index by checking if its columns exactly match PK columns
-        let is_primary = !idx_columns.is_empty()
-            && idx_columns.len() == pk_cols.len()
-            && idx_columns.iter().all(|c| pk_cols.contains(c));
-        idx_map.insert(
-            name.clone(),
-            crate::schema::IndexInfo {
-                name,
-                unique,
-                columns: idx_columns,
-                is_primary,
-            },
-        );
-    }
+        })?;
+        for row in idx_rows {
+            let (index_name, unique, sql) = row?;
+            let idx_columns = sql
+                .as_deref()
+                .map(extract_index_columns_from_sql)
+                .unwrap_or_default();
+            // Detect primary index by checking if its columns exactly match PK columns
+            let is_primary = !idx_columns.is_empty()
+                && idx_columns.len() == pk_cols.len()
+                && idx_columns.iter().all(|c| pk_cols.contains(c));
+            idx_map.insert(
+                index_name.clone(),
+                crate::schema::IndexInfo {
+                    name: index_name,
+                    unique,
+                    columns: idx_columns,
+                    is_primary,
+                },
+            );
+        }
 
-    // Foreign keys
-    let foreign_keys = query_foreign_keys(conn, table_name)?;
+        query_foreign_keys(conn, schema, name)?
+    } else {
+        std::collections::BTreeMap::new()
+    };
 
-    Ok(crate::schema::TableInfo {
-        name: table_name.to_string(),
+    Ok(Some(crate::schema::TableInfo {
+        name: name.to_string(),
+        schema: Some(schema.to_string()),
+        kind,
+        comment,
         columns: col_map,
         indexes: idx_map,
         foreign_keys,
+    }))
+}
+
+/// Execute a raw query and collect a positional [`crate::QueryResult`].
+#[cfg(feature = "raw-sql")]
+fn duckdb_query_result(
+    conn: &Connection,
+    query: &str,
+    params: &[DuckDbDatabaseValue],
+) -> Result<crate::QueryResult, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(query)?;
+    bind_values_raw(&mut stmt, Some(params), 0)?;
+    stmt.raw_execute()?;
+
+    let names = stmt.column_names();
+    let columns: Vec<crate::ResultColumn> = names
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| crate::ResultColumn {
+            name,
+            type_name: Some(duckdb_arrow_type_name(&stmt.column_type(index))),
+        })
+        .collect();
+
+    let mut result_rows = Vec::new();
+    let mut rows = stmt.raw_query();
+    while let Some(row) = rows.next()? {
+        let mut values = Vec::with_capacity(columns.len());
+        for (index, column) in columns.iter().enumerate() {
+            let mut value = DatabaseValue::from(row.get::<_, Value>(index)?);
+            if let (DatabaseValue::Other { type_name, .. }, Some(native)) =
+                (&mut value, &column.type_name)
+            {
+                type_name.clone_from(native);
+            }
+            values.push(value);
+        }
+        result_rows.push(values);
+    }
+
+    Ok(crate::QueryResult {
+        columns,
+        rows: result_rows,
     })
+}
+
+impl DuckDbDatabase {
+    /// Run synchronous work against one pooled connection on the blocking executor.
+    #[allow(dead_code)]
+    async fn with_connection<T: Send + Unpin + 'static>(
+        &self,
+        task_name: &'static str,
+        task: impl FnOnce(&Connection) -> Result<T, DuckDbDatabaseError> + Send + 'static,
+    ) -> Result<T, DatabaseError> {
+        let _operation_guard = self.lock_operation_gate().await;
+        let connection = self.get_connection();
+        run_duckdb_blocking(task_name, move || {
+            let conn = connection.blocking_lock();
+            task(&conn).map_err(Into::into)
+        })
+        .await
+    }
+}
+
+impl DuckDbTransaction {
+    /// Run synchronous work against the transaction's connection on the blocking executor.
+    #[allow(dead_code)]
+    async fn with_connection<T: Send + Unpin + 'static>(
+        &self,
+        task_name: &'static str,
+        task: impl FnOnce(&Connection) -> Result<T, DuckDbDatabaseError> + Send + 'static,
+    ) -> Result<T, DatabaseError> {
+        let connection = Arc::clone(&self.connection);
+        run_duckdb_blocking(task_name, move || {
+            let conn = connection.blocking_lock();
+            task(&conn).map_err(Into::into)
+        })
+        .await
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2582,94 +3064,42 @@ impl Database for DuckDbDatabase {
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
         let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_table_exists", move || {
-            let conn = connection.blocking_lock();
-            let mut stmt = conn
-                .prepare(
-                    "SELECT COUNT(*) FROM information_schema.tables \
-                     WHERE table_name = ? AND table_schema = 'main'",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let count: i64 = stmt
-                .query_row([&table_name], |row| row.get(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            Ok(count > 0)
+        self.with_connection("duckdb_table_exists", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_table_exists(conn, &schema, &table_name)
         })
         .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
-        run_duckdb_blocking("duckdb_list_tables", move || {
-            let conn = connection.blocking_lock();
-            let mut stmt = conn
-                .prepare(
-                    "SELECT table_name FROM information_schema.tables \
-                     WHERE table_schema = 'main' ORDER BY table_name",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let mut tables = Vec::new();
-            for row in rows {
-                tables.push(row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
-            }
-            Ok(tables)
+        self.with_connection("duckdb_list_tables", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_list_table_names(conn, &schema)
         })
         .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_info(
         &self,
         table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
-        let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_get_table_info", move || {
-            let conn = connection.blocking_lock();
-
-            let mut stmt = conn
-                .prepare(
-                    "SELECT COUNT(*) FROM information_schema.tables \
-                     WHERE table_name = ? AND table_schema = 'main'",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let count: i64 = stmt
-                .query_row([&table_name], |row| row.get(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            if count == 0 {
-                return Ok(None);
-            }
-
-            Ok(Some(duckdb_get_table_info(&conn, &table_name)?))
-        })
-        .await
+        self.get_relation_info(&crate::schema::RelationRef::new(table_name))
+            .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_columns(
         &self,
         table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        let _operation_guard = self.lock_operation_gate().await;
-        let connection = self.get_connection();
         let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_get_table_columns", move || {
-            let conn = connection.blocking_lock();
-            Ok(duckdb_get_table_columns(&conn, &table_name)?)
+        self.with_connection("duckdb_get_table_columns", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_get_table_columns(conn, &schema, &table_name)
         })
         .await
     }
@@ -2682,6 +3112,67 @@ impl Database for DuckDbDatabase {
     ) -> Result<bool, DatabaseError> {
         let columns = self.get_table_columns(table_name).await?;
         Ok(columns.iter().any(|c| c.name == column_name))
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        self.with_connection("duckdb_list_schemas", duckdb_list_schemas)
+            .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let schema = schema.map(ToString::to_string);
+        self.with_connection("duckdb_list_relations", move |conn| {
+            let schema = duckdb_resolve_schema(conn, schema.as_deref())?;
+            duckdb_list_relations(conn, &schema)
+        })
+        .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let relation = relation.clone();
+        self.with_connection("duckdb_get_relation_info", move |conn| {
+            let schema = duckdb_resolve_schema(conn, relation.schema.as_deref())?;
+            duckdb_get_relation_info(conn, &schema, &relation.name)
+        })
+        .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let relation = relation.clone();
+        self.with_connection("duckdb_get_view_definition", move |conn| {
+            let schema = duckdb_resolve_schema(conn, relation.schema.as_deref())?;
+            duckdb_view_definition(conn, &schema, &relation.name)
+        })
+        .await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.into_iter().map(Into::into).collect();
+        self.with_connection("duckdb_query_raw_result", move |conn| {
+            duckdb_query_result(conn, &transformed_query, &duckdb_params)
+        })
+        .await
     }
 }
 
@@ -3196,90 +3687,42 @@ impl Database for DuckDbTransaction {
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
-        let connection = Arc::clone(&self.connection);
         let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_tx_table_exists", move || {
-            let conn = connection.blocking_lock();
-            let mut stmt = conn
-                .prepare(
-                    "SELECT COUNT(*) FROM information_schema.tables \
-                     WHERE table_name = ? AND table_schema = 'main'",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let count: i64 = stmt
-                .query_row([&table_name], |row| row.get(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            Ok(count > 0)
+        self.with_connection("duckdb_tx_table_exists", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_table_exists(conn, &schema, &table_name)
         })
         .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
-        let connection = Arc::clone(&self.connection);
-        run_duckdb_blocking("duckdb_tx_list_tables", move || {
-            let conn = connection.blocking_lock();
-            let mut stmt = conn
-                .prepare(
-                    "SELECT table_name FROM information_schema.tables \
-                     WHERE table_schema = 'main' ORDER BY table_name",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let mut tables = Vec::new();
-            for row in rows {
-                tables.push(row.map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
-            }
-            Ok(tables)
+        self.with_connection("duckdb_tx_list_tables", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_list_table_names(conn, &schema)
         })
         .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_info(
         &self,
         table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        let connection = Arc::clone(&self.connection);
-        let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_tx_get_table_info", move || {
-            let conn = connection.blocking_lock();
-
-            let mut stmt = conn
-                .prepare(
-                    "SELECT COUNT(*) FROM information_schema.tables \
-                     WHERE table_name = ? AND table_schema = 'main'",
-                )
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            let count: i64 = stmt
-                .query_row([&table_name], |row| row.get(0))
-                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
-            if count == 0 {
-                return Ok(None);
-            }
-
-            Ok(Some(duckdb_get_table_info(&conn, &table_name)?))
-        })
-        .await
+        self.get_relation_info(&crate::schema::RelationRef::new(table_name))
+            .await
     }
 
     #[cfg(feature = "schema")]
-    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_columns(
         &self,
         table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        let connection = Arc::clone(&self.connection);
         let table_name = table_name.to_string();
-        run_duckdb_blocking("duckdb_tx_get_table_columns", move || {
-            let conn = connection.blocking_lock();
-            Ok(duckdb_get_table_columns(&conn, &table_name)?)
+        self.with_connection("duckdb_tx_get_table_columns", move |conn| {
+            let schema = duckdb_resolve_schema(conn, None)?;
+            duckdb_get_table_columns(conn, &schema, &table_name)
         })
         .await
     }
@@ -3292,6 +3735,67 @@ impl Database for DuckDbTransaction {
     ) -> Result<bool, DatabaseError> {
         let columns = self.get_table_columns(table_name).await?;
         Ok(columns.iter().any(|c| c.name == column_name))
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        self.with_connection("duckdb_tx_list_schemas", duckdb_list_schemas)
+            .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let schema = schema.map(ToString::to_string);
+        self.with_connection("duckdb_tx_list_relations", move |conn| {
+            let schema = duckdb_resolve_schema(conn, schema.as_deref())?;
+            duckdb_list_relations(conn, &schema)
+        })
+        .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let relation = relation.clone();
+        self.with_connection("duckdb_tx_get_relation_info", move |conn| {
+            let schema = duckdb_resolve_schema(conn, relation.schema.as_deref())?;
+            duckdb_get_relation_info(conn, &schema, &relation.name)
+        })
+        .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let relation = relation.clone();
+        self.with_connection("duckdb_tx_get_view_definition", move |conn| {
+            let schema = duckdb_resolve_schema(conn, relation.schema.as_deref())?;
+            duckdb_view_definition(conn, &schema, &relation.name)
+        })
+        .await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let (transformed_query, filtered_params) =
+            duckdb_transform_query_for_params(query, params)?;
+        let duckdb_params: Vec<DuckDbDatabaseValue> =
+            filtered_params.into_iter().map(Into::into).collect();
+        self.with_connection("duckdb_tx_query_raw_result", move |conn| {
+            duckdb_query_result(conn, &transformed_query, &duckdb_params)
+        })
+        .await
     }
 }
 
@@ -3374,7 +3878,8 @@ impl DatabaseTransaction for DuckDbTransaction {
                 }
                 // Check if check_table has a FK referencing current_table
                 let conn = self.connection.lock().await;
-                let fk_map = query_foreign_keys(&conn, check_table)?;
+                let fk_map =
+                    query_foreign_keys(&conn, &duckdb_resolve_schema(&conn, None)?, check_table)?;
                 drop(conn);
 
                 for fk_info in fk_map.values() {
@@ -3401,7 +3906,8 @@ impl DatabaseTransaction for DuckDbTransaction {
                 continue;
             }
             let conn = self.connection.lock().await;
-            let fk_map = query_foreign_keys(&conn, check_table)?;
+            let fk_map =
+                query_foreign_keys(&conn, &duckdb_resolve_schema(&conn, None)?, check_table)?;
             drop(conn);
 
             for fk_info in fk_map.values() {
@@ -3425,7 +3931,8 @@ impl DatabaseTransaction for DuckDbTransaction {
                 continue;
             }
             let conn = self.connection.lock().await;
-            let fk_map = query_foreign_keys(&conn, check_table)?;
+            let fk_map =
+                query_foreign_keys(&conn, &duckdb_resolve_schema(&conn, None)?, check_table)?;
             drop(conn);
 
             for fk_info in fk_map.values() {
@@ -3468,22 +3975,7 @@ impl Expression for DuckDbDatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        matches!(
-            self.0,
-            DatabaseValue::Null
-                | DatabaseValue::BoolOpt(None)
-                | DatabaseValue::Int8Opt(None)
-                | DatabaseValue::Int16Opt(None)
-                | DatabaseValue::Int32Opt(None)
-                | DatabaseValue::Int64Opt(None)
-                | DatabaseValue::UInt8Opt(None)
-                | DatabaseValue::UInt16Opt(None)
-                | DatabaseValue::UInt32Opt(None)
-                | DatabaseValue::UInt64Opt(None)
-                | DatabaseValue::Real32Opt(None)
-                | DatabaseValue::Real64Opt(None)
-                | DatabaseValue::StringOpt(None)
-        )
+        self.0.is_null()
     }
 
     fn expression_type(&self) -> ExpressionType<'_> {

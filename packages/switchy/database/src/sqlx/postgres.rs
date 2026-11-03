@@ -915,6 +915,59 @@ impl Database for PostgresSqlxDatabase {
         postgres_sqlx_column_exists(&mut conn, table_name, column_name).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_list_schemas(&mut conn).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_list_relations(&mut conn, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_get_relation_info(&mut conn, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_get_view_definition(&mut conn, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        query_raw_result_on(&mut conn, query, params).await
+    }
+
     #[allow(clippy::significant_drop_tightening)]
     #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1356,6 +1409,59 @@ impl Database for PostgresSqlxTransaction {
         let mut lock = self.transaction.lock().await;
         let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
         postgres_sqlx_column_exists(tx, table_name, column_name).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        super::postgres_introspection::postgres_sqlx_list_schemas(tx).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_relations(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        super::postgres_introspection::postgres_sqlx_list_relations(tx, schema).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_relation_info(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        super::postgres_introspection::postgres_sqlx_get_relation_info(tx, relation).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn get_view_definition(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Option<String>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        super::postgres_introspection::postgres_sqlx_get_view_definition(tx, relation).await
+    }
+
+    #[cfg(feature = "raw-sql")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw_result(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<crate::QueryResult, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        query_raw_result_on(tx, query, params).await
     }
 
     #[allow(clippy::significant_drop_tightening)]
@@ -1835,6 +1941,12 @@ async fn postgres_sqlx_exec_create_table(
                     query.push_str("timestamp '");
                     query.push_str(&x.and_utc().to_rfc3339());
                     query.push('\'');
+                }
+                other => {
+                    query.push_str(
+                        &crate::postgres_common::extended_value_literal(other)
+                            .unwrap_or_else(|| "NULL".to_string()),
+                    );
                 }
             }
         }
@@ -2374,35 +2486,230 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
     Ok(())
 }
 
+/// Decode a column value; never fails on unknown or unexpected types.
+///
+/// Types with a native mapping are decoded by sqlx; everything else
+/// (dates, times, `bytea`, JSON, arrays, enums, intervals, network types,
+/// ...) is decoded from the wire bytes by
+/// [`crate::postgres_common::decode_binary_value`], degrading to
+/// [`DatabaseValue::Other`]. `TIMESTAMPTZ` decodes to
+/// [`DatabaseValue::DateTime`] in UTC (`PostgreSQL` stores UTC instants).
+#[allow(clippy::unnecessary_wraps)]
 fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
     if value.is_null() {
         return Ok(DatabaseValue::Null);
     }
     let owned = sqlx::ValueRef::to_owned(value);
-    match value.type_info().name() {
-        "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
-        "\"CHAR\"" => Ok(DatabaseValue::Int8(owned.try_decode()?)),
-        "SMALLINT" | "SMALLSERIAL" | "INT2" => Ok(DatabaseValue::Int16(owned.try_decode()?)),
-        "INT" | "SERIAL" | "INT4" => Ok(DatabaseValue::Int32(owned.try_decode()?)),
-        "BIGINT" | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Int64(owned.try_decode()?)),
-        "REAL" | "FLOAT4" => Ok(DatabaseValue::Real32(owned.try_decode()?)),
+    let native = match value.type_info().name() {
+        "BOOL" => Some(owned.try_decode().map(DatabaseValue::Bool)),
+        "\"CHAR\"" => Some(owned.try_decode().map(DatabaseValue::Int8)),
+        "SMALLINT" | "SMALLSERIAL" | "INT2" => Some(owned.try_decode().map(DatabaseValue::Int16)),
+        "INT" | "SERIAL" | "INT4" => Some(owned.try_decode().map(DatabaseValue::Int32)),
+        "BIGINT" | "BIGSERIAL" | "INT8" => Some(owned.try_decode().map(DatabaseValue::Int64)),
+        "REAL" | "FLOAT4" => Some(owned.try_decode().map(DatabaseValue::Real32)),
         #[cfg(feature = "decimal")]
-        "DECIMAL" | "NUMERIC" => Ok(DatabaseValue::Decimal(owned.try_decode()?)),
-        "DOUBLE PRECISION" | "FLOAT8" => Ok(DatabaseValue::Real64(owned.try_decode()?)),
+        "DECIMAL" | "NUMERIC" => Some(owned.try_decode().map(DatabaseValue::Decimal)),
+        "DOUBLE PRECISION" | "FLOAT8" => Some(owned.try_decode().map(DatabaseValue::Real64)),
         "CHAR" | "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" | "BPCHAR" => {
-            Ok(DatabaseValue::String(owned.try_decode()?))
+            Some(owned.try_decode().map(DatabaseValue::String))
         }
-        "TIMESTAMP" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
-        "TIMESTAMPTZ" => {
-            let dt: chrono::DateTime<chrono::Utc> = owned.try_decode()?;
-            Ok(DatabaseValue::DateTime(dt.naive_utc()))
-        }
+        "TIMESTAMP" => Some(owned.try_decode().map(DatabaseValue::DateTime)),
+        "TIMESTAMPTZ" => Some(
+            owned
+                .try_decode::<chrono::DateTime<chrono::Utc>>()
+                .map(|dt| DatabaseValue::DateTime(dt.naive_utc())),
+        ),
         #[cfg(feature = "uuid")]
-        "UUID" => Ok(DatabaseValue::Uuid(owned.try_decode()?)),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: value.type_info().name().to_string(),
-        }),
+        "UUID" => Some(owned.try_decode().map(DatabaseValue::Uuid)),
+        _ => None,
+    };
+    if let Some(Ok(value)) = native {
+        return Ok(value);
     }
+    Ok(generic_column_value(value))
+}
+
+/// Decode any non-NULL value from its wire representation.
+fn generic_column_value(value: &PgValueRef<'_>) -> DatabaseValue {
+    use crate::postgres_common::{
+        TypeShape, canonical_type_name, decode_binary_value, decode_text_value,
+    };
+    use sqlx::postgres::PgTypeKind;
+
+    let type_info = value.type_info();
+    let type_oid = type_info.oid().map(|o| o.0);
+    let type_name = canonical_type_name(type_oid, type_info.name());
+    let (decode_oid, shape) = match type_info.kind() {
+        PgTypeKind::Array(_) => (type_oid, TypeShape::Array),
+        PgTypeKind::Composite(_) => (type_oid, TypeShape::Composite),
+        PgTypeKind::Range(_) => (type_oid, TypeShape::Range),
+        // Domains use their base type's wire format
+        PgTypeKind::Domain(base) => (base.oid().map(|o| o.0), TypeShape::Scalar),
+        PgTypeKind::Simple | PgTypeKind::Pseudo | PgTypeKind::Enum(_) => {
+            (type_oid, TypeShape::Scalar)
+        }
+    };
+    let decode_oid = decode_oid.unwrap_or(0);
+    match value.format() {
+        sqlx::postgres::PgValueFormat::Text => value.as_str().map_or_else(
+            |_| DatabaseValue::Other {
+                type_name: type_name.clone(),
+                text: value
+                    .as_bytes()
+                    .map(crate::postgres_common::hex_bytes)
+                    .unwrap_or_default(),
+            },
+            |text| decode_text_value(decode_oid, &type_name, text),
+        ),
+        sqlx::postgres::PgValueFormat::Binary => value.as_bytes().map_or_else(
+            |_| DatabaseValue::Other {
+                type_name: type_name.clone(),
+                text: String::new(),
+            },
+            |bytes| decode_binary_value(decode_oid, &type_name, shape, bytes),
+        ),
+    }
+}
+
+/// Bind [`DatabaseValue`] variants added for lossless round-trips.
+///
+/// [`DatabaseValue::Other`] binds as `TEXT`; the SQL may need an explicit
+/// cast to the target type (e.g. `$1::interval`).
+fn bind_extended_value<'q>(
+    query: Query<'q, Postgres, PgArguments>,
+    value: &'q DatabaseValue,
+) -> Result<Query<'q, Postgres, PgArguments>, DatabaseError> {
+    Ok(match value {
+        DatabaseValue::Bytes(bytes) | DatabaseValue::BytesOpt(Some(bytes)) => {
+            query.bind(bytes.as_slice())
+        }
+        DatabaseValue::BytesOpt(None) => query.bind(None::<Vec<u8>>),
+        DatabaseValue::Date(date) | DatabaseValue::DateOpt(Some(date)) => query.bind(*date),
+        DatabaseValue::DateOpt(None) => query.bind(None::<chrono::NaiveDate>),
+        DatabaseValue::Time(time) | DatabaseValue::TimeOpt(Some(time)) => query.bind(*time),
+        DatabaseValue::TimeOpt(None) => query.bind(None::<chrono::NaiveTime>),
+        DatabaseValue::DateTimeTz(dt) | DatabaseValue::DateTimeTzOpt(Some(dt)) => query.bind(*dt),
+        DatabaseValue::DateTimeTzOpt(None) => {
+            query.bind(None::<chrono::DateTime<chrono::FixedOffset>>)
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::Json(json) | DatabaseValue::JsonOpt(Some(json)) => {
+            query.bind(sqlx::types::Json(json))
+        }
+        #[cfg(feature = "json")]
+        DatabaseValue::JsonOpt(None) => query.bind(None::<sqlx::types::Json<serde_json::Value>>),
+        DatabaseValue::Other { text, .. } => query.bind(text.as_str()),
+        other => {
+            return Err(DatabaseError::UnsupportedDataType(format!(
+                "cannot bind {other:?} as a PostgreSQL parameter"
+            )));
+        }
+    })
+}
+
+/// Bind one raw-SQL parameter (after `Now`/`NowPlus` transformation).
+#[cfg(feature = "raw-sql")]
+fn bind_raw_param<'q>(
+    query: Query<'q, Postgres, PgArguments>,
+    param: &'q DatabaseValue,
+) -> Result<Query<'q, Postgres, PgArguments>, DatabaseError> {
+    Ok(match param {
+        DatabaseValue::Null => query.bind(Option::<String>::None),
+        DatabaseValue::String(s) => query.bind(s.as_str()),
+        DatabaseValue::StringOpt(s) => query.bind(s.as_deref()),
+        DatabaseValue::Bool(b) => query.bind(*b),
+        DatabaseValue::BoolOpt(b) => query.bind(*b),
+        DatabaseValue::Int8(n) => query.bind(i16::from(*n)),
+        DatabaseValue::Int8Opt(n) => query.bind(n.map(i16::from)),
+        DatabaseValue::Int16(n) => query.bind(*n),
+        DatabaseValue::Int16Opt(n) => query.bind(*n),
+        DatabaseValue::Int32(n) => query.bind(*n),
+        DatabaseValue::Int32Opt(n) => query.bind(*n),
+        DatabaseValue::Int64(n) => query.bind(*n),
+        DatabaseValue::Int64Opt(n) => query.bind(*n),
+        DatabaseValue::UInt8(n) => query.bind(i16::from(*n)),
+        DatabaseValue::UInt8Opt(n) => query.bind(n.map(i16::from)),
+        DatabaseValue::UInt16(n) => {
+            query.bind(i16::try_from(*n).map_err(|_| DatabaseError::UInt16Overflow(*n))?)
+        }
+        DatabaseValue::UInt16Opt(n) => query.bind(n.and_then(|v| i16::try_from(v).ok())),
+        DatabaseValue::UInt32(n) => {
+            query.bind(i32::try_from(*n).map_err(|_| DatabaseError::UInt32Overflow(*n))?)
+        }
+        DatabaseValue::UInt32Opt(n) => query.bind(n.and_then(|v| i32::try_from(v).ok())),
+        DatabaseValue::UInt64(n) => query.bind(i64::try_from(*n).unwrap_or(i64::MAX)),
+        DatabaseValue::UInt64Opt(n) => query.bind(n.map(|x| i64::try_from(x).unwrap_or(i64::MAX))),
+        DatabaseValue::Real64(r) => query.bind(*r),
+        DatabaseValue::Real64Opt(r) => query.bind(*r),
+        DatabaseValue::Real32(r) => query.bind(*r),
+        DatabaseValue::Real32Opt(r) => query.bind(*r),
+        #[cfg(feature = "decimal")]
+        DatabaseValue::Decimal(d) => query.bind(*d),
+        #[cfg(feature = "decimal")]
+        DatabaseValue::DecimalOpt(d) => query.bind(*d),
+        #[cfg(feature = "uuid")]
+        DatabaseValue::Uuid(u) => query.bind(*u),
+        #[cfg(feature = "uuid")]
+        DatabaseValue::UuidOpt(u) => query.bind(*u),
+        DatabaseValue::DateTime(dt) => query.bind(*dt),
+        DatabaseValue::Now | DatabaseValue::NowPlus(_) => {
+            return Err(DatabaseError::QueryFailed(
+                "Now/NowPlus parameters should be handled by query transformation".to_string(),
+            ));
+        }
+        other => bind_extended_value(query, other)?,
+    })
+}
+
+/// Execute a raw query on one connection, describing its result columns.
+#[cfg(feature = "raw-sql")]
+async fn query_raw_result_on(
+    connection: &mut PgConnection,
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<crate::QueryResult, DatabaseError> {
+    use sqlx::SqlSafeStr as _;
+
+    let (transformed_query, filtered_params) = postgres_transform_query_for_params(query, params);
+    let statement = (&mut *connection)
+        .prepare(sqlx::AssertSqlSafe(transformed_query).into_sql_str())
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+    let columns = statement
+        .columns()
+        .iter()
+        .map(|column| {
+            let type_info = column.type_info();
+            crate::ResultColumn {
+                name: column.name().to_string(),
+                type_name: Some(crate::postgres_common::canonical_type_name(
+                    type_info.oid().map(|o| o.0),
+                    type_info.name(),
+                )),
+            }
+        })
+        .collect();
+    let mut query_builder = statement.query();
+    for param in &filtered_params {
+        query_builder = bind_raw_param(query_builder, param)?;
+    }
+    let rows = query_builder
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+    let rows = rows
+        .iter()
+        .map(|row| {
+            (0..row.len())
+                .map(|index| {
+                    row.try_get_raw(index)
+                        .and_then(|value| column_value(&value))
+                        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(crate::QueryResult { columns, rows })
 }
 
 fn from_row(column_names: &[String], row: &PgRow) -> Result<crate::Row, SqlxDatabaseError> {
@@ -2794,6 +3101,9 @@ where
                 DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
+                }
+                other => {
+                    query = bind_extended_value(query, other)?;
                 }
             }
         }
@@ -3501,7 +3811,7 @@ impl Expression for PgDatabaseValue {
     }
 
     fn is_null(&self) -> bool {
-        self.0.is_null()
+        Expression::is_null(&self.0)
     }
 
     fn expression_type(&self) -> ExpressionType<'_> {
@@ -4146,6 +4456,7 @@ impl PostgresSqlxDatabase {
                             .to_string(),
                     ));
                 }
+                other => bind_extended_value(query_builder, other)?,
             };
         }
 
@@ -4245,6 +4556,7 @@ impl PostgresSqlxDatabase {
                             .to_string(),
                     ));
                 }
+                other => bind_extended_value(query_builder, other)?,
             };
         }
 
@@ -4412,6 +4724,7 @@ impl PostgresSqlxTransaction {
                     // NowPlus should not be bound as parameter - it should be a SQL expression
                     panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
+                other => bind_extended_value(query_builder, other)?,
             };
         }
 
@@ -4507,6 +4820,7 @@ impl PostgresSqlxTransaction {
                     // NowPlus should not be bound as parameter - it should be a SQL expression
                     panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
+                other => bind_extended_value(query_builder, other)?,
             };
         }
 

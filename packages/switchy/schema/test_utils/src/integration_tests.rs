@@ -103,7 +103,6 @@ pub async fn demonstrate_rollback_functionality() -> Result<(), crate::TestError
 pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::TestError> {
     use std::sync::Arc;
 
-    use switchy_database::query::Expression as _;
     use switchy_schema::migration::Migration;
 
     use crate::{MigrationTestBuilder, create_empty_in_memory};
