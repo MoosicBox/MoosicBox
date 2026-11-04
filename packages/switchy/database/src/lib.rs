@@ -1868,10 +1868,18 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// # Errors
     ///
+    /// * If the backend does not implement raw SQL (`DatabaseError::UnsupportedOperation`)
     /// * If the statement execution fails
     /// * If there are connection errors
     #[cfg(feature = "raw-sql")]
-    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError>;
+    async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {
+        // A default (like the `_params` variants) keeps wrapper databases that
+        // gate raw SQL on their own feature compiling when another crate
+        // enables `raw-sql` on this one.
+        Err(DatabaseError::UnsupportedOperation(
+            "exec_raw not implemented for this backend".to_string(),
+        ))
+    }
 
     /// Samples `SQLite` change counters on one persistent connection without writes.
     /// Callers must retain their own connection identity and exclude concurrent local
@@ -2465,15 +2473,21 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// # Backend Support
     ///
-    /// All backends must implement this method. This is core Database functionality
-    /// without fallback or default behavior.
+    /// Every backend implements this. The default returns
+    /// `DatabaseError::UnsupportedOperation`, so wrappers that gate raw SQL behind
+    /// their own feature still compile when another crate enables `raw-sql`.
     ///
     /// # Errors
     ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
     /// * Returns `DatabaseError::QueryFailed` if query execution fails
     /// * Returns `DatabaseError::InvalidQuery` for malformed SQL
     #[cfg(feature = "raw-sql")]
-    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError>;
+    async fn query_raw(&self, _query: &str) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "query_raw not implemented for this backend".to_string(),
+        ))
+    }
 
     /// Execute raw SQL with parameters
     /// Parameters are safely bound, preventing SQL injection

@@ -1688,6 +1688,12 @@ impl Digest for ExpressionType<'_> {
                 hasher.update(b"VALUE:");
                 value.update_digest(hasher);
             }
+            // Another crate can enable `switchy_database/raw-sql` without this
+            // crate's `raw-sql`, adding `Literal`. This crate never builds one
+            // then, so a fixed tag keeps digests total without inspecting it.
+            #[cfg(not(feature = "raw-sql"))]
+            #[allow(unreachable_patterns)]
+            _ => hasher.update(b"UNSUPPORTED_EXPRESSION"),
         }
     }
 }
