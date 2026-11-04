@@ -142,8 +142,8 @@ use std::collections::BTreeMap;
 use crate::{
     DatabaseError, DatabaseValue,
     schema::{
-        ColumnInfo, DataType, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind, RelationRef,
-        RelationSummary, SchemaInfo, TableInfo,
+        ColumnInfo, DataType, DatabaseInfo, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
+        RelationRef, RelationSummary, SchemaInfo, TableInfo,
     },
 };
 
@@ -244,6 +244,41 @@ pub async fn mysql_sqlx_list_schemas(
                 is_system: is_mysql_system_schema(&name),
                 name,
                 is_default,
+            })
+        })
+        .collect()
+}
+
+/// List the databases of the server
+///
+/// `information_schema`, `mysql`, `performance_schema` and `sys` are reported
+/// as system databases; the current database is `DATABASE()`.
+///
+/// # Errors
+///
+/// * If the `information_schema.schemata` query fails
+pub async fn mysql_sqlx_list_databases(
+    conn: &mut MySqlConnection,
+) -> Result<Vec<DatabaseInfo>, DatabaseError> {
+    let query = "SELECT
+        CAST(SCHEMA_NAME AS CHAR) AS SCHEMA_NAME,
+        CAST(COALESCE(SCHEMA_NAME = DATABASE(), 0) AS SIGNED) AS IS_CURRENT
+    FROM information_schema.schemata
+    ORDER BY SCHEMA_NAME";
+
+    let rows = sqlx::query(sqlx::AssertSqlSafe(query.to_string()))
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(map_err)?;
+
+    rows.iter()
+        .map(|row| {
+            let name = get_string(row, "SCHEMA_NAME")?;
+            let is_current = row.try_get::<i64, _>("IS_CURRENT").map_err(map_err)? != 0;
+            Ok(DatabaseInfo {
+                is_system: is_mysql_system_schema(&name),
+                name,
+                is_current,
             })
         })
         .collect()

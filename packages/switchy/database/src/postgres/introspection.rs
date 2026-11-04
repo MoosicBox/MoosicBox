@@ -16,7 +16,9 @@ use tokio_postgres::Client;
 
 use crate::DatabaseError;
 use crate::postgres_common::PgCatalog;
-use crate::schema::{ColumnInfo, RelationRef, RelationSummary, SchemaInfo, TableInfo};
+use crate::schema::{
+    ColumnInfo, DatabaseInfo, RelationRef, RelationSummary, SchemaInfo, TableInfo,
+};
 
 /// [`PgCatalog`] adapter over a borrowed `tokio-postgres` client.
 pub struct TokioCatalog<'a>(pub &'a Client);
@@ -93,6 +95,11 @@ pub async fn postgres_get_table_info(
 /// List all schemas
 pub async fn postgres_list_schemas(client: &Client) -> Result<Vec<SchemaInfo>, DatabaseError> {
     crate::postgres_common::pg_list_schemas(&mut TokioCatalog(client)).await
+}
+
+/// List the connectable, non-template databases of the server
+pub async fn postgres_list_databases(client: &Client) -> Result<Vec<DatabaseInfo>, DatabaseError> {
+    crate::postgres_common::pg_list_databases(&mut TokioCatalog(client)).await
 }
 
 /// List relations in a schema (`None` = default schema)

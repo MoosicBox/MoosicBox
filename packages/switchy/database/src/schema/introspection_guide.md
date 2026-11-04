@@ -60,7 +60,9 @@ connection.execute("PRAGMA table_info(users)", [])?;
 
 **Behavior**: The table-oriented methods operate on the `main` schema. Attached
 databases are reported as schemas by `list_schemas()` (`PRAGMA database_list`;
-`main` is the default, `temp` is flagged as a system schema).
+`main` is the default, `temp` is flagged as a system schema). `list_databases()`
+reports the same list as databases (`main` is current, `temp` is a system
+database), since `SQLite` has no server-level database catalog.
 
 ```sql
 ATTACH DATABASE 'other.db' AS other;
@@ -108,6 +110,12 @@ for schema in db.list_schemas().await? {          // pg_namespace
 }
 let info = db.get_relation_info(&RelationRef::with_schema("myapp", "users")).await?;
 let sql = db.get_view_definition(&RelationRef::with_schema("myapp", "active_users")).await?;
+
+// Other databases on the same server (pg_database, excluding templates and
+// databases that do not allow connections); open one with a new connection
+for database in db.list_databases().await? {
+    println!("{} current={}", database.name, database.is_current);
+}
 ```
 
 ### 2. Case Sensitivity - Identifier Folding

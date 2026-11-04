@@ -980,7 +980,7 @@ mod introspection {
     use async_trait::async_trait;
 
     use crate::schema::{
-        ColumnInfo, DataType, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
+        ColumnInfo, DataType, DatabaseInfo, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
         RelationSummary, SchemaInfo, TableInfo,
     };
     use crate::{DatabaseError, DatabaseValue};
@@ -1026,6 +1026,11 @@ mod introspection {
          (n.nspname IN ('pg_catalog', 'information_schema') \
           OR n.nspname LIKE 'pg\\_toast%' OR n.nspname LIKE 'pg\\_temp\\_%')::text \
          FROM pg_namespace n ORDER BY n.nspname";
+
+    /// `SELECT name, is_current` for every connectable, non-template database.
+    pub const LIST_DATABASES_SQL: &str = "SELECT datname::text, \
+         (datname = current_database())::text \
+         FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname";
 
     /// Relations of a schema (`$1`, nullable = current schema):
     /// `schema, name, relkind, comment, reltuples`.
@@ -1304,6 +1309,26 @@ mod introspection {
                 name: col_string(row, 0),
                 is_default: col_bool(row, 1),
                 is_system: col_bool(row, 2),
+            })
+            .collect())
+    }
+
+    /// List the connectable, non-template databases of the server.
+    ///
+    /// # Errors
+    ///
+    /// * If the catalog query fails
+    pub async fn pg_list_databases<C: PgCatalog + ?Sized>(
+        client: &mut C,
+    ) -> Result<Vec<DatabaseInfo>, DatabaseError> {
+        Ok(client
+            .catalog_rows(LIST_DATABASES_SQL, &[])
+            .await?
+            .iter()
+            .map(|row| DatabaseInfo {
+                name: col_string(row, 0),
+                is_current: col_bool(row, 1),
+                is_system: false,
             })
             .collect())
     }

@@ -16,7 +16,9 @@ use sqlx::{PgConnection, Row};
 
 use crate::DatabaseError;
 use crate::postgres_common::PgCatalog;
-use crate::schema::{ColumnInfo, RelationRef, RelationSummary, SchemaInfo, TableInfo};
+use crate::schema::{
+    ColumnInfo, DatabaseInfo, RelationRef, RelationSummary, SchemaInfo, TableInfo,
+};
 
 fn sqlx_error(e: sqlx::Error) -> DatabaseError {
     DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
@@ -89,6 +91,13 @@ pub async fn postgres_sqlx_list_schemas(
     conn: &mut PgConnection,
 ) -> Result<Vec<SchemaInfo>, DatabaseError> {
     crate::postgres_common::pg_list_schemas(conn).await
+}
+
+/// List the connectable, non-template databases of the server
+pub async fn postgres_sqlx_list_databases(
+    conn: &mut PgConnection,
+) -> Result<Vec<DatabaseInfo>, DatabaseError> {
+    crate::postgres_common::pg_list_databases(conn).await
 }
 
 /// List relations in a schema (`None` = default schema)

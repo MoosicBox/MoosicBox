@@ -846,6 +846,14 @@ impl Database for MySqlSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        drop(pool);
+        super::mysql_introspection::mysql_sqlx_list_databases(&mut connection).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -1364,6 +1372,16 @@ impl Database for MysqlSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
         super::mysql_introspection::mysql_sqlx_list_schemas(&mut *tx).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_list_databases(&mut *tx).await
     }
 
     #[cfg(feature = "schema")]

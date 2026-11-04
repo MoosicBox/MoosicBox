@@ -58,6 +58,24 @@ async fn lists_schemas_with_default_and_system_flags() {
 }
 
 #[test_log::test(switchy_async::test)]
+async fn lists_databases_with_current_and_system_flags() {
+    let db = setup();
+    let databases = db.list_databases().await.unwrap();
+    let current = databases
+        .iter()
+        .filter(|d| d.is_current)
+        .collect::<Vec<_>>();
+    assert_eq!(current.len(), 1);
+    assert!(!current[0].is_system);
+    assert!(databases.iter().any(|d| d.name == "system" && d.is_system));
+    assert!(databases.iter().any(|d| d.name == "temp" && d.is_system));
+
+    let tx = db.begin_transaction().await.unwrap();
+    assert_eq!(tx.list_databases().await.unwrap(), databases);
+    tx.rollback().await.unwrap();
+}
+
+#[test_log::test(switchy_async::test)]
 async fn lists_relations_in_default_and_named_schema() {
     let db = setup();
     let default = db.list_relations(None).await.unwrap();

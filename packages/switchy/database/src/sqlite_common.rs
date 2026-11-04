@@ -7,7 +7,7 @@
 #![allow(dead_code)]
 
 #[cfg(feature = "schema")]
-use crate::schema::{DataType, RelationKind, SchemaInfo};
+use crate::schema::{DataType, DatabaseInfo, RelationKind, SchemaInfo};
 
 /// Name of the default `SQLite` schema.
 pub const SQLITE_DEFAULT_SCHEMA: &str = "main";
@@ -228,6 +228,23 @@ pub fn sqlite_schema_info(name: &str) -> SchemaInfo {
     }
 }
 
+/// Report `PRAGMA database_list` schemas as databases.
+///
+/// `SQLite` has no server-level database list: the attached database files are
+/// the databases, with `main` current and `temp` a system database.
+#[cfg(feature = "schema")]
+#[must_use]
+pub fn sqlite_databases(schemas: Vec<SchemaInfo>) -> Vec<DatabaseInfo> {
+    schemas
+        .into_iter()
+        .map(|schema| DatabaseInfo {
+            name: schema.name,
+            is_current: schema.is_default,
+            is_system: schema.is_system,
+        })
+        .collect()
+}
+
 /// Map a `sqlite_master.type` value to a [`RelationKind`].
 #[cfg(feature = "schema")]
 #[must_use]
@@ -414,6 +431,21 @@ mod tests {
         assert!(sqlite_schema_info("main").is_default);
         assert!(sqlite_schema_info("temp").is_system);
         assert!(!sqlite_schema_info("aux").is_default);
+        assert_eq!(
+            sqlite_databases(vec![sqlite_schema_info("main"), sqlite_schema_info("temp")]),
+            vec![
+                DatabaseInfo {
+                    name: "main".to_string(),
+                    is_current: true,
+                    is_system: false,
+                },
+                DatabaseInfo {
+                    name: "temp".to_string(),
+                    is_current: false,
+                    is_system: true,
+                },
+            ]
+        );
         assert_eq!(sqlite_catalog_table("temp"), "sqlite_temp_master");
         assert_eq!(sqlite_catalog_table("a\"b"), "\"a\"\"b\".sqlite_master");
         assert_eq!(sqlite_relation_kind("view", "v"), RelationKind::View);

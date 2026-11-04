@@ -501,6 +501,13 @@ impl crate::Database for TursoTransaction {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        super::introspection::list_schemas(&self.connection)
+            .await
+            .map(crate::sqlite_common::sqlite_databases)
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,

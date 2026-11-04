@@ -1005,6 +1005,14 @@ impl Database for SqliteSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        Ok(crate::sqlite_common::sqlite_databases(
+            sqlx_sqlite_list_schemas(self.get_connection_internal().await?.lock().await.as_mut())
+                .await?,
+        ))
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -3926,6 +3934,18 @@ impl Database for SqliteSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
         sqlx_sqlite_list_schemas(&mut *tx).await.map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        Ok(crate::sqlite_common::sqlite_databases(
+            sqlx_sqlite_list_schemas(&mut *tx).await?,
+        ))
     }
 
     #[cfg(feature = "schema")]

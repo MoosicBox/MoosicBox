@@ -834,6 +834,13 @@ impl Database for PostgresDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_list_databases(client_ref).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -1318,6 +1325,12 @@ impl Database for PostgresTransaction {
     async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
         let client_ref: &Client = &*self.client.lock().await;
         super::introspection::postgres_list_schemas(client_ref).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        super::introspection::postgres_list_databases(client_ref).await
     }
 
     #[cfg(feature = "schema")]

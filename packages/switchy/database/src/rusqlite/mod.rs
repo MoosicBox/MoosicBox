@@ -1436,6 +1436,12 @@ impl Database for RusqliteDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_list_schemas(&*connection.lock().await).map(crate::sqlite_common::sqlite_databases)
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -1988,6 +1994,12 @@ impl Database for RusqliteTransaction {
     #[cfg(feature = "schema")]
     async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
         rusqlite_list_schemas(&*self.connection.lock().await)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        rusqlite_list_schemas(&*self.connection.lock().await)
+            .map(crate::sqlite_common::sqlite_databases)
     }
 
     #[cfg(feature = "schema")]

@@ -89,6 +89,15 @@ async fn check_relations(db: &dyn Database) {
     assert!(main.is_default);
     assert!(!main.is_system);
 
+    let databases = db.list_databases().await.unwrap();
+    let main = databases
+        .iter()
+        .find(|d| d.name == "main")
+        .expect("main database");
+    assert!(main.is_current);
+    assert!(!main.is_system);
+    assert_eq!(databases.iter().filter(|d| d.is_current).count(), 1);
+
     let relations = db.list_relations(None).await.unwrap();
     let names: Vec<_> = relations
         .iter()
@@ -313,6 +322,12 @@ mod rusqlite_backend {
         let temp = schemas.iter().find(|s| s.name == "temp").expect("temp");
         assert!(temp.is_system);
 
+        let databases = db.list_databases().await.unwrap();
+        let aux = databases.iter().find(|d| d.name == "aux").expect("aux");
+        assert!(!aux.is_current && !aux.is_system);
+        let temp = databases.iter().find(|d| d.name == "temp").expect("temp");
+        assert!(temp.is_system && !temp.is_current);
+
         let relations = db.list_relations(Some("aux")).await.unwrap();
         assert_eq!(relations.len(), 2);
         assert!(relations.iter().all(|r| r.schema.as_deref() == Some("aux")));
@@ -352,6 +367,7 @@ mod rusqlite_backend {
         );
         assert_eq!(tx.list_relations(Some("aux")).await.unwrap().len(), 2);
         assert!(tx.list_schemas().await.unwrap().len() >= 3);
+        assert!(tx.list_databases().await.unwrap().len() >= 3);
         let result = tx
             .query_raw_result("SELECT id, label FROM aux.items", &[])
             .await

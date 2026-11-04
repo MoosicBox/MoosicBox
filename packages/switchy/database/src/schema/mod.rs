@@ -1479,6 +1479,23 @@ pub struct SchemaInfo {
     pub is_system: bool,
 }
 
+/// Information about a database (catalog) on the server the connection is attached to
+///
+/// Returned by [`Database::list_databases`](crate::Database::list_databases).
+/// `PostgreSQL` and `MySQL` report the databases of the server, `SQLite`/Turso
+/// report the attached database files (`PRAGMA database_list`), and `DuckDB`
+/// reports its attached catalogs.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DatabaseInfo {
+    /// Database name
+    pub name: String,
+    /// Whether this is the database the connection is currently using
+    pub is_current: bool,
+    /// Whether this is a system/internal database (e.g. `MySQL`'s `mysql`,
+    /// `SQLite`'s `temp`, `DuckDB`'s `system`)
+    pub is_system: bool,
+}
+
 /// A reference to a relation (table, view, ...), optionally schema-qualified
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RelationRef {

@@ -91,6 +91,15 @@ async fn check_introspection(db: &dyn Database, s: &str) {
     );
     assert!(schemas.iter().any(|x| x.name == "public" && x.is_default));
 
+    let databases = db.list_databases().await.unwrap();
+    let current = databases
+        .iter()
+        .filter(|d| d.is_current)
+        .collect::<Vec<_>>();
+    assert_eq!(current.len(), 1);
+    assert!(databases.iter().all(|d| !d.is_system));
+    assert!(!databases.iter().any(|d| d.name.starts_with("template")));
+
     let relations = db.list_relations(Some(s)).await.unwrap();
     let find = |name: &str| relations.iter().find(|r| r.name == name).unwrap();
     let parent = find("parent");
@@ -409,6 +418,7 @@ async fn check_decoding(db: &dyn Database, s: &str) {
             .is_some()
     );
     assert!(!tx.list_schemas().await.unwrap().is_empty());
+    assert!(!tx.list_databases().await.unwrap().is_empty());
     let tx_result = tx
         .query_raw_result(&format!("SELECT x FROM {s}.tx_only"), &[])
         .await

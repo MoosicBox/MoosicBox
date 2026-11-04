@@ -2117,6 +2117,26 @@ fn duckdb_list_schemas(
     Ok(schemas)
 }
 
+/// List the attached databases (catalogs); internal catalogs such as
+/// `system` and `temp` are reported as system databases.
+#[cfg(feature = "schema")]
+fn duckdb_list_databases(
+    conn: &Connection,
+) -> Result<Vec<crate::schema::DatabaseInfo>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(
+        "SELECT database_name, database_name = current_database(), internal \
+         FROM duckdb_databases() ORDER BY database_name",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(crate::schema::DatabaseInfo {
+            name: row.get(0)?,
+            is_current: row.get(1)?,
+            is_system: row.get(2)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 /// SQL selecting `name`, `kind`, `comment`, `estimated_rows` for tables and views
 /// in schema `?1`; the optional `extra` predicate may reference `name`.
 #[cfg(feature = "schema")]
@@ -3260,6 +3280,12 @@ impl Database for DuckDbDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        self.with_connection("duckdb_list_databases", duckdb_list_databases)
+            .await
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -3890,6 +3916,12 @@ impl Database for DuckDbTransaction {
     #[cfg(feature = "schema")]
     async fn list_schemas(&self) -> Result<Vec<crate::schema::SchemaInfo>, DatabaseError> {
         self.with_connection("duckdb_tx_list_schemas", duckdb_list_schemas)
+            .await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        self.with_connection("duckdb_tx_list_databases", duckdb_list_databases)
             .await
     }
 

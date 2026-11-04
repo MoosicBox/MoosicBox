@@ -152,6 +152,19 @@ async fn mysql_lists_schemas_relations_and_views_across_databases() {
             .is_system
     );
 
+    // Databases
+    let databases = db.list_databases().await.unwrap();
+    let current_db = databases.iter().find(|d| d.name == current).unwrap();
+    assert!(current_db.is_current && !current_db.is_system);
+    let other_db = databases.iter().find(|d| d.name == other).unwrap();
+    assert!(!other_db.is_current && !other_db.is_system);
+    assert_eq!(databases.iter().filter(|d| d.is_current).count(), 1);
+    assert!(
+        databases
+            .iter()
+            .any(|d| d.name == "information_schema" && d.is_system)
+    );
+
     // Relations in the default schema
     let relations = db.list_relations(None).await.unwrap();
     let users = relations
@@ -262,6 +275,13 @@ async fn mysql_lists_schemas_relations_and_views_across_databases() {
             .await
             .unwrap()
             .is_some()
+    );
+    assert!(
+        tx.list_databases()
+            .await
+            .unwrap()
+            .iter()
+            .any(|d| d.name == other)
     );
     tx.rollback().await.unwrap();
 

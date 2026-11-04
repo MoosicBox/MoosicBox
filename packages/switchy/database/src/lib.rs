@@ -89,6 +89,8 @@
 //!
 //! * [`Database::list_schemas`] - enumerate schemas (`PostgreSQL` schemas, `MySQL`
 //!   databases, `SQLite` attached databases, `DuckDB` schemas)
+//! * [`Database::list_databases`] - enumerate the databases on the server
+//!   (`PostgreSQL`/`MySQL` databases, `SQLite` attached databases, `DuckDB` catalogs)
 //! * [`Database::list_relations`] - tables, views, materialized views and foreign tables
 //!   in a schema, with comments and cheap row estimates where available
 //! * [`Database::get_relation_info`] - columns, indexes and foreign keys of any relation
@@ -2362,6 +2364,34 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     #[cfg(feature = "schema")]
     async fn list_schemas(&self) -> Result<Vec<schema::SchemaInfo>, DatabaseError> {
         Err(DatabaseError::UnsupportedOperation("list_schemas".into()))
+    }
+
+    /// List the databases (catalogs) available on the server the connection
+    /// is attached to, so a client can offer to open another one
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_database` rows that allow connections and are not
+    ///   templates; the current database is `current_database()`; no database is
+    ///   reported as a system database
+    /// * **`MySQL`**: `information_schema.schemata`; the current database is
+    ///   `DATABASE()`; `information_schema`, `mysql`, `performance_schema` and
+    ///   `sys` are system databases
+    /// * **`SQLite`/Turso**: `PRAGMA database_list` (attached database files);
+    ///   `main` is current and `temp` is a system database
+    /// * **`DuckDB`**: `duckdb_databases()`; internal catalogs (`system`, `temp`)
+    ///   are system databases
+    ///
+    /// The default implementation returns `DatabaseError::UnsupportedOperation`,
+    /// since there is no backend-independent way to enumerate databases.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot enumerate databases
+    #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<schema::DatabaseInfo>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation("list_databases".into()))
     }
 
     /// List tables, views and other relations in a schema

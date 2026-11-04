@@ -44,6 +44,16 @@ async fn lists_schemas_with_main_default() {
 }
 
 #[test_log::test(switchy_async::test(no_simulator))]
+async fn lists_databases_with_main_current() {
+    let db = setup().await;
+    let databases = db.list_databases().await.unwrap();
+    let main = databases.iter().find(|d| d.name == "main").unwrap();
+    assert!(main.is_current);
+    assert!(!main.is_system);
+    assert_eq!(databases.iter().filter(|d| d.is_current).count(), 1);
+}
+
+#[test_log::test(switchy_async::test(no_simulator))]
 async fn lists_tables_and_views() {
     let db = setup().await;
     let relations = db.list_relations(None).await.unwrap();
@@ -259,6 +269,7 @@ async fn transaction_introspection_sees_uncommitted_objects() {
         .unwrap();
     assert_eq!(result.columns[0].name, "x");
     assert!(!tx.list_schemas().await.unwrap().is_empty());
+    assert!(!tx.list_databases().await.unwrap().is_empty());
     tx.rollback().await.unwrap();
 }
 

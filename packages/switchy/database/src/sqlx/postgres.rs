@@ -924,6 +924,14 @@ impl Database for PostgresSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_list_databases(&mut conn).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn list_relations(
         &self,
         schema: Option<&str>,
@@ -1428,6 +1436,14 @@ impl Database for PostgresSqlxTransaction {
         let mut lock = self.transaction.lock().await;
         let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
         super::postgres_introspection::postgres_sqlx_list_schemas(tx).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_databases(&self) -> Result<Vec<crate::schema::DatabaseInfo>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        super::postgres_introspection::postgres_sqlx_list_databases(tx).await
     }
 
     #[cfg(feature = "schema")]

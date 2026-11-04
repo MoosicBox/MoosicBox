@@ -547,7 +547,7 @@ The core `Database` trait provides:
 - Execution methods (`query`, `query_first`, `exec_update`, `exec_insert`, etc.)
 - Raw SQL methods (`query_raw`, `query_raw_params`, `query_raw_result`, `exec_raw`, `exec_raw_params`)
 - Introspection methods (`table_exists`, `column_exists`, `get_table_info`, `list_tables`,
-  `list_schemas`, `list_relations`, `get_relation_info`, `get_view_definition`) - requires `schema` feature
+  `list_schemas`, `list_databases`, `list_relations`, `get_relation_info`, `get_view_definition`) - requires `schema` feature
 - Transaction method (`begin_transaction`)
 
 ### DatabaseTransaction Trait
