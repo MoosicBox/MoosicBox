@@ -201,6 +201,19 @@ let db = init_with_options(&target, &options).await?;
 | `application_name`  | `application_name`                 | ignored                                              | ignored                 | ignored                |
 | `pool_size`         | pool max size                      | pool max size                                        | connection count        | connection count       |
 
+TLS certificate files are parsed into `TlsFiles` (also available as
+`ConnectionTarget::tls_files()`) and applied when connecting:
+
+| PostgreSQL parameter | MySQL parameter                    | `postgres-sqlx`   | `mysql-sqlx`      |
+| -------------------- | ---------------------------------- | ----------------- | ----------------- |
+| `sslrootcert`        | `ssl-ca` (`ssl_ca`, `sslca`)       | `ssl_root_cert`   | `ssl_ca`          |
+| `sslcert`            | `ssl-cert` (`ssl_cert`, `sslcert`) | `ssl_client_cert` | `ssl_client_cert` |
+| `sslkey`             | `ssl-key` (`ssl_key`, `sslkey`)    | `ssl_client_key`  | `ssl_client_key`  |
+
+With `postgres-raw`, the root certificate is added to the TLS connector's trust store
+and the client certificate and key become its identity (`postgres-native-tls` needs a
+PKCS#8 PEM key). MySQL TLS requires the `tls` feature.
+
 Read-only in-memory databases are rejected. If no backend for the target's driver is
 compiled in, `InitDbError::DriverNotEnabled` is returned. `init_with_options` never
 substitutes the `simulator` database.

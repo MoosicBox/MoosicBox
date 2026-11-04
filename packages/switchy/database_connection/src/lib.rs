@@ -59,7 +59,9 @@ mod connect;
 pub mod target;
 
 pub use connect::init_with_options;
-pub use target::{AccessMode, ConnectOptions, ConnectionTarget, ConnectionUrlError, SslMode};
+pub use target::{
+    AccessMode, ConnectOptions, ConnectionTarget, ConnectionUrlError, SslMode, TlsFiles,
+};
 
 /// Create a database connection builder.
 #[must_use]
@@ -399,6 +401,14 @@ pub enum InitDbError {
     /// A requested connection option cannot be applied by the selected backend
     #[error("Unsupported connection option: {0}")]
     UnsupportedOption(String),
+    /// A TLS certificate or key file could not be read
+    #[error("Failed to read TLS file {}: {source}", path.display())]
+    TlsFile {
+        /// Path of the certificate or key file
+        path: std::path::PathBuf,
+        /// Underlying IO error
+        source: std::io::Error,
+    },
     /// Generic database error
     #[error(transparent)]
     Database(#[from] switchy_database::DatabaseError),

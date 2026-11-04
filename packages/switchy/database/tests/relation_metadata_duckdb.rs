@@ -391,6 +391,9 @@ async fn lists_builtin_and_user_routines() {
     db.exec_raw("CREATE MACRO app.add_one(x) AS x + 1")
         .await
         .unwrap();
+    db.exec_raw("CREATE MACRO app.numbers(n) AS TABLE SELECT * FROM range(n)")
+        .await
+        .unwrap();
     let all = db.list_routines(None).await.unwrap();
     let lower = all.iter().find(|r| r.name == "lower").unwrap();
     assert!(lower.builtin);
@@ -403,4 +406,9 @@ async fn lists_builtin_and_user_routines() {
     assert!(!add_one.builtin);
     assert_eq!(add_one.schema.as_deref(), Some("app"));
     assert_eq!(add_one.arguments.as_deref(), Some("x"));
+    assert_eq!(add_one.kind, RoutineKind::Macro);
+    let numbers = app.iter().find(|r| r.name == "numbers").unwrap();
+    assert_eq!(numbers.kind, RoutineKind::TableMacro);
+    assert!(!numbers.builtin);
+    assert_eq!(numbers.arguments.as_deref(), Some("n"));
 }

@@ -125,6 +125,75 @@ impl std::str::FromStr for SslMode {
     }
 }
 
+/// TLS certificate and key files used when connecting to a network database.
+///
+/// Every path is optional. Files are read by the driver when a connection is
+/// opened, so a missing or unreadable file surfaces as a connection error.
+///
+/// [`ConnectionTarget::from_url`] fills these from the libpq parameters
+/// `sslrootcert`, `sslcert` and `sslkey` (`PostgreSQL`) or from `ssl-ca`,
+/// `ssl-cert` and `ssl-key` (`MySQL`; the `ssl_ca`/`sslca` spellings are also
+/// accepted).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TlsFiles {
+    /// PEM file of certificate authorities used to verify the server certificate.
+    pub root_cert: Option<PathBuf>,
+    /// PEM client certificate presented to the server.
+    pub client_cert: Option<PathBuf>,
+    /// PEM private key for [`client_cert`](Self::client_cert).
+    pub client_key: Option<PathBuf>,
+}
+
+impl TlsFiles {
+    /// No certificate files.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the certificate-authority file used to verify the server.
+    #[must_use]
+    pub fn root_cert(mut self, path: impl Into<PathBuf>) -> Self {
+        self.root_cert = Some(path.into());
+        self
+    }
+
+    /// Set the client certificate file.
+    #[must_use]
+    pub fn client_cert(mut self, path: impl Into<PathBuf>) -> Self {
+        self.client_cert = Some(path.into());
+        self
+    }
+
+    /// Set the client private key file.
+    #[must_use]
+    pub fn client_key(mut self, path: impl Into<PathBuf>) -> Self {
+        self.client_key = Some(path.into());
+        self
+    }
+
+    /// Whether no certificate file is set.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.root_cert.is_none() && self.client_cert.is_none() && self.client_key.is_none()
+    }
+}
+
+/// Remove the first of `keys` present in `params`, ignoring empty values.
+fn take_path_param(params: &mut BTreeMap<String, String>, keys: &[&str]) -> Option<PathBuf> {
+    let mut found = None;
+    for key in keys {
+        if let Some(value) = params.remove(*key)
+            && found.is_none()
+            && !value.is_empty()
+        {
+            found = Some(PathBuf::from(value));
+        }
+    }
+    found
+}
+
 /// Errors produced while parsing a connection URL.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -163,6 +232,8 @@ pub enum ConnectionTarget {
         creds: Credentials,
         /// TLS mode from `sslmode`, if given.
         ssl_mode: Option<SslMode>,
+        /// TLS files from `sslrootcert`, `sslcert` and `sslkey`.
+        tls_files: TlsFiles,
         /// Remaining (percent-decoded) query parameters, e.g. `application_name`.
         params: BTreeMap<String, String>,
     },
@@ -176,6 +247,8 @@ pub enum ConnectionTarget {
         creds: Credentials,
         /// TLS mode from `ssl-mode`/`sslmode`, if given.
         ssl_mode: Option<SslMode>,
+        /// TLS files from `ssl-ca`, `ssl-cert` and `ssl-key`.
+        tls_files: TlsFiles,
         /// Remaining (percent-decoded) query parameters.
         params: BTreeMap<String, String>,
     },
@@ -209,7 +282,12 @@ impl ConnectionTarget {
     /// Reserved characters (`@`, `:`, `/`, `?`) in a password should be
     /// percent-encoded; an unencoded `@` is tolerated because the last `@`
     /// delimits the user info. `sslmode` (`PostgreSQL`) and `ssl-mode`/`sslmode`
-    /// (`MySQL`) are parsed into `ssl_mode`; for `PostgreSQL` the libpq
+    /// (`MySQL`) are parsed into `ssl_mode`, and certificate parameters into
+    /// [`TlsFiles`]: `sslrootcert`/`sslcert`/`sslkey` (`PostgreSQL`; the libpq
+    /// value `sslrootcert=system` means the default trust store and sets no file)
+    /// and `ssl-ca`/`ssl-cert`/`ssl-key` (`MySQL`, also spelled `ssl_ca`/`sslca`,
+    /// `ssl_cert`/`sslcert` and `ssl_key`/`sslkey`). Empty values are ignored. For
+    /// `PostgreSQL` the libpq
     /// parameters `host`, `port`, `user`, `password` and `dbname` override the
     /// URL components. For file databases the query string is ignored, except
     /// `mode=memory` which selects an in-memory database.
@@ -258,6 +336,18 @@ impl ConnectionTarget {
             .remove("sslmode")
             .map(|mode| mode.parse())
             .transpose()?;
+        let mut tls_files = TlsFiles {
+            root_cert: take_path_param(&mut parts.params, &["sslrootcert"]),
+            client_cert: take_path_param(&mut parts.params, &["sslcert"]),
+            client_key: take_path_param(&mut parts.params, &["sslkey"]),
+        };
+        if tls_files
+            .root_cert
+            .as_deref()
+            .is_some_and(|path| path == std::path::Path::new("system"))
+        {
+            tls_files.root_cert = None;
+        }
         if let Some(host) = parts.params.remove("host") {
             parts.host = host;
         }
@@ -280,6 +370,7 @@ impl ConnectionTarget {
         Ok(Self::Postgres {
             creds: parts.credentials(),
             ssl_mode,
+            tls_files,
             params,
         })
     }
@@ -290,6 +381,11 @@ impl ConnectionTarget {
             .find_map(|key| parts.params.remove(*key))
             .map(|mode| mode.parse())
             .transpose()?;
+        let tls_files = TlsFiles {
+            root_cert: take_path_param(&mut parts.params, &["ssl-ca", "ssl_ca", "sslca"]),
+            client_cert: take_path_param(&mut parts.params, &["ssl-cert", "ssl_cert", "sslcert"]),
+            client_key: take_path_param(&mut parts.params, &["ssl-key", "ssl_key", "sslkey"]),
+        };
         if let Some(socket) = parts.params.remove("socket") {
             parts.host = socket;
         }
@@ -300,6 +396,7 @@ impl ConnectionTarget {
         Ok(Self::MySql {
             creds: parts.credentials(),
             ssl_mode,
+            tls_files,
             params,
         })
     }
@@ -331,6 +428,15 @@ impl ConnectionTarget {
         match self {
             Self::Postgres { creds, .. } => Some(creds.port().unwrap_or(5432)),
             Self::MySql { creds, .. } => Some(creds.port().unwrap_or(3306)),
+            Self::Sqlite { .. } | Self::DuckDb { .. } => None,
+        }
+    }
+
+    /// The TLS certificate files of a network target (`None` for file databases).
+    #[must_use]
+    pub const fn tls_files(&self) -> Option<&TlsFiles> {
+        match self {
+            Self::Postgres { tls_files, .. } | Self::MySql { tls_files, .. } => Some(tls_files),
             Self::Sqlite { .. } | Self::DuckDb { .. } => None,
         }
     }
@@ -630,6 +736,7 @@ mod tests {
         let ConnectionTarget::Postgres {
             creds,
             ssl_mode,
+            tls_files,
             params,
         } = &target
         else {
@@ -640,6 +747,7 @@ mod tests {
         assert_eq!(creds.user(), "bob");
         assert_eq!(creds.name(), "app");
         assert_eq!(*ssl_mode, Some(SslMode::Disable));
+        assert!(tls_files.is_empty());
         assert_eq!(
             params.iter().collect::<Vec<_>>(),
             vec![(&"connect_timeout".to_string(), &"5".to_string())]
@@ -674,6 +782,71 @@ mod tests {
         assert_eq!(
             ConnectionTarget::from_url("postgres://u@h/db?sslmode=bogus"),
             Err(ConnectionUrlError::InvalidSslMode("bogus".to_string()))
+        );
+    }
+
+    #[test_log::test]
+    fn postgres_tls_files() {
+        let target = ConnectionTarget::from_url(
+            "postgres://u@h/db?sslmode=verify-full&sslrootcert=%2Fcerts%2Fca.pem\
+             &sslcert=/certs/client.pem&sslkey=/certs/client.key&connect_timeout=5",
+        )
+        .unwrap();
+        let ConnectionTarget::Postgres {
+            tls_files, params, ..
+        } = &target
+        else {
+            panic!("expected postgres")
+        };
+        assert_eq!(
+            *tls_files,
+            TlsFiles::new()
+                .root_cert("/certs/ca.pem")
+                .client_cert("/certs/client.pem")
+                .client_key("/certs/client.key")
+        );
+        assert_eq!(params.keys().collect::<Vec<_>>(), vec!["connect_timeout"]);
+        assert_eq!(target.tls_files(), Some(tls_files));
+
+        // `system` selects the default trust store; empty values are ignored.
+        let target =
+            ConnectionTarget::from_url("postgres://u@h/db?sslrootcert=system&sslcert=").unwrap();
+        assert!(target.tls_files().unwrap().is_empty());
+        let ConnectionTarget::Postgres { params, .. } = &target else {
+            panic!("expected postgres")
+        };
+        assert!(params.is_empty());
+    }
+
+    #[test_log::test]
+    fn mysql_tls_files() {
+        for url in [
+            "mysql://u@h/db?ssl-ca=/c/ca.pem&ssl-cert=/c/cl.pem&ssl-key=/c/cl.key",
+            "mysql://u@h/db?ssl_ca=/c/ca.pem&ssl_cert=/c/cl.pem&ssl_key=/c/cl.key",
+            "mysql://u@h/db?sslca=/c/ca.pem&sslcert=/c/cl.pem&sslkey=/c/cl.key",
+        ] {
+            let target = ConnectionTarget::from_url(url).unwrap();
+            let ConnectionTarget::MySql {
+                tls_files, params, ..
+            } = &target
+            else {
+                panic!("expected mysql")
+            };
+            assert_eq!(
+                *tls_files,
+                TlsFiles::new()
+                    .root_cert("/c/ca.pem")
+                    .client_cert("/c/cl.pem")
+                    .client_key("/c/cl.key"),
+                "{url}"
+            );
+            assert!(params.is_empty(), "{url}");
+        }
+        assert!(
+            ConnectionTarget::from_url("sqlite::memory:")
+                .unwrap()
+                .tls_files()
+                .is_none()
         );
     }
 

@@ -5,7 +5,7 @@ use switchy_database::Database;
 #[allow(unused_imports)]
 use crate::{
     InitDbError,
-    target::{ConnectOptions, ConnectionTarget, SslMode},
+    target::{ConnectOptions, ConnectionTarget, SslMode, TlsFiles},
 };
 
 /// Default number of pooled connections.
@@ -64,12 +64,27 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// connector. Other URL query parameters are carried in the target but not
 /// applied.
 ///
+/// [`TlsFiles`] are applied as follows:
+///
+/// * `PostgreSQL` (`postgres-sqlx`): `ssl_root_cert`, `ssl_client_cert`, `ssl_client_key`
+/// * `PostgreSQL` (`postgres-raw`): the root certificate is added to the TLS
+///   connector's trust store and the client certificate/key pair becomes its
+///   identity (`postgres-native-tls` requires a PKCS#8 PEM key). Certificate
+///   files without a TLS feature are rejected.
+/// * `MySQL` (`mysql-sqlx`): `ssl_ca`, `ssl_client_cert`, `ssl_client_key`; TLS
+///   itself requires the `tls` feature
+///
+/// Whether the root certificate is used for verification depends on the
+/// [`SslMode`]: modes that skip verification (`Require` and below) also skip it.
+///
 /// # Errors
 ///
 /// * [`InitDbError::DriverNotEnabled`] when no backend for the target's driver is compiled in
 /// * [`InitDbError::UnsupportedOption`] when an option cannot be honored (read-only
-///   in-memory databases, read-only Turso, TLS requested for raw `PostgreSQL`
-///   without a TLS feature)
+///   in-memory databases, read-only Turso, TLS or certificate files requested for
+///   raw `PostgreSQL` without a TLS feature, a client certificate without a key or
+///   vice versa for raw `PostgreSQL`)
+/// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
 ///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`) when connecting or
 ///   opening fails
@@ -82,19 +97,20 @@ pub async fn init_with_options(
         ConnectionTarget::Postgres {
             creds,
             ssl_mode,
+            tls_files,
             params,
         } => {
             #[cfg(feature = "postgres-sqlx")]
             {
-                postgres_sqlx(creds, *ssl_mode, params, options).await
+                postgres_sqlx(creds, *ssl_mode, tls_files, params, options).await
             }
             #[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
             {
-                postgres_raw(creds, *ssl_mode, params, options)
+                postgres_raw(creds, *ssl_mode, tls_files, params, options)
             }
             #[cfg(not(any(feature = "postgres-sqlx", feature = "postgres-raw")))]
             {
-                let _ = (creds, ssl_mode, params, options);
+                let _ = (creds, ssl_mode, tls_files, params, options);
                 Err(InitDbError::DriverNotEnabled {
                     driver: "postgres",
                     features: "postgres-sqlx, postgres-raw",
@@ -104,16 +120,17 @@ pub async fn init_with_options(
         ConnectionTarget::MySql {
             creds,
             ssl_mode,
+            tls_files,
             params,
         } => {
             #[cfg(feature = "mysql-sqlx")]
             {
                 let _ = params;
-                mysql_sqlx(creds, *ssl_mode, options).await
+                mysql_sqlx(creds, *ssl_mode, tls_files, options).await
             }
             #[cfg(not(feature = "mysql-sqlx"))]
             {
-                let _ = (creds, ssl_mode, params, options);
+                let _ = (creds, ssl_mode, tls_files, params, options);
                 Err(InitDbError::DriverNotEnabled {
                     driver: "mysql",
                     features: "mysql-sqlx",
@@ -220,13 +237,37 @@ fn postgres_application_name<'a>(
 async fn postgres_sqlx(
     creds: &crate::Credentials,
     ssl_mode: Option<SslMode>,
+    tls_files: &TlsFiles,
     params: &std::collections::BTreeMap<String, String>,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     use std::sync::Arc;
 
-    use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
+    use sqlx::postgres::PgPoolOptions;
     use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
+
+    let connect_options = pg_connect_options(creds, ssl_mode, tls_files, params, options);
+
+    let pool = PgPoolOptions::new()
+        .max_connections(pool_size_u32(options))
+        .connect_with(connect_options)
+        .await
+        .map_err(crate::InitDatabaseError::from)?;
+
+    Ok(Box::new(PostgresSqlxDatabase::new(Arc::new(
+        switchy_async::sync::Mutex::new(pool),
+    ))))
+}
+
+#[cfg(feature = "postgres-sqlx")]
+fn pg_connect_options(
+    creds: &crate::Credentials,
+    ssl_mode: Option<SslMode>,
+    tls_files: &TlsFiles,
+    params: &std::collections::BTreeMap<String, String>,
+    options: &ConnectOptions,
+) -> sqlx::postgres::PgConnectOptions {
+    use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
     let mut connect_options = PgConnectOptions::new();
     connect_options = if creds.host().starts_with('/') {
@@ -259,20 +300,20 @@ async fn postgres_sqlx(
     if let Some(name) = postgres_application_name(params, options) {
         connect_options = connect_options.application_name(name);
     }
+    if let Some(path) = &tls_files.root_cert {
+        connect_options = connect_options.ssl_root_cert(path);
+    }
+    if let Some(path) = &tls_files.client_cert {
+        connect_options = connect_options.ssl_client_cert(path);
+    }
+    if let Some(path) = &tls_files.client_key {
+        connect_options = connect_options.ssl_client_key(path);
+    }
     let startup = postgres_startup_options(options);
     if !startup.is_empty() {
         connect_options = connect_options.options(startup);
     }
-
-    let pool = PgPoolOptions::new()
-        .max_connections(pool_size_u32(options))
-        .connect_with(connect_options)
-        .await
-        .map_err(crate::InitDatabaseError::from)?;
-
-    Ok(Box::new(PostgresSqlxDatabase::new(Arc::new(
-        switchy_async::sync::Mutex::new(pool),
-    ))))
+    connect_options
 }
 
 #[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
@@ -280,6 +321,7 @@ async fn postgres_sqlx(
 fn postgres_raw(
     creds: &crate::Credentials,
     ssl_mode: Option<SslMode>,
+    tls_files: &TlsFiles,
     params: &std::collections::BTreeMap<String, String>,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
@@ -330,6 +372,11 @@ fn postgres_raw(
         let pool = raw_pool(config, tokio_postgres::NoTls, max_size)?;
         return Ok(Box::new(PostgresDatabase::new(pool)));
     }
+    if tls_files.client_cert.is_some() != tls_files.client_key.is_some() {
+        return Err(InitDbError::UnsupportedOption(
+            "a client certificate and a client key must be given together".to_string(),
+        ));
+    }
 
     #[cfg(feature = "postgres-native-tls")]
     {
@@ -352,6 +399,18 @@ fn postgres_raw(
                 }
             }
         }
+        if let Some(path) = &tls_files.root_cert {
+            let pem = read_tls_file(path)?;
+            builder.add_root_certificate(
+                native_tls::Certificate::from_pem(&pem).map_err(crate::InitDatabaseError::from)?,
+            );
+        }
+        if let (Some(cert), Some(key)) = (&tls_files.client_cert, &tls_files.client_key) {
+            let identity =
+                native_tls::Identity::from_pkcs8(&read_tls_file(cert)?, &read_tls_file(key)?)
+                    .map_err(crate::InitDatabaseError::from)?;
+            builder.identity(identity);
+        }
         let connector = postgres_native_tls::MakeTlsConnector::new(
             builder.build().map_err(crate::InitDatabaseError::from)?,
         );
@@ -361,7 +420,7 @@ fn postgres_raw(
 
     #[cfg(all(not(feature = "postgres-native-tls"), feature = "postgres-openssl"))]
     {
-        use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+        use openssl::ssl::{SslConnector, SslFiletype, SslMethod, SslVerifyMode};
 
         let mut builder =
             SslConnector::builder(SslMethod::tls()).map_err(crate::InitDatabaseError::from)?;
@@ -380,6 +439,25 @@ fn postgres_raw(
                 }
             }
         }
+        if let Some(path) = &tls_files.root_cert {
+            read_tls_file(path)?;
+            builder
+                .set_ca_file(path)
+                .map_err(crate::InitDatabaseError::from)?;
+        }
+        if let (Some(cert), Some(key)) = (&tls_files.client_cert, &tls_files.client_key) {
+            read_tls_file(cert)?;
+            read_tls_file(key)?;
+            builder
+                .set_certificate_chain_file(cert)
+                .map_err(crate::InitDatabaseError::from)?;
+            builder
+                .set_private_key_file(key, SslFiletype::PEM)
+                .map_err(crate::InitDatabaseError::from)?;
+            builder
+                .check_private_key()
+                .map_err(crate::InitDatabaseError::from)?;
+        }
         let connector = postgres_openssl::MakeTlsConnector::new(builder.build());
         let pool = raw_pool(config, connector, max_size)?;
         Ok(Box::new(PostgresDatabase::new(pool)))
@@ -396,9 +474,29 @@ fn postgres_raw(
                     .to_string(),
             ));
         }
+        if !tls_files.is_empty() {
+            return Err(InitDbError::UnsupportedOption(
+                "TLS certificate files for postgres-raw require the postgres-native-tls or \
+                 postgres-openssl feature"
+                    .to_string(),
+            ));
+        }
         let pool = raw_pool(config, tokio_postgres::NoTls, max_size)?;
         Ok(Box::new(PostgresDatabase::new(pool)))
     }
+}
+
+/// Read a TLS certificate or key file, reporting the path on failure.
+#[cfg(all(
+    not(feature = "postgres-sqlx"),
+    feature = "postgres-raw",
+    any(feature = "postgres-native-tls", feature = "postgres-openssl")
+))]
+fn read_tls_file(path: &std::path::Path) -> Result<Vec<u8>, InitDbError> {
+    std::fs::read(path).map_err(|source| InitDbError::TlsFile {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 #[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
@@ -429,40 +527,15 @@ where
 async fn mysql_sqlx(
     creds: &crate::Credentials,
     ssl_mode: Option<SslMode>,
+    tls_files: &TlsFiles,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     use std::sync::Arc;
 
-    use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
+    use sqlx::mysql::MySqlPoolOptions;
     use switchy_database::sqlx::mysql::MySqlSqlxDatabase;
 
-    let mut connect_options = MySqlConnectOptions::new();
-    connect_options = if creds.host().starts_with('/') {
-        connect_options.socket(creds.host())
-    } else {
-        connect_options.host(creds.host())
-    };
-    if let Some(port) = creds.port() {
-        connect_options = connect_options.port(port);
-    }
-    if !creds.user().is_empty() {
-        connect_options = connect_options.username(creds.user());
-    }
-    if let Some(password) = creds.password() {
-        connect_options = connect_options.password(password);
-    }
-    if !creds.name().is_empty() {
-        connect_options = connect_options.database(creds.name());
-    }
-    if let Some(mode) = ssl_mode {
-        connect_options = connect_options.ssl_mode(match mode {
-            SslMode::Disable => MySqlSslMode::Disabled,
-            SslMode::Allow | SslMode::Prefer => MySqlSslMode::Preferred,
-            SslMode::Require => MySqlSslMode::Required,
-            SslMode::VerifyCa => MySqlSslMode::VerifyCa,
-            SslMode::VerifyFull => MySqlSslMode::VerifyIdentity,
-        });
-    }
+    let connect_options = mysql_connect_options(creds, ssl_mode, tls_files);
     if options.application_name.is_some() {
         log::debug!("init_with_options: application_name is not supported by MySQL; ignoring");
     }
@@ -501,6 +574,53 @@ async fn mysql_sqlx(
     Ok(Box::new(MySqlSqlxDatabase::new(Arc::new(
         switchy_async::sync::Mutex::new(pool),
     ))))
+}
+
+#[cfg(feature = "mysql-sqlx")]
+fn mysql_connect_options(
+    creds: &crate::Credentials,
+    ssl_mode: Option<SslMode>,
+    tls_files: &TlsFiles,
+) -> sqlx::mysql::MySqlConnectOptions {
+    use sqlx::mysql::{MySqlConnectOptions, MySqlSslMode};
+
+    let mut connect_options = MySqlConnectOptions::new();
+    connect_options = if creds.host().starts_with('/') {
+        connect_options.socket(creds.host())
+    } else {
+        connect_options.host(creds.host())
+    };
+    if let Some(port) = creds.port() {
+        connect_options = connect_options.port(port);
+    }
+    if !creds.user().is_empty() {
+        connect_options = connect_options.username(creds.user());
+    }
+    if let Some(password) = creds.password() {
+        connect_options = connect_options.password(password);
+    }
+    if !creds.name().is_empty() {
+        connect_options = connect_options.database(creds.name());
+    }
+    if let Some(mode) = ssl_mode {
+        connect_options = connect_options.ssl_mode(match mode {
+            SslMode::Disable => MySqlSslMode::Disabled,
+            SslMode::Allow | SslMode::Prefer => MySqlSslMode::Preferred,
+            SslMode::Require => MySqlSslMode::Required,
+            SslMode::VerifyCa => MySqlSslMode::VerifyCa,
+            SslMode::VerifyFull => MySqlSslMode::VerifyIdentity,
+        });
+    }
+    if let Some(path) = &tls_files.root_cert {
+        connect_options = connect_options.ssl_ca(path);
+    }
+    if let Some(path) = &tls_files.client_cert {
+        connect_options = connect_options.ssl_client_cert(path);
+    }
+    if let Some(path) = &tls_files.client_key {
+        connect_options = connect_options.ssl_client_key(path);
+    }
+    connect_options
 }
 
 #[cfg(feature = "sqlite-rusqlite")]
@@ -754,6 +874,83 @@ mod tests {
         assert!(db.exec_raw("INSERT INTO t VALUES (2)").await.is_err());
         db.close().await.unwrap();
         std::fs::remove_file(&path).ok();
+    }
+
+    #[cfg(feature = "postgres-sqlx")]
+    #[test_log::test]
+    fn postgres_sqlx_applies_tls_files() {
+        let target = ConnectionTarget::from_url(
+            "postgres://u@db.example.com/app?sslmode=verify-full\
+             &sslrootcert=/certs/pg-ca.pem&sslcert=/certs/pg-client.pem&sslkey=/certs/pg-client.key",
+        )
+        .unwrap();
+        let ConnectionTarget::Postgres {
+            creds,
+            ssl_mode,
+            tls_files,
+            params,
+        } = &target
+        else {
+            panic!("expected postgres")
+        };
+        let options =
+            pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new());
+        assert!(matches!(
+            options.get_ssl_mode(),
+            sqlx::postgres::PgSslMode::VerifyFull
+        ));
+        let debug = format!("{options:?}");
+        for path in [
+            "/certs/pg-ca.pem",
+            "/certs/pg-client.pem",
+            "/certs/pg-client.key",
+        ] {
+            assert!(debug.contains(path), "{path} missing from {debug}");
+        }
+
+        let target = ConnectionTarget::from_url("postgres://u@db.example.com/app").unwrap();
+        let ConnectionTarget::Postgres {
+            creds,
+            ssl_mode,
+            tls_files,
+            params,
+        } = &target
+        else {
+            panic!("expected postgres")
+        };
+        let debug = format!(
+            "{:?}",
+            pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new())
+        );
+        assert!(!debug.contains("/certs/"));
+    }
+
+    #[cfg(feature = "mysql-sqlx")]
+    #[test_log::test]
+    fn mysql_sqlx_applies_tls_files() {
+        let target = ConnectionTarget::from_url(
+            "mysql://u@db.example.com/app?ssl-mode=VERIFY_CA\
+             &ssl-ca=/certs/my-ca.pem&ssl-cert=/certs/my-client.pem&ssl-key=/certs/my-client.key",
+        )
+        .unwrap();
+        let ConnectionTarget::MySql {
+            creds,
+            ssl_mode,
+            tls_files,
+            ..
+        } = &target
+        else {
+            panic!("expected mysql")
+        };
+        let debug = format!("{:?}", mysql_connect_options(creds, *ssl_mode, tls_files));
+        for path in [
+            "/certs/my-ca.pem",
+            "/certs/my-client.pem",
+            "/certs/my-client.key",
+            "VerifyCa",
+        ] {
+            assert!(debug.contains(path), "{path} missing from {debug}");
+        }
     }
 
     /// Requires `POSTGRES_TEST_URL`, e.g. `postgres://postgres@localhost/postgres`.

@@ -1610,7 +1610,7 @@ impl RelationSummary {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RoutineKind {
-    /// A scalar function (including macros)
+    /// A scalar function
     Function,
     /// An aggregate function
     Aggregate,
@@ -1618,22 +1618,36 @@ pub enum RoutineKind {
     Window,
     /// A stored procedure
     Procedure,
+    /// A scalar macro: a function defined by an expression that is expanded
+    /// at the call site (`DuckDB` `CREATE MACRO name(params) AS expr`)
+    Macro,
+    /// A table macro: a macro whose body is a query returning a table
+    /// (`DuckDB` `CREATE MACRO name(params) AS TABLE query`)
+    TableMacro,
     /// A backend-specific kind, by its catalog name
     Other(String),
 }
 
 impl RoutineKind {
     /// Interpret a catalog kind code or name (`f`/`s`/`scalar`, `a`, `w`,
-    /// `p`, `FUNCTION`, `PROCEDURE`, `macro`, ...)
+    /// `p`, `FUNCTION`, `PROCEDURE`, `macro`, `table_macro`, ...)
     #[must_use]
     pub fn from_catalog(kind: &str) -> Self {
         match kind.to_ascii_lowercase().as_str() {
-            "f" | "s" | "scalar" | "function" | "macro" => Self::Function,
+            "f" | "s" | "scalar" | "function" => Self::Function,
             "a" | "aggregate" => Self::Aggregate,
             "w" | "window" => Self::Window,
             "p" | "procedure" => Self::Procedure,
+            "macro" => Self::Macro,
+            "table_macro" => Self::TableMacro,
             _ => Self::Other(kind.to_string()),
         }
+    }
+
+    /// Whether this is a [`Macro`](Self::Macro) or [`TableMacro`](Self::TableMacro)
+    #[must_use]
+    pub const fn is_macro(&self) -> bool {
+        matches!(self, Self::Macro | Self::TableMacro)
     }
 }
 
@@ -1714,7 +1728,8 @@ pub mod routines_sql {
             .to_string()
     }
 
-    /// `DuckDB`: scalar, aggregate, and macro functions (`duckdb_functions()`)
+    /// `DuckDB`: scalar, aggregate, macro, and table macro functions
+    /// (`duckdb_functions()`)
     #[must_use]
     pub fn duckdb(schema: Option<&str>) -> String {
         let filter = schema.map_or_else(String::new, |schema| {
@@ -1725,7 +1740,7 @@ pub mod routines_sql {
              array_to_string(parameters, ', '), return_type, \
              CASE WHEN internal THEN 'true' ELSE 'false' END \
              FROM duckdb_functions() \
-             WHERE function_type IN ('scalar', 'aggregate', 'macro'){filter} \
+             WHERE function_type IN ('scalar', 'aggregate', 'macro', 'table_macro'){filter} \
              ORDER BY function_name"
         )
     }
@@ -1764,6 +1779,27 @@ pub fn routines_from_rows(rows: &[Vec<crate::DatabaseValue>]) -> Vec<RoutineInfo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routine_kind_from_catalog() {
+        for (code, kind) in [
+            ("f", RoutineKind::Function),
+            ("scalar", RoutineKind::Function),
+            ("FUNCTION", RoutineKind::Function),
+            ("a", RoutineKind::Aggregate),
+            ("w", RoutineKind::Window),
+            ("PROCEDURE", RoutineKind::Procedure),
+            ("macro", RoutineKind::Macro),
+            ("table_macro", RoutineKind::TableMacro),
+            ("TABLE_MACRO", RoutineKind::TableMacro),
+            ("table", RoutineKind::Other("table".to_string())),
+        ] {
+            assert_eq!(RoutineKind::from_catalog(code), kind, "{code}");
+        }
+        assert!(RoutineKind::Macro.is_macro());
+        assert!(RoutineKind::TableMacro.is_macro());
+        assert!(!RoutineKind::Function.is_macro());
+    }
 
     #[cfg(any(feature = "mysql-sqlx", feature = "duckdb"))]
     #[test]
