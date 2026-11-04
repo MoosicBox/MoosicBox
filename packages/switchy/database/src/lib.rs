@@ -2267,7 +2267,8 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// # Limitations
     ///
-    /// - **Computed/Generated Columns**: Not supported for introspection
+    /// - **Computed/Generated Columns**: Reported via [`schema::ColumnInfo::generated`];
+    ///   the generation expression itself is not exposed
     /// - **Complex Default Values**: Function calls and expressions may not parse correctly
     /// - **Custom Types**: Types without a matching variant map to [`schema::DataType::Custom`];
     ///   [`schema::ColumnInfo::native_type`] always has the exact native type name
@@ -2298,10 +2299,14 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// - **`auto_increment`**: Whether column has auto-increment behavior (limited detection)
     /// - **`default_value`**: Parsed default value as [`DatabaseValue`] (where possible)
     /// - **`ordinal_position`**: 1-based position of column in table definition
+    /// - **`native_type`**: Exact native type name
+    /// - **`enum_values`**: Allowed labels for enum-typed columns (`PostgreSQL`, `MySQL`, `DuckDB`)
+    /// - **`generated`**: Whether (and how) the column is a generated/computed column
     ///
     /// # Backend-Specific Parsing
     ///
-    /// - **`SQLite`**: Uses `PRAGMA table_info()`, limited auto-increment detection
+    /// - **`SQLite`**: Uses `PRAGMA table_xinfo()` (includes generated columns), limited
+    ///   auto-increment detection
     /// - **`PostgreSQL`**: Queries `information_schema.columns` with type casting awareness
     /// - **`MySQL`**: Queries `information_schema.columns` with `EXTRA` field for auto-increment
     ///
@@ -2321,7 +2326,7 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// # Implementation Details
     ///
-    /// - **`SQLite`**: Uses `PRAGMA table_info()` and searches results
+    /// - **`SQLite`**: Uses `PRAGMA table_xinfo()` and searches results
     /// - **`PostgreSQL`**: Queries `information_schema.columns` with column name filter
     /// - **`MySQL`**: Queries `information_schema.columns` with column name filter
     ///

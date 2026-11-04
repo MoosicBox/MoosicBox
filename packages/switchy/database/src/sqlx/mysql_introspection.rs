@@ -25,7 +25,6 @@
 //! ### `MySQL` 8.0 Features NOT Used
 //! We intentionally avoid `MySQL` 8.0-specific features for broader compatibility:
 //! - **Invisible columns**: Not detected in introspection
-//! - **Generated columns**: Not handled specifically (appear as regular columns)
 //! - **Check constraints**: Not introspected (would require `MySQL` 8.0.16+)
 //! - **Role-based privileges**: Not considered in introspection
 //!
@@ -122,10 +121,13 @@
 //! # Limitations
 //!
 //! ## Generated/Computed Columns (`MySQL` 5.7+)
-//! Generated columns appear in `information_schema.columns` but:
-//! - `GENERATION_EXPRESSION` column not parsed
-//! - Treated as regular columns in introspection
-//! - May have complex default expressions not representable
+//! Generated columns are detected from `EXTRA` (`VIRTUAL GENERATED` /
+//! `STORED GENERATED`) and reported in `generated`; the
+//! `GENERATION_EXPRESSION` itself is not parsed.
+//!
+//! ## Enum Columns
+//! `ENUM` labels are parsed from `COLUMN_TYPE` into `enum_values` (in
+//! declaration order); `SET` columns are not enums and report `None`.
 //!
 //! ## Partitioned Tables
 //! - Partition information not included in introspection
@@ -140,7 +142,7 @@ use std::collections::BTreeMap;
 use crate::{
     DatabaseError, DatabaseValue,
     schema::{
-        ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, RelationKind, RelationRef,
+        ColumnInfo, DataType, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind, RelationRef,
         RelationSummary, SchemaInfo, TableInfo,
     },
 };
@@ -406,11 +408,13 @@ async fn fetch_columns(
             .and_then(|position| u32::try_from(position).ok())
             .unwrap_or_default();
 
-        let default_value = get_opt_string(&row, "COLUMN_DEFAULT");
-        let parsed_default = default_value.as_deref().and_then(parse_mysql_default_value);
-
         let extra = get_opt_string(&row, "EXTRA").unwrap_or_default();
         let auto_increment = extra.to_uppercase().contains("AUTO_INCREMENT");
+        let generated = mysql_extra_generated_kind(&extra);
+
+        let default_value = get_opt_string(&row, "COLUMN_DEFAULT").filter(|_| generated.is_none());
+        let parsed_default = default_value.as_deref().and_then(parse_mysql_default_value);
+        let enum_values = parse_mysql_enum_values(&column_type_str);
 
         let is_primary_key = primary_key_columns.contains(&column_name);
 
@@ -423,6 +427,8 @@ async fn fetch_columns(
             default_value: parsed_default,
             ordinal_position,
             native_type: column_type_str,
+            enum_values,
+            generated,
         });
     }
 
@@ -735,6 +741,38 @@ fn mysql_column_type_to_data_type(
         .unwrap_or_else(|| DataType::Custom(column_type.to_string()))
 }
 
+/// The generated-column kind marked by an `information_schema.columns.EXTRA` value.
+///
+/// `MySQL` reports `VIRTUAL GENERATED` / `STORED GENERATED` (`MariaDB` may use
+/// `PERSISTENT GENERATED` for stored); `DEFAULT_GENERATED` marks an expression
+/// default, not a generated column, so only the standalone `GENERATED` word counts.
+fn mysql_extra_generated_kind(extra: &str) -> Option<GeneratedKind> {
+    let words: Vec<&str> = extra.split_whitespace().collect();
+    if !words
+        .iter()
+        .any(|word| word.eq_ignore_ascii_case("GENERATED"))
+    {
+        return None;
+    }
+    Some(
+        if words.iter().any(|word| {
+            word.eq_ignore_ascii_case("STORED") || word.eq_ignore_ascii_case("PERSISTENT")
+        }) {
+            GeneratedKind::Stored
+        } else {
+            GeneratedKind::Virtual
+        },
+    )
+}
+
+/// Labels of an `enum('a','b')` `COLUMN_TYPE` (`None` for any other type).
+///
+/// `COLUMN_TYPE` doubles embedded single quotes and backslash-escapes
+/// backslashes and control characters, both of which are decoded.
+fn parse_mysql_enum_values(column_type: &str) -> Option<Vec<String>> {
+    crate::schema::parse_enum_type_labels(column_type, true)
+}
+
 /// Parse `MySQL` default values into `DatabaseValue`
 fn parse_mysql_default_value(default_str: &str) -> Option<DatabaseValue> {
     if default_str.is_empty() || default_str.to_uppercase() == "NULL" {
@@ -850,6 +888,43 @@ mod tests {
         );
         assert!(is_mysql_system_schema("PERFORMANCE_SCHEMA"));
         assert!(!is_mysql_system_schema("app"));
+    }
+
+    #[test]
+    fn parses_enum_values() {
+        let labels = |values: &[&str]| Some(values.iter().map(ToString::to_string).collect());
+        assert_eq!(
+            parse_mysql_enum_values("enum('a','b')"),
+            labels(&["a", "b"])
+        );
+        assert_eq!(
+            parse_mysql_enum_values("ENUM('it''s','x,y', ' spaced ')"),
+            labels(&["it's", "x,y", " spaced "])
+        );
+        assert_eq!(
+            parse_mysql_enum_values(r"enum('back\\slash','new\nline','')"),
+            labels(&["back\\slash", "new\nline", ""])
+        );
+        assert_eq!(
+            parse_mysql_enum_values("enum('(paren)')"),
+            labels(&["(paren)"])
+        );
+        assert_eq!(parse_mysql_enum_values("set('a','b')"), None);
+        assert_eq!(parse_mysql_enum_values("varchar(10)"), None);
+        assert_eq!(parse_mysql_enum_values("enum"), None);
+        assert_eq!(parse_mysql_enum_values("enum('unterminated)"), None);
+    }
+
+    #[test]
+    fn detects_generated_columns_from_extra() {
+        let kind = mysql_extra_generated_kind;
+        assert_eq!(kind("VIRTUAL GENERATED"), Some(GeneratedKind::Virtual));
+        assert_eq!(kind("STORED GENERATED"), Some(GeneratedKind::Stored));
+        assert_eq!(kind("PERSISTENT GENERATED"), Some(GeneratedKind::Stored));
+        assert_eq!(kind("DEFAULT_GENERATED"), None);
+        assert_eq!(kind("DEFAULT_GENERATED on update CURRENT_TIMESTAMP"), None);
+        assert_eq!(kind("auto_increment"), None);
+        assert_eq!(kind(""), None);
     }
 
     #[test]

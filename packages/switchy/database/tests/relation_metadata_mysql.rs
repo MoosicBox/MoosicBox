@@ -14,7 +14,7 @@ use switchy_async::sync::Mutex;
 use switchy_database::{
     Database, DatabaseValue,
     query::FilterableQuery as _,
-    schema::{DataType, RelationKind, RelationRef},
+    schema::{DataType, GeneratedKind, RelationKind, RelationRef},
     sqlx::mysql::MySqlSqlxDatabase,
 };
 
@@ -33,6 +33,57 @@ async fn current_database(db: &MySqlSqlxDatabase) -> String {
         .as_str()
         .unwrap()
         .to_string()
+}
+
+#[test_log::test(tokio::test)]
+async fn mysql_reports_enum_values_and_generated_columns() {
+    let Some(db) = get_database().await else {
+        return;
+    };
+    db.exec_raw("DROP TABLE IF EXISTS relmeta_gen")
+        .await
+        .unwrap();
+    db.exec_raw(
+        r"CREATE TABLE relmeta_gen (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            mood ENUM('happy','it''s, sad','back\\slash','(paren)') NULL,
+            tags SET('a','b') NULL,
+            qty INT NOT NULL DEFAULT 1,
+            created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            qty_v INT AS (qty * 2) VIRTUAL,
+            qty_s INT AS (qty * 3) STORED
+        )",
+    )
+    .await
+    .unwrap();
+
+    let info = db
+        .get_relation_info(&RelationRef::new("relmeta_gen"))
+        .await
+        .unwrap()
+        .unwrap();
+    let column = |name: &str| &info.columns[name];
+    assert_eq!(
+        column("mood").enum_values,
+        Some(vec![
+            "happy".to_string(),
+            "it's, sad".to_string(),
+            "back\\slash".to_string(),
+            "(paren)".to_string(),
+        ])
+    );
+    assert_eq!(column("tags").enum_values, None);
+    assert_eq!(column("qty").enum_values, None);
+
+    assert_eq!(column("qty_v").generated, Some(GeneratedKind::Virtual));
+    assert_eq!(column("qty_v").default_value, None);
+    assert_eq!(column("qty_s").generated, Some(GeneratedKind::Stored));
+    assert_eq!(column("id").generated, None);
+    assert!(column("id").auto_increment);
+    assert_eq!(column("created").generated, None);
+    assert_eq!(column("qty").generated, None);
+
+    db.exec_raw("DROP TABLE relmeta_gen").await.unwrap();
 }
 
 #[test_log::test(tokio::test)]

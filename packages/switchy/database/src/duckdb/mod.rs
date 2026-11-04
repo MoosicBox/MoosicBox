@@ -2347,19 +2347,34 @@ fn duckdb_get_table_columns(
          WHERE table_catalog = current_database() AND table_schema = ? AND table_name = ? \
          ORDER BY ordinal_position",
     )?;
-    let rows = stmt.query_map([schema, table_name], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, Option<String>>(3)?,
-            row.get::<_, i32>(4)?,
-        ))
-    })?;
+    let rows = stmt
+        .query_map([schema, table_name], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, i32>(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
-    let mut columns = Vec::new();
-    for row in rows {
-        let (name, type_str, nullable_str, default_str, ordinal) = row?;
+    // Generated columns report their expression as `column_default` and are
+    // otherwise indistinguishable in the catalog, so consult the stored
+    // `CREATE TABLE` SQL only when some column has a default.
+    let generated_cols = if rows.iter().any(|row| row.3.is_some()) {
+        query_generated_columns(conn, schema, table_name)?
+    } else {
+        std::collections::BTreeSet::new()
+    };
+
+    let mut columns = Vec::with_capacity(rows.len());
+    for (name, type_str, nullable_str, default_str, ordinal) in rows {
+        // DuckDB only supports virtual generated columns
+        let generated = generated_cols
+            .contains(&name)
+            .then_some(crate::schema::GeneratedKind::Virtual);
+        let default_str = default_str.filter(|_| generated.is_none());
 
         // Detect auto-increment from nextval() default pattern
         let auto_increment = default_str.as_ref().is_some_and(|d| d.contains("nextval("));
@@ -2372,11 +2387,135 @@ fn duckdb_get_table_columns(
             auto_increment,
             default_value: default_str.map(DatabaseValue::String),
             ordinal_position: u32::try_from(ordinal).unwrap_or_default(),
+            enum_values: crate::schema::parse_enum_type_labels(&type_str, false),
             native_type: type_str,
+            generated,
         });
     }
 
     Ok(columns)
+}
+
+/// Names of the generated columns of a table, from its stored `CREATE TABLE` SQL.
+#[cfg(feature = "schema")]
+fn query_generated_columns(
+    conn: &Connection,
+    schema: &str,
+    table_name: &str,
+) -> Result<std::collections::BTreeSet<String>, DuckDbDatabaseError> {
+    let mut stmt = conn.prepare(
+        "SELECT sql FROM duckdb_tables() \
+         WHERE database_name = current_database() AND schema_name = ? AND table_name = ?",
+    )?;
+    let mut rows = stmt.query([schema, table_name])?;
+    let sql = match rows.next()? {
+        Some(row) => row.get::<_, Option<String>>(0)?,
+        None => None,
+    };
+    Ok(sql
+        .as_deref()
+        .map(duckdb_generated_column_names)
+        .unwrap_or_default())
+}
+
+/// Names of the columns declared `GENERATED ALWAYS AS (...)` in a `DuckDB`
+/// `CREATE TABLE` statement.
+///
+/// The column list is split at top-level commas while honoring string literals
+/// and quoted identifiers, so expressions, defaults and names containing commas,
+/// parentheses or the keywords themselves do not confuse detection.
+#[cfg(feature = "schema")]
+fn duckdb_generated_column_names(create_sql: &str) -> std::collections::BTreeSet<String> {
+    // Each element: (leading identifier, segment text with literal contents removed)
+    let mut segments: Vec<(Option<String>, String)> = Vec::new();
+    let mut depth = 0_u32;
+    let mut current_ident: Option<String> = None;
+    let mut ident_done = false;
+    let mut code = String::new();
+    let mut chars = create_sql.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                // String literal ('' escapes a quote); contents are dropped
+                while let Some(next) = chars.next() {
+                    if next == '\'' {
+                        if chars.peek() == Some(&'\'') {
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                code.push_str("''");
+            }
+            '"' => {
+                let mut ident = String::new();
+                while let Some(next) = chars.next() {
+                    if next == '"' {
+                        if chars.peek() == Some(&'"') {
+                            chars.next();
+                            ident.push('"');
+                        } else {
+                            break;
+                        }
+                    } else {
+                        ident.push(next);
+                    }
+                }
+                if depth == 1 && !ident_done && current_ident.is_none() {
+                    current_ident = Some(ident);
+                    ident_done = true;
+                }
+                code.push_str("\"\"");
+            }
+            '(' => {
+                depth += 1;
+                if depth > 1 {
+                    code.push(c);
+                }
+            }
+            ')' => {
+                if depth == 1 {
+                    segments.push((current_ident.take(), std::mem::take(&mut code)));
+                    break;
+                }
+                depth = depth.saturating_sub(1);
+                code.push(c);
+            }
+            ',' if depth == 1 => {
+                segments.push((current_ident.take(), std::mem::take(&mut code)));
+                ident_done = false;
+            }
+            _ if depth == 1 && !ident_done => {
+                if c.is_whitespace() {
+                    if current_ident.is_some() {
+                        ident_done = true;
+                    }
+                } else {
+                    current_ident.get_or_insert_with(String::new).push(c);
+                }
+                code.push(c);
+            }
+            _ => {
+                if depth >= 1 {
+                    code.push(c);
+                }
+            }
+        }
+    }
+
+    segments
+        .into_iter()
+        .filter_map(|(ident, code)| {
+            let normalized = code.split_whitespace().collect::<Vec<_>>().join(" ");
+            normalized
+                .to_ascii_uppercase()
+                .contains(" GENERATED ALWAYS AS")
+                .then_some(ident)
+                .flatten()
+        })
+        .collect()
 }
 
 /// Get complete relation info including columns, indexes, and foreign keys.
@@ -4288,10 +4427,37 @@ impl DuckDbTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::DatabaseValue;
     use crate::query::{FilterableQuery, where_eq};
     use std::sync::Arc;
     use switchy_async::sync::Mutex;
+
+    #[cfg(feature = "schema")]
+    #[test]
+    fn finds_generated_columns_in_create_sql() {
+        let names = |sql: &str| {
+            duckdb_generated_column_names(sql)
+                .into_iter()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(
+                "CREATE TABLE t(a INTEGER, \"we, ird\" INTEGER DEFAULT(3), \
+                 g INTEGER GENERATED ALWAYS AS((a * 2)), \
+                 \"Q\"\"x\" VARCHAR GENERATED ALWAYS AS(('a,b' || a)), \
+                 s VARCHAR DEFAULT('x GENERATED ALWAYS AS (1)'), \
+                 d DECIMAL(10,2), PRIMARY KEY(a));"
+            ),
+            ["Q\"x", "g"]
+        );
+        assert_eq!(names("CREATE TABLE t(a INTEGER);"), Vec::<String>::new());
+        assert_eq!(names(""), Vec::<String>::new());
+        assert_eq!(
+            names("CREATE TABLE \"odd (name\"(x INTEGER GENERATED ALWAYS AS(1));"),
+            ["x"]
+        );
+    }
 
     #[test]
     fn now_uses_utc_in_non_utc_sessions() {

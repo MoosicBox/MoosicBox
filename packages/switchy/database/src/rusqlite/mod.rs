@@ -5427,7 +5427,8 @@ fn rusqlite_get_relation_columns(
         sqlite_parse_default_value, sqlite_pragma_sql, sqlite_type_to_data_type,
     };
 
-    let query = sqlite_pragma_sql(schema, "table_info", table_name);
+    // `table_xinfo` (unlike `table_info`) also lists generated columns.
+    let query = sqlite_pragma_sql(schema, "table_xinfo", table_name);
     let mut stmt = connection
         .prepare_cached(&query)
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -5441,6 +5442,7 @@ fn rusqlite_get_relation_columns(
                 row.get::<_, bool>(3)?,                               // notnull
                 row.get::<_, Option<String>>(4)?,                     // dflt_value
                 row.get::<_, bool>(5)?,                               // pk (primary key)
+                row.get::<_, i64>(6)?,                                // hidden
             ))
         })
         .map_err(RusqliteDatabaseError::Rusqlite)?;
@@ -5449,8 +5451,12 @@ fn rusqlite_get_relation_columns(
     let mut create_sql: Option<Option<String>> = None;
 
     for column_result in column_rows {
-        let (ordinal, name, type_str, not_null, default_value, is_pk) =
+        let (ordinal, name, type_str, not_null, default_value, is_pk, hidden) =
             column_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+        if crate::sqlite_common::sqlite_hidden_is_virtual_table_column(hidden) {
+            continue;
+        }
+        let generated = crate::sqlite_common::sqlite_hidden_generated_kind(hidden);
 
         let auto_increment = if is_pk {
             // Check if this column has AUTOINCREMENT in the CREATE TABLE statement
@@ -5475,8 +5481,14 @@ fn rusqlite_get_relation_columns(
             nullable: !not_null,
             is_primary_key: is_pk,
             auto_increment,
-            default_value: sqlite_parse_default_value(default_value.as_deref()),
+            default_value: if generated.is_some() {
+                None
+            } else {
+                sqlite_parse_default_value(default_value.as_deref())
+            },
             ordinal_position: ordinal + 1, // Convert 0-based to 1-based
+            enum_values: None,
+            generated,
         });
     }
 

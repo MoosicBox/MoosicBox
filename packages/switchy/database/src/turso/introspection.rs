@@ -249,7 +249,7 @@ pub(super) async fn view_definition(
 
 /// Read column metadata of a table or view.
 ///
-/// Uses `PRAGMA table_info`; when that yields nothing for a view, columns are
+/// Uses `PRAGMA table_xinfo`; when that yields nothing for a view, columns are
 /// derived from the prepared `SELECT *` statement instead.
 ///
 /// # Errors
@@ -265,8 +265,9 @@ pub(super) async fn columns(
     let prefix = schema.map_or_else(String::new, |schema| {
         format!("{}.", quote_sqlite_identifier(schema))
     });
+    // `table_xinfo` (unlike `table_info`) also lists generated columns.
     let pragma = format!(
-        "PRAGMA {prefix}table_info({})",
+        "PRAGMA {prefix}table_xinfo({})",
         quote_sqlite_identifier(name)
     );
     let rows = query_rows(connection, &pragma, &[]).await?;
@@ -276,6 +277,11 @@ pub(super) async fn columns(
         let Some(column_name) = text(row, "name") else {
             continue;
         };
+        let hidden = int(row, "hidden").unwrap_or(0);
+        if crate::sqlite_common::sqlite_hidden_is_virtual_table_column(hidden) {
+            continue;
+        }
+        let generated = crate::sqlite_common::sqlite_hidden_generated_kind(hidden);
         let fallback_ordinal = u32::try_from(columns.len()).unwrap_or(0);
         let ordinal = int(row, "cid")
             .and_then(|cid| u32::try_from(cid).ok())
@@ -283,7 +289,11 @@ pub(super) async fn columns(
         let native_type = text(row, "type").unwrap_or_default();
         let not_null = int(row, "notnull").is_some_and(|value| value != 0);
         let is_pk = int(row, "pk").is_some_and(|value| value != 0);
-        let default_value = super::parse_default_value(text(row, "dflt_value").as_deref());
+        let default_value = if generated.is_some() {
+            None
+        } else {
+            super::parse_default_value(text(row, "dflt_value").as_deref())
+        };
         let auto_increment = is_pk && super::check_autoincrement_in_sql(create_sql, &column_name);
 
         columns.push(ColumnInfo {
@@ -295,6 +305,8 @@ pub(super) async fn columns(
             default_value,
             ordinal_position: ordinal + 1,
             native_type,
+            enum_values: None,
+            generated,
         });
     }
 
@@ -317,6 +329,8 @@ pub(super) async fn columns(
                     default_value: None,
                     ordinal_position: u32::try_from(index + 1).unwrap_or(u32::MAX),
                     native_type,
+                    enum_values: None,
+                    generated: None,
                 });
             }
         }

@@ -81,6 +81,25 @@ pub fn sqlite_pragma_sql(schema: Option<&str>, pragma: &str, arg: &str) -> Strin
     )
 }
 
+/// Whether a `PRAGMA table_xinfo` `hidden` value (`1`) marks a hidden
+/// virtual-table column, which `PRAGMA table_info` omits and introspection skips.
+#[must_use]
+pub const fn sqlite_hidden_is_virtual_table_column(hidden: i64) -> bool {
+    hidden == 1
+}
+
+/// The generated-column kind of a `PRAGMA table_xinfo` `hidden` value
+/// (`2` = virtual, `3` = stored; anything else is not generated).
+#[cfg(feature = "schema")]
+#[must_use]
+pub const fn sqlite_hidden_generated_kind(hidden: i64) -> Option<crate::schema::GeneratedKind> {
+    match hidden {
+        2 => Some(crate::schema::GeneratedKind::Virtual),
+        3 => Some(crate::schema::GeneratedKind::Stored),
+        _ => None,
+    }
+}
+
 /// Whether `column_name` is declared `PRIMARY KEY AUTOINCREMENT` in a `CREATE TABLE` statement.
 #[must_use]
 pub fn sqlite_sql_has_autoincrement(create_sql: &str, column_name: &str) -> bool {
@@ -374,6 +393,20 @@ mod tests {
             sqlite_parse_default_value(Some("'a''b'")),
             Some(DatabaseValue::String("a'b".into()))
         );
+    }
+
+    #[test]
+    fn table_xinfo_hidden_values() {
+        use crate::schema::GeneratedKind;
+        assert!(!sqlite_hidden_is_virtual_table_column(0));
+        assert!(sqlite_hidden_is_virtual_table_column(1));
+        assert_eq!(sqlite_hidden_generated_kind(0), None);
+        assert_eq!(sqlite_hidden_generated_kind(1), None);
+        assert_eq!(
+            sqlite_hidden_generated_kind(2),
+            Some(GeneratedKind::Virtual)
+        );
+        assert_eq!(sqlite_hidden_generated_kind(3), Some(GeneratedKind::Stored));
     }
 
     #[test]

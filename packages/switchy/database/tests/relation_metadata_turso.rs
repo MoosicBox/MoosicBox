@@ -298,3 +298,30 @@ async fn query_builder_binds_new_variants() {
     );
     assert_eq!(rows[1].get("weird").unwrap().as_str(), Some("12:34:56"));
 }
+
+/// Columns come from `PRAGMA table_xinfo`; regular columns are not generated and
+/// `SQLite`-family backends have no enum types. (Turso only accepts generated
+/// columns behind its experimental `generated_columns` feature, which
+/// `TursoDatabase` does not enable; the `hidden` mapping is unit-tested in
+/// `sqlite_common`.)
+#[test_log::test(switchy_async::test(no_simulator))]
+async fn regular_columns_are_not_generated_or_enums() {
+    let db = setup().await;
+    let info = db
+        .get_relation_info(&RelationRef::new("children"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(info.columns.len(), 5);
+    assert_eq!(info.columns["weird"].ordinal_position, 5);
+    assert!(info.columns.values().all(|c| c.generated.is_none()));
+    assert!(info.columns.values().all(|c| c.enum_values.is_none()));
+
+    let view = db
+        .get_relation_info(&RelationRef::new("parent_names"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(view.columns.len(), 2);
+    assert!(view.columns.values().all(|c| c.generated.is_none()));
+}

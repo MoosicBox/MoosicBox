@@ -1312,6 +1312,105 @@ pub struct ColumnInfo {
     /// `varchar(255)`, `bigint unsigned` or the name of a user-defined enum.
     /// Use this for display or for types that map to [`DataType::Custom`].
     pub native_type: String,
+    /// Allowed labels when the column's type is an enumeration, in declaration order
+    ///
+    /// `None` when the column is not an enum type (including arrays of enums
+    /// and `MySQL` `SET` columns) or when the backend has no enum types.
+    ///
+    /// * `PostgreSQL`: user-defined `ENUM` types in any schema, ordered by `enumsortorder`
+    /// * `MySQL`/`MariaDB`: labels parsed from `COLUMN_TYPE` (`enum('a','b')`)
+    /// * `DuckDB`: labels parsed from the `ENUM('a', 'b')` type (named or inline)
+    /// * `SQLite`/Turso: always `None` (no enum types)
+    pub enum_values: Option<Vec<String>>,
+    /// `Some` when the column is a generated (computed) column whose value is
+    /// derived from an expression and cannot be written directly
+    ///
+    /// Identity/auto-increment columns are reported via
+    /// [`auto_increment`](Self::auto_increment), not as generated. For
+    /// generated columns [`default_value`](Self::default_value) is `None`
+    /// (the generation expression is not a default).
+    ///
+    /// * `PostgreSQL`: `pg_attribute.attgenerated` (`s` = stored, `v` = virtual)
+    /// * `MySQL`/`MariaDB`: `EXTRA` is `VIRTUAL GENERATED` or `STORED GENERATED`
+    ///   (`PERSISTENT GENERATED` on `MariaDB`); `DEFAULT_GENERATED` expression
+    ///   defaults are not generated columns
+    /// * `SQLite`/Turso: `PRAGMA table_xinfo` `hidden` is `2` (virtual) or `3` (stored)
+    /// * `DuckDB`: `GENERATED ALWAYS AS` in the table's stored `CREATE TABLE` SQL
+    ///   (`DuckDB` only supports virtual generated columns)
+    pub generated: Option<GeneratedKind>,
+}
+
+/// How a generated (computed) column's value is materialized
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GeneratedKind {
+    /// Computed when read; not stored on disk
+    Virtual,
+    /// Computed when written and stored like a regular column
+    Stored,
+}
+
+/// Parse the labels of a quoted enum type string such as `enum('a','b''c')`
+/// (`MySQL`/`MariaDB` `COLUMN_TYPE`) or `ENUM('a', 'b')` (`DuckDB`).
+///
+/// The keyword is matched case-insensitively and the string must end with the
+/// closing parenthesis, so arrays of enums (`ENUM('a')[]`) and other types
+/// return `None`. Doubled quotes (`''`) unescape to a single quote; when
+/// `backslash_escapes` is true, `MySQL`-style backslash escapes (`\\`, `\n`,
+/// `\r`, `\t`, `\0`, `\Z`, `\'`) are decoded as well.
+#[cfg(any(feature = "mysql-sqlx", feature = "duckdb"))]
+#[must_use]
+pub(crate) fn parse_enum_type_labels(
+    type_str: &str,
+    backslash_escapes: bool,
+) -> Option<Vec<String>> {
+    let trimmed = type_str.trim();
+    let open = trimmed.find('(')?;
+    if !trimmed[..open].trim().eq_ignore_ascii_case("enum") {
+        return None;
+    }
+    let body = trimmed[open + 1..].strip_suffix(')')?;
+
+    let mut labels = Vec::new();
+    let mut chars = body.chars().peekable();
+    loop {
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        match chars.next() {
+            None => break,
+            Some('\'') => {}
+            Some(_) => return None,
+        }
+        let mut label = String::new();
+        loop {
+            match chars.next()? {
+                '\'' if chars.peek() == Some(&'\'') => {
+                    chars.next();
+                    label.push('\'');
+                }
+                '\'' => break,
+                '\\' if backslash_escapes => label.push(match chars.next()? {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '0' => '\0',
+                    'Z' => '\u{1a}',
+                    other => other,
+                }),
+                c => label.push(c),
+            }
+        }
+        labels.push(label);
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        match chars.next() {
+            None => break,
+            Some(',') => {}
+            Some(_) => return None,
+        }
+    }
+    Some(labels)
 }
 
 /// Information about a database index
@@ -1648,6 +1747,34 @@ pub fn routines_from_rows(rows: &[Vec<crate::DatabaseValue>]) -> Vec<RoutineInfo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(feature = "mysql-sqlx", feature = "duckdb"))]
+    #[test]
+    fn parses_enum_type_labels() {
+        let labels = |values: &[&str]| Some(values.iter().map(ToString::to_string).collect());
+        assert_eq!(
+            parse_enum_type_labels("ENUM('sad', 'ha''ppy')", false),
+            labels(&["sad", "ha'ppy"])
+        );
+        assert_eq!(
+            parse_enum_type_labels("enum('a,b','(c)')", false),
+            labels(&["a,b", "(c)"])
+        );
+        assert_eq!(
+            parse_enum_type_labels(r"ENUM('back\slash')", false),
+            labels(&[r"back\slash"])
+        );
+        assert_eq!(
+            parse_enum_type_labels(r"enum('back\\slash','tab\t')", true),
+            labels(&[r"back\slash", "tab\t"])
+        );
+        assert_eq!(parse_enum_type_labels("ENUM()", false), labels(&[]));
+        assert_eq!(parse_enum_type_labels("ENUM('a')[]", false), None);
+        assert_eq!(parse_enum_type_labels("SET('a')", false), None);
+        assert_eq!(parse_enum_type_labels("VARCHAR", false), None);
+        assert_eq!(parse_enum_type_labels("ENUM('a' 'b')", false), None);
+        assert_eq!(parse_enum_type_labels("ENUM(a)", false), None);
+    }
 
     #[test]
     fn relation_ref_constructors_and_display() {

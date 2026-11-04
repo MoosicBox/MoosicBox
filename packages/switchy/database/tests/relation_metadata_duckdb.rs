@@ -9,7 +9,7 @@ use switchy_async::sync::Mutex;
 use switchy_database::{
     Database, DatabaseValue,
     duckdb::DuckDbDatabase,
-    schema::{DataType, RelationKind, RelationRef},
+    schema::{DataType, GeneratedKind, RelationKind, RelationRef},
 };
 
 fn setup() -> DuckDbDatabase {
@@ -80,6 +80,69 @@ async fn lists_relations_in_default_and_named_schema() {
     assert_eq!(db.list_tables().await.unwrap(), vec!["plain".to_string()]);
     assert!(!db.table_exists("items").await.unwrap());
     assert!(db.get_table_info("items").await.unwrap().is_none());
+}
+
+#[test_log::test(switchy_async::test)]
+async fn relation_info_reports_enum_values_and_generated_columns() {
+    let db = setup();
+    db.exec_raw(
+        "CREATE TYPE app.color AS ENUM ('red', 'it''s, green');
+         CREATE TABLE app.extras (
+             \"we, ird\" INTEGER DEFAULT 3,
+             c app.color,
+             inline_enum ENUM('x', 'y z'),
+             moods mood[],
+             label VARCHAR DEFAULT 'GENERATED ALWAYS AS',
+             doubled INTEGER GENERATED ALWAYS AS (\"we, ird\" * 2) VIRTUAL,
+             \"Short\" AS (\"we, ird\" + 1)
+         );",
+    )
+    .await
+    .unwrap();
+
+    let info = db
+        .get_relation_info(&RelationRef::with_schema("app", "extras"))
+        .await
+        .unwrap()
+        .unwrap();
+    let col = |name: &str| info.columns.get(name).unwrap();
+    let labels = |values: &[&str]| Some(values.iter().map(ToString::to_string).collect());
+
+    assert_eq!(col("c").enum_values, labels(&["red", "it's, green"]));
+    assert_eq!(col("inline_enum").enum_values, labels(&["x", "y z"]));
+    assert_eq!(col("moods").enum_values, None);
+    assert_eq!(col("we, ird").enum_values, None);
+
+    assert_eq!(col("we, ird").generated, None);
+    assert_eq!(
+        col("we, ird").default_value,
+        Some(DatabaseValue::String("3".to_string()))
+    );
+    assert_eq!(col("label").generated, None);
+    assert_eq!(col("doubled").generated, Some(GeneratedKind::Virtual));
+    assert_eq!(col("doubled").default_value, None);
+    assert_eq!(col("Short").generated, Some(GeneratedKind::Virtual));
+
+    let items = db
+        .get_relation_info(&RelationRef::with_schema("app", "items"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        items.columns.get("m").unwrap().enum_values,
+        labels(&["sad", "happy"])
+    );
+    assert!(items.columns.values().all(|c| c.generated.is_none()));
+
+    let view = db
+        .get_relation_info(&RelationRef::with_schema("app", "item_moods"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        view.columns.get("m").unwrap().enum_values,
+        labels(&["sad", "happy"])
+    );
 }
 
 #[test_log::test(switchy_async::test)]

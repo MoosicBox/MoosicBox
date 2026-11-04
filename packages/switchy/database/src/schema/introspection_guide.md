@@ -349,6 +349,24 @@ without a dedicated `DatabaseValue` variant decode to
 `DatabaseValue::Other { type_name, text }` (or `DatabaseValue::Bytes` for raw
 binary data).
 
+### 0a. Enum Labels and Generated Columns
+
+`ColumnInfo::enum_values` lists the allowed labels of enum-typed columns in
+declaration order, and `ColumnInfo::generated` is `Some(GeneratedKind::Virtual)`
+or `Some(GeneratedKind::Stored)` for computed columns (whose `default_value` is
+always `None`, since the generation expression is not a default):
+
+| Backend        | `enum_values`                                             | `generated`                                                      |
+| -------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| PostgreSQL     | User-defined `ENUM` types (`pg_enum`, by `enumsortorder`) | `pg_attribute.attgenerated` (`s` stored, `v` virtual)            |
+| MySQL/MariaDB  | Parsed from `COLUMN_TYPE` `enum('a','b')` (not `SET`)     | `EXTRA` `VIRTUAL GENERATED` / `STORED GENERATED` (`PERSISTENT`)  |
+| DuckDB         | Parsed from the `ENUM('a', 'b')` type (named or inline)   | `GENERATED ALWAYS AS` in the stored `CREATE TABLE` SQL (virtual) |
+| SQLite / Turso | Always `None` (no enum types)                             | `PRAGMA table_xinfo` `hidden` `2` (virtual) / `3` (stored)       |
+
+Arrays of enums and domains over enums report `enum_values: None`. Identity
+and auto-increment columns are reported through `auto_increment`, not
+`generated`.
+
 ### 1. Data Type Mapping Inconsistencies
 
 **Issue**: Same DataType enum maps to different native types across backends.

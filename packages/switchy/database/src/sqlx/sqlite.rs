@@ -4348,7 +4348,8 @@ async fn sqlx_sqlite_get_relation_columns(
 
     let mut columns = Vec::new();
 
-    let pragma_query = sqlite_pragma_sql(schema, "table_info", table_name);
+    // `table_xinfo` (unlike `table_info`) also lists generated columns.
+    let pragma_query = sqlite_pragma_sql(schema, "table_xinfo", table_name);
     let rows = sqlx::query(sqlx::AssertSqlSafe(pragma_query))
         .fetch_all(&mut *executor)
         .await?;
@@ -4363,6 +4364,11 @@ async fn sqlx_sqlite_get_relation_columns(
         let notnull: i32 = row.try_get(3)?;
         let dflt_value: Option<String> = row.try_get(4)?;
         let pk: i32 = row.try_get(5)?;
+        let hidden: i64 = row.try_get(6)?;
+        if crate::sqlite_common::sqlite_hidden_is_virtual_table_column(hidden) {
+            continue;
+        }
+        let generated = crate::sqlite_common::sqlite_hidden_generated_kind(hidden);
 
         let auto_increment = if pk > 0 {
             // Check if this column has AUTOINCREMENT in the CREATE TABLE statement
@@ -4388,8 +4394,14 @@ async fn sqlx_sqlite_get_relation_columns(
             nullable: notnull == 0,
             is_primary_key: pk > 0,
             auto_increment,
-            default_value: sqlite_parse_default_value(dflt_value.as_deref()),
+            default_value: if generated.is_some() {
+                None
+            } else {
+                sqlite_parse_default_value(dflt_value.as_deref())
+            },
             ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // 0-based cid to 1-based ordinal
+            enum_values: None,
+            generated,
         });
     }
 

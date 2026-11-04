@@ -9,7 +9,7 @@
 
 use switchy_database::{
     Database, DatabaseValue,
-    schema::{DataType, RelationKind, RelationRef},
+    schema::{DataType, GeneratedKind, RelationKind, RelationRef},
 };
 
 async fn exec_all(db: &dyn Database, statements: &[String]) {
@@ -27,6 +27,7 @@ async fn setup(db: &dyn Database, s: &str) {
             format!("DROP SCHEMA IF EXISTS {s} CASCADE"),
             format!("CREATE SCHEMA {s}"),
             format!("CREATE TYPE {s}.mood AS ENUM ('sad', 'happy')"),
+            format!("ALTER TYPE {s}.mood ADD VALUE 'it''s, meh' BEFORE 'happy'"),
             format!("CREATE DOMAIN {s}.posint AS integer CHECK (VALUE > 0)"),
             format!(
                 "CREATE TABLE {s}.parent (id SERIAL PRIMARY KEY, name VARCHAR(40) NOT NULL UNIQUE)"
@@ -47,7 +48,9 @@ async fn setup(db: &dyn Database, s: &str) {
                     blob BYTEA,
                     doc JSONB,
                     stamp TIMESTAMPTZ,
-                    price NUMERIC(10,2)
+                    price NUMERIC(10,2),
+                    moods {s}.mood[],
+                    price_x2 NUMERIC GENERATED ALWAYS AS (price * 2) STORED
                 )"
             ),
             format!("CREATE VIEW {s}.child_view AS SELECT id, feeling FROM {s}.child"),
@@ -138,6 +141,26 @@ async fn check_introspection(db: &dyn Database, s: &str) {
     assert_eq!(column("price").data_type, DataType::Decimal(10, 2));
     assert_eq!(column("price").ordinal_position, 14);
 
+    // Enum labels in sort order (including values added later), not for arrays
+    assert_eq!(
+        column("feeling").enum_values,
+        Some(vec![
+            "sad".to_string(),
+            "it's, meh".to_string(),
+            "happy".to_string()
+        ])
+    );
+    assert_eq!(column("moods").enum_values, None);
+    assert_eq!(column("tags").enum_values, None);
+    assert_eq!(column("qty").enum_values, None);
+
+    // Generated columns; identity columns stay auto-increment, not generated
+    assert_eq!(column("price_x2").generated, Some(GeneratedKind::Stored));
+    assert_eq!(column("price_x2").default_value, None);
+    assert!(!column("price_x2").auto_increment);
+    assert_eq!(column("id").generated, None);
+    assert_eq!(column("price").generated, None);
+
     let fk = child.foreign_keys.values().next().unwrap();
     assert_eq!(fk.column, "parent_id");
     assert_eq!(fk.referenced_table, "parent");
@@ -171,6 +194,10 @@ async fn check_introspection(db: &dyn Database, s: &str) {
     assert_eq!(view.kind, RelationKind::View);
     assert_eq!(view.columns.len(), 2);
     assert!(view.indexes.is_empty());
+    assert_eq!(
+        view.columns.get("feeling").unwrap().enum_values,
+        column("feeling").enum_values
+    );
 
     let mv = db
         .get_relation_info(&RelationRef::with_schema(s, "parent_mv"))

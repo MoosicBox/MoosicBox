@@ -8,7 +8,7 @@
 
 use switchy_database::{
     Database, DatabaseValue,
-    schema::{DataType, RelationKind, RelationRef},
+    schema::{DataType, GeneratedKind, RelationKind, RelationRef},
 };
 
 const SETUP: &str = "
@@ -36,6 +36,46 @@ async fn check_routines(db: &dyn Database) {
     assert!(routines.iter().any(|r| {
         r.name == "count" && matches!(r.kind, RoutineKind::Aggregate | RoutineKind::Window)
     }));
+}
+
+/// Generated columns (listed by `PRAGMA table_xinfo`, not `table_info`) are
+/// reported with their kind, keep their ordinal and have no default; `SQLite`
+/// has no enum types.
+async fn check_generated_columns(db: &dyn Database) {
+    db.exec_raw(
+        "CREATE TABLE gen_cols (
+            a INTEGER NOT NULL DEFAULT 1,
+            v INTEGER GENERATED ALWAYS AS (a * 2) VIRTUAL,
+            s TEXT GENERATED ALWAYS AS ('x' || a) STORED,
+            b TEXT
+        )",
+    )
+    .await
+    .unwrap();
+
+    let info = db
+        .get_relation_info(&RelationRef::new("gen_cols"))
+        .await
+        .unwrap()
+        .expect("gen_cols");
+    assert_eq!(info.columns.len(), 4);
+    let column = |name: &str| &info.columns[name];
+    assert_eq!(column("a").generated, None);
+    assert_eq!(column("a").default_value, Some(DatabaseValue::Int64(1)));
+    assert_eq!(column("v").generated, Some(GeneratedKind::Virtual));
+    assert_eq!(column("v").native_type, "INTEGER");
+    assert_eq!(column("v").default_value, None);
+    assert_eq!(column("v").ordinal_position, 2);
+    assert_eq!(column("s").generated, Some(GeneratedKind::Stored));
+    assert_eq!(column("s").ordinal_position, 3);
+    assert_eq!(column("b").generated, None);
+    assert_eq!(column("b").ordinal_position, 4);
+    assert!(info.columns.values().all(|c| c.enum_values.is_none()));
+
+    let columns = db.get_table_columns("gen_cols").await.unwrap();
+    let names: Vec<_> = columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["a", "v", "s", "b"]);
+    assert!(db.column_exists("gen_cols", "s").await.unwrap());
 }
 
 async fn check_relations(db: &dyn Database) {
@@ -245,6 +285,11 @@ mod rusqlite_backend {
     }
 
     #[tokio::test]
+    async fn generated_columns() {
+        check_generated_columns(&db()).await;
+    }
+
+    #[tokio::test]
     async fn values_and_raw_results() {
         check_values(&db()).await;
     }
@@ -363,6 +408,11 @@ mod sqlx_backend {
     }
 
     #[tokio::test]
+    async fn generated_columns() {
+        check_generated_columns(&db().await).await;
+    }
+
+    #[tokio::test]
     async fn values_and_raw_results() {
         check_values(&db().await).await;
     }
@@ -416,5 +466,10 @@ mod simulator_backend {
     #[tokio::test]
     async fn values_and_raw_results() {
         check_values(&SimulationDatabase::new().unwrap()).await;
+    }
+
+    #[tokio::test]
+    async fn generated_columns() {
+        check_generated_columns(&SimulationDatabase::new().unwrap()).await;
     }
 }

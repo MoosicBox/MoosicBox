@@ -980,8 +980,8 @@ mod introspection {
     use async_trait::async_trait;
 
     use crate::schema::{
-        ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, RelationKind, RelationSummary, SchemaInfo,
-        TableInfo,
+        ColumnInfo, DataType, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
+        RelationSummary, SchemaInfo, TableInfo,
     };
     use crate::{DatabaseError, DatabaseValue};
 
@@ -1058,7 +1058,12 @@ mod introspection {
         )
     }
 
-    /// Columns: `name, native_type, nullable, default, attnum, is_identity, is_pk`.
+    /// Columns: `name, native_type, nullable, default, attnum, is_identity, is_pk,
+    /// generated (`s`/`v` or `NULL`), enum_labels`.
+    ///
+    /// `enum_labels` is `NULL` unless the column's type is an enum (`typtype = 'e'`;
+    /// arrays of enums are base types), otherwise the labels in `enumsortorder`
+    /// separated by U+001F (empty for an enum without labels).
     #[must_use]
     pub fn columns_sql(kinds: &str) -> String {
         format!(
@@ -1066,8 +1071,13 @@ mod introspection {
              (NOT a.attnotnull)::text, pg_get_expr(ad.adbin, ad.adrelid), a.attnum::text, \
              (a.attidentity <> '')::text, \
              EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = a.attrelid \
-                     AND i.indisprimary AND a.attnum = ANY (i.indkey))::text \
+                     AND i.indisprimary AND a.attnum = ANY (i.indkey))::text, \
+             NULLIF(a.attgenerated::text, ''), \
+             CASE WHEN t.typtype = 'e' THEN COALESCE( \
+                 (SELECT string_agg(e.enumlabel::text, chr(31) ORDER BY e.enumsortorder) \
+                  FROM pg_enum e WHERE e.enumtypid = t.oid), '') END \
              FROM pg_attribute a \
+             JOIN pg_type t ON t.oid = a.atttypid \
              LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum \
              WHERE a.attrelid = {} AND a.attnum > 0 AND NOT a.attisdropped \
              ORDER BY a.attnum",
@@ -1266,6 +1276,18 @@ mod introspection {
         matches!(col(row, index), Some("true" | "t"))
     }
 
+    /// Split `columns_sql` enum labels (U+001F separated; empty = no labels).
+    fn split_enum_labels(labels: &str) -> Vec<String> {
+        if labels.is_empty() {
+            Vec::new()
+        } else {
+            labels
+                .split(LIST_SEPARATOR)
+                .map(ToString::to_string)
+                .collect()
+        }
+    }
+
     /// List all schemas.
     ///
     /// # Errors
@@ -1357,7 +1379,13 @@ mod introspection {
             .iter()
             .map(|row| {
                 let native_type = col_string(row, 1);
-                let default_expr = col(row, 3);
+                let generated = match col(row, 7) {
+                    Some("s") => Some(GeneratedKind::Stored),
+                    Some("v") => Some(GeneratedKind::Virtual),
+                    _ => None,
+                };
+                // pg_attrdef holds the generation expression for generated columns
+                let default_expr = col(row, 3).filter(|_| generated.is_none());
                 let is_identity = col_bool(row, 5);
                 ColumnInfo {
                     name: col_string(row, 0),
@@ -1369,6 +1397,8 @@ mod introspection {
                     default_value: default_expr.and_then(parse_default_value),
                     ordinal_position: col(row, 4).and_then(|n| n.parse::<u32>().ok()).unwrap_or(0),
                     native_type,
+                    enum_values: col(row, 8).map(split_enum_labels),
+                    generated,
                 }
             })
             .collect())
