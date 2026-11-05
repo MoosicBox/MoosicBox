@@ -981,7 +981,7 @@ mod introspection {
 
     use crate::schema::{
         ColumnInfo, DataType, DatabaseInfo, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
-        RelationSummary, SchemaInfo, TableInfo,
+        RelationStatistics, RelationSummary, SchemaInfo, TableInfo,
     };
     use crate::{DatabaseError, DatabaseValue};
 
@@ -1044,6 +1044,28 @@ mod introspection {
              AND c.relkind IN ({kinds}) ORDER BY c.relname"
         )
     }
+
+    /// Statistics of the tables, partitioned tables and materialized views of
+    /// a schema (`$1`, nullable = current schema): `schema, name, relkind,
+    /// reltuples, live rows, last analyzed (epoch), modified since analyze,
+    /// size`. A partitioned table sums its leaf partitions' live rows and
+    /// sizes.
+    pub const RELATION_STATISTICS_SQL: &str = "SELECT n.nspname::text, c.relname::text, \
+         c.relkind::text, c.reltuples::bigint::text, \
+         (CASE WHEN c.relkind = 'p' THEN \
+           (SELECT sum(pg_stat_get_live_tuples(t.relid)) FROM pg_partition_tree(c.oid) t \
+            WHERE t.isleaf) \
+          ELSE pg_stat_get_live_tuples(c.oid) END)::bigint::text, \
+         extract(epoch FROM greatest(pg_stat_get_last_analyze_time(c.oid), \
+           pg_stat_get_last_autoanalyze_time(c.oid)))::bigint::text, \
+         pg_stat_get_mod_since_analyze(c.oid)::text, \
+         (CASE WHEN c.relkind = 'p' THEN \
+           (SELECT sum(pg_relation_size(t.relid)) FROM pg_partition_tree(c.oid) t \
+            WHERE t.isleaf) \
+          ELSE pg_relation_size(c.oid) END)::bigint::text \
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+         WHERE n.nspname = COALESCE($1::text, current_schema())::name \
+         AND c.relkind IN ('r','p','m') ORDER BY c.relname";
 
     /// `schema, relkind, comment` of a relation.
     #[must_use]
@@ -1356,6 +1378,47 @@ mod introspection {
                 estimated_rows: col(row, 4)
                     .and_then(|n| n.parse::<i64>().ok())
                     .and_then(|n| u64::try_from(n).ok()),
+            })
+            .collect())
+    }
+
+    /// Planner statistics of the tables in a schema (`None` = current schema).
+    ///
+    /// # Errors
+    ///
+    /// * If the catalog query fails
+    pub async fn pg_list_relation_statistics<C: PgCatalog + ?Sized>(
+        client: &mut C,
+        schema: Option<&str>,
+    ) -> Result<Vec<RelationStatistics>, DatabaseError> {
+        let number = |row: &[Option<String>], index| {
+            col(row, index)
+                .and_then(|n| n.parse::<i64>().ok())
+                .and_then(|n| u64::try_from(n).ok())
+        };
+        Ok(client
+            .catalog_rows(RELATION_STATISTICS_SQL, &[schema])
+            .await?
+            .iter()
+            .map(|row| {
+                let partitioned = col(row, 2) == Some("p");
+                let last_analyzed_unix = col(row, 5).and_then(|n| n.parse().ok());
+                RelationStatistics {
+                    schema: col(row, 0).map(ToString::to_string),
+                    name: col_string(row, 1),
+                    // `-1` until the first ANALYZE or VACUUM.
+                    planner_rows: number(row, 3),
+                    live_rows: number(row, 4),
+                    // VACUUM also sets reltuples, without column statistics,
+                    // but the planner then has a row count to go on.
+                    ever_analyzed: Some(last_analyzed_unix.is_some() || number(row, 3).is_some()),
+                    last_analyzed_unix,
+                    modified_since_analyze: number(row, 6),
+                    size_bytes: number(row, 7),
+                    // Analyzing the parent analyzes every partition, and
+                    // autovacuum never does it on its own.
+                    analyzable: !partitioned,
+                }
             })
             .collect())
     }

@@ -1025,6 +1025,19 @@ impl Database for SqliteSqlxDatabase {
         .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+        sqlx_sqlite_list_relation_statistics(
+            self.get_connection_internal().await?.lock().await.as_mut(),
+            schema,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
     #[cfg(all(feature = "schema", feature = "raw-sql"))]
     async fn list_routines(
         &self,
@@ -4542,6 +4555,36 @@ async fn sqlx_sqlite_list_relations(
                 comment: None,
                 estimated_rows: None,
             })
+        })
+        .collect()
+}
+
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_list_relation_statistics(
+    executor: &mut SqliteConnection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, SqlxDatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_has_stat1_sql, sqlite_relation_statistics, sqlite_relation_statistics_sql,
+        sqlite_schema_or_default,
+    };
+
+    let schema = sqlite_schema_or_default(schema);
+    let has_stat1: i64 = sqlx::query(sqlx::AssertSqlSafe(sqlite_has_stat1_sql(schema)))
+        .fetch_one(&mut *executor)
+        .await?
+        .try_get(0)?;
+    let has_stat1 = has_stat1 > 0;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sqlite_relation_statistics_sql(
+        schema, has_stat1,
+    )))
+    .fetch_all(executor)
+    .await?;
+    rows.iter()
+        .map(|row| {
+            let name: String = row.try_get(0)?;
+            let count: Option<i64> = row.try_get(1)?;
+            Ok(sqlite_relation_statistics(schema, name, count, has_stat1))
         })
         .collect()
 }

@@ -201,6 +201,45 @@ pub(super) async fn list_relations(
         .collect())
 }
 
+/// Planner statistics of the tables in `schema` (`None`: `main`).
+///
+/// # Errors
+///
+/// * If the catalog query fails
+#[cfg(feature = "schema")]
+pub(super) async fn list_relation_statistics(
+    connection: &turso::Connection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_has_stat1_sql, sqlite_relation_statistics, sqlite_relation_statistics_sql,
+    };
+
+    let resolved = schema.unwrap_or(SQLITE_DEFAULT_SCHEMA);
+    if !schema_exists(connection, resolved).await? {
+        return Ok(Vec::new());
+    }
+    let has_stat1 = query_rows(connection, &sqlite_has_stat1_sql(resolved), &[])
+        .await?
+        .first()
+        .and_then(|row| int(row, "stat1_count"))
+        .is_some_and(|count| count > 0);
+    let sql = sqlite_relation_statistics_sql(resolved, has_stat1);
+    Ok(query_rows(connection, &sql, &[])
+        .await?
+        .iter()
+        .filter_map(|row| {
+            let name = text(row, "name").filter(|name| !is_internal_name(name))?;
+            Some(sqlite_relation_statistics(
+                resolved,
+                name,
+                int(row, "row_count"),
+                has_stat1,
+            ))
+        })
+        .collect())
+}
+
 /// Fetch the catalog `type` and `sql` of a table or view.
 #[cfg(feature = "schema")]
 async fn relation_catalog_entry(

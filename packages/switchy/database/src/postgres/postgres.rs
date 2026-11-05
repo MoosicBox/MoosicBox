@@ -850,6 +850,16 @@ impl Database for PostgresDatabase {
         super::introspection::postgres_list_relations(client_ref, schema).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        super::introspection::postgres_list_relation_statistics(client_ref, schema).await
+    }
+
     #[cfg(all(feature = "schema", feature = "raw-sql"))]
     async fn list_routines(
         &self,

@@ -110,6 +110,14 @@ pub async fn postgres_list_relations(
     crate::postgres_common::pg_list_relations(&mut TokioCatalog(client), schema).await
 }
 
+/// Planner statistics of the tables in a schema (`None` = default schema)
+pub async fn postgres_list_relation_statistics(
+    client: &Client,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+    crate::postgres_common::pg_list_relation_statistics(&mut TokioCatalog(client), schema).await
+}
+
 /// Get full information about any relation in any schema
 pub async fn postgres_get_relation_info(
     client: &Client,

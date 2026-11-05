@@ -396,3 +396,17 @@ async fn composite_foreign_keys_report_every_column() {
     assert_eq!(referencing.len(), 1, "{referencing:?}");
     assert_eq!(referencing[0].foreign_key, *key);
 }
+
+#[test_log::test(switchy_async::test(no_simulator))]
+async fn statistics_list_tables_without_row_counts_before_analyze() {
+    let db = setup().await;
+    let statistics = db.list_relation_statistics(None).await.unwrap();
+    let mut names: Vec<&str> = statistics.iter().map(|t| t.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, vec!["children", "parents"], "views have none");
+    let parents = statistics.iter().find(|t| t.name == "parents").unwrap();
+    assert_eq!(parents.schema.as_deref(), Some("main"));
+    assert_eq!(parents.planner_rows, None);
+    assert_eq!(parents.ever_analyzed, Some(false));
+    assert!(parents.analyzable);
+}

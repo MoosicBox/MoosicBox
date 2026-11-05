@@ -48,6 +48,56 @@ pub fn sqlite_list_relations_sql(schema: &str) -> String {
     )
 }
 
+/// SQL counting `sqlite_stat1` tables in `schema` (column `stat1_count`; 1
+/// once `ANALYZE` has run).
+#[must_use]
+pub fn sqlite_has_stat1_sql(schema: &str) -> String {
+    format!(
+        "SELECT count(*) AS stat1_count FROM {} WHERE type = 'table' AND name = 'sqlite_stat1'",
+        sqlite_catalog_table(schema)
+    )
+}
+
+/// SQL listing the tables of `schema` with the row count `ANALYZE` recorded:
+/// columns `name`, `row_count` (NULL without a `sqlite_stat1` row). Every
+/// `sqlite_stat1` row of a table starts with its row count; `ANALYZE` skips
+/// tables that are empty.
+#[must_use]
+pub fn sqlite_relation_statistics_sql(schema: &str, has_stat1: bool) -> String {
+    let rows = if has_stat1 {
+        format!(
+            "(SELECT max(CAST(s.stat AS INTEGER)) FROM {}.sqlite_stat1 s WHERE s.tbl = m.name)",
+            quote_sqlite_identifier(schema)
+        )
+    } else {
+        "NULL".to_string()
+    };
+    format!(
+        "SELECT m.name, {rows} AS row_count FROM {} m \
+         WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name",
+        sqlite_catalog_table(schema)
+    )
+}
+
+/// A table's statistics from a [`sqlite_relation_statistics_sql`] row.
+#[cfg(feature = "schema")]
+#[must_use]
+pub fn sqlite_relation_statistics(
+    schema: &str,
+    name: String,
+    rows: Option<i64>,
+    has_stat1: bool,
+) -> crate::schema::RelationStatistics {
+    crate::schema::RelationStatistics {
+        schema: Some(schema.to_string()),
+        name,
+        planner_rows: rows.and_then(|rows| u64::try_from(rows).ok()),
+        ever_analyzed: Some(has_stat1),
+        analyzable: true,
+        ..crate::schema::RelationStatistics::default()
+    }
+}
+
 /// SQL selecting `type` and `sql` for a named relation in `schema` (one `?` parameter: name).
 #[must_use]
 pub fn sqlite_relation_sql(schema: &str) -> String {

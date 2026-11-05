@@ -942,6 +942,18 @@ impl Database for PostgresSqlxDatabase {
         super::postgres_introspection::postgres_sqlx_list_relations(&mut conn, schema).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        super::postgres_introspection::postgres_sqlx_list_relation_statistics(&mut conn, schema)
+            .await
+    }
+
     #[cfg(all(feature = "schema", feature = "raw-sql"))]
     async fn list_routines(
         &self,

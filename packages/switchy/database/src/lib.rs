@@ -2447,6 +2447,24 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         Err(DatabaseError::UnsupportedOperation("list_databases".into()))
     }
 
+    /// Planner statistics of the tables in a schema
+    ///
+    /// `schema` of `None` means the connection's default schema. Reads only
+    /// catalog and activity statistics, never the tables themselves. Backends
+    /// that track nothing useful return an empty list (the default), and so
+    /// may transactions, so call this outside one.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        _schema: Option<&str>,
+    ) -> Result<Vec<schema::RelationStatistics>, DatabaseError> {
+        Ok(Vec::new())
+    }
+
     /// List tables, views and other relations in a schema
     ///
     /// `schema` of `None` means the connection's default schema. Includes

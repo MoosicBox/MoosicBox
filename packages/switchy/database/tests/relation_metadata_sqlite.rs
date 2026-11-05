@@ -404,6 +404,44 @@ async fn check_foreign_keys(db: &dyn Database) {
     );
 }
 
+/// Row counts come from `sqlite_stat1` once `ANALYZE` has run; tables that
+/// were empty then have none.
+async fn check_statistics(db: &dyn Database) {
+    db.exec_raw(
+        "CREATE TABLE stat_full (x INTEGER);
+         CREATE TABLE stat_indexed (x INTEGER PRIMARY KEY, y INTEGER);
+         CREATE INDEX stat_indexed_y ON stat_indexed(y);
+         CREATE TABLE stat_empty (x INTEGER);
+         CREATE VIEW stat_view AS SELECT x FROM stat_full;
+         INSERT INTO stat_full VALUES (1), (2), (3);
+         INSERT INTO stat_indexed (y) VALUES (1), (2);",
+    )
+    .await
+    .unwrap();
+    let find = |statistics: &[switchy_database::schema::RelationStatistics], name: &str| {
+        statistics.iter().find(|t| t.name == name).cloned().unwrap()
+    };
+    let before = db.list_relation_statistics(None).await.unwrap();
+    assert!(
+        before.iter().all(|t| t.name != "stat_view"),
+        "views have none"
+    );
+    let full = find(&before, "stat_full");
+    assert_eq!(full.schema.as_deref(), Some("main"));
+    assert_eq!(full.planner_rows, None);
+    assert_eq!(full.ever_analyzed, Some(false));
+    assert!(full.analyzable);
+
+    db.exec_raw("ANALYZE").await.unwrap();
+    let after = db.list_relation_statistics(Some("main")).await.unwrap();
+    assert_eq!(find(&after, "stat_full").planner_rows, Some(3));
+    assert_eq!(find(&after, "stat_indexed").planner_rows, Some(2));
+    let empty = find(&after, "stat_empty");
+    assert_eq!(empty.planner_rows, None);
+    assert_eq!(empty.ever_analyzed, Some(true));
+    assert!(after.iter().all(|t| !t.name.starts_with("sqlite_")));
+}
+
 #[cfg(feature = "sqlite-rusqlite")]
 mod rusqlite_backend {
     use super::*;
@@ -418,6 +456,11 @@ mod rusqlite_backend {
     #[tokio::test]
     async fn relations() {
         check_relations(&db()).await;
+    }
+
+    #[tokio::test]
+    async fn statistics() {
+        check_statistics(&db()).await;
     }
 
     #[tokio::test]
@@ -558,6 +601,11 @@ mod sqlx_backend {
     #[tokio::test]
     async fn relations() {
         check_relations(&db().await).await;
+    }
+
+    #[tokio::test]
+    async fn statistics() {
+        check_statistics(&db().await).await;
     }
 
     #[tokio::test]

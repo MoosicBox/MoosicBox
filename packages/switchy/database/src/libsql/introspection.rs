@@ -87,6 +87,44 @@ pub(super) async fn list_relations(
         .collect())
 }
 
+/// Planner statistics of the tables in `schema` (`None`: `main`).
+pub(super) async fn list_relation_statistics(
+    executor: &dyn Executor,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_has_stat1_sql, sqlite_relation_statistics, sqlite_relation_statistics_sql,
+    };
+
+    let schema = sqlite_schema_or_default(schema);
+    if !list_schemas(executor)
+        .await?
+        .iter()
+        .any(|info| info.name.eq_ignore_ascii_case(schema))
+    {
+        return Ok(Vec::new());
+    }
+    let has_stat1 = rows(executor, &sqlite_has_stat1_sql(schema), &[])
+        .await?
+        .first()
+        .and_then(|row| int(row, "stat1_count"))
+        .is_some_and(|count| count > 0);
+    let sql = sqlite_relation_statistics_sql(schema, has_stat1);
+    Ok(rows(executor, &sql, &[])
+        .await?
+        .iter()
+        .filter_map(|row| {
+            let name = text(row, "name")?;
+            Some(sqlite_relation_statistics(
+                schema,
+                name,
+                int(row, "row_count"),
+                has_stat1,
+            ))
+        })
+        .collect())
+}
+
 /// The catalog `type` and `sql` of a table or view (`None` schema:
 /// unqualified lookup).
 async fn catalog_entry(

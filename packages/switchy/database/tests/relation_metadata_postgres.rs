@@ -503,7 +503,7 @@ async fn check_objects(db: &dyn Database, s: &str) {
             format!("CREATE TYPE {s}.window_range AS RANGE (subtype = integer)"),
             format!("CREATE SEQUENCE {s}.order_no AS bigint"),
             format!(
-                "CREATE FUNCTION {s}.touch() RETURNS trigger LANGUAGE plpgsql \
+                "CREATE OR REPLACE FUNCTION {s}.touch() RETURNS trigger LANGUAGE plpgsql \
                  AS 'BEGIN RETURN NEW; END'"
             ),
             format!(
@@ -635,6 +635,77 @@ async fn check_foreign_keys(db: &dyn Database, s: &str) {
     exec_all(db, &[format!("DROP SCHEMA {other} CASCADE")]).await;
 }
 
+/// A session publishes its activity statistics once it has been idle a
+/// while (up to 10 seconds); poll until `ready` holds.
+async fn statistics_when(
+    db: &dyn Database,
+    s: &str,
+    ready: impl Fn(&[switchy_database::schema::RelationStatistics]) -> bool,
+) -> Vec<switchy_database::schema::RelationStatistics> {
+    for _ in 0..100 {
+        let statistics = db.list_relation_statistics(Some(s)).await.unwrap();
+        if ready(&statistics) {
+            return statistics;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    panic!("statistics never settled");
+}
+
+/// Statistics before and after ANALYZE, and for a partitioned table.
+async fn check_statistics(db: &dyn Database, s: &str) {
+    exec_all(
+        db,
+        &[
+            format!("CREATE TABLE {s}.fresh (id INTEGER)"),
+            format!("INSERT INTO {s}.fresh SELECT generate_series(1, 100)"),
+            format!("CREATE TABLE {s}.parts (id INTEGER) PARTITION BY RANGE (id)"),
+            format!("CREATE TABLE {s}.parts_a PARTITION OF {s}.parts FOR VALUES FROM (0) TO (50)"),
+            format!(
+                "CREATE TABLE {s}.parts_b PARTITION OF {s}.parts FOR VALUES FROM (50) TO (100)"
+            ),
+            format!("INSERT INTO {s}.parts SELECT generate_series(0, 99)"),
+        ],
+    )
+    .await;
+    let find = |statistics: &[switchy_database::schema::RelationStatistics], name: &str| {
+        statistics.iter().find(|t| t.name == name).cloned()
+    };
+    let before = statistics_when(db, s, |statistics| {
+        find(statistics, "fresh").and_then(|t| t.live_rows) == Some(100)
+            && find(statistics, "parts").and_then(|t| t.live_rows) == Some(100)
+    })
+    .await;
+    let fresh = find(&before, "fresh").unwrap();
+    assert_eq!(fresh.schema.as_deref(), Some(s));
+    assert_eq!(fresh.planner_rows, None, "never analyzed");
+    assert_eq!(fresh.ever_analyzed, Some(false));
+    assert_eq!(fresh.last_analyzed_unix, None);
+    assert_eq!(fresh.modified_since_analyze, Some(100));
+    assert!(fresh.size_bytes.is_some_and(|size| size > 0));
+    assert!(fresh.analyzable);
+    let parts = find(&before, "parts").unwrap();
+    assert!(
+        !parts.analyzable,
+        "partitioned parents are analyzed through partitions"
+    );
+    assert!(parts.size_bytes.is_some_and(|size| size > 0));
+    assert!(
+        find(&before, "child_view").is_none(),
+        "views have no statistics"
+    );
+
+    exec_all(db, &[format!("ANALYZE {s}.fresh")]).await;
+    let after = statistics_when(db, s, |statistics| {
+        find(statistics, "fresh").and_then(|t| t.modified_since_analyze) == Some(0)
+    })
+    .await;
+    let fresh = find(&after, "fresh").unwrap();
+    assert_eq!(fresh.planner_rows, Some(100));
+    assert_eq!(fresh.ever_analyzed, Some(true));
+    assert!(fresh.last_analyzed_unix.is_some());
+}
+
 async fn run_all(db: &dyn Database, schema: &str) {
     setup(db, schema).await;
     check_introspection(db, schema).await;
@@ -642,6 +713,7 @@ async fn run_all(db: &dyn Database, schema: &str) {
     check_objects(db, schema).await;
     check_foreign_keys(db, schema).await;
     check_decoding(db, schema).await;
+    check_statistics(db, schema).await;
     teardown(db, schema).await;
     check_builder_nulls(db, &format!("{schema}_builder_nulls")).await;
 }

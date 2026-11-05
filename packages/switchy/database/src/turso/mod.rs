@@ -1901,6 +1901,14 @@ impl crate::Database for TursoDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, crate::DatabaseError> {
+        introspection::list_relation_statistics(&*self.connection().await?, schema).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
         relation: &crate::schema::RelationRef,

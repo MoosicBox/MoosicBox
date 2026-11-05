@@ -1753,6 +1753,40 @@ impl RelationSummary {
     }
 }
 
+/// Planner statistics of a relation, returned by
+/// [`Database::list_relation_statistics`](crate::Database::list_relation_statistics)
+///
+/// Every field is optional: backends report what they track. Nothing here
+/// comes from scanning the relation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RelationStatistics {
+    /// Schema containing the relation, where known
+    pub schema: Option<String>,
+    /// Relation name
+    pub name: String,
+    /// Row count the planner statistics hold; `None` when they were never
+    /// gathered
+    pub planner_rows: Option<u64>,
+    /// Live rows counted by the server's activity statistics, which are
+    /// kept up to date on every write (and can be reset, say after a crash)
+    pub live_rows: Option<u64>,
+    /// Whether planner statistics were ever gathered; backends that only
+    /// know this for the whole database (`SQLite`) report that
+    pub ever_analyzed: Option<bool>,
+    /// When planner statistics were last gathered, manually or
+    /// automatically (Unix seconds)
+    pub last_analyzed_unix: Option<i64>,
+    /// Rows inserted, updated or deleted since planner statistics were last
+    /// gathered
+    pub modified_since_analyze: Option<u64>,
+    /// Size of the relation's data on disk, in bytes
+    pub size_bytes: Option<u64>,
+    /// Whether gathering statistics for this relation on its own is
+    /// meaningful (`false` for, say, a partitioned parent whose data lives
+    /// in its partitions)
+    pub analyzable: bool,
+}
+
 /// Kind of routine returned by [`Database::list_routines`](crate::Database::list_routines)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]

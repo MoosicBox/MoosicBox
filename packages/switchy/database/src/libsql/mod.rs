@@ -845,6 +845,14 @@ macro_rules! impl_database {
             }
 
             #[cfg(feature = "schema")]
+            async fn list_relation_statistics(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::RelationStatistics>, $crate::DatabaseError> {
+                $crate::libsql::introspection::list_relation_statistics(self, schema).await
+            }
+
+            #[cfg(feature = "schema")]
             async fn get_relation_info(
                 &self,
                 relation: &$crate::schema::RelationRef,

@@ -1450,6 +1450,15 @@ impl Database for RusqliteDatabase {
         rusqlite_list_relations(&*connection.lock().await, schema)
     }
 
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+        let connection = self.get_connection()?;
+        rusqlite_list_relation_statistics(&*connection.lock().await, schema)
+    }
+
     #[cfg(all(feature = "schema", feature = "raw-sql"))]
     async fn list_routines(
         &self,
@@ -2033,6 +2042,14 @@ impl Database for RusqliteTransaction {
         schema: Option<&str>,
     ) -> Result<Vec<crate::schema::RelationSummary>, DatabaseError> {
         rusqlite_list_relations(&*self.connection.lock().await, schema)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_relation_statistics(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+        rusqlite_list_relation_statistics(&*self.connection.lock().await, schema)
     }
 
     #[cfg(all(feature = "schema", feature = "raw-sql"))]
@@ -5635,6 +5652,39 @@ fn rusqlite_list_relations(
         });
     }
     Ok(relations)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_list_relation_statistics(
+    connection: &Connection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+    use crate::sqlite_common::{
+        sqlite_has_stat1_sql, sqlite_relation_statistics, sqlite_relation_statistics_sql,
+        sqlite_schema_or_default,
+    };
+
+    let schema = sqlite_schema_or_default(schema);
+    let has_stat1 = connection
+        .query_row(&sqlite_has_stat1_sql(schema), [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?
+        > 0;
+    let mut stmt = connection
+        .prepare(&sqlite_relation_statistics_sql(schema, has_stat1))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let mut statistics = Vec::new();
+    for row in rows {
+        let (name, count) = row.map_err(RusqliteDatabaseError::Rusqlite)?;
+        statistics.push(sqlite_relation_statistics(schema, name, count, has_stat1));
+    }
+    Ok(statistics)
 }
 
 #[cfg(feature = "schema")]

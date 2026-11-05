@@ -108,6 +108,14 @@ pub async fn postgres_sqlx_list_relations(
     crate::postgres_common::pg_list_relations(conn, schema).await
 }
 
+/// Planner statistics of the tables in a schema (`None` = default schema)
+pub async fn postgres_sqlx_list_relation_statistics(
+    conn: &mut PgConnection,
+    schema: Option<&str>,
+) -> Result<Vec<crate::schema::RelationStatistics>, DatabaseError> {
+    crate::postgres_common::pg_list_relation_statistics(conn, schema).await
+}
+
 /// Get full information about any relation in any schema
 pub async fn postgres_sqlx_get_relation_info(
     conn: &mut PgConnection,
