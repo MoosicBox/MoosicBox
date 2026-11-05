@@ -219,7 +219,9 @@ pub enum ConnectionUrlError {
 }
 
 /// A database to connect to, independent of which backend crate opens it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Its `Debug` output redacts secrets (passwords and auth tokens).
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ConnectionTarget {
     /// A `PostgreSQL` server.
@@ -262,6 +264,61 @@ pub enum ConnectionTarget {
         /// Database file path; `None` for an in-memory database.
         path: Option<PathBuf>,
     },
+    /// A remote `libSQL` server (`sqld`, `turso dev`, Turso Cloud), reached
+    /// with Hrana over HTTP.
+    Libsql {
+        /// The server's base URL: `https://...` or `http://...`, without a
+        /// query string (`libsql://` URLs are given as `https://`, or
+        /// `http://` with `tls=0`).
+        url: String,
+        /// Auth token from the `authToken` parameter, sent as a bearer token.
+        auth_token: Option<String>,
+        /// Remaining (percent-decoded) query parameters.
+        params: BTreeMap<String, String>,
+    },
+}
+
+impl std::fmt::Debug for ConnectionTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Postgres {
+                creds,
+                ssl_mode,
+                tls_files,
+                params,
+            } => f
+                .debug_struct("Postgres")
+                .field("creds", creds)
+                .field("ssl_mode", ssl_mode)
+                .field("tls_files", tls_files)
+                .field("params", params)
+                .finish(),
+            Self::MySql {
+                creds,
+                ssl_mode,
+                tls_files,
+                params,
+            } => f
+                .debug_struct("MySql")
+                .field("creds", creds)
+                .field("ssl_mode", ssl_mode)
+                .field("tls_files", tls_files)
+                .field("params", params)
+                .finish(),
+            Self::Sqlite { path } => f.debug_struct("Sqlite").field("path", path).finish(),
+            Self::DuckDb { path } => f.debug_struct("DuckDb").field("path", path).finish(),
+            Self::Libsql {
+                url,
+                auth_token,
+                params,
+            } => f
+                .debug_struct("Libsql")
+                .field("url", url)
+                .field("auth_token", &auth_token.as_ref().map(|_| "<redacted>"))
+                .field("params", params)
+                .finish(),
+        }
+    }
 }
 
 impl ConnectionTarget {
@@ -277,6 +334,8 @@ impl ConnectionTarget {
     /// * `sqlite:path`, `sqlite://path`, `sqlite:///abs/path`, `file:path`,
     ///   `sqlite::memory:`, `sqlite://:memory:`, `:memory:`
     /// * `duckdb:path`, `duckdb://path`, `duckdb:///abs/path`, `duckdb::memory:`
+    /// * `libsql://host[:port][?authToken=...]` (TLS; `tls=0` turns it off),
+    ///   `https://...` and `http://...` for a remote `libSQL` server
     ///
     /// User, password, host, database and query parameters are percent-decoded.
     /// Reserved characters (`@`, `:`, `/`, `?`) in a password should be
@@ -290,7 +349,8 @@ impl ConnectionTarget {
     /// `PostgreSQL` the libpq
     /// parameters `host`, `port`, `user`, `password` and `dbname` override the
     /// URL components. For file databases the query string is ignored, except
-    /// `mode=memory` which selects an in-memory database.
+    /// `mode=memory` which selects an in-memory database. For `libSQL` the
+    /// `authToken` (or `auth_token`) parameter becomes the auth token.
     ///
     /// # Errors
     ///
@@ -326,6 +386,7 @@ impl ConnectionTarget {
             "duckdb" => Ok(Self::DuckDb {
                 path: parse_file_path(rest)?,
             }),
+            "libsql" | "http" | "https" => Self::libsql_from_url(scheme, rest),
             other => Err(ConnectionUrlError::UnsupportedScheme(other.to_string())),
         }
     }
@@ -401,7 +462,58 @@ impl ConnectionTarget {
         })
     }
 
-    /// Short name of the target's driver family (`postgres`, `mysql`, `sqlite`, `duckdb`).
+    fn libsql_from_url(scheme: &str, rest: &str) -> Result<Self, ConnectionUrlError> {
+        let rest = rest
+            .strip_prefix("//")
+            .ok_or_else(|| ConnectionUrlError::InvalidUrl("expected scheme://".to_string()))?;
+        let (base, query) = rest.split_once('?').unwrap_or((rest, ""));
+        let base = base.trim_end_matches('/');
+        let authority = base.split('/').next().unwrap_or(base);
+        if authority.is_empty() {
+            return Err(ConnectionUrlError::InvalidUrl(
+                "the URL has no host".to_string(),
+            ));
+        }
+        if authority.contains('@') {
+            return Err(ConnectionUrlError::InvalidUrl(
+                "libSQL takes an auth token (authToken=...), not a user and password".to_string(),
+            ));
+        }
+        split_host_port(authority)?;
+        let mut params = parse_query(query)?;
+        let auth_token = ["authToken", "auth_token"]
+            .iter()
+            .filter_map(|key| params.remove(*key))
+            .find(|token| !token.is_empty());
+        let tls = params.remove("tls");
+        let scheme = match scheme.to_ascii_lowercase().as_str() {
+            "libsql" => match tls.as_deref() {
+                None | Some("1" | "true" | "on") => "https",
+                Some("0" | "false" | "off") => "http",
+                Some(other) => {
+                    return Err(ConnectionUrlError::InvalidUrl(format!(
+                        "tls must be 0 or 1, not {other:?}"
+                    )));
+                }
+            },
+            other => {
+                if tls.is_some() {
+                    return Err(ConnectionUrlError::InvalidUrl(format!(
+                        "{other}:// URLs set TLS by their scheme; tls= is for libsql:// URLs"
+                    )));
+                }
+                if other == "https" { "https" } else { "http" }
+            }
+        };
+        Ok(Self::Libsql {
+            url: format!("{scheme}://{base}"),
+            auth_token,
+            params,
+        })
+    }
+
+    /// Short name of the target's driver family (`postgres`, `mysql`,
+    /// `sqlite`, `duckdb`, `libsql`).
     #[must_use]
     pub const fn driver_name(&self) -> &'static str {
         match self {
@@ -409,35 +521,45 @@ impl ConnectionTarget {
             Self::MySql { .. } => "mysql",
             Self::Sqlite { .. } => "sqlite",
             Self::DuckDb { .. } => "duckdb",
+            Self::Libsql { .. } => "libsql",
         }
     }
 
-    /// The credentials of a network target (`None` for file databases).
+    /// The credentials of a network target (`None` for file databases and
+    /// `libSQL`, which authenticates with a token).
     #[must_use]
     pub const fn credentials(&self) -> Option<&Credentials> {
         match self {
             Self::Postgres { creds, .. } | Self::MySql { creds, .. } => Some(creds),
-            Self::Sqlite { .. } | Self::DuckDb { .. } => None,
+            Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
         }
     }
 
     /// The effective port of a network target, applying the driver default
-    /// (5432 for `PostgreSQL`, 3306 for `MySQL`).
+    /// (5432 for `PostgreSQL`, 3306 for `MySQL`, 443 or 80 for `libSQL`
+    /// over `https://` or `http://`).
     #[must_use]
     pub fn port_or_default(&self) -> Option<u16> {
         match self {
             Self::Postgres { creds, .. } => Some(creds.port().unwrap_or(5432)),
             Self::MySql { creds, .. } => Some(creds.port().unwrap_or(3306)),
+            Self::Libsql { url, .. } => {
+                let (scheme, rest) = url.split_once("://")?;
+                let authority = rest.split('/').next().unwrap_or(rest);
+                let port = split_host_port(authority).ok()?.1;
+                Some(port.unwrap_or(if scheme == "https" { 443 } else { 80 }))
+            }
             Self::Sqlite { .. } | Self::DuckDb { .. } => None,
         }
     }
 
-    /// The TLS certificate files of a network target (`None` for file databases).
+    /// The TLS certificate files of a network target (`None` for file
+    /// databases and `libSQL`, whose TLS comes from its URL scheme).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
             Self::Postgres { tls_files, .. } | Self::MySql { tls_files, .. } => Some(tls_files),
-            Self::Sqlite { .. } | Self::DuckDb { .. } => None,
+            Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
         }
     }
 
@@ -621,7 +743,22 @@ pub(crate) fn percent_decode(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use pretty_assertions::assert_eq;
+
+    #[test_log::test]
+    fn debug_redacts_secrets() {
+        let target =
+            ConnectionTarget::from_url("libsql://shop.example.turso.io?authToken=secret-token")
+                .unwrap();
+        let debug = format!("{target:?}");
+        assert!(!debug.contains("secret-token"), "{debug}");
+        assert!(debug.contains("<redacted>"), "{debug}");
+
+        let target = ConnectionTarget::from_url("postgres://u:secret-pw@db/shop").unwrap();
+        let debug = format!("{target:?}");
+        assert!(!debug.contains("secret-pw"), "{debug}");
+    }
 
     fn creds_of(target: &ConnectionTarget) -> &Credentials {
         target.credentials().expect("network target")
@@ -945,6 +1082,61 @@ mod tests {
             Err(ConnectionUrlError::InvalidUrl(_))
         ));
         assert!("postgres://u@h/db".parse::<ConnectionTarget>().is_ok());
+    }
+
+    #[test_log::test]
+    fn libsql_urls_move_the_token_out_of_the_url() {
+        let target =
+            ConnectionTarget::from_url("libsql://shop-example.turso.io?authToken=abc.def&x=1")
+                .unwrap();
+        assert_eq!(
+            target,
+            ConnectionTarget::Libsql {
+                url: "https://shop-example.turso.io".to_string(),
+                auth_token: Some("abc.def".to_string()),
+                params: BTreeMap::from([("x".to_string(), "1".to_string())]),
+            }
+        );
+        assert_eq!(target.driver_name(), "libsql");
+        assert_eq!(target.port_or_default(), Some(443));
+        assert_eq!(target.credentials(), None);
+
+        let local = ConnectionTarget::from_url("http://127.0.0.1:8080/").unwrap();
+        assert_eq!(
+            local,
+            ConnectionTarget::Libsql {
+                url: "http://127.0.0.1:8080".to_string(),
+                auth_token: None,
+                params: BTreeMap::new(),
+            }
+        );
+        assert_eq!(local.port_or_default(), Some(8080));
+        assert!(matches!(
+            ConnectionTarget::from_url("libsql://localhost:8080?tls=0"),
+            Ok(ConnectionTarget::Libsql { url, .. }) if url == "http://localhost:8080"
+        ));
+        assert!(matches!(
+            ConnectionTarget::from_url("https://db.example?auth_token=t"),
+            Ok(ConnectionTarget::Libsql { auth_token: Some(token), .. }) if token == "t"
+        ));
+    }
+
+    #[test_log::test]
+    fn libsql_urls_reject_user_info_and_misplaced_tls() {
+        for url in [
+            "libsql://user:pw@db.example",
+            "libsql://",
+            "https://db.example?tls=0",
+            "libsql://db.example?tls=maybe",
+        ] {
+            assert!(
+                matches!(
+                    ConnectionTarget::from_url(url),
+                    Err(ConnectionUrlError::InvalidUrl(_))
+                ),
+                "{url}"
+            );
+        }
     }
 
     #[test_log::test]

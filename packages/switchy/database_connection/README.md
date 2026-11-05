@@ -22,6 +22,7 @@ The Database Connection package provides:
 - **SQLite**: Rusqlite and SQLx implementations
 - **DuckDB**: Embedded analytical database (file-backed and in-memory)
 - **Turso**: Turso database support (libSQL-compatible)
+- **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud over HTTP (`libsql` feature)
 - **Simulator**: Mock database for testing and development
 
 ### PostgreSQL Options
@@ -177,9 +178,11 @@ let db = switchy_database_connection::init(None, Some(creds)).await?;
 ### Connection URLs and Options
 
 `ConnectionTarget::from_url` parses `postgres://`/`postgresql://`, `mysql://`/`mariadb://`,
-`sqlite:`/`sqlite://`/`file:`/`:memory:` and `duckdb:`/`duckdb://` URLs (percent-decoding
-user, password, host and database; parsing `sslmode`/`ssl-mode` and other query
-parameters). `init_with_options` opens the target with the best enabled backend and
+`sqlite:`/`sqlite://`/`file:`/`:memory:`, `duckdb:`/`duckdb://` and
+`libsql://`/`https://`/`http://` URLs (percent-decoding user, password, host and
+database; parsing `sslmode`/`ssl-mode` and other query parameters; a libSQL
+`authToken` parameter becomes the bearer token, and `tls=0` turns a `libsql://`
+URL into `http://`). `init_with_options` opens the target with the best enabled backend and
 applies `ConnectOptions` natively:
 
 ```rust
@@ -194,12 +197,12 @@ let options = ConnectOptions::new()
 let db = init_with_options(&target, &options).await?;
 ```
 
-| Option              | PostgreSQL                         | MySQL/MariaDB                                        | SQLite                  | DuckDB                 |
-| ------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------- | ---------------------- |
-| `read_only()`       | `default_transaction_read_only=on` | `SET SESSION TRANSACTION READ ONLY`                  | `SQLITE_OPEN_READ_ONLY` | `AccessMode::ReadOnly` |
-| `statement_timeout` | `statement_timeout` startup option | `max_execution_time` (MariaDB: `max_statement_time`) | ignored                 | ignored                |
-| `application_name`  | `application_name`                 | ignored                                              | ignored                 | ignored                |
-| `pool_size`         | pool max size                      | pool max size                                        | connection count        | connection count       |
+| Option              | PostgreSQL                         | MySQL/MariaDB                                        | SQLite                  | DuckDB                 | libSQL (remote)                                                         |
+| ------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------- | ---------------------- | ----------------------------------------------------------------------- |
+| `read_only()`       | `default_transaction_read_only=on` | `SET SESSION TRANSACTION READ ONLY`                  | `SQLITE_OPEN_READ_ONLY` | `AccessMode::ReadOnly` | server-described read-only check plus an always-rolled-back transaction |
+| `statement_timeout` | `statement_timeout` startup option | `max_execution_time` (MariaDB: `max_statement_time`) | ignored                 | ignored                | ignored                                                                 |
+| `application_name`  | `application_name`                 | ignored                                              | ignored                 | ignored                | ignored                                                                 |
+| `pool_size`         | pool max size                      | pool max size                                        | connection count        | connection count       | ignored                                                                 |
 
 TLS certificate files are parsed into `TlsFiles` (also available as
 `ConnectionTarget::tls_files()`) and applied when connecting:

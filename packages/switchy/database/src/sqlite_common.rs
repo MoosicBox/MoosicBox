@@ -1,4 +1,4 @@
-//! Shared helpers for `SQLite`-family backends (rusqlite, sqlx-sqlite, Turso).
+//! Shared helpers for `SQLite`-family backends (rusqlite, sqlx-sqlite, Turso, libSQL).
 //!
 //! Everything here is backend-agnostic: SQL text for catalog queries and pure
 //! functions mapping catalog values to the [`crate::schema`] introspection
@@ -453,5 +453,87 @@ mod tests {
             sqlite_relation_kind("table", "sqlite_sequence"),
             RelationKind::SystemTable
         );
+    }
+}
+
+/// `SQLite` date modifiers (`+1 day`, `-2 hours`, ...) for an interval, for
+/// `datetime('now', ...)`.
+#[must_use]
+pub fn format_sqlite_interval(interval: &crate::sql_interval::SqlInterval) -> Vec<String> {
+    let mut modifiers = Vec::new();
+
+    if interval.years != 0 {
+        let sign = if interval.years >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} year{}",
+            sign,
+            interval.years,
+            if interval.years.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.months != 0 {
+        let sign = if interval.months >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} month{}",
+            sign,
+            interval.months,
+            if interval.months.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.days != 0 {
+        let sign = if interval.days >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} day{}",
+            sign,
+            interval.days,
+            if interval.days.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.hours != 0 {
+        let sign = if interval.hours >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} hour{}",
+            sign,
+            interval.hours,
+            if interval.hours.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.minutes != 0 {
+        let sign = if interval.minutes >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} minute{}",
+            sign,
+            interval.minutes,
+            if interval.minutes.abs() == 1 { "" } else { "s" }
+        ));
+    }
+
+    if interval.seconds != 0 || interval.nanos != 0 {
+        let sign = if interval.seconds >= 0 && interval.nanos == 0 {
+            "+"
+        } else if interval.seconds < 0 {
+            ""
+        } else {
+            "+"
+        };
+        if interval.nanos == 0 {
+            modifiers.push(format!(
+                "{}{} second{}",
+                sign,
+                interval.seconds,
+                if interval.seconds.abs() == 1 { "" } else { "s" }
+            ));
+        } else {
+            #[allow(clippy::cast_precision_loss)]
+            let fractional =
+                interval.seconds as f64 + (f64::from(interval.nanos) / 1_000_000_000.0);
+            modifiers.push(format!("{sign}{fractional} seconds"));
+        }
+    }
+
+    if modifiers.is_empty() {
+        vec!["0 seconds".to_string()]
+    } else {
+        modifiers
     }
 }

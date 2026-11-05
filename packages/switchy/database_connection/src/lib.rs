@@ -383,6 +383,10 @@ pub enum InitDbError {
     #[cfg(feature = "duckdb")]
     #[error(transparent)]
     InitDuckDb(#[from] InitDuckDbError),
+    /// Error connecting to a remote `libSQL` server
+    #[cfg(feature = "libsql")]
+    #[error(transparent)]
+    InitLibsql(#[from] switchy_database::libsql::LibsqlDatabaseError),
     /// Error initializing `MySQL` via sqlx
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]

@@ -185,6 +185,9 @@ pub mod config;
 pub mod duckdb;
 /// Trait for executing database operations
 pub mod executable;
+#[cfg(feature = "libsql")]
+/// Remote `libSQL` backend (`sqld`, Turso Cloud) over Hrana over HTTP
+pub mod libsql;
 #[cfg(feature = "postgres-raw")]
 /// `PostgreSQL` database backend implementation
 pub mod postgres;
@@ -1287,6 +1290,10 @@ pub enum DatabaseError {
     /// Error from Turso backend
     #[error(transparent)]
     Turso(#[from] turso::TursoDatabaseError),
+    #[cfg(feature = "libsql")]
+    /// Error from the remote `libSQL` backend
+    #[error(transparent)]
+    Libsql(libsql::LibsqlDatabaseError),
     /// Database is busy acquiring a lock or an exclusive connection lease.
     #[error("Database is busy")]
     Busy,
@@ -1403,6 +1410,8 @@ impl DatabaseError {
                 }
                 _ => None,
             },
+            #[cfg(feature = "libsql")]
+            Self::Libsql(libsql::LibsqlDatabaseError::Server { kind, .. }) => *kind,
             _ => None,
         }
     }
@@ -1433,6 +1442,12 @@ impl DatabaseError {
             Self::Rusqlite(rusqlite::RusqliteDatabaseError::Rusqlite(
                 ::rusqlite::Error::SqliteFailure(_, _),
             )) => true,
+            #[cfg(feature = "libsql")]
+            Self::Libsql(libsql::LibsqlDatabaseError::StreamExpired) => true,
+            #[cfg(feature = "libsql")]
+            Self::Libsql(libsql::LibsqlDatabaseError::Http(error)) => {
+                error.is_connect() || error.is_timeout()
+            }
             _ => false,
         }
     }

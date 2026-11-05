@@ -37,6 +37,7 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * `MySQL`: `mysql-sqlx`
 /// * `SQLite`: `sqlite-rusqlite`, otherwise `sqlite-sqlx`, otherwise `turso`
 /// * `DuckDB`: `duckdb`
+/// * `libSQL`: `libsql` (Hrana over HTTP)
 ///
 /// # Option handling
 ///
@@ -48,15 +49,21 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   * `SQLite`: `SQLITE_OPEN_READ_ONLY` (rusqlite) / `read_only(true)` (sqlx);
 ///     the file must exist. Not supported for in-memory databases or Turso.
 ///   * `DuckDB`: `AccessMode::ReadOnly`; not supported for in-memory databases
+///   * `libSQL`: the server describes each statement first and it is refused,
+///     never sent to run, unless it is read-only; one that passes runs in a
+///     transaction that is rolled back
+///     (`libSQL` servers refuse `PRAGMA query_only`); see
+///     [`switchy_database::libsql`]
 /// * `statement_timeout`:
 ///   * `PostgreSQL`: startup option `statement_timeout` (milliseconds)
 ///   * `MySQL`: `SET SESSION max_execution_time` (milliseconds; applies to
 ///     `SELECT` only), falling back to `MariaDB`'s `max_statement_time` (seconds)
-///   * `SQLite`/`DuckDB`/Turso: no server-side equivalent; ignored (this is not
+///   * `SQLite`/`DuckDB`/Turso/`libSQL`: no server-side equivalent; ignored (this is not
 ///     mapped to the `SQLite` busy timeout, which is a different concept)
 /// * `application_name`: `PostgreSQL` only (falls back to an
 ///   `application_name` URL parameter); ignored elsewhere
-/// * `pool_size`: maximum pool size (default 5); ignored by Turso
+/// * `pool_size`: maximum pool size (default 5); ignored by Turso and
+///   `libSQL` (which opens a server stream per statement or transaction)
 ///
 /// For `PostgreSQL`, [`SslMode`] maps onto the driver's TLS modes; with
 /// `postgres-raw`, `Allow`/`Prefer` become `prefer`, `Require` and the verify
@@ -86,8 +93,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   vice versa for raw `PostgreSQL`)
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
-///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`) when connecting or
-///   opening fails
+///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`) when
+///   connecting or opening fails
 #[allow(clippy::unused_async)]
 pub async fn init_with_options(
     target: &ConnectionTarget,
@@ -181,6 +188,32 @@ pub async fn init_with_options(
                 })
             }
         }
+        ConnectionTarget::Libsql {
+            url,
+            auth_token,
+            params: _,
+        } => libsql_target(url, auth_token.as_deref(), options).await,
+    }
+}
+
+/// Open a `libSQL` target with the `libsql` backend, when it is compiled in.
+#[allow(clippy::unused_async)]
+async fn libsql_target(
+    url: &str,
+    auth_token: Option<&str>,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(feature = "libsql")]
+    {
+        libsql(url, auth_token, options).await
+    }
+    #[cfg(not(feature = "libsql"))]
+    {
+        let _ = (url, auth_token, options);
+        Err(InitDbError::DriverNotEnabled {
+            driver: "libsql",
+            features: "libsql",
+        })
     }
 }
 
@@ -712,6 +745,30 @@ async fn sqlite_turso(
     log_ignored_statement_timeout("Turso", options);
     Ok(crate::init_turso_local(path).await?)
 }
+
+#[cfg(feature = "libsql")]
+async fn libsql(
+    url: &str,
+    auth_token: Option<&str>,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    use switchy_database::libsql::LibsqlDatabase;
+
+    if options.statement_timeout.is_some() {
+        log::debug!("init_with_options: libSQL has no statement timeout; ignoring");
+    }
+    let mut builder = LibsqlDatabase::builder(url)
+        .read_only(options.is_read_only())
+        .connect_timeout(LIBSQL_CONNECT_TIMEOUT);
+    if let Some(token) = auth_token {
+        builder = builder.auth_token(token);
+    }
+    Ok(Box::new(builder.build().await?))
+}
+
+/// How long to wait for a `libSQL` server's TCP/TLS connection.
+#[cfg(feature = "libsql")]
+const LIBSQL_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[cfg(feature = "duckdb")]
 fn duckdb(

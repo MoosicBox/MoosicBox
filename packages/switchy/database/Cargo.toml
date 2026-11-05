@@ -54,6 +54,11 @@ tokio       = { workspace = true }
 tokio-util  = { workspace = true, optional = true }
 turso       = { workspace = true, optional = true }
 
+# Remote libSQL (Hrana over HTTP) dependencies
+base64  = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+serde   = { workspace = true, optional = true }
+
 # Decimal support
 rust_decimal = { workspace = true, optional = true, features = [
     "std",
@@ -90,7 +95,13 @@ switchy_database_connection = { workspace = true, features = [
     "turso",
 ], default-features = false }
 test-log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = [
+    "io-util",
+    "macros",
+    "net",
+    "rt",
+    "rt-multi-thread",
+] }
 uuid = { workspace = true }
 
 [[bench]]
@@ -108,6 +119,7 @@ default = [
     "cascade",
     "decimal",
     "duckdb",
+    "libsql",
     "mysql",
     "postgres-sqlx",
     "schema",
@@ -202,6 +214,21 @@ turso = [
     "dep:regex",
     "dep:turso",
     "placeholder-question-mark",
+]
+
+# Remote libSQL servers (`sqld`, `turso dev`, Turso Cloud) over Hrana over HTTP.
+libsql = [
+    "_any_backend",
+    "_sqlite",
+    "dep:base64",
+    "dep:regex",
+    "dep:reqwest",
+    "dep:serde",
+    "dep:serde_json",
+    "placeholder-question-mark",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
 ]
 
 # Explicit whole-artifact allocator opt-in; never included by `turso` or defaults.

@@ -83,6 +83,8 @@ creds = ["dep:aws-config", "dep:aws-sdk-ssm"]
 duckdb         = ["dep:duckdb", "dep:switchy_async", "switchy_database/duckdb"]
 duckdb-bundled = ["duckdb", "duckdb/bundled", "switchy_database/duckdb-bundled"]
 
+libsql = ["switchy_database/libsql"]
+
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 
 _sqlite = ["dep:switchy_async"]

@@ -6,7 +6,7 @@ Database abstraction layer with support for multiple database backends, schema m
 
 The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, and Turso
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, and remote libSQL servers
 - **Schema Management**: Create/alter tables, indexes with portable definitions
 - **Schema Introspection**: Query existing database structure programmatically
 - **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
@@ -23,6 +23,7 @@ The Switchy Database package provides:
 - **MySQL (sqlx)**: MySQL database using sqlx driver
 - **DuckDB**: Embedded analytical database using duckdb driver with `?` placeholders
 - **Turso**: Turso (local libSQL/SQLite-compatible) database support
+- **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud databases over Hrana over HTTP, with `?` placeholders
 - **Simulator**: Testing database (delegates to underlying backend)
 
 ### Schema Features
@@ -422,6 +423,7 @@ The following feature flags are available in `Cargo.toml`:
 - `duckdb-bundled` - DuckDB with bundled library (no system install required)
 - `turso` - Turso local database support (file-based or in-memory), without selecting a global allocator
 - `turso-mimalloc` - Explicitly enables `turso` and Turso's mimalloc global allocator; not enabled by defaults or `turso`
+- `libsql` - Remote libSQL servers (`sqld`, `turso dev`, Turso Cloud) over Hrana over HTTP (`reqwest` with rustls)
 
 #### Optional Turso allocator
 
@@ -504,6 +506,7 @@ Each backend has its own error variant:
 - `DatabaseError::MysqlSqlx(sqlx::mysql::SqlxDatabaseError)` - sqlx MySQL errors
 - `DatabaseError::DuckDb(duckdb::DuckDbDatabaseError)` - DuckDB errors
 - `DatabaseError::Turso(turso::TursoDatabaseError)` - Turso errors
+- `DatabaseError::Libsql(libsql::LibsqlDatabaseError)` - remote libSQL errors
 
 ## Data Types
 
@@ -622,6 +625,25 @@ Turso (libSQL/SQLite-compatible) local database support:
 - Uses `?` placeholders
 - Local file-based and in-memory database support
 - Compatible with SQLite API
+
+### libSQL (remote)
+
+Remote libSQL servers (`libsql` feature): `sqld`, `turso dev` and Turso Cloud.
+
+- `LibsqlDatabase::builder("libsql://db-org.turso.io").auth_token(token).build()`;
+  `libsql://` means `https://`, and `http://` URLs (a local `sqld`) skip TLS
+- Each statement outside a transaction runs on its own server stream, closed in
+  the same HTTP request; a transaction holds one stream from `BEGIN` to
+  `COMMIT`/`ROLLBACK` and pings it in the background, since servers close idle
+  streams after about ten seconds
+- Introspection reads the SQLite catalog (`PRAGMA table_xinfo`, `index_list`,
+  `foreign_key_list`); `ALTER TABLE` adds, drops and renames columns (changing
+  a column needs a table rebuild and is refused)
+- Read-only mode (`.read_only(true)`): libSQL servers refuse `PRAGMA query_only`,
+  so the server describes each statement first, in a request of its own, and a
+  statement it does not report read-only is refused without ever being sent to
+  run; one that passes runs in a transaction (or savepoint) that is always
+  rolled back (one extra round trip per statement)
 
 ### DuckDB
 

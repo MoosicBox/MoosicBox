@@ -87,7 +87,8 @@ use crate::{Database, DatabaseError, DatabaseValue, Row};
     feature = "postgres-sqlx",
     feature = "mysql-sqlx",
     feature = "duckdb",
-    feature = "turso"
+    feature = "turso",
+    feature = "libsql"
 ))]
 pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     if cfg!(feature = "raw-sql") {
@@ -108,7 +109,8 @@ pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     feature = "postgres-raw",
     feature = "mysql-sqlx",
     feature = "duckdb",
-    feature = "turso"
+    feature = "turso",
+    feature = "libsql"
 ))]
 pub(crate) fn render_columns(columns: &[&str], delimiter: char) -> String {
     columns
@@ -228,7 +230,8 @@ impl JoinCondition {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         match self {
@@ -280,7 +283,8 @@ impl Join<'_> {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         #[cfg(feature = "raw-sql")]
@@ -672,7 +676,8 @@ impl QualifiedColumn {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         let quote = |name: &str| {
@@ -931,7 +936,8 @@ impl JsonPath {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) fn sqlite(&self) -> String {
         format!("'$.{}'", self.member)
@@ -965,7 +971,8 @@ impl JsonType {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) const fn sqlite(self) -> &'static str {
         match self {
@@ -2188,7 +2195,8 @@ impl<'a> SelectQuery<'a> {
         feature = "postgres-sqlx",
         feature = "mysql-sqlx",
         feature = "duckdb",
-        feature = "turso"
+        feature = "turso",
+        feature = "libsql"
     ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         let table = render_identifier(self.table_name, delimiter);

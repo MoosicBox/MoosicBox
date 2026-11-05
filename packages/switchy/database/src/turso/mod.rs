@@ -120,9 +120,9 @@ use crate::query::Expression as _;
 use thiserror::Error;
 use turso::{Builder, Value as TursoValue};
 
+use crate::DatabaseValue;
 #[cfg(any(feature = "raw-sql", feature = "schema"))]
 use crate::query_transform::{QuestionMarkHandler, transform_query_for_params};
-use crate::{DatabaseValue, sql_interval::SqlInterval};
 
 pub use transaction::TursoTransaction;
 
@@ -336,84 +336,7 @@ impl TursoDatabase {
     }
 }
 
-pub(crate) fn format_sqlite_interval(interval: &SqlInterval) -> Vec<String> {
-    let mut modifiers = Vec::new();
-
-    if interval.years != 0 {
-        let sign = if interval.years >= 0 { "+" } else { "" };
-        modifiers.push(format!(
-            "{}{} year{}",
-            sign,
-            interval.years,
-            if interval.years.abs() == 1 { "" } else { "s" }
-        ));
-    }
-    if interval.months != 0 {
-        let sign = if interval.months >= 0 { "+" } else { "" };
-        modifiers.push(format!(
-            "{}{} month{}",
-            sign,
-            interval.months,
-            if interval.months.abs() == 1 { "" } else { "s" }
-        ));
-    }
-    if interval.days != 0 {
-        let sign = if interval.days >= 0 { "+" } else { "" };
-        modifiers.push(format!(
-            "{}{} day{}",
-            sign,
-            interval.days,
-            if interval.days.abs() == 1 { "" } else { "s" }
-        ));
-    }
-    if interval.hours != 0 {
-        let sign = if interval.hours >= 0 { "+" } else { "" };
-        modifiers.push(format!(
-            "{}{} hour{}",
-            sign,
-            interval.hours,
-            if interval.hours.abs() == 1 { "" } else { "s" }
-        ));
-    }
-    if interval.minutes != 0 {
-        let sign = if interval.minutes >= 0 { "+" } else { "" };
-        modifiers.push(format!(
-            "{}{} minute{}",
-            sign,
-            interval.minutes,
-            if interval.minutes.abs() == 1 { "" } else { "s" }
-        ));
-    }
-
-    if interval.seconds != 0 || interval.nanos != 0 {
-        let sign = if interval.seconds >= 0 && interval.nanos == 0 {
-            "+"
-        } else if interval.seconds < 0 {
-            ""
-        } else {
-            "+"
-        };
-        if interval.nanos == 0 {
-            modifiers.push(format!(
-                "{}{} second{}",
-                sign,
-                interval.seconds,
-                if interval.seconds.abs() == 1 { "" } else { "s" }
-            ));
-        } else {
-            #[allow(clippy::cast_precision_loss)]
-            let fractional =
-                interval.seconds as f64 + (f64::from(interval.nanos) / 1_000_000_000.0);
-            modifiers.push(format!("{sign}{fractional} seconds"));
-        }
-    }
-
-    if modifiers.is_empty() {
-        vec!["0 seconds".to_string()]
-    } else {
-        modifiers
-    }
-}
+pub(crate) use crate::sqlite_common::format_sqlite_interval;
 
 #[cfg(any(feature = "raw-sql", feature = "schema"))]
 pub(crate) fn turso_transform_query_for_params(
