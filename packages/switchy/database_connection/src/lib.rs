@@ -387,6 +387,10 @@ pub enum InitDbError {
     #[cfg(feature = "libsql")]
     #[error(transparent)]
     InitLibsql(#[from] switchy_database::libsql::LibsqlDatabaseError),
+    /// Error connecting to a `ClickHouse` server
+    #[cfg(feature = "clickhouse")]
+    #[error(transparent)]
+    InitClickHouse(#[from] switchy_database::clickhouse::ClickHouseDatabaseError),
     /// Error initializing `MySQL` via sqlx
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]

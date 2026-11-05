@@ -276,6 +276,16 @@ pub enum ConnectionTarget {
         /// Remaining (percent-decoded) query parameters.
         params: BTreeMap<String, String>,
     },
+    /// A `ClickHouse` server, reached over its HTTP interface.
+    ClickHouse {
+        /// Host, port, database (empty: the user's default database), user
+        /// (empty: the server's `default` user) and password.
+        creds: Credentials,
+        /// Whether to use HTTPS.
+        tls: bool,
+        /// Remaining (percent-decoded) query parameters.
+        params: BTreeMap<String, String>,
+    },
 }
 
 impl std::fmt::Debug for ConnectionTarget {
@@ -317,6 +327,12 @@ impl std::fmt::Debug for ConnectionTarget {
                 .field("auth_token", &auth_token.as_ref().map(|_| "<redacted>"))
                 .field("params", params)
                 .finish(),
+            Self::ClickHouse { creds, tls, params } => f
+                .debug_struct("ClickHouse")
+                .field("creds", creds)
+                .field("tls", tls)
+                .field("params", params)
+                .finish(),
         }
     }
 }
@@ -336,6 +352,11 @@ impl ConnectionTarget {
     /// * `duckdb:path`, `duckdb://path`, `duckdb:///abs/path`, `duckdb::memory:`
     /// * `libsql://host[:port][?authToken=...]` (TLS; `tls=0` turns it off),
     ///   `https://...` and `http://...` for a remote `libSQL` server
+    /// * `clickhouse://[user[:password]@][host][:port][/database][?params]`
+    ///   for a `ClickHouse` server's HTTP interface (plain HTTP unless
+    ///   `secure=true` or `tls=1`), and `clickhouse+http://...` /
+    ///   `clickhouse+https://...`, whose scheme says whether TLS is used (a
+    ///   `secure` parameter must agree with it)
     ///
     /// User, password, host, database and query parameters are percent-decoded.
     /// Reserved characters (`@`, `:`, `/`, `?`) in a password should be
@@ -350,7 +371,10 @@ impl ConnectionTarget {
     /// parameters `host`, `port`, `user`, `password` and `dbname` override the
     /// URL components. For file databases the query string is ignored, except
     /// `mode=memory` which selects an in-memory database. For `libSQL` the
-    /// `authToken` (or `auth_token`) parameter becomes the auth token.
+    /// `authToken` (or `auth_token`) parameter becomes the auth token. For
+    /// `ClickHouse` the `secure`/`tls` parameter selects HTTPS on
+    /// `clickhouse://` URLs (and must agree with a `clickhouse+http(s)://`
+    /// scheme).
     ///
     /// # Errors
     ///
@@ -387,6 +411,9 @@ impl ConnectionTarget {
                 path: parse_file_path(rest)?,
             }),
             "libsql" | "http" | "https" => Self::libsql_from_url(scheme, rest),
+            "clickhouse" | "clickhouse+http" | "clickhouse+https" => {
+                Self::clickhouse_from_parts(&scheme.to_ascii_lowercase(), parse_network(rest)?)
+            }
             other => Err(ConnectionUrlError::UnsupportedScheme(other.to_string())),
         }
     }
@@ -462,6 +489,47 @@ impl ConnectionTarget {
         })
     }
 
+    fn clickhouse_from_parts(
+        scheme: &str,
+        mut parts: NetworkParts,
+    ) -> Result<Self, ConnectionUrlError> {
+        let secure = ["secure", "tls"]
+            .iter()
+            .filter_map(|key| parts.params.remove(*key))
+            .next_back();
+        let secure = match secure.as_deref() {
+            None => None,
+            Some("1" | "true" | "on") => Some(true),
+            Some("0" | "false" | "off") => Some(false),
+            Some(other) => {
+                return Err(ConnectionUrlError::InvalidUrl(format!(
+                    "secure must be true or false, not {other:?}"
+                )));
+            }
+        };
+        let tls = match (scheme, secure) {
+            ("clickhouse", secure) => secure.unwrap_or(false),
+            (other, secure) => {
+                let https = other == "clickhouse+https";
+                if secure.is_some_and(|secure| secure != https) {
+                    return Err(ConnectionUrlError::InvalidUrl(format!(
+                        "{other}:// URLs set TLS by their scheme, which secure= contradicts"
+                    )));
+                }
+                https
+            }
+        };
+        if parts.host.is_empty() {
+            "localhost".clone_into(&mut parts.host);
+        }
+        let params = std::mem::take(&mut parts.params);
+        Ok(Self::ClickHouse {
+            creds: parts.credentials(),
+            tls,
+            params,
+        })
+    }
+
     fn libsql_from_url(scheme: &str, rest: &str) -> Result<Self, ConnectionUrlError> {
         let rest = rest
             .strip_prefix("//")
@@ -513,7 +581,7 @@ impl ConnectionTarget {
     }
 
     /// Short name of the target's driver family (`postgres`, `mysql`,
-    /// `sqlite`, `duckdb`, `libsql`).
+    /// `sqlite`, `duckdb`, `libsql`, `clickhouse`).
     #[must_use]
     pub const fn driver_name(&self) -> &'static str {
         match self {
@@ -522,6 +590,7 @@ impl ConnectionTarget {
             Self::Sqlite { .. } => "sqlite",
             Self::DuckDb { .. } => "duckdb",
             Self::Libsql { .. } => "libsql",
+            Self::ClickHouse { .. } => "clickhouse",
         }
     }
 
@@ -530,19 +599,25 @@ impl ConnectionTarget {
     #[must_use]
     pub const fn credentials(&self) -> Option<&Credentials> {
         match self {
-            Self::Postgres { creds, .. } | Self::MySql { creds, .. } => Some(creds),
+            Self::Postgres { creds, .. }
+            | Self::MySql { creds, .. }
+            | Self::ClickHouse { creds, .. } => Some(creds),
             Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
         }
     }
 
     /// The effective port of a network target, applying the driver default
     /// (5432 for `PostgreSQL`, 3306 for `MySQL`, 443 or 80 for `libSQL`
-    /// over `https://` or `http://`).
+    /// over `https://` or `http://`, 8443 or 8123 for `ClickHouse` with or
+    /// without TLS).
     #[must_use]
     pub fn port_or_default(&self) -> Option<u16> {
         match self {
             Self::Postgres { creds, .. } => Some(creds.port().unwrap_or(5432)),
             Self::MySql { creds, .. } => Some(creds.port().unwrap_or(3306)),
+            Self::ClickHouse { creds, tls, .. } => {
+                Some(creds.port().unwrap_or(if *tls { 8443 } else { 8123 }))
+            }
             Self::Libsql { url, .. } => {
                 let (scheme, rest) = url.split_once("://")?;
                 let authority = rest.split('/').next().unwrap_or(rest);
@@ -554,12 +629,16 @@ impl ConnectionTarget {
     }
 
     /// The TLS certificate files of a network target (`None` for file
-    /// databases and `libSQL`, whose TLS comes from its URL scheme).
+    /// databases, `libSQL` and `ClickHouse`, which use the system's trusted
+    /// certificates over HTTPS).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
             Self::Postgres { tls_files, .. } | Self::MySql { tls_files, .. } => Some(tls_files),
-            Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
+            Self::Sqlite { .. }
+            | Self::DuckDb { .. }
+            | Self::Libsql { .. }
+            | Self::ClickHouse { .. } => None,
         }
     }
 
@@ -1119,6 +1198,62 @@ mod tests {
             ConnectionTarget::from_url("https://db.example?auth_token=t"),
             Ok(ConnectionTarget::Libsql { auth_token: Some(token), .. }) if token == "t"
         ));
+    }
+
+    #[test_log::test]
+    fn clickhouse_urls_carry_credentials_and_tls() {
+        let target =
+            ConnectionTarget::from_url("clickhouse://shop:s%40cret@ch.example/music?x=1").unwrap();
+        let ConnectionTarget::ClickHouse { creds, tls, params } = &target else {
+            panic!("{target:?}");
+        };
+        assert_eq!(
+            (creds.host(), creds.user(), creds.password(), creds.name()),
+            ("ch.example", "shop", Some("s@cret"), "music")
+        );
+        assert!(!tls);
+        assert_eq!(
+            params,
+            &BTreeMap::from([("x".to_string(), "1".to_string())])
+        );
+        assert_eq!(target.driver_name(), "clickhouse");
+        assert_eq!(target.port_or_default(), Some(8123));
+        assert!(!format!("{target:?}").contains("s@cret"));
+
+        let secure = ConnectionTarget::from_url("clickhouse://ch.example?secure=true").unwrap();
+        assert!(matches!(
+            secure,
+            ConnectionTarget::ClickHouse { tls: true, .. }
+        ));
+        assert_eq!(secure.port_or_default(), Some(8443));
+        let https = ConnectionTarget::from_url("clickhouse+https://ch.example:9443").unwrap();
+        assert!(matches!(
+            https,
+            ConnectionTarget::ClickHouse { tls: true, .. }
+        ));
+        assert_eq!(https.port_or_default(), Some(9443));
+        let local = ConnectionTarget::from_url("clickhouse+http://").unwrap();
+        assert!(matches!(
+            &local,
+            ConnectionTarget::ClickHouse { creds, tls: false, .. } if creds.host() == "localhost"
+        ));
+        assert!(matches!(
+            ConnectionTarget::from_url("clickhouse+https://ch.example?secure=true"),
+            Ok(ConnectionTarget::ClickHouse { tls: true, params, .. }) if params.is_empty()
+        ));
+        for url in [
+            "clickhouse://ch.example?secure=maybe",
+            "clickhouse+https://ch.example?secure=false",
+            "clickhouse+http://ch.example?tls=1",
+        ] {
+            assert!(
+                matches!(
+                    ConnectionTarget::from_url(url),
+                    Err(ConnectionUrlError::InvalidUrl(_))
+                ),
+                "{url}"
+            );
+        }
     }
 
     #[test_log::test]

@@ -178,6 +178,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+#[cfg(feature = "clickhouse")]
+/// `ClickHouse` backend over the HTTP interface
+pub mod clickhouse;
 /// Database configuration and initialization
 pub mod config;
 #[cfg(feature = "duckdb")]
@@ -1294,6 +1297,10 @@ pub enum DatabaseError {
     /// Error from the remote `libSQL` backend
     #[error(transparent)]
     Libsql(libsql::LibsqlDatabaseError),
+    #[cfg(feature = "clickhouse")]
+    /// Error from the `ClickHouse` backend
+    #[error(transparent)]
+    ClickHouse(clickhouse::ClickHouseDatabaseError),
     /// Database is busy acquiring a lock or an exclusive connection lease.
     #[error("Database is busy")]
     Busy,
@@ -1446,6 +1453,10 @@ impl DatabaseError {
             Self::Libsql(libsql::LibsqlDatabaseError::StreamExpired) => true,
             #[cfg(feature = "libsql")]
             Self::Libsql(libsql::LibsqlDatabaseError::Http(error)) => {
+                error.is_connect() || error.is_timeout()
+            }
+            #[cfg(feature = "clickhouse")]
+            Self::ClickHouse(clickhouse::ClickHouseDatabaseError::Http(error)) => {
                 error.is_connect() || error.is_timeout()
             }
             _ => false,

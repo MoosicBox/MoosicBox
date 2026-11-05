@@ -6,7 +6,7 @@ Database abstraction layer with support for multiple database backends, schema m
 
 The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, and remote libSQL servers
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, remote libSQL servers, and ClickHouse
 - **Schema Management**: Create/alter tables, indexes with portable definitions
 - **Schema Introspection**: Query existing database structure programmatically
 - **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
@@ -24,6 +24,7 @@ The Switchy Database package provides:
 - **DuckDB**: Embedded analytical database using duckdb driver with `?` placeholders
 - **Turso**: Turso (local libSQL/SQLite-compatible) database support
 - **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud databases over Hrana over HTTP, with `?` placeholders
+- **ClickHouse**: ClickHouse servers over the HTTP interface, with `$n` placeholders sent as typed query parameters
 - **Simulator**: Testing database (delegates to underlying backend)
 
 ### Schema Features
@@ -424,6 +425,7 @@ The following feature flags are available in `Cargo.toml`:
 - `turso` - Turso local database support (file-based or in-memory), without selecting a global allocator
 - `turso-mimalloc` - Explicitly enables `turso` and Turso's mimalloc global allocator; not enabled by defaults or `turso`
 - `libsql` - Remote libSQL servers (`sqld`, `turso dev`, Turso Cloud) over Hrana over HTTP (`reqwest` with rustls)
+- `clickhouse` - ClickHouse servers over the HTTP interface (`reqwest` with rustls)
 
 #### Optional Turso allocator
 
@@ -507,6 +509,7 @@ Each backend has its own error variant:
 - `DatabaseError::DuckDb(duckdb::DuckDbDatabaseError)` - DuckDB errors
 - `DatabaseError::Turso(turso::TursoDatabaseError)` - Turso errors
 - `DatabaseError::Libsql(libsql::LibsqlDatabaseError)` - remote libSQL errors
+- `DatabaseError::ClickHouse(clickhouse::ClickHouseDatabaseError)` - ClickHouse errors
 
 ## Data Types
 
@@ -644,6 +647,32 @@ Remote libSQL servers (`libsql` feature): `sqld`, `turso dev` and Turso Cloud.
   statement it does not report read-only is refused without ever being sent to
   run; one that passes runs in a transaction (or savepoint) that is always
   rolled back (one extra round trip per statement)
+
+### ClickHouse
+
+ClickHouse servers (`clickhouse` feature), over the HTTP interface.
+
+- `ClickHouseDatabase::builder("http://127.0.0.1:8123").user(user).password(password).database("shop").build()`;
+  `https://` URLs use TLS with the system's trusted certificates; the password
+  travels in the `X-ClickHouse-Key` header
+- Raw SQL and introspection only: `$1`, `$2`, ... placeholders become typed
+  substitutions (`{p1:String}`) whose values are sent as `param_p1` HTTP
+  parameters, never written into the statement (`?` is ClickHouse's ternary
+  operator); the query and schema builders return
+  `DatabaseError::UnsupportedOperation` (ClickHouse has no `RETURNING`, changes
+  rows through asynchronous mutations, and needs a table engine)
+- Results come back as `TabSeparatedWithNamesAndTypes` and decode by column
+  type (`Nullable`/`LowCardinality` looked through; `Array`, `Map`, `Tuple`,
+  enums and big integers stay text); a statement asking for another `FORMAT`
+  returns its output as text rows
+- No transactions: `begin_transaction` returns `UnsupportedOperation`
+- Introspection reads `system.databases` (as schemas), `system.tables`,
+  `system.columns`, `system.data_skipping_indices` and `system.functions`; the
+  primary key is reported as a non-unique index, since it doesn't make rows
+  unique, and there are no foreign keys
+- Read-only mode (`.read_only(true)`): `readonly=1`, ClickHouse's own read-only
+  mode, is sent as the last parameter of every request; settings given with
+  `.setting(name, value)` may not name it (or any parameter the backend sets)
 
 ### DuckDB
 

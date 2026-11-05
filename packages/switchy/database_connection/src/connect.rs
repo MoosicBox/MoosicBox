@@ -38,6 +38,7 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * `SQLite`: `sqlite-rusqlite`, otherwise `sqlite-sqlx`, otherwise `turso`
 /// * `DuckDB`: `duckdb`
 /// * `libSQL`: `libsql` (Hrana over HTTP)
+/// * `ClickHouse`: `clickhouse` (the HTTP interface)
 ///
 /// # Option handling
 ///
@@ -54,22 +55,27 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///     transaction that is rolled back
 ///     (`libSQL` servers refuse `PRAGMA query_only`); see
 ///     [`switchy_database::libsql`]
+///   * `ClickHouse`: the server's `readonly=1` mode, sent with every request
 /// * `statement_timeout`:
 ///   * `PostgreSQL`: startup option `statement_timeout` (milliseconds)
 ///   * `MySQL`: `SET SESSION max_execution_time` (milliseconds; applies to
 ///     `SELECT` only), falling back to `MariaDB`'s `max_statement_time` (seconds)
+///   * `ClickHouse`: the `max_execution_time` setting (whole seconds, rounded up)
 ///   * `SQLite`/`DuckDB`/Turso/`libSQL`: no server-side equivalent; ignored (this is not
 ///     mapped to the `SQLite` busy timeout, which is a different concept)
 /// * `application_name`: `PostgreSQL` only (falls back to an
 ///   `application_name` URL parameter); ignored elsewhere
-/// * `pool_size`: maximum pool size (default 5); ignored by Turso and
-///   `libSQL` (which opens a server stream per statement or transaction)
+/// * `pool_size`: maximum pool size (default 5); ignored by Turso,
+///   `libSQL` (which opens a server stream per statement or transaction) and
+///   `ClickHouse` (one HTTP request per statement)
 ///
 /// For `PostgreSQL`, [`SslMode`] maps onto the driver's TLS modes; with
 /// `postgres-raw`, `Allow`/`Prefer` become `prefer`, `Require` and the verify
 /// modes become `require`, and the verification level is applied to the TLS
-/// connector. Other URL query parameters are carried in the target but not
-/// applied.
+/// connector. For `ClickHouse`, remaining URL query parameters are sent as
+/// settings with every request (`readonly` and the parameters the backend
+/// sets itself are refused). Other URL query parameters are carried in the
+/// target but not applied.
 ///
 /// [`TlsFiles`] are applied as follows:
 ///
@@ -93,8 +99,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   vice versa for raw `PostgreSQL`)
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
-///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`) when
-///   connecting or opening fails
+///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`,
+///   `InitClickHouse`) when connecting or opening fails
 #[allow(clippy::unused_async)]
 pub async fn init_with_options(
     target: &ConnectionTarget,
@@ -193,6 +199,32 @@ pub async fn init_with_options(
             auth_token,
             params: _,
         } => libsql_target(url, auth_token.as_deref(), options).await,
+        ConnectionTarget::ClickHouse { creds, tls, params } => {
+            clickhouse_target(creds, *tls, params, options).await
+        }
+    }
+}
+
+/// Open a `ClickHouse` target with the `clickhouse` backend, when it is
+/// compiled in.
+#[allow(clippy::unused_async)]
+async fn clickhouse_target(
+    creds: &crate::Credentials,
+    tls: bool,
+    params: &std::collections::BTreeMap<String, String>,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(feature = "clickhouse")]
+    {
+        clickhouse(creds, tls, params, options).await
+    }
+    #[cfg(not(feature = "clickhouse"))]
+    {
+        let _ = (creds, tls, params, options);
+        Err(InitDbError::DriverNotEnabled {
+            driver: "clickhouse",
+            features: "clickhouse",
+        })
     }
 }
 
@@ -765,6 +797,46 @@ async fn libsql(
     }
     Ok(Box::new(builder.build().await?))
 }
+
+#[cfg(feature = "clickhouse")]
+async fn clickhouse(
+    creds: &crate::Credentials,
+    tls: bool,
+    params: &std::collections::BTreeMap<String, String>,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    use switchy_database::clickhouse::ClickHouseDatabase;
+
+    let host = if creds.host().contains(':') && !creds.host().starts_with('[') {
+        format!("[{}]", creds.host())
+    } else {
+        creds.host().to_string()
+    };
+    let port = creds.port().unwrap_or(if tls { 8443 } else { 8123 });
+    let url = format!("{}://{host}:{port}", if tls { "https" } else { "http" });
+    let mut builder = ClickHouseDatabase::builder(url)
+        .read_only(options.is_read_only())
+        .connect_timeout(CLICKHOUSE_CONNECT_TIMEOUT)
+        .database(creds.name());
+    if !creds.user().is_empty() {
+        builder = builder.user(creds.user());
+    }
+    if let Some(password) = creds.password() {
+        builder = builder.password(password);
+    }
+    for (name, value) in params {
+        builder = builder.setting(name, value);
+    }
+    if let Some(timeout) = options.statement_timeout {
+        let seconds = timeout.as_millis().div_ceil(1_000).max(1);
+        builder = builder.setting("max_execution_time", seconds.to_string());
+    }
+    Ok(Box::new(builder.build().await?))
+}
+
+/// How long to wait for a `ClickHouse` server's TCP/TLS connection.
+#[cfg(feature = "clickhouse")]
+const CLICKHOUSE_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How long to wait for a `libSQL` server's TCP/TLS connection.
 #[cfg(feature = "libsql")]

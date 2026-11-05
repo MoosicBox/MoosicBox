@@ -54,7 +54,7 @@ tokio       = { workspace = true }
 tokio-util  = { workspace = true, optional = true }
 turso       = { workspace = true, optional = true }
 
-# Remote libSQL (Hrana over HTTP) dependencies
+# Remote libSQL (Hrana over HTTP) and ClickHouse (HTTP) dependencies
 base64  = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde   = { workspace = true, optional = true }
@@ -117,6 +117,7 @@ default = [
     "api",
     "auto-reverse",
     "cascade",
+    "clickhouse",
     "decimal",
     "duckdb",
     "libsql",
@@ -230,6 +231,9 @@ libsql = [
     "tokio/sync",
     "tokio/time",
 ]
+
+# ClickHouse servers over the HTTP interface.
+clickhouse = ["_any_backend", "dep:reqwest", "dep:serde_json"]
 
 # Explicit whole-artifact allocator opt-in; never included by `turso` or defaults.
 # Not suitable for independently linked native plugins on macOS.
