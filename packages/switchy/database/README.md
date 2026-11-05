@@ -6,7 +6,7 @@ Database abstraction layer with support for multiple database backends, schema m
 
 The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, remote libSQL servers, and ClickHouse
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, remote libSQL servers, ClickHouse, and SQL Server
 - **Schema Management**: Create/alter tables, indexes with portable definitions
 - **Schema Introspection**: Query existing database structure programmatically
 - **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
@@ -25,6 +25,7 @@ The Switchy Database package provides:
 - **Turso**: Turso (local libSQL/SQLite-compatible) database support
 - **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud databases over Hrana over HTTP, with `?` placeholders
 - **ClickHouse**: ClickHouse servers over the HTTP interface, with `$n` placeholders sent as typed query parameters
+- **SQL Server**: Microsoft SQL Server and Azure SQL over TDS (`tiberius`), with `@P1`, `@P2`, ... placeholders
 - **Simulator**: Testing database (delegates to underlying backend)
 
 ### Schema Features
@@ -426,6 +427,7 @@ The following feature flags are available in `Cargo.toml`:
 - `turso-mimalloc` - Explicitly enables `turso` and Turso's mimalloc global allocator; not enabled by defaults or `turso`
 - `libsql` - Remote libSQL servers (`sqld`, `turso dev`, Turso Cloud) over Hrana over HTTP (`reqwest` with rustls)
 - `clickhouse` - ClickHouse servers over the HTTP interface (`reqwest` with rustls)
+- `mssql` - Microsoft SQL Server over TDS (`tiberius` with rustls; named instances through SQL Browser)
 
 #### Optional Turso allocator
 
@@ -510,6 +512,7 @@ Each backend has its own error variant:
 - `DatabaseError::Turso(turso::TursoDatabaseError)` - Turso errors
 - `DatabaseError::Libsql(libsql::LibsqlDatabaseError)` - remote libSQL errors
 - `DatabaseError::ClickHouse(clickhouse::ClickHouseDatabaseError)` - ClickHouse errors
+- `DatabaseError::Mssql(mssql::MssqlDatabaseError)` - SQL Server errors (server errors keep their number, state, class, line and procedure)
 
 ## Data Types
 
@@ -673,6 +676,54 @@ ClickHouse servers (`clickhouse` feature), over the HTTP interface.
 - Read-only mode (`.read_only(true)`): `readonly=1`, ClickHouse's own read-only
   mode, is sent as the last parameter of every request; settings given with
   `.setting(name, value)` may not name it (or any parameter the backend sets)
+
+### SQL Server
+
+Microsoft SQL Server 2016 and later, Azure SQL Database and Azure SQL Edge
+(`mssql` feature), over TDS with SQL Server logins.
+
+- `MssqlDatabase::builder("db.example.com").database("shop").user(user).password(password).build()`;
+  `.port()`, `.instance()` (a named instance, found through SQL Browser),
+  `.encryption()` (`Plaintext`, `LoginOnly`, `Preferred`, `Required` by
+  default, or TDS 8.0 `Strict`), `.trust_server_certificate()`, `.ca_file()`,
+  `.host_name_in_certificate()`, `.application_name()`, `.pool_size()`,
+  `.connect_timeout()` and `.statement_timeout()` (a statement that runs over
+  closes its connection, so the server rolls it back)
+- Raw SQL takes `@P1`, `@P2`, ... placeholders, sent through `sp_executesql`
+  as typed parameters; `DatabaseValue::Now` becomes `SYSUTCDATETIME()`
+- The query builders generate T-SQL (`TOP`, `OUTPUT INSERTED.*` /
+  `DELETED.*` for returned rows, `MERGE … WITH (HOLDLOCK)` for upserts), and
+  the schema builders `IDENTITY` columns, `NVARCHAR`, `DATETIME2`, and
+  `sp_rename` renames (dropping a column first drops its default constraint)
+- Values decode by type: `money` and `decimal`/`numeric` exactly (as
+  `Decimal`, or text beyond its range), `datetime` rounded to milliseconds as
+  SQL Server shows it, `datetimeoffset` with its offset, `uniqueidentifier`
+  as a UUID, `xml` and `sql_variant` as text
+- Transactions with savepoints (`SAVE TRANSACTION`); if the server rolls a
+  transaction back itself (a deadlock, or an error under `XACT_ABORT`), the
+  transaction reports `MssqlDatabaseError::TransactionLost`. In autocommit,
+  a statement that leaves a transaction open is rolled back and reported
+  (`OpenTransaction`)
+- Introspection reads the `sys` catalog: schemas, databases the login can
+  open, tables and views with `MS_Description` comments and row estimates,
+  columns (alias types, computed and identity columns, parsed defaults),
+  indexes, foreign keys, view definitions, and functions and procedures
+- Read-only mode (`.read_only(true)`): SQL Server has no read-only session
+  setting, so the backend enforces it. A conservative T-SQL tokenizer check
+  admits only single queries (`SELECT`, `WITH`, `(`) free of words that
+  write, run code, change the session or leave a transaction, and no
+  `NEXT VALUE FOR` or four-part (linked-server) names; `EXEC` only of a few
+  catalog procedures (`mssql::READ_ONLY_PROCEDURES`, unqualified or
+  `sys.`-qualified) with literal arguments.
+  A statement that passes runs in `BEGIN TRANSACTION` (connections set
+  `XACT_ABORT ON`) and is rolled back. Afterwards `@@TRANCOUNT` must still be
+  1, otherwise it returns `ReadOnlyViolation` and the connection is closed, as
+  it is on any error, timeout or cancellation. That check only *detects* a
+  statement that ended the transaction: a commit it made has already taken
+  effect, so preventing writes rests on the statement check. CLR functions,
+  and T-SQL functions calling extended stored procedures, can still act
+  outside the transaction when a query calls them. For a guarantee from the
+  server itself, use a login with only `db_datareader`
 
 ### DuckDB
 

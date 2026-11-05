@@ -24,6 +24,7 @@ The Database Connection package provides:
 - **Turso**: Turso database support (libSQL-compatible)
 - **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud over HTTP (`libsql` feature)
 - **ClickHouse**: ClickHouse servers over the HTTP interface (`clickhouse` feature)
+- **SQL Server**: Microsoft SQL Server and Azure SQL over TDS (`mssql` feature)
 - **Simulator**: Mock database for testing and development
 
 ### PostgreSQL Options
@@ -186,7 +187,11 @@ database; parsing `sslmode`/`ssl-mode` and other query parameters; a libSQL
 URL into `http://`), and `clickhouse://`/`clickhouse+http://`/`clickhouse+https://`
 URLs for ClickHouse's HTTP interface (`secure=true` selects HTTPS on
 `clickhouse://`; other query parameters are sent as ClickHouse settings, except
-`readonly`, which is refused). `init_with_options` opens the target with the best enabled backend and
+`readonly`, which is refused), and `sqlserver://`/`mssql://` URLs for SQL Server
+(`host%5CINSTANCE` or `instance=` for a named instance; `encrypt=strict|true|prefer|false|danger_plaintext`,
+`trustServerCertificate`, `certificate` (a CA file; `trustServerCertificate=true` with one is
+refused, and so are client certificates), `hostNameInCertificate`, `database`, and
+`application_name` read case-insensitively). `init_with_options` opens the target with the best enabled backend and
 applies `ConnectOptions` natively:
 
 ```rust
@@ -207,6 +212,12 @@ let db = init_with_options(&target, &options).await?;
 | `statement_timeout` | `statement_timeout` startup option | `max_execution_time` (MariaDB: `max_statement_time`) | ignored                 | ignored                | ignored                                                                 | `max_execution_time` (seconds, up) |
 | `application_name`  | `application_name`                 | ignored                                              | ignored                 | ignored                | ignored                                                                 | ignored                            |
 | `pool_size`         | pool max size                      | pool max size                                        | connection count        | connection count       | ignored                                                                 | ignored                            |
+
+On SQL Server, `read_only()` is the backend's own check (a conservative T-SQL
+check, then every statement in a transaction that is always rolled back and
+must still be open afterwards), `statement_timeout` limits each statement
+(closing a connection that runs over), and `application_name` and `pool_size`
+apply as on PostgreSQL.
 
 TLS certificate files are parsed into `TlsFiles` (also available as
 `ConnectionTarget::tls_files()`) and applied when connecting:
@@ -558,6 +569,10 @@ match init(None, None).await {
 ### ClickHouse Features
 
 - **`clickhouse`**: ClickHouse servers over the HTTP interface
+
+### SQL Server Features
+
+- **`mssql`**: Microsoft SQL Server over TDS (`tiberius`)
 
 ### DuckDB Features
 

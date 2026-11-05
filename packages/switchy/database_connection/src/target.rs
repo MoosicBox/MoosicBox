@@ -125,6 +125,44 @@ impl std::str::FromStr for SslMode {
     }
 }
 
+/// How much of a SQL Server connection TLS protects (the `encrypt` URL
+/// parameter, as SQL Server's own drivers spell it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MssqlEncrypt {
+    /// No TLS at all, not even for the login (`encrypt=danger_plaintext`).
+    Plaintext,
+    /// TLS for the login only (`encrypt=false`, `no` or `optional`); the
+    /// server may still insist on encrypting everything.
+    LoginOnly,
+    /// TLS for the whole session if the server supports it
+    /// (`encrypt=prefer`).
+    Preferred,
+    /// TLS for the whole session, or no connection (`encrypt=true`, `yes`
+    /// or `mandatory`; the default).
+    #[default]
+    Required,
+    /// TDS 8.0 strict encryption: TLS before anything else
+    /// (`encrypt=strict`; SQL Server 2022 and Azure SQL).
+    Strict,
+}
+
+impl std::str::FromStr for MssqlEncrypt {
+    type Err = ConnectionUrlError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "danger_plaintext" => Ok(Self::Plaintext),
+            "false" | "no" | "optional" | "0" => Ok(Self::LoginOnly),
+            "prefer" | "preferred" => Ok(Self::Preferred),
+            "true" | "yes" | "mandatory" | "required" | "1" => Ok(Self::Required),
+            "strict" => Ok(Self::Strict),
+            _ => Err(ConnectionUrlError::InvalidUrl(format!(
+                "encrypt must be strict, true, false or danger_plaintext, not {value:?}"
+            ))),
+        }
+    }
+}
+
 /// TLS certificate and key files used when connecting to a network database.
 ///
 /// Every path is optional. Files are read by the driver when a connection is
@@ -286,6 +324,30 @@ pub enum ConnectionTarget {
         /// Remaining (percent-decoded) query parameters.
         params: BTreeMap<String, String>,
     },
+    /// A Microsoft SQL Server (or Azure SQL) database, reached over TDS.
+    Mssql {
+        /// Host, port (empty: 1433, or a named instance's port), database
+        /// (empty: the login's default database), login and password.
+        creds: Credentials,
+        /// A named instance (`host\NAME` or `instance=NAME`), found through
+        /// the SQL Server Browser unless a port is given.
+        instance: Option<String>,
+        /// How much of the connection TLS protects (`encrypt=`).
+        encrypt: MssqlEncrypt,
+        /// Accept any server certificate without verifying it
+        /// (`trustServerCertificate=true`).
+        trust_server_certificate: bool,
+        /// TLS files: a certificate authority to verify the server with
+        /// (`certificate=`, `trustServerCertificateCA=` or `sslrootcert=`).
+        /// SQL Server doesn't use client certificates.
+        tls_files: TlsFiles,
+        /// The name the server's certificate must carry, when it differs
+        /// from the host (`hostNameInCertificate=`).
+        host_name_in_certificate: Option<String>,
+        /// Remaining (percent-decoded) query parameters, with lowercase
+        /// names (SQL Server's drivers match them case-insensitively).
+        params: BTreeMap<String, String>,
+    },
 }
 
 impl std::fmt::Debug for ConnectionTarget {
@@ -333,6 +395,24 @@ impl std::fmt::Debug for ConnectionTarget {
                 .field("tls", tls)
                 .field("params", params)
                 .finish(),
+            Self::Mssql {
+                creds,
+                instance,
+                encrypt,
+                trust_server_certificate,
+                tls_files,
+                host_name_in_certificate,
+                params,
+            } => f
+                .debug_struct("Mssql")
+                .field("creds", creds)
+                .field("instance", instance)
+                .field("encrypt", encrypt)
+                .field("trust_server_certificate", trust_server_certificate)
+                .field("tls_files", tls_files)
+                .field("host_name_in_certificate", host_name_in_certificate)
+                .field("params", params)
+                .finish(),
         }
     }
 }
@@ -357,6 +437,8 @@ impl ConnectionTarget {
     ///   `secure=true` or `tls=1`), and `clickhouse+http://...` /
     ///   `clickhouse+https://...`, whose scheme says whether TLS is used (a
     ///   `secure` parameter must agree with it)
+    /// * `sqlserver://[user[:password]@]host[\instance][:port][/database][?params]`
+    ///   (also `mssql://`) for Microsoft SQL Server and Azure SQL
     ///
     /// User, password, host, database and query parameters are percent-decoded.
     /// Reserved characters (`@`, `:`, `/`, `?`) in a password should be
@@ -374,7 +456,12 @@ impl ConnectionTarget {
     /// `authToken` (or `auth_token`) parameter becomes the auth token. For
     /// `ClickHouse` the `secure`/`tls` parameter selects HTTPS on
     /// `clickhouse://` URLs (and must agree with a `clickhouse+http(s)://`
-    /// scheme).
+    /// scheme). For SQL Server, parameter names are case-insensitive:
+    /// `encrypt` (`strict`, `true`, `false`, `danger_plaintext`; default
+    /// `true`), `trustServerCertificate`, a CA file in `certificate` (or
+    /// `trustServerCertificateCA`, `sslrootcert`), `hostNameInCertificate`,
+    /// `instance` (or a `host\instance` host, `%5C` encoded) and `database`
+    /// (overriding the path).
     ///
     /// # Errors
     ///
@@ -414,6 +501,7 @@ impl ConnectionTarget {
             "clickhouse" | "clickhouse+http" | "clickhouse+https" => {
                 Self::clickhouse_from_parts(&scheme.to_ascii_lowercase(), parse_network(rest)?)
             }
+            "sqlserver" | "mssql" => Self::mssql_from_parts(parse_network(rest)?),
             other => Err(ConnectionUrlError::UnsupportedScheme(other.to_string())),
         }
     }
@@ -530,6 +618,97 @@ impl ConnectionTarget {
         })
     }
 
+    fn mssql_from_parts(mut parts: NetworkParts) -> Result<Self, ConnectionUrlError> {
+        // SQL Server's drivers match parameter names case-insensitively.
+        let mut params: BTreeMap<String, String> = std::mem::take(&mut parts.params)
+            .into_iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value))
+            .collect();
+        let flag = |name: &str, value: Option<String>| -> Result<bool, ConnectionUrlError> {
+            match value.as_deref().map(str::to_ascii_lowercase).as_deref() {
+                None | Some("false" | "no" | "0") => Ok(false),
+                Some("true" | "yes" | "1") => Ok(true),
+                Some(other) => Err(ConnectionUrlError::InvalidUrl(format!(
+                    "{name} must be true or false, not {other:?}"
+                ))),
+            }
+        };
+        let encrypt = params
+            .remove("encrypt")
+            .map(|value| value.parse())
+            .transpose()?
+            .unwrap_or_default();
+        let trust_server_certificate = flag(
+            "trustServerCertificate",
+            params
+                .remove("trustservercertificate")
+                .or_else(|| params.remove("trust_server_certificate")),
+        )?;
+        let tls_files = TlsFiles {
+            root_cert: take_path_param(
+                &mut params,
+                &["certificate", "trustservercertificateca", "sslrootcert"],
+            ),
+            client_cert: None,
+            client_key: None,
+        };
+        if ["sslcert", "sslkey"]
+            .iter()
+            .any(|key| params.contains_key(*key))
+        {
+            return Err(ConnectionUrlError::InvalidUrl(
+                "SQL Server doesn't use client certificates".to_string(),
+            ));
+        }
+        if trust_server_certificate && tls_files.root_cert.is_some() {
+            return Err(ConnectionUrlError::InvalidUrl(
+                "trustServerCertificate=true accepts any certificate, so a CA file to verify \
+                 it with contradicts it"
+                    .to_string(),
+            ));
+        }
+        // A password in the query string would be kept with the other
+        // parameters (and shown with them); it belongs in the user info.
+        if ["password", "pwd"]
+            .iter()
+            .any(|key| params.contains_key(*key))
+        {
+            return Err(ConnectionUrlError::InvalidUrl(
+                "give the password in the URL's user info (sqlserver://user:password@host) or \
+                 separately, not as a query parameter"
+                    .to_string(),
+            ));
+        }
+        let host_name_in_certificate = params
+            .remove("hostnameincertificate")
+            .filter(|name| !name.is_empty());
+        let mut instance = params
+            .remove("instance")
+            .or_else(|| params.remove("instancename"))
+            .filter(|name| !name.is_empty());
+        if let Some((host, name)) = parts.host.split_once('\\') {
+            if !name.is_empty() {
+                instance = Some(name.to_string());
+            }
+            parts.host = host.to_string();
+        }
+        if let Some(database) = params.remove("database") {
+            parts.database = database;
+        }
+        if parts.host.is_empty() {
+            "localhost".clone_into(&mut parts.host);
+        }
+        Ok(Self::Mssql {
+            creds: parts.credentials(),
+            instance,
+            encrypt,
+            trust_server_certificate,
+            tls_files,
+            host_name_in_certificate,
+            params,
+        })
+    }
+
     fn libsql_from_url(scheme: &str, rest: &str) -> Result<Self, ConnectionUrlError> {
         let rest = rest
             .strip_prefix("//")
@@ -581,7 +760,7 @@ impl ConnectionTarget {
     }
 
     /// Short name of the target's driver family (`postgres`, `mysql`,
-    /// `sqlite`, `duckdb`, `libsql`, `clickhouse`).
+    /// `sqlite`, `duckdb`, `libsql`, `clickhouse`, `mssql`).
     #[must_use]
     pub const fn driver_name(&self) -> &'static str {
         match self {
@@ -591,6 +770,7 @@ impl ConnectionTarget {
             Self::DuckDb { .. } => "duckdb",
             Self::Libsql { .. } => "libsql",
             Self::ClickHouse { .. } => "clickhouse",
+            Self::Mssql { .. } => "mssql",
         }
     }
 
@@ -601,7 +781,8 @@ impl ConnectionTarget {
         match self {
             Self::Postgres { creds, .. }
             | Self::MySql { creds, .. }
-            | Self::ClickHouse { creds, .. } => Some(creds),
+            | Self::ClickHouse { creds, .. }
+            | Self::Mssql { creds, .. } => Some(creds),
             Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
         }
     }
@@ -609,7 +790,8 @@ impl ConnectionTarget {
     /// The effective port of a network target, applying the driver default
     /// (5432 for `PostgreSQL`, 3306 for `MySQL`, 443 or 80 for `libSQL`
     /// over `https://` or `http://`, 8443 or 8123 for `ClickHouse` with or
-    /// without TLS).
+    /// without TLS, 1433 for SQL Server; `None` for a SQL Server named
+    /// instance without a port, whose port the SQL Server Browser assigns).
     #[must_use]
     pub fn port_or_default(&self) -> Option<u16> {
         match self {
@@ -618,6 +800,9 @@ impl ConnectionTarget {
             Self::ClickHouse { creds, tls, .. } => {
                 Some(creds.port().unwrap_or(if *tls { 8443 } else { 8123 }))
             }
+            Self::Mssql {
+                creds, instance, ..
+            } => creds.port().or_else(|| instance.is_none().then_some(1433)),
             Self::Libsql { url, .. } => {
                 let (scheme, rest) = url.split_once("://")?;
                 let authority = rest.split('/').next().unwrap_or(rest);
@@ -630,11 +815,13 @@ impl ConnectionTarget {
 
     /// The TLS certificate files of a network target (`None` for file
     /// databases, `libSQL` and `ClickHouse`, which use the system's trusted
-    /// certificates over HTTPS).
+    /// certificates over HTTPS; SQL Server's carry a root certificate only).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
-            Self::Postgres { tls_files, .. } | Self::MySql { tls_files, .. } => Some(tls_files),
+            Self::Postgres { tls_files, .. }
+            | Self::MySql { tls_files, .. }
+            | Self::Mssql { tls_files, .. } => Some(tls_files),
             Self::Sqlite { .. }
             | Self::DuckDb { .. }
             | Self::Libsql { .. }
@@ -1257,6 +1444,82 @@ mod tests {
     }
 
     #[test_log::test]
+    fn mssql_urls_carry_instances_and_tls_settings() {
+        let target = ConnectionTarget::from_url(
+            "sqlserver://shop:s%40cret@db.example:14330/music?Encrypt=strict&TrustServerCertificate=false&applicationName=shop",
+        )
+        .unwrap();
+        let ConnectionTarget::Mssql {
+            creds,
+            instance,
+            encrypt,
+            trust_server_certificate,
+            tls_files,
+            host_name_in_certificate,
+            params,
+        } = &target
+        else {
+            panic!("{target:?}");
+        };
+        assert_eq!(
+            (creds.host(), creds.user(), creds.password(), creds.name()),
+            ("db.example", "shop", Some("s@cret"), "music")
+        );
+        assert_eq!(*instance, None);
+        assert_eq!(*encrypt, MssqlEncrypt::Strict);
+        assert!(!trust_server_certificate);
+        assert!(tls_files.is_empty());
+        assert_eq!(*host_name_in_certificate, None);
+        assert_eq!(
+            params,
+            &BTreeMap::from([("applicationname".to_string(), "shop".to_string())])
+        );
+        assert_eq!(target.driver_name(), "mssql");
+        assert_eq!(target.port_or_default(), Some(14330));
+        assert!(!format!("{target:?}").contains("s@cret"));
+
+        let named =
+            ConnectionTarget::from_url("mssql://sa@db.example%5CSQLEXPRESS?database=shop").unwrap();
+        assert!(matches!(
+            &named,
+            ConnectionTarget::Mssql { creds, instance: Some(instance), encrypt: MssqlEncrypt::Required, .. }
+                if creds.host() == "db.example" && instance == "SQLEXPRESS" && creds.name() == "shop"
+        ));
+        assert_eq!(named.port_or_default(), None);
+        let local = ConnectionTarget::from_url(
+            "sqlserver://?encrypt=false&certificate=/etc/ca.pem&hostNameInCertificate=db",
+        )
+        .unwrap();
+        assert!(matches!(
+            &local,
+            ConnectionTarget::Mssql {
+                creds,
+                encrypt: MssqlEncrypt::LoginOnly,
+                tls_files,
+                host_name_in_certificate: Some(name),
+                ..
+            } if creds.host() == "localhost"
+                && tls_files.root_cert.as_deref() == Some(std::path::Path::new("/etc/ca.pem"))
+                && name == "db"
+        ));
+        assert_eq!(local.port_or_default(), Some(1433));
+        for url in [
+            "sqlserver://db?encrypt=maybe",
+            "sqlserver://db?trustServerCertificate=perhaps",
+            "sqlserver://db?trustServerCertificate=true&certificate=/etc/ca.pem",
+            "sqlserver://db?sslcert=/etc/client.pem",
+        ] {
+            assert!(
+                matches!(
+                    ConnectionTarget::from_url(url),
+                    Err(ConnectionUrlError::InvalidUrl(_))
+                ),
+                "{url}"
+            );
+        }
+    }
+
+    #[test_log::test]
     fn libsql_urls_reject_user_info_and_misplaced_tls() {
         for url in [
             "libsql://user:pw@db.example",
@@ -1292,5 +1555,16 @@ mod tests {
                 .access(AccessMode::ReadWrite)
                 .is_read_only()
         );
+    }
+}
+#[test]
+fn mssql_refuses_passwords_in_the_query_string() {
+    for url in [
+        "sqlserver://h/db?password=hunter2",
+        "mssql://h/db?PWD=hunter2",
+        "sqlserver://h/db?Password=hunter2",
+    ] {
+        let error = ConnectionTarget::from_url(url).unwrap_err().to_string();
+        assert!(!error.contains("hunter2"), "{error}");
     }
 }

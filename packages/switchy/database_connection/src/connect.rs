@@ -39,6 +39,7 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * `DuckDB`: `duckdb`
 /// * `libSQL`: `libsql` (Hrana over HTTP)
 /// * `ClickHouse`: `clickhouse` (the HTTP interface)
+/// * SQL Server: `mssql` (TDS, with rustls TLS)
 ///
 /// # Option handling
 ///
@@ -56,15 +57,22 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///     (`libSQL` servers refuse `PRAGMA query_only`); see
 ///     [`switchy_database::libsql`]
 ///   * `ClickHouse`: the server's `readonly=1` mode, sent with every request
+///   * SQL Server (which has no read-only session setting): each statement
+///     must be a query or a read-only catalog procedure, and runs in a
+///     transaction that is always rolled back; see
+///     [`switchy_database::mssql`]
 /// * `statement_timeout`:
 ///   * `PostgreSQL`: startup option `statement_timeout` (milliseconds)
 ///   * `MySQL`: `SET SESSION max_execution_time` (milliseconds; applies to
 ///     `SELECT` only), falling back to `MariaDB`'s `max_statement_time` (seconds)
 ///   * `ClickHouse`: the `max_execution_time` setting (whole seconds, rounded up)
+///   * SQL Server: enforced by the client (no server-side equivalent); a
+///     statement that runs longer fails and its connection is closed
 ///   * `SQLite`/`DuckDB`/Turso/`libSQL`: no server-side equivalent; ignored (this is not
 ///     mapped to the `SQLite` busy timeout, which is a different concept)
-/// * `application_name`: `PostgreSQL` only (falls back to an
-///   `application_name` URL parameter); ignored elsewhere
+/// * `application_name`: `PostgreSQL` and SQL Server (falling back to an
+///   `application_name` URL parameter, or `applicationName`/`app` for SQL
+///   Server); ignored elsewhere
 /// * `pool_size`: maximum pool size (default 5); ignored by Turso,
 ///   `libSQL` (which opens a server stream per statement or transaction) and
 ///   `ClickHouse` (one HTTP request per statement)
@@ -74,8 +82,11 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// modes become `require`, and the verification level is applied to the TLS
 /// connector. For `ClickHouse`, remaining URL query parameters are sent as
 /// settings with every request (`readonly` and the parameters the backend
-/// sets itself are refused). Other URL query parameters are carried in the
-/// target but not applied.
+/// sets itself are refused). For SQL Server, `encrypt`,
+/// `trustServerCertificate`, the CA file and `hostNameInCertificate` map onto
+/// the driver's TLS settings, and a named instance is found through the SQL
+/// Server Browser unless a port is given. Other URL query parameters are
+/// carried in the target but not applied.
 ///
 /// [`TlsFiles`] are applied as follows:
 ///
@@ -86,6 +97,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   files without a TLS feature are rejected.
 /// * `MySQL` (`mysql-sqlx`): `ssl_ca`, `ssl_client_cert`, `ssl_client_key`; TLS
 ///   itself requires the `tls` feature
+/// * SQL Server: the root certificate is trusted in addition to the system's
+///   certificates (client certificates are refused when parsing the URL)
 ///
 /// Whether the root certificate is used for verification depends on the
 /// [`SslMode`]: modes that skip verification (`Require` and below) also skip it.
@@ -100,7 +113,7 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
 ///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`,
-///   `InitClickHouse`) when connecting or opening fails
+///   `InitClickHouse`, `InitMssql`) when connecting or opening fails
 #[allow(clippy::unused_async)]
 pub async fn init_with_options(
     target: &ConnectionTarget,
@@ -202,7 +215,91 @@ pub async fn init_with_options(
         ConnectionTarget::ClickHouse { creds, tls, params } => {
             clickhouse_target(creds, *tls, params, options).await
         }
+        ConnectionTarget::Mssql { .. } => mssql_target(target, options).await,
     }
+}
+
+/// Open a SQL Server target with the `mssql` backend, when it is compiled
+/// in.
+#[allow(clippy::unused_async)]
+async fn mssql_target(
+    target: &ConnectionTarget,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(feature = "mssql")]
+    {
+        mssql(target, options).await
+    }
+    #[cfg(not(feature = "mssql"))]
+    {
+        let _ = (target, options);
+        Err(InitDbError::DriverNotEnabled {
+            driver: "mssql",
+            features: "mssql",
+        })
+    }
+}
+
+#[cfg(feature = "mssql")]
+async fn mssql(
+    target: &ConnectionTarget,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    use switchy_database::mssql::{Encryption, MssqlDatabase};
+
+    let ConnectionTarget::Mssql {
+        creds,
+        instance,
+        encrypt,
+        trust_server_certificate,
+        tls_files,
+        host_name_in_certificate,
+        params,
+    } = target
+    else {
+        unreachable!("mssql() is only called for SQL Server targets");
+    };
+    let encryption = match encrypt {
+        crate::MssqlEncrypt::Plaintext => Encryption::Plaintext,
+        crate::MssqlEncrypt::LoginOnly => Encryption::LoginOnly,
+        crate::MssqlEncrypt::Preferred => Encryption::Preferred,
+        crate::MssqlEncrypt::Required => Encryption::Required,
+        crate::MssqlEncrypt::Strict => Encryption::Strict,
+    };
+    let mut builder = MssqlDatabase::builder(creds.host())
+        .database(creds.name())
+        .user(creds.user())
+        .encryption(encryption)
+        .trust_server_certificate(*trust_server_certificate)
+        .read_only(options.is_read_only())
+        .pool_size(pool_size(options));
+    if let Some(port) = creds.port() {
+        builder = builder.port(port);
+    }
+    if let Some(instance) = instance {
+        builder = builder.instance(instance);
+    }
+    if let Some(password) = creds.password() {
+        builder = builder.password(password);
+    }
+    if let Some(path) = &tls_files.root_cert {
+        builder = builder.ca_file(path);
+    }
+    if let Some(name) = host_name_in_certificate {
+        builder = builder.host_name_in_certificate(name);
+    }
+    let application_name = options.application_name.as_deref().or_else(|| {
+        ["application_name", "applicationname", "app"]
+            .iter()
+            .find_map(|key| params.get(*key).map(String::as_str))
+    });
+    if let Some(name) = application_name {
+        builder = builder.application_name(name);
+    }
+    if let Some(timeout) = options.statement_timeout {
+        builder = builder.statement_timeout(timeout);
+    }
+    Ok(Box::new(builder.build().await?))
 }
 
 /// Open a `ClickHouse` target with the `clickhouse` backend, when it is

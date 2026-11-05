@@ -59,6 +59,14 @@ base64  = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde   = { workspace = true, optional = true }
 
+# SQL Server (TDS) dependencies
+tiberius = { workspace = true, optional = true, features = [
+    "chrono",
+    "rustls",
+    "sql-browser-tokio",
+    "tds80",
+] }
+
 # Decimal support
 rust_decimal = { workspace = true, optional = true, features = [
     "std",
@@ -121,6 +129,7 @@ default = [
     "decimal",
     "duckdb",
     "libsql",
+    "mssql",
     "mysql",
     "postgres-sqlx",
     "schema",
@@ -234,6 +243,19 @@ libsql = [
 
 # ClickHouse servers over the HTTP interface.
 clickhouse = ["_any_backend", "dep:reqwest", "dep:serde_json"]
+
+# Microsoft SQL Server (and Azure SQL) over TDS, with rustls TLS.
+mssql = [
+    "_any_backend",
+    "dep:futures",
+    "dep:tiberius",
+    "dep:tokio-util",
+    "dep:uuid",
+    "tokio-util/compat",
+    "tokio/net",
+    "tokio/sync",
+    "tokio/time",
+]
 
 # Explicit whole-artifact allocator opt-in; never included by `turso` or defaults.
 # Not suitable for independently linked native plugins on macOS.

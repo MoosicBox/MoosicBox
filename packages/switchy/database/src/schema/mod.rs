@@ -492,6 +492,7 @@ impl TableConstraint {
         feature = "mysql-sqlx",
         feature = "turso",
         feature = "libsql",
+        feature = "mssql",
         feature = "duckdb"
     ))]
     pub(crate) fn render(&self, quote: char) -> Result<String, DatabaseError> {

@@ -88,7 +88,8 @@ use crate::{Database, DatabaseError, DatabaseValue, Row};
     feature = "mysql-sqlx",
     feature = "duckdb",
     feature = "turso",
-    feature = "libsql"
+    feature = "libsql",
+    feature = "mssql"
 ))]
 pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     if cfg!(feature = "raw-sql") {
@@ -110,7 +111,8 @@ pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     feature = "mysql-sqlx",
     feature = "duckdb",
     feature = "turso",
-    feature = "libsql"
+    feature = "libsql",
+    feature = "mssql"
 ))]
 pub(crate) fn render_columns(columns: &[&str], delimiter: char) -> String {
     columns
@@ -231,7 +233,8 @@ impl JoinCondition {
         feature = "mysql-sqlx",
         feature = "duckdb",
         feature = "turso",
-        feature = "libsql"
+        feature = "libsql",
+        feature = "mssql"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         match self {
@@ -284,7 +287,8 @@ impl Join<'_> {
         feature = "mysql-sqlx",
         feature = "duckdb",
         feature = "turso",
-        feature = "libsql"
+        feature = "libsql",
+        feature = "mssql"
     ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         #[cfg(feature = "raw-sql")]
@@ -677,7 +681,8 @@ impl QualifiedColumn {
         feature = "mysql-sqlx",
         feature = "duckdb",
         feature = "turso",
-        feature = "libsql"
+        feature = "libsql",
+        feature = "mssql"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         let quote = |name: &str| {

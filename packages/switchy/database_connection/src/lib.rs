@@ -60,7 +60,8 @@ pub mod target;
 
 pub use connect::init_with_options;
 pub use target::{
-    AccessMode, ConnectOptions, ConnectionTarget, ConnectionUrlError, SslMode, TlsFiles,
+    AccessMode, ConnectOptions, ConnectionTarget, ConnectionUrlError, MssqlEncrypt, SslMode,
+    TlsFiles,
 };
 
 /// Create a database connection builder.
@@ -391,6 +392,10 @@ pub enum InitDbError {
     #[cfg(feature = "clickhouse")]
     #[error(transparent)]
     InitClickHouse(#[from] switchy_database::clickhouse::ClickHouseDatabaseError),
+    /// Error connecting to a SQL Server
+    #[cfg(feature = "mssql")]
+    #[error(transparent)]
+    InitMssql(#[from] switchy_database::mssql::MssqlDatabaseError),
     /// Error initializing `MySQL` via sqlx
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]

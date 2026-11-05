@@ -191,6 +191,9 @@ pub mod executable;
 #[cfg(feature = "libsql")]
 /// Remote `libSQL` backend (`sqld`, Turso Cloud) over Hrana over HTTP
 pub mod libsql;
+#[cfg(feature = "mssql")]
+/// Microsoft SQL Server backend over TDS (`tiberius`)
+pub mod mssql;
 #[cfg(feature = "postgres-raw")]
 /// `PostgreSQL` database backend implementation
 pub mod postgres;
@@ -1301,6 +1304,10 @@ pub enum DatabaseError {
     /// Error from the `ClickHouse` backend
     #[error(transparent)]
     ClickHouse(clickhouse::ClickHouseDatabaseError),
+    #[cfg(feature = "mssql")]
+    /// Error from the SQL Server backend
+    #[error(transparent)]
+    Mssql(mssql::MssqlDatabaseError),
     /// Database is busy acquiring a lock or an exclusive connection lease.
     #[error("Database is busy")]
     Busy,
@@ -1419,6 +1426,8 @@ impl DatabaseError {
             },
             #[cfg(feature = "libsql")]
             Self::Libsql(libsql::LibsqlDatabaseError::Server { kind, .. }) => *kind,
+            #[cfg(feature = "mssql")]
+            Self::Mssql(error) => error.kind(),
             _ => None,
         }
     }
@@ -1459,6 +1468,8 @@ impl DatabaseError {
             Self::ClickHouse(clickhouse::ClickHouseDatabaseError::Http(error)) => {
                 error.is_connect() || error.is_timeout()
             }
+            #[cfg(feature = "mssql")]
+            Self::Mssql(error) => error.is_connection_error(),
             _ => false,
         }
     }
