@@ -6,7 +6,7 @@ Database abstraction layer with support for multiple database backends, schema m
 
 The Switchy Database package provides:
 
-- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, remote libSQL servers, ClickHouse, and SQL Server
+- **Multi-Database Support**: SQLite (rusqlite and sqlx), PostgreSQL (raw and sqlx), MySQL (sqlx), DuckDB, Turso, remote libSQL servers, ClickHouse, SQL Server, and Oracle
 - **Schema Management**: Create/alter tables, indexes with portable definitions
 - **Schema Introspection**: Query existing database structure programmatically
 - **Transaction Support**: ACID transactions with savepoint capabilities for nested transaction-like behavior
@@ -26,6 +26,7 @@ The Switchy Database package provides:
 - **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud databases over Hrana over HTTP, with `?` placeholders
 - **ClickHouse**: ClickHouse servers over the HTTP interface, with `$n` placeholders sent as typed query parameters
 - **SQL Server**: Microsoft SQL Server and Azure SQL over TDS (`tiberius`), with `@P1`, `@P2`, ... placeholders
+- **Oracle**: Oracle Database 12c and later through ODPI-C (the `oracle` crate, which loads Oracle Instant Client at runtime), with `:1`, `:2`, ... placeholders
 - **Simulator**: Testing database (delegates to underlying backend)
 
 ### Schema Features
@@ -428,6 +429,7 @@ The following feature flags are available in `Cargo.toml`:
 - `libsql` - Remote libSQL servers (`sqld`, `turso dev`, Turso Cloud) over Hrana over HTTP (`reqwest` with rustls)
 - `clickhouse` - ClickHouse servers over the HTTP interface (`reqwest` with rustls)
 - `mssql` - Microsoft SQL Server over TDS (`tiberius` with rustls; named instances through SQL Browser)
+- `oracle` - Oracle Database through ODPI-C (the `oracle` crate; Oracle Instant Client must be installed where the program runs, and is loaded on the first connection)
 
 #### Optional Turso allocator
 
@@ -513,6 +515,7 @@ Each backend has its own error variant:
 - `DatabaseError::Libsql(libsql::LibsqlDatabaseError)` - remote libSQL errors
 - `DatabaseError::ClickHouse(clickhouse::ClickHouseDatabaseError)` - ClickHouse errors
 - `DatabaseError::Mssql(mssql::MssqlDatabaseError)` - SQL Server errors (server errors keep their number, state, class, line and procedure)
+- `DatabaseError::Oracle(oracle::OracleDatabaseError)` - Oracle errors (server errors keep their `ORA-` code and offset; a missing Instant Client is `ClientLibrary`)
 
 ## Data Types
 
@@ -724,6 +727,66 @@ Microsoft SQL Server 2016 and later, Azure SQL Database and Azure SQL Edge
   and T-SQL functions calling extended stored procedures, can still act
   outside the transaction when a query calls them. For a guarantee from the
   server itself, use a login with only `db_datareader`
+
+### Oracle
+
+Oracle Database 12c and later (`oracle` feature), with database users and
+passwords, through ODPI-C. Oracle Instant Client is loaded when the first
+connection opens; without it, connecting returns
+`OracleDatabaseError::ClientLibrary` (DPI-1047).
+
+- `OracleDatabase::builder("db.example.com").service_name("FREEPDB1").user(user).password(password).build()`;
+  `.port()`, `.sid()` (an instance's SID instead of a service),
+  `OracleDatabaseBuilder::connect_string()` (a net service name, Easy
+  Connect string or connect descriptor, given to the client as it is),
+  `.tls()` (TCPS), `.wallet_location()`, `.server_cert_dn()`, `.pool_size()`,
+  `.connect_timeout()` and `.statement_timeout()` (the client's call
+  timeout). Host, service and wallet values that would change the connect
+  descriptor's shape are refused
+- The driver is synchronous: calls run on Tokio's blocking pool, and a
+  dropped (cancelled) call breaks the running statement
+- Raw SQL takes `:1`, `:2`, ... placeholders, bound as typed values (text
+  as `VARCHAR2`/`CLOB`, never `NVARCHAR2`); `DatabaseValue::Now` becomes
+  `SYS_EXTRACT_UTC(SYSTIMESTAMP)`. Sessions use ISO date and timestamp
+  formats
+- The query builders generate Oracle SQL (`FETCH FIRST n ROWS ONLY`,
+  `RETURNING ROWID INTO` and a re-read for returned rows, deletes by
+  `ROWID`, `MERGE` for upserts), and the schema builders identity columns,
+  `VARCHAR2`/`CLOB`/`NUMBER`, and `IF [NOT] EXISTS` as PL/SQL blocks ignoring
+  the one error the object's presence (or absence) raises, so they work
+  before 23ai too
+- Values decode by type: `NUMBER` exactly (as `Decimal` up to 28 digits,
+  text beyond), `DATE`/`TIMESTAMP` to the fraction, `TIMESTAMP WITH TIME
+  ZONE` with its offset, `TIMESTAMP WITH LOCAL TIME ZONE` in the session's
+  zone, `RAW`/`BLOB` as bytes, `CLOB` as text, 23ai `BOOLEAN`; intervals,
+  `ROWID` and other types as text. Native `JSON` columns can't be fetched by
+  the driver: the error suggests `JSON_SERIALIZE`
+- Transactions with savepoints; Oracle commits an open transaction around
+  every DDL statement
+- Introspection reads the `ALL_*` views: schemas (users), tables, views and
+  materialized views with comments and row estimates, columns (identity
+  columns, defaults), indexes, foreign keys and view definitions
+- Read-only mode (`.read_only(true)`) is enforced by the backend in three
+  steps. A conservative tokenizer check (`oracle::READ_ONLY_DENIED_WORDS`,
+  `oracle::READ_ONLY_DENIED_PREFIXES`) admits only single queries
+  (`SELECT`, `WITH`, `(`) free of words that write, run code, change the
+  session or end a transaction, sequence `NEXTVAL`/`CURRVAL`, supplied
+  packages that act outside the query (`DBMS_*`, `UTL_*`, ...) and database
+  links (`@`), whose parenthesized calls are all unqualified built-in
+  functions (`oracle::READ_ONLY_FUNCTIONS`). A keyword before `(` passes
+  only if Oracle reserves it (`oracle::READ_ONLY_RESERVED_PAREN_WORDS`) or,
+  for an unreserved one that could name a function
+  (`oracle::READ_ONLY_CONTEXT_PAREN_KEYWORDS`), only where the grammar makes
+  it a keyword (`OVER (` after `)`, `PIVOT (` after a table). On 23ai and later, `ALTER
+  SESSION SET READ_ONLY = TRUE` is re-asserted before every statement;
+  before 23ai each statement runs in `SET TRANSACTION READ ONLY`. Every
+  statement is rolled back afterwards. A read-only transaction holds one
+  connection but runs each statement alone the same way (Oracle can't
+  re-assert the session mode inside an open transaction). A user function
+  called without parentheses (`SELECT f FROM dual`) or from a view can't be
+  seen by the check; on 23ai the session mode still refuses its writes
+  unless it switches that mode off itself. For a guarantee from the server
+  itself, use a 23ai `READ ONLY` user, or one with only `SELECT` grants
 
 ### DuckDB
 

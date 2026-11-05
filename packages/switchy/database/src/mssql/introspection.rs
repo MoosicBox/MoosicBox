@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use crate::schema::{
     ColumnInfo, DataType, DatabaseInfo, ForeignKeyInfo, GeneratedKind, IndexInfo, RelationKind,
-    RelationRef, RelationSummary, RoutineInfo, SchemaInfo, TableInfo,
+    RelationRef, RelationSummary, SchemaInfo, TableInfo,
 };
 use crate::{DatabaseError, DatabaseValue};
 
@@ -503,7 +503,7 @@ pub(super) async fn view_definition(
 pub(super) async fn list_routines(
     executor: &dyn Executor,
     schema: Option<&str>,
-) -> Result<Vec<RoutineInfo>, DatabaseError> {
+) -> Result<Vec<crate::schema::RoutineInfo>, DatabaseError> {
     let found = rows(
         executor,
         "SELECT s.name, o.name, \

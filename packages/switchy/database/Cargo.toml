@@ -67,6 +67,9 @@ tiberius = { workspace = true, optional = true, features = [
     "tds80",
 ] }
 
+# Oracle Database (ODPI-C, which loads Oracle Instant Client at run time)
+oracle = { workspace = true, optional = true, features = ["chrono"] }
+
 # Decimal support
 rust_decimal = { workspace = true, optional = true, features = [
     "std",
@@ -131,6 +134,7 @@ default = [
     "libsql",
     "mssql",
     "mysql",
+    "oracle",
     "postgres-sqlx",
     "schema",
     "simulator",
@@ -256,6 +260,10 @@ mssql = [
     "tokio/sync",
     "tokio/time",
 ]
+
+# Oracle Database 12c and later over ODPI-C (the `oracle` crate). Oracle
+# Instant Client is loaded at run time, so building doesn't need it.
+oracle = ["_any_backend", "dep:oracle", "tokio/rt", "tokio/sync", "tokio/time"]
 
 # Explicit whole-artifact allocator opt-in; never included by `turso` or defaults.
 # Not suitable for independently linked native plugins on macOS.

@@ -396,6 +396,10 @@ pub enum InitDbError {
     #[cfg(feature = "mssql")]
     #[error(transparent)]
     InitMssql(#[from] switchy_database::mssql::MssqlDatabaseError),
+    /// Error connecting to an Oracle database
+    #[cfg(feature = "oracle")]
+    #[error(transparent)]
+    InitOracle(#[from] switchy_database::oracle::OracleDatabaseError),
     /// Error initializing `MySQL` via sqlx
     #[cfg(feature = "mysql-sqlx")]
     #[error(transparent)]

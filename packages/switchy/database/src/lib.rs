@@ -194,6 +194,9 @@ pub mod libsql;
 #[cfg(feature = "mssql")]
 /// Microsoft SQL Server backend over TDS (`tiberius`)
 pub mod mssql;
+#[cfg(feature = "oracle")]
+/// Oracle Database backend over ODPI-C (the `oracle` crate)
+pub mod oracle;
 #[cfg(feature = "postgres-raw")]
 /// `PostgreSQL` database backend implementation
 pub mod postgres;
@@ -1308,6 +1311,10 @@ pub enum DatabaseError {
     /// Error from the SQL Server backend
     #[error(transparent)]
     Mssql(mssql::MssqlDatabaseError),
+    #[cfg(feature = "oracle")]
+    /// Error from the Oracle backend
+    #[error(transparent)]
+    Oracle(oracle::OracleDatabaseError),
     /// Database is busy acquiring a lock or an exclusive connection lease.
     #[error("Database is busy")]
     Busy,
@@ -1428,6 +1435,8 @@ impl DatabaseError {
             Self::Libsql(libsql::LibsqlDatabaseError::Server { kind, .. }) => *kind,
             #[cfg(feature = "mssql")]
             Self::Mssql(error) => error.kind(),
+            #[cfg(feature = "oracle")]
+            Self::Oracle(error) => error.kind(),
             _ => None,
         }
     }
@@ -1470,6 +1479,8 @@ impl DatabaseError {
             }
             #[cfg(feature = "mssql")]
             Self::Mssql(error) => error.is_connection_error(),
+            #[cfg(feature = "oracle")]
+            Self::Oracle(error) => error.is_connection_error(),
             _ => false,
         }
     }

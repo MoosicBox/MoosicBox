@@ -86,6 +86,7 @@ duckdb-bundled = ["duckdb", "duckdb/bundled", "switchy_database/duckdb-bundled"]
 clickhouse = ["switchy_database/clickhouse"]
 libsql     = ["switchy_database/libsql"]
 mssql      = ["switchy_database/mssql"]
+oracle     = ["switchy_database/oracle"]
 
 sqlx = ["dep:sqlx", "switchy_database/sqlx"]
 

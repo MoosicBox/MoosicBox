@@ -40,6 +40,7 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * `libSQL`: `libsql` (Hrana over HTTP)
 /// * `ClickHouse`: `clickhouse` (the HTTP interface)
 /// * SQL Server: `mssql` (TDS, with rustls TLS)
+/// * Oracle: `oracle` (ODPI-C; needs Oracle Instant Client at run time)
 ///
 /// # Option handling
 ///
@@ -61,6 +62,10 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///     must be a query or a read-only catalog procedure, and runs in a
 ///     transaction that is always rolled back; see
 ///     [`switchy_database::mssql`]
+///   * Oracle: each statement must be a query that calls only built-in
+///     functions, and runs in a `SET TRANSACTION READ ONLY` transaction that
+///     is rolled back, in a read-only session on 23ai and later; see
+///     [`switchy_database::oracle`]
 /// * `statement_timeout`:
 ///   * `PostgreSQL`: startup option `statement_timeout` (milliseconds)
 ///   * `MySQL`: `SET SESSION max_execution_time` (milliseconds; applies to
@@ -68,6 +73,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   * `ClickHouse`: the `max_execution_time` setting (whole seconds, rounded up)
 ///   * SQL Server: enforced by the client (no server-side equivalent); a
 ///     statement that runs longer fails and its connection is closed
+///   * Oracle: the client's call timeout; a call that runs longer is
+///     interrupted and its connection closed
 ///   * `SQLite`/`DuckDB`/Turso/`libSQL`: no server-side equivalent; ignored (this is not
 ///     mapped to the `SQLite` busy timeout, which is a different concept)
 /// * `application_name`: `PostgreSQL` and SQL Server (falling back to an
@@ -113,7 +120,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
 ///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`,
-///   `InitClickHouse`, `InitMssql`) when connecting or opening fails
+///   `InitClickHouse`, `InitMssql`, `InitOracle`) when connecting or opening
+///   fails
 #[allow(clippy::unused_async)]
 pub async fn init_with_options(
     target: &ConnectionTarget,
@@ -208,15 +216,89 @@ pub async fn init_with_options(
             }
         }
         ConnectionTarget::Libsql {
-            url,
-            auth_token,
-            params: _,
+            url, auth_token, ..
         } => libsql_target(url, auth_token.as_deref(), options).await,
         ConnectionTarget::ClickHouse { creds, tls, params } => {
             clickhouse_target(creds, *tls, params, options).await
         }
         ConnectionTarget::Mssql { .. } => mssql_target(target, options).await,
+        ConnectionTarget::Oracle { .. } => oracle_target(target, options).await,
     }
+}
+
+/// Open an Oracle target with the `oracle` backend, when it is compiled in.
+#[allow(clippy::unused_async)]
+async fn oracle_target(
+    target: &ConnectionTarget,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    #[cfg(feature = "oracle")]
+    {
+        oracle(target, options).await
+    }
+    #[cfg(not(feature = "oracle"))]
+    {
+        let _ = (target, options);
+        Err(InitDbError::DriverNotEnabled {
+            driver: "oracle",
+            features: "oracle",
+        })
+    }
+}
+
+#[cfg(feature = "oracle")]
+async fn oracle(
+    target: &ConnectionTarget,
+    options: &ConnectOptions,
+) -> Result<Box<dyn Database>, InitDbError> {
+    use switchy_database::oracle::{OracleDatabase, OracleDatabaseBuilder};
+
+    let ConnectionTarget::Oracle {
+        creds,
+        sid,
+        connect_string,
+        tls,
+        wallet_location,
+        server_cert_dn,
+        params: _,
+    } = target
+    else {
+        unreachable!("oracle() is only called for Oracle targets");
+    };
+    let mut builder = connect_string.as_ref().map_or_else(
+        || {
+            let mut builder = OracleDatabase::builder(creds.host()).tls(*tls);
+            if let Some(port) = creds.port() {
+                builder = builder.port(port);
+            }
+            if !creds.name().is_empty() {
+                builder = if *sid {
+                    builder.sid(creds.name())
+                } else {
+                    builder.service_name(creds.name())
+                };
+            }
+            if let Some(path) = wallet_location {
+                builder = builder.wallet_location(path);
+            }
+            if let Some(dn) = server_cert_dn {
+                builder = builder.server_cert_dn(dn);
+            }
+            builder
+        },
+        OracleDatabaseBuilder::connect_string,
+    );
+    builder = builder
+        .user(creds.user())
+        .read_only(options.is_read_only())
+        .pool_size(pool_size(options));
+    if let Some(password) = creds.password() {
+        builder = builder.password(password);
+    }
+    if let Some(timeout) = options.statement_timeout {
+        builder = builder.statement_timeout(timeout);
+    }
+    Ok(Box::new(builder.build().await?))
 }
 
 /// Open a SQL Server target with the `mssql` backend, when it is compiled

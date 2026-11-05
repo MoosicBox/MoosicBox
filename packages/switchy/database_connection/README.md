@@ -25,6 +25,7 @@ The Database Connection package provides:
 - **libSQL (remote)**: `sqld`, `turso dev` and Turso Cloud over HTTP (`libsql` feature)
 - **ClickHouse**: ClickHouse servers over the HTTP interface (`clickhouse` feature)
 - **SQL Server**: Microsoft SQL Server and Azure SQL over TDS (`mssql` feature)
+- **Oracle**: Oracle Database 12c and later through ODPI-C and Oracle Instant Client (`oracle` feature)
 - **Simulator**: Mock database for testing and development
 
 ### PostgreSQL Options
@@ -191,7 +192,11 @@ URLs for ClickHouse's HTTP interface (`secure=true` selects HTTPS on
 (`host%5CINSTANCE` or `instance=` for a named instance; `encrypt=strict|true|prefer|false|danger_plaintext`,
 `trustServerCertificate`, `certificate` (a CA file; `trustServerCertificate=true` with one is
 refused, and so are client certificates), `hostNameInCertificate`, `database`, and
-`application_name` read case-insensitively). `init_with_options` opens the target with the best enabled backend and
+`application_name` read case-insensitively), and `oracle://`/`oracle+tcp://`/`oracle+tcps://`
+URLs for Oracle (the path is the service name; `sid=NAME` names an instance's SID instead,
+`tns=NAME` gives a net service name or connect string to the client as it is,
+`protocol=tcps` or `ssl=true` selects TLS, with `wallet_location` and `ssl_server_cert_dn`).
+`init_with_options` opens the target with the best enabled backend and
 applies `ConnectOptions` natively:
 
 ```rust

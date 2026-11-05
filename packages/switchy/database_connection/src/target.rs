@@ -348,6 +348,31 @@ pub enum ConnectionTarget {
         /// names (SQL Server's drivers match them case-insensitively).
         params: BTreeMap<String, String>,
     },
+    /// An Oracle database, reached through Oracle Instant Client.
+    Oracle {
+        /// Host, port (empty: 1521, or 2484 with TLS), database (the service
+        /// name, or the SID when [`sid`](Self::Oracle::sid) is set; empty:
+        /// the listener's default service), user and password. The host is
+        /// empty when a connect string is given.
+        creds: Credentials,
+        /// The database is an instance's SID (`?sid=NAME`) rather than a
+        /// service name.
+        sid: bool,
+        /// A net service name (`tnsnames.ora` alias), Easy Connect string or
+        /// connect descriptor to give the client as it is (`?tns=...`),
+        /// instead of a host and service.
+        connect_string: Option<String>,
+        /// Connect over TLS (`oracle+tcps://`, `?protocol=tcps`).
+        tls: bool,
+        /// The wallet directory TLS trusts (`?wallet_location=`).
+        wallet_location: Option<PathBuf>,
+        /// The distinguished name the server's certificate must have
+        /// (`?ssl_server_cert_dn=`).
+        server_cert_dn: Option<String>,
+        /// Remaining (percent-decoded) query parameters, with lowercase
+        /// names.
+        params: BTreeMap<String, String>,
+    },
 }
 
 impl std::fmt::Debug for ConnectionTarget {
@@ -413,6 +438,24 @@ impl std::fmt::Debug for ConnectionTarget {
                 .field("host_name_in_certificate", host_name_in_certificate)
                 .field("params", params)
                 .finish(),
+            Self::Oracle {
+                creds,
+                sid,
+                connect_string,
+                tls,
+                wallet_location,
+                server_cert_dn,
+                params,
+            } => f
+                .debug_struct("Oracle")
+                .field("creds", creds)
+                .field("sid", sid)
+                .field("connect_string", connect_string)
+                .field("tls", tls)
+                .field("wallet_location", wallet_location)
+                .field("server_cert_dn", server_cert_dn)
+                .field("params", params)
+                .finish(),
         }
     }
 }
@@ -439,6 +482,12 @@ impl ConnectionTarget {
     ///   `secure` parameter must agree with it)
     /// * `sqlserver://[user[:password]@]host[\instance][:port][/database][?params]`
     ///   (also `mssql://`) for Microsoft SQL Server and Azure SQL
+    /// * `oracle://[user[:password]@]host[:port][/service_name][?params]` for
+    ///   Oracle Database (`oracle+tcps://` for TLS), with `?sid=NAME` for an
+    ///   instance's SID instead of a service name, or
+    ///   `oracle://[user[:password]@]?tns=NAME` for a net service name (or an
+    ///   Easy Connect string or connect descriptor) given to the client as it
+    ///   is
     ///
     /// User, password, host, database and query parameters are percent-decoded.
     /// Reserved characters (`@`, `:`, `/`, `?`) in a password should be
@@ -461,7 +510,9 @@ impl ConnectionTarget {
     /// `true`), `trustServerCertificate`, a CA file in `certificate` (or
     /// `trustServerCertificateCA`, `sslrootcert`), `hostNameInCertificate`,
     /// `instance` (or a `host\instance` host, `%5C` encoded) and `database`
-    /// (overriding the path).
+    /// (overriding the path). For Oracle, parameter names are
+    /// case-insensitive: `sid`, `tns`, `protocol` (`tcp` or `tcps`; also
+    /// `ssl=true`), `wallet_location` (or `wallet`) and `ssl_server_cert_dn`.
     ///
     /// # Errors
     ///
@@ -502,6 +553,9 @@ impl ConnectionTarget {
                 Self::clickhouse_from_parts(&scheme.to_ascii_lowercase(), parse_network(rest)?)
             }
             "sqlserver" | "mssql" => Self::mssql_from_parts(parse_network(rest)?),
+            "oracle" | "oracle+tcp" | "oracle+tcps" => {
+                Self::oracle_from_parts(&scheme.to_ascii_lowercase(), parse_network(rest)?)
+            }
             other => Err(ConnectionUrlError::UnsupportedScheme(other.to_string())),
         }
     }
@@ -709,6 +763,93 @@ impl ConnectionTarget {
         })
     }
 
+    fn oracle_from_parts(
+        scheme: &str,
+        mut parts: NetworkParts,
+    ) -> Result<Self, ConnectionUrlError> {
+        let invalid = |message: String| Err(ConnectionUrlError::InvalidUrl(message));
+        let mut params: BTreeMap<String, String> = std::mem::take(&mut parts.params)
+            .into_iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value))
+            .collect();
+        if ["password", "pwd"]
+            .iter()
+            .any(|key| params.contains_key(*key))
+        {
+            return invalid(
+                "give the password in the URL's user info (oracle://user:password@host) or \
+                 separately, not as a query parameter"
+                    .to_string(),
+            );
+        }
+        let mut tls = scheme == "oracle+tcps";
+        if let Some(protocol) = params.remove("protocol") {
+            match protocol.to_ascii_lowercase().as_str() {
+                "tcps" => tls = true,
+                "tcp" if scheme != "oracle+tcps" => tls = false,
+                other => {
+                    return invalid(format!(
+                        "protocol must be tcp or tcps (agreeing with the scheme), not {other:?}"
+                    ));
+                }
+            }
+        }
+        if let Some(ssl) = params.remove("ssl") {
+            match ssl.to_ascii_lowercase().as_str() {
+                "true" | "1" | "yes" => tls = true,
+                "false" | "0" | "no" if scheme != "oracle+tcps" => tls = false,
+                other => return invalid(format!("ssl must be true or false, not {other:?}")),
+            }
+        }
+        let wallet_location = take_path_param(&mut params, &["wallet_location", "wallet"]);
+        let server_cert_dn = params
+            .remove("ssl_server_cert_dn")
+            .filter(|dn| !dn.is_empty());
+        if !tls && (wallet_location.is_some() || server_cert_dn.is_some()) {
+            return invalid(
+                "a wallet or certificate DN needs TLS (oracle+tcps:// or protocol=tcps)"
+                    .to_string(),
+            );
+        }
+        let connect_string = params.remove("tns").filter(|tns| !tns.is_empty());
+        if connect_string.is_some() {
+            if !parts.host.is_empty() || parts.port.is_some() || !parts.database.is_empty() {
+                return invalid(
+                    "tns= names the database by itself; leave out the host, port and service"
+                        .to_string(),
+                );
+            }
+            if tls || wallet_location.is_some() || server_cert_dn.is_some() {
+                return invalid(
+                    "with tns=, TLS settings belong in the net service's own configuration"
+                        .to_string(),
+                );
+            }
+        } else if parts.host.is_empty() {
+            "localhost".clone_into(&mut parts.host);
+        }
+        let sid = if let Some(name) = params.remove("sid").filter(|name| !name.is_empty()) {
+            if !parts.database.is_empty() {
+                return invalid(
+                    "give either a service name (the path) or a SID (sid=), not both".to_string(),
+                );
+            }
+            parts.database = name;
+            true
+        } else {
+            false
+        };
+        Ok(Self::Oracle {
+            creds: parts.credentials(),
+            sid,
+            connect_string,
+            tls,
+            wallet_location,
+            server_cert_dn,
+            params,
+        })
+    }
+
     fn libsql_from_url(scheme: &str, rest: &str) -> Result<Self, ConnectionUrlError> {
         let rest = rest
             .strip_prefix("//")
@@ -760,7 +901,7 @@ impl ConnectionTarget {
     }
 
     /// Short name of the target's driver family (`postgres`, `mysql`,
-    /// `sqlite`, `duckdb`, `libsql`, `clickhouse`, `mssql`).
+    /// `sqlite`, `duckdb`, `libsql`, `clickhouse`, `mssql`, `oracle`).
     #[must_use]
     pub const fn driver_name(&self) -> &'static str {
         match self {
@@ -771,6 +912,7 @@ impl ConnectionTarget {
             Self::Libsql { .. } => "libsql",
             Self::ClickHouse { .. } => "clickhouse",
             Self::Mssql { .. } => "mssql",
+            Self::Oracle { .. } => "oracle",
         }
     }
 
@@ -782,7 +924,8 @@ impl ConnectionTarget {
             Self::Postgres { creds, .. }
             | Self::MySql { creds, .. }
             | Self::ClickHouse { creds, .. }
-            | Self::Mssql { creds, .. } => Some(creds),
+            | Self::Mssql { creds, .. }
+            | Self::Oracle { creds, .. } => Some(creds),
             Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Libsql { .. } => None,
         }
     }
@@ -790,8 +933,10 @@ impl ConnectionTarget {
     /// The effective port of a network target, applying the driver default
     /// (5432 for `PostgreSQL`, 3306 for `MySQL`, 443 or 80 for `libSQL`
     /// over `https://` or `http://`, 8443 or 8123 for `ClickHouse` with or
-    /// without TLS, 1433 for SQL Server; `None` for a SQL Server named
-    /// instance without a port, whose port the SQL Server Browser assigns).
+    /// without TLS, 1433 for SQL Server, 1521 or 2484 for Oracle without or
+    /// with TLS; `None` for a SQL Server named instance without a port,
+    /// whose port the SQL Server Browser assigns, and for an Oracle net
+    /// service name).
     #[must_use]
     pub fn port_or_default(&self) -> Option<u16> {
         match self {
@@ -803,6 +948,16 @@ impl ConnectionTarget {
             Self::Mssql {
                 creds, instance, ..
             } => creds.port().or_else(|| instance.is_none().then_some(1433)),
+            Self::Oracle {
+                creds,
+                connect_string,
+                tls,
+                ..
+            } => creds.port().or_else(|| {
+                connect_string
+                    .is_none()
+                    .then_some(if *tls { 2484 } else { 1521 })
+            }),
             Self::Libsql { url, .. } => {
                 let (scheme, rest) = url.split_once("://")?;
                 let authority = rest.split('/').next().unwrap_or(rest);
@@ -815,7 +970,8 @@ impl ConnectionTarget {
 
     /// The TLS certificate files of a network target (`None` for file
     /// databases, `libSQL` and `ClickHouse`, which use the system's trusted
-    /// certificates over HTTPS; SQL Server's carry a root certificate only).
+    /// certificates over HTTPS, and Oracle, which trusts a wallet; SQL
+    /// Server's carry a root certificate only).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
@@ -825,7 +981,8 @@ impl ConnectionTarget {
             Self::Sqlite { .. }
             | Self::DuckDb { .. }
             | Self::Libsql { .. }
-            | Self::ClickHouse { .. } => None,
+            | Self::ClickHouse { .. }
+            | Self::Oracle { .. } => None,
         }
     }
 
@@ -1557,6 +1714,76 @@ mod tests {
         );
     }
 }
+#[test]
+fn oracle_urls_carry_services_sids_tns_and_tls() {
+    let target =
+        ConnectionTarget::from_url("oracle://shop:s%40cret@db.example:1522/FREEPDB1").unwrap();
+    let ConnectionTarget::Oracle {
+        creds,
+        sid,
+        connect_string,
+        tls,
+        ..
+    } = &target
+    else {
+        panic!("{target:?}");
+    };
+    assert_eq!(
+        (creds.host(), creds.port(), creds.name(), creds.user()),
+        ("db.example", Some(1522), "FREEPDB1", "shop")
+    );
+    assert_eq!(creds.password(), Some("s@cret"));
+    assert!(!*sid && connect_string.is_none() && !*tls);
+    assert_eq!(target.driver_name(), "oracle");
+    assert_eq!(target.port_or_default(), Some(1522));
+    let debug = format!("{target:?}");
+    assert!(!debug.contains("s@cret"), "{debug}");
+
+    let target = ConnectionTarget::from_url(
+        "oracle+tcps://shop@db.example?SID=ORCL&wallet_location=/etc/wallet",
+    )
+    .unwrap();
+    let ConnectionTarget::Oracle {
+        creds,
+        sid,
+        tls,
+        wallet_location,
+        ..
+    } = &target
+    else {
+        panic!("{target:?}");
+    };
+    assert!(*sid && *tls);
+    assert_eq!(creds.name(), "ORCL");
+    assert_eq!(
+        wallet_location.as_deref(),
+        Some(std::path::Path::new("/etc/wallet"))
+    );
+    assert_eq!(target.port_or_default(), Some(2484));
+
+    let target = ConnectionTarget::from_url("oracle://shop@?tns=shop_high").unwrap();
+    let ConnectionTarget::Oracle { connect_string, .. } = &target else {
+        panic!("{target:?}");
+    };
+    assert_eq!(connect_string.as_deref(), Some("shop_high"));
+    assert_eq!(target.port_or_default(), None);
+    assert!(matches!(
+        ConnectionTarget::from_url("oracle://h/db?protocol=tcps").unwrap(),
+        ConnectionTarget::Oracle { tls: true, .. }
+    ));
+    for url in [
+        "oracle://h/db?password=hunter2",
+        "oracle://h/db?sid=ORCL",
+        "oracle://h/db?wallet_location=/w",
+        "oracle://h/db?tns=alias",
+        "oracle+tcps://h/db?protocol=tcp",
+        "oracle://h/db?protocol=udp",
+    ] {
+        let error = ConnectionTarget::from_url(url).unwrap_err().to_string();
+        assert!(!error.contains("hunter2"), "{error}");
+    }
+}
+
 #[test]
 fn mssql_refuses_passwords_in_the_query_string() {
     for url in [

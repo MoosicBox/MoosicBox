@@ -89,7 +89,8 @@ use crate::{Database, DatabaseError, DatabaseValue, Row};
     feature = "duckdb",
     feature = "turso",
     feature = "libsql",
-    feature = "mssql"
+    feature = "mssql",
+    feature = "oracle"
 ))]
 pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     if cfg!(feature = "raw-sql") {
@@ -112,7 +113,8 @@ pub(crate) fn render_identifier(value: &str, delimiter: char) -> String {
     feature = "duckdb",
     feature = "turso",
     feature = "libsql",
-    feature = "mssql"
+    feature = "mssql",
+    feature = "oracle"
 ))]
 pub(crate) fn render_columns(columns: &[&str], delimiter: char) -> String {
     columns
@@ -234,7 +236,8 @@ impl JoinCondition {
         feature = "duckdb",
         feature = "turso",
         feature = "libsql",
-        feature = "mssql"
+        feature = "mssql",
+        feature = "oracle"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         match self {
@@ -288,7 +291,8 @@ impl Join<'_> {
         feature = "duckdb",
         feature = "turso",
         feature = "libsql",
-        feature = "mssql"
+        feature = "mssql",
+        feature = "oracle"
     ))]
     pub(crate) fn render_table(&self, delimiter: char) -> String {
         #[cfg(feature = "raw-sql")]
@@ -682,7 +686,8 @@ impl QualifiedColumn {
         feature = "duckdb",
         feature = "turso",
         feature = "libsql",
-        feature = "mssql"
+        feature = "mssql",
+        feature = "oracle"
     ))]
     pub(crate) fn render(&self, delimiter: char) -> String {
         let quote = |name: &str| {
