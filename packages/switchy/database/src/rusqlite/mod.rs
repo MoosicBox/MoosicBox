@@ -1462,6 +1462,31 @@ impl Database for RusqliteDatabase {
         Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::sqlite(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::sqlite(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -2020,6 +2045,31 @@ impl Database for RusqliteTransaction {
             .query_raw_result(&crate::schema::routines_sql::sqlite(), &[])
             .await?;
         Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::sqlite(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::sqlite(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
     }
 
     #[cfg(feature = "schema")]
@@ -5501,6 +5551,12 @@ fn rusqlite_get_relation_columns(
             ordinal_position: ordinal + 1, // Convert 0-based to 1-based
             enum_values: None,
             generated,
+            default_text: default_value.filter(|_| generated.is_none()),
+            generation_expression: None,
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
         });
     }
 
@@ -5668,6 +5724,73 @@ fn rusqlite_get_table_info(
     Ok(Some(info))
 }
 
+/// The foreign keys of a table, every column pair of composite keys in key
+/// order; keys are unnamed, so each is named after its first column pair.
+#[cfg(feature = "schema")]
+fn rusqlite_foreign_keys(
+    connection: &Connection,
+    schema: Option<&str>,
+    table_name: &str,
+) -> Result<std::collections::BTreeMap<String, crate::schema::ForeignKeyInfo>, DatabaseError> {
+    use crate::schema::ForeignKeyInfo;
+    use crate::sqlite_common::sqlite_pragma_sql;
+    use std::collections::BTreeMap;
+
+    let mut foreign_keys = BTreeMap::new();
+    let fk_query = sqlite_pragma_sql(schema, "foreign_key_list", table_name);
+    let mut fk_stmt = connection
+        .prepare_cached(&fk_query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let fk_rows = fk_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(2)?,         // table (referenced table)
+                row.get::<_, String>(3)?,         // from (column in current table)
+                row.get::<_, Option<String>>(4)?, // NULL means the referenced primary key
+                row.get::<_, String>(5)?,         // on_update
+                row.get::<_, String>(6)?,         // on_delete
+                row.get::<_, i64>(1)?,            // sequence within a composite foreign key
+                row.get::<_, i64>(0)?,            // key id
+            ))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    // Keys are unnamed: each is named after its first column pair.
+    let mut names: BTreeMap<i64, String> = BTreeMap::new();
+    for fk_result in fk_rows {
+        let (referenced_table, column, referenced_column, on_update, on_delete, sequence, id) =
+            fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+        let referenced_column = if let Some(column) = referenced_column {
+            column
+        } else {
+            rusqlite_referenced_primary_key(connection, schema, &referenced_table, sequence)?
+        };
+
+        let fk_name = names
+            .entry(id)
+            .or_insert_with(|| {
+                format!("{table_name}_{column}_{referenced_table}_{referenced_column}")
+            })
+            .clone();
+
+        foreign_keys
+            .entry(fk_name.clone())
+            .or_insert_with(|| ForeignKeyInfo {
+                referenced_schema: Some(
+                    schema
+                        .unwrap_or(crate::sqlite_common::SQLITE_DEFAULT_SCHEMA)
+                        .to_string(),
+                ),
+                on_update: (on_update != "NO ACTION").then_some(on_update),
+                on_delete: (on_delete != "NO ACTION").then_some(on_delete),
+                ..ForeignKeyInfo::new(fk_name, referenced_table)
+            })
+            .push_pair(column, referenced_column);
+    }
+    Ok(foreign_keys)
+}
+
 /// Build complete relation info (columns, indexes and foreign keys).
 #[cfg(feature = "schema")]
 fn rusqlite_build_table_info(
@@ -5676,7 +5799,7 @@ fn rusqlite_build_table_info(
     table_name: &str,
     kind: crate::schema::RelationKind,
 ) -> Result<crate::schema::TableInfo, DatabaseError> {
-    use crate::schema::{ForeignKeyInfo, IndexInfo, TableInfo};
+    use crate::schema::{IndexInfo, TableInfo};
     use crate::sqlite_common::sqlite_pragma_sql;
     use std::collections::BTreeMap;
 
@@ -5688,7 +5811,6 @@ fn rusqlite_build_table_info(
     }
 
     let mut indexes = BTreeMap::new();
-    let mut foreign_keys = BTreeMap::new();
 
     if !kind.is_view() {
         // Get indexes
@@ -5738,50 +5860,13 @@ fn rusqlite_build_table_info(
                 },
             );
         }
-
-        // Get foreign keys
-        let fk_query = sqlite_pragma_sql(schema, "foreign_key_list", table_name);
-        let mut fk_stmt = connection
-            .prepare_cached(&fk_query)
-            .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-        let fk_rows = fk_stmt
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(2)?,         // table (referenced table)
-                    row.get::<_, String>(3)?,         // from (column in current table)
-                    row.get::<_, Option<String>>(4)?, // NULL means the referenced primary key
-                    row.get::<_, String>(5)?,         // on_update
-                    row.get::<_, String>(6)?,         // on_delete
-                    row.get::<_, i64>(1)?,            // sequence within a composite foreign key
-                ))
-            })
-            .map_err(RusqliteDatabaseError::Rusqlite)?;
-
-        for fk_result in fk_rows {
-            let (referenced_table, column, referenced_column, on_update, on_delete, sequence) =
-                fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
-            let referenced_column = if let Some(column) = referenced_column {
-                column
-            } else {
-                rusqlite_referenced_primary_key(connection, schema, &referenced_table, sequence)?
-            };
-
-            let fk_name = format!("{table_name}_{column}_{referenced_table}_{referenced_column}");
-
-            foreign_keys.insert(
-                fk_name.clone(),
-                ForeignKeyInfo {
-                    name: fk_name,
-                    column,
-                    referenced_table,
-                    referenced_column,
-                    on_update: (on_update != "NO ACTION").then_some(on_update),
-                    on_delete: (on_delete != "NO ACTION").then_some(on_delete),
-                },
-            );
-        }
     }
+
+    let foreign_keys = if kind.is_view() {
+        BTreeMap::new()
+    } else {
+        rusqlite_foreign_keys(connection, schema, table_name)?
+    };
 
     Ok(TableInfo {
         name: table_name.to_string(),

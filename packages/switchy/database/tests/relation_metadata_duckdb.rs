@@ -9,7 +9,7 @@ use switchy_async::sync::Mutex;
 use switchy_database::{
     Database, DatabaseValue,
     duckdb::DuckDbDatabase,
-    schema::{DataType, GeneratedKind, RelationKind, RelationRef},
+    schema::{DataType, ForeignKeyScope, GeneratedKind, RelationKind, RelationRef},
 };
 
 fn setup() -> DuckDbDatabase {
@@ -385,6 +385,38 @@ async fn query_builder_keeps_placeholders_aligned_for_new_null_variants() {
 }
 
 #[test_log::test(switchy_async::test)]
+async fn lists_sequences_and_types() {
+    use switchy_database::schema::UserTypeKind;
+    let db = setup();
+    db.exec_raw("CREATE SEQUENCE app.order_no START 10")
+        .await
+        .unwrap();
+    db.exec_raw("CREATE TYPE app.point AS STRUCT(x INTEGER, y INTEGER)")
+        .await
+        .unwrap();
+    let sequences = db.list_sequences(Some("app")).await.unwrap();
+    assert_eq!(
+        sequences
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>(),
+        ["order_no"]
+    );
+    assert_eq!(sequences[0].schema.as_deref(), Some("app"));
+    assert!(db.list_sequences(None).await.unwrap().is_empty());
+
+    let types = db.list_user_types(None).await.unwrap();
+    let mood = types.iter().find(|t| t.name == "mood").unwrap();
+    assert_eq!(mood.kind, UserTypeKind::Enum);
+    assert_eq!(mood.schema.as_deref(), Some("main"));
+    let app = db.list_user_types(Some("app")).await.unwrap();
+    assert_eq!(app.len(), 1);
+    assert_eq!(app[0].kind, UserTypeKind::Composite);
+    assert!(db.list_triggers(None).await.is_err());
+    assert!(db.list_roles().await.is_err());
+}
+
+#[test_log::test(switchy_async::test)]
 async fn lists_builtin_and_user_routines() {
     use switchy_database::schema::RoutineKind;
     let db = setup();
@@ -411,4 +443,109 @@ async fn lists_builtin_and_user_routines() {
     assert_eq!(numbers.kind, RoutineKind::TableMacro);
     assert!(!numbers.builtin);
     assert_eq!(numbers.arguments.as_deref(), Some("n"));
+}
+
+#[test_log::test(switchy_async::test)]
+async fn composite_keys_constraint_indexes_and_default_text() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "CREATE SCHEMA shop;
+         CREATE TABLE shop.albums (id INTEGER PRIMARY KEY, code VARCHAR UNIQUE,
+             price INTEGER DEFAULT 0, total INTEGER GENERATED ALWAYS AS (price * 2) VIRTUAL);
+         CREATE TABLE shop.tracks (album_id INTEGER REFERENCES shop.albums(id),
+             track_no INTEGER, title VARCHAR DEFAULT 'untitled',
+             PRIMARY KEY (album_id, track_no));
+         CREATE TABLE shop.plays (id INTEGER, album_id INTEGER, track_no INTEGER,
+             FOREIGN KEY (album_id, track_no) REFERENCES shop.tracks (album_id, track_no));
+         CREATE INDEX plays_album_idx ON shop.plays(album_id);",
+    )
+    .unwrap();
+    let db = DuckDbDatabase::new(vec![Arc::new(Mutex::new(conn))]);
+
+    let albums = db
+        .get_relation_info(&RelationRef::with_schema("shop", "albums"))
+        .await
+        .unwrap()
+        .unwrap();
+    // The indexes of PRIMARY KEY and UNIQUE constraints are listed, unique.
+    let primary = albums
+        .indexes
+        .values()
+        .find(|index| index.is_primary)
+        .unwrap();
+    assert!(primary.unique);
+    assert_eq!(primary.columns, vec!["id"]);
+    let code = albums
+        .indexes
+        .values()
+        .find(|index| index.columns == ["code"])
+        .unwrap();
+    assert!(code.unique && !code.is_primary);
+    assert_eq!(albums.columns["price"].default_text.as_deref(), Some("0"));
+    assert_eq!(albums.columns["total"].default_text, None);
+    assert!(
+        albums.columns["total"]
+            .generation_expression
+            .as_deref()
+            .is_some_and(|expression| expression.contains("price"))
+    );
+
+    let plays = db
+        .get_relation_info(&RelationRef::with_schema("shop", "plays"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!plays.indexes["plays_album_idx"].unique);
+    assert!(!plays.indexes["plays_album_idx"].is_primary);
+    let key = plays.foreign_keys.values().next().unwrap();
+    assert_eq!(key.columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.referenced_columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.referenced_table, "tracks");
+    assert_eq!(key.referenced_schema.as_deref(), Some("shop"));
+
+    let around = db
+        .list_foreign_keys(&ForeignKeyScope::Relation(RelationRef::with_schema(
+            "shop", "tracks",
+        )))
+        .await
+        .unwrap();
+    let described: Vec<String> = around
+        .iter()
+        .map(|key| {
+            format!(
+                "{} ({}) -> {} ({})",
+                key.table,
+                key.foreign_key.columns.join(", "),
+                key.referenced(),
+                key.foreign_key.referenced_columns.join(", ")
+            )
+        })
+        .collect();
+    assert_eq!(
+        described,
+        vec![
+            "shop.plays (album_id, track_no) -> shop.tracks (album_id, track_no)",
+            "shop.tracks (album_id) -> shop.albums (id)",
+        ]
+    );
+    let referencing = db
+        .get_referencing_foreign_keys(&RelationRef::with_schema("shop", "albums"))
+        .await
+        .unwrap();
+    assert_eq!(referencing.len(), 1);
+    assert_eq!(
+        referencing[0].table,
+        RelationRef::with_schema("shop", "tracks")
+    );
+    let schema = db
+        .list_foreign_keys(&ForeignKeyScope::Schema(Some("shop".to_string())))
+        .await
+        .unwrap();
+    assert_eq!(schema.len(), 2);
+    assert!(
+        db.list_foreign_keys(&ForeignKeyScope::Schema(None))
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

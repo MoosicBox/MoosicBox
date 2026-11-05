@@ -1037,6 +1037,31 @@ impl Database for SqliteSqlxDatabase {
         Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::sqlite(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::sqlite(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -3975,6 +4000,31 @@ impl Database for SqliteSqlxTransaction {
         Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::sqlite(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::sqlite(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
+    }
+
     #[cfg(feature = "schema")]
     #[allow(clippy::significant_drop_tightening)]
     async fn get_relation_info(
@@ -4422,6 +4472,12 @@ async fn sqlx_sqlite_get_relation_columns(
             ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // 0-based cid to 1-based ordinal
             enum_values: None,
             generated,
+            default_text: dflt_value.filter(|_| generated.is_none()),
+            generation_expression: None,
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
         });
     }
 
@@ -4540,6 +4596,34 @@ async fn sqlx_sqlite_get_table_info(
     Ok(Some(info))
 }
 
+/// The primary-key column at position `sequence` (0-based) of `table`, which
+/// `SQLite` reports as `NULL` for `REFERENCES table` with no column list.
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_referenced_primary_key(
+    executor: &mut SqliteConnection,
+    schema: Option<&str>,
+    table: &str,
+    sequence: i64,
+) -> Result<Option<String>, SqlxDatabaseError> {
+    use crate::sqlite_common::sqlite_pragma_sql;
+
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sqlite_pragma_sql(
+        schema,
+        "table_info",
+        table,
+    )))
+    .fetch_all(&mut *executor)
+    .await?;
+    for row in rows {
+        let name: String = row.try_get(1)?;
+        let ordinal: i64 = row.try_get(5)?;
+        if ordinal == sequence + 1 {
+            return Ok(Some(name));
+        }
+    }
+    Ok(None)
+}
+
 /// Build complete relation info (columns, indexes and foreign keys).
 #[cfg(feature = "schema")]
 async fn sqlx_sqlite_build_table_info(
@@ -4605,27 +4689,41 @@ async fn sqlx_sqlite_build_table_info(
             .fetch_all(&mut *executor)
             .await?;
 
+        // Keys are unnamed: each is named after its first column pair.
+        let mut names: BTreeMap<i32, String> = BTreeMap::new();
         for row in fk_rows {
             let id: i32 = row.try_get(0)?;
+            let sequence: i64 = row.try_get(1)?;
             let table: String = row.try_get(2)?;
             let from: String = row.try_get(3)?;
             // NULL means the referenced table's primary key
             let to: Option<String> = row.try_get(4)?;
             let on_update: String = row.try_get(5)?;
             let on_delete: String = row.try_get(6)?;
+            let to = match to {
+                Some(to) => to,
+                None => sqlx_sqlite_referenced_primary_key(executor, schema, &table, sequence)
+                    .await?
+                    .unwrap_or_default(),
+            };
 
-            let constraint_name = format!("fk_{table_name}_{id}");
-            foreign_keys.insert(
-                constraint_name.clone(),
-                crate::schema::ForeignKeyInfo {
-                    name: constraint_name,
-                    column: from,
-                    referenced_table: table,
-                    referenced_column: to.unwrap_or_default(),
+            let constraint_name = names
+                .entry(id)
+                .or_insert_with(|| format!("{table_name}_{from}_{table}_{to}"))
+                .clone();
+            foreign_keys
+                .entry(constraint_name.clone())
+                .or_insert_with(|| crate::schema::ForeignKeyInfo {
+                    referenced_schema: Some(
+                        schema
+                            .unwrap_or(crate::sqlite_common::SQLITE_DEFAULT_SCHEMA)
+                            .to_string(),
+                    ),
                     on_update: Some(on_update),
                     on_delete: Some(on_delete),
-                },
-            );
+                    ..crate::schema::ForeignKeyInfo::new(constraint_name, table)
+                })
+                .push_pair(from, to);
         }
     }
 

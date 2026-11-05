@@ -374,6 +374,51 @@ impl Database for SimulationDatabase {
         self.inner.list_routines(schema).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        self.inner.list_triggers(schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::SequenceInfo>, DatabaseError> {
+        self.inner.list_sequences(schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::UserTypeInfo>, DatabaseError> {
+        self.inner.list_user_types(schema).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_roles(&self) -> Result<Vec<crate::schema::RoleInfo>, DatabaseError> {
+        self.inner.list_roles().await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        self.inner.list_foreign_keys(scope).await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn get_referencing_foreign_keys(
+        &self,
+        relation: &crate::schema::RelationRef,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        self.inner.get_referencing_foreign_keys(relation).await
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,

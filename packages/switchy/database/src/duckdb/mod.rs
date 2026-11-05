@@ -2286,7 +2286,9 @@ fn query_primary_key_columns(
     Ok(pk_cols)
 }
 
-/// Query foreign key constraints for a table using `information_schema`.
+/// Query foreign key constraints for a table using `duckdb_constraints()`,
+/// every column pair of composite keys in key order. `DuckDB` only has
+/// `NO ACTION` referential actions, which are reported as `None`.
 #[cfg(feature = "schema")]
 fn query_foreign_keys(
     conn: &Connection,
@@ -2296,25 +2298,18 @@ fn query_foreign_keys(
 {
     let mut fk_map = std::collections::BTreeMap::new();
     let mut stmt = conn.prepare(
-        "SELECT kcu.column_name, \
-                ccu.table_name AS referenced_table, \
-                ccu.column_name AS referenced_column, \
-                rc.update_rule, \
-                rc.delete_rule, \
-                tc.constraint_name \
-         FROM information_schema.table_constraints tc \
-         JOIN information_schema.key_column_usage kcu \
-             ON tc.constraint_name = kcu.constraint_name \
-             AND tc.table_schema = kcu.table_schema \
-         JOIN information_schema.referential_constraints rc \
-             ON tc.constraint_name = rc.constraint_name \
-             AND tc.table_schema = rc.constraint_schema \
-         JOIN information_schema.key_column_usage ccu \
-             ON rc.unique_constraint_name = ccu.constraint_name \
-             AND rc.unique_constraint_schema = ccu.constraint_schema \
-         WHERE tc.table_catalog = current_database() \
-             AND tc.table_schema = ? AND tc.table_name = ? \
-             AND tc.constraint_type = 'FOREIGN KEY'",
+        "SELECT c.constraint_name, unnest(c.constraint_column_names), \
+                COALESCE(t.table_name, c.referenced_table), \
+                unnest(c.referenced_column_names), \
+                unnest(generate_series(1, len(c.constraint_column_names))) AS position \
+         FROM duckdb_constraints() c \
+         LEFT JOIN duckdb_tables() t ON t.database_name = c.database_name \
+             AND t.schema_name = c.schema_name \
+             AND lower(t.table_name) = lower(c.referenced_table) \
+         WHERE c.database_name = current_database() \
+             AND c.schema_name = ? AND c.table_name = ? \
+             AND c.constraint_type = 'FOREIGN KEY' \
+         ORDER BY c.constraint_name, position",
     )?;
     let rows = stmt.query_map([schema, table_name], |row| {
         Ok((
@@ -2322,34 +2317,61 @@ fn query_foreign_keys(
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
             row.get::<_, String>(3)?,
-            row.get::<_, String>(4)?,
-            row.get::<_, String>(5)?,
         ))
     })?;
     for row in rows {
-        let (column, referenced_table, referenced_column, on_update, on_delete, constraint_name) =
-            row?;
-        fk_map.insert(
-            constraint_name.clone(),
-            crate::schema::ForeignKeyInfo {
-                name: constraint_name,
-                column,
-                referenced_table,
-                referenced_column,
-                on_update: if on_update == "NO ACTION" {
-                    None
-                } else {
-                    Some(on_update)
-                },
-                on_delete: if on_delete == "NO ACTION" {
-                    None
-                } else {
-                    Some(on_delete)
-                },
-            },
-        );
+        let (constraint_name, column, referenced_table, referenced_column) = row?;
+        fk_map
+            .entry(constraint_name.clone())
+            .or_insert_with(|| crate::schema::ForeignKeyInfo {
+                // DuckDB keys reference tables of their own schema.
+                referenced_schema: Some(schema.to_string()),
+                ..crate::schema::ForeignKeyInfo::new(constraint_name, referenced_table)
+            })
+            .push_pair(column, referenced_column);
     }
     Ok(fk_map)
+}
+
+/// The indexes `DuckDB` creates for `PRIMARY KEY` and `UNIQUE` constraints,
+/// which `duckdb_indexes()` doesn't list: named after their constraint,
+/// always unique.
+#[cfg(feature = "schema")]
+fn query_constraint_indexes(
+    conn: &Connection,
+    schema: &str,
+    table_name: &str,
+) -> Result<std::collections::BTreeMap<String, crate::schema::IndexInfo>, DuckDbDatabaseError> {
+    let mut indexes = std::collections::BTreeMap::new();
+    let mut stmt = conn.prepare(
+        "SELECT constraint_name, constraint_type, unnest(constraint_column_names), \
+                unnest(generate_series(1, len(constraint_column_names))) AS position \
+         FROM duckdb_constraints() \
+         WHERE database_name = current_database() AND schema_name = ? AND table_name = ? \
+         AND constraint_type IN ('PRIMARY KEY', 'UNIQUE') \
+         ORDER BY constraint_index, position",
+    )?;
+    let rows = stmt.query_map([schema, table_name], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (name, kind, column) = row?;
+        indexes
+            .entry(name.clone())
+            .or_insert_with(|| crate::schema::IndexInfo {
+                name,
+                unique: true,
+                columns: Vec::new(),
+                is_primary: kind == "PRIMARY KEY",
+            })
+            .columns
+            .push(column);
+    }
+    Ok(indexes)
 }
 
 /// Get column info (tables and views) with primary key and auto-increment detection.
@@ -2394,6 +2416,7 @@ fn duckdb_get_table_columns(
         let generated = generated_cols
             .contains(&name)
             .then_some(crate::schema::GeneratedKind::Virtual);
+        let generation_expression = default_str.clone().filter(|_| generated.is_some());
         let default_str = default_str.filter(|_| generated.is_none());
 
         // Detect auto-increment from nextval() default pattern
@@ -2405,11 +2428,17 @@ fn duckdb_get_table_columns(
             data_type: duckdb_type_str_to_data_type(&type_str),
             nullable: nullable_str == "YES",
             auto_increment,
-            default_value: default_str.map(DatabaseValue::String),
+            default_value: default_str.clone().map(DatabaseValue::String),
             ordinal_position: u32::try_from(ordinal).unwrap_or_default(),
             enum_values: crate::schema::parse_enum_type_labels(&type_str, false),
             native_type: type_str,
             generated,
+            default_text: default_str,
+            generation_expression,
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
         });
     }
 
@@ -2560,7 +2589,7 @@ fn duckdb_get_relation_info(
     let mut idx_map = std::collections::BTreeMap::new();
 
     let foreign_keys = if kind == crate::schema::RelationKind::Table {
-        let pk_cols = query_primary_key_columns(conn, schema, name)?;
+        idx_map = query_constraint_indexes(conn, schema, name)?;
         let mut stmt = conn.prepare(
             "SELECT index_name, is_unique, sql FROM duckdb_indexes() \
              WHERE database_name = current_database() AND schema_name = ? AND table_name = ?",
@@ -2578,17 +2607,14 @@ fn duckdb_get_relation_info(
                 .as_deref()
                 .map(extract_index_columns_from_sql)
                 .unwrap_or_default();
-            // Detect primary index by checking if its columns exactly match PK columns
-            let is_primary = !idx_columns.is_empty()
-                && idx_columns.len() == pk_cols.len()
-                && idx_columns.iter().all(|c| pk_cols.contains(c));
+            // The primary key's index is the constraint's, listed above.
             idx_map.insert(
                 index_name.clone(),
                 crate::schema::IndexInfo {
                     name: index_name,
                     unique,
                     columns: idx_columns,
-                    is_primary,
+                    is_primary: false,
                 },
             );
         }
@@ -3309,6 +3335,44 @@ impl Database for DuckDbDatabase {
         Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::SequenceInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::sequences_sql::duckdb(schema),
+            crate::schema::sequences_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::UserTypeInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::user_types_sql::duckdb(schema),
+            crate::schema::user_types_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::duckdb(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -3947,6 +4011,44 @@ impl Database for DuckDbTransaction {
             .query_raw_result(&crate::schema::routines_sql::duckdb(schema), &[])
             .await?;
         Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::SequenceInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::sequences_sql::duckdb(schema),
+            crate::schema::sequences_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::UserTypeInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::user_types_sql::duckdb(schema),
+            crate::schema::user_types_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::duckdb(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
     }
 
     #[cfg(feature = "schema")]

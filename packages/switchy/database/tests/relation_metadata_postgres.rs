@@ -465,13 +465,21 @@ async fn check_routines(db: &dyn Database, s: &str) {
     use switchy_database::schema::RoutineKind;
     exec_all(
         db,
-        &[format!(
-            "CREATE FUNCTION {s}.add_one(x integer) RETURNS integer \
-             LANGUAGE sql AS 'SELECT x + 1'"
-        )],
+        &[
+            format!(
+                "CREATE FUNCTION {s}.add_one(x integer) RETURNS integer \
+                 LANGUAGE sql AS 'SELECT x + 1'"
+            ),
+            format!(
+                "CREATE FUNCTION {s}.touch() RETURNS trigger \
+                 LANGUAGE plpgsql AS 'BEGIN RETURN NEW; END'"
+            ),
+        ],
     )
     .await;
     let routines = db.list_routines(Some(s)).await.unwrap();
+    // Trigger functions are left out.
+    assert!(routines.iter().all(|r| r.name != "touch"), "{routines:?}");
     let add_one = routines.iter().find(|r| r.name == "add_one").unwrap();
     assert_eq!(add_one.kind, RoutineKind::Function);
     assert_eq!(add_one.arguments.as_deref(), Some("x integer"));
@@ -486,10 +494,153 @@ async fn check_routines(db: &dyn Database, s: &str) {
     );
 }
 
+async fn check_objects(db: &dyn Database, s: &str) {
+    use switchy_database::schema::UserTypeKind;
+    exec_all(
+        db,
+        &[
+            format!("CREATE TYPE {s}.span AS (lo integer, hi integer)"),
+            format!("CREATE TYPE {s}.window_range AS RANGE (subtype = integer)"),
+            format!("CREATE SEQUENCE {s}.order_no AS bigint"),
+            format!(
+                "CREATE FUNCTION {s}.touch() RETURNS trigger LANGUAGE plpgsql \
+                 AS 'BEGIN RETURN NEW; END'"
+            ),
+            format!(
+                "CREATE TRIGGER parent_touch BEFORE INSERT OR UPDATE ON {s}.parent \
+                 FOR EACH ROW EXECUTE FUNCTION {s}.touch()"
+            ),
+            format!("ALTER TABLE {s}.parent DISABLE TRIGGER parent_touch"),
+        ],
+    )
+    .await;
+
+    let triggers = db.list_triggers(Some(s)).await.unwrap();
+    assert_eq!(triggers.len(), 1, "{triggers:?}");
+    let touch = &triggers[0];
+    assert_eq!(touch.name, "parent_touch");
+    assert_eq!(touch.schema.as_deref(), Some(s));
+    assert_eq!(touch.table.as_deref(), Some("parent"));
+    assert_eq!(touch.timing.as_deref(), Some("BEFORE"));
+    assert_eq!(touch.events, vec!["INSERT", "UPDATE"]);
+    assert!(!touch.enabled);
+    assert!(
+        touch
+            .definition
+            .as_deref()
+            .is_some_and(|sql| sql.starts_with("CREATE TRIGGER parent_touch"))
+    );
+
+    let sequences = db.list_sequences(Some(s)).await.unwrap();
+    let order_no = sequences.iter().find(|q| q.name == "order_no").unwrap();
+    assert_eq!(order_no.data_type.as_deref(), Some("bigint"));
+    // SERIAL and identity columns own sequences too.
+    assert!(
+        sequences
+            .iter()
+            .any(|q| q.name == "parent_id_seq" && q.data_type.as_deref() == Some("integer"))
+    );
+
+    let types = db.list_user_types(Some(s)).await.unwrap();
+    let kind = |name: &str| {
+        types
+            .iter()
+            .find(|t| t.name == name)
+            .map(|t| t.kind.clone())
+    };
+    assert_eq!(kind("mood"), Some(UserTypeKind::Enum));
+    assert_eq!(kind("posint"), Some(UserTypeKind::Domain));
+    assert_eq!(kind("span"), Some(UserTypeKind::Composite));
+    assert_eq!(kind("window_range"), Some(UserTypeKind::Range));
+    // Row types of tables, array types, and multiranges are left out.
+    assert_eq!(kind("parent"), None);
+    assert_eq!(kind("_mood"), None);
+    assert_eq!(types.len(), 4, "{types:?}");
+
+    let roles = db.list_roles().await.unwrap();
+    assert!(
+        roles
+            .iter()
+            .any(|r| r.name == "pg_read_all_data" && r.builtin)
+    );
+    assert!(
+        roles
+            .iter()
+            .any(|r| !r.builtin && r.can_login == Some(true) && r.superuser.is_some())
+    );
+}
+
+/// Composite and cross-schema keys keep every column pair and the
+/// referenced schema, defaults keep their SQL text, and keys are listed in
+/// both directions.
+async fn check_foreign_keys(db: &dyn Database, s: &str) {
+    use switchy_database::schema::ForeignKeyScope;
+    let other = format!("{s}_fk_other");
+    exec_all(
+        db,
+        &[
+            format!("DROP SCHEMA IF EXISTS {other} CASCADE"),
+            format!("CREATE SCHEMA {other}"),
+            format!(
+                "CREATE TABLE {s}.tracks (album_id integer, track_no integer, \
+                 title text DEFAULT 'untitled', PRIMARY KEY (album_id, track_no))"
+            ),
+            format!(
+                "CREATE TABLE {other}.plays (id integer PRIMARY KEY, album integer, track integer, \
+                 CONSTRAINT plays_track_fk FOREIGN KEY (album, track) \
+                 REFERENCES {s}.tracks (album_id, track_no) ON DELETE CASCADE)"
+            ),
+        ],
+    )
+    .await;
+    let tracks = db
+        .get_relation_info(&RelationRef::with_schema(s, "tracks"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        tracks.columns["title"].default_text.as_deref(),
+        Some("'untitled'::text")
+    );
+    let plays = db
+        .get_relation_info(&RelationRef::with_schema(other.as_str(), "plays"))
+        .await
+        .unwrap()
+        .unwrap();
+    let key = &plays.foreign_keys["plays_track_fk"];
+    assert_eq!(key.columns, vec!["album", "track"]);
+    assert_eq!(key.referenced_columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.referenced_schema.as_deref(), Some(s));
+    assert_eq!(key.on_delete.as_deref(), Some("CASCADE"));
+
+    let referencing = db
+        .get_referencing_foreign_keys(&RelationRef::with_schema(s, "tracks"))
+        .await
+        .unwrap();
+    assert_eq!(referencing.len(), 1, "{referencing:?}");
+    let found = &referencing[0];
+    assert_eq!(
+        found.table,
+        RelationRef::with_schema(other.as_str(), "plays")
+    );
+    assert_eq!(found.foreign_key.columns, key.columns);
+    assert_eq!(found.foreign_key.referenced_columns, key.referenced_columns);
+    assert_eq!(found.foreign_key.on_delete.as_deref(), Some("CASCADE"));
+    assert_eq!(found.foreign_key.on_update.as_deref(), Some("NO ACTION"));
+    let in_other = db
+        .list_foreign_keys(&ForeignKeyScope::Schema(Some(other.clone())))
+        .await
+        .unwrap();
+    assert_eq!(in_other.len(), 1);
+    exec_all(db, &[format!("DROP SCHEMA {other} CASCADE")]).await;
+}
+
 async fn run_all(db: &dyn Database, schema: &str) {
     setup(db, schema).await;
     check_introspection(db, schema).await;
     check_routines(db, schema).await;
+    check_objects(db, schema).await;
+    check_foreign_keys(db, schema).await;
     check_decoding(db, schema).await;
     teardown(db, schema).await;
     check_builder_nulls(db, &format!("{schema}_builder_nulls")).await;

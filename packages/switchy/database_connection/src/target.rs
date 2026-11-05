@@ -321,6 +321,10 @@ pub enum ConnectionTarget {
         creds: Credentials,
         /// Whether to use HTTPS.
         tls: bool,
+        /// TLS files from `sslrootcert` (a certificate authority trusted in
+        /// addition to the system's), `sslcert` and `sslkey` (a client
+        /// certificate and its key); they need HTTPS.
+        tls_files: TlsFiles,
         /// Remaining (percent-decoded) query parameters.
         params: BTreeMap<String, String>,
     },
@@ -414,10 +418,16 @@ impl std::fmt::Debug for ConnectionTarget {
                 .field("auth_token", &auth_token.as_ref().map(|_| "<redacted>"))
                 .field("params", params)
                 .finish(),
-            Self::ClickHouse { creds, tls, params } => f
+            Self::ClickHouse {
+                creds,
+                tls,
+                tls_files,
+                params,
+            } => f
                 .debug_struct("ClickHouse")
                 .field("creds", creds)
                 .field("tls", tls)
+                .field("tls_files", tls_files)
                 .field("params", params)
                 .finish(),
             Self::Mssql {
@@ -505,7 +515,8 @@ impl ConnectionTarget {
     /// `authToken` (or `auth_token`) parameter becomes the auth token. For
     /// `ClickHouse` the `secure`/`tls` parameter selects HTTPS on
     /// `clickhouse://` URLs (and must agree with a `clickhouse+http(s)://`
-    /// scheme). For SQL Server, parameter names are case-insensitive:
+    /// scheme), and `sslrootcert`, `sslcert` and `sslkey` name a CA file and
+    /// a client certificate and key. For SQL Server, parameter names are case-insensitive:
     /// `encrypt` (`strict`, `true`, `false`, `danger_plaintext`; default
     /// `true`), `trustServerCertificate`, a CA file in `certificate` (or
     /// `trustServerCertificateCA`, `sslrootcert`), `hostNameInCertificate`,
@@ -664,10 +675,16 @@ impl ConnectionTarget {
         if parts.host.is_empty() {
             "localhost".clone_into(&mut parts.host);
         }
+        let tls_files = TlsFiles {
+            root_cert: take_path_param(&mut parts.params, &["sslrootcert"]),
+            client_cert: take_path_param(&mut parts.params, &["sslcert"]),
+            client_key: take_path_param(&mut parts.params, &["sslkey"]),
+        };
         let params = std::mem::take(&mut parts.params);
         Ok(Self::ClickHouse {
             creds: parts.credentials(),
             tls,
+            tls_files,
             params,
         })
     }
@@ -969,19 +986,19 @@ impl ConnectionTarget {
     }
 
     /// The TLS certificate files of a network target (`None` for file
-    /// databases, `libSQL` and `ClickHouse`, which use the system's trusted
-    /// certificates over HTTPS, and Oracle, which trusts a wallet; SQL
-    /// Server's carry a root certificate only).
+    /// databases, `libSQL`, which uses the system's trusted certificates
+    /// over HTTPS, and Oracle, which trusts a wallet; SQL Server's carry a
+    /// root certificate only).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
             Self::Postgres { tls_files, .. }
             | Self::MySql { tls_files, .. }
+            | Self::ClickHouse { tls_files, .. }
             | Self::Mssql { tls_files, .. } => Some(tls_files),
             Self::Sqlite { .. }
             | Self::DuckDb { .. }
             | Self::Libsql { .. }
-            | Self::ClickHouse { .. }
             | Self::Oracle { .. } => None,
         }
     }
@@ -1548,7 +1565,13 @@ mod tests {
     fn clickhouse_urls_carry_credentials_and_tls() {
         let target =
             ConnectionTarget::from_url("clickhouse://shop:s%40cret@ch.example/music?x=1").unwrap();
-        let ConnectionTarget::ClickHouse { creds, tls, params } = &target else {
+        let ConnectionTarget::ClickHouse {
+            creds,
+            tls,
+            tls_files,
+            params,
+        } = &target
+        else {
             panic!("{target:?}");
         };
         assert_eq!(
@@ -1556,6 +1579,7 @@ mod tests {
             ("ch.example", "shop", Some("s@cret"), "music")
         );
         assert!(!tls);
+        assert!(tls_files.is_empty());
         assert_eq!(
             params,
             &BTreeMap::from([("x".to_string(), "1".to_string())])
@@ -1580,6 +1604,23 @@ mod tests {
         assert!(matches!(
             &local,
             ConnectionTarget::ClickHouse { creds, tls: false, .. } if creds.host() == "localhost"
+        ));
+        let files = ConnectionTarget::from_url(
+            "clickhouse+https://ch.example?sslrootcert=/c/ca.pem&sslcert=/c/cl.pem&sslkey=/c/cl.key&x=1",
+        )
+        .unwrap();
+        assert_eq!(
+            files.tls_files(),
+            Some(
+                &TlsFiles::new()
+                    .root_cert("/c/ca.pem")
+                    .client_cert("/c/cl.pem")
+                    .client_key("/c/cl.key")
+            )
+        );
+        assert!(matches!(
+            &files,
+            ConnectionTarget::ClickHouse { params, .. } if params.len() == 1
         ));
         assert!(matches!(
             ConnectionTarget::from_url("clickhouse+https://ch.example?secure=true"),

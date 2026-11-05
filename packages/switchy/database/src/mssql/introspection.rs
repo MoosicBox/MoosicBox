@@ -328,7 +328,7 @@ async fn object_columns(
          CASE WHEN EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.indexes i \
          ON i.object_id = ic.object_id AND i.index_id = ic.index_id \
          WHERE i.is_primary_key = 1 AND ic.object_id = c.object_id \
-         AND ic.column_id = c.column_id) THEN 1 ELSE 0 END \
+         AND ic.column_id = c.column_id) THEN 1 ELSE 0 END, cc.definition \
          FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id \
          LEFT JOIN sys.types bt ON bt.user_type_id = t.system_type_id AND t.is_user_defined = 1 \
          LEFT JOIN sys.computed_columns cc \
@@ -368,6 +368,12 @@ async fn object_columns(
                 .unwrap_or(0),
             native_type: native_type(&type_name, &base, max_length, precision, scale),
             enum_values: None,
+            default_text: text(row, 10).filter(|_| generated.is_none()),
+            generation_expression: text(row, 13).filter(|_| generated.is_some()),
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
             generated,
         })
     })
@@ -438,7 +444,8 @@ pub(super) async fn relation_info(
     for row in rows(
         executor,
         "SELECT fk.name, pc.name, OBJECT_NAME(fk.referenced_object_id), rc.name, \
-         fk.update_referential_action_desc, fk.delete_referential_action_desc \
+         fk.update_referential_action_desc, fk.delete_referential_action_desc, \
+         OBJECT_SCHEMA_NAME(fk.referenced_object_id) \
          FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc \
          ON fkc.constraint_object_id = fk.object_id \
          JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id \
@@ -453,17 +460,18 @@ pub(super) async fn relation_info(
         let Some(name) = text(&row, 0) else {
             continue;
         };
-        // Multi-column keys report their first column pair.
         foreign_keys
             .entry(name.clone())
             .or_insert_with(|| ForeignKeyInfo {
-                name,
-                column: text(&row, 1).unwrap_or_default(),
-                referenced_table: text(&row, 2).unwrap_or_default(),
-                referenced_column: text(&row, 3).unwrap_or_default(),
+                referenced_schema: text(&row, 6),
                 on_update: text(&row, 4).map(|action| referential_action(&action)),
                 on_delete: text(&row, 5).map(|action| referential_action(&action)),
-            });
+                ..ForeignKeyInfo::new(name, text(&row, 2).unwrap_or_default())
+            })
+            .push_pair(
+                text(&row, 1).unwrap_or_default(),
+                text(&row, 3).unwrap_or_default(),
+            );
     }
 
     Ok(Some(TableInfo {
@@ -524,6 +532,20 @@ pub(super) async fn list_routines(
     )
     .await?;
     Ok(crate::schema::routines_from_rows(&found))
+}
+
+/// Foreign keys from or to a table, or from or to any table of a schema
+/// (see [`crate::schema::foreign_keys_sql::mssql`]).
+#[cfg(feature = "raw-sql")]
+pub(super) async fn list_foreign_keys(
+    executor: &dyn Executor,
+    scope: &crate::schema::ForeignKeyScope,
+) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+    let (sql, params) = crate::schema::foreign_keys_sql::mssql(scope);
+    let found = rows(executor, &sql, &params).await?;
+    Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+        &found,
+    ))
 }
 
 #[cfg(test)]

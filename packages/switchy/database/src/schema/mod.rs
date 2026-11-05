@@ -216,9 +216,18 @@
 //! ```
 
 mod expression;
+pub mod foreign_keys_sql;
 mod trigger;
 pub mod write_guard;
+
+pub mod objects;
+
 pub use expression::{SchemaComparison, SchemaExpression};
+pub use objects::{
+    RoleInfo, SequenceInfo, TriggerInfo, UserTypeInfo, UserTypeKind, roles_from_rows, roles_sql,
+    sequences_from_rows, sequences_sql, triggers_from_rows, triggers_sql, user_types_from_rows,
+    user_types_sql,
+};
 pub use trigger::{CreateTriggerStatement, TriggerAction, TriggerEvent, create_trigger};
 
 use std::collections::BTreeMap;
@@ -1293,6 +1302,8 @@ impl AlterTableStatement<'_> {
 // Table introspection types for Phase 16 (Table Introspection API)
 
 /// Information about a single column in a database table
+// Each flag is an independent catalog fact about the column, not a state.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ColumnInfo {
     /// Column name
@@ -1341,6 +1352,51 @@ pub struct ColumnInfo {
     /// * `DuckDB`: `GENERATED ALWAYS AS` in the table's stored `CREATE TABLE` SQL
     ///   (`DuckDB` only supports virtual generated columns)
     pub generated: Option<GeneratedKind>,
+    /// The column's default exactly as the server's catalog reports it,
+    /// before any parsing into [`default_value`](Self::default_value)
+    ///
+    /// `None` when the column has no default, and for generated columns
+    /// (see [`generation_expression`](Self::generation_expression)).
+    /// Most backends report SQL text that can be written back after
+    /// `DEFAULT`:
+    ///
+    /// * `PostgreSQL`: `pg_get_expr` of the default (`'a'::text`,
+    ///   `nextval('t_id_seq'::regclass)`); identity columns have none
+    /// * `MySQL`/`MariaDB`: `information_schema.COLUMNS.COLUMN_DEFAULT`.
+    ///   `MariaDB` reports SQL (`'a'`, `current_timestamp()`, and `NULL` for
+    ///   an explicit `DEFAULT NULL`); `MySQL` reports literals unquoted (`a`)
+    ///   and expression defaults bare, marked `DEFAULT_GENERATED` in `EXTRA`
+    /// * `SQLite`/Turso/libSQL: `PRAGMA table_xinfo` `dflt_value`
+    /// * `DuckDB`: `information_schema.columns.column_default`
+    /// * SQL Server: the default constraint's definition (`((0))`)
+    /// * Oracle: `DATA_DEFAULT` (surrounding whitespace removed); identity
+    ///   columns have none
+    /// * `ClickHouse`: `default_expression` of a `DEFAULT` column
+    pub default_text: Option<String>,
+    /// The expression of a generated column, as the server's catalog
+    /// reports it, where the backend exposes it
+    ///
+    /// * `PostgreSQL`: `pg_get_expr` of the generation expression
+    /// * `MySQL`/`MariaDB`: `information_schema.COLUMNS.GENERATION_EXPRESSION`
+    /// * `DuckDB`: `information_schema.columns.column_default`
+    /// * SQL Server: `sys.computed_columns.definition`
+    /// * Oracle: `DATA_DEFAULT` of a virtual column
+    /// * `ClickHouse`: `default_expression` of a `MATERIALIZED` or `ALIAS` column
+    /// * `SQLite`/Turso/libSQL: always `None` (the catalog doesn't report it)
+    pub generation_expression: Option<String>,
+    /// The expression the column is set to whenever its row is updated
+    /// (`MySQL`/`MariaDB` `ON UPDATE CURRENT_TIMESTAMP`, from `EXTRA`);
+    /// `None` elsewhere
+    pub on_update: Option<String>,
+    /// Whether a numeric column is `UNSIGNED` (`MySQL`/`MariaDB`); `false`
+    /// elsewhere
+    pub unsigned: bool,
+    /// The character set of a string column (`MySQL`/`MariaDB`
+    /// `CHARACTER_SET_NAME`); `None` elsewhere
+    pub character_set: Option<String>,
+    /// The collation of a string column (`MySQL`/`MariaDB`
+    /// `COLLATION_NAME`); `None` elsewhere
+    pub collation: Option<String>,
 }
 
 /// How a generated (computed) column's value is materialized
@@ -1430,20 +1486,108 @@ pub struct IndexInfo {
 }
 
 /// Information about a foreign key constraint
+///
+/// Every column of a composite key is reported, in key order, in
+/// [`columns`](Self::columns) and [`referenced_columns`](Self::referenced_columns);
+/// [`column`](Self::column) and [`referenced_column`](Self::referenced_column)
+/// repeat the first pair.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ForeignKeyInfo {
     /// Foreign key constraint name
+    ///
+    /// `SQLite` keys are unnamed; they are named
+    /// `{table}_{column}_{referenced_table}_{referenced_column}` after their
+    /// first column pair.
     pub name: String,
-    /// Column name in the current table
+    /// The first referencing column (`columns[0]`)
     pub column: String,
+    /// Referencing columns in the current table, in key order
+    pub columns: Vec<String>,
+    /// Schema of the referenced table, where the backend reports it
+    pub referenced_schema: Option<String>,
     /// Referenced table name
     pub referenced_table: String,
-    /// Referenced column name
+    /// The first referenced column (`referenced_columns[0]`)
     pub referenced_column: String,
+    /// Referenced columns, paired with [`columns`](Self::columns)
+    pub referenced_columns: Vec<String>,
     /// Action to take on UPDATE (CASCADE, RESTRICT, SET NULL, etc.)
     pub on_update: Option<String>,
     /// Action to take on DELETE (CASCADE, RESTRICT, SET NULL, etc.)
     pub on_delete: Option<String>,
+}
+
+impl ForeignKeyInfo {
+    /// An empty key named `name` referencing `referenced_table`, without
+    /// columns, referential actions or a referenced schema; add its columns
+    /// with [`push_pair`](Self::push_pair)
+    #[must_use]
+    pub fn new(name: impl Into<String>, referenced_table: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            column: String::new(),
+            columns: Vec::new(),
+            referenced_schema: None,
+            referenced_table: referenced_table.into(),
+            referenced_column: String::new(),
+            referenced_columns: Vec::new(),
+            on_update: None,
+            on_delete: None,
+        }
+    }
+
+    /// Append the next column pair of a (composite) key; the first pair also
+    /// sets [`column`](Self::column) and [`referenced_column`](Self::referenced_column)
+    pub fn push_pair(&mut self, column: impl Into<String>, referenced_column: impl Into<String>) {
+        let (column, referenced_column) = (column.into(), referenced_column.into());
+        if self.columns.is_empty() {
+            self.column.clone_from(&column);
+            self.referenced_column.clone_from(&referenced_column);
+        }
+        self.columns.push(column);
+        self.referenced_columns.push(referenced_column);
+    }
+
+    /// `(referencing column, referenced column)` pairs, in key order
+    pub fn pairs(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.columns
+            .iter()
+            .map(String::as_str)
+            .zip(self.referenced_columns.iter().map(String::as_str))
+    }
+}
+
+/// Which foreign keys [`Database::list_foreign_keys`](crate::Database::list_foreign_keys) lists
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ForeignKeyScope {
+    /// Keys of one table and keys of any table (in any schema) that
+    /// reference it; a relation without a schema is in the connection's
+    /// default schema
+    Relation(RelationRef),
+    /// Keys of every table of a schema (`None`: the connection's default
+    /// schema) and keys of any table that reference one of them
+    Schema(Option<String>),
+}
+
+/// A foreign key together with the table that holds it, returned by
+/// [`Database::list_foreign_keys`](crate::Database::list_foreign_keys)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableForeignKey {
+    /// The referencing table, with its schema where the backend reports it
+    pub table: RelationRef,
+    /// The key, with every column pair and the referenced table's schema
+    pub foreign_key: ForeignKeyInfo,
+}
+
+impl TableForeignKey {
+    /// The referenced table, with its schema where the backend reports it
+    #[must_use]
+    pub fn referenced(&self) -> RelationRef {
+        RelationRef {
+            schema: self.foreign_key.referenced_schema.clone(),
+            name: self.foreign_key.referenced_table.clone(),
+        }
+    }
 }
 
 /// Complete information about a database table or view
@@ -1683,6 +1827,10 @@ pub mod routines_sql {
 
     /// `PostgreSQL`: `pg_proc`, for `schema` or every schema on the search
     /// path (including `pg_catalog`), without internal and trigger functions
+    ///
+    /// The return types are matched by `pg_type` name rather than by
+    /// `regtype` casts, which wire-compatible servers such as `CockroachDB`
+    /// can't resolve for `internal`.
     #[must_use]
     pub fn postgres(schema: Option<&str>) -> String {
         let filter = schema.map_or_else(
@@ -1698,7 +1846,10 @@ pub mod routines_sql {
              FROM pg_catalog.pg_proc p \
              JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace \
              WHERE {filter} \
-             AND p.prorettype NOT IN ('pg_catalog.internal'::regtype, 'pg_catalog.trigger'::regtype) \
+             AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_type t \
+             JOIN pg_catalog.pg_namespace tn ON tn.oid = t.typnamespace \
+             WHERE t.oid = p.prorettype AND tn.nspname = 'pg_catalog' \
+             AND t.typname IN ('internal', 'trigger')) \
              ORDER BY 2"
         )
     }

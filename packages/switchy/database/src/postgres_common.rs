@@ -1104,16 +1104,18 @@ mod introspection {
     }
 
     /// Foreign keys: `name, column, referenced_table, referenced_column,
-    /// on_update, on_delete` (one row per column pair).
+    /// on_update, on_delete, referenced_schema` (one row per column pair,
+    /// in key order).
     #[must_use]
     pub fn foreign_keys_sql(kinds: &str) -> String {
         format!(
             "SELECT con.conname::text, a.attname::text, rc.relname::text, ra.attname::text, \
-             con.confupdtype::text, con.confdeltype::text \
+             con.confupdtype::text, con.confdeltype::text, rn.nspname::text \
              FROM pg_constraint con \
              CROSS JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(att, ref_att, ord) \
              JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.att \
              JOIN pg_class rc ON rc.oid = con.confrelid \
+             JOIN pg_namespace rn ON rn.oid = rc.relnamespace \
              JOIN pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = k.ref_att \
              WHERE con.contype = 'f' AND con.conrelid = {} \
              ORDER BY con.conname, k.ord",
@@ -1411,6 +1413,9 @@ mod introspection {
                 };
                 // pg_attrdef holds the generation expression for generated columns
                 let default_expr = col(row, 3).filter(|_| generated.is_none());
+                let generation_expression = col(row, 3)
+                    .filter(|_| generated.is_some())
+                    .map(ToString::to_string);
                 let is_identity = col_bool(row, 5);
                 ColumnInfo {
                     name: col_string(row, 0),
@@ -1424,6 +1429,12 @@ mod introspection {
                     native_type,
                     enum_values: col(row, 8).map(split_enum_labels),
                     generated,
+                    default_text: default_expr.map(ToString::to_string),
+                    generation_expression,
+                    on_update: None,
+                    unsigned: false,
+                    character_set: None,
+                    collation: None,
                 }
             })
             .collect())
@@ -1501,17 +1512,15 @@ mod introspection {
             .await?
         {
             let constraint = col_string(&row, 0);
-            // Multi-column keys report their first column pair.
             foreign_keys
                 .entry(constraint.clone())
                 .or_insert_with(|| ForeignKeyInfo {
-                    name: constraint,
-                    column: col_string(&row, 1),
-                    referenced_table: col_string(&row, 2),
-                    referenced_column: col_string(&row, 3),
+                    referenced_schema: col(&row, 6).map(ToString::to_string),
                     on_update: col(&row, 4).and_then(referential_action),
                     on_delete: col(&row, 5).and_then(referential_action),
-                });
+                    ..ForeignKeyInfo::new(constraint, col_string(&row, 2))
+                })
+                .push_pair(col_string(&row, 1), col_string(&row, 3));
         }
 
         Ok(Some(TableInfo {

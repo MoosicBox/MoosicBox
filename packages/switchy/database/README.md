@@ -269,6 +269,47 @@ async fn create_schema(db: &dyn Database) -> Result<(), DatabaseError> {
 }
 ```
 
+### Catalog listings
+
+`list_routines`, `list_triggers`, `list_sequences`, `list_user_types` and
+`list_roles` read the system catalog with one plain `SELECT` each, so they
+work on read-only connections. A schema of `None` means the connection's
+default schema (the search path, the current database, `main`, ...).
+Backends without a kind of object return `DatabaseError::UnsupportedOperation`.
+
+| Backend       | Triggers | Sequences     | User-defined types                         | Roles                       |
+| ------------- | -------- | ------------- | ------------------------------------------ | --------------------------- |
+| PostgreSQL    | yes      | yes           | enums, domains, ranges, composite and base | `pg_roles`                  |
+| MySQL/MariaDB | yes      | MariaDB, TiDB | no (enums are column types)                | grantees                    |
+| SQLite/libSQL | yes      | no            | no                                         | no                          |
+| DuckDB        | no       | yes           | yes                                        | no                          |
+| SQL Server    | DML      | yes           | alias, table and CLR types                 | database principals         |
+| Oracle        | yes      | yes           | object and collection types                | granted roles and all users |
+
+```rust
+use switchy_database::{Database, DatabaseError};
+
+async fn audit(db: &dyn Database) -> Result<(), DatabaseError> {
+    for trigger in db.list_triggers(Some("shop")).await? {
+        println!(
+            "{} on {:?}: {:?} {}",
+            trigger.name,
+            trigger.table,
+            trigger.timing,
+            trigger.events.join(" OR ")
+        );
+    }
+    for role in db.list_roles().await?.iter().filter(|role| !role.builtin) {
+        println!("{} (superuser: {:?})", role.name, role.superuser);
+    }
+    Ok(())
+}
+```
+
+The catalog SQL itself is public (`schema::triggers_sql`, `sequences_sql`,
+`user_types_sql`, `roles_sql`, and `routines_sql`), with `*_from_rows`
+functions mapping the rows, for callers that run it their own way.
+
 ### Schema Introspection
 
 ```rust
@@ -367,6 +408,30 @@ async fn browse(db: &dyn Database) -> Result<(), DatabaseError> {
         }
     }
     let _ = RelationRef::with_schema("public", "users");
+    Ok(())
+}
+```
+
+Foreign keys report every column of composite keys and the referenced
+table's schema. `list_foreign_keys` lists the keys of a table and the keys
+referencing it (or every key from or to a schema's tables) in one catalog
+query, and `get_referencing_foreign_keys` keeps the referencing ones (both
+require the `schema` and `raw-sql` features):
+
+```rust
+use switchy_database::{Database, DatabaseError, schema::RelationRef};
+
+async fn referencing(db: &dyn Database) -> Result<(), DatabaseError> {
+    let orders = RelationRef::with_schema("shop", "orders");
+    for key in db.get_referencing_foreign_keys(&orders).await? {
+        println!(
+            "{} ({}) -> {} ({})",
+            key.table,
+            key.foreign_key.columns.join(", "),
+            key.referenced(),
+            key.foreign_key.referenced_columns.join(", ")
+        );
+    }
     Ok(())
 }
 ```
@@ -559,7 +624,10 @@ The core `Database` trait provides:
 - Execution methods (`query`, `query_first`, `exec_update`, `exec_insert`, etc.)
 - Raw SQL methods (`query_raw`, `query_raw_params`, `query_raw_result`, `exec_raw`, `exec_raw_params`)
 - Introspection methods (`table_exists`, `column_exists`, `get_table_info`, `list_tables`,
-  `list_schemas`, `list_databases`, `list_relations`, `get_relation_info`, `get_view_definition`) - requires `schema` feature
+  `list_schemas`, `list_databases`, `list_relations`, `get_relation_info`, `get_view_definition`) - requires `schema` feature;
+  `list_foreign_keys` and `get_referencing_foreign_keys` also require `raw-sql`
+- Catalog listings (`list_routines`, `list_triggers`, `list_sequences`, `list_user_types`,
+  `list_roles`) - requires `schema` and `raw-sql` features; see [Catalog listings](#catalog-listings)
 - Transaction method (`begin_transaction`)
 
 ### DatabaseTransaction Trait
@@ -659,8 +727,11 @@ Remote libSQL servers (`libsql` feature): `sqld`, `turso dev` and Turso Cloud.
 ClickHouse servers (`clickhouse` feature), over the HTTP interface.
 
 - `ClickHouseDatabase::builder("http://127.0.0.1:8123").user(user).password(password).database("shop").build()`;
-  `https://` URLs use TLS with the system's trusted certificates; the password
-  travels in the `X-ClickHouse-Key` header
+  `https://` URLs use TLS with the system's trusted certificates, plus a CA file
+  given to `.root_certificate(path)`; `.client_certificate(cert, key)` presents a
+  client certificate (without a password, the user logs in with it through
+  ClickHouse's `ssl_certificates` authentication); the password travels in the
+  `X-ClickHouse-Key` header
 - Raw SQL and introspection only: `$1`, `$2`, ... placeholders become typed
   substitutions (`{p1:String}`) whose values are sent as `param_p1` HTTP
   parameters, never written into the statement (`?` is ClickHouse's ternary
@@ -760,7 +831,9 @@ connection opens; without it, connecting returns
   ZONE` with its offset, `TIMESTAMP WITH LOCAL TIME ZONE` in the session's
   zone, `RAW`/`BLOB` as bytes, `CLOB` as text, 23ai `BOOLEAN`; intervals,
   `ROWID` and other types as text. Native `JSON` columns can't be fetched by
-  the driver: the error suggests `JSON_SERIALIZE`
+  the driver: the error suggests `JSON_SERIALIZE` (the `oracle` crate, 0.6.3
+  being its latest release, defines no fetch for Oracle's JSON type and lets no
+  column be fetched as another type)
 - Transactions with savepoints; Oracle commits an open transaction around
   every DDL statement
 - Introspection reads the `ALL_*` views: schemas (users), tables, views and

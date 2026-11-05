@@ -620,6 +620,71 @@ async fn mysql_query_raw_result_reports_columns_positionally() {
 }
 
 #[test_log::test(tokio::test)]
+async fn mysql_lists_triggers_sequences_and_roles() {
+    let Some(db) = get_database().await else {
+        return;
+    };
+    db.exec_raw("DROP TABLE IF EXISTS relmeta_trig")
+        .await
+        .unwrap();
+    db.exec_raw("CREATE TABLE relmeta_trig (id INT PRIMARY KEY, n INT)")
+        .await
+        .unwrap();
+    db.exec_raw(
+        "CREATE TRIGGER relmeta_trig_check BEFORE INSERT ON relmeta_trig \
+         FOR EACH ROW SET NEW.n = COALESCE(NEW.n, 0)",
+    )
+    .await
+    .unwrap();
+    let triggers = db.list_triggers(None).await.unwrap();
+    let check = triggers
+        .iter()
+        .find(|t| t.name == "relmeta_trig_check")
+        .unwrap();
+    assert_eq!(check.table.as_deref(), Some("relmeta_trig"));
+    assert_eq!(check.timing.as_deref(), Some("BEFORE"));
+    assert_eq!(check.events, vec!["INSERT"]);
+    assert!(check.enabled);
+    let database = current_database(&db).await;
+    assert_eq!(check.schema.as_deref(), Some(database.as_str()));
+    assert_eq!(db.list_triggers(Some(&database)).await.unwrap(), triggers);
+
+    // MariaDB has sequences (MySQL has none, and lists nothing).
+    let mariadb = db
+        .query_raw("SELECT CAST(VERSION() AS CHAR) AS v")
+        .await
+        .unwrap()[0]
+        .get("v")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("MariaDB");
+    if mariadb {
+        db.exec_raw("CREATE OR REPLACE SEQUENCE relmeta_seq")
+            .await
+            .unwrap();
+        let sequences = db.list_sequences(None).await.unwrap();
+        assert!(
+            sequences.iter().any(|s| s.name == "relmeta_seq"),
+            "{sequences:?}"
+        );
+        db.exec_raw("DROP SEQUENCE relmeta_seq").await.unwrap();
+    } else {
+        assert!(db.list_sequences(None).await.unwrap().is_empty());
+    }
+    assert!(db.list_user_types(None).await.is_err());
+
+    let roles = db.list_roles().await.unwrap();
+    assert!(!roles.is_empty());
+    assert!(
+        roles
+            .iter()
+            .all(|r| r.name.starts_with('\'') && r.can_login.is_none())
+    );
+    db.exec_raw("DROP TABLE relmeta_trig").await.unwrap();
+}
+
+#[test_log::test(tokio::test)]
 async fn mysql_lists_stored_routines() {
     use switchy_database::schema::RoutineKind;
     let Some(db) = get_database().await else {
@@ -648,4 +713,115 @@ async fn mysql_lists_stored_routines() {
     );
     assert!(!add_one.builtin);
     db.exec_raw("DROP FUNCTION relmeta_add_one").await.unwrap();
+}
+
+#[test_log::test(tokio::test)]
+async fn mysql_reports_column_details_composite_keys_and_unique_indexes() {
+    use switchy_database::schema::ForeignKeyScope;
+
+    let Some(db) = get_database().await else {
+        return;
+    };
+    let current = current_database(&db).await;
+    let other = format!("{current}_relmeta_fk");
+    for statement in [
+        format!("DROP DATABASE IF EXISTS `{other}`"),
+        "DROP TABLE IF EXISTS relmeta_fk_tracks".to_string(),
+        format!("CREATE DATABASE `{other}`"),
+        "CREATE TABLE relmeta_fk_tracks (
+            album_id INT NOT NULL,
+            track_no INT UNSIGNED NOT NULL,
+            title VARCHAR(40) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'untitled',
+            code VARCHAR(10) NULL,
+            touched TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            doubled INT AS (album_id * 2) STORED,
+            PRIMARY KEY (album_id, track_no),
+            UNIQUE KEY relmeta_fk_code (code),
+            KEY relmeta_fk_title (title)
+        )"
+        .to_string(),
+        format!(
+            "CREATE TABLE `{other}`.plays (
+                id INT PRIMARY KEY,
+                album INT NOT NULL,
+                track INT UNSIGNED NOT NULL,
+                CONSTRAINT relmeta_fk_plays FOREIGN KEY (album, track)
+                    REFERENCES `{current}`.relmeta_fk_tracks (album_id, track_no)
+                    ON DELETE CASCADE
+            )"
+        ),
+    ] {
+        db.exec_raw(&statement)
+            .await
+            .unwrap_or_else(|e| panic!("{statement}: {e}"));
+    }
+
+    let tracks = db
+        .get_relation_info(&RelationRef::new("relmeta_fk_tracks"))
+        .await
+        .unwrap()
+        .unwrap();
+    let column = |name: &str| &tracks.columns[name];
+    assert!(column("track_no").unsigned);
+    assert!(!column("album_id").unsigned);
+    assert_eq!(column("title").character_set.as_deref(), Some("latin1"));
+    assert_eq!(column("title").collation.as_deref(), Some("latin1_bin"));
+    assert!(
+        column("title")
+            .default_text
+            .as_deref()
+            .is_some_and(|text| text.contains("untitled"))
+    );
+    assert!(
+        column("touched")
+            .on_update
+            .as_deref()
+            .is_some_and(|text| text.to_lowercase().starts_with("current_timestamp"))
+    );
+    assert_eq!(column("title").on_update, None);
+    assert!(
+        column("doubled")
+            .generation_expression
+            .as_deref()
+            .is_some_and(|text| text.contains("album_id"))
+    );
+    assert_eq!(column("doubled").default_text, None);
+    assert!(tracks.indexes["relmeta_fk_code"].unique);
+    assert!(!tracks.indexes["relmeta_fk_title"].unique);
+    assert!(tracks.indexes["PRIMARY"].unique);
+
+    let plays = db
+        .get_relation_info(&RelationRef::with_schema(other.as_str(), "plays"))
+        .await
+        .unwrap()
+        .unwrap();
+    let key = &plays.foreign_keys["relmeta_fk_plays"];
+    assert_eq!(key.columns, vec!["album", "track"]);
+    assert_eq!(key.referenced_columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.referenced_schema.as_deref(), Some(current.as_str()));
+
+    let referencing = db
+        .get_referencing_foreign_keys(&RelationRef::new("relmeta_fk_tracks"))
+        .await
+        .unwrap();
+    assert_eq!(referencing.len(), 1, "{referencing:?}");
+    assert_eq!(
+        referencing[0].table,
+        RelationRef::with_schema(other.as_str(), "plays")
+    );
+    assert_eq!(referencing[0].foreign_key.columns, key.columns);
+    assert_eq!(
+        referencing[0].foreign_key.on_delete.as_deref(),
+        Some("CASCADE")
+    );
+    let in_other = db
+        .list_foreign_keys(&ForeignKeyScope::Schema(Some(other.clone())))
+        .await
+        .unwrap();
+    assert_eq!(in_other.len(), 1);
+
+    db.exec_raw(&format!("DROP DATABASE `{other}`"))
+        .await
+        .unwrap();
+    db.exec_raw("DROP TABLE relmeta_fk_tracks").await.unwrap();
 }

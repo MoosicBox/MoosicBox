@@ -36,6 +36,16 @@
 //! queries is still allowed in this mode, as `ClickHouse` allows it to any
 //! user.
 //!
+//! # TLS
+//!
+//! An `https://` server's certificate is verified against the system's
+//! trusted certificates, plus the certificate authorities of a PEM file
+//! given to
+//! [`ClickHouseDatabaseBuilder::root_certificate`](crate::clickhouse::ClickHouseDatabaseBuilder::root_certificate).
+//! [`ClickHouseDatabaseBuilder::client_certificate`](crate::clickhouse::ClickHouseDatabaseBuilder::client_certificate)
+//! presents a client certificate and key, for servers that authenticate
+//! users by certificate or sit behind a proxy requiring mutual TLS.
+//!
 //! # Example
 //!
 //! ```rust,no_run
@@ -63,6 +73,7 @@ mod tsv;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -233,6 +244,16 @@ pub fn base_url(url: &str) -> Result<String, ClickHouseDatabaseError> {
     Ok(format!("{scheme}://{rest}"))
 }
 
+/// The contents of the PEM file at `path`, the `what` of a TLS setting.
+fn read_pem(path: &Path, what: &str) -> Result<Vec<u8>, ClickHouseDatabaseError> {
+    std::fs::read(path).map_err(|error| {
+        ClickHouseDatabaseError::InvalidConfig(format!(
+            "can't read the {what} {}: {error}",
+            path.display()
+        ))
+    })
+}
+
 /// Whether `name` may be sent as a setting: a plain identifier the backend
 /// doesn't set itself.
 fn valid_setting(name: &str) -> bool {
@@ -252,6 +273,8 @@ pub struct ClickHouseDatabaseBuilder {
     read_only: bool,
     connect_timeout: Option<Duration>,
     settings: BTreeMap<String, String>,
+    root_certificate: Option<PathBuf>,
+    client_certificate: Option<(PathBuf, PathBuf)>,
 }
 
 impl std::fmt::Debug for ClickHouseDatabaseBuilder {
@@ -264,6 +287,8 @@ impl std::fmt::Debug for ClickHouseDatabaseBuilder {
             .field("read_only", &self.read_only)
             .field("connect_timeout", &self.connect_timeout)
             .field("settings", &self.settings)
+            .field("root_certificate", &self.root_certificate)
+            .field("client_certificate", &self.client_certificate)
             .finish()
     }
 }
@@ -281,6 +306,8 @@ impl ClickHouseDatabaseBuilder {
             read_only: false,
             connect_timeout: None,
             settings: BTreeMap::new(),
+            root_certificate: None,
+            client_certificate: None,
         }
     }
 
@@ -321,6 +348,34 @@ impl ClickHouseDatabaseBuilder {
         self
     }
 
+    /// Trust the certificate authorities in the PEM file at `path` when
+    /// verifying an `https://` server, in addition to the system's trusted
+    /// certificates (for a server whose certificate a private CA signed).
+    /// The file is read by [`build`](Self::build).
+    #[must_use]
+    pub fn root_certificate(mut self, path: impl Into<PathBuf>) -> Self {
+        self.root_certificate = Some(path.into());
+        self
+    }
+
+    /// Present the PEM client certificate at `certificate`, with its PEM
+    /// private key (PKCS#8, PKCS#1 or SEC1) at `key`, to an `https://`
+    /// server that asks for one. Without a [`password`](Self::password), the
+    /// [`user`](Self::user) logs in with the certificate (`ClickHouse`'s
+    /// `ssl_certificates` authentication, which matches the certificate's
+    /// common name or subject alternative names); with one, the certificate
+    /// only sets up the TLS connection (a proxy requiring mutual TLS). The
+    /// files are read by [`build`](Self::build).
+    #[must_use]
+    pub fn client_certificate(
+        mut self,
+        certificate: impl Into<PathBuf>,
+        key: impl Into<PathBuf>,
+    ) -> Self {
+        self.client_certificate = Some((certificate.into(), key.into()));
+        self
+    }
+
     /// Send the setting `name=value` with every request (`max_execution_time`,
     /// `max_result_rows`, ...). Read-only mode allows settings sent this way.
     #[must_use]
@@ -334,8 +389,10 @@ impl ClickHouseDatabaseBuilder {
     /// # Errors
     ///
     /// * [`ClickHouseDatabaseError::InvalidConfig`] if the URL is not an
-    ///   `http(s)://` URL or a setting names a parameter the backend sets
-    ///   itself (`readonly`, `database`, `param_*`, ...)
+    ///   `http(s)://` URL, a setting names a parameter the backend sets
+    ///   itself (`readonly`, `database`, `param_*`, ...), certificate files
+    ///   are given for an `http://` URL, or a certificate or key file can't
+    ///   be read or holds no usable PEM certificate or key
     /// * [`ClickHouseDatabaseError::Http`] if the server can't be reached
     /// * [`ClickHouseDatabaseError::Unauthorized`] if the server refuses the
     ///   user or password
@@ -353,8 +410,48 @@ impl ClickHouseDatabaseBuilder {
         if let Some(timeout) = self.connect_timeout {
             http = http.connect_timeout(timeout);
         }
+        if (self.root_certificate.is_some() || self.client_certificate.is_some())
+            && !base.starts_with("https://")
+        {
+            return Err(ClickHouseDatabaseError::InvalidConfig(
+                "certificate files need an https:// server URL".to_string(),
+            ));
+        }
+        if let Some(path) = &self.root_certificate {
+            let pem = read_pem(path, "CA certificate")?;
+            let certificates = reqwest::Certificate::from_pem_bundle(&pem).map_err(|error| {
+                ClickHouseDatabaseError::InvalidConfig(format!(
+                    "the CA certificate {} isn't usable: {}",
+                    path.display(),
+                    error_chain(&error)
+                ))
+            })?;
+            if certificates.is_empty() {
+                return Err(ClickHouseDatabaseError::InvalidConfig(format!(
+                    "the CA certificate {} holds no PEM certificate",
+                    path.display()
+                )));
+            }
+            http = http.tls_certs_merge(certificates);
+        }
+        if let Some((certificate, key)) = &self.client_certificate {
+            let mut pem = read_pem(certificate, "client certificate")?;
+            pem.push(b'\n');
+            pem.extend(read_pem(key, "client key")?);
+            let identity = reqwest::Identity::from_pem(&pem).map_err(|error| {
+                ClickHouseDatabaseError::InvalidConfig(format!(
+                    "the client certificate {} and key {} aren't usable: {}",
+                    certificate.display(),
+                    key.display(),
+                    error_chain(&error)
+                ))
+            })?;
+            http = http.identity(identity);
+        }
+        let certificate_auth = self.client_certificate.is_some() && self.password.is_none();
         let db = ClickHouseDatabase {
             http: http.build().map_err(ClickHouseDatabaseError::Http)?,
+            certificate_auth,
             base_url: base,
             user: self.user,
             password: self.password,
@@ -385,6 +482,8 @@ impl ClickHouseDatabaseBuilder {
 /// A `ClickHouse` server, reached over HTTP.
 pub struct ClickHouseDatabase {
     http: reqwest::Client,
+    /// Log in with the client certificate instead of a password.
+    certificate_auth: bool,
     base_url: String,
     user: Option<String>,
     password: Option<String>,
@@ -400,6 +499,7 @@ impl std::fmt::Debug for ClickHouseDatabase {
             .field("base_url", &self.base_url)
             .field("user", &self.user)
             .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("certificate_auth", &self.certificate_auth)
             .field("database", &self.database)
             .field("read_only", &self.read_only)
             .field("settings", &self.settings)
@@ -501,6 +601,8 @@ impl ClickHouseDatabase {
         }
         if let Some(password) = &self.password {
             request = request.header("X-ClickHouse-Key", password);
+        } else if self.certificate_auth {
+            request = request.header("X-ClickHouse-SSL-Certificate-Auth", "on");
         }
         let response = request
             .send()
@@ -840,6 +942,16 @@ impl crate::Database for ClickHouseDatabase {
         introspection::list_routines(self).await
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        // ClickHouse has no foreign keys.
+        let _ = scope;
+        Ok(Vec::new())
+    }
+
     #[cfg(feature = "schema")]
     async fn get_view_definition(
         &self,
@@ -938,6 +1050,48 @@ mod tests {
         let debug = format!("{builder:?}");
         assert!(!debug.contains("hunter2"), "{debug}");
         assert!(debug.contains("<redacted>"), "{debug}");
+    }
+
+    #[tokio::test]
+    async fn certificate_files_need_https_and_readable_pem() {
+        let error = ClickHouseDatabase::builder("http://127.0.0.1:1")
+            .root_certificate("/nonexistent/ca.pem")
+            .build()
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("https://"), "{error}");
+
+        let error = ClickHouseDatabase::builder("https://127.0.0.1:1")
+            .root_certificate("/nonexistent/ca.pem")
+            .build()
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, ClickHouseDatabaseError::InvalidConfig(message)
+                if message.contains("can't read the CA certificate /nonexistent/ca.pem")),
+            "{error}"
+        );
+
+        let dir = std::env::temp_dir().join(format!("switchy-ch-tls-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let not_pem = dir.join("not.pem");
+        std::fs::write(&not_pem, "not a certificate").unwrap();
+        let error = ClickHouseDatabase::builder("https://127.0.0.1:1")
+            .root_certificate(&not_pem)
+            .build()
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("holds no PEM certificate"),
+            "{error}"
+        );
+        let error = ClickHouseDatabase::builder("https://127.0.0.1:1")
+            .client_certificate(&not_pem, &not_pem)
+            .build()
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("aren't usable"), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Requests against a stand-in server.

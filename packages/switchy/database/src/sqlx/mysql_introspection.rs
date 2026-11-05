@@ -122,8 +122,16 @@
 //!
 //! ## Generated/Computed Columns (`MySQL` 5.7+)
 //! Generated columns are detected from `EXTRA` (`VIRTUAL GENERATED` /
-//! `STORED GENERATED`) and reported in `generated`; the
-//! `GENERATION_EXPRESSION` itself is not parsed.
+//! `STORED GENERATED`) and reported in `generated`, with
+//! `GENERATION_EXPRESSION` as written by the server in
+//! `generation_expression` (`MySQL` backslash-escapes quotes in it).
+//!
+//! ## Other Column Details
+//! `COLUMN_DEFAULT` is reported verbatim in `default_text`, the `ON UPDATE`
+//! expression from `EXTRA` in `on_update`, `unsigned` from `COLUMN_TYPE`, and
+//! `CHARACTER_SET_NAME` / `COLLATION_NAME` in `character_set` / `collation`.
+//! `STATISTICS.NON_UNIQUE` is read whether the server reports it as a number
+//! or as text (`TiDB`).
 //!
 //! ## Enum Columns
 //! `ENUM` labels are parsed from `COLUMN_TYPE` into `enum_values` (in
@@ -165,7 +173,8 @@ fn is_mysql_system_schema(name: &str) -> bool {
 }
 
 /// Read an unsigned integer column regardless of the exact integer width/signedness
-/// reported by the server (`MySQL` and `MariaDB` differ in `information_schema` types).
+/// reported by the server (`MySQL` and `MariaDB` differ in `information_schema` types),
+/// or as text (`TiDB` reports `STATISTICS.NON_UNIQUE` as a `VARCHAR`).
 fn get_lenient_u64(row: &MySqlRow, column: &str) -> Option<u64> {
     row.try_get::<Option<u64>, _>(column)
         .ok()
@@ -188,6 +197,17 @@ fn get_lenient_u64(row: &MySqlRow, column: &str) -> Option<u64> {
                 .flatten()
                 .and_then(|value| u64::try_from(value).ok())
         })
+        .or_else(|| {
+            row.try_get::<Option<String>, _>(column)
+                .ok()
+                .flatten()
+                .and_then(|value| parse_lenient_u64(&value))
+        })
+}
+
+/// An unsigned integer written as text (`"0"`, `" 1 "`)
+fn parse_lenient_u64(value: &str) -> Option<u64> {
+    value.trim().parse().ok()
 }
 
 fn get_string(row: &MySqlRow, column: &str) -> Result<String, DatabaseError> {
@@ -393,7 +413,10 @@ async fn fetch_columns(
         CAST(COLUMN_DEFAULT AS CHAR) AS COLUMN_DEFAULT,
         CAST(COLUMN_KEY AS CHAR) AS COLUMN_KEY,
         CAST(EXTRA AS CHAR) AS EXTRA,
-        ORDINAL_POSITION
+        ORDINAL_POSITION,
+        CAST(GENERATION_EXPRESSION AS CHAR) AS GENERATION_EXPRESSION,
+        CAST(CHARACTER_SET_NAME AS CHAR) AS CHARACTER_SET_NAME,
+        CAST(COLLATION_NAME AS CHAR) AS COLLATION_NAME
     FROM information_schema.columns
     WHERE TABLE_SCHEMA = COALESCE(?, DATABASE()) AND TABLE_NAME = ?
     ORDER BY ORDINAL_POSITION";
@@ -450,6 +473,8 @@ async fn fetch_columns(
         let default_value = get_opt_string(&row, "COLUMN_DEFAULT").filter(|_| generated.is_none());
         let parsed_default = default_value.as_deref().and_then(parse_mysql_default_value);
         let enum_values = parse_mysql_enum_values(&column_type_str);
+        let generation_expression = get_opt_string(&row, "GENERATION_EXPRESSION")
+            .filter(|expression| generated.is_some() && !expression.is_empty());
 
         let is_primary_key = primary_key_columns.contains(&column_name);
 
@@ -461,9 +486,15 @@ async fn fetch_columns(
             auto_increment,
             default_value: parsed_default,
             ordinal_position,
+            unsigned: mysql_column_type_is_unsigned(&column_type_str),
             native_type: column_type_str,
             enum_values,
             generated,
+            default_text: default_value,
+            generation_expression,
+            on_update: mysql_extra_on_update(&extra),
+            character_set: get_opt_string(&row, "CHARACTER_SET_NAME"),
+            collation: get_opt_string(&row, "COLLATION_NAME"),
         });
     }
 
@@ -567,6 +598,7 @@ async fn fetch_foreign_keys(
     let fk_query = "SELECT
         CAST(kcu.CONSTRAINT_NAME AS CHAR) AS CONSTRAINT_NAME,
         CAST(kcu.COLUMN_NAME AS CHAR) AS COLUMN_NAME,
+        CAST(kcu.REFERENCED_TABLE_SCHEMA AS CHAR) AS REFERENCED_TABLE_SCHEMA,
         CAST(kcu.REFERENCED_TABLE_NAME AS CHAR) AS REFERENCED_TABLE_NAME,
         CAST(kcu.REFERENCED_COLUMN_NAME AS CHAR) AS REFERENCED_COLUMN_NAME,
         CAST(rc.UPDATE_RULE AS CHAR) AS UPDATE_RULE,
@@ -577,7 +609,8 @@ async fn fetch_foreign_keys(
         AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
     WHERE kcu.TABLE_SCHEMA = COALESCE(?, DATABASE())
       AND kcu.TABLE_NAME = ?
-      AND kcu.REFERENCED_TABLE_NAME IS NOT NULL";
+      AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+    ORDER BY kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION";
 
     let fk_rows = sqlx::query(sqlx::AssertSqlSafe(fk_query.to_string()))
         .bind(schema)
@@ -589,17 +622,19 @@ async fn fetch_foreign_keys(
     let mut foreign_keys_map = BTreeMap::new();
     for row in fk_rows {
         let constraint_name = get_string(&row, "CONSTRAINT_NAME")?;
-        foreign_keys_map.insert(
-            constraint_name.clone(),
-            ForeignKeyInfo {
-                name: constraint_name,
-                column: get_string(&row, "COLUMN_NAME")?,
-                referenced_table: get_string(&row, "REFERENCED_TABLE_NAME")?,
-                referenced_column: get_string(&row, "REFERENCED_COLUMN_NAME")?,
+        let referenced_table = get_string(&row, "REFERENCED_TABLE_NAME")?;
+        foreign_keys_map
+            .entry(constraint_name.clone())
+            .or_insert_with(|| ForeignKeyInfo {
+                referenced_schema: get_opt_string(&row, "REFERENCED_TABLE_SCHEMA"),
                 on_update: get_opt_string(&row, "UPDATE_RULE"),
                 on_delete: get_opt_string(&row, "DELETE_RULE"),
-            },
-        );
+                ..ForeignKeyInfo::new(constraint_name, referenced_table)
+            })
+            .push_pair(
+                get_string(&row, "COLUMN_NAME")?,
+                get_string(&row, "REFERENCED_COLUMN_NAME")?,
+            );
     }
 
     Ok(foreign_keys_map)
@@ -800,6 +835,36 @@ fn mysql_extra_generated_kind(extra: &str) -> Option<GeneratedKind> {
     )
 }
 
+/// The `ON UPDATE` expression in an `information_schema.columns.EXTRA`
+/// value (`on update CURRENT_TIMESTAMP`, `on update current_timestamp(3)`).
+fn mysql_extra_on_update(extra: &str) -> Option<String> {
+    let mut words = extra.split_whitespace();
+    while let Some(word) = words.next() {
+        if word.eq_ignore_ascii_case("on") {
+            let mut rest = words.clone();
+            if rest
+                .next()
+                .is_some_and(|next| next.eq_ignore_ascii_case("update"))
+            {
+                return rest.next().map(ToString::to_string);
+            }
+        }
+    }
+    None
+}
+
+/// Whether a `COLUMN_TYPE` is `unsigned` (`int(10) unsigned zerofill`).
+fn mysql_column_type_is_unsigned(column_type: &str) -> bool {
+    // The attributes follow the type's arguments, which may be quoted labels.
+    let attributes = column_type.rfind(')').map_or_else(
+        || column_type.split_once(' ').map_or("", |(_, rest)| rest),
+        |close| &column_type[close + 1..],
+    );
+    attributes
+        .split_whitespace()
+        .any(|word| word.eq_ignore_ascii_case("unsigned"))
+}
+
 /// Labels of an `enum('a','b')` `COLUMN_TYPE` (`None` for any other type).
 ///
 /// `COLUMN_TYPE` doubles embedded single quotes and backslash-escapes
@@ -960,6 +1025,32 @@ mod tests {
         assert_eq!(kind("DEFAULT_GENERATED on update CURRENT_TIMESTAMP"), None);
         assert_eq!(kind("auto_increment"), None);
         assert_eq!(kind(""), None);
+    }
+
+    #[test]
+    fn reads_on_update_and_unsigned() {
+        assert_eq!(
+            mysql_extra_on_update("DEFAULT_GENERATED on update CURRENT_TIMESTAMP"),
+            Some("CURRENT_TIMESTAMP".to_string())
+        );
+        assert_eq!(
+            mysql_extra_on_update("on update current_timestamp(3)"),
+            Some("current_timestamp(3)".to_string())
+        );
+        assert_eq!(mysql_extra_on_update("auto_increment"), None);
+        assert_eq!(mysql_extra_on_update("on"), None);
+        assert!(mysql_column_type_is_unsigned("int(10) unsigned"));
+        assert!(mysql_column_type_is_unsigned("bigint UNSIGNED zerofill"));
+        assert!(!mysql_column_type_is_unsigned("int"));
+        assert!(!mysql_column_type_is_unsigned("enum('unsigned')"));
+        assert!(!mysql_column_type_is_unsigned("enum('a', 'b unsigned c')"));
+    }
+
+    #[test]
+    fn reads_integers_written_as_text() {
+        assert_eq!(parse_lenient_u64("0"), Some(0));
+        assert_eq!(parse_lenient_u64(" 1 "), Some(1));
+        assert_eq!(parse_lenient_u64("yes"), None);
     }
 
     #[test]

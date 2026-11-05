@@ -29,8 +29,10 @@
 //!
 //! Oracle 23ai's native `JSON` columns can't be read by the driver: a
 //! query returning one fails with [`OracleDatabaseError::Unsupported`]
-//! (select `JSON_SERIALIZE(column RETURNING CLOB)` instead). JSON kept in
-//! `CLOB`/`VARCHAR2` columns reads as text.
+//! (select `JSON_SERIALIZE(column RETURNING CLOB)` instead). The `oracle`
+//! crate (0.6.3, its latest release) has no fetch for Oracle's JSON type and
+//! no way to fetch a column as another type, so the backend can't read them
+//! as text itself. JSON kept in `CLOB`/`VARCHAR2` columns reads as text.
 //!
 //! Sessions convert text to dates, timestamps and numbers (and back) with
 //! ISO formats (`NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'`, timestamps with
@@ -973,6 +975,63 @@ macro_rules! impl_database {
                 schema: Option<&str>,
             ) -> Result<Vec<$crate::schema::RoutineInfo>, $crate::DatabaseError> {
                 $crate::oracle::introspection::list_routines(self, schema).await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_triggers(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::TriggerInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::triggers_sql::oracle(schema),
+                    $crate::schema::triggers_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_sequences(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::SequenceInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::sequences_sql::oracle(schema),
+                    $crate::schema::sequences_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_user_types(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::UserTypeInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::user_types_sql::oracle(schema),
+                    $crate::schema::user_types_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_roles(&self) -> Result<Vec<$crate::schema::RoleInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::roles_sql::oracle(),
+                    $crate::schema::roles_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_foreign_keys(
+                &self,
+                scope: &$crate::schema::ForeignKeyScope,
+            ) -> Result<Vec<$crate::schema::TableForeignKey>, $crate::DatabaseError> {
+                $crate::oracle::introspection::list_foreign_keys(self, scope).await
             }
 
             #[cfg(feature = "schema")]

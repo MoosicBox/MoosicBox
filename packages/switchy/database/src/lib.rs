@@ -2317,8 +2317,9 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ///
     /// # Limitations
     ///
-    /// - **Computed/Generated Columns**: Reported via [`schema::ColumnInfo::generated`];
-    ///   the generation expression itself is not exposed
+    /// - **Computed/Generated Columns**: Reported via [`schema::ColumnInfo::generated`],
+    ///   with the expression in [`schema::ColumnInfo::generation_expression`]
+    ///   where the backend's catalog reports it
     /// - **Complex Default Values**: Function calls and expressions may not parse correctly
     /// - **Custom Types**: Types without a matching variant map to [`schema::DataType::Custom`];
     ///   [`schema::ColumnInfo::native_type`] always has the exact native type name
@@ -2352,6 +2353,10 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// - **`native_type`**: Exact native type name
     /// - **`enum_values`**: Allowed labels for enum-typed columns (`PostgreSQL`, `MySQL`, `DuckDB`)
     /// - **`generated`**: Whether (and how) the column is a generated/computed column
+    /// - **`default_text`**: The default as the server's catalog reports it
+    /// - **`generation_expression`**, **`on_update`**, **`unsigned`**,
+    ///   **`character_set`**, **`collation`**: Further column details where the
+    ///   backend reports them (see [`schema::ColumnInfo`])
     ///
     /// # Backend-Specific Parsing
     ///
@@ -2500,6 +2505,227 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     ) -> Result<Vec<schema::RoutineInfo>, DatabaseError> {
         let _ = schema;
         Err(DatabaseError::UnsupportedOperation("list_routines".into()))
+    }
+
+    /// List the triggers on tables and views in `schema`, or in the default
+    /// schema with `None` (see [`schema::objects`] for what that is on each
+    /// backend). Internal triggers (`PostgreSQL`'s constraint triggers) are
+    /// left out.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_trigger`, with each trigger's definition
+    /// * **`MySQL`/`MariaDB`**: `information_schema.TRIGGERS`
+    /// * **`SQLite`**: `sqlite_master` of the attached database, with each
+    ///   trigger's definition (timing and events are read from it)
+    /// * **SQL Server**: DML triggers (`sys.triggers`), with definitions
+    /// * **Oracle**: `ALL_TRIGGERS`, including schema and database triggers
+    ///   (without a table)
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend has no
+    ///   triggers it can list (`DuckDB`, `ClickHouse`, Turso)
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<schema::TriggerInfo>, DatabaseError> {
+        let _ = schema;
+        Err(DatabaseError::UnsupportedOperation("list_triggers".into()))
+    }
+
+    /// List the sequences in `schema`, or in the default schema with `None`.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_sequence`, with each sequence's type
+    /// * **`MySQL`/`MariaDB`**: `MariaDB`'s (and `TiDB`'s) sequences, listed in
+    ///   `information_schema.TABLES`; `MySQL` has none, so the list is empty
+    /// * **`DuckDB`**: `duckdb_sequences()` of the current database
+    /// * **SQL Server**: `sys.sequences`, with each sequence's type
+    /// * **Oracle**: `ALL_SEQUENCES`
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend has no
+    ///   sequences (`SQLite`, `ClickHouse`)
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<schema::SequenceInfo>, DatabaseError> {
+        let _ = schema;
+        Err(DatabaseError::UnsupportedOperation("list_sequences".into()))
+    }
+
+    /// List the user-defined types in `schema`, or in the default schema
+    /// with `None`.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: enums, domains, ranges, standalone composite
+    ///   types, and base types (extension types); not array types,
+    ///   multiranges, or the row types of tables
+    /// * **`DuckDB`**: `duckdb_types()` without built-in types
+    /// * **SQL Server**: alias, table, and CLR types
+    /// * **Oracle**: `ALL_TYPES` (object and collection types)
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend has no
+    ///   user-defined types (`MySQL`, whose enums are column types, `SQLite`,
+    ///   `ClickHouse`)
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<schema::UserTypeInfo>, DatabaseError> {
+        let _ = schema;
+        Err(DatabaseError::UnsupportedOperation(
+            "list_user_types".into(),
+        ))
+    }
+
+    /// List the roles and users the connection can see (server-wide, or
+    /// the current database's on SQL Server).
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_roles`, with superuser and login flags; the
+    ///   `pg_*` roles are built in
+    /// * **`MySQL`/`MariaDB`**: the grantees in
+    ///   `information_schema.USER_PRIVILEGES` (`'user'@'host'`); those with
+    ///   `SUPER` are superusers
+    /// * **SQL Server**: the database's principals (users and roles)
+    /// * **Oracle**: the roles granted to the user, and `ALL_USERS`
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend has no roles
+    ///   (`SQLite`, `DuckDB`)
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_roles(&self) -> Result<Vec<schema::RoleInfo>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation("list_roles".into()))
+    }
+
+    /// List foreign keys with every column of composite keys and the schema
+    /// of both sides: the keys of one table and the keys that reference it
+    /// ([`ForeignKeyScope::Relation`](schema::ForeignKeyScope::Relation)),
+    /// or the keys from or to any table of a schema
+    /// ([`ForeignKeyScope::Schema`](schema::ForeignKeyScope::Schema)).
+    ///
+    /// Keys are sorted by referencing schema, table and key name; a key from
+    /// a table to itself is listed once. Referential actions are reported as
+    /// their SQL keywords (`NO ACTION`, `CASCADE`, `SET NULL`, ...) where
+    /// the backend reports them.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL`**: `pg_constraint`, across schemas
+    /// * **`MySQL`**: `information_schema.KEY_COLUMN_USAGE`, across databases
+    /// * **`SQLite`/libSQL**: `pragma_foreign_key_list`; keys never
+    ///   leave their attached database, are named as
+    ///   [`ForeignKeyInfo::name`](schema::ForeignKeyInfo::name) describes,
+    ///   and keys referencing a primary key implicitly report its columns
+    /// * **`DuckDB`**: `duckdb_constraints()`; keys reference tables of their
+    ///   own schema, and referential actions aren't reported
+    /// * **SQL Server**: `sys.foreign_keys`, across schemas
+    /// * **Oracle**: `ALL_CONSTRAINTS`, across schemas (no `ON UPDATE` actions)
+    /// * **`ClickHouse`**: no foreign keys; always empty
+    /// * **Turso**: the default implementation below, with keys parsed from
+    ///   table-level `FOREIGN KEY` clauses of the `CREATE TABLE` text
+    ///   (column-level `REFERENCES` clauses aren't reported)
+    ///
+    /// The default implementation (used by Turso) reads the keys of every
+    /// table of the scope's schema through
+    /// [`list_relations`](Self::list_relations) and
+    /// [`get_relation_info`](Self::get_relation_info), so it finds only the
+    /// referencing keys of tables in the relation's own schema.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot list the scope's relations
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &schema::ForeignKeyScope,
+    ) -> Result<Vec<schema::TableForeignKey>, DatabaseError> {
+        let (schema, wanted) = match scope {
+            schema::ForeignKeyScope::Relation(relation) => {
+                (relation.schema.as_deref(), Some(relation))
+            }
+            schema::ForeignKeyScope::Schema(schema) => (schema.as_deref(), None),
+        };
+        let mut keys = Vec::new();
+        for relation in self.list_relations(schema).await? {
+            if relation.kind.is_view() {
+                continue;
+            }
+            let Some(info) = self.get_relation_info(&relation.relation_ref()).await? else {
+                continue;
+            };
+            let table = schema::RelationRef {
+                schema: info.schema.clone().or(relation.schema),
+                name: info.name,
+            };
+            for foreign_key in info.foreign_keys.into_values() {
+                let key = schema::TableForeignKey {
+                    table: table.clone(),
+                    foreign_key,
+                };
+                let in_scope = wanted.is_none_or(|wanted| {
+                    schema::foreign_keys_sql::same_relation(&key.table, wanted)
+                        || schema::foreign_keys_sql::same_relation(&key.referenced(), wanted)
+                });
+                if in_scope {
+                    keys.push(key);
+                }
+            }
+        }
+        keys.sort_by(|a, b| (&a.table, &a.foreign_key.name).cmp(&(&b.table, &b.foreign_key.name)));
+        Ok(keys)
+    }
+
+    /// List the foreign keys of other tables (and of `relation` itself, for
+    /// self-references) that reference `relation`, in any schema; a
+    /// relation without a schema is in the connection's default schema.
+    ///
+    /// The default implementation keeps the referencing keys of
+    /// [`list_foreign_keys`](Self::list_foreign_keys) for the relation.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * `DatabaseError::UnsupportedOperation` if the backend cannot list foreign keys
+    ///
+    /// Available with the `schema` and `raw-sql` features.
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn get_referencing_foreign_keys(
+        &self,
+        relation: &schema::RelationRef,
+    ) -> Result<Vec<schema::TableForeignKey>, DatabaseError> {
+        Ok(self
+            .list_foreign_keys(&schema::ForeignKeyScope::Relation(relation.clone()))
+            .await?
+            .into_iter()
+            .filter(|key| schema::foreign_keys_sql::same_relation(&key.referenced(), relation))
+            .collect())
     }
 
     /// Get columns, indexes and foreign keys of a table or view in any schema

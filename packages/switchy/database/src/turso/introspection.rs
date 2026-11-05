@@ -307,6 +307,12 @@ pub(super) async fn columns(
             native_type,
             enum_values: None,
             generated,
+            default_text: text(row, "dflt_value").filter(|_| generated.is_none()),
+            generation_expression: None,
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
         });
     }
 
@@ -331,6 +337,12 @@ pub(super) async fn columns(
                     native_type,
                     enum_values: None,
                     generated: None,
+                    default_text: None,
+                    generation_expression: None,
+                    on_update: None,
+                    unsigned: false,
+                    character_set: None,
+                    collation: None,
                 });
             }
         }
@@ -398,9 +410,10 @@ pub(super) async fn indexes(
 
 /// Parse foreign key constraints from a `CREATE TABLE` statement.
 ///
-/// See the known limitations documented on the `FK_PATTERN` parser: composite
-/// keys are captured as a single comma-separated column string, and `MATCH` /
-/// `DEFERRABLE` clauses are ignored.
+/// Every column pair of a composite key is reported, in declaration order,
+/// and the key is named after its first pair. See the known limitations
+/// documented on the `FK_PATTERN` parser: column-level `REFERENCES` clauses
+/// aren't parsed, and `MATCH` / `DEFERRABLE` clauses are ignored.
 #[cfg(feature = "schema")]
 #[must_use]
 pub(super) fn foreign_keys(
@@ -424,26 +437,61 @@ pub(super) fn foreign_keys(
     };
 
     for cap in super::FK_PATTERN.captures_iter(sql) {
-        let column = super::strip_identifier_quotes(&cap[1]);
+        let columns = identifier_list(&cap[1]);
         let referenced_table = super::strip_identifier_quotes(&cap[2]);
-        let referenced_column = super::strip_identifier_quotes(&cap[3]);
+        let referenced_columns = identifier_list(&cap[3]);
         let fk_actions = &cap[4];
+        let (Some(column), Some(referenced_column)) = (columns.first(), referenced_columns.first())
+        else {
+            continue;
+        };
         let fk_name = format!("{table}_{column}_{referenced_table}_{referenced_column}");
 
-        foreign_keys.insert(
-            fk_name.clone(),
-            ForeignKeyInfo {
-                name: fk_name,
-                column,
-                referenced_table,
-                referenced_column,
-                on_update: action(&super::ON_UPDATE_PATTERN, fk_actions),
-                on_delete: action(&super::ON_DELETE_PATTERN, fk_actions),
-            },
-        );
+        let mut foreign_key = ForeignKeyInfo {
+            on_update: action(&super::ON_UPDATE_PATTERN, fk_actions),
+            on_delete: action(&super::ON_DELETE_PATTERN, fk_actions),
+            ..ForeignKeyInfo::new(fk_name.clone(), referenced_table)
+        };
+        for (column, referenced_column) in columns.into_iter().zip(referenced_columns) {
+            foreign_key.push_pair(column, referenced_column);
+        }
+        foreign_keys.insert(fk_name, foreign_key);
     }
 
     foreign_keys
+}
+
+/// Split a parenthesized identifier list (`a, "b c", [d]`) into unquoted
+/// names. Commas inside quoted identifiers don't split.
+#[cfg(feature = "schema")]
+fn identifier_list(list: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    for c in list.chars() {
+        match quote {
+            Some(open) => {
+                let close = if open == '[' { ']' } else { open };
+                if c == close {
+                    quote = None;
+                }
+                current.push(c);
+            }
+            None if c == ',' => {
+                names.push(super::strip_identifier_quotes(&current));
+                current.clear();
+            }
+            None => {
+                if matches!(c, '"' | '`' | '[' | '\'') {
+                    quote = Some(c);
+                }
+                current.push(c);
+            }
+        }
+    }
+    names.push(super::strip_identifier_quotes(&current));
+    names.retain(|name| !name.is_empty());
+    names
 }
 
 /// Get full relation metadata.

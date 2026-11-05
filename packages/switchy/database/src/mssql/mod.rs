@@ -973,6 +973,63 @@ macro_rules! impl_database {
                 $crate::mssql::introspection::list_routines(self, schema).await
             }
 
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_triggers(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::TriggerInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::triggers_sql::mssql(schema),
+                    $crate::schema::triggers_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_sequences(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::SequenceInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::sequences_sql::mssql(schema),
+                    $crate::schema::sequences_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_user_types(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::UserTypeInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::user_types_sql::mssql(schema),
+                    $crate::schema::user_types_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_roles(&self) -> Result<Vec<$crate::schema::RoleInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::roles_sql::mssql(),
+                    $crate::schema::roles_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_foreign_keys(
+                &self,
+                scope: &$crate::schema::ForeignKeyScope,
+            ) -> Result<Vec<$crate::schema::TableForeignKey>, $crate::DatabaseError> {
+                $crate::mssql::introspection::list_foreign_keys(self, scope).await
+            }
+
             #[cfg(feature = "schema")]
             async fn get_view_definition(
                 &self,

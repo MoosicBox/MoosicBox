@@ -177,6 +177,12 @@ pub(super) async fn columns(
             ordinal_position: ordinal + 1,
             enum_values: None,
             generated,
+            default_text: text(row, "dflt_value").filter(|_| generated.is_none()),
+            generation_expression: None,
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
         });
     }
     Ok(columns)
@@ -217,6 +223,7 @@ async fn build_table_info(
         .collect();
     let mut indexes = BTreeMap::new();
     let mut foreign_keys = BTreeMap::new();
+    let mut names: BTreeMap<i64, String> = BTreeMap::new();
     if !kind.is_view() {
         for row in rows(
             executor,
@@ -271,18 +278,22 @@ async fn build_table_info(
                 }
             };
             let action = |column: &str| text(&row, column).filter(|action| action != "NO ACTION");
-            let fk_name = format!("{name}_{column}_{referenced_table}_{referenced_column}");
-            foreign_keys.insert(
-                fk_name.clone(),
-                ForeignKeyInfo {
-                    name: fk_name,
-                    column,
-                    referenced_table,
-                    referenced_column,
+            // Keys are unnamed: each is named after its first column pair.
+            let fk_name = names
+                .entry(int(&row, "id").unwrap_or(0))
+                .or_insert_with(|| {
+                    format!("{name}_{column}_{referenced_table}_{referenced_column}")
+                })
+                .clone();
+            foreign_keys
+                .entry(fk_name.clone())
+                .or_insert_with(|| ForeignKeyInfo {
+                    referenced_schema: Some(schema.unwrap_or(SQLITE_DEFAULT_SCHEMA).to_string()),
                     on_update: action("on_update"),
                     on_delete: action("on_delete"),
-                },
-            );
+                    ..ForeignKeyInfo::new(fk_name, referenced_table)
+                })
+                .push_pair(column, referenced_column);
         }
     }
     Ok(TableInfo {

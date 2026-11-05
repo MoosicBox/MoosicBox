@@ -272,6 +272,15 @@ fn column_info(row: &[DatabaseValue]) -> Option<ColumnInfo> {
         default_value,
         ordinal_position: u32::try_from(number(row.get(4)).unwrap_or(0)).unwrap_or(u32::MAX),
         enum_values: enum_values(&native_type),
+        default_text: text(row.get(3))
+            .filter(|expression| default_kind == "DEFAULT" && !expression.is_empty()),
+        generation_expression: text(row.get(3)).filter(|expression| {
+            matches!(default_kind.as_str(), "MATERIALIZED" | "ALIAS") && !expression.is_empty()
+        }),
+        on_update: None,
+        unsigned: false,
+        character_set: None,
+        collation: None,
         generated: match default_kind.as_str() {
             "MATERIALIZED" => Some(GeneratedKind::Stored),
             "ALIAS" => Some(GeneratedKind::Virtual),

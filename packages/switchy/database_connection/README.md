@@ -187,8 +187,9 @@ database; parsing `sslmode`/`ssl-mode` and other query parameters; a libSQL
 `authToken` parameter becomes the bearer token, and `tls=0` turns a `libsql://`
 URL into `http://`), and `clickhouse://`/`clickhouse+http://`/`clickhouse+https://`
 URLs for ClickHouse's HTTP interface (`secure=true` selects HTTPS on
-`clickhouse://`; other query parameters are sent as ClickHouse settings, except
-`readonly`, which is refused), and `sqlserver://`/`mssql://` URLs for SQL Server
+`clickhouse://`; `sslrootcert`, `sslcert` and `sslkey` name a CA file and a
+client certificate and key, which need HTTPS; other query parameters are sent as
+ClickHouse settings, except `readonly`, which is refused), and `sqlserver://`/`mssql://` URLs for SQL Server
 (`host%5CINSTANCE` or `instance=` for a named instance; `encrypt=strict|true|prefer|false|danger_plaintext`,
 `trustServerCertificate`, `certificate` (a CA file; `trustServerCertificate=true` with one is
 refused, and so are client certificates), `hostNameInCertificate`, `database`, and
@@ -232,6 +233,10 @@ TLS certificate files are parsed into `TlsFiles` (also available as
 | `sslrootcert`        | `ssl-ca` (`ssl_ca`, `sslca`)       | `ssl_root_cert`   | `ssl_ca`          |
 | `sslcert`            | `ssl-cert` (`ssl_cert`, `sslcert`) | `ssl_client_cert` | `ssl_client_cert` |
 | `sslkey`             | `ssl-key` (`ssl_key`, `sslkey`)    | `ssl_client_key`  | `ssl_client_key`  |
+
+ClickHouse takes PostgreSQL's parameter names: the root certificate is trusted in
+addition to the system's certificates, and the client certificate and key (both or
+neither) are presented to the server.
 
 With `postgres-raw`, the root certificate is added to the TLS connector's trust store
 and the client certificate and key become its identity (`postgres-native-tls` needs a

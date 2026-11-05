@@ -381,6 +381,17 @@ async fn relation_columns(
             default_value: text(row, 10)
                 .filter(|_| generated.is_none() && !identity)
                 .and_then(|definition| parse_default(&definition)),
+            default_text: text(row, 10)
+                .filter(|_| generated.is_none() && !identity)
+                .map(|definition| definition.trim().to_string())
+                .filter(|definition| !definition.is_empty()),
+            generation_expression: text(row, 10)
+                .filter(|_| generated.is_some())
+                .map(|definition| definition.trim().to_string()),
+            on_update: None,
+            unsigned: false,
+            character_set: None,
+            collation: None,
             ordinal_position: int(row, 11)
                 .and_then(|position| u32::try_from(position).ok())
                 .unwrap_or(0),
@@ -462,7 +473,8 @@ pub(super) async fn relation_info(
     let mut foreign_keys = BTreeMap::new();
     for row in rows(
         executor,
-        "SELECT c.constraint_name, cc.column_name, r.table_name, rc.column_name, c.delete_rule \
+        "SELECT c.constraint_name, cc.column_name, r.table_name, rc.column_name, c.delete_rule, \
+         r.owner \
          FROM all_constraints c \
          JOIN all_cons_columns cc ON cc.owner = c.owner AND cc.constraint_name = c.constraint_name \
          JOIN all_constraints r ON r.owner = c.r_owner AND r.constraint_name = c.r_constraint_name \
@@ -477,18 +489,19 @@ pub(super) async fn relation_info(
         let Some(name) = text(&row, 0) else {
             continue;
         };
-        // Multi-column keys report their first column pair.
         foreign_keys
             .entry(name.clone())
             .or_insert_with(|| ForeignKeyInfo {
-                name,
-                column: text(&row, 1).unwrap_or_default(),
-                referenced_table: text(&row, 2).unwrap_or_default(),
-                referenced_column: text(&row, 3).unwrap_or_default(),
+                referenced_schema: text(&row, 5),
                 // Oracle has no ON UPDATE actions.
                 on_update: Some("NO ACTION".to_string()),
                 on_delete: text(&row, 4),
-            });
+                ..ForeignKeyInfo::new(name, text(&row, 2).unwrap_or_default())
+            })
+            .push_pair(
+                text(&row, 1).unwrap_or_default(),
+                text(&row, 3).unwrap_or_default(),
+            );
     }
 
     Ok(Some(TableInfo {
@@ -556,6 +569,20 @@ pub(super) async fn list_routines(
     )
     .await?;
     Ok(crate::schema::routines_from_rows(&found))
+}
+
+/// Foreign keys from or to a table, or from or to any table of a schema
+/// (see [`crate::schema::foreign_keys_sql::oracle`]).
+#[cfg(feature = "raw-sql")]
+pub(super) async fn list_foreign_keys(
+    executor: &dyn Executor,
+    scope: &crate::schema::ForeignKeyScope,
+) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+    let (sql, params) = crate::schema::foreign_keys_sql::oracle(scope);
+    let found = rows(executor, &sql, &params).await?;
+    Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+        &found,
+    ))
 }
 
 #[cfg(test)]

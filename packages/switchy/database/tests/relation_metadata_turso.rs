@@ -336,3 +336,63 @@ async fn regular_columns_are_not_generated_or_enums() {
     assert_eq!(view.columns.len(), 2);
     assert!(view.columns.values().all(|c| c.generated.is_none()));
 }
+
+#[test_log::test(switchy_async::test(no_simulator))]
+async fn lists_foreign_keys_in_both_directions() {
+    use switchy_database::schema::ForeignKeyScope;
+    let db = setup().await;
+    let keys = db
+        .list_foreign_keys(&ForeignKeyScope::Relation(RelationRef::new("parents")))
+        .await
+        .unwrap();
+    assert_eq!(keys.len(), 1, "{keys:?}");
+    assert_eq!(keys[0].table.name, "children");
+    assert_eq!(keys[0].foreign_key.columns, vec!["parent_id"]);
+    assert_eq!(keys[0].foreign_key.referenced_columns, vec!["id"]);
+    assert_eq!(keys[0].foreign_key.on_delete.as_deref(), Some("CASCADE"));
+    let referencing = db
+        .get_referencing_foreign_keys(&RelationRef::new("parents"))
+        .await
+        .unwrap();
+    assert_eq!(referencing, keys);
+}
+
+#[test_log::test(switchy_async::test(no_simulator))]
+async fn composite_foreign_keys_report_every_column() {
+    use switchy_database::schema::ForeignKeyScope;
+    let db = TursoDatabase::new(":memory:").await.unwrap();
+    db.exec_raw(
+        "CREATE TABLE regions (country TEXT, \"region code\" TEXT, \
+         PRIMARY KEY (country, \"region code\"))",
+    )
+    .await
+    .unwrap();
+    db.exec_raw(
+        "CREATE TABLE offices (id INTEGER PRIMARY KEY, country TEXT, region TEXT, \
+         FOREIGN KEY (country, region) REFERENCES regions (country, \"region code\") \
+         ON DELETE CASCADE)",
+    )
+    .await
+    .unwrap();
+
+    let info = db
+        .get_relation_info(&RelationRef::new("offices"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(info.foreign_keys.len(), 1, "{:?}", info.foreign_keys);
+    let (name, key) = info.foreign_keys.iter().next().unwrap();
+    assert_eq!(name, "offices_country_regions_country");
+    assert_eq!(key.columns, vec!["country", "region"]);
+    assert_eq!(key.referenced_columns, vec!["country", "region code"]);
+    assert_eq!(key.column, "country");
+    assert_eq!(key.referenced_column, "country");
+    assert_eq!(key.on_delete.as_deref(), Some("CASCADE"));
+
+    let referencing = db
+        .list_foreign_keys(&ForeignKeyScope::Relation(RelationRef::new("regions")))
+        .await
+        .unwrap();
+    assert_eq!(referencing.len(), 1, "{referencing:?}");
+    assert_eq!(referencing[0].foreign_key, *key);
+}

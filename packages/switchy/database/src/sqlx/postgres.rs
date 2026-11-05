@@ -953,6 +953,67 @@ impl Database for PostgresSqlxDatabase {
         Ok(crate::schema::routines_from_rows(&result.rows))
     }
 
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::postgres(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::SequenceInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::sequences_sql::postgres(schema),
+            crate::schema::sequences_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::UserTypeInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::user_types_sql::postgres(schema),
+            crate::schema::user_types_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_roles(&self) -> Result<Vec<crate::schema::RoleInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::roles_sql::postgres(),
+            crate::schema::roles_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::postgres(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
+    }
+
     #[cfg(feature = "schema")]
     async fn get_relation_info(
         &self,
@@ -1466,6 +1527,67 @@ impl Database for PostgresSqlxTransaction {
             .query_raw_result(&crate::schema::routines_sql::postgres(schema), &[])
             .await?;
         Ok(crate::schema::routines_from_rows(&result.rows))
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_triggers(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::TriggerInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::triggers_sql::postgres(schema),
+            crate::schema::triggers_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_sequences(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::SequenceInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::sequences_sql::postgres(schema),
+            crate::schema::sequences_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_user_types(
+        &self,
+        schema: Option<&str>,
+    ) -> Result<Vec<crate::schema::UserTypeInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::user_types_sql::postgres(schema),
+            crate::schema::user_types_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_roles(&self) -> Result<Vec<crate::schema::RoleInfo>, DatabaseError> {
+        crate::schema::objects::list(
+            self,
+            &crate::schema::roles_sql::postgres(),
+            crate::schema::roles_from_rows,
+        )
+        .await
+    }
+
+    #[cfg(all(feature = "schema", feature = "raw-sql"))]
+    async fn list_foreign_keys(
+        &self,
+        scope: &crate::schema::ForeignKeyScope,
+    ) -> Result<Vec<crate::schema::TableForeignKey>, DatabaseError> {
+        let (sql, params) = crate::schema::foreign_keys_sql::postgres(scope);
+        let result = self.query_raw_result(&sql, &params).await?;
+        Ok(crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+            &result.rows,
+        ))
     }
 
     #[cfg(feature = "schema")]

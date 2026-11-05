@@ -869,6 +869,31 @@ macro_rules! impl_database {
                 Ok($crate::schema::routines_from_rows(&result.rows))
             }
 
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_triggers(
+                &self,
+                schema: Option<&str>,
+            ) -> Result<Vec<$crate::schema::TriggerInfo>, $crate::DatabaseError> {
+                $crate::schema::objects::list(
+                    self,
+                    &$crate::schema::triggers_sql::sqlite(schema),
+                    $crate::schema::triggers_from_rows,
+                )
+                .await
+            }
+
+            #[cfg(all(feature = "schema", feature = "raw-sql"))]
+            async fn list_foreign_keys(
+                &self,
+                scope: &$crate::schema::ForeignKeyScope,
+            ) -> Result<Vec<$crate::schema::TableForeignKey>, $crate::DatabaseError> {
+                let (sql, params) = $crate::schema::foreign_keys_sql::sqlite(scope);
+                let result = $crate::libsql::Executor::run(self, &sql, &params, true).await?;
+                Ok($crate::schema::foreign_keys_sql::foreign_keys_from_rows(
+                    &result.rows,
+                ))
+            }
+
             #[cfg(feature = "schema")]
             async fn get_view_definition(
                 &self,

@@ -48,7 +48,9 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   * `PostgreSQL`: startup option `default_transaction_read_only=on` on every
 ///     pooled connection (a session can still explicitly `SET` it back; use a
 ///     read-only role for a hard guarantee)
-///   * `MySQL`: `SET SESSION TRANSACTION READ ONLY` on every pooled connection
+///   * `MySQL`: `SET SESSION TRANSACTION READ ONLY` on every pooled connection,
+///     checked to have taken effect (`@@transaction_read_only`); a server
+///     that refuses or ignores it fails the connect at once with its error
 ///   * `SQLite`: `SQLITE_OPEN_READ_ONLY` (rusqlite) / `read_only(true)` (sqlx);
 ///     the file must exist. Not supported for in-memory databases or Turso.
 ///   * `DuckDB`: `AccessMode::ReadOnly`; not supported for in-memory databases
@@ -106,6 +108,9 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   itself requires the `tls` feature
 /// * SQL Server: the root certificate is trusted in addition to the system's
 ///   certificates (client certificates are refused when parsing the URL)
+/// * `ClickHouse`: the root certificate is trusted in addition to the
+///   system's certificates, and the client certificate and key (both or
+///   neither) are presented to the server; they need HTTPS
 ///
 /// Whether the root certificate is used for verification depends on the
 /// [`SslMode`]: modes that skip verification (`Require` and below) also skip it.
@@ -218,9 +223,7 @@ pub async fn init_with_options(
         ConnectionTarget::Libsql {
             url, auth_token, ..
         } => libsql_target(url, auth_token.as_deref(), options).await,
-        ConnectionTarget::ClickHouse { creds, tls, params } => {
-            clickhouse_target(creds, *tls, params, options).await
-        }
+        ConnectionTarget::ClickHouse { .. } => clickhouse_target(target, options).await,
         ConnectionTarget::Mssql { .. } => mssql_target(target, options).await,
         ConnectionTarget::Oracle { .. } => oracle_target(target, options).await,
     }
@@ -388,18 +391,16 @@ async fn mssql(
 /// compiled in.
 #[allow(clippy::unused_async)]
 async fn clickhouse_target(
-    creds: &crate::Credentials,
-    tls: bool,
-    params: &std::collections::BTreeMap<String, String>,
+    target: &ConnectionTarget,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "clickhouse")]
     {
-        clickhouse(creds, tls, params, options).await
+        clickhouse(target, options).await
     }
     #[cfg(not(feature = "clickhouse"))]
     {
-        let _ = (creds, tls, params, options);
+        let _ = (target, options);
         Err(InitDbError::DriverNotEnabled {
             driver: "clickhouse",
             features: "clickhouse",
@@ -787,26 +788,25 @@ async fn mysql_sqlx(
     let read_only = options.is_read_only();
     let statement_timeout = options.statement_timeout;
 
+    // A pool retries a failing setup until its acquire timeout and then
+    // reports only "pool timed out", so a read-only session the server
+    // refuses is set up once on a connection of its own first: its error
+    // is reported as it is, at once.
+    if read_only {
+        use sqlx::Connection as _;
+
+        let mut probe = sqlx::mysql::MySqlConnection::connect_with(&connect_options)
+            .await
+            .map_err(crate::InitMySqlSqlxError::from)?;
+        let prepared = mysql_prepare_session(&mut probe, read_only, statement_timeout).await;
+        let _ = probe.close().await;
+        prepared.map_err(crate::InitMySqlSqlxError::from)?;
+    }
+
     let mut pool_options = MySqlPoolOptions::new().max_connections(pool_size_u32(options));
     if read_only || statement_timeout.is_some() {
         pool_options = pool_options.after_connect(move |conn, _meta| {
-            Box::pin(async move {
-                use sqlx::Executor as _;
-
-                if read_only {
-                    conn.execute("SET SESSION TRANSACTION READ ONLY").await?;
-                }
-                if let Some(timeout) = statement_timeout {
-                    let mysql = format!("SET SESSION max_execution_time = {}", timeout.as_millis());
-                    if conn.execute(sqlx::AssertSqlSafe(mysql)).await.is_err() {
-                        // MariaDB has no max_execution_time; it uses seconds.
-                        let mariadb =
-                            format!("SET SESSION max_statement_time = {}", timeout.as_secs_f64());
-                        conn.execute(sqlx::AssertSqlSafe(mariadb)).await?;
-                    }
-                }
-                Ok(())
-            })
+            Box::pin(mysql_prepare_session(conn, read_only, statement_timeout))
         });
     }
 
@@ -818,6 +818,51 @@ async fn mysql_sqlx(
     Ok(Box::new(MySqlSqlxDatabase::new(Arc::new(
         switchy_async::sync::Mutex::new(pool),
     ))))
+}
+
+/// Set up a new `MySQL`/`MariaDB` session: read-only (verified, since a
+/// server can accept `SET SESSION TRANSACTION READ ONLY` without honouring
+/// it) and the statement timeout.
+#[cfg(feature = "mysql-sqlx")]
+async fn mysql_prepare_session(
+    conn: &mut sqlx::mysql::MySqlConnection,
+    read_only: bool,
+    statement_timeout: Option<std::time::Duration>,
+) -> Result<(), sqlx::Error> {
+    use sqlx::Executor as _;
+
+    if read_only {
+        conn.execute("SET SESSION TRANSACTION READ ONLY").await?;
+        // `transaction_read_only` (MySQL 5.7.20+, MariaDB 11.1+), else the
+        // older name `tx_read_only`.
+        let flag = match sqlx::query_scalar::<_, i64>("SELECT @@SESSION.transaction_read_only")
+            .fetch_one(&mut *conn)
+            .await
+        {
+            Ok(flag) => flag,
+            Err(_) => {
+                sqlx::query_scalar::<_, i64>("SELECT @@SESSION.tx_read_only")
+                    .fetch_one(&mut *conn)
+                    .await?
+            }
+        };
+        if flag != 1 {
+            return Err(sqlx::Error::Protocol(
+                "the server accepted SET SESSION TRANSACTION READ ONLY but the session is not \
+                 read-only"
+                    .to_string(),
+            ));
+        }
+    }
+    if let Some(timeout) = statement_timeout {
+        let mysql = format!("SET SESSION max_execution_time = {}", timeout.as_millis());
+        if conn.execute(sqlx::AssertSqlSafe(mysql)).await.is_err() {
+            // MariaDB has no max_execution_time; it uses seconds.
+            let mariadb = format!("SET SESSION max_statement_time = {}", timeout.as_secs_f64());
+            conn.execute(sqlx::AssertSqlSafe(mariadb)).await?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(feature = "mysql-sqlx")]
@@ -979,12 +1024,21 @@ async fn libsql(
 
 #[cfg(feature = "clickhouse")]
 async fn clickhouse(
-    creds: &crate::Credentials,
-    tls: bool,
-    params: &std::collections::BTreeMap<String, String>,
+    target: &ConnectionTarget,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     use switchy_database::clickhouse::ClickHouseDatabase;
+
+    let ConnectionTarget::ClickHouse {
+        creds,
+        tls,
+        tls_files,
+        params,
+    } = target
+    else {
+        unreachable!("clickhouse() is only called with ClickHouse targets");
+    };
+    let tls = *tls;
 
     let host = if creds.host().contains(':') && !creds.host().starts_with('[') {
         format!("[{}]", creds.host())
@@ -1005,6 +1059,18 @@ async fn clickhouse(
     }
     for (name, value) in params {
         builder = builder.setting(name, value);
+    }
+    if let Some(path) = &tls_files.root_cert {
+        builder = builder.root_certificate(path);
+    }
+    match (&tls_files.client_cert, &tls_files.client_key) {
+        (Some(certificate), Some(key)) => builder = builder.client_certificate(certificate, key),
+        (None, None) => {}
+        _ => {
+            return Err(InitDbError::UnsupportedOption(
+                "a ClickHouse client certificate needs its key (sslcert and sslkey)".to_string(),
+            ));
+        }
     }
     if let Some(timeout) = options.statement_timeout {
         let seconds = timeout.as_millis().div_ceil(1_000).max(1);

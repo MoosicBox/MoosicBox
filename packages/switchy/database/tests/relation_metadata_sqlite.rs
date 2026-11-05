@@ -38,6 +38,39 @@ async fn check_routines(db: &dyn Database) {
     }));
 }
 
+/// Triggers are listed with their table, timing and events (read from the
+/// stored statement); `SQLite` has no sequences, types or roles.
+async fn check_triggers(db: &dyn Database) {
+    db.exec_raw("CREATE TABLE trig_items (id INTEGER PRIMARY KEY, n INTEGER)")
+        .await
+        .unwrap();
+    db.exec_raw(
+        "CREATE TRIGGER trig_items_stamp AFTER UPDATE OF n ON trig_items \
+         BEGIN SELECT 1; END",
+    )
+    .await
+    .unwrap();
+    let triggers = db.list_triggers(None).await.unwrap();
+    let stamp = triggers
+        .iter()
+        .find(|t| t.name == "trig_items_stamp")
+        .unwrap();
+    assert_eq!(stamp.schema.as_deref(), Some("main"));
+    assert_eq!(stamp.table.as_deref(), Some("trig_items"));
+    assert_eq!(stamp.timing.as_deref(), Some("AFTER"));
+    assert_eq!(stamp.events, vec!["UPDATE"]);
+    assert!(stamp.enabled);
+    assert!(
+        stamp
+            .definition
+            .as_deref()
+            .is_some_and(|sql| sql.contains("BEGIN"))
+    );
+    assert_eq!(db.list_triggers(Some("main")).await.unwrap(), triggers);
+    assert!(db.list_sequences(None).await.is_err());
+    assert!(db.list_roles().await.is_err());
+}
+
 /// Generated columns (listed by `PRAGMA table_xinfo`, not `table_info`) are
 /// reported with their kind, keep their ordinal and have no default; `SQLite`
 /// has no enum types.
@@ -272,6 +305,105 @@ async fn check_values(db: &dyn Database) {
     assert_eq!(result.rows[1][2], DatabaseValue::Null);
 }
 
+/// Composite keys keep every column pair (keys to a primary key implicitly
+/// report its columns), defaults keep their SQL text, and keys are listed
+/// in both directions.
+async fn check_foreign_keys(db: &dyn Database) {
+    use switchy_database::schema::ForeignKeyScope;
+    db.exec_raw("CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT DEFAULT 'untitled')")
+        .await
+        .unwrap();
+    db.exec_raw(
+        "CREATE TABLE tracks (album_id INTEGER NOT NULL REFERENCES albums, \
+         track_no INTEGER NOT NULL, PRIMARY KEY (album_id, track_no))",
+    )
+    .await
+    .unwrap();
+    db.exec_raw(
+        "CREATE TABLE plays (id INTEGER PRIMARY KEY, album_id INTEGER, track_no INTEGER, \
+         FOREIGN KEY (album_id, track_no) REFERENCES tracks (album_id, track_no) \
+         ON DELETE CASCADE)",
+    )
+    .await
+    .unwrap();
+
+    let albums = db
+        .get_relation_info(&RelationRef::new("albums"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        albums.columns["title"].default_text.as_deref(),
+        Some("'untitled'")
+    );
+    assert_eq!(albums.columns["id"].default_text, None);
+
+    let plays = db
+        .get_relation_info(&RelationRef::new("plays"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(plays.foreign_keys.len(), 1);
+    let key = plays.foreign_keys.values().next().unwrap();
+    assert_eq!(key.columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.referenced_columns, vec!["album_id", "track_no"]);
+    assert_eq!(key.column, "album_id");
+    assert_eq!(key.referenced_schema.as_deref(), Some("main"));
+
+    // An implicit reference to the primary key reports its column.
+    let tracks = db
+        .get_relation_info(&RelationRef::new("tracks"))
+        .await
+        .unwrap()
+        .unwrap();
+    let (name, key) = tracks.foreign_keys.iter().next().unwrap();
+    assert_eq!(name, "tracks_album_id_albums_id");
+    assert_eq!(key.referenced_columns, vec!["id"]);
+
+    let around = db
+        .list_foreign_keys(&ForeignKeyScope::Relation(RelationRef::new("tracks")))
+        .await
+        .unwrap();
+    let described: Vec<String> = around
+        .iter()
+        .map(|key| {
+            format!(
+                "{} ({}) -> {} ({}) {:?}",
+                key.table,
+                key.foreign_key.columns.join(", "),
+                key.referenced(),
+                key.foreign_key.referenced_columns.join(", "),
+                key.foreign_key.on_delete
+            )
+        })
+        .collect();
+    assert_eq!(
+        described,
+        vec![
+            "main.plays (album_id, track_no) -> main.tracks (album_id, track_no) Some(\"CASCADE\")",
+            "main.tracks (album_id) -> main.albums (id) Some(\"NO ACTION\")",
+        ]
+    );
+    // Listed keys are named as table introspection names them.
+    assert_eq!(
+        &around[0].foreign_key.name,
+        plays.foreign_keys.keys().next().unwrap()
+    );
+    let referencing = db
+        .get_referencing_foreign_keys(&RelationRef::new("albums"))
+        .await
+        .unwrap();
+    assert_eq!(referencing.len(), 1);
+    assert_eq!(referencing[0].table.name, "tracks");
+    assert_eq!(
+        db.list_foreign_keys(&ForeignKeyScope::Schema(None))
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
 #[cfg(feature = "sqlite-rusqlite")]
 mod rusqlite_backend {
     use super::*;
@@ -294,8 +426,18 @@ mod rusqlite_backend {
     }
 
     #[tokio::test]
+    async fn triggers() {
+        check_triggers(&db()).await;
+    }
+
+    #[tokio::test]
     async fn generated_columns() {
         check_generated_columns(&db()).await;
+    }
+
+    #[tokio::test]
+    async fn foreign_keys() {
+        check_foreign_keys(&db()).await;
     }
 
     #[tokio::test]
@@ -424,6 +566,11 @@ mod sqlx_backend {
     }
 
     #[tokio::test]
+    async fn triggers() {
+        check_triggers(&db().await).await;
+    }
+
+    #[tokio::test]
     async fn generated_columns() {
         check_generated_columns(&db().await).await;
     }
@@ -431,6 +578,11 @@ mod sqlx_backend {
     #[tokio::test]
     async fn values_and_raw_results() {
         check_values(&db().await).await;
+    }
+
+    #[tokio::test]
+    async fn foreign_keys() {
+        check_foreign_keys(&db().await).await;
     }
 
     #[tokio::test]
