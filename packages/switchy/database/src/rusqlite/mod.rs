@@ -1930,19 +1930,15 @@ impl Database for RusqliteTransaction {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
-        let mut results = Vec::new();
-
-        for values in &statement.values {
-            results.extend(upsert(
-                &*self.connection.lock().await,
-                statement.table_name,
-                values,
-                None,
-                None,
-            )?);
-        }
-
-        Ok(results)
+        Ok(upsert_multi_internal(
+            &*self.connection.lock().await,
+            statement.table_name,
+            statement
+                .unique
+                .as_ref()
+                .ok_or(RusqliteDatabaseError::MissingUnique)?,
+            &statement.values,
+        )?)
     }
 
     #[cfg(feature = "raw-sql")]
