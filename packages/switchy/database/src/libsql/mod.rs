@@ -64,6 +64,8 @@ mod schema;
 mod sql;
 mod transaction;
 
+use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -76,8 +78,8 @@ use crate::sqlite_common::format_sqlite_interval;
 use crate::{DatabaseError, DatabaseValue, QueryResult, ResultColumn, Row};
 
 use hrana::{
-    Batch, BatchCond, BatchStep, HranaClient, Request, Response, StmtResult, StreamPosition,
-    StreamResult,
+    Batch, BatchCond, BatchStep, HranaClient, HttpOptions, Request, Response, StmtResult,
+    StreamPosition, StreamResult,
 };
 
 pub use transaction::{LibsqlSavepoint, LibsqlTransaction};
@@ -100,6 +102,14 @@ pub enum LibsqlDatabaseError {
         "the server closed the connection after it sat idle; any open transaction was rolled back"
     )]
     StreamExpired,
+    /// A request on a transaction's stream got no answer (it timed out, or
+    /// the connection dropped), so the transaction can't go on; the server
+    /// rolls it back.
+    #[error(
+        "the transaction was lost when a request in it got no answer; roll it back (the server \
+         rolls it back itself)"
+    )]
+    StreamLost,
     /// The server reported an error (a SQL error, a constraint, ...).
     #[error("{message}")]
     Server {
@@ -124,6 +134,27 @@ pub enum LibsqlDatabaseError {
     /// The URL is not a `libSQL` server URL.
     #[error("invalid libSQL URL: {0}")]
     InvalidUrl(String),
+    /// A setting can't be used (an unreadable CA certificate, say).
+    #[error("{0}")]
+    InvalidConfig(String),
+    /// The server didn't answer a request within the request timeout. The
+    /// client stopped waiting; the server may still be running the
+    /// statement.
+    #[error(
+        "timed out: the server didn't answer within {}",
+        format_timeout(*.0)
+    )]
+    Timeout(Duration),
+}
+
+/// A timeout for messages: whole seconds where it is a whole number of
+/// them, otherwise milliseconds.
+fn format_timeout(timeout: Duration) -> String {
+    if timeout.subsec_millis() == 0 && timeout.as_secs() > 0 {
+        format!("{}s", timeout.as_secs())
+    } else {
+        format!("{}ms", timeout.as_millis())
+    }
 }
 
 impl LibsqlDatabaseError {
@@ -230,6 +261,9 @@ pub struct LibsqlDatabaseBuilder {
     auth_token: Option<String>,
     read_only: bool,
     connect_timeout: Option<Duration>,
+    request_timeout: Option<Duration>,
+    connect_address: Option<SocketAddr>,
+    root_certificate: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for LibsqlDatabaseBuilder {
@@ -242,6 +276,9 @@ impl std::fmt::Debug for LibsqlDatabaseBuilder {
             )
             .field("read_only", &self.read_only)
             .field("connect_timeout", &self.connect_timeout)
+            .field("request_timeout", &self.request_timeout)
+            .field("connect_address", &self.connect_address)
+            .field("root_certificate", &self.root_certificate)
             .finish()
     }
 }
@@ -255,6 +292,9 @@ impl LibsqlDatabaseBuilder {
             auth_token: None,
             read_only: false,
             connect_timeout: None,
+            request_timeout: None,
+            connect_address: None,
+            root_certificate: None,
         }
     }
 
@@ -279,18 +319,78 @@ impl LibsqlDatabaseBuilder {
         self
     }
 
+    /// How long to wait for each request's whole response, so for each
+    /// statement (Hrana has no server-side statement timeout). A request
+    /// that runs longer fails with [`LibsqlDatabaseError::Timeout`]; the
+    /// server is not told, and may keep running the statement.
+    #[must_use]
+    pub const fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+
+    /// Connect to `address` (an SSH tunnel's local end, a port forward)
+    /// instead of the address the URL's host resolves to. TLS still checks
+    /// the server's certificate against the URL's host name and sends it as
+    /// SNI, and the `Host` header still names the URL's host and port. An
+    /// `https://` (or `libsql://`) URL must then name its server by host
+    /// name, not IP address.
+    #[must_use]
+    pub const fn connect_address(mut self, address: SocketAddr) -> Self {
+        self.connect_address = Some(address);
+        self
+    }
+
+    /// Trust the certificate authorities in the PEM file at `path`, in
+    /// addition to the system's, when checking the server's certificate
+    /// (a server whose certificate a private CA issued). Needs TLS.
+    #[must_use]
+    pub fn root_certificate(mut self, path: impl Into<PathBuf>) -> Self {
+        self.root_certificate = Some(path.into());
+        self
+    }
+
     /// Connect, checking that the server answers (and accepts the token).
     ///
     /// # Errors
     ///
-    /// * [`LibsqlDatabaseError::InvalidUrl`] if the URL is not a `libSQL` server URL
+    /// * [`LibsqlDatabaseError::InvalidUrl`] if the URL is not a `libSQL` server
+    ///   URL, or names its TLS server by IP address with a connect address
+    /// * [`LibsqlDatabaseError::InvalidConfig`] if the root certificate can't be
+    ///   read or holds no PEM certificate, or is given for a plain `http://` URL
     /// * [`LibsqlDatabaseError::Http`] if the server can't be reached
+    /// * [`LibsqlDatabaseError::Timeout`] if the server doesn't answer within the
+    ///   request timeout
     /// * [`LibsqlDatabaseError::Unauthorized`] if the server refuses the token
     /// * [`LibsqlDatabaseError::Server`] / [`LibsqlDatabaseError::Protocol`] if
     ///   the server does not answer a `SELECT 1` as a `libSQL` server would
     pub async fn build(self) -> Result<LibsqlDatabase, LibsqlDatabaseError> {
         let base = base_url(&self.url)?;
-        let client = HranaClient::new(&base, self.auth_token, self.connect_timeout)?;
+        let mut options = HttpOptions::new();
+        if let Some(timeout) = self.connect_timeout {
+            options = options.connect_timeout(timeout);
+        }
+        if let Some(timeout) = self.request_timeout {
+            options = options.request_timeout(timeout);
+        }
+        if let Some(address) = self.connect_address {
+            options = options.connect_address(address);
+        }
+        if let Some(path) = &self.root_certificate {
+            if !base.starts_with("https://") {
+                return Err(LibsqlDatabaseError::InvalidConfig(
+                    "a CA certificate needs TLS (an https:// or libsql:// URL)".to_string(),
+                ));
+            }
+            let pem = std::fs::read(path).map_err(|error| {
+                LibsqlDatabaseError::InvalidConfig(format!(
+                    "can't read the CA certificate {}: {error}",
+                    path.display()
+                ))
+            })?;
+            options = options.root_certificates(pem);
+        }
+        let client = HranaClient::new(&base, self.auth_token, &options)?;
         let db = LibsqlDatabase {
             client: Arc::new(client),
             read_only: self.read_only,
@@ -939,6 +1039,52 @@ mod tests {
 
     use super::*;
 
+    #[tokio::test]
+    async fn tls_settings_are_checked_before_connecting() {
+        let error = LibsqlDatabase::builder("https://192.0.2.10:8443")
+            .connect_address("127.0.0.1:1".parse().unwrap())
+            .build()
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&error, LibsqlDatabaseError::InvalidUrl(message) if message.contains("host name")),
+            "{error}"
+        );
+        let error = LibsqlDatabase::builder("http://db.example.invalid")
+            .root_certificate("/nonexistent/ca.pem")
+            .build()
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("needs TLS"), "{error}");
+        let error = LibsqlDatabase::builder("libsql://db.example.invalid")
+            .root_certificate("/nonexistent/ca.pem")
+            .build()
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("/nonexistent/ca.pem"), "{error}");
+        let dir = std::env::temp_dir().join(format!("switchy-libsql-ca-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let not_pem = dir.join("ca.pem");
+        std::fs::write(&not_pem, "not a certificate").unwrap();
+        let error = LibsqlDatabase::builder("libsql://db.example.invalid")
+            .root_certificate(&not_pem)
+            .build()
+            .await
+            .unwrap_err();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(
+            matches!(error, LibsqlDatabaseError::InvalidConfig(_)),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn timeouts_read_in_seconds_or_milliseconds() {
+        assert_eq!(format_timeout(Duration::from_secs(30)), "30s");
+        assert_eq!(format_timeout(Duration::from_millis(1500)), "1500ms");
+        assert_eq!(format_timeout(Duration::from_millis(250)), "250ms");
+    }
+
     #[test]
     fn libsql_urls_become_http_base_urls() {
         assert_eq!(
@@ -1055,14 +1201,29 @@ mod tests {
             serde_json::json!({"type": "ok", "response": response})
         }
 
+        /// What a stand-in server saw: every pipeline body, and the `Host`
+        /// header of every request.
+        #[derive(Default)]
+        struct Seen {
+            bodies: std::sync::Mutex<Vec<serde_json::Value>>,
+            hosts: std::sync::Mutex<Vec<String>>,
+        }
+
         /// A stand-in `libSQL` server on a free local port that answers with
         /// [`stub_result`] and records every pipeline it receives.
-        async fn stub_server() -> (String, Arc<std::sync::Mutex<Vec<serde_json::Value>>>) {
+        async fn stub_server() -> (String, Arc<Seen>) {
+            let (address, seen) = stub_server_with(std::time::Duration::ZERO).await;
+            (format!("http://{address}"), seen)
+        }
+
+        /// [`stub_server`], answering any pipeline whose body mentions
+        /// `slow` only after `delay`, and recording `Host` headers too.
+        async fn stub_server_with(delay: std::time::Duration) -> (std::net::SocketAddr, Arc<Seen>) {
             use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-            let url = format!("http://{}", listener.local_addr().unwrap());
-            let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let address = listener.local_addr().unwrap();
+            let seen = Arc::new(Seen::default());
             let recorded = Arc::clone(&seen);
             tokio::spawn(async move {
                 while let Ok((mut socket, _)) = listener.accept().await {
@@ -1082,6 +1243,11 @@ mod tests {
                                 continue;
                             };
                             let headers = String::from_utf8_lossy(&buffer[..end]).to_lowercase();
+                            if let Some(host) =
+                                headers.lines().find_map(|line| line.strip_prefix("host:"))
+                            {
+                                recorded.hosts.lock().unwrap().push(host.trim().to_string());
+                            }
                             let length = headers
                                 .lines()
                                 .find_map(|line| line.strip_prefix("content-length:"))
@@ -1096,7 +1262,10 @@ mod tests {
                             let requests = body["requests"].as_array().cloned().unwrap_or_default();
                             let closes = requests.iter().any(|request| request["type"] == "close");
                             let results: Vec<_> = requests.iter().map(stub_result).collect();
-                            recorded.lock().unwrap().push(body);
+                            if body.to_string().contains("slow") {
+                                tokio::time::sleep(delay).await;
+                            }
+                            recorded.bodies.lock().unwrap().push(body);
                             let response = serde_json::json!({
                                 "baton": if closes { None } else { Some("stub") },
                                 "base_url": null,
@@ -1115,14 +1284,14 @@ mod tests {
                     });
                 }
             });
-            (url, seen)
+            (address, seen)
         }
 
         /// The SQL of every statement the server was asked to run (not just
         /// describe) in the recorded pipelines.
-        fn run_statements(seen: &std::sync::Mutex<Vec<serde_json::Value>>) -> Vec<String> {
+        fn run_statements(seen: &Seen) -> Vec<String> {
             let mut statements = Vec::new();
-            for body in seen.lock().unwrap().iter() {
+            for body in seen.bodies.lock().unwrap().iter() {
                 for request in body["requests"].as_array().into_iter().flatten() {
                     let stmts = match request["type"].as_str() {
                         Some("execute") => vec![&request["stmt"]],
@@ -1176,6 +1345,109 @@ mod tests {
             assert!(
                 statements.iter().any(|sql| sql == "SELECT 2"),
                 "{statements:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_connect_address_reaches_the_server_by_its_host_name() {
+            use crate::Database as _;
+
+            let (address, seen) = stub_server_with(std::time::Duration::ZERO).await;
+            // Nothing resolves this name: every request must go to `address`.
+            let db = LibsqlDatabase::builder("http://db.example.invalid:8080")
+                .connect_address(address)
+                .build()
+                .await
+                .unwrap();
+            db.query_raw("SELECT 2").await.unwrap();
+            assert_eq!(db.base_url(), "http://db.example.invalid:8080");
+            let hosts = seen.hosts.lock().unwrap().clone();
+            // The connect probe and the query.
+            assert_eq!(hosts, ["db.example.invalid:8080"; 2]);
+
+            // An IP address host is sent to the connect address too.
+            let (address, seen) = stub_server_with(std::time::Duration::ZERO).await;
+            LibsqlDatabase::builder("http://192.0.2.10:8080")
+                .connect_address(address)
+                .build()
+                .await
+                .unwrap();
+            assert_eq!(
+                seen.hosts.lock().unwrap().as_slice(),
+                ["192.0.2.10:8080".to_string()]
+            );
+        }
+
+        #[tokio::test]
+        async fn requests_that_outlast_the_request_timeout_fail_as_timeouts() {
+            use crate::Database as _;
+
+            let (address, _) = stub_server_with(std::time::Duration::from_secs(5)).await;
+            let db = LibsqlDatabase::builder(format!("http://{address}"))
+                .request_timeout(std::time::Duration::from_millis(300))
+                .build()
+                .await
+                .unwrap();
+            let started = std::time::Instant::now();
+            let error = db.query_raw("SELECT 'slow'").await.unwrap_err();
+            assert!(started.elapsed() < std::time::Duration::from_secs(4));
+            assert!(
+                matches!(
+                    &error,
+                    crate::DatabaseError::Libsql(super::super::LibsqlDatabaseError::Timeout(t))
+                        if *t == std::time::Duration::from_millis(300)
+                ),
+                "{error:?}"
+            );
+            assert!(error.to_string().contains("timed out"), "{error}");
+            assert!(error.to_string().contains("300ms"), "{error}");
+            // Quick statements still run.
+            db.query_raw("SELECT 3").await.unwrap();
+        }
+
+        #[tokio::test]
+        async fn a_transaction_a_request_timed_out_in_is_lost_and_rolls_back() {
+            use crate::Database as _;
+
+            let (address, seen) = stub_server_with(std::time::Duration::from_secs(5)).await;
+            let db = LibsqlDatabase::builder(format!("http://{address}"))
+                .request_timeout(std::time::Duration::from_millis(300))
+                .build()
+                .await
+                .unwrap();
+            let tx = db.begin_transaction().await.unwrap();
+            let error = tx.query_raw("SELECT 'slow'").await.unwrap_err();
+            assert!(error.to_string().contains("timed out"), "{error}");
+            let error = tx.query_raw("SELECT 4").await.unwrap_err();
+            assert!(
+                matches!(
+                    &error,
+                    crate::DatabaseError::Libsql(super::super::LibsqlDatabaseError::StreamLost)
+                ),
+                "{error:?}"
+            );
+            assert!(error.is_connection_error(), "{error:?}");
+            // Its baton never arrived, so rolling back sends nothing: the
+            // server rolls the transaction back itself.
+            tx.rollback().await.unwrap();
+            let statements = run_statements(&seen);
+            assert!(
+                statements
+                    .iter()
+                    .all(|sql| sql != "ROLLBACK" && sql != "SELECT 4"),
+                "{statements:?}"
+            );
+
+            // Committing a lost transaction fails.
+            let tx = db.begin_transaction().await.unwrap();
+            assert!(tx.query_raw("SELECT 'slow'").await.is_err());
+            let error = tx.commit().await.unwrap_err();
+            assert!(
+                matches!(
+                    &error,
+                    crate::DatabaseError::Libsql(super::super::LibsqlDatabaseError::StreamLost)
+                ),
+                "{error:?}"
             );
         }
     }

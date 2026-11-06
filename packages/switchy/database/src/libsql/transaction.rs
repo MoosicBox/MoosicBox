@@ -7,6 +7,15 @@
 //! anyway, the next statement fails with
 //! [`LibsqlDatabaseError::StreamExpired`].
 //!
+//! A request that gets no answer (it ran past the request timeout, or the
+//! connection dropped mid-request) loses the stream: the next baton never
+//! arrived, and the server either dropped the stream when the request went
+//! away or will close it once it sits idle, rolling its transaction back
+//! either way. Further statements then fail with
+//! [`LibsqlDatabaseError::StreamLost`], committing does too, and rolling back
+//! succeeds without sending anything. Rolling back a stream the server
+//! closed for inactivity succeeds the same way.
+//!
 //! On a read-only database the server describes every statement first, in a
 //! request of its own, and only a statement it reports read-only is sent to
 //! run, inside a savepoint that is rolled back; committing rolls the
@@ -35,6 +44,40 @@ struct StreamState {
     position: StreamPosition,
     /// Whether the stream (and its transaction) is still open.
     open: bool,
+    /// Whether the stream was closed because a request on it got no answer.
+    lost: bool,
+}
+
+impl StreamState {
+    /// Record what `result` (of a request on this stream) means for it.
+    fn update<T>(&mut self, result: &Result<T, LibsqlDatabaseError>) {
+        match result {
+            Err(LibsqlDatabaseError::StreamExpired) => self.open = false,
+            // The request may have reached the server, which then moved the
+            // stream on to a baton that never arrived.
+            Err(LibsqlDatabaseError::Timeout(_)) => self.lose(),
+            Err(LibsqlDatabaseError::Http(error)) if !error.is_connect() => self.lose(),
+            _ => {
+                if self.position.baton.is_none() {
+                    self.open = false;
+                }
+            }
+        }
+    }
+
+    const fn lose(&mut self) {
+        self.open = false;
+        self.lost = true;
+    }
+
+    /// The error for a request on this stream once it is closed.
+    const fn closed_error(&self) -> LibsqlDatabaseError {
+        if self.lost {
+            LibsqlDatabaseError::StreamLost
+        } else {
+            LibsqlDatabaseError::StreamExpired
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -52,14 +95,10 @@ impl Shared {
     ) -> Result<Vec<super::hrana::StreamResult>, LibsqlDatabaseError> {
         let mut stream = self.stream.lock().await;
         if !stream.open {
-            return Err(LibsqlDatabaseError::StreamExpired);
+            return Err(stream.closed_error());
         }
         let result = self.client.pipeline(&mut stream.position, requests).await;
-        if matches!(result, Err(LibsqlDatabaseError::StreamExpired))
-            || stream.position.baton.is_none()
-        {
-            stream.open = false;
-        }
+        stream.update(&result);
         result
     }
 
@@ -72,8 +111,22 @@ impl Shared {
         execute_result(self.send(&requests).await?.into_iter().next()).map(|_| ())
     }
 
-    /// End the transaction with `sql` and close the stream.
+    /// End the transaction with `sql` and close the stream. Rolling back a
+    /// stream that is already closed (lost or expired) succeeds: the server
+    /// rolls its transaction back without being asked.
     async fn finish(&self, sql: &str) -> Result<(), LibsqlDatabaseError> {
+        if sql == "ROLLBACK" {
+            let closed = {
+                let stream = self.stream.lock().await;
+                (!stream.open).then(|| stream.closed_error())
+            };
+            if let Some(closed) = closed {
+                log::debug!(
+                    "libsql: rolling back a closed stream; the server rolls it back itself ({closed})"
+                );
+                return Ok(());
+            }
+        }
         let requests = [
             Request::Execute {
                 stmt: Stmt::new(sql),
@@ -106,6 +159,7 @@ impl LibsqlTransaction {
             stream: tokio::sync::Mutex::new(StreamState {
                 position: StreamPosition::default(),
                 open: true,
+                lost: false,
             }),
         });
         shared.control("BEGIN").await?;
@@ -146,9 +200,7 @@ async fn keep_alive(shared: std::sync::Weak<Shared>) {
             return;
         }
         let result = shared.client.pipeline(&mut stream.position, &[]).await;
-        if matches!(result, Err(LibsqlDatabaseError::StreamExpired)) {
-            stream.open = false;
-        }
+        stream.update(&result);
         let open = stream.open;
         drop(stream);
         if let Err(error) = result {

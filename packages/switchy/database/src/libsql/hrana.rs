@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::DatabaseValue;
 
-use super::LibsqlDatabaseError;
+use super::{LibsqlDatabaseError, error_chain};
 
 /// Base64 that accepts padded and unpadded input (`sqld` omits the padding).
 const BASE64: base64::engine::GeneralPurpose = base64::engine::GeneralPurpose::new(
@@ -408,12 +408,79 @@ pub struct StreamPosition {
     pub base_url: Option<String>,
 }
 
+/// How a [`HranaClient`] reaches its server.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct HttpOptions {
+    /// How long to wait for the TCP/TLS connection.
+    pub connect_timeout: Option<std::time::Duration>,
+    /// How long to wait for each request's whole response.
+    pub request_timeout: Option<std::time::Duration>,
+    /// Connect here instead of to the address the URL's host resolves to,
+    /// still naming the URL's host for TLS and in the `Host` header.
+    pub connect_address: Option<std::net::SocketAddr>,
+    /// PEM certificate authorities trusted in addition to the system's.
+    pub root_certificates: Option<Vec<u8>>,
+}
+
+impl HttpOptions {
+    /// No timeouts, the URL's own address and the system's trust store.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the connect timeout.
+    #[must_use]
+    pub const fn connect_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Set the request timeout.
+    #[must_use]
+    pub const fn request_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+
+    /// Connect to `address` instead of the URL host's own address.
+    #[must_use]
+    pub const fn connect_address(mut self, address: std::net::SocketAddr) -> Self {
+        self.connect_address = Some(address);
+        self
+    }
+
+    /// Trust the certificate authorities in `pem` too.
+    #[must_use]
+    pub fn root_certificates(mut self, pem: Vec<u8>) -> Self {
+        self.root_certificates = Some(pem);
+        self
+    }
+}
+
+/// Where requests for the server's own host and port go instead
+/// ([`HttpOptions::connect_address`]).
+#[derive(Debug, Clone)]
+struct Route {
+    /// The host as the URL names it (`db.example.com`, `[::1]`).
+    host: String,
+    /// The URL's port, or its scheme's default.
+    port: u16,
+    /// Whether the host is an IP address (reqwest never resolves those).
+    ip_literal: bool,
+    /// Where to connect.
+    address: std::net::SocketAddr,
+}
+
 /// An HTTP client for one `libSQL` server.
 #[derive(Clone)]
 pub struct HranaClient {
     http: reqwest::Client,
     base_url: String,
     auth_token: Option<String>,
+    request_timeout: Option<std::time::Duration>,
+    route: Option<Route>,
 }
 
 impl std::fmt::Debug for HranaClient {
@@ -424,6 +491,8 @@ impl std::fmt::Debug for HranaClient {
                 "auth_token",
                 &self.auth_token.as_ref().map(|_| "<redacted>"),
             )
+            .field("request_timeout", &self.request_timeout)
+            .field("route", &self.route)
             .finish_non_exhaustive()
     }
 }
@@ -431,24 +500,97 @@ impl std::fmt::Debug for HranaClient {
 impl HranaClient {
     /// A client for the server at `base_url` (`http://` or `https://`).
     ///
+    /// With [`HttpOptions::connect_address`], requests to the URL's host
+    /// and port connect to that address instead (a tunnel's local end, a
+    /// port forward), while TLS still checks the certificate against, and
+    /// sends as SNI, the URL's host name, and the `Host` header still names
+    /// it. An `https://` URL whose host is an IP address can't be checked
+    /// that way and is refused.
+    ///
     /// # Errors
     ///
+    /// * [`LibsqlDatabaseError::InvalidUrl`] if `base_url` doesn't parse, or
+    ///   names its TLS server by IP address with a connect address
+    /// * [`LibsqlDatabaseError::InvalidConfig`] if the root certificates
+    ///   aren't PEM certificates
     /// * [`LibsqlDatabaseError::Http`] if the HTTP client can't be built
     pub fn new(
         base_url: &str,
         auth_token: Option<String>,
-        timeout: Option<std::time::Duration>,
+        options: &HttpOptions,
     ) -> Result<Self, LibsqlDatabaseError> {
+        let base_url = base_url.trim_end_matches('/').to_string();
         let mut builder = reqwest::Client::builder()
             .user_agent(concat!("switchy_database/", env!("CARGO_PKG_VERSION")));
-        if let Some(timeout) = timeout {
+        if let Some(timeout) = options.connect_timeout {
             builder = builder.connect_timeout(timeout);
+        }
+        if let Some(timeout) = options.request_timeout {
+            builder = builder.timeout(timeout);
+        }
+        if let Some(pem) = &options.root_certificates {
+            let certificates = reqwest::Certificate::from_pem_bundle(pem).map_err(|error| {
+                LibsqlDatabaseError::InvalidConfig(format!(
+                    "the CA certificate isn't usable: {}",
+                    error_chain(&error)
+                ))
+            })?;
+            if certificates.is_empty() {
+                return Err(LibsqlDatabaseError::InvalidConfig(
+                    "the CA certificate file holds no PEM certificate".to_string(),
+                ));
+            }
+            builder = builder.tls_certs_merge(certificates);
+        }
+        let route = match options.connect_address {
+            Some(address) => Some(route(&base_url, address)?),
+            None => None,
+        };
+        if let Some(route) = route.as_ref().filter(|route| !route.ip_literal) {
+            builder = builder.resolve(&route.host, route.address);
         }
         Ok(Self {
             http: builder.build().map_err(LibsqlDatabaseError::Http)?,
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url,
             auth_token: auth_token.filter(|token| !token.is_empty()),
+            request_timeout: options.request_timeout,
+            route,
         })
+    }
+
+    /// The URL to send a request for `url` to, and the `Host` header it
+    /// carries: `url` itself unless it is the server's own host and port
+    /// and a connect address is set. reqwest connects to the URL's port
+    /// whenever the URL names one, even for a host it was told to resolve
+    /// elsewhere, so the port moves from the URL to the `Host` header.
+    fn routed(&self, url: &str) -> Result<(String, Option<String>), LibsqlDatabaseError> {
+        let Some(route) = &self.route else {
+            return Ok((url.to_string(), None));
+        };
+        let mut parsed = reqwest::Url::parse(url)
+            .map_err(|error| LibsqlDatabaseError::InvalidUrl(format!("{url}: {error}")))?;
+        if parsed.host_str() != Some(route.host.as_str())
+            || parsed.port_or_known_default() != Some(route.port)
+        {
+            return Ok((url.to_string(), None));
+        }
+        let host = parsed.port().map_or_else(
+            || route.host.clone(),
+            |port| format!("{}:{port}", route.host),
+        );
+        let rewritten = if route.ip_literal {
+            parsed.set_ip_host(route.address.ip()).is_ok()
+                && parsed.set_port(Some(route.address.port())).is_ok()
+        } else {
+            parsed.set_port(None).is_ok()
+        };
+        if !rewritten {
+            return Err(LibsqlDatabaseError::InvalidUrl(format!(
+                "{url} can't be sent to {}",
+                route.address
+            )));
+        }
+        Ok((parsed.to_string(), Some(host)))
     }
 
     /// The server's base URL.
@@ -476,6 +618,7 @@ impl HranaClient {
     ) -> Result<Vec<StreamResult>, LibsqlDatabaseError> {
         let base = position.base_url.as_deref().unwrap_or(&self.base_url);
         let url = format!("{}/v2/pipeline", base.trim_end_matches('/'));
+        let (url, host) = self.routed(&url)?;
         let body = serde_json::to_vec(&PipelineRequest {
             baton: position.baton.as_deref(),
             requests,
@@ -486,12 +629,21 @@ impl HranaClient {
             .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(body);
+        if let Some(host) = host {
+            request = request.header(reqwest::header::HOST, host);
+        }
         if let Some(token) = &self.auth_token {
             request = request.bearer_auth(token);
         }
-        let response = request.send().await.map_err(LibsqlDatabaseError::Http)?;
+        let response = request
+            .send()
+            .await
+            .map_err(|error| self.http_failure(error))?;
         let status = response.status();
-        let bytes = response.bytes().await.map_err(LibsqlDatabaseError::Http)?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| self.http_failure(error))?;
         if !status.is_success() {
             return Err(http_error(status, &bytes));
         }
@@ -508,6 +660,43 @@ impl HranaClient {
         position.base_url = response.base_url;
         Ok(response.results)
     }
+}
+
+impl HranaClient {
+    /// The error a failed HTTP exchange stands for: a request that ran past
+    /// the request timeout is [`LibsqlDatabaseError::Timeout`].
+    fn http_failure(&self, error: reqwest::Error) -> LibsqlDatabaseError {
+        match self.request_timeout {
+            Some(timeout) if error.is_timeout() && !error.is_connect() => {
+                LibsqlDatabaseError::Timeout(timeout)
+            }
+            _ => LibsqlDatabaseError::Http(error),
+        }
+    }
+}
+
+/// The [`Route`] for `base_url`'s host and port to `address`.
+fn route(base_url: &str, address: std::net::SocketAddr) -> Result<Route, LibsqlDatabaseError> {
+    let parsed = reqwest::Url::parse(base_url)
+        .map_err(|error| LibsqlDatabaseError::InvalidUrl(format!("{base_url}: {error}")))?;
+    let (Some(host), Some(port)) = (parsed.host_str(), parsed.port_or_known_default()) else {
+        return Err(LibsqlDatabaseError::InvalidUrl(format!(
+            "{base_url} has no host"
+        )));
+    };
+    let ip_literal = parsed.domain().is_none();
+    if ip_literal && parsed.scheme() == "https" {
+        return Err(LibsqlDatabaseError::InvalidUrl(format!(
+            "{base_url} names its server by IP address, so its certificate can't be checked \
+             through another address; name the server by its host name"
+        )));
+    }
+    Ok(Route {
+        host: host.to_string(),
+        port,
+        ip_literal,
+        address,
+    })
 }
 
 /// An HTTP-level error body: `{"message", "code"}` (Hrana) or

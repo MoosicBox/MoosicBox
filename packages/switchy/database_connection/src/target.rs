@@ -4,7 +4,9 @@
 //! [`init_with_options`](crate::init_with_options) can open with the best
 //! enabled backend, applying [`ConnectOptions`] natively.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap, net::SocketAddr, num::NonZeroUsize, path::PathBuf, time::Duration,
+};
 
 use thiserror::Error;
 
@@ -38,6 +40,10 @@ pub struct ConnectOptions {
     pub application_name: Option<String>,
     /// Maximum number of pooled connections (defaults to 5).
     pub pool_size: Option<NonZeroUsize>,
+    /// Connect to this address instead of the one the target's host
+    /// resolves to (an SSH tunnel's local end, a port forward), still
+    /// naming the target's host for TLS, where supported.
+    pub connect_address: Option<SocketAddr>,
 }
 
 impl ConnectOptions {
@@ -78,6 +84,13 @@ impl ConnectOptions {
     #[must_use]
     pub const fn pool_size(mut self, size: NonZeroUsize) -> Self {
         self.pool_size = Some(size);
+        self
+    }
+
+    /// Connect to `address` instead of the target host's own address.
+    #[must_use]
+    pub const fn connect_address(mut self, address: SocketAddr) -> Self {
+        self.connect_address = Some(address);
         self
     }
 
@@ -311,6 +324,9 @@ pub enum ConnectionTarget {
         url: String,
         /// Auth token from the `authToken` parameter, sent as a bearer token.
         auth_token: Option<String>,
+        /// TLS files from `sslrootcert` (a certificate authority trusted in
+        /// addition to the system's; it needs TLS).
+        tls_files: TlsFiles,
         /// Remaining (percent-decoded) query parameters.
         params: BTreeMap<String, String>,
     },
@@ -411,11 +427,13 @@ impl std::fmt::Debug for ConnectionTarget {
             Self::Libsql {
                 url,
                 auth_token,
+                tls_files,
                 params,
             } => f
                 .debug_struct("Libsql")
                 .field("url", url)
                 .field("auth_token", &auth_token.as_ref().map(|_| "<redacted>"))
+                .field("tls_files", tls_files)
                 .field("params", params)
                 .finish(),
             Self::ClickHouse {
@@ -512,7 +530,8 @@ impl ConnectionTarget {
     /// parameters `host`, `port`, `user`, `password` and `dbname` override the
     /// URL components. For file databases the query string is ignored, except
     /// `mode=memory` which selects an in-memory database. For `libSQL` the
-    /// `authToken` (or `auth_token`) parameter becomes the auth token. For
+    /// `authToken` (or `auth_token`) parameter becomes the auth token and
+    /// `sslrootcert` names a CA file. For
     /// `ClickHouse` the `secure`/`tls` parameter selects HTTPS on
     /// `clickhouse://` URLs (and must agree with a `clickhouse+http(s)://`
     /// scheme), and `sslrootcert`, `sslcert` and `sslkey` name a CA file and
@@ -890,6 +909,10 @@ impl ConnectionTarget {
             .iter()
             .filter_map(|key| params.remove(*key))
             .find(|token| !token.is_empty());
+        let tls_files = TlsFiles {
+            root_cert: take_path_param(&mut params, &["sslrootcert"]),
+            ..TlsFiles::default()
+        };
         let tls = params.remove("tls");
         let scheme = match scheme.to_ascii_lowercase().as_str() {
             "libsql" => match tls.as_deref() {
@@ -913,6 +936,7 @@ impl ConnectionTarget {
         Ok(Self::Libsql {
             url: format!("{scheme}://{base}"),
             auth_token,
+            tls_files,
             params,
         })
     }
@@ -986,20 +1010,17 @@ impl ConnectionTarget {
     }
 
     /// The TLS certificate files of a network target (`None` for file
-    /// databases, `libSQL`, which uses the system's trusted certificates
-    /// over HTTPS, and Oracle, which trusts a wallet; SQL Server's carry a
-    /// root certificate only).
+    /// databases and Oracle, which trusts a wallet; SQL Server's and
+    /// `libSQL`'s carry a root certificate only).
     #[must_use]
     pub const fn tls_files(&self) -> Option<&TlsFiles> {
         match self {
             Self::Postgres { tls_files, .. }
             | Self::MySql { tls_files, .. }
             | Self::ClickHouse { tls_files, .. }
+            | Self::Libsql { tls_files, .. }
             | Self::Mssql { tls_files, .. } => Some(tls_files),
-            Self::Sqlite { .. }
-            | Self::DuckDb { .. }
-            | Self::Libsql { .. }
-            | Self::Oracle { .. } => None,
+            Self::Sqlite { .. } | Self::DuckDb { .. } | Self::Oracle { .. } => None,
         }
     }
 
@@ -1534,6 +1555,7 @@ mod tests {
             ConnectionTarget::Libsql {
                 url: "https://shop-example.turso.io".to_string(),
                 auth_token: Some("abc.def".to_string()),
+                tls_files: TlsFiles::default(),
                 params: BTreeMap::from([("x".to_string(), "1".to_string())]),
             }
         );
@@ -1547,6 +1569,7 @@ mod tests {
             ConnectionTarget::Libsql {
                 url: "http://127.0.0.1:8080".to_string(),
                 auth_token: None,
+                tls_files: TlsFiles::default(),
                 params: BTreeMap::new(),
             }
         );
@@ -1559,6 +1582,14 @@ mod tests {
             ConnectionTarget::from_url("https://db.example?auth_token=t"),
             Ok(ConnectionTarget::Libsql { auth_token: Some(token), .. }) if token == "t"
         ));
+        let private =
+            ConnectionTarget::from_url("https://db.example?sslrootcert=/etc/ca.pem").unwrap();
+        assert_eq!(
+            private
+                .tls_files()
+                .and_then(|files| files.root_cert.as_deref()),
+            Some(std::path::Path::new("/etc/ca.pem"))
+        );
     }
 
     #[test_log::test]

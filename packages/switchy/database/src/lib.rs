@@ -1468,7 +1468,10 @@ impl DatabaseError {
                 ::rusqlite::Error::SqliteFailure(_, _),
             )) => true,
             #[cfg(feature = "libsql")]
-            Self::Libsql(libsql::LibsqlDatabaseError::StreamExpired) => true,
+            Self::Libsql(
+                libsql::LibsqlDatabaseError::StreamExpired
+                | libsql::LibsqlDatabaseError::StreamLost,
+            ) => true,
             #[cfg(feature = "libsql")]
             Self::Libsql(libsql::LibsqlDatabaseError::Http(error)) => {
                 error.is_connect() || error.is_timeout()

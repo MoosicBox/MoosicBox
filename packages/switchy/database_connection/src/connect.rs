@@ -77,11 +77,18 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///     statement that runs longer fails and its connection is closed
 ///   * Oracle: the client's call timeout; a call that runs longer is
 ///     interrupted and its connection closed
-///   * `SQLite`/`DuckDB`/Turso/`libSQL`: no server-side equivalent; ignored (this is not
+///   * `libSQL`: the HTTP client's request timeout (Hrana has no server-side
+///     limit): the client stops waiting for a statement that runs longer and
+///     reports a timeout, while the server may keep running it
+///   * `SQLite`/`DuckDB`/Turso: no server-side equivalent; ignored (this is not
 ///     mapped to the `SQLite` busy timeout, which is a different concept)
 /// * `application_name`: `PostgreSQL` and SQL Server (falling back to an
 ///   `application_name` URL parameter, or `applicationName`/`app` for SQL
 ///   Server); ignored elsewhere
+/// * `connect_address`: `libSQL` only (refused for other targets): requests
+///   connect to that address, while TLS still checks the certificate
+///   against the URL's host name; see
+///   [`switchy_database::libsql::LibsqlDatabaseBuilder::connect_address`]
 /// * `pool_size`: maximum pool size (default 5); ignored by Turso,
 ///   `libSQL` (which opens a server stream per statement or transaction) and
 ///   `ClickHouse` (one HTTP request per statement)
@@ -111,6 +118,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// * `ClickHouse`: the root certificate is trusted in addition to the
 ///   system's certificates, and the client certificate and key (both or
 ///   neither) are presented to the server; they need HTTPS
+/// * `libSQL`: the root certificate is trusted in addition to the system's
+///   certificates; it needs HTTPS
 ///
 /// Whether the root certificate is used for verification depends on the
 /// [`SslMode`]: modes that skip verification (`Require` and below) also skip it.
@@ -119,7 +128,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///
 /// * [`InitDbError::DriverNotEnabled`] when no backend for the target's driver is compiled in
 /// * [`InitDbError::UnsupportedOption`] when an option cannot be honored (read-only
-///   in-memory databases, read-only Turso, TLS or certificate files requested for
+///   in-memory databases, read-only Turso, a connect address for a target other
+///   than `libSQL`, TLS or certificate files requested for
 ///   raw `PostgreSQL` without a TLS feature, a client certificate without a key or
 ///   vice versa for raw `PostgreSQL`)
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
@@ -132,6 +142,7 @@ pub async fn init_with_options(
     target: &ConnectionTarget,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
+    refuse_connect_address(target, options)?;
     match target {
         ConnectionTarget::Postgres {
             creds,
@@ -220,13 +231,26 @@ pub async fn init_with_options(
                 })
             }
         }
-        ConnectionTarget::Libsql {
-            url, auth_token, ..
-        } => libsql_target(url, auth_token.as_deref(), options).await,
+        ConnectionTarget::Libsql { .. } => libsql_target(target, options).await,
         ConnectionTarget::ClickHouse { .. } => clickhouse_target(target, options).await,
         ConnectionTarget::Mssql { .. } => mssql_target(target, options).await,
         ConnectionTarget::Oracle { .. } => oracle_target(target, options).await,
     }
+}
+
+/// Refuse a connect address for targets that can't take one (all but
+/// `libSQL`).
+fn refuse_connect_address(
+    target: &ConnectionTarget,
+    options: &ConnectOptions,
+) -> Result<(), InitDbError> {
+    if options.connect_address.is_some() && !matches!(target, ConnectionTarget::Libsql { .. }) {
+        return Err(InitDbError::UnsupportedOption(format!(
+            "a connect address for a {} target (only libSQL takes one)",
+            target.driver_name()
+        )));
+    }
+    Ok(())
 }
 
 /// Open an Oracle target with the `oracle` backend, when it is compiled in.
@@ -411,17 +435,16 @@ async fn clickhouse_target(
 /// Open a `libSQL` target with the `libsql` backend, when it is compiled in.
 #[allow(clippy::unused_async)]
 async fn libsql_target(
-    url: &str,
-    auth_token: Option<&str>,
+    target: &ConnectionTarget,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "libsql")]
     {
-        libsql(url, auth_token, options).await
+        libsql(target, options).await
     }
     #[cfg(not(feature = "libsql"))]
     {
-        let _ = (url, auth_token, options);
+        let _ = (target, options);
         Err(InitDbError::DriverNotEnabled {
             driver: "libsql",
             features: "libsql",
@@ -1004,20 +1027,35 @@ async fn sqlite_turso(
 
 #[cfg(feature = "libsql")]
 async fn libsql(
-    url: &str,
-    auth_token: Option<&str>,
+    target: &ConnectionTarget,
     options: &ConnectOptions,
 ) -> Result<Box<dyn Database>, InitDbError> {
     use switchy_database::libsql::LibsqlDatabase;
 
-    if options.statement_timeout.is_some() {
-        log::debug!("init_with_options: libSQL has no statement timeout; ignoring");
-    }
+    let ConnectionTarget::Libsql {
+        url,
+        auth_token,
+        tls_files,
+        ..
+    } = target
+    else {
+        unreachable!("libsql() is only called with libSQL targets");
+    };
+
     let mut builder = LibsqlDatabase::builder(url)
         .read_only(options.is_read_only())
         .connect_timeout(LIBSQL_CONNECT_TIMEOUT);
     if let Some(token) = auth_token {
         builder = builder.auth_token(token);
+    }
+    if let Some(timeout) = options.statement_timeout {
+        builder = builder.request_timeout(timeout);
+    }
+    if let Some(address) = options.connect_address {
+        builder = builder.connect_address(address);
+    }
+    if let Some(path) = &tls_files.root_cert {
+        builder = builder.root_certificate(path);
     }
     Ok(Box::new(builder.build().await?))
 }
@@ -1171,6 +1209,20 @@ mod tests {
                 result,
                 Err(InitDbError::UnsupportedOption(_) | InitDbError::DriverNotEnabled { .. })
             ));
+        }
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn only_libsql_takes_a_connect_address() {
+        let options = ConnectOptions::new().connect_address("127.0.0.1:1".parse().unwrap());
+        for url in ["postgres://app@db.example/shop", "sqlite::memory:"] {
+            let target = ConnectionTarget::from_url(url).unwrap();
+            let result = init_with_options(&target, &options).await;
+            assert!(
+                matches!(&result, Err(InitDbError::UnsupportedOption(message)) if message.contains("connect address")),
+                "{url}: {:?}",
+                result.err()
+            );
         }
     }
 
