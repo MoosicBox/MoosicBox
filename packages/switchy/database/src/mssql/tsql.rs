@@ -502,10 +502,16 @@ pub(super) enum ReadOnlyStatement {
     ShowplanOn,
     /// `SET SHOWPLAN_XML OFF` (transactions only).
     ShowplanOff,
+    /// `SET STATISTICS XML ON` (transactions only): queries still run, and
+    /// return their actual plans as a further result set.
+    StatisticsOn,
+    /// `SET STATISTICS XML OFF` (transactions only).
+    StatisticsOff,
 }
 
 /// Check that `sql` is a statement a read-only connection may run (see the
-/// [module documentation](self)). `in_transaction` allows `SET SHOWPLAN_XML`.
+/// [module documentation](self)). `in_transaction` allows `SET SHOWPLAN_XML`
+/// and `SET STATISTICS XML`.
 ///
 /// # Errors
 ///
@@ -548,7 +554,8 @@ pub(super) fn check_read_only(
     if let Some(showplan) = showplan(tokens) {
         if !in_transaction {
             return Err(
-                "SET SHOWPLAN_XML changes the session, so it only runs inside a transaction"
+                "SET SHOWPLAN_XML and SET STATISTICS XML change the session, so they only run \
+                 inside a transaction"
                     .to_string(),
             );
         }
@@ -579,9 +586,21 @@ fn describe(token: &Token<'_>) -> String {
     }
 }
 
-/// `SET SHOWPLAN_XML ON|OFF`, if that is the whole statement.
+/// `SET SHOWPLAN_XML ON|OFF` or `SET STATISTICS XML ON|OFF`, if that is the
+/// whole statement.
 fn showplan(tokens: &[Token<'_>]) -> Option<ReadOnlyStatement> {
     match tokens {
+        [set, statistics, xml, value]
+            if set.is_word("SET") && statistics.is_word("STATISTICS") && xml.is_word("XML") =>
+        {
+            if value.is_word("ON") {
+                Some(ReadOnlyStatement::StatisticsOn)
+            } else if value.is_word("OFF") {
+                Some(ReadOnlyStatement::StatisticsOff)
+            } else {
+                None
+            }
+        }
         [set, option, value]
             if set.is_word("SET") && option.is_word("SHOWPLAN_XML") && value.is_word("ON") =>
         {
@@ -1025,7 +1044,17 @@ mod tests {
             check_read_only("SET SHOWPLAN_XML OFF;", true),
             Ok(ReadOnlyStatement::ShowplanOff)
         );
-        assert!(check_read_only("SET STATISTICS XML ON", true).is_err());
+        assert_eq!(
+            check_read_only("set statistics xml on", true),
+            Ok(ReadOnlyStatement::StatisticsOn)
+        );
+        assert_eq!(
+            check_read_only("SET STATISTICS XML OFF;", true),
+            Ok(ReadOnlyStatement::StatisticsOff)
+        );
+        assert!(check_read_only("SET STATISTICS XML ON", false).is_err());
+        assert!(check_read_only("SET STATISTICS IO ON", true).is_err());
+        assert!(check_read_only("SET STATISTICS XML ON; SELECT 1", true).is_err());
         assert!(check_read_only("SET SHOWPLAN_XML ON; SELECT 1", true).is_err());
     }
 

@@ -453,6 +453,15 @@ impl Database for SimulationDatabase {
     }
 
     #[cfg(feature = "raw-sql")]
+    async fn query_raw_results(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::QueryResult>, DatabaseError> {
+        self.inner.query_raw_results(query, params).await
+    }
+
+    #[cfg(feature = "raw-sql")]
     async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
         self.query_raw_internal(query).await
     }

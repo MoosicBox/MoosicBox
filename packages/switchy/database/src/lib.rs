@@ -2896,6 +2896,31 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         ))
     }
 
+    /// Execute raw SQL with parameters and return every result set it
+    /// produces, in order. A statement can return more than one: a batch of
+    /// queries, a procedure, or SQL Server's `SET STATISTICS XML ON`, which
+    /// adds each statement's actual plan as a set after the statement's own.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **SQL Server**: every result set of the statement
+    /// * **Others**: the default implementation, which returns the one set
+    ///   [`query_raw_result`](Self::query_raw_result) does
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if query fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    #[cfg(feature = "raw-sql")]
+    async fn query_raw_results(
+        &self,
+        query: &str,
+        params: &[DatabaseValue],
+    ) -> Result<Vec<QueryResult>, DatabaseError> {
+        Ok(vec![self.query_raw_result(query, params).await?])
+    }
+
     /// Begin a database transaction
     ///
     /// # Errors

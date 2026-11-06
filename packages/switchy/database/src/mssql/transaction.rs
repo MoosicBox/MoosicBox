@@ -32,6 +32,9 @@ struct State {
     in_flight: bool,
     /// `SET SHOWPLAN_XML ON` is in effect (read-only transactions).
     showplan: bool,
+    /// `SET STATISTICS XML ON` is in effect (read-only transactions): the
+    /// connection isn't given back to the pool like that.
+    statistics: bool,
     /// The no-execute options writable statements turned on.
     modes: tsql::SessionModes,
 }
@@ -146,7 +149,7 @@ impl MssqlTransaction {
             (
                 state.lease.take(),
                 lost,
-                state.showplan,
+                state.showplan || state.statistics,
                 state.modes.is_normal(),
             )
         };
@@ -217,10 +220,23 @@ impl MssqlTransaction {
                     run::control(client, "SET SHOWPLAN_XML OFF").await?;
                     Ok(Outcome::default())
                 }
+                Some(ReadOnlyStatement::StatisticsOn) => {
+                    run::control(client, "SET STATISTICS XML ON").await?;
+                    Ok(Outcome::default())
+                }
+                Some(ReadOnlyStatement::StatisticsOff) => {
+                    run::control(client, "SET STATISTICS XML OFF").await?;
+                    Ok(Outcome::default())
+                }
                 // With SHOWPLAN_XML on the server compiles statements and
                 // returns their plans without running them.
                 Some(ReadOnlyStatement::Read) if showplan => {
-                    run::statement(client, sql, params, Mode::Rows, false).await
+                    let mode = if mode == Mode::Sets {
+                        Mode::Sets
+                    } else {
+                        Mode::Rows
+                    };
+                    run::statement(client, sql, params, mode, false).await
                 }
                 Some(ReadOnlyStatement::Read) => {
                     let mode = if mode == Mode::Batch {
@@ -250,6 +266,8 @@ impl MssqlTransaction {
             Ok(_) => match checked {
                 Some(ReadOnlyStatement::ShowplanOn) => state.showplan = true,
                 Some(ReadOnlyStatement::ShowplanOff) => state.showplan = false,
+                Some(ReadOnlyStatement::StatisticsOn) => state.statistics = true,
+                Some(ReadOnlyStatement::StatisticsOff) => state.statistics = false,
                 _ => {}
             },
             Err(error) if read_only || error.breaks_connection() => {

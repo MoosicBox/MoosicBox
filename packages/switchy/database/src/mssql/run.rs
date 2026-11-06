@@ -15,6 +15,9 @@ use super::value::{Param, decode, now_sql, type_name};
 pub(super) enum Mode {
     /// Its first result set (columns and rows).
     Rows,
+    /// Every result set, in order (a statement under `SET STATISTICS XML
+    /// ON` returns its plan as a set after its own).
+    Sets,
     /// The number of rows it changed.
     Count,
     /// Nothing: a raw batch (`exec_raw`), run as SQL text so that session
@@ -31,6 +34,9 @@ pub(super) struct Outcome {
     // Only the raw-SQL API reports affected rows.
     #[cfg_attr(not(feature = "raw-sql"), allow(dead_code))]
     pub(super) affected: u64,
+    /// The result sets after the first (`Mode::Sets` only).
+    #[cfg_attr(not(feature = "raw-sql"), allow(dead_code))]
+    pub(super) later: Vec<QueryResult>,
 }
 
 impl Outcome {
@@ -39,6 +45,15 @@ impl Outcome {
             columns: self.columns,
             rows: self.rows,
         }
+    }
+
+    /// Every result set: the first, then the later ones.
+    #[cfg_attr(not(feature = "raw-sql"), allow(dead_code))]
+    pub(super) fn into_results(mut self) -> Vec<QueryResult> {
+        let later = std::mem::take(&mut self.later);
+        let mut results = vec![self.into_result()];
+        results.extend(later);
+        results
     }
 
     pub(super) fn into_rows(self) -> Vec<Row> {
@@ -111,45 +126,69 @@ pub(super) async fn statement(
             client.execute(sql, &refs).await?;
             Ok(Outcome::default())
         }
-        Mode::Rows if text => first_result(client.simple_query(sql).await?).await,
-        Mode::Rows => first_result(client.query(sql, &refs).await?).await,
+        Mode::Rows if text => results(client.simple_query(sql).await?, false).await,
+        Mode::Rows => results(client.query(sql, &refs).await?, false).await,
+        Mode::Sets if text => results(client.simple_query(sql).await?, true).await,
+        Mode::Sets => results(client.query(sql, &refs).await?, true).await,
     }
 }
 
-/// The first result set of a stream (columns even without rows), reading
-/// the rest of the stream so that errors from later statements surface.
-async fn first_result(
+/// The first result set of a stream (columns even without rows), and with
+/// `all` every later one too, reading the rest of the stream either way so
+/// that errors from later statements surface.
+async fn results(
     mut stream: tiberius::QueryStream<'_>,
+    all: bool,
 ) -> Result<Outcome, MssqlDatabaseError> {
-    let mut outcome = Outcome::default();
+    let mut sets: Vec<QueryResult> = Vec::new();
     let mut types = Vec::new();
-    let mut sets = 0_usize;
+    // Whether rows belong to a set being kept.
+    let mut collecting = false;
     while let Some(item) = stream.try_next().await? {
         match item {
             QueryItem::Metadata(metadata) => {
-                sets += 1;
-                if sets == 1 {
-                    for column in metadata.columns() {
-                        outcome.columns.push(ResultColumn {
+                collecting = sets.is_empty() || all;
+                if !collecting {
+                    continue;
+                }
+                types = metadata
+                    .columns()
+                    .iter()
+                    .map(tiberius::Column::column_type)
+                    .collect();
+                sets.push(QueryResult {
+                    columns: metadata
+                        .columns()
+                        .iter()
+                        .map(|column| ResultColumn {
                             name: column.name().to_string(),
                             type_name: type_name(column.column_type()).map(str::to_string),
-                        });
-                        types.push(column.column_type());
-                    }
-                }
-            }
-            QueryItem::Row(row) if sets <= 1 => {
-                outcome.rows.push(
-                    row.cells()
-                        .zip(&types)
-                        .map(|((_, data), column_type)| decode(data, *column_type))
+                        })
                         .collect(),
-                );
+                    rows: Vec::new(),
+                });
+            }
+            QueryItem::Row(row) if collecting => {
+                if let Some(set) = sets.last_mut() {
+                    set.rows.push(
+                        row.cells()
+                            .zip(&types)
+                            .map(|((_, data), column_type)| decode(data, *column_type))
+                            .collect(),
+                    );
+                }
             }
             QueryItem::Row(_) => {}
         }
     }
-    Ok(outcome)
+    let mut sets = sets.into_iter();
+    let first = sets.next().unwrap_or_default();
+    Ok(Outcome {
+        columns: first.columns,
+        rows: first.rows,
+        affected: 0,
+        later: sets.collect(),
+    })
 }
 
 /// Run a statement that passed the read-only check inside a transaction

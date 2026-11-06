@@ -702,6 +702,17 @@ macro_rules! impl_database {
             }
 
             #[cfg(feature = "raw-sql")]
+            async fn query_raw_results(
+                &self,
+                query: &str,
+                params: &[$crate::DatabaseValue],
+            ) -> Result<Vec<$crate::QueryResult>, $crate::DatabaseError> {
+                Ok($crate::mssql::Executor::run(self, query, params, $crate::mssql::Mode::Sets)
+                    .await?
+                    .into_results())
+            }
+
+            #[cfg(feature = "raw-sql")]
             async fn exec_raw(&self, statement: &str) -> Result<(), $crate::DatabaseError> {
                 $crate::mssql::Executor::run(self, statement, &[], $crate::mssql::Mode::Batch)
                     .await
