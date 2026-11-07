@@ -12,7 +12,7 @@
 //! accessing this module directly. The parent crate automatically selects the appropriate
 //! backend based on enabled features.
 
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{collections::BTreeMap, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -47,24 +47,57 @@ impl GenericClient<crate::ReqwestRequestBuilder> for Client {
 
 /// Builder for constructing a reqwest HTTP client.
 ///
-/// This builder creates a default `reqwest::Client` configuration that can be used
-/// for making real HTTP requests.
-pub struct ClientBuilder;
+/// Options left unset keep `reqwest`'s defaults (no timeouts, no `User-Agent`).
+#[derive(Debug, Default)]
+pub struct ClientBuilder {
+    timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
+    user_agent: Option<String>,
+}
+
+impl ClientBuilder {
+    const fn empty() -> Self {
+        Self {
+            timeout: None,
+            connect_timeout: None,
+            user_agent: None,
+        }
+    }
+}
 
 impl crate::ReqwestClientBuilder {
     /// Create a new client builder for configuring the reqwest HTTP client.
     #[must_use]
     pub const fn new() -> Self {
-        Self(ClientBuilder, PhantomData, PhantomData)
+        Self(ClientBuilder::empty(), PhantomData, PhantomData)
     }
 }
 
 impl GenericClientBuilder<crate::ReqwestRequestBuilder, crate::ReqwestClient> for ClientBuilder {
+    fn timeout(&mut self, timeout: Duration) {
+        self.timeout = Some(timeout);
+    }
+
+    fn connect_timeout(&mut self, timeout: Duration) {
+        self.connect_timeout = Some(timeout);
+    }
+
+    fn user_agent(&mut self, user_agent: &str) {
+        self.user_agent = Some(user_agent.to_owned());
+    }
+
     fn build(self) -> Result<crate::ReqwestClient, Error> {
-        Ok(crate::ClientWrapper(
-            Client(reqwest::Client::new()),
-            PhantomData,
-        ))
+        let mut builder = reqwest::Client::builder();
+        if let Some(timeout) = self.timeout {
+            builder = builder.timeout(timeout);
+        }
+        if let Some(timeout) = self.connect_timeout {
+            builder = builder.connect_timeout(timeout);
+        }
+        if let Some(user_agent) = self.user_agent {
+            builder = builder.user_agent(user_agent);
+        }
+        Ok(crate::ClientWrapper(Client(builder.build()?), PhantomData))
     }
 }
 
@@ -101,6 +134,11 @@ impl GenericRequestBuilder<crate::ReqwestResponse> for RequestBuilder {
     fn body(&mut self, body: Bytes) {
         let builder = self.0.take().unwrap();
         self.0 = Some(builder.body(body));
+    }
+
+    fn timeout(&mut self, timeout: Duration) {
+        let builder = self.0.take().unwrap();
+        self.0 = Some(builder.timeout(timeout));
     }
 
     #[cfg(feature = "json")]
@@ -257,11 +295,57 @@ mod tests {
 
     #[test_log::test]
     fn test_client_builder_build() {
-        let builder = ClientBuilder;
+        let builder = ClientBuilder::default();
         let result =
             GenericClientBuilder::<crate::ReqwestRequestBuilder, crate::ReqwestClient>::build(
                 builder,
             );
         assert!(result.is_ok());
+    }
+
+    /// Accepts connections on a local port and never responds.
+    fn silent_server() -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let (_stream, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_secs(2));
+        });
+        (addr, handle)
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_client_timeout_elapses() {
+        let (addr, _server) = silent_server();
+        let client = crate::ReqwestClient::builder()
+            .timeout(Duration::from_millis(100))
+            .build()
+            .unwrap();
+        let error = client
+            .get(&format!("http://{addr}/"))
+            .send()
+            .await
+            .err()
+            .expect("request to a silent server should time out");
+        assert!(error.is_timeout(), "{error:?}");
+    }
+
+    #[test_log::test(switchy_async::test(real_time))]
+    async fn test_request_timeout_overrides_client() {
+        let (addr, _server) = silent_server();
+        let client = crate::ReqwestClient::new();
+        let error = client
+            .get(&format!("http://{addr}/"))
+            .timeout(Duration::from_millis(100))
+            .send()
+            .await
+            .err()
+            .expect("request to a silent server should time out");
+        assert!(error.is_timeout(), "{error:?}");
+    }
+
+    #[test_log::test]
+    fn test_decode_error_is_not_timeout() {
+        assert!(!Error::Decode.is_timeout());
     }
 }

@@ -191,6 +191,38 @@ async fn api_request_with_auth() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Timeouts and Client Options
+
+Requests have no timeout by default. Set one for the whole client, or per request:
+
+```rust
+use std::time::Duration;
+
+use switchy_http::Client;
+
+async fn fetch_with_timeouts() -> Result<(), switchy_http::Error> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30)) // connect + send + read the whole body
+        .connect_timeout(Duration::from_secs(5))
+        .user_agent("MoosicBox/1.0")
+        .build()?;
+
+    match client
+        .get("https://api.example.com/slow")
+        .timeout(Duration::from_secs(60)) // overrides the client timeout
+        .send()
+        .await
+    {
+        Ok(response) => println!("Response status: {:?}", response.status()),
+        Err(e) if e.is_timeout() => println!("Timed out"),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+```
+
+The simulator backend accepts these options and ignores them.
+
 ### Error Handling
 
 ```rust
@@ -272,6 +304,8 @@ Enable automatic decompression of HTTP responses (requires `reqwest` feature):
 - `Error::Decode` - Response decoding failures
 - `Error::Deserialize` - JSON deserialization errors (with `json` feature)
 - `Error::Reqwest` - Reqwest-specific errors (with `reqwest` feature)
+
+`Error::is_timeout()` reports whether a configured timeout elapsed.
 
 ## Thread Safety
 

@@ -61,7 +61,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{collections::BTreeMap, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -101,6 +101,25 @@ pub enum Error {
     Reqwest(#[from] ::reqwest::Error),
 }
 
+impl Error {
+    /// Whether the request failed because a configured timeout elapsed (see
+    /// [`GenericClientBuilder::timeout`], [`GenericClientBuilder::connect_timeout`], and
+    /// [`GenericRequestBuilder::timeout`]).
+    #[must_use]
+    // Without the `reqwest` backend no variant can carry a timeout, so `self` goes unused.
+    #[cfg_attr(
+        not(feature = "reqwest"),
+        allow(clippy::unused_self, clippy::missing_const_for_fn)
+    )]
+    pub fn is_timeout(&self) -> bool {
+        #[cfg(feature = "reqwest")]
+        if let Self::Reqwest(error) = self {
+            return error.is_timeout();
+        }
+        false
+    }
+}
+
 /// Common HTTP header names.
 #[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
@@ -129,6 +148,10 @@ pub trait GenericRequestBuilder<R>: Send + Sync {
     /// Set the request body.
     #[allow(unused)]
     fn body(&mut self, body: Bytes);
+    /// Set a timeout for this request, overriding the client's
+    /// [`GenericClientBuilder::timeout`]. It covers connecting, sending, and reading the whole
+    /// response body.
+    fn timeout(&mut self, timeout: Duration);
     /// Set the request body as a form (requires `json` feature).
     #[cfg(feature = "json")]
     fn form(&mut self, form: &serde_json::Value);
@@ -142,6 +165,13 @@ pub trait GenericRequestBuilder<R>: Send + Sync {
 
 /// Generic trait for building HTTP clients.
 pub trait GenericClientBuilder<RB, C: GenericClient<RB>>: Send + Sync {
+    /// Set a timeout applied to every request: from connecting until the response body has
+    /// been read. Unset by default (no timeout).
+    fn timeout(&mut self, timeout: Duration);
+    /// Set a timeout for only the connect phase of every request. Unset by default.
+    fn connect_timeout(&mut self, timeout: Duration);
+    /// Set the `User-Agent` header sent with every request.
+    fn user_agent(&mut self, user_agent: &str);
     /// Build the HTTP client.
     ///
     /// # Errors
@@ -336,6 +366,14 @@ macro_rules! impl_http {
                     self
                 }
 
+                /// Set a timeout for this request, overriding the client's timeout. It
+                /// covers connecting, sending, and reading the whole response body.
+                #[must_use]
+                pub fn timeout(mut self, timeout: std::time::Duration) -> Self {
+                    self.0.timeout(timeout);
+                    self
+                }
+
                 /// Send the HTTP request.
                 ///
                 /// # Errors
@@ -367,6 +405,10 @@ macro_rules! impl_http {
 
                 fn body(&mut self, body: Bytes) {
                     self.0.body(body);
+                }
+
+                fn timeout(&mut self, timeout: std::time::Duration) {
+                    self.0.timeout(timeout);
                 }
 
                 #[cfg(feature = "json")]
@@ -467,12 +509,47 @@ macro_rules! impl_http {
             }
 
             impl GenericClientBuilder<ModuleRequestBuilder, ModuleClient> for ModuleClientBuilder {
+                fn timeout(&mut self, timeout: std::time::Duration) {
+                    self.0.timeout(timeout);
+                }
+
+                fn connect_timeout(&mut self, timeout: std::time::Duration) {
+                    self.0.connect_timeout(timeout);
+                }
+
+                fn user_agent(&mut self, user_agent: &str) {
+                    self.0.user_agent(user_agent);
+                }
+
                 fn build(self) -> Result<ModuleClient, Error> {
                     self.0.build()
                 }
             }
 
             impl ModuleClientBuilder {
+                /// Set a timeout applied to every request: from connecting until the
+                /// response body has been read. Unset by default (no timeout).
+                #[must_use]
+                pub fn timeout(mut self, timeout: std::time::Duration) -> Self {
+                    <Self as GenericClientBuilder<ModuleRequestBuilder, ModuleClient>>::timeout(&mut self, timeout);
+                    self
+                }
+
+                /// Set a timeout for only the connect phase of every request. Unset by
+                /// default.
+                #[must_use]
+                pub fn connect_timeout(mut self, timeout: std::time::Duration) -> Self {
+                    <Self as GenericClientBuilder<ModuleRequestBuilder, ModuleClient>>::connect_timeout(&mut self, timeout);
+                    self
+                }
+
+                /// Set the `User-Agent` header sent with every request.
+                #[must_use]
+                pub fn user_agent(mut self, user_agent: &str) -> Self {
+                    <Self as GenericClientBuilder<ModuleRequestBuilder, ModuleClient>>::user_agent(&mut self, user_agent);
+                    self
+                }
+
                 /// Build the configured HTTP client.
                 ///
                 /// # Errors

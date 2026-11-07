@@ -18,7 +18,7 @@
 //! accessing this module directly. The parent crate automatically selects the appropriate
 //! backend based on enabled features.
 
-use std::{collections::BTreeMap, marker::PhantomData};
+use std::{collections::BTreeMap, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -66,6 +66,12 @@ impl crate::SimulatorClientBuilder {
 impl GenericClientBuilder<crate::SimulatorRequestBuilder, crate::SimulatorClient>
     for ClientBuilder
 {
+    fn timeout(&mut self, _timeout: Duration) {}
+
+    fn connect_timeout(&mut self, _timeout: Duration) {}
+
+    fn user_agent(&mut self, _user_agent: &str) {}
+
     fn build(self) -> Result<crate::SimulatorClient, Error> {
         Ok(crate::ClientWrapper(Client, PhantomData))
     }
@@ -88,6 +94,8 @@ impl GenericRequestBuilder<crate::SimulatorResponse> for RequestBuilder {
     fn query_params(&mut self, _params: &[(&str, &str)]) {}
 
     fn body(&mut self, _body: Bytes) {}
+
+    fn timeout(&mut self, _timeout: Duration) {}
 
     #[cfg(feature = "json")]
     fn form(&mut self, _form: &serde_json::Value) {}
