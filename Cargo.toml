@@ -677,7 +677,7 @@ mlua = { version = "0.12.2", default-features = false }
 moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
-mp3lame-encoder = "0.2.5"
+mp3lame-encoder = "0.3.0"
 nanoid = "0.5.0"
 native-tls = "0.2.18"
 net2 = "0.2.39"
@@ -734,7 +734,7 @@ reqwest = { version = "0.13.5", default-features = false, features = [
     "rustls",
     "stream",
 ] }
-rfd = { version = "0.17.2", default-features = false }
+rfd = { version = "0.18.0", default-features = false }
 roxmltree = "0.21.2"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
@@ -771,16 +771,16 @@ static_init = "1.0.4"
 strum = "0.28.0"
 strum_macros = "0.28.0"
 subtle = "2.6.1"
-swc_bundler = "57.0.0"
-swc_common = { version = "26.0.0", features = ["tty-emitter"] }
-swc_ecma_ast = "29.0.2"
-swc_ecma_codegen = "32.0.5"
-swc_ecma_loader = { version = "27.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "63.0.4"
-swc_ecma_parser = "46.1.2"
-swc_ecma_transforms_base = "50.0.3"
-swc_ecma_transforms_typescript = "56.0.1"
-swc_ecma_visit = "29.0.0"
+swc_bundler = "58.0.0"
+swc_common = { version = "27.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "30.0.2"
+swc_ecma_codegen = "33.0.0"
+swc_ecma_loader = { version = "28.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "64.0.3"
+swc_ecma_parser = "47.0.0"
+swc_ecma_transforms_base = "51.0.1"
+swc_ecma_transforms_typescript = "57.0.3"
+swc_ecma_visit = "30.0.0"
 symphonia = { version = "0.6.1", default-features = false, features = ["all"] }
 syn = "3.0.10"
 syntect = "5.3.0"
