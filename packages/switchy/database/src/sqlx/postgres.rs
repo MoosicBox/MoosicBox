@@ -1098,6 +1098,14 @@ impl Database for PostgresSqlxDatabase {
     async fn clear_connection_cache(&self) {
         self.connection.lock().await.take();
     }
+
+    async fn set_password(&self, password: &str) -> Result<(), DatabaseError> {
+        let pool = self.pool.lock().await;
+        let options = pool.connect_options().as_ref().clone().password(password);
+        pool.set_connect_options(options);
+        drop(pool);
+        Ok(())
+    }
 }
 
 #[async_trait]

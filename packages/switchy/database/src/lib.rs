@@ -2976,6 +2976,30 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// The default implementation does nothing, which is correct for backends
     /// that don't cache connections in a way that causes stale schema issues.
     async fn clear_connection_cache(&self) {}
+
+    /// Log in with `password` on connections opened from now on.
+    ///
+    /// Connections that are already open keep the session they logged in
+    /// with; connections the pool opens later (to replace idle, expired or
+    /// broken ones) use the new password. This rotates short-lived
+    /// credentials, such as cloud IAM tokens or dynamically issued secrets,
+    /// without reopening the database.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// * **`PostgreSQL` (sqlx)**: Replaces the pool's connect options
+    /// * **`MySQL` (sqlx)**: Replaces the pool's connect options
+    ///
+    /// # Errors
+    ///
+    /// * [`DatabaseError::UnsupportedOperation`] if the backend can't change
+    ///   the password of an open database (the default)
+    async fn set_password(&self, password: &str) -> Result<(), DatabaseError> {
+        let _ = password;
+        Err(DatabaseError::UnsupportedOperation(
+            "changing the password of an open database".into(),
+        ))
+    }
 }
 
 /// Savepoint within a transaction for nested transaction support

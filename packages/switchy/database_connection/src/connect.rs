@@ -101,8 +101,14 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 /// sets itself are refused). For SQL Server, `encrypt`,
 /// `trustServerCertificate`, the CA file and `hostNameInCertificate` map onto
 /// the driver's TLS settings, and a named instance is found through the SQL
-/// Server Browser unless a port is given. Other URL query parameters are
-/// carried in the target but not applied.
+/// Server Browser unless a port is given. For `PostgreSQL`, libpq's
+/// `options` parameter (`-c name=value` and `--name=value` settings, such as
+/// `-c search_path=app,public`) is sent as startup options ahead of the
+/// ones above, which win, and `connect_timeout` (whole seconds; zero or
+/// negative means no limit, and anything shorter than two seconds counts as
+/// two) limits opening the connection (with `postgres-sqlx`, the first one
+/// the pool opens; with `postgres-raw`, each one). Other URL query
+/// parameters are carried in the target but not applied.
 ///
 /// [`TlsFiles`] are applied as follows:
 ///
@@ -131,7 +137,8 @@ fn pool_size_u32(options: &ConnectOptions) -> u32 {
 ///   in-memory databases, read-only Turso, a connect address for a target other
 ///   than `libSQL`, TLS or certificate files requested for
 ///   raw `PostgreSQL` without a TLS feature, a client certificate without a key or
-///   vice versa for raw `PostgreSQL`)
+///   vice versa for raw `PostgreSQL`, a `PostgreSQL` `options` parameter with
+///   anything but settings, a `connect_timeout` that isn't a whole number)
 /// * [`InitDbError::TlsFile`] when raw `PostgreSQL` cannot read a certificate file
 /// * Backend initialization errors (`InitDatabase`, `InitMySql`, `InitSqlite`,
 ///   `InitSqliteSqlxDatabase`, `InitTurso`, `InitDuckDb`, `InitLibsql`,
@@ -477,17 +484,136 @@ fn log_ignored_statement_timeout(kind: &str, options: &ConnectOptions) {
     }
 }
 
-/// Startup `-c` options for `PostgreSQL`.
+/// Startup `-c` options for `PostgreSQL`: the URL's libpq `options`
+/// parameter, then the settings `options` asks for (later settings win, so
+/// the URL can't turn a read-only session back into a read-write one).
+///
+/// # Errors
+///
+/// * [`InitDbError::UnsupportedOption`] if the `options` parameter holds
+///   anything but `-c name=value` and `--name=value` settings
 #[cfg(feature = "postgres")]
-fn postgres_startup_options(options: &ConnectOptions) -> Vec<(&'static str, String)> {
-    let mut startup = Vec::new();
+fn postgres_startup_options(
+    params: &std::collections::BTreeMap<String, String>,
+    options: &ConnectOptions,
+) -> Result<Vec<(String, String)>, InitDbError> {
+    let mut startup = match params.get("options") {
+        Some(value) => parse_libpq_options(value)?,
+        None => Vec::new(),
+    };
     if options.is_read_only() {
-        startup.push(("default_transaction_read_only", "on".to_string()));
+        startup.push((
+            "default_transaction_read_only".to_string(),
+            "on".to_string(),
+        ));
     }
     if let Some(timeout) = options.statement_timeout {
-        startup.push(("statement_timeout", timeout.as_millis().to_string()));
+        startup.push((
+            "statement_timeout".to_string(),
+            timeout.as_millis().to_string(),
+        ));
     }
-    startup
+    Ok(startup)
+}
+
+/// Parse libpq's `options` connection parameter: settings written as
+/// `-c name=value`, `-cname=value` or `--name=value` (where dashes in the
+/// name stand for underscores), separated by spaces, with `\` escaping the
+/// next character.
+///
+/// # Errors
+///
+/// * [`InitDbError::UnsupportedOption`] for any other command-line switch,
+///   or a setting without `=`
+#[cfg(feature = "postgres")]
+fn parse_libpq_options(value: &str) -> Result<Vec<(String, String)>, InitDbError> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut in_word = false;
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    word.push(next);
+                }
+                in_word = true;
+            }
+            c if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut word));
+                    in_word = false;
+                }
+            }
+            c => {
+                word.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if in_word {
+        words.push(word);
+    }
+
+    let unsupported = |detail: String| {
+        InitDbError::UnsupportedOption(format!(
+            "the options parameter takes only `-c name=value` settings: {detail}"
+        ))
+    };
+    let mut settings = Vec::new();
+    let mut words = words.into_iter();
+    while let Some(word) = words.next() {
+        let (setting, dashes_mean_underscores) = if word == "-c" {
+            let setting = words
+                .next()
+                .ok_or_else(|| unsupported("`-c` without a setting".to_string()))?;
+            (setting, false)
+        } else if let Some(setting) = word.strip_prefix("--") {
+            (setting.to_string(), true)
+        } else if let Some(setting) = word.strip_prefix("-c") {
+            (setting.to_string(), false)
+        } else {
+            return Err(unsupported(format!("`{word}`")));
+        };
+        let Some((name, value)) = setting.split_once('=') else {
+            return Err(unsupported(format!("`{setting}` has no value")));
+        };
+        if name.is_empty() {
+            return Err(unsupported(format!("`{setting}` has no name")));
+        }
+        let name = if dashes_mean_underscores {
+            name.replace('-', "_")
+        } else {
+            name.to_string()
+        };
+        settings.push((name, value.to_string()));
+    }
+    Ok(settings)
+}
+
+/// libpq's `connect_timeout` connection parameter: whole seconds to wait
+/// for the connection, where zero, a negative number or no parameter means
+/// no limit and libpq's minimum of two seconds applies.
+///
+/// # Errors
+///
+/// * [`InitDbError::UnsupportedOption`] if the value isn't a whole number
+#[cfg(feature = "postgres")]
+fn postgres_connect_timeout(
+    params: &std::collections::BTreeMap<String, String>,
+) -> Result<Option<std::time::Duration>, InitDbError> {
+    let Some(value) = params.get("connect_timeout") else {
+        return Ok(None);
+    };
+    let seconds: i64 = value.trim().parse().map_err(|_| {
+        InitDbError::UnsupportedOption(format!(
+            "connect_timeout must be a whole number of seconds, not `{value}`"
+        ))
+    })?;
+    Ok(u64::try_from(seconds)
+        .ok()
+        .filter(|seconds| *seconds > 0)
+        .map(|seconds| std::time::Duration::from_secs(seconds.max(2))))
 }
 
 #[cfg(feature = "postgres")]
@@ -514,13 +640,28 @@ async fn postgres_sqlx(
     use sqlx::postgres::PgPoolOptions;
     use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
 
-    let connect_options = pg_connect_options(creds, ssl_mode, tls_files, params, options);
+    let connect_options = pg_connect_options(creds, ssl_mode, tls_files, params, options)?;
 
-    let pool = PgPoolOptions::new()
+    let connecting = PgPoolOptions::new()
         .max_connections(pool_size_u32(options))
-        .connect_with(connect_options)
-        .await
-        .map_err(crate::InitDatabaseError::from)?;
+        .connect_with(connect_options);
+    let pool = match postgres_connect_timeout(params)? {
+        // sqlx runs on tokio's clock, so its connect is timed on it too.
+        Some(limit) => tokio::time::timeout(limit, connecting)
+            .await
+            .map_err(|_| {
+                sqlx::Error::Io(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!(
+                        "connection timed out after {}s (connect_timeout)",
+                        limit.as_secs()
+                    ),
+                ))
+            })
+            .and_then(|connected| connected),
+        None => connecting.await,
+    }
+    .map_err(crate::InitDatabaseError::from)?;
 
     Ok(Box::new(PostgresSqlxDatabase::new(Arc::new(
         switchy_async::sync::Mutex::new(pool),
@@ -534,7 +675,7 @@ fn pg_connect_options(
     tls_files: &TlsFiles,
     params: &std::collections::BTreeMap<String, String>,
     options: &ConnectOptions,
-) -> sqlx::postgres::PgConnectOptions {
+) -> Result<sqlx::postgres::PgConnectOptions, InitDbError> {
     use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
     let mut connect_options = PgConnectOptions::new();
@@ -577,11 +718,11 @@ fn pg_connect_options(
     if let Some(path) = &tls_files.client_key {
         connect_options = connect_options.ssl_client_key(path);
     }
-    let startup = postgres_startup_options(options);
+    let startup = postgres_startup_options(params, options)?;
     if !startup.is_empty() {
         connect_options = connect_options.options(startup);
     }
-    connect_options
+    Ok(connect_options)
 }
 
 #[cfg(all(not(feature = "postgres-sqlx"), feature = "postgres-raw"))]
@@ -620,10 +761,17 @@ fn postgres_raw(
     }
     // Match sqlx, which always starts sessions in UTC.
     let mut startup_str = String::from("-c TimeZone=UTC");
-    for (key, value) in postgres_startup_options(options) {
-        write!(startup_str, " -c {key}={value}").ok();
+    for (key, value) in postgres_startup_options(params, options)? {
+        // libpq's escaping: a backslash makes the next character literal.
+        let setting = format!("{key}={value}")
+            .replace('\\', "\\\\")
+            .replace(' ', "\\ ");
+        write!(startup_str, " -c {setting}").ok();
     }
     config.options(startup_str);
+    if let Some(limit) = postgres_connect_timeout(params)? {
+        config.connect_timeout(limit);
+    }
     if let Some(mode) = ssl_mode {
         config.ssl_mode(match mode {
             SslMode::Disable => tokio_postgres::config::SslMode::Disable,
@@ -1302,6 +1450,140 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
+    #[cfg(feature = "postgres")]
+    #[test_log::test]
+    fn libpq_options_parse_settings() {
+        let pairs = |value: &str| {
+            parse_libpq_options(value)
+                .unwrap()
+                .into_iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            pairs("-c search_path=app,public -cgeqo=off --work-mem=64MB"),
+            ["search_path=app,public", "geqo=off", "work_mem=64MB"]
+        );
+        assert_eq!(
+            pairs(r#"-c search_path="my\ schema",public"#),
+            [r#"search_path="my schema",public"#]
+        );
+        assert_eq!(pairs("  "), Vec::<String>::new());
+
+        for refused in ["-d 5", "-c", "-c search_path", "--=x", "search_path=x"] {
+            assert!(
+                matches!(
+                    parse_libpq_options(refused),
+                    Err(InitDbError::UnsupportedOption(_))
+                ),
+                "{refused} was accepted"
+            );
+        }
+    }
+
+    #[cfg(feature = "postgres")]
+    #[test_log::test]
+    fn postgres_connect_timeout_follows_libpq() {
+        let timeout = |value: &str| {
+            postgres_connect_timeout(&std::collections::BTreeMap::from([(
+                "connect_timeout".to_string(),
+                value.to_string(),
+            )]))
+        };
+        assert_eq!(
+            timeout("5").unwrap(),
+            Some(std::time::Duration::from_secs(5))
+        );
+        assert_eq!(
+            timeout("1").unwrap(),
+            Some(std::time::Duration::from_secs(2))
+        );
+        assert_eq!(timeout("0").unwrap(), None);
+        assert_eq!(timeout("-3").unwrap(), None);
+        assert!(timeout("5s").is_err());
+        assert_eq!(
+            postgres_connect_timeout(&std::collections::BTreeMap::new()).unwrap(),
+            None
+        );
+    }
+
+    #[cfg(feature = "postgres-sqlx")]
+    #[test_log::test(tokio::test)]
+    async fn postgres_sqlx_gives_up_after_connect_timeout() {
+        // A server that accepts the connection and never answers.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let _held = std::thread::spawn(move || {
+            let held = listener.accept();
+            std::thread::sleep(std::time::Duration::from_secs(10));
+            drop(held);
+        });
+
+        let target = ConnectionTarget::from_url(&format!(
+            "postgres://u@127.0.0.1:{port}/app?sslmode=disable&connect_timeout=2"
+        ))
+        .unwrap();
+        let started = std::time::Instant::now();
+        let error = init_with_options(&target, &ConnectOptions::new())
+            .await
+            .unwrap_err();
+        assert!(started.elapsed() < std::time::Duration::from_secs(8));
+        assert!(
+            error.to_string().contains("timed out after 2s"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[cfg(feature = "postgres-sqlx")]
+    #[test_log::test]
+    fn postgres_sqlx_sends_url_options_before_its_own() {
+        let target = ConnectionTarget::from_url(
+            "postgres://u@db.example.com/app?options=-c%20search_path%3Dapp%2Cpublic\
+             %20-c%20default_transaction_read_only%3Doff",
+        )
+        .unwrap();
+        let ConnectionTarget::Postgres {
+            creds,
+            ssl_mode,
+            tls_files,
+            params,
+        } = &target
+        else {
+            panic!("expected postgres")
+        };
+        let options = pg_connect_options(
+            creds,
+            *ssl_mode,
+            tls_files,
+            params,
+            &ConnectOptions::new().read_only(),
+        )
+        .unwrap();
+        assert_eq!(
+            options.get_options(),
+            Some(
+                "-c search_path=app,public -c default_transaction_read_only=off \
+                 -c default_transaction_read_only=on"
+            )
+        );
+
+        let target =
+            ConnectionTarget::from_url("postgres://u@db.example.com/app?options=-e").unwrap();
+        let ConnectionTarget::Postgres {
+            creds,
+            ssl_mode,
+            tls_files,
+            params,
+        } = &target
+        else {
+            panic!("expected postgres")
+        };
+        assert!(matches!(
+            pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new()),
+            Err(InitDbError::UnsupportedOption(_))
+        ));
+    }
+
     #[cfg(feature = "postgres-sqlx")]
     #[test_log::test]
     fn postgres_sqlx_applies_tls_files() {
@@ -1320,7 +1602,8 @@ mod tests {
             panic!("expected postgres")
         };
         let options =
-            pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new());
+            pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new())
+                .unwrap();
         assert!(matches!(
             options.get_ssl_mode(),
             sqlx::postgres::PgSslMode::VerifyFull
@@ -1347,6 +1630,7 @@ mod tests {
         let debug = format!(
             "{:?}",
             pg_connect_options(creds, *ssl_mode, tls_files, params, &ConnectOptions::new())
+                .unwrap()
         );
         assert!(!debug.contains("/certs/"));
     }

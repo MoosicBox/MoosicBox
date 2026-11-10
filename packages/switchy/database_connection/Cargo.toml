@@ -25,7 +25,8 @@ duckdb   = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
 # sqlx dependencies
-sqlx = { workspace = true, optional = true, features = ["runtime-tokio"] }
+sqlx  = { workspace = true, optional = true, features = ["runtime-tokio"] }
+tokio = { workspace = true, optional = true, features = ["time"] }
 
 # tokio-postgres dependencies
 deadpool-postgres = { workspace = true, optional = true }
@@ -103,6 +104,7 @@ postgres-raw = [
     "switchy_database/postgres-raw",
 ]
 postgres-sqlx = [
+    "dep:tokio",
     "postgres",
     "sqlx",
     "sqlx/postgres",

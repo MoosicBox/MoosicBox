@@ -997,6 +997,14 @@ impl Database for MySqlSqlxDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         self.query_raw_params_internal(query, params).await
     }
+
+    async fn set_password(&self, password: &str) -> Result<(), DatabaseError> {
+        let pool = self.connection.lock().await;
+        let options = pool.connect_options().as_ref().clone().password(password);
+        pool.set_connect_options(options);
+        drop(pool);
+        Ok(())
+    }
 }
 
 #[async_trait]
