@@ -665,12 +665,12 @@ mod tui {
     use bmux_tui::terminal::Terminal;
     use bmux_tui::text::{Line, Span, Text, TextWrap};
     use bmux_tui_components::pane::{Pane, PaneComponent, PaneState};
-    use crossterm::cursor::{Hide, Show};
-    use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-    use crossterm::execute;
-    use crossterm::terminal;
-    use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-    use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+    use bmux_terminal::cursor::{Hide, Show};
+    use bmux_terminal::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+    use bmux_terminal::execute;
+    use bmux_terminal::terminal;
+    use bmux_terminal::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+    use bmux_terminal::terminal::{disable_raw_mode, enable_raw_mode};
     use std::cell::Cell;
     use std::collections::{BTreeMap, VecDeque};
     use std::io::{BufRead, Read, Seek, Write};
