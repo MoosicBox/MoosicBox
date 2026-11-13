@@ -657,6 +657,12 @@ mod tui {
         watch_filter_state_to_rule,
     };
     use anyhow::{Context, Result};
+    use bmux_terminal::cursor::{Hide, Show};
+    use bmux_terminal::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+    use bmux_terminal::execute;
+    use bmux_terminal::terminal;
+    use bmux_terminal::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+    use bmux_terminal::terminal::{disable_raw_mode, enable_raw_mode};
     use bmux_tui::component::{Component, Constraints, LayoutCx};
     use bmux_tui::composition::TextBlock;
     use bmux_tui::geometry::{Rect, Size};
@@ -665,12 +671,6 @@ mod tui {
     use bmux_tui::terminal::Terminal;
     use bmux_tui::text::{Line, Span, Text, TextWrap};
     use bmux_tui_components::pane::{Pane, PaneComponent, PaneState};
-    use bmux_terminal::cursor::{Hide, Show};
-    use bmux_terminal::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-    use bmux_terminal::execute;
-    use bmux_terminal::terminal;
-    use bmux_terminal::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-    use bmux_terminal::terminal::{disable_raw_mode, enable_raw_mode};
     use std::cell::Cell;
     use std::collections::{BTreeMap, VecDeque};
     use std::io::{BufRead, Read, Seek, Write};

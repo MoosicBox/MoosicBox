@@ -790,7 +790,7 @@ impl PackageProgress {
             }
         }
         let size =
-            bmux_tui::crossterm::terminal_size().unwrap_or(bmux_tui::geometry::Size::new(80, 24));
+            bmux_tui::terminal_io::terminal_size().unwrap_or(bmux_tui::geometry::Size::new(80, 24));
         let lines = self.lines(size);
         let mut out = io::stderr().lock();
         self.clear(&mut out)?;

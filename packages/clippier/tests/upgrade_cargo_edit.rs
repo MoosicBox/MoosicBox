@@ -205,9 +205,19 @@ fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     result
 }
 
+/// Name under which deliberately invalid fixture manifests are stored, so
+/// Cargo does not report them when it scans this repository as a git
+/// dependency. Projects receive them as `Cargo.toml`.
+const STORED_INVALID_MANIFEST: &str = "Cargo.toml.invalid";
+
 fn project(name: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     for (relative, bytes) in files(&fixtures(name).join("in")) {
+        let relative = if relative.file_name() == Some(STORED_INVALID_MANIFEST.as_ref()) {
+            relative.with_file_name("Cargo.toml")
+        } else {
+            relative
+        };
         let path = dir.path().join(relative);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();

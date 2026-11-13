@@ -7,9 +7,9 @@ use std::{
 };
 
 use bmux_tui::{
-    crossterm::{CrosstermTerminalGuard, terminal_size},
     event::Event,
     terminal::Terminal,
+    terminal_io::{TerminalGuard, terminal_size},
 };
 use bmux_tui_runtime::{ManagedTerminalInput, Runtime, RuntimeError};
 use hyperchad_renderer::RenderRunner;
@@ -219,7 +219,7 @@ async fn run_terminal(
     receiver: flume::Receiver<Message>,
 ) -> Result<(), Error> {
     // Guard remains in this stack through every success, failure and unwinding path.
-    let guard = CrosstermTerminalGuard::enter(io::stdout())?;
+    let guard = TerminalGuard::enter(io::stdout())?;
     let size = terminal_size()?;
     let mut program = BmuxProgram::from_shared(Arc::clone(&shared));
     program.resize(size);
@@ -259,8 +259,22 @@ async fn run_terminal(
     let (mut output, primary): (_, Option<Error>) = match result {
         Ok(output) => (output, None),
         Err(
-            RuntimeError::Program { error, output } | RuntimeError::Presenter { error, output },
-        ) => (output, Some(error)),
+            RuntimeError::Program {
+                error,
+                cleanup_error,
+                output,
+            }
+            | RuntimeError::Presenter {
+                error,
+                cleanup_error,
+                output,
+            },
+        ) => {
+            if let Some(cleanup_error) = cleanup_error {
+                log::error!("bmux runtime restoration after {error}: {cleanup_error}");
+            }
+            (*output, Some(error))
+        }
     };
     let cleanup = output.presenter.cleanup();
     let leave = guard.leave();

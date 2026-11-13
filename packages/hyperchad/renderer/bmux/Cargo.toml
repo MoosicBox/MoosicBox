@@ -18,7 +18,7 @@ async-trait = { workspace = true }
 bmux_image = { workspace = true, optional = true }
 bmux_keyboard = { workspace = true }
 bmux_text_edit = { workspace = true }
-bmux_tui = { workspace = true, features = ["crossterm"] }
+bmux_tui = { workspace = true, features = ["terminal-io"] }
 bmux_tui_components = { workspace = true, features = [
     "data-display",
     "forms",
@@ -27,8 +27,7 @@ bmux_tui_components = { workspace = true, features = [
     "scroll-view",
     "text-editing",
 ] }
-bmux_tui_runtime = { workspace = true, features = ["crossterm"] }
-crossterm = { workspace = true }
+bmux_tui_runtime = { workspace = true, features = ["terminal-io"] }
 flume = { workspace = true }
 hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
 hyperchad_color = { workspace = true }

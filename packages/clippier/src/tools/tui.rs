@@ -4,18 +4,18 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
+use bmux_terminal::event::{self, Event, KeyCode, KeyModifiers};
 use bmux_tui::{
     component::{Component, Constraints, LayoutCx, LayoutNode},
     composition::{Column, Flex, Row, TextBlock},
-    crossterm::CrosstermTerminalGuard,
     geometry::{Rect, Size},
     paint::PaintCx,
     style::{Color, Modifier, Style},
     terminal::Terminal,
+    terminal_io::TerminalGuard,
     text::{Line, Span, Text},
 };
 use bmux_tui_components::pane::{Pane, PaneComponent, PaneState as SurfaceState, PaneStyles};
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use std::cell::Cell;
 
 use crate::tools::runner::ToolEvent;
@@ -190,8 +190,8 @@ pub fn run_live_tui(
         .map(|(name, display_name)| (name.clone(), PaneState::new(display_name.clone())))
         .collect();
 
-    let mut guard = CrosstermTerminalGuard::enter(std::io::stdout())?;
-    let (width, height) = crossterm::terminal::size()?;
+    let mut guard = TerminalGuard::enter(std::io::stdout())?;
+    let (width, height) = bmux_terminal::terminal::size()?;
     let mut terminal = Terminal::new(
         guard.writer_mut().expect("active terminal guard"),
         Rect::new(0, 0, width, height),
@@ -232,7 +232,7 @@ pub fn run_live_tui(
             Err(RecvTimeoutError::Disconnected) => break Ok(TuiExit::Completed),
         }
 
-        let (width, height) = crossterm::terminal::size()?;
+        let (width, height) = bmux_terminal::terminal::size()?;
         if terminal.area() != Rect::new(0, 0, width, height) {
             terminal.resize(Rect::new(0, 0, width, height));
         }
@@ -377,7 +377,7 @@ pub fn run_inline_tui(
                 pane.lines.pop_front();
             }
         }
-        let (width, height) = crossterm::terminal::size()?;
+        let (width, height) = bmux_terminal::terminal::size()?;
         terminal.draw(&inline_frame(
             &panes,
             tools,

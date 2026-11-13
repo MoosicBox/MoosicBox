@@ -14,6 +14,11 @@ versions are retained when different (`original.rs.txt`, `fork-original.rs.txt`)
 `registry-original.rs.txt` preserves the published registry setup. `sha256.json`
 protects the imported data, including original manifests, lockfiles and drivers.
 Fixtures are never regenerated from native output to make tests pass.
+The deliberately invalid `invalid_manifest` and
+`invalid_workspace_root_manifest` root manifests are stored as
+`Cargo.toml.invalid`, byte-identical to the originals, so Cargo does not report
+them when it scans this repository for a git dependency; the test harness copies
+them into place as `Cargo.toml`.
 
 ## Executable coverage
 

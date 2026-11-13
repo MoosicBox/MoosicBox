@@ -104,7 +104,7 @@ fn interactive() -> bool {
 }
 
 fn size() -> Size {
-    bmux_tui::crossterm::terminal_size().unwrap_or(Size::new(80, 24))
+    bmux_tui::terminal_io::terminal_size().unwrap_or(Size::new(80, 24))
 }
 
 /// Keep successes transient and commit failed transcripts exactly once.

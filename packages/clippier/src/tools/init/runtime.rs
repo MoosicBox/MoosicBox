@@ -267,13 +267,14 @@ impl<W: Write> Presenter<Setup<'_>> for InlinePresenter<'_, W> {
 struct MouseCapture;
 impl MouseCapture {
     fn enter() -> io::Result<Self> {
-        crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+        bmux_terminal::execute!(std::io::stdout(), bmux_terminal::event::EnableMouseCapture)?;
         Ok(Self)
     }
 }
 impl Drop for MouseCapture {
     fn drop(&mut self) {
-        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
+        let _ =
+            bmux_terminal::execute!(std::io::stdout(), bmux_terminal::event::DisableMouseCapture);
     }
 }
 
@@ -287,7 +288,7 @@ pub(super) fn run(
         return Ok(());
     }
     let _mouse = MouseCapture::enter()?;
-    let (width, height) = crossterm::terminal::size()?;
+    let (width, height) = bmux_terminal::terminal::size()?;
     let executor = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;

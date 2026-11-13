@@ -190,13 +190,14 @@ fn ignored_and_boundary_events_do_not_request_frames() {
             Invalidation::None
         );
     }
-    let release = crossterm::event::KeyEvent::new_with_kind(
-        crossterm::event::KeyCode::Down,
-        crossterm::event::KeyModifiers::NONE,
-        crossterm::event::KeyEventKind::Release,
+    let release = bmux_terminal::event::KeyEvent::new_with_kind(
+        bmux_terminal::event::KeyCode::Down,
+        bmux_terminal::event::KeyModifiers::NONE,
+        bmux_terminal::event::KeyEventKind::Release,
     );
     assert!(
-        bmux_tui::crossterm::event_from_crossterm(crossterm::event::Event::Key(release)).is_none()
+        bmux_tui::terminal_io::event_from_terminal(bmux_terminal::event::Event::Key(release))
+            .is_none()
     );
 }
 #[test]
