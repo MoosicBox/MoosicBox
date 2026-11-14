@@ -691,15 +691,13 @@ fn apply_primary(
         {
             index(primary)?;
         }
-        let nodes = primary
-            .map(|primary| {
-                if is_fragment {
-                    primary.children
-                } else {
-                    vec![primary]
-                }
-            })
-            .unwrap_or_default();
+        let nodes = primary.map_or_default(|primary| {
+            if is_fragment {
+                primary.children
+            } else {
+                vec![primary]
+            }
+        });
         // Empty insertion fragments are true no-ops, not lifecycle resets.
         if nodes.is_empty()
             && matches!(

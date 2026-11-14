@@ -32,7 +32,6 @@ flume = { workspace = true }
 hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
 hyperchad_color = { workspace = true }
 hyperchad_renderer = { workspace = true, features = ["canvas", "logic"] }
-hyperchad_router = { workspace = true }
 hyperchad_transformer = { workspace = true, features = [
     "html",
     "layout",
@@ -63,7 +62,6 @@ fail-on-warnings = [
     "hyperchad_actions/fail-on-warnings",
     "hyperchad_color/fail-on-warnings",
     "hyperchad_renderer/fail-on-warnings",
-    "hyperchad_router/fail-on-warnings",
     "hyperchad_transformer/fail-on-warnings",
     "hyperchad_transformer_models/fail-on-warnings",
     "switchy_async/fail-on-warnings",

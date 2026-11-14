@@ -2178,13 +2178,12 @@ impl BmuxProgram {
             let projected_geometry: Vec<_> = if geometry.is_none() {
                 self.committed_projection
                     .as_ref()
-                    .map(|projection| {
+                    .map_or_default(|projection| {
                         tree.nodes
                             .iter()
                             .filter_map(|node| projection.geometry_node(&node.key))
                             .collect()
                     })
-                    .unwrap_or_default()
             } else if self.candidate_projection.is_some()
                 && geometry.is_some_and(|geometry| {
                     self.candidate

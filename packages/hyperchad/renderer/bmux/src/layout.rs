@@ -369,11 +369,11 @@ fn absolute_translation_proven(source: &Container, containing: &Container) -> bo
                     Some(Number::IntegerPercent(_) | Number::RealPercent(_))
                 )
             });
-    if needs_fixed_basis
-        && (![&containing.width, &containing.height]
+    !needs_fixed_basis
+        || ([&containing.width, &containing.height]
             .into_iter()
             .all(|length| matches!(length, Some(Number::Integer(_))))
-            || [
+            && [
                 &containing.min_width,
                 &containing.max_width,
                 &containing.min_height,
@@ -384,11 +384,7 @@ fn absolute_translation_proven(source: &Container, containing: &Container) -> bo
                 &containing.padding_bottom,
             ]
             .into_iter()
-            .any(|length| !matches!(length, None | Some(Number::Integer(_)))))
-    {
-        return false;
-    }
-    true
+            .all(|length| matches!(length, None | Some(Number::Integer(_)))))
 }
 
 impl LayoutTree {
@@ -3195,6 +3191,7 @@ mod scroll_reprojection_tests {
                 .scroll_offsets
                 .insert(port.into(), ScrollOffset { x, y });
             let previous = projection.clone();
+            let previous_scroll = format!("{:?}", previous.node("scroll"));
             projection = projection.reproject(&options.scroll_offsets).unwrap();
             let full = layout(&root, &options, &DefaultLeafMeasure).unwrap();
             for node in &full.nodes {
@@ -3230,10 +3227,7 @@ mod scroll_reprojection_tests {
                 }
             }
             // Preparing a successor leaves the preceding candidate untouched.
-            assert_eq!(
-                format!("{:?}", previous.node("scroll")),
-                format!("{:?}", previous.clone().node("scroll"))
-            );
+            assert_eq!(format!("{:?}", previous.node("scroll")), previous_scroll);
         }
         assert_eq!(
             initial.get("scroll").unwrap().scroll_offset,

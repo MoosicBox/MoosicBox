@@ -1180,8 +1180,7 @@ impl Controls {
                             .get()
                             .selected()
                             .and_then(|i| control.spec.options.get(i))
-                            .map(|o| vec![o.id.clone()])
-                            .unwrap_or_default(),
+                            .map_or_default(|o| vec![o.id.clone()]),
                     ),
                     NativeState::Multiple(states) => Value::Selected(
                         control
