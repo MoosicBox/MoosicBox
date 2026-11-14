@@ -617,7 +617,20 @@ pub fn roles_from_rows(rows: &[Vec<DatabaseValue>]) -> Vec<RoleInfo> {
 }
 
 /// Run a catalog query and map its rows (the backends' listing methods).
-#[cfg(feature = "raw-sql")]
+#[cfg(all(
+    feature = "raw-sql",
+    any(
+        feature = "duckdb",
+        feature = "libsql",
+        feature = "mssql",
+        feature = "mysql-sqlx",
+        feature = "oracle",
+        feature = "postgres-raw",
+        feature = "postgres-sqlx",
+        feature = "sqlite-rusqlite",
+        feature = "sqlite-sqlx",
+    )
+))]
 pub(crate) async fn list<D, T>(
     db: &D,
     sql: &str,

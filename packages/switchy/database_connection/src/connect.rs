@@ -477,7 +477,12 @@ fn reject_read_only_in_memory(
     Ok(())
 }
 
-#[cfg(any(feature = "_sqlite", feature = "duckdb"))]
+#[cfg(any(
+    feature = "sqlite-rusqlite",
+    feature = "sqlite-sqlx",
+    feature = "turso",
+    feature = "duckdb"
+))]
 fn log_ignored_statement_timeout(kind: &str, options: &ConnectOptions) {
     if options.statement_timeout.is_some() {
         log::debug!("init_with_options: statement_timeout is not supported by {kind}; ignoring");
@@ -492,7 +497,7 @@ fn log_ignored_statement_timeout(kind: &str, options: &ConnectOptions) {
 ///
 /// * [`InitDbError::UnsupportedOption`] if the `options` parameter holds
 ///   anything but `-c name=value` and `--name=value` settings
-#[cfg(feature = "postgres")]
+#[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
 fn postgres_startup_options(
     params: &std::collections::BTreeMap<String, String>,
     options: &ConnectOptions,
@@ -525,7 +530,7 @@ fn postgres_startup_options(
 ///
 /// * [`InitDbError::UnsupportedOption`] for any other command-line switch,
 ///   or a setting without `=`
-#[cfg(feature = "postgres")]
+#[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
 fn parse_libpq_options(value: &str) -> Result<Vec<(String, String)>, InitDbError> {
     let mut words = Vec::new();
     let mut word = String::new();
@@ -598,7 +603,7 @@ fn parse_libpq_options(value: &str) -> Result<Vec<(String, String)>, InitDbError
 /// # Errors
 ///
 /// * [`InitDbError::UnsupportedOption`] if the value isn't a whole number
-#[cfg(feature = "postgres")]
+#[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
 fn postgres_connect_timeout(
     params: &std::collections::BTreeMap<String, String>,
 ) -> Result<Option<std::time::Duration>, InitDbError> {
@@ -616,7 +621,7 @@ fn postgres_connect_timeout(
         .map(|seconds| std::time::Duration::from_secs(seconds.max(2))))
 }
 
-#[cfg(feature = "postgres")]
+#[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
 fn postgres_application_name<'a>(
     params: &'a std::collections::BTreeMap<String, String>,
     options: &'a ConnectOptions,
@@ -738,12 +743,24 @@ fn postgres_raw(
 
     use switchy_database::postgres::postgres::PostgresDatabase;
 
+    // tokio-postgres only connects over Unix-domain sockets on Unix.
+    #[cfg(not(unix))]
+    if creds.host().starts_with('/') {
+        return Err(InitDbError::UnsupportedOption(format!(
+            "Unix-domain socket host {} is only supported on Unix",
+            creds.host()
+        )));
+    }
+
     let mut config = tokio_postgres::Config::new();
+    #[cfg(unix)]
     if creds.host().starts_with('/') {
         config.host_path(creds.host());
     } else {
         config.host(creds.host());
     }
+    #[cfg(not(unix))]
+    config.host(creds.host());
     if let Some(port) = creds.port() {
         config.port(port);
     }
@@ -1450,7 +1467,7 @@ mod tests {
         std::fs::remove_file(&path).ok();
     }
 
-    #[cfg(feature = "postgres")]
+    #[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
     #[test_log::test]
     fn libpq_options_parse_settings() {
         let pairs = |value: &str| {
@@ -1481,7 +1498,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "postgres")]
+    #[cfg(any(feature = "postgres-sqlx", feature = "postgres-raw"))]
     #[test_log::test]
     fn postgres_connect_timeout_follows_libpq() {
         let timeout = |value: &str| {
