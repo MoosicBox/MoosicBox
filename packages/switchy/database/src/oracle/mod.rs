@@ -107,7 +107,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use switchy_database::{Database, DatabaseValue, oracle::OracleDatabase};
+//! use switchy_database::{Database, query::FilterableQuery, oracle::OracleDatabase};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let db = OracleDatabase::builder("db.example")
@@ -118,7 +118,10 @@
 //!     .build()
 //!     .await?;
 //! let rows = db
-//!     .query_raw_params("SELECT title FROM albums WHERE id = :1", &[DatabaseValue::Int64(1)])
+//!     .select("albums")
+//!     .columns(&["title"])
+//!     .where_eq("id", 1)
+//!     .execute(&db)
 //!     .await?;
 //! # Ok(())
 //! # }

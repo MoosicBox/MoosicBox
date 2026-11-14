@@ -73,7 +73,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use switchy_database::{Database, DatabaseValue, mssql::MssqlDatabase};
+//! use switchy_database::{Database, query::FilterableQuery, mssql::MssqlDatabase};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let db = MssqlDatabase::builder("db.example")
@@ -84,7 +84,10 @@
 //!     .build()
 //!     .await?;
 //! let rows = db
-//!     .query_raw_params("SELECT title FROM dbo.albums WHERE id = @P1", &[DatabaseValue::Int64(1)])
+//!     .select("albums")
+//!     .columns(&["title"])
+//!     .where_eq("id", 1)
+//!     .execute(&db)
 //!     .await?;
 //! # Ok(())
 //! # }

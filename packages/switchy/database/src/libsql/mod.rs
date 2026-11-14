@@ -47,7 +47,11 @@
 //!     .read_only(true)
 //!     .build()
 //!     .await?;
-//! let rows = db.query_raw("SELECT name FROM sqlite_master").await?;
+//! let tables = db
+//!     .select("sqlite_master")
+//!     .columns(&["name"])
+//!     .execute(&db)
+//!     .await?;
 //! # Ok(())
 //! # }
 //! ```

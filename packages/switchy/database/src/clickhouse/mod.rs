@@ -49,7 +49,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use switchy_database::{Database, DatabaseValue, clickhouse::ClickHouseDatabase};
+//! use switchy_database::{Database, query::FilterableQuery, clickhouse::ClickHouseDatabase};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let db = ClickHouseDatabase::builder("http://127.0.0.1:8123")
@@ -60,7 +60,10 @@
 //!     .build()
 //!     .await?;
 //! let rows = db
-//!     .query_raw_params("SELECT title FROM albums WHERE id = $1", &[DatabaseValue::Int64(1)])
+//!     .select("albums")
+//!     .columns(&["title"])
+//!     .where_eq("id", 1)
+//!     .execute(&db)
 //!     .await?;
 //! # Ok(())
 //! # }
