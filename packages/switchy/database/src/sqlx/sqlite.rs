@@ -1237,21 +1237,19 @@ async fn update_and_get_row(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+            })
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -1318,21 +1316,19 @@ async fn update_and_get_rows(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<SqliteDatabaseValue>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                })
-                .collect::<Vec<SqliteDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+            })
+            .collect::<Vec<SqliteDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -3031,15 +3027,13 @@ async fn delete(
         build_update_where_clause(filters, limit, select_query.as_deref(), &index),
     );
 
-    let mut all_filter_values: Vec<SqliteDatabaseValue> = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values: Vec<SqliteDatabaseValue> = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -3328,23 +3322,20 @@ async fn update_chunk(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .as_ref()
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.as_ref().map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());

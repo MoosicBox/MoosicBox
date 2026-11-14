@@ -1320,7 +1320,7 @@ fn build_update_plan(
         .flat_map(|(_, value)| value.params().unwrap_or_default().into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<DuckDbDatabaseValue>>();
-    let mut filter_values = filters.map(bexprs_to_values).unwrap_or_default();
+    let mut filter_values = filters.map_or_default(bexprs_to_values);
     if limit.is_some() {
         filter_values.extend(filter_values.clone());
     }
@@ -1573,15 +1573,13 @@ fn delete(
     let table_name = crate::query::render_identifier(table_name, '"');
     let where_clause = build_where_clause(filters);
 
-    let filter_values: Vec<DuckDbDatabaseValue> = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let filter_values: Vec<DuckDbDatabaseValue> = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     let limit_clause = limit.map_or_else(String::new, |l| format!(" LIMIT {l}"));
 
@@ -2461,10 +2459,7 @@ fn query_generated_columns(
         Some(row) => row.get::<_, Option<String>>(0)?,
         None => None,
     };
-    Ok(sql
-        .as_deref()
-        .map(duckdb_generated_column_names)
-        .unwrap_or_default())
+    Ok(sql.as_deref().map_or_default(duckdb_generated_column_names))
 }
 
 /// Names of the columns declared `GENERATED ALWAYS AS (...)` in a `DuckDB`
@@ -2605,8 +2600,7 @@ fn duckdb_get_relation_info(
             let (index_name, unique, sql) = row?;
             let idx_columns = sql
                 .as_deref()
-                .map(extract_index_columns_from_sql)
-                .unwrap_or_default();
+                .map_or_default(extract_index_columns_from_sql);
             // The primary key's index is the constraint's, listed above.
             idx_map.insert(
                 index_name.clone(),
@@ -2823,8 +2817,7 @@ impl Database for DuckDbDatabase {
         let filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         let limit_clause = statement
             .limit
             .map_or_else(String::new, |l| format!(" LIMIT {l}"));
@@ -2960,8 +2953,7 @@ impl Database for DuckDbDatabase {
         let mut filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         if statement.limit.is_some() {
             filter_values.extend(filter_values.clone());
         }
@@ -3013,8 +3005,7 @@ impl Database for DuckDbDatabase {
         let mut filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         if statement.limit.is_some() {
             filter_values.extend(filter_values.clone());
         }
@@ -3523,8 +3514,7 @@ impl Database for DuckDbTransaction {
         let filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         let limit_clause = statement
             .limit
             .map_or_else(String::new, |l| format!(" LIMIT {l}"));
@@ -3655,8 +3645,7 @@ impl Database for DuckDbTransaction {
         let mut filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         if statement.limit.is_some() {
             filter_values.extend(filter_values.clone());
         }
@@ -3707,8 +3696,7 @@ impl Database for DuckDbTransaction {
         let mut filter_values = statement
             .filters
             .as_deref()
-            .map(bexprs_to_values)
-            .unwrap_or_default();
+            .map_or_default(bexprs_to_values);
         if statement.limit.is_some() {
             filter_values.extend(filter_values.clone());
         }
@@ -4320,8 +4308,7 @@ impl DuckDbDatabase {
 
             let column_names: Vec<String> = rows
                 .as_ref()
-                .map(::duckdb::Statement::column_names)
-                .unwrap_or_default();
+                .map_or_default(::duckdb::Statement::column_names);
 
             let result = to_rows(&column_names, &mut rows)
                 .map_err(|e| DatabaseError::QueryFailed(e.to_string()));
@@ -4468,8 +4455,7 @@ impl DuckDbTransaction {
 
             let column_names: Vec<String> = rows
                 .as_ref()
-                .map(::duckdb::Statement::column_names)
-                .unwrap_or_default();
+                .map_or_default(::duckdb::Statement::column_names);
 
             let result = to_rows(&column_names, &mut rows)
                 .map_err(|e| DatabaseError::QueryFailed(e.to_string()));

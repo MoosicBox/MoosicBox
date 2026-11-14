@@ -263,7 +263,7 @@ fn render_command(
     if !positionals.is_empty() {
         doc.push_str("**Arguments:**\n\n| Name | Description | Required |\n|------|-------------|----------|\n");
         for arg in positionals {
-            let desc = arg.get_help().map(ToString::to_string).unwrap_or_default();
+            let desc = arg.get_help().map_or_default(ToString::to_string);
             let required = if arg.is_required_set() { "yes" } else { "no" };
             doc.push_str(&format!(
                 "| `{}` | {} | {required} |\n",
@@ -289,7 +289,7 @@ fn render_command(
             } else {
                 names.join(", ")
             };
-            let desc = flag.get_help().map(ToString::to_string).unwrap_or_default();
+            let desc = flag.get_help().map_or_default(ToString::to_string);
             let values = render_possible_values(flag);
             let default = flag
                 .get_default_values()
@@ -320,7 +320,7 @@ fn render_command(
     if !subcommands.is_empty() && depth < 2 {
         doc.push_str("**Subcommands:**\n\n");
         for sub in &subcommands {
-            let desc = sub.get_about().map(ToString::to_string).unwrap_or_default();
+            let desc = sub.get_about().map_or_default(ToString::to_string);
             doc.push_str(&format!("- `{}` — {desc}\n", sub.get_name()));
         }
         doc.push('\n');

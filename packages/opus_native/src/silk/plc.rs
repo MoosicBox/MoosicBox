@@ -125,8 +125,8 @@ impl Concealment {
             [32440, 29491]
         }[self.losses.min(1)];
         let mut chirp = 64881_i32;
-        for index in 0..order {
-            self.lpc_q12[index] = rounded(chirp * i32::from(self.lpc_q12[index]), 16) as i16;
+        for (index, coefficient) in self.lpc_q12.iter_mut().take(order).enumerate() {
+            *coefficient = rounded(chirp * i32::from(*coefficient), 16) as i16;
             if index + 1 < order {
                 chirp += rounded(chirp * (64881 - 65536), 16);
             }

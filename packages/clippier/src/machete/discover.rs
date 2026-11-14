@@ -236,13 +236,11 @@ fn document(inventory: &Inventory, path: &Path) -> Result<DocumentMut, BoxError>
     Ok(text(inventory, path)?.parse()?)
 }
 fn strings(item: Option<&Item>) -> Vec<String> {
-    item.and_then(Item::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default()
+    item.and_then(Item::as_array).map_or_default(|a| {
+        a.iter()
+            .filter_map(|v| v.as_str().map(str::to_owned))
+            .collect()
+    })
 }
 fn root_manifest(requested: &Path, inventory: &mut Inventory) -> Result<PathBuf, BoxError> {
     let original: DocumentMut = fs::read_to_string(requested)?.parse()?;
@@ -1166,14 +1164,13 @@ fn dev_feature_contribution(doc: &DocumentMut, key: &str, dev: &Item) -> bool {
     let features = |item: &Item| {
         item.get("features")
             .and_then(Item::as_array)
-            .map(|features| {
+            .map_or_default(|features| {
                 features
                     .iter()
                     .filter_map(toml_edit::Value::as_str)
                     .map(str::to_owned)
                     .collect::<BTreeSet<_>>()
             })
-            .unwrap_or_default()
     };
     let normal_features = features(normal);
     !features(dev).is_subset(&normal_features)

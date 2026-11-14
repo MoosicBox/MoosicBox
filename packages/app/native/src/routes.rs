@@ -171,12 +171,8 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
     };
     let search = req.query.get("search").filter(|x| !x.is_empty());
 
-    let filtered_sources = parse_track_sources(
-        req.query
-            .get("sources")
-            .map(String::as_str)
-            .unwrap_or_default(),
-    )?;
+    let filtered_sources =
+        parse_track_sources(req.query.get("sources").map_or_default(String::as_str))?;
 
     let sort = req
         .query
@@ -257,12 +253,8 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
 
     let search = req.query.get("search").filter(|x| !x.is_empty());
 
-    let filtered_sources = parse_track_sources(
-        req.query
-            .get("sources")
-            .map(String::as_str)
-            .unwrap_or_default(),
-    )?;
+    let filtered_sources =
+        parse_track_sources(req.query.get("sources").map_or_default(String::as_str))?;
 
     let sort = req
         .query
@@ -537,12 +529,8 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             container
         }
     } else {
-        let filtered_sources = parse_track_sources(
-            req.query
-                .get("sources")
-                .map(String::as_str)
-                .unwrap_or_default(),
-        )?;
+        let filtered_sources =
+            parse_track_sources(req.query.get("sources").map_or_default(String::as_str))?;
 
         let sort = req
             .query

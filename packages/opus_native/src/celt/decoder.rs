@@ -1589,8 +1589,8 @@ impl CeltDecoder {
         let is_transient_idx = usize::from(self.transient);
 
         // Check only the coded bands [start, end)
-        for band in start..end {
-            let tf_change_idx = usize::from(self.tf_change[band]);
+        for &tf_change in self.tf_change.iter().take(end).skip(start) {
+            let tf_change_idx = usize::from(tf_change);
 
             // Get TF values for both tf_select options using direct table lookup
             let tf_0 = TF_SELECT_TABLE[lm_idx][is_transient_idx][0][tf_change_idx];
@@ -1852,8 +1852,8 @@ impl CeltDecoder {
 
         // Compute resolution for ALL bands
         // Bands outside [start_band, end_band) use tf_change=false (default)
-        for band in 0..CELT_NUM_BANDS {
-            let tf_change_idx = usize::from(self.tf_change[band]);
+        for &tf_change in &self.tf_change[..CELT_NUM_BANDS] {
+            let tf_change_idx = usize::from(tf_change);
 
             // Direct table lookup from RFC Tables 60-63
             // No arithmetic operations - just index into the 4D table

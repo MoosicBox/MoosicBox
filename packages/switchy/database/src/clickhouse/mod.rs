@@ -883,12 +883,11 @@ impl crate::Database for ClickHouseDatabase {
         Ok(
             introspection::relation_info(self, &crate::schema::RelationRef::new(table))
                 .await?
-                .map(|info| {
+                .map_or_default(|info| {
                     let mut columns: Vec<_> = info.columns.into_values().collect();
                     columns.sort_by_key(|column| column.ordinal_position);
                     columns
-                })
-                .unwrap_or_default(),
+                }),
         )
     }
 

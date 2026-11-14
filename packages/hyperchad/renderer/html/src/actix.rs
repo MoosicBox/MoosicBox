@@ -353,12 +353,11 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .inspect_err(|e| {
                 log::error!("Failed to get cookies: {e:?}");
             })
-            .map(|x| {
+            .map_or_default(|x| {
                 x.iter()
                     .map(|cookie| (cookie.name().to_string(), cookie.value().to_string()))
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         let path = req.path().to_string();
 

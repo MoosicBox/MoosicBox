@@ -7,7 +7,6 @@ use std::net::SocketAddr;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use moosicbox_async_service::{Arc, CancellationToken, JoinError, JoinHandle, sync::RwLock};
-use strum_macros::AsRefStr;
 use thiserror::Error;
 
 /// Represents a discovered `MoosicBox` server on the network.
@@ -39,15 +38,12 @@ pub enum Error {
 
 /// Commands that can be sent to the scanner service.
 ///
-/// Currently no commands are defined for the scanner service.
-#[derive(Debug, AsRefStr)]
+/// The scanner takes no commands, so this type has no values.
+// `async_service!` needs a nominal command type; `Infallible` would make the
+// macro's generated dispatch code trip `unreachable_code`.
+#[allow(clippy::empty_enums)]
+#[derive(Debug)]
 pub enum Command {}
-
-impl std::fmt::Display for Command {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_ref())
-    }
-}
 
 /// Context for the mDNS scanner service.
 ///
@@ -177,7 +173,7 @@ impl service::Processor for service::Service {
 
     /// Processes commands sent to the scanner service.
     ///
-    /// Currently no commands are defined, so this is a no-op.
+    /// The scanner takes no commands, so this can never be called.
     ///
     /// # Errors
     ///
@@ -186,8 +182,7 @@ impl service::Processor for service::Service {
         _ctx: Arc<RwLock<Context>>,
         command: Command,
     ) -> Result<(), Self::Error> {
-        log::debug!("mdns scanner: process_command command={command}");
-        Ok(())
+        match command {}
     }
 }
 

@@ -249,7 +249,9 @@ pub fn mult32_32_q31(a: i32, b: i32) -> i32 {
 /// `LibOpus` `fixed_generic.h:90`
 #[must_use]
 #[inline]
-#[allow(clippy::cast_precision_loss)]
+// Mirrors libopus's `QCONST16` exactly; a fused `mul_add` would round
+// differently (and isn't `const`).
+#[allow(clippy::cast_precision_loss, clippy::suboptimal_flops)]
 pub const fn qconst16(x: f64, bits: i32) -> i16 {
     (0.5 + x * ((1_i64 << bits) as f64)) as i16
 }
@@ -258,7 +260,9 @@ pub const fn qconst16(x: f64, bits: i32) -> i16 {
 /// `LibOpus` `fixed_generic.h:93`
 #[must_use]
 #[inline]
-#[allow(clippy::cast_precision_loss)]
+// Mirrors libopus's `QCONST32` exactly; a fused `mul_add` would round
+// differently (and isn't `const`).
+#[allow(clippy::cast_precision_loss, clippy::suboptimal_flops)]
 pub const fn qconst32(x: f64, bits: i32) -> i32 {
     (0.5 + x * ((1_i64 << bits) as f64)) as i32
 }

@@ -19,11 +19,10 @@ moosicbox_async_service = { workspace = true }
 
 switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }
 
-kanal        = { workspace = true }
-log          = { workspace = true }
-mdns-sd      = { workspace = true }
-strum_macros = { workspace = true }
-thiserror    = { workspace = true }
+kanal     = { workspace = true }
+log       = { workspace = true }
+mdns-sd   = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros", "sync", "tokio"] }

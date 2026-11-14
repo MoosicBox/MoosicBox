@@ -1069,14 +1069,12 @@ async fn update_and_get_rows(
             .flat_map(|(_, v)| v.params().unwrap_or_default().into_iter().cloned())
             .collect::<Vec<_>>();
 
-        let mut filter_values = filters
-            .map(|filters| {
-                filters
-                    .iter()
-                    .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let mut filter_values = filters.map_or_default(|filters| {
+            filters
+                .iter()
+                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+                .collect::<Vec<_>>()
+        });
 
         all_values.append(&mut filter_values);
 
@@ -1107,14 +1105,12 @@ async fn update_and_get_rows(
         limit.unwrap(),
     );
 
-    let filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .collect::<Vec<_>>()
+    });
 
     log::trace!(
         "Running update (select phase) query: {select_query} with params: {filter_values:?}"
@@ -1212,14 +1208,12 @@ async fn delete(
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}")),
     );
 
-    let filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .collect::<Vec<_>>()
+    });
 
     log::trace!(
         "Running delete (select phase) query: {select_query} with params: {filter_values:?}"
@@ -2789,7 +2783,7 @@ async fn exec_table_recreation_workaround(
         {
             let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
             if let Some(DatabaseValue::String(sql)) = turso_row.get("sql") {
-                schema_objects.push(sql.clone());
+                schema_objects.push(sql);
             }
         }
 
@@ -2873,7 +2867,7 @@ async fn exec_table_recreation_workaround(
         {
             let turso_row = from_turso_row(&column_names, &row).map_err(crate::DatabaseError::Turso)?;
             if let Some(DatabaseValue::String(name)) = turso_row.get("name") {
-                columns.push(name.clone());
+                columns.push(name);
             }
         }
 

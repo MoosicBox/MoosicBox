@@ -79,13 +79,12 @@ fn route_request_from_http_request(req: &HttpRequest) -> Result<RouteRequest, ac
         .inspect_err(|e| {
             log::debug!("Failed to parse cookies for shared-state bridge: {e}");
         })
-        .map(|cookies| {
+        .map_or_default(|cookies| {
             cookies
                 .iter()
                 .map(|cookie| (cookie.name().to_string(), cookie.value().to_string()))
                 .collect::<BTreeMap<_, _>>()
-        })
-        .unwrap_or_default();
+        });
 
     Ok(RouteRequest {
         path: req.path().to_string(),

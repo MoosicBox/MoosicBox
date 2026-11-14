@@ -1261,7 +1261,7 @@ impl FeatureValidator {
                     format!("{dep_name}/{feature_name}")
                 };
 
-                expected.insert(dep_name.clone(), propagation);
+                expected.insert(dep_name, propagation);
             }
         }
 
@@ -1396,7 +1396,7 @@ impl FeatureValidator {
             let global_prefixes: BTreeMap<String, String> = feature_validation
                 .get("parent-prefix")
                 .and_then(|v| v.as_array())
-                .map(|arr| {
+                .map_or_default(|arr| {
                     arr.iter()
                         .filter_map(|entry| {
                             let dep = entry.get("dependency")?.as_str()?;
@@ -1404,8 +1404,7 @@ impl FeatureValidator {
                             Some((dep.to_string(), prefix.to_string()))
                         })
                         .collect()
-                })
-                .unwrap_or_default();
+                });
 
             // Parent packages
             if let Some(parent_packages) = feature_validation
@@ -1493,7 +1492,7 @@ impl FeatureValidator {
             let prefix_overrides = parent
                 .get("prefix")
                 .and_then(|v| v.as_array())
-                .map(|arr| {
+                .map_or_default(|arr| {
                     arr.iter()
                         .filter_map(|entry| {
                             let dep = entry.get("dependency")?.as_str()?;
@@ -1501,8 +1500,7 @@ impl FeatureValidator {
                             Some((dep.to_string(), prefix.to_string()))
                         })
                         .collect()
-                })
-                .unwrap_or_default();
+                });
 
             return Ok(Some(ResolvedParentConfig {
                 depth,
@@ -1705,8 +1703,7 @@ fn get_all_feature_names(cargo_value: &Value) -> BTreeSet<String> {
     cargo_value
         .get("features")
         .and_then(|f| f.as_table())
-        .map(|t| t.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|t| t.keys().cloned().collect())
 }
 
 /// Find workspace root from a given path

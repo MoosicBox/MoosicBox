@@ -902,7 +902,7 @@ fn check_call(tokens: &[Token<'_>], index: usize, column_lists: &[usize]) -> Res
             // `EXTRACT(field FROM value)`: called any other way, the name
             // can reach a user function of the same name.
             if upper == "EXTRACT" {
-                let field = tokens.get(index + 2).map(Token::upper).unwrap_or_default();
+                let field = tokens.get(index + 2).map_or_default(Token::upper);
                 return if DATETIME_FIELDS.contains(&field.as_str())
                     && tokens.get(index + 3).is_some_and(|t| t.is_word("FROM"))
                 {

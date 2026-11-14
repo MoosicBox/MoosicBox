@@ -539,15 +539,13 @@ pub fn triggers_from_rows(rows: &[Vec<DatabaseValue>]) -> Vec<TriggerInfo> {
         .filter_map(|row| {
             let definition = present(row.get(6));
             let mut timing = present(row.get(3)).map(|timing| timing.trim().to_ascii_uppercase());
-            let mut events: Vec<String> = present(row.get(4))
-                .map(|events| {
-                    events
-                        .split(" OR ")
-                        .map(|event| event.trim().to_ascii_uppercase())
-                        .filter(|event| !event.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let mut events: Vec<String> = present(row.get(4)).map_or_default(|events| {
+                events
+                    .split(" OR ")
+                    .map(|event| event.trim().to_ascii_uppercase())
+                    .filter(|event| !event.is_empty())
+                    .collect()
+            });
             if (timing.is_none() || events.is_empty())
                 && let Some(definition) = &definition
             {

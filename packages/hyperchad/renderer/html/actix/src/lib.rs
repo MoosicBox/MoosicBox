@@ -717,7 +717,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                     AssetNotFoundBehavior::Fallthrough => {
                                         // Use a guard that only matches if the file exists
                                         let guard_dir = target.clone();
-                                        let guard_prefix = route_prefix.clone();
+                                        let guard_prefix = route_prefix;
                                         app = app.route(
                                             &directory_route_pattern(route),
                                             web::get()

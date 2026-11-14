@@ -69,12 +69,9 @@ pub fn setup_cdn_optimization(
     };
 
     // 1. Add skeleton index.html as a static asset route
-    let title_element = title
-        .map(|x| format!("<title>{x}</title>"))
-        .unwrap_or_default();
-    let viewport_element = viewport
-        .map(|x| format!("<meta name=\"viewport\" content=\"{x}\">"))
-        .unwrap_or_default();
+    let title_element = title.map_or_default(|x| format!("<title>{x}</title>"));
+    let viewport_element =
+        viewport.map_or_default(|x| format!("<meta name=\"viewport\" content=\"{x}\">"));
 
     let skeleton_html = format!(
         r#"<!DOCTYPE html>

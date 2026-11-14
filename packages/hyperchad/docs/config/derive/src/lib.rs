@@ -435,7 +435,7 @@ pub fn derive_config_doc_enum(input: TokenStream) -> TokenStream {
     for variant in &data_enum.variants {
         let raw_name = variant.ident.to_string();
         let toml_name = if rename_rule.is_empty() {
-            raw_name.clone()
+            raw_name
         } else {
             apply_rename_rule(&raw_name, &rename_rule)
         };
@@ -625,7 +625,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
                     .unwrap_or_else(|| type_to_display(value_ty));
                 let value_description = nested_doc_config
                     .value_description
-                    .clone()
                     .unwrap_or_else(|| doc_comment.clone());
                 let value_enum_values_expr = extract_config_doc_values(&field.attrs).map_or_else(
                     || {
@@ -688,7 +687,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
                     .unwrap_or_else(|| type_to_display(item_ty));
                 let item_description = nested_doc_config
                     .value_description
-                    .clone()
                     .unwrap_or_else(|| doc_comment.clone());
                 let item_enum_values_expr = extract_config_doc_values(&field.attrs).map_or_else(
                     || {

@@ -2931,15 +2931,13 @@ async fn update_and_get_row(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<MySqlDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<MySqlDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -3864,23 +3862,20 @@ async fn update_chunk(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
-    let mut all_filter_values = filters
-        .as_ref()
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                })
-                .map(std::convert::Into::into)
-                .collect::<Vec<MySqlDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.as_ref().map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .map(std::convert::Into::into)
+            .collect::<Vec<MySqlDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());

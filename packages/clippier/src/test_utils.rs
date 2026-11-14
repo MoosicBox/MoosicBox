@@ -335,12 +335,11 @@ pub mod test_resources {
 
         json.get("workspaces")
             .and_then(|w| w.as_array())
-            .map(|arr| {
+            .map_or_default(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                     .collect()
             })
-            .unwrap_or_default()
     }
 
     /// Expand workspace patterns (e.g., "packages/*") to actual package paths.

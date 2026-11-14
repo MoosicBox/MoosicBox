@@ -2095,33 +2095,21 @@ impl Expression for SelectQuery<'_> {
     }
 
     fn values(&self) -> Option<Vec<&DatabaseValue>> {
-        let joins_values = self
-            .joins
-            .as_ref()
-            .map(|x| {
-                x.iter()
-                    .flat_map(|j| j.values().unwrap_or_default())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        let filters_values = self
-            .filters
-            .as_ref()
-            .map(|x| {
-                x.iter()
-                    .flat_map(|j| j.values().unwrap_or_default())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        let sorts_values = self
-            .sorts
-            .as_ref()
-            .map(|x| {
-                x.iter()
-                    .flat_map(|j| j.values().unwrap_or_default())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let joins_values = self.joins.as_ref().map_or_default(|x| {
+            x.iter()
+                .flat_map(|j| j.values().unwrap_or_default())
+                .collect::<Vec<_>>()
+        });
+        let filters_values = self.filters.as_ref().map_or_default(|x| {
+            x.iter()
+                .flat_map(|j| j.values().unwrap_or_default())
+                .collect::<Vec<_>>()
+        });
+        let sorts_values = self.sorts.as_ref().map_or_default(|x| {
+            x.iter()
+                .flat_map(|j| j.values().unwrap_or_default())
+                .collect::<Vec<_>>()
+        });
 
         let projections_values = self
             .projections

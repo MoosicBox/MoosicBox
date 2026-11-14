@@ -304,7 +304,7 @@ pub async fn select_endpoint(
 #[must_use]
 pub fn select_form(profiles: &[&str], selected: Option<&str>, trigger: Option<&str>) -> Markup {
     html! {
-        form hx-post="/admin/profiles/select" hx-trigger={"change"(trigger.map(|x| format!(", {x}")).unwrap_or_default())} {
+        form hx-post="/admin/profiles/select" hx-trigger={"change"(trigger.map_or_default(|x| format!(", {x}")))} {
             (select(profiles, selected))
         }
     }

@@ -3289,7 +3289,6 @@ impl SilkDecoder {
         clippy::similar_names,
         clippy::needless_pass_by_ref_mut
     )]
-    #[allow(dead_code)]
     fn ltp_synthesis_voiced(
         excitation_q14: &[i32],
         params: &SubframeParams,
@@ -3320,7 +3319,7 @@ impl SilkDecoder {
             // Matches libopus NSQ.c line 225: LTP_pred_Q13 = sum(b_Q7[k] * sLTP[i-lag+2-k]) >> 7
             let mut ltp_pred_q14 = 0_i64;
 
-            for k in 0..5 {
+            for (k, &b_q7) in params.ltp_filter_q7.iter().enumerate() {
                 let tap_idx = if i + 2 >= k + pitch_lag {
                     i + 2 - k - pitch_lag
                 } else {
@@ -3334,9 +3333,8 @@ impl SilkDecoder {
                     0
                 };
 
-                let b_q7 = i64::from(params.ltp_filter_q7[k]);
                 // ltp_val is Q14, b_q7 is Q7, product is Q21, >> 7 gives Q14
-                ltp_pred_q14 += (i64::from(ltp_val) * b_q7) >> 7;
+                ltp_pred_q14 += (i64::from(ltp_val) * i64::from(b_q7)) >> 7;
             }
 
             // Add excitation to LTP prediction: residual = excitation + LTP_pred
@@ -3370,7 +3368,6 @@ impl SilkDecoder {
     ) -> Vec<f32> {
         let n = Self::samples_per_subframe(bandwidth);
         let j = Self::subframe_start_index(subframe_index, n);
-        let d_lpc = params.lpc_coeffs_q12.len();
         let pitch_lag = params.pitch_lag as usize;
 
         let mut res = Vec::new();
@@ -3391,15 +3388,14 @@ impl SilkDecoder {
                 .unwrap_or(0.0);
 
             let mut lpc_sum = 0.0_f32;
-            for k in 0..d_lpc {
+            for (k, &a_q12) in params.lpc_coeffs_q12.iter().enumerate() {
                 let idx = i.saturating_sub(k + 1);
                 let out_prev = self.ltp_state[channel_idx]
                     .out_buffer
                     .get(idx)
                     .copied()
                     .unwrap_or(0.0);
-                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
-                lpc_sum += out_prev * (a_q12 / 4096.0);
+                lpc_sum += out_prev * (f32::from(a_q12) / 4096.0);
             }
 
             let whitened = out_val - lpc_sum;
@@ -3418,15 +3414,14 @@ impl SilkDecoder {
                 .unwrap_or(0.0);
 
             let mut lpc_sum = 0.0_f32;
-            for k in 0..d_lpc {
+            for (k, &a_q12) in params.lpc_coeffs_q12.iter().enumerate() {
                 let idx = i.saturating_sub(k + 1);
                 let lpc_prev = self.ltp_state[channel_idx]
                     .lpc_buffer
                     .get(idx)
                     .copied()
                     .unwrap_or(0.0);
-                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
-                lpc_sum += lpc_prev * (a_q12 / 4096.0);
+                lpc_sum += lpc_prev * (f32::from(a_q12) / 4096.0);
             }
 
             let whitened = lpc_val - lpc_sum;
@@ -3442,7 +3437,7 @@ impl SilkDecoder {
             let e_normalized = e_val as f32 / (1_i32 << 23) as f32;
 
             let mut ltp_sum = 0.0_f32;
-            for k in 0..5 {
+            for (k, &b_q7) in params.ltp_filter_q7.iter().enumerate() {
                 let global_idx = j + i;
                 let target_idx = global_idx
                     .saturating_sub(pitch_lag)
@@ -3452,8 +3447,7 @@ impl SilkDecoder {
 
                 let res_prev = res.get(res_idx).copied().unwrap_or(0.0);
 
-                let b_q7 = f32::from(params.ltp_filter_q7[k]);
-                ltp_sum += res_prev * (b_q7 / 128.0);
+                ltp_sum += res_prev * (f32::from(b_q7) / 128.0);
             }
 
             let res_val = e_normalized + ltp_sum;

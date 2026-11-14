@@ -1236,18 +1236,15 @@ impl QueryResult {
     /// has no columns.
     #[must_use]
     pub fn from_rows(rows: Vec<Row>) -> Self {
-        let columns = rows
-            .first()
-            .map(|row| {
-                row.columns
-                    .iter()
-                    .map(|(name, _)| ResultColumn {
-                        name: name.clone(),
-                        type_name: None,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let columns = rows.first().map_or_default(|row| {
+            row.columns
+                .iter()
+                .map(|(name, _)| ResultColumn {
+                    name: name.clone(),
+                    type_name: None,
+                })
+                .collect()
+        });
         let rows = rows
             .into_iter()
             .map(|row| row.columns.into_iter().map(|(_, value)| value).collect())

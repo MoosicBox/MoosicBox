@@ -1407,10 +1407,7 @@ pub fn is_workspace_dependency_with_features(dep_value: &Value) -> bool {
     match dep_value {
         Value::Table(table) => {
             // Optional dependencies should return false unless activated by features
-            if table.get("optional") == Some(&Value::Boolean(true)) {
-                return false;
-            }
-            true
+            table.get("optional") != Some(&Value::Boolean(true))
         }
         _ => false,
     }
@@ -3592,7 +3589,7 @@ pub async fn collect_environment_variables(
     }
 
     // Convert features to comma-separated string for the dependencies command
-    let features_str = enabled_features.map(|f| f.join(",")).unwrap_or_default();
+    let features_str = enabled_features.map_or_default(|f| f.join(","));
     let specific_features = if features_str.is_empty() {
         None
     } else {
@@ -3651,7 +3648,7 @@ pub async fn collect_system_dependencies(
     let mut all_deps = BTreeSet::new();
 
     // Convert features to comma-separated string for the dependencies command
-    let features_str = enabled_features.map(|f| f.join(",")).unwrap_or_default();
+    let features_str = enabled_features.map_or_default(|f| f.join(","));
 
     for (_, package_path) in dependencies {
         let path = workspace_root.join(package_path);

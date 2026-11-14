@@ -84,14 +84,11 @@ impl ActixRequest {
             })
             .collect();
 
-        let cookies = inner
-            .cookies()
-            .map(|jar| {
-                jar.iter()
-                    .map(|c| (c.name().to_string(), c.value().to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let cookies = inner.cookies().map_or_default(|jar| {
+            jar.iter()
+                .map(|c| (c.name().to_string(), c.value().to_string()))
+                .collect()
+        });
 
         let remote_addr = inner
             .connection_info()

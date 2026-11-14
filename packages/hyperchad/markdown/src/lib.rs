@@ -594,8 +594,7 @@ fn process_start_tag(ctx: &mut MarkdownContext, tag: Tag) -> Result<(), Markdown
                 element: Element::Div,
                 classes: vec!["markdown-code-block".to_string()],
                 data: language
-                    .map(|l| vec![("language".to_string(), l)])
-                    .unwrap_or_default()
+                    .map_or_default(|l| vec![("language".to_string(), l)])
                     .into_iter()
                     .collect(),
                 white_space: Some(WhiteSpace::PreserveWrap),

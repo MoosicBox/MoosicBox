@@ -143,7 +143,7 @@ pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, BoxError> {
     let packages = toml_value
         .get("package")
         .and_then(|p| p.as_array())
-        .map(|packages| {
+        .map_or_default(|packages| {
             packages
                 .iter()
                 .filter_map(|pkg| {
@@ -170,8 +170,7 @@ pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, BoxError> {
                     })
                 })
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     Ok(CargoLock {
         version,

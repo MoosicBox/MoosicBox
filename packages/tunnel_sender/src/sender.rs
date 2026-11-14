@@ -1032,11 +1032,8 @@ impl TunnelSender {
 
                     if packet_id == 1 {
                         prefix.push_str(&status.to_string());
-                        let mut headers_base64 = general_purpose::STANDARD.encode(
-                            serde_json::to_string(&headers)
-                                .map_err(wrap_to_500)?
-                                .clone(),
-                        );
+                        let mut headers_base64 = general_purpose::STANDARD
+                            .encode(serde_json::to_string(&headers).map_err(wrap_to_500)?);
                         headers_base64.insert(0, '{');
                         headers_base64.push('}');
                         headers_base64.push_str(&base64);

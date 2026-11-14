@@ -345,8 +345,7 @@ impl TryFrom<Album> for QobuzAlbum {
             released_at: 0,
             release_date_original: value
                 .date_released
-                .map(|x| x.and_utc().to_rfc3339())
-                .unwrap_or_default(),
+                .map_or_default(|x| x.and_utc().to_rfc3339()),
             duration: 0,
             parental_warning: false,
             popularity: 0,

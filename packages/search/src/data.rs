@@ -60,17 +60,12 @@ impl AsDataValues for Album {
                 "date_released",
                 DataValue::String(
                     self.date_released
-                        .map(|x| x.and_utc().to_rfc3339())
-                        .unwrap_or_default(),
+                        .map_or_default(|x| x.and_utc().to_rfc3339()),
                 ),
             ),
             (
                 "date_added",
-                DataValue::String(
-                    self.date_added
-                        .map(|x| x.and_utc().to_rfc3339())
-                        .unwrap_or_default(),
-                ),
+                DataValue::String(self.date_added.map_or_default(|x| x.and_utc().to_rfc3339())),
             ),
         ];
 

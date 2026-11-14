@@ -302,8 +302,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         let cookies = req
             .headers()
             .get("Cookie")
-            .map(|x| parse_cookies(x.to_str().unwrap_or_default()))
-            .unwrap_or_default()
+            .map_or_default(|x| parse_cookies(x.to_str().unwrap_or_default()))
             .into_iter()
             .collect();
 

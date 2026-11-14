@@ -11450,7 +11450,6 @@ dependencies = [
  "mdns-sd",
  "moosicbox_assert",
  "moosicbox_async_service",
- "strum_macros 0.28.0",
  "switchy_async",
  "test-log",
  "thiserror 2.0.21",

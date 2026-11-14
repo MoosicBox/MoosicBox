@@ -726,12 +726,11 @@ fn type_args(column_type: &str) -> Vec<u32> {
                 .find(')')
                 .map(|end| &column_type[start + 1..start + 1 + end])
         })
-        .map(|args| {
+        .map_or_default(|args| {
             args.split(',')
                 .filter_map(|arg| arg.trim().parse::<u32>().ok())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Map `MySQL` `DATA_TYPE` values to our `DataType` enum

@@ -70,7 +70,7 @@ impl CargoLockfile {
         let packages = toml_value
             .get("package")
             .and_then(|p| p.as_array())
-            .map(|packages| {
+            .map_or_default(|packages| {
                 packages
                     .iter()
                     .filter_map(|pkg| {
@@ -83,12 +83,11 @@ impl CargoLockfile {
                         let dependencies = pkg
                             .get("dependencies")
                             .and_then(|deps| deps.as_array())
-                            .map(|deps| {
+                            .map_or_default(|deps| {
                                 deps.iter()
                                     .filter_map(|d| d.as_str().map(ToString::to_string))
                                     .collect()
-                            })
-                            .unwrap_or_default();
+                            });
 
                         Some(CargoLockEntry {
                             name,
@@ -98,8 +97,7 @@ impl CargoLockfile {
                         })
                     })
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         Ok(Self { version, packages })
     }

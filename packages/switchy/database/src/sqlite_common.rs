@@ -318,12 +318,11 @@ fn type_args(native: &str) -> Vec<u32> {
                 .find(')')
                 .map(|end| &native[start + 1..start + 1 + end])
         })
-        .map(|args| {
+        .map_or_default(|args| {
             args.split(',')
                 .filter_map(|arg| arg.trim().parse::<u32>().ok())
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Map a declared `SQLite` column type to a [`DataType`].

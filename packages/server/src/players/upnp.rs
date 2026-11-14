@@ -156,7 +156,7 @@ pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerEr
                 .unwrap()
                 .replace(handler.clone());
 
-            players.push((output.clone(), player.clone(), handler));
+            players.push((output, player, handler));
         }
     }
 

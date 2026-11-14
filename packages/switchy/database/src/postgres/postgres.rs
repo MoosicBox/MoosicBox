@@ -2619,21 +2619,19 @@ async fn update_and_get_row(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                })
-                .collect::<Vec<PgDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+            })
+            .collect::<Vec<PgDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -2697,21 +2695,19 @@ async fn update_and_get_rows(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                })
-                .collect::<Vec<PgDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+            })
+            .collect::<Vec<PgDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -2923,11 +2919,11 @@ fn to_values_opt(values: Option<&[(&str, DatabaseValue)]>) -> Option<Vec<PgDatab
 
 #[allow(unused)]
 fn exprs_to_params_opt(values: Option<&[(&str, Box<dyn Expression>)]>) -> Vec<PgDatabaseValue> {
-    values.map(exprs_to_params).unwrap_or_default()
+    values.map_or_default(exprs_to_params)
 }
 
 fn bexprs_to_params_opt(values: Option<&[Box<dyn BooleanExpression>]>) -> Vec<PgDatabaseValue> {
-    values.map(bexprs_to_params).unwrap_or_default()
+    values.map_or_default(bexprs_to_params)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3282,23 +3278,20 @@ async fn update_chunk(
                 .map(std::convert::Into::into)
         })
         .collect::<Vec<PgDatabaseValue>>();
-    let mut all_filter_values = filters
-        .as_ref()
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<PgDatabaseValue>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.as_ref().map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<PgDatabaseValue>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());

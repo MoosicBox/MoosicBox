@@ -2289,8 +2289,7 @@ fn dependency_table_keys(value: &toml::Value, key: &str) -> BTreeSet<String> {
     value
         .get(key)
         .and_then(toml::Value::as_table)
-        .map(|table| table.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|table| table.keys().cloned().collect())
 }
 
 fn dependency_exists_as_normal_or_build_dependency(

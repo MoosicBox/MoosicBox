@@ -595,14 +595,13 @@ type Decision = (UpgradeStatus, String, Option<String>, Option<String>);
 fn required_features(item: &Item) -> BTreeSet<String> {
     item.get("features")
         .and_then(Item::as_array)
-        .map(|array| {
+        .map_or_default(|array| {
             array
                 .iter()
                 .filter_map(Value::as_str)
                 .map(str::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn eligible(

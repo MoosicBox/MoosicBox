@@ -1562,9 +1562,9 @@ mod introspection {
                     name: index_name,
                     unique: col_bool(&row, 1),
                     is_primary: col_bool(&row, 2),
-                    columns: col(&row, 3)
-                        .map(|c| c.split(LIST_SEPARATOR).map(ToString::to_string).collect())
-                        .unwrap_or_default(),
+                    columns: col(&row, 3).map_or_default(|c| {
+                        c.split(LIST_SEPARATOR).map(ToString::to_string).collect()
+                    }),
                 },
             );
         }

@@ -829,7 +829,7 @@ fn rusqlite_get_column_dependencies(
         for col_result in column_rows {
             let col_name = col_result.map_err(RusqliteDatabaseError::Rusqlite)?;
             if col_name == column_name {
-                indexes.push(index_name.clone());
+                indexes.push(index_name);
                 break;
             }
         }
@@ -2843,7 +2843,7 @@ fn rusqlite_find_cascade_dependents(
             for ref_table in fk_rows {
                 if ref_table == current_table {
                     all_dependents.insert(check_table.clone());
-                    to_check.push(check_table.clone());
+                    to_check.push(check_table);
                     break;
                 }
             }
@@ -3950,15 +3950,13 @@ fn update_and_get_row(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -4011,15 +4009,13 @@ fn update_and_get_rows(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -4065,15 +4061,13 @@ fn update_count(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -4587,7 +4581,7 @@ fn select_values(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     sorts: Option<&[Sort]>,
 ) -> Vec<RusqliteDatabaseValue> {
-    let mut values = filters.map(bexprs_to_values).unwrap_or_default();
+    let mut values = filters.map_or_default(bexprs_to_values);
     values.extend(
         sorts
             .into_iter()
@@ -4797,15 +4791,13 @@ fn delete(
         build_update_where_clause(filters, limit, select_query.as_deref()),
     );
 
-    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -4846,15 +4838,13 @@ fn delete_count(
         build_update_where_clause(filters, limit, select_query.as_deref()),
     );
 
-    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values: Vec<RusqliteDatabaseValue> = filters.map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
+            .map(std::convert::Into::into)
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());
@@ -5178,23 +5168,20 @@ fn update_chunk(
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<_>>();
-    let mut all_filter_values = filters
-        .as_ref()
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| {
-                    value
-                        .params()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .cloned()
-                        .map(std::convert::Into::into)
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let mut all_filter_values = filters.as_ref().map_or_default(|filters| {
+        filters
+            .iter()
+            .flat_map(|value| {
+                value
+                    .params()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .cloned()
+                    .map(std::convert::Into::into)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    });
 
     if limit.is_some() {
         all_filter_values.extend(all_filter_values.clone());

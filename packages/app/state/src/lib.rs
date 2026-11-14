@@ -1889,8 +1889,9 @@ impl AppState {
             .await
             .clone()
             .filter(|x| !x.is_empty())
-            .map(|x| format!("{}clientId={x}", if url.contains('?') { '&' } else { '?' }))
-            .unwrap_or_default();
+            .map_or_default(|x| {
+                format!("{}clientId={x}", if url.contains('?') { '&' } else { '?' })
+            });
 
         let url = format!(
             "{}/{url}{client_id}",

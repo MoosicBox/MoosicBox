@@ -2507,11 +2507,7 @@ fn render_normalized_ast_node(
                     .nth(1)
                     .is_some_and(|line| line.trim().chars().all(|character| character == '='))
             {
-                let text = source[start..end]
-                    .lines()
-                    .next()
-                    .map(str::trim)
-                    .unwrap_or_default();
+                let text = source[start..end].lines().next().map_or_default(str::trim);
                 return format!("# {text}");
             }
             let text = render_heading_inline_source(&heading.children, source);
