@@ -41,7 +41,7 @@ Critical public API notes:
 - `silk` (default): SILK decoder for speech/narrowband content
 - `celt` (default): CELT decoder for music/wideband content
 - `hybrid` (default): Combined SILK+CELT decoder mode
-- `resampling`: SILK resampling support (requires moosicbox_resampler and symphonia)
+- `resampling`: SILK resampling support (enables `silk`; requires moosicbox_resampler and symphonia)
 
 ## Reference Implementation
 

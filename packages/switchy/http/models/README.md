@@ -324,7 +324,6 @@ match StatusCode::try_from(999) {
 
 ## Dependencies
 
-- **moosicbox_assert**: Internal assertion utilities
 - **Serde**: Serialization support (optional, enabled by default)
 - **Strum**: Enum utilities for string conversion
 - **Thiserror**: Error handling

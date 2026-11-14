@@ -17,9 +17,8 @@ examples = false
 group = "switchy"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 
 [features]
 default = []
 
-fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
+fail-on-warnings = []

@@ -179,11 +179,11 @@ markdown-xss-protection = ["hyperchad_markdown?/xss-protection", "markdown"]
 renderer = ["dep:hyperchad_renderer"]
 renderer-assets = [
     "hyperchad_app?/assets",
-    "hyperchad_renderer/assets",
+    "hyperchad_renderer?/assets",
     "hyperchad_renderer_html?/assets",
     "hyperchad_renderer_html_http?/assets",
 ]
-renderer-benchmark = ["hyperchad_renderer/benchmark"]
+renderer-benchmark = ["hyperchad_renderer?/benchmark"]
 renderer-bmux = ["dep:hyperchad_renderer_bmux", "hyperchad_app?/bmux"]
 renderer-bmux-images = [
     "hyperchad_app?/bmux-images",

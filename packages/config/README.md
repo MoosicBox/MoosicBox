@@ -384,7 +384,7 @@ pub enum AppType {
 - **`api`**: Enable REST API endpoints for profile management
 - **`db`**: Enable database functionality for profiles and server identity
 - **`file`**: Enable file-based configuration loading with JSON5 support
-- **`openapi`**: Enable OpenAPI/utoipa schema generation
+- **`openapi`**: Enable OpenAPI/utoipa schema generation for the API (implies `api`)
 
 ## Default Behavior
 

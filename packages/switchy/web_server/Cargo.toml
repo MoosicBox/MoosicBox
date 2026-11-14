@@ -17,7 +17,6 @@ examples = true
 group = "switchy"
 
 [dependencies]
-moosicbox_assert        = { workspace = true }
 switchy_http_models     = { workspace = true }
 switchy_web_server_core = { workspace = true }
 switchy_web_server_cors = { workspace = true, optional = true }
@@ -56,7 +55,6 @@ test-log = { workspace = true }
 default = ["actix", "compress", "cors", "htmx", "openapi-all", "serde", "tls"]
 
 fail-on-warnings = [
-    "moosicbox_assert/fail-on-warnings",
     "switchy_fs?/fail-on-warnings",
     "switchy_http_models/fail-on-warnings",
     "switchy_web_server_core/fail-on-warnings",

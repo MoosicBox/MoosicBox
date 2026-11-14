@@ -38,7 +38,7 @@ maud        = { workspace = true }
 qstring     = { workspace = true }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true, optional = true }
-uaparser    = { workspace = true }
+uaparser    = { workspace = true, optional = true }
 
 [features]
 default = ["actix", "assets", "debug", "extend", "json", "lambda"]
@@ -65,11 +65,12 @@ debug = [
 
 actix = [
     "dep:hyperchad_renderer_html_actix",
+    "dep:uaparser",
     "extend",
     "hyperchad_renderer_html_web_server?/actix",
     "switchy_http_models/actix",
 ]
-lambda = ["dep:hyperchad_renderer_html_lambda"]
+lambda = ["dep:hyperchad_renderer_html_lambda", "dep:uaparser"]
 web-server = [
     "dep:hyperchad_renderer_html_web_server",
     "extend",

@@ -15,18 +15,16 @@ examples = false
 tests    = false
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
-log   = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
 [features]
 default = ["api", "openapi"]
 
-fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
+fail-on-warnings = []
 
 api     = []
-openapi = ["dep:utoipa"]
+openapi = ["api", "dep:utoipa"]

@@ -20,7 +20,6 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 moosicbox_log_runtime = { workspace = true, features = [
     "env-filter",
     "file",
@@ -38,7 +37,6 @@ serde_json = { workspace = true }
 default = []
 
 fail-on-warnings = [
-    "moosicbox_assert/fail-on-warnings",
     "moosicbox_log_runtime/fail-on-warnings",
     "switchy_fs/fail-on-warnings",
 ]

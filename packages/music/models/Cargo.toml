@@ -15,7 +15,6 @@ examples = false
 tests    = false
 
 [dependencies]
-moosicbox_assert        = { workspace = true }
 moosicbox_date_utils    = { workspace = true, features = ["chrono"] }
 moosicbox_json_utils    = { workspace = true, features = ["serde_json"] }
 moosicbox_parsing_utils = { workspace = true }
@@ -42,7 +41,6 @@ test-log          = { workspace = true }
 default = ["all-formats", "api", "db", "openapi", "tantivy"]
 
 fail-on-warnings = [
-    "moosicbox_assert/fail-on-warnings",
     "moosicbox_date_utils/fail-on-warnings",
     "moosicbox_json_utils/fail-on-warnings",
     "moosicbox_parsing_utils/fail-on-warnings",

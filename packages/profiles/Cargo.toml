@@ -14,7 +14,6 @@ version     = "0.5.0"
 examples = false
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 
 actix-web     = { workspace = true, optional = true }
 futures       = { workspace = true, optional = true }
@@ -29,10 +28,7 @@ test-log      = { workspace = true }
 [features]
 default = ["api", "events"]
 
-fail-on-warnings = [
-    "moosicbox_assert/fail-on-warnings",
-    "switchy_async/fail-on-warnings",
-]
+fail-on-warnings = ["switchy_async/fail-on-warnings"]
 
 events = []
 

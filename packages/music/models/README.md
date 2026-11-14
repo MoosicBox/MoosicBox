@@ -192,7 +192,6 @@ let cd_version = AlbumVersionQuality {
 
 Core dependencies:
 
-- **moosicbox_assert**: Assertion utilities
 - **moosicbox_date_utils**: Date parsing and formatting (with chrono features)
 - **moosicbox_json_utils**: JSON parsing utilities (with serde_json features)
 - **moosicbox_parsing_utils**: Parsing utilities

@@ -9,10 +9,10 @@ mDNS service registration for MoosicBox servers.
 
 ## Cargo Features
 
-| Feature            | Default | Description                                                          |
-| ------------------ | ------- | -------------------------------------------------------------------- |
-| `simulator`        | Yes     | Provides a simulated mDNS daemon for testing                         |
-| `fail-on-warnings` | No      | Enables strict warning handling through the `moosicbox_assert` crate |
+| Feature            | Default | Description                                  |
+| ------------------ | ------- | -------------------------------------------- |
+| `simulator`        | Yes     | Provides a simulated mDNS daemon for testing |
+| `fail-on-warnings` | No      | Treats compiler warnings as errors           |
 
 ## Installation
 

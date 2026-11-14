@@ -46,7 +46,7 @@ switchy_fs = { workspace = true, features = [
 switchy_random = { workspace = true, features = ["rand"] }
 
 anyhow = { workspace = true }
-async-trait = { workspace = true }
+async-trait = { workspace = true, optional = true }
 bmux_keyboard = { workspace = true, optional = true }
 bmux_terminal = { workspace = true, optional = true }
 bmux_tui = { workspace = true, optional = true, features = ["terminal-io"] }
@@ -68,7 +68,7 @@ clap = { workspace = true }
 ctrlc = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 globset = { workspace = true }
-ignore = { workspace = true }
+ignore = { workspace = true, optional = true }
 itertools = { workspace = true }
 log = { workspace = true }
 proc-macro2 = { workspace = true, optional = true, features = [
@@ -133,6 +133,7 @@ native-ci = ["dep:serde_yaml", "dep:sha2"]
 
 machete = [
     "dep:bmux_tui",
+    "dep:ignore",
     "dep:proc-macro2",
     "dep:quote",
     "dep:syn",
@@ -151,7 +152,7 @@ fail-on-warnings = [
 ]
 
 # Workspace type support
-_workspace = []
+_workspace = ["dep:async-trait"]
 cargo-workspace = ["_workspace"]
 node-workspace = ["_workspace", "dep:serde_yaml"]
 publish = [
@@ -187,7 +188,7 @@ upgrade = [
 ]
 versioning = ["dep:cargo_metadata", "dep:toml_edit"]
 
-_tools = ["dep:rayon", "dep:toml_edit", "dep:which"]
+_tools = ["dep:ignore", "dep:rayon", "dep:toml_edit", "dep:which"]
 _transforms = []
 check = ["_tools"]
 format = ["_tools", "dep:cargo_metadata", "dep:git2", "dep:tempfile"]

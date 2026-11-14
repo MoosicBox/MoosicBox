@@ -102,7 +102,6 @@ pub enum Error {
 - `async-trait` - Async trait support
 - `thiserror` - Error handling
 - `log` - Logging
-- `moosicbox_assert` - Assertion utilities
 
 ## Related
 

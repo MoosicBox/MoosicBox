@@ -8431,7 +8431,6 @@ version = "0.5.0"
 dependencies = [
  "base64 0.23.1",
  "bmux_codec 0.0.1-alpha.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "moosicbox_assert",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -8446,7 +8445,6 @@ dependencies = [
  "http 1.5.0",
  "hyperchad_shared_state_models",
  "log 0.4.34",
- "moosicbox_assert",
  "reqwest 0.13.5",
  "serde_json",
  "thiserror 2.0.21",
@@ -8489,7 +8487,6 @@ version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.34",
- "moosicbox_assert",
  "serde",
  "serde_json",
  "switchy",
@@ -8556,7 +8553,6 @@ dependencies = [
 name = "hyperchad_test_utils"
 version = "0.5.0"
 dependencies = [
- "moosicbox_assert",
  "serde",
  "serde_json",
  "test-log",
@@ -10722,10 +10718,6 @@ dependencies = [
 [[package]]
 name = "moosicbox_app_client"
 version = "0.5.0"
-dependencies = [
- "log 0.4.34",
- "moosicbox_assert",
-]
 
 [[package]]
 name = "moosicbox_app_create_config"
@@ -10733,7 +10725,6 @@ version = "0.5.0"
 dependencies = [
  "clap",
  "log 0.4.34",
- "moosicbox_assert",
  "moosicbox_log_runtime",
  "serde",
  "serde_json",
@@ -10795,7 +10786,6 @@ name = "moosicbox_app_native_bundled"
 version = "0.5.0"
 dependencies = [
  "log 0.4.34",
- "moosicbox_app_models",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_config",
@@ -11201,7 +11191,6 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_parsing_utils",
  "moosicbox_stream_utils",
- "profiling",
  "regex",
  "serde",
  "strum 0.28.0",
@@ -11333,7 +11322,6 @@ version = "0.5.0"
 dependencies = [
  "async-trait",
  "log 0.4.34",
- "moosicbox_env_utils",
  "moosicbox_log_runtime",
  "pingora",
  "pingora-core",
@@ -11588,7 +11576,6 @@ name = "moosicbox_music_models"
 version = "0.5.0"
 dependencies = [
  "log 0.4.34",
- "moosicbox_assert",
  "moosicbox_date_utils",
  "moosicbox_json_utils",
  "moosicbox_parsing_utils",
@@ -11735,7 +11722,6 @@ version = "0.5.0"
 dependencies = [
  "actix-web",
  "futures",
- "moosicbox_assert",
  "qstring",
  "serial_test",
  "switchy_async",
@@ -11855,8 +11841,6 @@ dependencies = [
 name = "moosicbox_scan_models"
 version = "0.5.0"
 dependencies = [
- "log 0.4.34",
- "moosicbox_assert",
  "serde",
  "utoipa",
 ]
@@ -18617,7 +18601,6 @@ name = "switchy_http_models"
 version = "0.5.0"
 dependencies = [
  "actix-web",
- "moosicbox_assert",
  "reqwest 0.13.5",
  "serde",
  "strum 0.28.0",
@@ -18632,7 +18615,6 @@ dependencies = [
  "hostname",
  "log 0.4.34",
  "mdns-sd",
- "moosicbox_assert",
  "switchy_async",
  "test-log",
  "thiserror 2.0.21",
@@ -18755,8 +18737,6 @@ dependencies = [
  "actix-web-opentelemetry",
  "futures-util",
  "log 0.4.34",
- "moosicbox_assert",
- "moosicbox_env_utils",
  "moosicbox_log_runtime",
  "opentelemetry 0.33.1",
  "opentelemetry-otlp",
@@ -18790,7 +18770,6 @@ dependencies = [
  "futures",
  "itertools 0.15.0",
  "log 0.4.34",
- "moosicbox_assert",
  "pin-utils",
  "regex",
  "roxmltree 0.21.2",
@@ -18832,7 +18811,6 @@ dependencies = [
  "const_format",
  "futures",
  "log 0.4.34",
- "moosicbox_assert",
  "paste",
  "serde",
  "serde-querystring",
@@ -18873,15 +18851,11 @@ dependencies = [
 [[package]]
 name = "switchy_web_server_core"
 version = "0.5.0"
-dependencies = [
- "moosicbox_assert",
-]
 
 [[package]]
 name = "switchy_web_server_cors"
 version = "0.5.0"
 dependencies = [
- "moosicbox_assert",
  "switchy_http_models",
  "test-log",
 ]

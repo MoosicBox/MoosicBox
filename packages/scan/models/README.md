@@ -50,6 +50,4 @@ let scan_path = ApiScanPath {
 ## Dependencies
 
 - **Serde**: Serialization and deserialization
-- **log**: Logging facade
-- **moosicbox_assert**: Assertion utilities
-- **utoipa**: OpenAPI schema generation (optional, enabled with `openapi` feature)
+- **utoipa**: OpenAPI schema generation (optional, enabled with the `openapi` feature, which also enables `api`)

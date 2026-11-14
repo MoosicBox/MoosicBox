@@ -17,7 +17,6 @@ examples = true
 group = "switchy"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 
 async-trait = { workspace = true }
 hostname    = { workspace = true }
@@ -33,6 +32,6 @@ tokio         = { workspace = true }
 [features]
 default = ["simulator"]
 
-fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
+fail-on-warnings = []
 
 simulator = []

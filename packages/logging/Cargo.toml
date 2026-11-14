@@ -17,7 +17,7 @@ examples = true
 moosicbox_config    = { workspace = true, optional = true }
 moosicbox_env_utils = { workspace = true, optional = true }
 
-free_log_client = { workspace = true }
+free_log_client = { workspace = true, optional = true }
 log             = { workspace = true }
 thiserror       = { workspace = true }
 
@@ -33,8 +33,12 @@ fail-on-warnings = [
 ]
 
 
-api = ["free_log_client/api", "moosicbox_config?/api"]
+api = ["free_log_client?/api", "moosicbox_config?/api"]
 
-free_log = ["dep:moosicbox_config", "dep:moosicbox_env_utils"]
+free_log = [
+    "dep:free_log_client",
+    "dep:moosicbox_config",
+    "dep:moosicbox_env_utils",
+]
 
 macros = []

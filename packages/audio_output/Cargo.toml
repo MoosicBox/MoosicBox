@@ -72,7 +72,7 @@ fail-on-warnings = [
 ]
 
 api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde"]
-openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
+openapi = ["dep:utoipa", "moosicbox_paging?/openapi"]
 
 asio = ["cpal/asio"]
 cpal = ["dep:cpal", "dep:rb"]

@@ -89,4 +89,3 @@ moosicbox_create_config --output src/config.ts
 - **clap**: Command-line argument parsing (CLI binary)
 - **log**: Logging facade
 - **moosicbox_logging**: MoosicBox logging utilities
-- **moosicbox_assert**: MoosicBox assertion utilities

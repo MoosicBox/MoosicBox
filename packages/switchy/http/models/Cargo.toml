@@ -18,7 +18,6 @@ tests    = false
 group = "switchy"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
 
 actix-web = { workspace = true, optional = true }
 reqwest   = { workspace = true, optional = true }
@@ -29,7 +28,7 @@ thiserror = { workspace = true }
 [features]
 default = ["actix", "reqwest", "serde"]
 
-fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
+fail-on-warnings = []
 
 serde = ["dep:serde"]
 

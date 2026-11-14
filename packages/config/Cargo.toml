@@ -14,7 +14,7 @@ version     = "0.5.0"
 examples = false
 
 [dependencies]
-moosicbox_assert = { workspace = true }
+moosicbox_assert = { workspace = true, optional = true }
 moosicbox_profiles = { workspace = true, optional = true, features = [
     "events",
 ] }
@@ -32,13 +32,13 @@ utoipa    = { workspace = true, optional = true }
 
 # Serialization (used by both file and API modules)
 serde      = { workspace = true }
-serde_with = { workspace = true, features = ["macros"] }
+serde_with = { workspace = true, features = ["macros"], optional = true }
 
 home       = { workspace = true }
-json5      = { workspace = true }
+json5      = { workspace = true, optional = true }
 log        = { workspace = true }
-switchy_fs = { workspace = true, features = ["std", "sync"] }
-thiserror  = { workspace = true }
+switchy_fs = { workspace = true, features = ["std", "sync"], optional = true }
+thiserror  = { workspace = true, optional = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
@@ -48,21 +48,23 @@ test-log    = { workspace = true }
 default = ["api", "db", "file", "openapi"]
 
 fail-on-warnings = [
-    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_assert?/fail-on-warnings",
     "moosicbox_json_utils?/fail-on-warnings",
     "moosicbox_profiles?/fail-on-warnings",
     "switchy_database?/fail-on-warnings",
-    "switchy_fs/fail-on-warnings",
+    "switchy_fs?/fail-on-warnings",
 ]
 
 db = [
+    "dep:moosicbox_assert",
     "dep:moosicbox_json_utils",
     "dep:moosicbox_profiles",
     "dep:nanoid",
     "dep:switchy_database",
+    "dep:thiserror",
 ]
 
-file = []
+file = ["dep:json5", "dep:serde_with", "dep:switchy_fs", "dep:thiserror"]
 
 api = [
     "db",
@@ -70,4 +72,4 @@ api = [
     "moosicbox_profiles?/api",
     "switchy_database?/api",
 ]
-openapi = ["dep:utoipa"]
+openapi = ["api", "dep:utoipa"]

@@ -43,5 +43,4 @@ moosicbox_app_client = { path = "../app/tauri/client", features = ["fail-on-warn
 
 ## Dependencies
 
-- `moosicbox_assert`: Assertion utilities
-- `log`: Logging framework
+This crate has no dependencies.

@@ -29,7 +29,7 @@ profiling     = { workspace = true, optional = true }
 strum         = { workspace = true }
 strum_macros  = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
-switchy_fs    = { workspace = true, features = ["std"] }
+switchy_fs    = { workspace = true, features = ["std"], optional = true }
 thiserror     = { workspace = true }
 webp          = { workspace = true, optional = true }
 
@@ -43,10 +43,10 @@ default = ["image", "libvips"]
 
 fail-on-warnings = [
     "switchy_async/fail-on-warnings",
-    "switchy_fs/fail-on-warnings",
+    "switchy_fs?/fail-on-warnings",
 ]
 
-build-binary = ["dep:clap", "image"]
+build-binary = ["dep:clap", "dep:switchy_fs", "image"]
 image        = ["dep:image", "dep:webp"]
 libvips      = ["dep:libvips"]
 
