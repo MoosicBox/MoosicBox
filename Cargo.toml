@@ -557,12 +557,10 @@ openport                = { version = "0.5.0", default-features = false, path = 
 gpipe     = { version = "0.5.0", default-features = false, path = "packages/gpipe" }
 gpipe_ast = { version = "0.5.0", default-features = false, path = "packages/gpipe/ast" }
 
-actix = "0.13.5"
 actix-cors = "0.7.2"
 actix-files = "0.7.2"
 actix-htmx = "0.4.1"
 actix-http = "3.19.0"
-actix-rt = "2.15.0"
 actix-service = "2.0.3"
 actix-test = "0.1.6"
 actix-web = "4.18.1"
@@ -580,7 +578,6 @@ async-trait = "0.1.92"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.13.0"
-aws-sdk-apigatewaymanagement = "1.118.0"
 aws-sdk-ssm = "1.131.0"
 base64 = "0.23.1"
 bmux_codec = { version = "0.0.1-alpha.4", default-features = false }
@@ -615,7 +612,6 @@ convert_case = "0.12.0"
 cpal = "0.18.2"
 ctrlc = "3.5.2"
 deadpool-postgres = "0.14.2"
-debounce = "0.2.2"
 dialoguer = "0.12.0"
 # 1.4.3+ currently require yanked zip 6; keep fresh registry resolution working.
 cap-std = { version = "4.0.3", default-features = false }
@@ -640,10 +636,8 @@ futures-core = "0.3.34"
 futures-util = { version = "0.3.34", default-features = false, features = [
     "std",
 ] }
-getrandom = "0.4.3"
 gh-emoji = { version = "1.0.9", default-features = false }
 git2 = "0.21.0"
-glob = "0.3.4"
 globset = { version = "0.4.20", default-features = false }
 hex = "0.4.3"
 home = "0.5.12"
@@ -720,7 +714,6 @@ test-strategy = { version = "0.4.5", default-features = false }
 time = "0.3.55"
 
 quote = "1.0.47"
-rand  = "0.10.3"
 # Separate 0.8 API line for deterministic simulation replay (see random/tests/replay.rs).
 rand_08 = { package = "rand", version = "=0.8.8", default-features = false }
 rangemap = "1.8.0"
@@ -760,9 +753,6 @@ shell-words = "1.1.1"
 sqlx = { version = "0.9.0", default-features = false, features = [
     "chrono",
     "runtime-tokio",
-] }
-sqlx-mysql = { version = "0.9.0", default-features = false, features = [
-    "chrono",
 ] }
 sqlx-postgres = { version = "0.9.0", default-features = false, features = [
     "chrono",
@@ -806,7 +796,6 @@ tokio-postgres = { version = "0.7.18", features = [
     "with-uuid-1",
 ] }
 tokio-stream = "0.1.19"
-tokio-test = "0.4.6"
 tokio-tungstenite = { version = "0.30.0", features = [
     "rustls-tls-webpki-roots",
 ] }
