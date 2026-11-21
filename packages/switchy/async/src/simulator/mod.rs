@@ -7,6 +7,17 @@ pub mod futures;
 pub mod runtime;
 pub mod task;
 
+/// The branch a non-biased `select!` polls first, among `branches`: drawn from the run's seeded
+/// generator (as `tokio::select!` draws its own), so which ready branch wins replays by seed.
+#[doc(hidden)]
+#[must_use]
+pub fn select_start(branches: usize) -> usize {
+    if branches <= 1 {
+        return 0;
+    }
+    switchy_random::rng().gen_range(0..branches)
+}
+
 #[cfg(feature = "io")]
 pub mod io;
 #[cfg(feature = "process")]

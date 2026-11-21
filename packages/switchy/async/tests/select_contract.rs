@@ -73,3 +73,32 @@ fn preconditions_disable_branches() {
     });
     assert_eq!(picked, [("recv", 7), ("ready", 1)]);
 }
+
+/// Which of two always-ready branches a non-biased select picks follows the run's seed: the same
+/// for a seed, different across seeds, and fair to both.
+#[cfg(feature = "thread-simulator")]
+#[test]
+fn non_biased_selection_follows_the_seed() {
+    fn choices(seed: u64) -> Vec<u8> {
+        // A run of its own, seeded with `seed`.
+        let outcome = switchy_thread::simulator::run(seed, || {
+            switchy_random::simulator::reset_rng();
+            let runtime = switchy_async::simulator::runtime::Runtime::new();
+            runtime.block_on(async {
+                let mut picked = Vec::new();
+                for _ in 0..32 {
+                    switchy_async::select! {
+                        () = std::future::ready(()) => picked.push(0),
+                        () = std::future::ready(()) => picked.push(1),
+                    }
+                }
+                picked
+            })
+        });
+        outcome.result.unwrap()
+    }
+    let first = choices(7);
+    assert_eq!(first, choices(7));
+    assert!(first.contains(&0) && first.contains(&1), "{first:?}");
+    assert_ne!(first, choices(8));
+}

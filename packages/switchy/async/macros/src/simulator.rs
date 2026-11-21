@@ -74,17 +74,32 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    // Handle biased selection if present
-    let output = if select_input.biased {
+    // `futures::select!` picks among ready branches with a per-thread generator outside the
+    // simulation, so it would not replay. A biased select polls branches in order; any other
+    // starts at a branch drawn from the run's seeded generator (one `select_biased!` per
+    // rotation of the branches), which is as fair as tokio's and replays by seed.
+    let output = if select_input.biased || transformed_branches.len() <= 1 {
         quote! {
             #crate_path::futures::select_biased! {
                 #(#transformed_branches,)*
             }
         }
     } else {
+        let count = transformed_branches.len();
+        let rotations = (0..count).map(|start| {
+            let rotated = transformed_branches[start..]
+                .iter()
+                .chain(&transformed_branches[..start]);
+            quote! {
+                #start => #crate_path::futures::select_biased! {
+                    #(#rotated,)*
+                },
+            }
+        });
         quote! {
-            #crate_path::futures::select! {
-                #(#transformed_branches,)*
+            match #crate_path::simulator::select_start(#count) {
+                #(#rotations)*
+                _ => ::core::unreachable!("select_start returns a branch index"),
             }
         }
     };
