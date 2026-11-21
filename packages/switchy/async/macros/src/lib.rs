@@ -148,6 +148,11 @@ impl syn::parse::Parse for TestArgs {
                 "real_time" => real_time = true,
                 "real_fs" => real_fs = true,
                 "no_simulator" => no_simulator = true,
+                // tokio's runtime options: the simulator has one deterministic executor.
+                "flavor" | "worker_threads" => {
+                    let _: syn::Token![=] = input.parse()?;
+                    let _: syn::Lit = input.parse()?;
+                }
                 _ => {
                     return Err(syn::Error::new_spanned(
                         &ident,
@@ -169,6 +174,59 @@ impl syn::parse::Parse for TestArgs {
             real_fs,
             no_simulator,
         })
+    }
+}
+
+/// tokio's runtime options for a test (`flavor = "multi_thread"`, `worker_threads = 2`), and
+/// the simulator's options, which a native test ignores.
+#[derive(Default)]
+struct RuntimeOptions {
+    multi_thread: bool,
+    worker_threads: Option<usize>,
+}
+
+impl syn::parse::Parse for RuntimeOptions {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut options = Self::default();
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            match ident.to_string().as_str() {
+                "flavor" => {
+                    let _: syn::Token![=] = input.parse()?;
+                    let flavor: syn::LitStr = input.parse()?;
+                    options.multi_thread = match flavor.value().as_str() {
+                        "multi_thread" => true,
+                        "current_thread" => false,
+                        other => {
+                            return Err(syn::Error::new_spanned(
+                                &flavor,
+                                format!(
+                                    "unknown flavor '{other}': expected multi_thread or current_thread"
+                                ),
+                            ));
+                        }
+                    };
+                }
+                "worker_threads" => {
+                    let _: syn::Token![=] = input.parse()?;
+                    let threads: syn::LitInt = input.parse()?;
+                    options.worker_threads = Some(threads.base10_parse()?);
+                }
+                "real_time" | "real_fs" | "no_simulator" => {}
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        &ident,
+                        format!(
+                            "unknown test attribute '{ident}': expected flavor, worker_threads, real_time, real_fs or no_simulator"
+                        ),
+                    ));
+                }
+            }
+            if !input.is_empty() {
+                let _: syn::Token![,] = input.parse()?;
+            }
+        }
+        Ok(options)
     }
 }
 
@@ -823,7 +881,11 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
 /// * Generated test wrappers call `Builder::build().expect(...)` and panic if runtime
 ///   construction fails.
 #[proc_macro_attribute]
-pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
+    let runtime_options = match syn::parse::<RuntimeOptions>(args) {
+        Ok(options) => options,
+        Err(error) => return error.to_compile_error().into(),
+    };
     let input_fn = parse_macro_input!(item as syn::ItemFn);
 
     let fn_name = &input_fn.sig.ident;
@@ -839,12 +901,24 @@ pub fn tokio_test_wrapper(_args: TokenStream, item: TokenStream) -> TokenStream 
         .collect();
 
     let runtime_path = switchy_async_path();
+    let flavor = runtime_options.multi_thread.then(|| {
+        quote! { builder.flavor(#runtime_path::RuntimeFlavor::MultiThread); }
+    });
+    let workers = runtime_options
+        .worker_threads
+        .map(|threads| quote! { builder.worker_threads(#threads); });
 
     let result = quote! {
         #(#filtered_attrs)*
         #[::core::prelude::v1::test]
         #fn_vis fn #fn_name() #fn_output {
-            let rt = #runtime_path::Builder::new().build().expect("Failed to build runtime");
+            let rt = {
+                let mut builder = #runtime_path::Builder::new();
+                #flavor
+                #workers
+                builder.build()
+            }
+            .expect("Failed to build runtime");
             rt.block_on(async move #fn_block)
             // Don't call rt.wait() as it can hang in tests
         }

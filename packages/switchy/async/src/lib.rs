@@ -246,6 +246,11 @@ pub struct Builder {
     /// Maximum number of blocking threads (only available with `rt-multi-thread` feature).
     #[cfg(feature = "rt-multi-thread")]
     pub max_blocking_threads: Option<u16>,
+    /// How the runtime runs its tasks (the simulator ignores it).
+    pub flavor: RuntimeFlavor,
+    /// Worker threads of a multi-thread runtime.
+    #[cfg(feature = "rt-multi-thread")]
+    pub worker_threads: Option<usize>,
 }
 
 impl Default for Builder {
@@ -261,7 +266,24 @@ impl Builder {
         Self {
             #[cfg(feature = "rt-multi-thread")]
             max_blocking_threads: None,
+            flavor: RuntimeFlavor::CurrentThread,
+            #[cfg(feature = "rt-multi-thread")]
+            worker_threads: None,
         }
+    }
+
+    /// How the runtime runs its tasks (a multi-thread runtime needs `rt-multi-thread`; the
+    /// simulator ignores it).
+    pub const fn flavor(&mut self, flavor: RuntimeFlavor) -> &mut Self {
+        self.flavor = flavor;
+        self
+    }
+
+    /// Worker threads of a multi-thread runtime.
+    #[cfg(feature = "rt-multi-thread")]
+    pub const fn worker_threads(&mut self, threads: usize) -> &mut Self {
+        self.worker_threads = Some(threads);
+        self
     }
 
     /// Sets the maximum number of blocking threads for the runtime.

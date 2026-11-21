@@ -290,23 +290,25 @@ impl GenericRuntime for Runtime {
 pub(crate) fn build_runtime(#[allow(unused)] builder: &Builder) -> Result<Runtime, Error> {
     #[cfg(feature = "rt-multi-thread")]
     #[allow(clippy::option_if_let_else)]
-    let mut builder = if let Some(threads) = builder.max_blocking_threads {
-        let mut builder = tokio::runtime::Builder::new_multi_thread();
-
-        builder.max_blocking_threads(threads as usize);
-
-        builder
+    let mut builder = if builder.max_blocking_threads.is_some()
+        || builder.flavor == crate::RuntimeFlavor::MultiThread
+    {
+        let mut multi = tokio::runtime::Builder::new_multi_thread();
+        if let Some(threads) = builder.max_blocking_threads {
+            multi.max_blocking_threads(threads as usize);
+        }
+        if let Some(threads) = builder.worker_threads {
+            multi.worker_threads(threads);
+        }
+        multi
     } else {
         tokio::runtime::Builder::new_current_thread()
     };
     #[cfg(not(feature = "rt-multi-thread"))]
     let mut builder = tokio::runtime::Builder::new_current_thread();
 
-    #[cfg(feature = "time")]
-    builder.enable_time();
-
-    #[cfg(feature = "net")]
-    builder.enable_io();
+    // Every driver the build has, as `#[tokio::test]` and `#[tokio::main]` do.
+    builder.enable_all();
 
     Ok(Runtime {
         inner: Arc::new(builder.build()?),
