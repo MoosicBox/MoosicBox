@@ -11,6 +11,7 @@
 //! usually starts a run with [`run`], which creates a fresh context, runs a closure as the main
 //! thread and reports what happened.
 
+mod memory;
 pub mod sync;
 pub mod thread;
 
@@ -102,6 +103,9 @@ pub struct Config {
     pub strategy: Strategy,
     /// Decisions kept in [`Scheduler::recent_decisions`].
     pub recent_decisions: usize,
+    /// Model weak memory: atomic loads may return any store the memory model allows (see
+    /// `SIMULATOR_WEAK_MEMORY`). Slower; finds bugs in `Relaxed` and `Acquire`/`Release` use.
+    pub weak_memory: bool,
 }
 
 impl Config {
@@ -111,6 +115,7 @@ impl Config {
         Self {
             strategy: Strategy::Random,
             recent_decisions: 256,
+            weak_memory: false,
         }
     }
 
@@ -120,6 +125,7 @@ impl Config {
         Self {
             strategy: Strategy::Pct { depth, steps },
             recent_decisions: 256,
+            weak_memory: false,
         }
     }
 
@@ -128,6 +134,7 @@ impl Config {
     /// * `SIMULATOR_SCHEDULE_STRATEGY`: `random`, `pct` or `alternate` (the default), which
     ///   picks `random` for even seeds and `pct` for odd ones.
     /// * `SIMULATOR_PCT_DEPTH` (default 3) and `SIMULATOR_PCT_STEPS` (default 10000).
+    /// * `SIMULATOR_WEAK_MEMORY`: `1` or `true` to model weak memory.
     ///
     /// # Panics
     ///
@@ -155,6 +162,8 @@ impl Config {
         Self {
             strategy,
             recent_decisions: 256,
+            weak_memory: std::env::var("SIMULATOR_WEAK_MEMORY")
+                .is_ok_and(|v| v == "1" || v == "true"),
         }
     }
 }
@@ -252,6 +261,7 @@ struct Inner {
     failure: Option<String>,
     shutting_down: bool,
     os_handles: Vec<std::thread::JoinHandle<()>>,
+    memory: memory::Memory,
 }
 
 /// Called at every scheduling decision, before the chosen thread runs.
@@ -362,6 +372,7 @@ impl Scheduler {
                 failure: None,
                 shutting_down: false,
                 os_handles: Vec::new(),
+                memory: memory::Memory::default(),
             }),
         }
     }
@@ -432,7 +443,7 @@ impl Scheduler {
 
     /// Register a new simulated thread, returning its index. It starts runnable but does not
     /// run until picked.
-    fn add_thread(&self, name: String) -> ThreadIndex {
+    fn add_thread(&self, parent: ThreadIndex, name: String) -> ThreadIndex {
         let priority = {
             let mut rng = lock(&self.rng);
             let inner = lock(&self.inner);
@@ -451,7 +462,12 @@ impl Scheduler {
             timed_out: false,
             panicked: false,
         });
-        inner.threads.len() - 1
+        let child = inner.threads.len() - 1;
+        if inner.config.weak_memory {
+            inner.memory.fence(parent);
+            inner.memory.spawned(parent, child);
+        }
+        child
     }
 
     fn attach(&self, index: ThreadIndex, handle: std::thread::JoinHandle<()>) {
@@ -472,6 +488,69 @@ impl Scheduler {
     /// Returns whether the wait timed out.
     pub fn block(&self, op: Op, key: WaitKey, deadline: Option<Instant>) -> bool {
         self.switch(op, Some((key, deadline)))
+    }
+
+    /// Whether this run models weak memory.
+    pub(crate) fn weak_memory(&self) -> bool {
+        lock(&self.inner).config.weak_memory
+    }
+
+    /// Pick one of `count` allowed stores: the latest half the time, otherwise any.
+    fn choose_store(&self, count: usize) -> usize {
+        if count <= 1 {
+            return 0;
+        }
+        let mut rng = lock(&self.rng);
+        if rng.chance(0.5) {
+            count - 1
+        } else {
+            rng.index(count)
+        }
+    }
+
+    /// A weak-memory load of location `id` (whose latest value is `current`).
+    pub(crate) fn atomic_load(
+        &self,
+        id: u64,
+        current: u64,
+        order: std::sync::atomic::Ordering,
+    ) -> u64 {
+        let me = self.me();
+        let mut inner = lock(&self.inner);
+        let location = usize::try_from(id).unwrap_or(usize::MAX);
+        inner.memory.load(me, location, current, order, |count| {
+            self.choose_store(count)
+        })
+    }
+
+    /// A weak-memory store to location `id`.
+    pub(crate) fn atomic_store(
+        &self,
+        id: u64,
+        current: u64,
+        bits: u64,
+        order: std::sync::atomic::Ordering,
+    ) {
+        let me = self.me();
+        let location = usize::try_from(id).unwrap_or(usize::MAX);
+        lock(&self.inner)
+            .memory
+            .store(me, location, current, bits, order);
+    }
+
+    /// A weak-memory read-modify-write of location `id`; returns the value read.
+    pub(crate) fn atomic_update(
+        &self,
+        id: u64,
+        current: u64,
+        order: std::sync::atomic::Ordering,
+        update: impl FnOnce(u64) -> Option<u64>,
+    ) -> u64 {
+        let me = self.me();
+        let location = usize::try_from(id).unwrap_or(usize::MAX);
+        lock(&self.inner)
+            .memory
+            .update(me, location, current, order, update)
     }
 
     /// Make every thread blocked on `key` runnable. They run when picked.
@@ -510,6 +589,12 @@ impl Scheduler {
     fn switch(&self, op: Op, block: Option<(WaitKey, Option<Instant>)>) -> bool {
         let me = self.me();
         let mut inner = lock(&self.inner);
+        if inner.config.weak_memory
+            && !matches!(op, Op::AtomicLoad | Op::AtomicStore | Op::AtomicUpdate)
+        {
+            // Non-atomic synchronization orders everything, conservatively.
+            inner.memory.fence(me);
+        }
         inner.threads[me].op = op;
         inner.threads[me].timed_out = false;
         inner.threads[me].state = match block {
@@ -670,6 +755,9 @@ impl Scheduler {
     /// Mark the calling simulated thread finished and hand the baton on.
     fn exit(&self, me: ThreadIndex, panicked: bool) {
         let mut inner = lock(&self.inner);
+        if inner.config.weak_memory {
+            inner.memory.fence(me);
+        }
         inner.threads[me].state = ThreadState::Finished;
         inner.threads[me].panicked = panicked;
         inner.threads[me].op = Op::Exit;

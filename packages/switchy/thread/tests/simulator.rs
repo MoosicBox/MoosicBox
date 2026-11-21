@@ -333,3 +333,92 @@ fn both_strategies_are_deterministic() {
         }
     }
 }
+
+const fn weak() -> Config {
+    Config {
+        weak_memory: true,
+        ..Config::random()
+    }
+}
+
+/// Message passing: data written, then a flag; a reader seeing the flag reads the data.
+fn message_passing(flag_order: (Ordering, Ordering)) -> Vec<(bool, usize)> {
+    (0..300)
+        .map(|seed| {
+            outcome(simulator::run_with(weak(), seed, move || {
+                let data = Arc::new(AtomicUsize::new(0));
+                let flag = Arc::new(switchy_thread::sync::atomic::AtomicBool::new(false));
+                let writer = {
+                    let (data, flag) = (Arc::clone(&data), Arc::clone(&flag));
+                    thread::spawn(move || {
+                        data.store(42, Ordering::Relaxed);
+                        flag.store(true, flag_order.0);
+                    })
+                };
+                let reader = thread::spawn(move || {
+                    let seen = flag.load(flag_order.1);
+                    (seen, data.load(Ordering::Relaxed))
+                });
+                writer.join().unwrap();
+                reader.join().unwrap()
+            }))
+            .0
+        })
+        .collect()
+}
+
+#[test]
+fn weak_memory_lets_relaxed_message_passing_see_stale_data() {
+    let results = message_passing((Ordering::Relaxed, Ordering::Relaxed));
+    assert!(
+        results.contains(&(true, 0)),
+        "relaxed flags must allow seeing the flag without the data"
+    );
+}
+
+#[test]
+fn release_acquire_message_passing_always_sees_the_data() {
+    let results = message_passing((Ordering::Release, Ordering::Acquire));
+    assert!(!results.contains(&(true, 0)), "{results:?}");
+    assert!(results.contains(&(true, 42)));
+}
+
+/// Store buffering: each thread stores, then loads the other's location.
+fn store_buffering(order: Ordering) -> Vec<(usize, usize)> {
+    (0..300)
+        .map(|seed| {
+            outcome(simulator::run_with(weak(), seed, move || {
+                let x = Arc::new(AtomicUsize::new(0));
+                let y = Arc::new(AtomicUsize::new(0));
+                let a = {
+                    let (x, y) = (Arc::clone(&x), Arc::clone(&y));
+                    thread::spawn(move || {
+                        x.store(1, order);
+                        y.load(order)
+                    })
+                };
+                let b = thread::spawn(move || {
+                    y.store(1, order);
+                    x.load(order)
+                });
+                (a.join().unwrap(), b.join().unwrap())
+            }))
+            .0
+        })
+        .collect()
+}
+
+#[test]
+fn weak_memory_allows_relaxed_store_buffering_but_not_seq_cst() {
+    assert!(store_buffering(Ordering::Relaxed).contains(&(0, 0)));
+    assert!(!store_buffering(Ordering::SeqCst).contains(&(0, 0)));
+}
+
+#[test]
+fn weak_memory_runs_replay_exactly() {
+    for seed in 0..20 {
+        let first = outcome(simulator::run_with(weak(), seed, interleaving));
+        let second = outcome(simulator::run_with(weak(), seed, interleaving));
+        assert_eq!(first, second);
+    }
+}

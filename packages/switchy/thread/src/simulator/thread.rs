@@ -108,7 +108,7 @@ impl Builder {
             let count = scheduler.snapshot().threads.len();
             format!("sim-thread-{count}")
         });
-        let index = scheduler.add_thread(name.clone());
+        let index = scheduler.add_thread(scheduler.me(), name.clone());
         let result = Arc::new(Mutex::new(None));
         let mut builder = std::thread::Builder::new().name(name);
         if let Some(size) = self.stack_size {
