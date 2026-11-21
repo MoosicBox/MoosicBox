@@ -354,6 +354,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
         let run_index = Arc::new(AtomicU64::new(0));
 
         let bootstrap = Arc::new(self.bootstrap);
+        // Every run's result, in run order.
         let results = Arc::new(Mutex::new(BTreeMap::new()));
 
         if self.max_parallel == 0 {
@@ -366,7 +367,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
 
                 let result = simulation.run(run_number, None);
 
-                results.lock().unwrap().insert(0, result);
+                results.lock().unwrap().insert(run_number, result);
 
                 if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
                     break;
@@ -414,7 +415,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
 
                         let result = simulation.run(run_index + 1, Some(thread_id));
 
-                        results.lock().unwrap().insert(thread_id, result);
+                        results.lock().unwrap().insert(run_index + 1, result);
 
                         log::debug!(
                             "simulation finished run_index={run_index} on thread {i} ({thread_id})"
