@@ -18650,6 +18650,8 @@ name = "switchy_pty"
 version = "0.5.0"
 dependencies = [
  "libc",
+ "switchy_simulation",
+ "switchy_thread",
  "windows-sys 0.61.2",
 ]
 

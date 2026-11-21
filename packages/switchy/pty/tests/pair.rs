@@ -1,5 +1,5 @@
 //! Behaviour of pseudo-terminal pairs: processes started on the slave, driven from the master.
-#![cfg(any(unix, windows))]
+#![cfg(all(any(unix, windows), not(feature = "simulator")))]
 
 use std::io::{ErrorKind, Read as _, Write as _};
 use std::path::PathBuf;

@@ -530,6 +530,8 @@ pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
         Signal::Interrupt => libc::SIGINT,
         Signal::Kill => libc::SIGKILL,
         Signal::Terminate => libc::SIGTERM,
+        Signal::Quit => libc::SIGQUIT,
+        Signal::WindowChange => libc::SIGWINCH,
     };
     // SAFETY: kill has no memory-safety preconditions.
     if unsafe { libc::kill(-group, signal) } == -1 {

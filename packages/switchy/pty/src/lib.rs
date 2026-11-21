@@ -30,12 +30,16 @@ use std::io;
 
 use std::time::Duration;
 
-#[cfg(all(feature = "native", unix))]
+#[cfg(all(feature = "native", not(feature = "simulator"), unix))]
 #[path = "unix.rs"]
 mod native;
-#[cfg(all(feature = "native", windows))]
+#[cfg(all(feature = "native", not(feature = "simulator"), windows))]
 #[path = "windows.rs"]
 mod native;
+#[cfg(feature = "simulator")]
+pub mod simulator;
+#[cfg(feature = "simulator")]
+use simulator::backend as native;
 
 /// Terminal size in character cells.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,6 +84,10 @@ pub enum Signal {
     Kill,
     /// `SIGTERM`: please end.
     Terminate,
+    /// `SIGQUIT`: quit, as `ctrl+\\`.
+    Quit,
+    /// `SIGWINCH`: the window size changed. Ignored unless handled.
+    WindowChange,
 }
 
 /// Send `signal` to every process in process group `group`. A group with no processes left
@@ -201,14 +209,14 @@ impl PtyMaster {
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "simulator")))]
 impl std::os::fd::AsFd for PtyMaster {
     fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
         self.0.as_fd()
     }
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "simulator")))]
 impl std::os::fd::AsRawFd for PtyMaster {
     fn as_raw_fd(&self) -> std::os::fd::RawFd {
         self.0.as_fd().as_raw_fd()
@@ -258,7 +266,7 @@ impl PtySlave {
     /// # Errors
     /// As [`Self::spawn`], and [`io::ErrorKind::InvalidInput`] for a malformed `cmd` script
     /// invocation or an invalid exact environment.
-    #[cfg(windows)]
+    #[cfg(all(windows, not(feature = "simulator")))]
     pub fn spawn_in_job(
         &self,
         command: &SpawnCommand,
@@ -419,14 +427,14 @@ impl PtyChild {
 
 /// Adopt a process started some other way, such as a helper given the terminal's
 /// [`PtyMaster::tty_name`], so it is waited for and killed as a spawned one is.
-#[cfg(unix)]
+#[cfg(all(unix, not(feature = "simulator")))]
 impl From<std::process::Child> for PtyChild {
     fn from(child: std::process::Child) -> Self {
         Self(native::Child::from(child))
     }
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, not(feature = "simulator")))]
 impl std::os::windows::io::AsRawHandle for PtyChild {
     fn as_raw_handle(&self) -> std::os::windows::io::RawHandle {
         self.0.as_raw_handle()
@@ -474,6 +482,15 @@ impl ChildExit {
             code: 1,
             signal: Some(signal.to_owned()),
             signal_number: None,
+        }
+    }
+
+    /// An exit by signal number `number`, described as `name`.
+    #[cfg_attr(not(feature = "simulator"), allow(dead_code))]
+    pub(crate) fn signaled(number: i32, name: &str) -> Self {
+        Self {
+            signal_number: Some(number),
+            ..Self::with_signal(name)
         }
     }
 
@@ -724,6 +741,15 @@ fn env_key(name: &OsStr) -> OsString {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "simulator")]
+    #[test]
+    fn simulated_environment_is_fixed() {
+        let command = SpawnCommand::new("program");
+        assert_eq!(command.get_env("HOME"), Some(OsStr::new("/home/sim")));
+        assert_eq!(command.get_env("SHELL"), Some(OsStr::new("/bin/sh")));
+    }
+
+    #[cfg(not(feature = "simulator"))]
     #[test]
     fn environment_starts_from_this_process_and_reads_back_changes() {
         let mut command = SpawnCommand::new("program");

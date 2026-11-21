@@ -19,6 +19,8 @@ version = "0.5.0"
 group = "switchy"
 
 [dependencies]
+switchy_simulation = { workspace = true, optional = true }
+switchy_thread     = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, optional = true }
@@ -37,10 +39,22 @@ windows-sys = { workspace = true, optional = true, features = [
     "Win32_System_Threading",
 ] }
 
+[dev-dependencies]
+switchy_thread = { workspace = true }
+
 [features]
 default = ["native"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_simulation?/fail-on-warnings",
+    "switchy_thread?/fail-on-warnings",
+]
 
 # The operating system's pseudo-terminals: openpty on Unix, ConPTY on Windows.
 native = ["dep:libc", "dep:windows-sys"]
+# An in-memory kernel driven by the current simulation run (takes precedence over `native`).
+simulator = [
+    "dep:switchy_simulation",
+    "dep:switchy_thread",
+    "switchy_thread/simulator",
+]

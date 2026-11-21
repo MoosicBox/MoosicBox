@@ -1,0 +1,1914 @@
+//! A simulated kernel: terminals, pipes, processes and signals, for deterministic simulation.
+//!
+//! Each simulation run (a `switchy_simulation` context) has its own [`Kernel`]. Every
+//! operation on it is a `switchy_thread` switch point, and anything that has to wait blocks on
+//! the run's scheduler, so the interleaving of terminal readers, writers and simulated programs
+//! is decided by the run's seed. Timeouts use the run's simulated clock.
+//!
+//! Programs are Rust closures registered by name ([`register_program`]); [`PtySlave::spawn`]
+//! runs the one named by the command's first argument on a simulated thread, with a
+//! [`Process`] for its standard streams, signals and children.
+//!
+//! What is modelled:
+//!
+//! * **Terminals**: bounded buffers in each direction, so a writer that is not read blocks; a
+//!   line discipline subset (echo, `\r` to `\n` on input, `\n` to `\r\n` on output, `ctrl+c`
+//!   interrupting the foreground group, the end-of-file character); window size changes with
+//!   `SIGWINCH`; hang-up when the master closes; end of file on the master once nothing holds
+//!   the slave side.
+//! * **Personalities** ([`Personality`]): on Linux a terminal stays open while anything that
+//!   inherited it is alive; on macOS it ends with its session.
+//! * **Processes**: sessions, process groups, controlling terminals, zombies and reaping,
+//!   exit codes and signals with per-signal handling, children that outlive their parent, and
+//!   process ids reused as soon as nothing uses them any more.
+//! * **Faults** ([`Faults`]): interrupted and short reads and writes on the master side and
+//!   failed spawns, at seeded rates.
+//!
+//! The kernel also keeps what really happened (every byte each terminal and pipe was written,
+//! every signal delivered), for checking what a program under test observed; see [`snapshot`]
+//! and [`terminal_written`].
+
+mod programs;
+
+pub use programs::install_default_programs;
+
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    ffi::{OsStr, OsString},
+    fmt, io,
+    panic::AssertUnwindSafe,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    time::{Duration, Instant},
+};
+
+use switchy_thread::simulator::{self as scheduler, Op, WaitKey};
+
+use crate::{ChildExit, PtySize, Signal, SpawnCommand, Stdio};
+
+/// How often, and how many times, a hung-up process is checked for having exited before it is
+/// killed outright (as the native backend does).
+const HANGUP_GRACE: Duration = Duration::from_millis(50);
+const HANGUP_CHECKS: u32 = 5;
+
+/// Which operating system's terminal behaviour to model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Personality {
+    /// A terminal stays open while anything that inherited it is alive; buffers of 4 KiB.
+    Linux,
+    /// A terminal ends with its session; buffers of 1 KiB.
+    MacOs,
+}
+
+/// Rates (each from 0 to 1) at which operations on the master side fail.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Faults {
+    /// Reads, writes and waits fail with [`io::ErrorKind::Interrupted`].
+    pub interrupted: f64,
+    /// Reads and writes transfer only part of what they could.
+    pub short: f64,
+    /// Spawning fails as if the system were out of processes.
+    pub spawn: f64,
+}
+
+/// The simulated kernel's configuration for a run.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Config {
+    /// Which operating system's terminal behaviour to model.
+    pub personality: Personality,
+    /// The probability that a new process gets an id an earlier one used.
+    pub pid_reuse: f64,
+    /// Fault rates.
+    pub faults: Faults,
+}
+
+impl Config {
+    /// The configuration from the environment, with unset choices drawn from the run's seed:
+    ///
+    /// * `SIMULATOR_PTY_PERSONALITY`: `linux` or `macos`.
+    /// * `SIMULATOR_PTY_PID_REUSE`: a probability (default 0.5).
+    /// * `SIMULATOR_PTY_FAULTS`: a probability applied to every fault kind (default 0).
+    ///
+    /// # Panics
+    ///
+    /// * If a variable is set to an invalid value
+    #[must_use]
+    pub fn from_env() -> Self {
+        let personality = match std::env::var("SIMULATOR_PTY_PERSONALITY").as_deref() {
+            Ok("linux") => Personality::Linux,
+            Ok("macos") => Personality::MacOs,
+            Ok(other) => panic!("SIMULATOR_PTY_PERSONALITY must be linux|macos, got '{other}'"),
+            Err(_) => {
+                if lock(&switchy_simulation::stream("switchy_pty_personality")).chance(0.5) {
+                    Personality::Linux
+                } else {
+                    Personality::MacOs
+                }
+            }
+        };
+        let probability = |name: &str, default: f64| {
+            std::env::var(name).map_or(default, |value| {
+                value
+                    .parse::<f64>()
+                    .unwrap_or_else(|_| panic!("{name} must be a probability, got '{value}'"))
+                    .clamp(0.0, 1.0)
+            })
+        };
+        let fault = probability("SIMULATOR_PTY_FAULTS", 0.0);
+        Self {
+            personality,
+            pid_reuse: probability("SIMULATOR_PTY_PID_REUSE", 0.5),
+            faults: Faults {
+                interrupted: fault,
+                short: fault,
+                spawn: fault / 4.0,
+            },
+        }
+    }
+}
+
+/// How a process handles a signal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Disposition {
+    /// The default: `SIGWINCH` is ignored, anything else ends the process.
+    Default,
+    /// Nothing happens (`SIGKILL` cannot be ignored).
+    Ignore,
+    /// The program receives it from [`Process::signals`].
+    Catch,
+}
+
+/// A program: run with its process, returning its exit code.
+pub type Program = Arc<dyn Fn(&mut Process) -> i32 + Send + Sync>;
+
+/// A process's state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProcessState {
+    /// Running.
+    Running,
+    /// Exited, not yet waited for.
+    Zombie(ChildExit),
+}
+
+/// A read-only view of one process.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessSnapshot {
+    /// Its id.
+    pub pid: u32,
+    /// The process that started it, if a simulated one did.
+    pub parent: Option<u32>,
+    /// Its process group.
+    pub group: u32,
+    /// Its session.
+    pub session: u32,
+    /// Its program's name.
+    pub program: String,
+    /// Running or exited.
+    pub state: ProcessState,
+    /// The terminal it holds open through its standard streams, if any.
+    pub terminal: Option<String>,
+    /// Every signal delivered to it, in order.
+    pub signals: Vec<Signal>,
+}
+
+/// A read-only view of one terminal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalSnapshot {
+    /// Its slave device's simulated path.
+    pub name: String,
+    /// Its size.
+    pub size: PtySize,
+    /// Handles of its master side still open.
+    pub master_handles: usize,
+    /// Holders of its slave side (processes' streams and the slave handle).
+    pub slave_holders: usize,
+    /// Whether it hung up.
+    pub hung_up: bool,
+    /// Bytes written by processes and not yet read from the master.
+    pub output_buffered: usize,
+    /// Bytes typed and not yet read by processes.
+    pub input_buffered: usize,
+    /// Every byte processes wrote to it.
+    pub written: usize,
+}
+
+/// A read-only view of a run's simulated kernel. Taking it never changes the run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KernelSnapshot {
+    /// Every process not yet reaped.
+    pub processes: Vec<ProcessSnapshot>,
+    /// Every terminal.
+    pub terminals: Vec<TerminalSnapshot>,
+    /// The personality modelled.
+    pub personality: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stream {
+    Terminal(u64),
+    PipeRead(u64),
+    PipeWrite(u64),
+    Null,
+}
+
+// The flags are the terminal's line discipline settings.
+#[allow(clippy::struct_excessive_bools)]
+struct Terminal {
+    name: String,
+    size: PtySize,
+    /// Slave to master.
+    output: VecDeque<u8>,
+    /// Master to slave; `None` is an end-of-file mark.
+    input: VecDeque<Option<u8>>,
+    capacity: usize,
+    master_handles: usize,
+    slave_holders: usize,
+    nonblocking: bool,
+    took_writer: bool,
+    session: Option<u32>,
+    foreground: Option<u32>,
+    hung_up: bool,
+    echo: bool,
+    isig: bool,
+    icrnl: bool,
+    written: Vec<u8>,
+}
+
+struct Pipe {
+    buffer: VecDeque<u8>,
+    capacity: usize,
+    readers: usize,
+    writers: usize,
+    nonblocking: bool,
+    written: Vec<u8>,
+}
+
+struct Proc {
+    parent: Option<u32>,
+    group: u32,
+    session: u32,
+    program: String,
+    state: ProcessState,
+    streams: [Stream; 3],
+    controlling: Option<u64>,
+    dispositions: BTreeMap<Signal, Disposition>,
+    caught: VecDeque<Signal>,
+    fatal: Option<Signal>,
+    /// Whether a [`Child`] handle will wait for it; otherwise it is reaped when it exits.
+    waited: bool,
+    signals: Vec<Signal>,
+}
+
+struct State {
+    config: Config,
+    next_pid: u32,
+    used_pids: BTreeSet<u32>,
+    processes: BTreeMap<u32, Proc>,
+    terminals: BTreeMap<u64, Terminal>,
+    pipes: BTreeMap<u64, Pipe>,
+    next_id: u64,
+    programs: BTreeMap<String, Program>,
+}
+
+/// A run's simulated kernel.
+pub struct Kernel {
+    key: u64,
+    rng: Arc<Mutex<switchy_simulation::Rng>>,
+    state: Mutex<State>,
+}
+
+impl fmt::Debug for Kernel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Kernel").finish_non_exhaustive()
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The current run's kernel, created on first use with [`Config::from_env`] unless
+/// [`configure`] chose another configuration first.
+#[must_use]
+pub fn kernel() -> Arc<Kernel> {
+    switchy_simulation::state_with(|| Kernel::new(Config::from_env()))
+}
+
+/// Configure the current run's kernel. Must come before anything else uses it.
+///
+/// # Panics
+///
+/// * If the run's kernel already exists
+pub fn configure(config: Config) {
+    let mut fresh = false;
+    let _ = switchy_simulation::state_with(|| {
+        fresh = true;
+        Kernel::new(config)
+    });
+    assert!(
+        fresh,
+        "the simulated kernel is already in use; configure it first"
+    );
+}
+
+/// Register `program` for this run under `name`: spawning a command whose first argument is
+/// `name` (or a path ending in `/name`) runs it.
+pub fn register_program(name: &str, program: impl Fn(&mut Process) -> i32 + Send + Sync + 'static) {
+    lock(&kernel().state)
+        .programs
+        .insert(name.to_owned(), Arc::new(program));
+}
+
+/// A read-only view of the current run's kernel.
+#[must_use]
+pub fn snapshot() -> KernelSnapshot {
+    kernel().snapshot()
+}
+
+/// Every byte processes wrote to the terminal at simulated path `name`, in order.
+#[must_use]
+pub fn terminal_written(name: &str) -> Option<Vec<u8>> {
+    let kernel = kernel();
+    let state = lock(&kernel.state);
+    state
+        .terminals
+        .values()
+        .find(|t| t.name == name)
+        .map(|t| t.written.clone())
+}
+
+/// Every byte processes wrote to process `pid`'s piped standard output, in order.
+#[must_use]
+pub fn stdout_written(pid: u32) -> Option<Vec<u8>> {
+    let kernel = kernel();
+    let state = lock(&kernel.state);
+    let process = state.processes.get(&pid)?;
+    match process.streams[1] {
+        Stream::PipeWrite(pipe) => state.pipes.get(&pipe).map(|p| p.written.clone()),
+        _ => None,
+    }
+}
+
+/// End every process still running (as `SIGKILL`), so their simulated threads finish. For the
+/// end of a run.
+pub fn kill_all() {
+    let kernel = kernel();
+    let mut state = lock(&kernel.state);
+    let pids: Vec<u32> = state
+        .processes
+        .iter()
+        .filter(|(_, p)| p.state == ProcessState::Running)
+        .map(|(&pid, _)| pid)
+        .collect();
+    for pid in pids {
+        Kernel::deliver(&mut state, pid, Signal::Kill);
+    }
+    drop(state);
+    kernel.wake();
+}
+
+/// The system's description of a signal number.
+#[must_use]
+pub fn signal_name(signal: i32) -> String {
+    match signal {
+        1 => "Hangup".into(),
+        2 => "Interrupt".into(),
+        3 => "Quit".into(),
+        9 => "Killed".into(),
+        15 => "Terminated".into(),
+        28 => "Window size changes".into(),
+        other => format!("Signal {other}"),
+    }
+}
+
+const fn signal_number(signal: Signal) -> i32 {
+    match signal {
+        Signal::Hangup => 1,
+        Signal::Interrupt => 2,
+        Signal::Quit => 3,
+        Signal::Kill => 9,
+        Signal::Terminate => 15,
+        Signal::WindowChange => 28,
+    }
+}
+
+/// The environment new commands start from: fixed, so runs do not depend on the real one.
+#[must_use]
+pub fn base_environment() -> Vec<(OsString, OsString)> {
+    [
+        ("HOME", "/home/sim"),
+        ("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        ("SHELL", "/bin/sh"),
+        ("USER", "sim"),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.into(), value.into()))
+    .collect()
+}
+
+/// Signal every process in `group`.
+///
+/// # Errors
+///
+/// * Never; a group with no processes counts as done.
+pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
+    let kernel = kernel();
+    kernel.switch();
+    let mut state = lock(&kernel.state);
+    let members: Vec<u32> = state
+        .processes
+        .iter()
+        .filter(|(_, p)| p.group == group && p.state == ProcessState::Running)
+        .map(|(&pid, _)| pid)
+        .collect();
+    for pid in members {
+        Kernel::deliver(&mut state, pid, signal);
+    }
+    drop(state);
+    kernel.wake();
+    Ok(())
+}
+
+/// A wait's outcome.
+enum Wait<T> {
+    Done(T),
+    Again,
+}
+
+impl Kernel {
+    fn new(config: Config) -> Self {
+        let rng = switchy_simulation::stream("switchy_pty");
+        let first = 100 + u32::try_from(lock(&rng).below(900)).unwrap_or(0);
+        Self {
+            key: scheduler::new_key(),
+            rng,
+            state: Mutex::new(State {
+                config,
+                next_pid: first,
+                used_pids: BTreeSet::new(),
+                processes: BTreeMap::new(),
+                terminals: BTreeMap::new(),
+                pipes: BTreeMap::new(),
+                next_id: 1,
+                programs: BTreeMap::new(),
+            }),
+        }
+    }
+
+    /// A switch point before any kernel operation.
+    fn switch(&self) {
+        let _ = self;
+        if !std::thread::panicking() {
+            scheduler::scheduler().yield_point(Op::Io);
+        }
+    }
+
+    /// Wake everything waiting on the kernel; each rechecks what it waits for.
+    fn wake(&self) {
+        scheduler::scheduler().wake_all(WaitKey::Io(self.key));
+    }
+
+    /// Wait for the kernel to change, or until `deadline`. Returns whether it timed out.
+    fn block(&self, deadline: Option<Instant>) -> bool {
+        scheduler::scheduler().block(Op::Io, WaitKey::Io(self.key), deadline)
+    }
+
+    fn chance(&self, p: f64) -> bool {
+        p > 0.0 && lock(&self.rng).chance(p)
+    }
+
+    /// Repeat `attempt` until it is done, blocking between attempts (until `deadline`).
+    /// `None` when the deadline passed first.
+    fn wait_for<T>(
+        &self,
+        deadline: Option<Instant>,
+        mut attempt: impl FnMut(&mut State) -> Wait<T>,
+    ) -> Option<T> {
+        loop {
+            {
+                let mut state = lock(&self.state);
+                if let Wait::Done(value) = attempt(&mut state) {
+                    drop(state);
+                    self.wake();
+                    return Some(value);
+                }
+            }
+            if self.block(deadline) {
+                let mut state = lock(&self.state);
+                return match attempt(&mut state) {
+                    Wait::Done(value) => {
+                        drop(state);
+                        self.wake();
+                        Some(value)
+                    }
+                    Wait::Again => None,
+                };
+            }
+        }
+    }
+
+    fn snapshot(&self) -> KernelSnapshot {
+        let state = lock(&self.state);
+        let snapshot = KernelSnapshot {
+            processes: state
+                .processes
+                .iter()
+                .map(|(&pid, p)| ProcessSnapshot {
+                    pid,
+                    parent: p.parent,
+                    group: p.group,
+                    session: p.session,
+                    program: p.program.clone(),
+                    state: p.state.clone(),
+                    terminal: p.streams.iter().find_map(|s| match s {
+                        Stream::Terminal(t) => state.terminals.get(t).map(|t| t.name.clone()),
+                        _ => None,
+                    }),
+                    signals: p.signals.clone(),
+                })
+                .collect(),
+            terminals: state
+                .terminals
+                .values()
+                .map(|t| TerminalSnapshot {
+                    name: t.name.clone(),
+                    size: t.size,
+                    master_handles: t.master_handles,
+                    slave_holders: t.slave_holders,
+                    hung_up: t.hung_up,
+                    output_buffered: t.output.len(),
+                    input_buffered: t.input.len(),
+                    written: t.written.len(),
+                })
+                .collect(),
+            personality: format!("{:?}", state.config.personality),
+        };
+        drop(state);
+        snapshot
+    }
+
+    const fn capacity(state: &State) -> usize {
+        match state.config.personality {
+            Personality::Linux => 4096,
+            Personality::MacOs => 1024,
+        }
+    }
+
+    const fn new_id(state: &mut State) -> u64 {
+        let id = state.next_id;
+        state.next_id += 1;
+        id
+    }
+
+    /// A process id: an earlier one nothing uses any more, sometimes, or a new one.
+    fn allocate_pid(&self, state: &mut State) -> u32 {
+        let in_use: BTreeSet<u32> = state
+            .processes
+            .iter()
+            .flat_map(|(&pid, p)| [pid, p.group, p.session])
+            .collect();
+        let free: Vec<u32> = state
+            .used_pids
+            .iter()
+            .copied()
+            .filter(|pid| !in_use.contains(pid))
+            .collect();
+        if !free.is_empty() && self.chance(state.config.pid_reuse) {
+            let index = lock(&self.rng).index(free.len());
+            return free[index];
+        }
+        let pid = state.next_pid;
+        state.next_pid += 1 + u32::try_from(lock(&self.rng).below(3)).unwrap_or(0);
+        state.used_pids.insert(pid);
+        pid
+    }
+
+    fn hold(state: &mut State, stream: Stream) {
+        match stream {
+            Stream::Terminal(t) => {
+                if let Some(t) = state.terminals.get_mut(&t) {
+                    t.slave_holders += 1;
+                }
+            }
+            Stream::PipeRead(p) => {
+                if let Some(p) = state.pipes.get_mut(&p) {
+                    p.readers += 1;
+                }
+            }
+            Stream::PipeWrite(p) => {
+                if let Some(p) = state.pipes.get_mut(&p) {
+                    p.writers += 1;
+                }
+            }
+            Stream::Null => {}
+        }
+    }
+
+    fn release(state: &mut State, stream: Stream) {
+        match stream {
+            Stream::Terminal(t) => {
+                if let Some(t) = state.terminals.get_mut(&t) {
+                    t.slave_holders = t.slave_holders.saturating_sub(1);
+                }
+            }
+            Stream::PipeRead(p) => {
+                if let Some(p) = state.pipes.get_mut(&p) {
+                    p.readers = p.readers.saturating_sub(1);
+                }
+            }
+            Stream::PipeWrite(p) => {
+                if let Some(p) = state.pipes.get_mut(&p) {
+                    p.writers = p.writers.saturating_sub(1);
+                }
+            }
+            Stream::Null => {}
+        }
+    }
+
+    /// Deliver `signal` to `pid`, as its handling says.
+    fn deliver(state: &mut State, pid: u32, signal: Signal) {
+        let Some(process) = state.processes.get_mut(&pid) else {
+            return;
+        };
+        if process.state != ProcessState::Running {
+            return;
+        }
+        process.signals.push(signal);
+        let disposition = if signal == Signal::Kill {
+            Disposition::Default
+        } else {
+            process
+                .dispositions
+                .get(&signal)
+                .copied()
+                .unwrap_or(Disposition::Default)
+        };
+        match disposition {
+            Disposition::Ignore => {}
+            Disposition::Catch => process.caught.push_back(signal),
+            Disposition::Default => {
+                if signal != Signal::WindowChange && process.fatal.is_none() {
+                    process.fatal = Some(signal);
+                }
+            }
+        }
+    }
+
+    /// Signal every running process whose controlling terminal is `terminal` and that is in its
+    /// foreground group (when it has one).
+    fn signal_foreground(state: &mut State, terminal: u64, signal: Signal) {
+        let foreground = state.terminals.get(&terminal).and_then(|t| t.foreground);
+        let targets: Vec<u32> = state
+            .processes
+            .iter()
+            .filter(|(_, p)| {
+                p.state == ProcessState::Running
+                    && p.controlling == Some(terminal)
+                    && foreground.is_none_or(|g| g == p.group)
+            })
+            .map(|(&pid, _)| pid)
+            .collect();
+        for pid in targets {
+            Self::deliver(state, pid, signal);
+        }
+    }
+
+    /// Record that `pid` ended, releasing what it held.
+    fn exit(&self, pid: u32, exit: ChildExit) {
+        let mut state = lock(&self.state);
+        let Some(process) = state.processes.get_mut(&pid) else {
+            return;
+        };
+        process.state = ProcessState::Zombie(exit);
+        let streams = process.streams;
+        let controlling = process.controlling;
+        let leader = process.session == pid;
+        let waited = process.waited;
+        for stream in streams {
+            Self::release(&mut state, stream);
+        }
+        if leader && let Some(terminal) = controlling {
+            // The controlling process exited: its terminal hangs up on the foreground group.
+            Self::signal_foreground(&mut state, terminal, Signal::Hangup);
+            if state.config.personality == Personality::MacOs
+                && let Some(t) = state.terminals.get_mut(&terminal)
+            {
+                t.hung_up = true;
+            }
+        }
+        if !waited {
+            state.processes.remove(&pid);
+        }
+        drop(state);
+        self.wake();
+    }
+
+    fn close_master(state: &mut State, terminal: u64) {
+        let Some(t) = state.terminals.get_mut(&terminal) else {
+            return;
+        };
+        t.master_handles = t.master_handles.saturating_sub(1);
+        if t.master_handles == 0 && !t.hung_up {
+            t.hung_up = true;
+            let session = t.session;
+            let targets: Vec<u32> = state
+                .processes
+                .iter()
+                .filter(|(_, p)| {
+                    p.state == ProcessState::Running
+                        && (p.controlling == Some(terminal) || Some(p.session) == session)
+                })
+                .map(|(&pid, _)| pid)
+                .collect();
+            for pid in targets {
+                Self::deliver(state, pid, Signal::Hangup);
+            }
+        }
+    }
+
+    /// Process `bytes` typed at the master through the line discipline, as far as there is
+    /// room. Returns how many were consumed.
+    fn type_input(state: &mut State, terminal: u64, bytes: &[u8]) -> usize {
+        let mut consumed = 0;
+        for &byte in bytes {
+            let Some(t) = state.terminals.get_mut(&terminal) else {
+                break;
+            };
+            if t.isig && (byte == 0x03 || byte == 0x1c) {
+                let signal = if byte == 0x03 {
+                    Signal::Interrupt
+                } else {
+                    Signal::Quit
+                };
+                t.input.clear();
+                if t.echo {
+                    t.output.extend(if byte == 0x03 { b"^C" } else { b"^\\" });
+                }
+                Self::signal_foreground(state, terminal, signal);
+                consumed += 1;
+                continue;
+            }
+            if t.input.len() >= t.capacity {
+                break;
+            }
+            if byte == 0x04 && t.isig {
+                t.input.push_back(None);
+            } else {
+                let byte = if t.icrnl && byte == b'\r' {
+                    b'\n'
+                } else {
+                    byte
+                };
+                t.input.push_back(Some(byte));
+                if t.echo {
+                    if byte == b'\n' {
+                        t.output.extend(b"\r\n");
+                    } else {
+                        t.output.push_back(byte);
+                    }
+                }
+            }
+            consumed += 1;
+        }
+        consumed
+    }
+
+    fn open(&self, size: PtySize) -> u64 {
+        self.switch();
+        let mut state = lock(&self.state);
+        let id = Self::new_id(&mut state);
+        let capacity = Self::capacity(&state);
+        state.terminals.insert(
+            id,
+            Terminal {
+                name: format!("/dev/simpts/{id}"),
+                size,
+                output: VecDeque::new(),
+                input: VecDeque::new(),
+                capacity,
+                // The master and the slave handle.
+                master_handles: 1,
+                slave_holders: 1,
+                nonblocking: false,
+                took_writer: false,
+                session: None,
+                foreground: None,
+                hung_up: false,
+                echo: true,
+                isig: true,
+                icrnl: true,
+                written: Vec::new(),
+            },
+        );
+        drop(state);
+        id
+    }
+
+    fn new_pipe(state: &mut State) -> u64 {
+        let id = Self::new_id(state);
+        let capacity = Self::capacity(state) * 4;
+        state.pipes.insert(
+            id,
+            Pipe {
+                buffer: VecDeque::new(),
+                capacity,
+                readers: 0,
+                writers: 0,
+                nonblocking: false,
+                written: Vec::new(),
+            },
+        );
+        id
+    }
+
+    /// Start `spec`'s program. `parent` is the simulated process starting it, if one is.
+    // One sequence: resolve the program, allocate the process and its streams, start it.
+    #[allow(clippy::too_many_lines)]
+    fn spawn(
+        self: &Arc<Self>,
+        spec: &SpawnCommand,
+        terminal: Option<u64>,
+        parent: Option<(u32, [Stream; 3], bool)>,
+    ) -> io::Result<(u32, Option<u64>, Option<u64>)> {
+        self.switch();
+        let argv: Vec<String> = spec
+            .argv()
+            .iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let name = argv
+            .first()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no program to run"))?;
+        let base = name.rsplit('/').next().unwrap_or(name).to_owned();
+        let mut state = lock(&self.state);
+        let Some(program) = state.programs.get(&base).cloned() else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "cannot run {name}: not found on PATH {}",
+                    spec.get_env("PATH")
+                        .map(OsStr::to_string_lossy)
+                        .unwrap_or_default()
+                ),
+            ));
+        };
+        if self.chance(state.config.faults.spawn) {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "simulated fault: cannot start another process",
+            ));
+        }
+        let pid = self.allocate_pid(&mut state);
+        let mut stdin_pipe = None;
+        let mut stdout_pipe = None;
+        let (group, session, streams, controlling, inherited) =
+            if let Some((parent_pid, parent_streams, new_group)) = parent {
+                let parent = &state.processes[&parent_pid];
+                let group = if new_group { pid } else { parent.group };
+                (
+                    group,
+                    parent.session,
+                    parent_streams,
+                    parent.controlling,
+                    parent.dispositions.clone(),
+                )
+            } else {
+                {
+                    let terminal = terminal.expect("a top-level spawn has a terminal");
+                    let (stdin, stdout, stderr) = spec.stdio();
+                    let mut stream = |stdio: Stdio, input: bool, state: &mut State| match stdio {
+                        Stdio::Terminal => Stream::Terminal(terminal),
+                        Stdio::Null => Stream::Null,
+                        Stdio::Piped => {
+                            let pipe = Self::new_pipe(state);
+                            if input {
+                                stdin_pipe = Some(pipe);
+                                Stream::PipeRead(pipe)
+                            } else {
+                                stdout_pipe = Some(pipe);
+                                Stream::PipeWrite(pipe)
+                            }
+                        }
+                    };
+                    let streams = [
+                        stream(stdin, true, &mut state),
+                        stream(stdout, false, &mut state),
+                        stream(stderr, false, &mut state),
+                    ];
+                    let controlling = spec.is_controlling_terminal().then_some(terminal);
+                    if let Some(t) = controlling.and_then(|t| state.terminals.get_mut(&t)) {
+                        t.session = Some(pid);
+                        t.foreground = Some(pid);
+                        t.hung_up = false;
+                    }
+                    (pid, pid, streams, controlling, BTreeMap::new())
+                }
+            };
+        for stream in streams {
+            Self::hold(&mut state, stream);
+        }
+        // The parent holds the other ends of new pipes.
+        if let Some(pipe) = stdin_pipe {
+            Self::hold(&mut state, Stream::PipeWrite(pipe));
+        }
+        if let Some(pipe) = stdout_pipe {
+            Self::hold(&mut state, Stream::PipeRead(pipe));
+        }
+        state.processes.insert(
+            pid,
+            Proc {
+                parent: parent.map(|(p, _, _)| p),
+                group,
+                session,
+                program: base.clone(),
+                state: ProcessState::Running,
+                streams,
+                controlling,
+                dispositions: inherited,
+                caught: VecDeque::new(),
+                fatal: None,
+                waited: parent.is_none(),
+                signals: Vec::new(),
+            },
+        );
+        drop(state);
+        let kernel = Arc::clone(self);
+        let env: Vec<(String, String)> = spec
+            .utf8_environment()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
+        let cwd = spec
+            .get_cwd()
+            .map_or_else(|| PathBuf::from("/home/sim"), PathBuf::from);
+        switchy_thread::thread::Builder::new()
+            .name(format!("proc-{pid}-{base}"))
+            .spawn(move || {
+                let mut process = Process {
+                    kernel: Arc::clone(&kernel),
+                    pid,
+                    argv,
+                    env,
+                    cwd,
+                };
+                let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| program(&mut process)));
+                let exit = match outcome {
+                    Ok(code) => ChildExit::with_exit_code(u32::from_ne_bytes(code.to_ne_bytes())),
+                    Err(payload) => match payload.downcast::<Ending>() {
+                        Ok(ending) => match *ending {
+                            Ending::Exit(code) => {
+                                ChildExit::with_exit_code(u32::from_ne_bytes(code.to_ne_bytes()))
+                            }
+                            Ending::Signal(signal) => ChildExit::signaled(
+                                signal_number(signal),
+                                &signal_name(signal_number(signal)),
+                            ),
+                        },
+                        Err(payload) => {
+                            kernel.exit(pid, ChildExit::with_exit_code(101));
+                            std::panic::resume_unwind(payload);
+                        }
+                    },
+                };
+                kernel.exit(pid, exit);
+            })?;
+        Ok((pid, stdin_pipe, stdout_pipe))
+    }
+}
+
+/// How a program's run ended early: unwound out of the program by [`Process`].
+enum Ending {
+    Exit(i32),
+    Signal(Signal),
+}
+
+/// What a simulated program sees of its process: standard streams, signals, children.
+///
+/// Every method is a switch point. When a signal ends the process, the method it is in (or
+/// the next one it calls) does not return: the program unwinds and the process exits.
+pub struct Process {
+    kernel: Arc<Kernel>,
+    pid: u32,
+    argv: Vec<String>,
+    env: Vec<(String, String)>,
+    cwd: PathBuf,
+}
+
+impl fmt::Debug for Process {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Process")
+            .field("pid", &self.pid)
+            .field("argv", &self.argv)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Process {
+    /// Its process id.
+    #[must_use]
+    pub const fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    /// The program's arguments, starting with its name.
+    #[must_use]
+    pub fn args(&self) -> &[String] {
+        &self.argv
+    }
+
+    /// The value of environment variable `name`.
+    #[must_use]
+    pub fn env(&self, name: &str) -> Option<&str> {
+        self.env
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// The working directory.
+    #[must_use]
+    pub fn cwd(&self) -> &Path {
+        &self.cwd
+    }
+
+    /// Unwind if a signal ended the process.
+    fn check(&self, state: &State) {
+        if let Some(signal) = state.processes.get(&self.pid).and_then(|p| p.fatal) {
+            std::panic::resume_unwind(Box::new(Ending::Signal(signal)));
+        }
+    }
+
+    fn streams(&self) -> [Stream; 3] {
+        lock(&self.kernel.state).processes[&self.pid].streams
+    }
+
+    /// Read standard input, waiting for something to read. `Ok(0)` is end of input.
+    ///
+    /// # Errors
+    ///
+    /// * [`io::Error`] if standard input fails
+    pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.kernel.switch();
+        let stream = self.streams()[0];
+        let pid = self.pid;
+        let read = self.kernel.wait_for(None, |state| {
+            if let Some(signal) = state.processes.get(&pid).and_then(|p| p.fatal) {
+                return Wait::Done(Err(signal));
+            }
+            match stream {
+                Stream::Null | Stream::PipeWrite(_) => Wait::Done(Ok(0)),
+                Stream::Terminal(t) => {
+                    let Some(t) = state.terminals.get_mut(&t) else {
+                        return Wait::Done(Ok(0));
+                    };
+                    if t.input.front() == Some(&None) {
+                        t.input.pop_front();
+                        return Wait::Done(Ok(0));
+                    }
+                    let mut read = 0;
+                    while read < buffer.len() {
+                        match t.input.front() {
+                            Some(Some(byte)) => {
+                                buffer[read] = *byte;
+                                t.input.pop_front();
+                                read += 1;
+                            }
+                            _ => break,
+                        }
+                    }
+                    if read > 0 {
+                        Wait::Done(Ok(read))
+                    } else if t.hung_up || t.master_handles == 0 {
+                        Wait::Done(Ok(0))
+                    } else {
+                        Wait::Again
+                    }
+                }
+                Stream::PipeRead(p) => {
+                    let Some(p) = state.pipes.get_mut(&p) else {
+                        return Wait::Done(Ok(0));
+                    };
+                    let mut read = 0;
+                    while read < buffer.len()
+                        && let Some(byte) = p.buffer.pop_front()
+                    {
+                        buffer[read] = byte;
+                        read += 1;
+                    }
+                    if read > 0 || p.writers == 0 {
+                        Wait::Done(Ok(read))
+                    } else {
+                        Wait::Again
+                    }
+                }
+            }
+        });
+        match read {
+            Some(Ok(read)) => Ok(read),
+            Some(Err(signal)) => std::panic::resume_unwind(Box::new(Ending::Signal(signal))),
+            None => unreachable!("reads without a deadline do not time out"),
+        }
+    }
+
+    /// Write all of `bytes` to standard output (`fd` 1) or error (`fd` 2), waiting while the
+    /// terminal or pipe is full.
+    ///
+    /// # Errors
+    ///
+    /// * [`io::ErrorKind::BrokenPipe`] when nothing reads the stream any more (a hung-up
+    ///   terminal, or a pipe whose reader is gone)
+    pub fn write_fd(&mut self, fd: usize, bytes: &[u8]) -> io::Result<()> {
+        self.kernel.switch();
+        let stream = self.streams()[fd.clamp(1, 2)];
+        let pid = self.pid;
+        let mut rest = bytes;
+        while !rest.is_empty() {
+            let written = self.kernel.wait_for(None, |state| {
+                if let Some(signal) = state.processes.get(&pid).and_then(|p| p.fatal) {
+                    return Wait::Done(Err(Ok(signal)));
+                }
+                match stream {
+                    Stream::Null | Stream::PipeRead(_) => Wait::Done(Ok(rest.len())),
+                    Stream::Terminal(t) => {
+                        let Some(t) = state.terminals.get_mut(&t) else {
+                            return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
+                        };
+                        if t.hung_up || t.master_handles == 0 {
+                            return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
+                        }
+                        let mut written = 0;
+                        for &byte in rest {
+                            let translated: &[u8] = if byte == b'\n' { b"\r\n" } else { &[byte] };
+                            if t.output.len() + translated.len() > t.capacity {
+                                break;
+                            }
+                            t.output.extend(translated);
+                            t.written.extend(translated);
+                            written += 1;
+                        }
+                        if written > 0 {
+                            Wait::Done(Ok(written))
+                        } else {
+                            Wait::Again
+                        }
+                    }
+                    Stream::PipeWrite(p) => {
+                        let Some(p) = state.pipes.get_mut(&p) else {
+                            return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
+                        };
+                        if p.readers == 0 {
+                            return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
+                        }
+                        let room = p.capacity.saturating_sub(p.buffer.len()).min(rest.len());
+                        if room == 0 {
+                            return Wait::Again;
+                        }
+                        p.buffer.extend(&rest[..room]);
+                        p.written.extend(&rest[..room]);
+                        Wait::Done(Ok(room))
+                    }
+                }
+            });
+            match written {
+                Some(Ok(written)) => rest = &rest[written..],
+                Some(Err(Ok(signal))) => {
+                    std::panic::resume_unwind(Box::new(Ending::Signal(signal)))
+                }
+                Some(Err(Err(kind))) => return Err(io::Error::from(kind)),
+                None => unreachable!("writes without a deadline do not time out"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Write all of `bytes` to standard output; see [`Self::write_fd`].
+    ///
+    /// # Errors
+    ///
+    /// * As [`Self::write_fd`]
+    pub fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.write_fd(1, bytes)
+    }
+
+    /// Choose how the process handles `signal`. Children started later inherit it.
+    pub fn handle(&mut self, signal: Signal, disposition: Disposition) {
+        self.kernel.switch();
+        let mut state = lock(&self.kernel.state);
+        self.check(&state);
+        if let Some(process) = state.processes.get_mut(&self.pid) {
+            process.dispositions.insert(signal, disposition);
+        }
+    }
+
+    /// Caught signals not yet taken, oldest first.
+    pub fn signals(&mut self) -> Vec<Signal> {
+        self.kernel.switch();
+        let mut state = lock(&self.kernel.state);
+        self.check(&state);
+        state
+            .processes
+            .get_mut(&self.pid)
+            .map(|p| p.caught.drain(..).collect())
+            .unwrap_or_default()
+    }
+
+    /// Wait at most `timeout` of simulated time for a caught signal; it is taken.
+    pub fn wait_signal(&mut self, timeout: Duration) -> Option<Signal> {
+        self.kernel.switch();
+        let pid = self.pid;
+        let deadline = scheduler::deadline_after(timeout);
+        let caught = self.kernel.wait_for(deadline, |state| {
+            let Some(process) = state.processes.get_mut(&pid) else {
+                return Wait::Done(None);
+            };
+            if process.fatal.is_some() {
+                return Wait::Done(None);
+            }
+            process
+                .caught
+                .pop_front()
+                .map_or(Wait::Again, |s| Wait::Done(Some(s)))
+        });
+        self.check(&lock(&self.kernel.state));
+        caught.flatten()
+    }
+
+    /// Sleep for `duration` of simulated time. A signal that ends the process ends it.
+    pub fn sleep(&mut self, duration: Duration) {
+        self.kernel.switch();
+        let pid = self.pid;
+        let deadline = scheduler::deadline_after(duration);
+        let _ = self.kernel.wait_for(deadline, |state| {
+            if state.processes.get(&pid).is_some_and(|p| p.fatal.is_some()) {
+                Wait::Done(())
+            } else {
+                Wait::Again
+            }
+        });
+        self.check(&lock(&self.kernel.state));
+    }
+
+    /// The size of the process's terminal (its controlling terminal, or the one on its
+    /// standard input).
+    #[must_use]
+    pub fn terminal_size(&self) -> Option<PtySize> {
+        let state = lock(&self.kernel.state);
+        let process = state.processes.get(&self.pid)?;
+        let terminal = process.controlling.or_else(|| {
+            process.streams.iter().find_map(|s| match s {
+                Stream::Terminal(t) => Some(*t),
+                _ => None,
+            })
+        })?;
+        state.terminals.get(&terminal).map(|t| t.size)
+    }
+
+    /// Turn the terminal's line discipline off (`raw`) or back on: echo, `ctrl+c` handling
+    /// and `\r` translation.
+    pub fn set_raw(&mut self, raw: bool) {
+        self.kernel.switch();
+        let mut state = lock(&self.kernel.state);
+        self.check(&state);
+        let terminal = state.processes.get(&self.pid).and_then(|p| p.controlling);
+        if let Some(t) = terminal.and_then(|t| state.terminals.get_mut(&t)) {
+            t.echo = !raw;
+            t.isig = !raw;
+            t.icrnl = !raw;
+        }
+        drop(state);
+    }
+
+    /// Start a child running `argv` with this process's standard streams. With `new_group`
+    /// it leads a process group of its own (as a shell's background job does); otherwise it
+    /// joins this one's. Nobody waits for it: it is reaped when it exits.
+    ///
+    /// # Errors
+    ///
+    /// * [`io::ErrorKind::NotFound`] when no program has that name
+    pub fn spawn(&mut self, argv: &[&str], new_group: bool) -> io::Result<u32> {
+        let mut command = SpawnCommand::new(argv.first().copied().unwrap_or_default());
+        command.args(&argv[1..]).env_clear();
+        for (name, value) in &self.env {
+            command.env(name, value);
+        }
+        command.cwd(&self.cwd);
+        let streams = self.streams();
+        let (pid, _, _) =
+            self.kernel
+                .spawn(&command, None, Some((self.pid, streams, new_group)))?;
+        Ok(pid)
+    }
+
+    /// End the process with exit code `code`.
+    pub fn exit(&mut self, code: i32) -> ! {
+        std::panic::resume_unwind(Box::new(Ending::Exit(code)))
+    }
+}
+
+/// The backend's types behind the crate's public wrappers.
+// Signatures are uniform with the native backends, which need the results, exclusive access
+// and handles that a simulated kernel does not.
+#[allow(
+    clippy::unnecessary_wraps,
+    clippy::needless_pass_by_ref_mut,
+    clippy::unused_self
+)]
+pub(crate) mod backend {
+    use std::{
+        io,
+        path::{Path, PathBuf},
+        sync::Arc,
+        time::Duration,
+    };
+
+    use switchy_thread::simulator as scheduler;
+
+    use super::{
+        ChildExit, HANGUP_CHECKS, HANGUP_GRACE, Kernel, ProcessState, PtySize, Signal,
+        SpawnCommand, State, Stream, Wait, kernel, lock,
+    };
+    pub use super::{base_environment, signal_group, signal_name};
+
+    pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
+        let kernel = kernel();
+        let terminal = kernel.open(size);
+        let name = PathBuf::from(format!("/dev/simpts/{terminal}"));
+        Ok((
+            Master {
+                kernel: Arc::clone(&kernel),
+                terminal,
+                name,
+            },
+            Slave { kernel, terminal },
+        ))
+    }
+
+    #[derive(Debug)]
+    pub struct Master {
+        kernel: Arc<Kernel>,
+        terminal: u64,
+        name: PathBuf,
+    }
+
+    impl Drop for Master {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            Kernel::close_master(&mut state, self.terminal);
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    impl Master {
+        fn open_handle(&self) -> io::Result<()> {
+            self.kernel.switch();
+            let mut state = lock(&self.kernel.state);
+            let t = state
+                .terminals
+                .get_mut(&self.terminal)
+                .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
+            t.master_handles += 1;
+            drop(state);
+            Ok(())
+        }
+
+        pub fn resize(&self, size: PtySize) -> io::Result<()> {
+            self.kernel.switch();
+            let mut state = lock(&self.kernel.state);
+            if let Some(t) = state.terminals.get_mut(&self.terminal) {
+                t.size = size;
+            }
+            Kernel::signal_foreground(&mut state, self.terminal, Signal::WindowChange);
+            drop(state);
+            self.kernel.wake();
+            Ok(())
+        }
+
+        pub fn size(&self) -> io::Result<PtySize> {
+            self.kernel.switch();
+            lock(&self.kernel.state)
+                .terminals
+                .get(&self.terminal)
+                .map(|t| t.size)
+                .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
+        }
+
+        pub fn try_clone_reader(&self) -> io::Result<Reader> {
+            self.open_handle()?;
+            Ok(Reader {
+                kernel: Arc::clone(&self.kernel),
+                terminal: self.terminal,
+            })
+        }
+
+        pub fn take_writer(&self) -> io::Result<Input> {
+            {
+                let mut state = lock(&self.kernel.state);
+                let t = state
+                    .terminals
+                    .get_mut(&self.terminal)
+                    .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))?;
+                if t.took_writer {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "the terminal's writer was already taken",
+                    ));
+                }
+                t.took_writer = true;
+                drop(state);
+            }
+            self.open_handle()?;
+            Ok(Input {
+                kernel: Arc::clone(&self.kernel),
+                terminal: self.terminal,
+                end_on_drop: true,
+            })
+        }
+
+        pub fn clone_writer(&self) -> io::Result<Input> {
+            self.open_handle()?;
+            Ok(Input {
+                kernel: Arc::clone(&self.kernel),
+                terminal: self.terminal,
+                end_on_drop: false,
+            })
+        }
+
+        pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+            self.kernel.switch();
+            if let Some(t) = lock(&self.kernel.state).terminals.get_mut(&self.terminal) {
+                t.nonblocking = nonblocking;
+            }
+            Ok(())
+        }
+
+        pub fn has_peer(&self) -> bool {
+            self.kernel.switch();
+            lock(&self.kernel.state)
+                .terminals
+                .get(&self.terminal)
+                .is_some_and(|t| t.slave_holders > 0 && !t.hung_up)
+        }
+
+        pub fn tty_name(&self) -> Option<&Path> {
+            Some(&self.name)
+        }
+
+        pub fn foreground_process_group(&self) -> Option<i32> {
+            lock(&self.kernel.state)
+                .terminals
+                .get(&self.terminal)
+                .and_then(|t| t.foreground)
+                .and_then(|g| i32::try_from(g).ok())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Reader {
+        kernel: Arc<Kernel>,
+        terminal: u64,
+    }
+
+    impl Drop for Reader {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            Kernel::close_master(&mut state, self.terminal);
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    /// Whether `terminal` has output to read or is at its end.
+    fn readable(state: &State, terminal: u64) -> bool {
+        state.terminals.get(&terminal).is_none_or(|t| {
+            !t.output.is_empty() || t.slave_holders == 0 || (t.hung_up && t.master_handles > 0)
+        })
+    }
+
+    impl Reader {
+        pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.kernel.switch();
+            let faults = lock(&self.kernel.state).config.faults;
+            if self.kernel.chance(faults.interrupted) {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            let limit = if buffer.len() > 1 && self.kernel.chance(faults.short) {
+                1 + usize::try_from(lock(&self.kernel.rng).below(buffer.len() as u64 - 1))
+                    .unwrap_or(0)
+            } else {
+                buffer.len()
+            };
+            let terminal = self.terminal;
+            let mut first = true;
+            self.kernel
+                .wait_for(None, |state| {
+                    let Some(t) = state.terminals.get_mut(&terminal) else {
+                        return Wait::Done(Ok(0));
+                    };
+                    if !t.output.is_empty() {
+                        let count = t.output.len().min(limit);
+                        for (slot, byte) in buffer.iter_mut().zip(t.output.drain(..count)) {
+                            *slot = byte;
+                        }
+                        return Wait::Done(Ok(count));
+                    }
+                    if t.slave_holders == 0 || t.hung_up {
+                        // A terminal nothing holds open reads as end of file (EIO natively).
+                        return Wait::Done(Ok(0));
+                    }
+                    if t.nonblocking && first {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::WouldBlock)));
+                    }
+                    first = false;
+                    Wait::Again
+                })
+                .unwrap_or_else(|| unreachable!("reads without a deadline do not time out"))
+        }
+
+        pub fn wait_readable(&self, timeout: Duration) -> io::Result<bool> {
+            self.kernel.switch();
+            if self
+                .kernel
+                .chance(lock(&self.kernel.state).config.faults.interrupted)
+            {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            let terminal = self.terminal;
+            Ok(self
+                .kernel
+                .wait_for(scheduler::deadline_after(timeout), |state| {
+                    if readable(state, terminal) {
+                        Wait::Done(())
+                    } else {
+                        Wait::Again
+                    }
+                })
+                .is_some())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Input {
+        kernel: Arc<Kernel>,
+        terminal: u64,
+        end_on_drop: bool,
+    }
+
+    impl Drop for Input {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            if self.end_on_drop {
+                // A newline, then the end-of-file character: it only acts at the start of a line.
+                let _ = Kernel::type_input(&mut state, self.terminal, b"\n\x04");
+            }
+            Kernel::close_master(&mut state, self.terminal);
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    impl Input {
+        pub fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.kernel.switch();
+            if bytes.is_empty() {
+                return Ok(0);
+            }
+            let faults = lock(&self.kernel.state).config.faults;
+            if self.kernel.chance(faults.interrupted) {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            let limit = if bytes.len() > 1 && self.kernel.chance(faults.short) {
+                1 + usize::try_from(lock(&self.kernel.rng).below(bytes.len() as u64 - 1))
+                    .unwrap_or(0)
+            } else {
+                bytes.len()
+            };
+            let terminal = self.terminal;
+            let mut first = true;
+            self.kernel
+                .wait_for(None, |state| {
+                    let Some(t) = state.terminals.get(&terminal) else {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::BrokenPipe)));
+                    };
+                    if t.slave_holders == 0 || t.hung_up {
+                        return Wait::Done(Err(io::Error::other("input/output error")));
+                    }
+                    let nonblocking = t.nonblocking;
+                    let consumed = Kernel::type_input(state, terminal, &bytes[..limit]);
+                    if consumed > 0 {
+                        return Wait::Done(Ok(consumed));
+                    }
+                    if nonblocking && first {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::WouldBlock)));
+                    }
+                    first = false;
+                    Wait::Again
+                })
+                .unwrap_or_else(|| unreachable!("writes without a deadline do not time out"))
+        }
+
+        // Uniform with the native backends.
+        #[allow(clippy::unnecessary_wraps, clippy::unused_self)]
+        pub const fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        pub fn wait_writable(&self, timeout: Duration) -> io::Result<bool> {
+            self.kernel.switch();
+            if self
+                .kernel
+                .chance(lock(&self.kernel.state).config.faults.interrupted)
+            {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            let terminal = self.terminal;
+            Ok(self
+                .kernel
+                .wait_for(scheduler::deadline_after(timeout), |state| {
+                    match state.terminals.get(&terminal) {
+                        Some(t) if t.input.len() >= t.capacity && t.slave_holders > 0 => {
+                            Wait::Again
+                        }
+                        _ => Wait::Done(()),
+                    }
+                })
+                .is_some())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Slave {
+        kernel: Arc<Kernel>,
+        terminal: u64,
+    }
+
+    impl Drop for Slave {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            Kernel::release(&mut state, Stream::Terminal(self.terminal));
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    impl Slave {
+        pub fn spawn(&self, spec: &SpawnCommand) -> io::Result<Child> {
+            let (pid, stdin, stdout) = self.kernel.spawn(spec, Some(self.terminal), None)?;
+            Ok(Child {
+                kernel: Arc::clone(&self.kernel),
+                pid,
+                stdin: stdin.map(|pipe| PipeWriter {
+                    kernel: Arc::clone(&self.kernel),
+                    pipe,
+                }),
+                stdout: stdout.map(|pipe| PipeReader {
+                    kernel: Arc::clone(&self.kernel),
+                    pipe,
+                }),
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Child {
+        kernel: Arc<Kernel>,
+        pid: u32,
+        stdin: Option<PipeWriter>,
+        stdout: Option<PipeReader>,
+    }
+
+    impl Drop for Child {
+        fn drop(&mut self) {
+            // Nobody will wait for it any more: reap it now if it exited, or when it does.
+            let mut state = lock(&self.kernel.state);
+            if let Some(process) = state.processes.get_mut(&self.pid) {
+                process.waited = false;
+                if matches!(process.state, ProcessState::Zombie(_)) {
+                    state.processes.remove(&self.pid);
+                }
+            }
+        }
+    }
+
+    impl Child {
+        pub const fn id(&self) -> u32 {
+            self.pid
+        }
+
+        pub const fn take_stdin(&mut self) -> Option<PipeWriter> {
+            self.stdin.take()
+        }
+
+        pub const fn take_stdout(&mut self) -> Option<PipeReader> {
+            self.stdout.take()
+        }
+
+        fn reap(state: &mut State, pid: u32) -> Option<ChildExit> {
+            match state.processes.get(&pid).map(|p| p.state.clone()) {
+                Some(ProcessState::Zombie(exit)) => {
+                    state.processes.remove(&pid);
+                    Some(exit)
+                }
+                _ => None,
+            }
+        }
+
+        pub fn try_wait(&mut self) -> io::Result<Option<ChildExit>> {
+            self.kernel.switch();
+            let mut state = lock(&self.kernel.state);
+            if !state.processes.contains_key(&self.pid) {
+                return Err(io::Error::other("the process was already waited for"));
+            }
+            let exit = Self::reap(&mut state, self.pid);
+            drop(state);
+            Ok(exit)
+        }
+
+        pub fn wait(&mut self) -> io::Result<ChildExit> {
+            self.kernel.switch();
+            let pid = self.pid;
+            self.kernel
+                .wait_for(None, |state| {
+                    if !state.processes.contains_key(&pid) {
+                        return Wait::Done(Err(io::Error::other(
+                            "the process was already waited for",
+                        )));
+                    }
+                    Self::reap(state, pid).map_or(Wait::Again, |exit| Wait::Done(Ok(exit)))
+                })
+                .unwrap_or_else(|| unreachable!("waits without a deadline do not time out"))
+        }
+
+        pub fn kill(&mut self) -> io::Result<()> {
+            if self.exited()? {
+                return Ok(());
+            }
+            signal_pid(&self.kernel, self.pid, Signal::Hangup);
+            for check in 0..HANGUP_CHECKS {
+                if check > 0 {
+                    switchy_thread::thread::sleep(HANGUP_GRACE);
+                }
+                if self.exited()? {
+                    return Ok(());
+                }
+            }
+            signal_pid(&self.kernel, self.pid, Signal::Kill);
+            Ok(())
+        }
+
+        fn exited(&self) -> io::Result<bool> {
+            self.kernel.switch();
+            let state = lock(&self.kernel.state);
+            Ok(state
+                .processes
+                .get(&self.pid)
+                .is_none_or(|p| p.state != ProcessState::Running))
+        }
+
+        // Fallible on every platform: Windows duplicates a handle.
+        #[allow(clippy::unnecessary_wraps)]
+        pub fn killer(&self) -> io::Result<Killer> {
+            Ok(Killer {
+                kernel: Arc::clone(&self.kernel),
+                pid: self.pid,
+            })
+        }
+    }
+
+    fn signal_pid(kernel: &Kernel, pid: u32, signal: Signal) {
+        kernel.switch();
+        let mut state = lock(&kernel.state);
+        Kernel::deliver(&mut state, pid, signal);
+        drop(state);
+        kernel.wake();
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct Killer {
+        kernel: Arc<Kernel>,
+        pid: u32,
+    }
+
+    impl Killer {
+        // Fallible on every platform: the native backends signal the operating system.
+        #[allow(clippy::unnecessary_wraps)]
+        pub fn kill(&self) -> io::Result<()> {
+            signal_pid(&self.kernel, self.pid, Signal::Hangup);
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct PipeReader {
+        kernel: Arc<Kernel>,
+        pipe: u64,
+    }
+
+    impl Drop for PipeReader {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            Kernel::release(&mut state, Stream::PipeRead(self.pipe));
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    impl PipeReader {
+        pub fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.kernel.switch();
+            let pipe = self.pipe;
+            let mut first = true;
+            self.kernel
+                .wait_for(None, |state| {
+                    let Some(p) = state.pipes.get_mut(&pipe) else {
+                        return Wait::Done(Ok(0));
+                    };
+                    let mut read = 0;
+                    while read < buffer.len()
+                        && let Some(byte) = p.buffer.pop_front()
+                    {
+                        buffer[read] = byte;
+                        read += 1;
+                    }
+                    if read > 0 || p.writers == 0 {
+                        return Wait::Done(Ok(read));
+                    }
+                    if p.nonblocking && first {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::WouldBlock)));
+                    }
+                    first = false;
+                    Wait::Again
+                })
+                .unwrap_or_else(|| unreachable!("reads without a deadline do not time out"))
+        }
+
+        pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+            self.kernel.switch();
+            if let Some(p) = lock(&self.kernel.state).pipes.get_mut(&self.pipe) {
+                p.nonblocking = nonblocking;
+            }
+            Ok(())
+        }
+
+        pub fn wait_readable(&self, timeout: Duration) -> io::Result<bool> {
+            self.kernel.switch();
+            let pipe = self.pipe;
+            Ok(self
+                .kernel
+                .wait_for(scheduler::deadline_after(timeout), |state| {
+                    match state.pipes.get(&pipe) {
+                        Some(p) if p.buffer.is_empty() && p.writers > 0 => Wait::Again,
+                        _ => Wait::Done(()),
+                    }
+                })
+                .is_some())
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct PipeWriter {
+        kernel: Arc<Kernel>,
+        pipe: u64,
+    }
+
+    impl Drop for PipeWriter {
+        fn drop(&mut self) {
+            let mut state = lock(&self.kernel.state);
+            Kernel::release(&mut state, Stream::PipeWrite(self.pipe));
+            drop(state);
+            self.kernel.wake();
+        }
+    }
+
+    impl PipeWriter {
+        pub fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.kernel.switch();
+            if bytes.is_empty() {
+                return Ok(0);
+            }
+            let pipe = self.pipe;
+            self.kernel
+                .wait_for(None, |state| {
+                    let Some(p) = state.pipes.get_mut(&pipe) else {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::BrokenPipe)));
+                    };
+                    if p.readers == 0 {
+                        return Wait::Done(Err(io::Error::from(io::ErrorKind::BrokenPipe)));
+                    }
+                    let room = p.capacity.saturating_sub(p.buffer.len()).min(bytes.len());
+                    if room == 0 {
+                        return Wait::Again;
+                    }
+                    p.buffer.extend(&bytes[..room]);
+                    p.written.extend(&bytes[..room]);
+                    Wait::Done(Ok(room))
+                })
+                .unwrap_or_else(|| unreachable!("writes without a deadline do not time out"))
+        }
+
+        // Uniform with the native backends.
+        #[allow(clippy::unnecessary_wraps, clippy::unused_self)]
+        pub const fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+}

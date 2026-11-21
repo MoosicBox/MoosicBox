@@ -1,7 +1,7 @@
 # Switchy PTY
 
 Pseudo-terminals and the processes running on them, with a native backend and
-(planned) a deterministic simulator backend.
+a deterministic simulator backend.
 
 A `PtyPair` is both ends of a new terminal: the `PtyMaster` reads output,
 writes input and resizes; the `PtySlave` starts processes with
@@ -17,6 +17,25 @@ whether the terminal becomes its controlling terminal.
   `PtyMaster::has_peer` to tell whether anything still holds the terminal open.
 - **Process groups** (Unix): `signal_group` signals everything a session
   leader started.
+
+## Simulator
+
+With the `simulator` feature, terminals, pipes, processes and signals are an
+in-memory kernel belonging to the current simulation run, and every operation is
+a `switchy_thread` switch point, so a run's seed decides every interleaving and
+waits use simulated time. Programs are Rust closures registered by name
+(`simulator::register_program`, or `simulator::install_default_programs` for a
+library of programs such as `cat`, `flood`, `daemonize`, `ignore-hup` and
+`resize-reporter`), each running as a simulated thread with a
+`simulator::Process` for its streams, signals and children.
+
+It models bounded terminal buffers (writers wait when nobody reads), a line
+discipline subset (echo, `ctrl+c`, end of file), window size changes, hang-ups,
+sessions and process groups, process ids reused once free, Linux and macOS
+terminal lifetimes (`simulator::Personality`), and seeded faults on the master
+side (`simulator::Faults`). `simulator::snapshot` and
+`simulator::terminal_written` report what really happened, for checking what a
+program under test saw.
 
 ## Installation
 

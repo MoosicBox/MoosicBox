@@ -43,6 +43,9 @@ pub enum WaitKey {
     Join(ThreadIndex),
     /// Time to pass.
     Sleep,
+    /// A simulated device or kernel object (from another simulator, such as `switchy_pty`) to
+    /// change; the key is from [`new_key`].
+    Io(u64),
 }
 
 /// The operation at which a thread last reached a switch point.
@@ -65,6 +68,8 @@ pub enum Op {
     AtomicStore,
     AtomicUpdate,
     Idle,
+    /// An operation on a simulated device or kernel object.
+    Io,
 }
 
 impl Op {
@@ -808,14 +813,16 @@ fn run_in<R>(context: Arc<Context>, f: impl FnOnce() -> R) -> Outcome<R> {
     })
 }
 
-/// A unique key for a synchronization object's waits.
-pub(crate) fn new_key() -> u64 {
+/// A unique key for a synchronization object's waits, such as [`WaitKey::Io`].
+#[must_use]
+pub fn new_key() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT: AtomicU64 = AtomicU64::new(1);
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 /// The deadline `timeout` from now on the run's clock, or `None` if it overflows.
-pub(crate) fn deadline_after(timeout: Duration) -> Option<Instant> {
+#[must_use]
+pub fn deadline_after(timeout: Duration) -> Option<Instant> {
     switchy_time::simulator::instant_now().checked_add(timeout)
 }
