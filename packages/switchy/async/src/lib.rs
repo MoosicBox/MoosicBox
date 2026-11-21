@@ -197,6 +197,16 @@ pub fn thread_id() -> u64 {
     THREAD_ID.with_borrow(|x| *x)
 }
 
+/// How a runtime runs its tasks; see each backend's `Handle::runtime_flavor`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeFlavor {
+    /// One thread runs every task; blocking it in place is not possible.
+    CurrentThread,
+    /// Tasks may block in place (`task::block_in_place`) and drive other futures with
+    /// `Handle::block_on` meanwhile.
+    MultiThread,
+}
+
 /// Errors that can occur when using the async runtime.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

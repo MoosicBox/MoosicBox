@@ -10,6 +10,22 @@ use crate::simulator::futures::{Sleep, Timeout};
 // Re-export types for compatibility
 pub use crate::simulator::futures::{Elapsed, Interval, MissedTickBehavior};
 pub use std::time::Duration;
+pub use switchy_time::Instant;
+
+/// Sleep until `deadline` on the run's clock.
+#[must_use]
+pub fn sleep_until(deadline: Instant) -> Sleep {
+    sleep(deadline.remaining())
+}
+
+/// Require `future` to complete before `deadline` on the run's clock.
+#[must_use]
+pub fn timeout_at<F>(deadline: Instant, future: F) -> Timeout<F::IntoFuture>
+where
+    F: IntoFuture,
+{
+    timeout(deadline.remaining(), future)
+}
 
 // Re-export simulator functionality
 /// Simulator-specific time utilities.

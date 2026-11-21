@@ -161,6 +161,15 @@ impl Handle {
         }
     }
 
+    /// How the runtime runs its tasks.
+    #[must_use]
+    pub fn runtime_flavor(&self) -> crate::RuntimeFlavor {
+        match self.inner.runtime_flavor() {
+            tokio::runtime::RuntimeFlavor::MultiThread => crate::RuntimeFlavor::MultiThread,
+            _ => crate::RuntimeFlavor::CurrentThread,
+        }
+    }
+
     /// Try to get the current runtime handle
     ///
     /// # Errors

@@ -6,6 +6,12 @@ pub use super::runtime::{JoinHandle, spawn, spawn_blocking, spawn_local};
 
 pub use tokio::task::yield_now;
 
+/// Run blocking `f` in place. The simulator runs every task on the calling thread already,
+/// and futures nested with `Handle::block_on` drive the runtime's other tasks meanwhile.
+pub fn block_in_place<F: FnOnce() -> R, R>(f: F) -> R {
+    f()
+}
+
 /// Error returned when a task fails to join.
 #[derive(Debug, Clone, thiserror::Error, Default)]
 pub struct JoinError;

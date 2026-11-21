@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Clock {
     Real,
     /// A simulation run's clock: its context id and the clock generation.
@@ -18,7 +18,9 @@ enum Clock {
 /// rejected rather than silently using that thread's unrelated clock. Resets,
 /// rewinds and explicit multiplier resets invalidate captured simulated instants;
 /// reading elapsed/remaining time then panics instead of mixing clock epochs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// Ordering compares the clocks' instants; instants of different clocks are not comparable in
+// any meaningful way, as with `std::time::Instant` across processes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Instant {
     value: std::time::Instant,
     clock: Clock,
@@ -120,6 +122,17 @@ impl Instant {
         self.value.saturating_duration_since(earlier.value)
     }
 
+    /// Returns the interval since `earlier`, saturating reversed instants at zero (as
+    /// `std::time::Instant::duration_since` does).
+    ///
+    /// # Panics
+    ///
+    /// * If the instants belong to different clocks or simulation generations.
+    #[must_use]
+    pub fn duration_since(self, earlier: Self) -> Duration {
+        self.saturating_duration_since(earlier)
+    }
+
     fn read_clock(self) -> std::time::Instant {
         match self.clock {
             Clock::Real => std::time::Instant::now(),
@@ -141,9 +154,70 @@ impl Instant {
     }
 }
 
+impl std::ops::Add<Duration> for Instant {
+    type Output = Self;
+
+    /// # Panics
+    ///
+    /// * On overflow, as `std::time::Instant` does.
+    fn add(self, duration: Duration) -> Self {
+        self.checked_add(duration)
+            .expect("overflow when adding duration to instant")
+    }
+}
+
+impl std::ops::AddAssign<Duration> for Instant {
+    fn add_assign(&mut self, duration: Duration) {
+        *self = *self + duration;
+    }
+}
+
+impl std::ops::Sub<Duration> for Instant {
+    type Output = Self;
+
+    /// # Panics
+    ///
+    /// * On overflow, as `std::time::Instant` does.
+    fn sub(self, duration: Duration) -> Self {
+        self.checked_sub(duration)
+            .expect("overflow when subtracting duration from instant")
+    }
+}
+
+impl std::ops::SubAssign<Duration> for Instant {
+    fn sub_assign(&mut self, duration: Duration) {
+        *self = *self - duration;
+    }
+}
+
+impl std::ops::Sub<Self> for Instant {
+    type Output = Duration;
+
+    /// The interval since `earlier`, saturating at zero; see [`Instant::duration_since`].
+    fn sub(self, earlier: Self) -> Duration {
+        self.duration_since(earlier)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn instants_order_add_and_subtract_like_std() {
+        let start = Instant::now();
+        let later = start + Duration::from_secs(1);
+        assert!(later > start);
+        assert_eq!(later - start, Duration::from_secs(1));
+        assert_eq!(later.duration_since(start), Duration::from_secs(1));
+        assert_eq!(start.duration_since(later), Duration::ZERO);
+        assert_eq!(later - Duration::from_secs(1), start);
+        let mut moved = start;
+        moved += Duration::from_secs(1);
+        assert_eq!(moved, later);
+        moved -= Duration::from_secs(1);
+        assert_eq!(moved, start);
+    }
 
     #[cfg(feature = "simulator")]
     #[test]

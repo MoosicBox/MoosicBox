@@ -115,9 +115,22 @@ pub struct Handle {
 impl Handle {
     /// Runs a future to completion on the runtime.
     ///
-    /// This blocks the current thread until the future completes.
+    /// This blocks the current thread until the future completes. Called from within this
+    /// runtime (in a task, typically through `task::block_in_place`), it drives the future
+    /// together with the runtime's other tasks on the calling thread, as a multi-thread tokio
+    /// runtime does.
     pub fn block_on<F: Future>(&self, f: F) -> F::Output {
+        if Runtime::current().is_some_and(|current| current.id == self.runtime.id) {
+            return self.runtime.block_on_nested(f);
+        }
         self.runtime.block_on(f)
+    }
+
+    /// How the runtime runs its tasks: [`crate::RuntimeFlavor::MultiThread`], since tasks
+    /// may block in place and nest [`Self::block_on`] (see there).
+    #[must_use]
+    pub const fn runtime_flavor(&self) -> crate::RuntimeFlavor {
+        crate::RuntimeFlavor::MultiThread
     }
 
     /// Spawns a future onto the runtime.
@@ -369,16 +382,39 @@ impl Runtime {
             log::debug!("No tasks");
             return None;
         }
-        let index = queue
+        // A task being polled further up this thread's stack (one that nests `block_on`) waits
+        // its turn until that poll returns.
+        let eligible: Vec<usize> = (0..task_count)
+            .filter(|&i| !queue[i].polling.load(Ordering::SeqCst))
+            .collect();
+        if eligible.is_empty() {
+            return None;
+        }
+        let index = eligible
             .iter()
-            .enumerate()
-            .filter(|(_, x)| x.block)
-            .map(|(i, _)| i)
+            .copied()
+            .filter(|&i| queue[i].block)
             .choose(&mut rng())
-            .unwrap_or_else(|| rng().gen_range(0..task_count));
+            .unwrap_or_else(|| eligible[rng().gen_range(0..eligible.len())]);
         log::debug!("next task index={index} task_count={task_count}");
 
         Some(queue.remove(index))
+    }
+
+    /// [`Handle::block_on`] from within this runtime: drive `future` and the runtime's other
+    /// tasks on the calling thread until it completes.
+    fn block_on_nested<F: Future>(&self, future: F) -> F::Output {
+        let mut future = std::pin::pin!(future);
+        let waker = futures::task::noop_waker();
+        let mut ctx = Context::from_waker(&waker);
+        loop {
+            if let Poll::Ready(output) = future.as_mut().poll(&mut ctx) {
+                return output;
+            }
+            if !self.process_next_task() {
+                self.idle();
+            }
+        }
     }
 
     /// Wait for something to do, having nothing to run.
@@ -800,6 +836,9 @@ struct Task {
     finished: AtomicBool,
     /// Whether this is a blocking task
     block: bool,
+    /// Whether its future is being polled (perhaps further up the stack, if it nests
+    /// `Handle::block_on`).
+    polling: AtomicBool,
 }
 
 impl std::fmt::Debug for Task {
@@ -825,6 +864,7 @@ impl Task {
             future: Mutex::new(Box::pin(future)),
             finished: AtomicBool::new(false),
             block,
+            polling: AtomicBool::new(false),
         })
     }
 
@@ -839,7 +879,10 @@ impl Task {
         let waker = self.waker();
         let mut ctx = Context::from_waker(&waker);
         let mut future = self.future.lock().unwrap_or_else(PoisonError::into_inner);
-        match future.as_mut().poll(&mut ctx) {
+        self.polling.store(true, Ordering::SeqCst);
+        let poll = future.as_mut().poll(&mut ctx);
+        self.polling.store(false, Ordering::SeqCst);
+        match poll {
             Poll::Ready(()) => {
                 // Retained wakers may keep Task alive indefinitely. Release user state
                 // now, outside the lock, before declaring the work drained.
