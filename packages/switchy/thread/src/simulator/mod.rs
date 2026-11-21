@@ -254,11 +254,19 @@ struct Inner {
     os_handles: Vec<std::thread::JoinHandle<()>>,
 }
 
+/// Called at every scheduling decision, before the chosen thread runs.
+///
+/// It gets the decision and a way to take a [`SchedulerSnapshot`], and runs while the
+/// scheduler is locked: no simulated thread runs until it returns, so an observer may block in
+/// it to pause the run (only real time passes). It must not call back into the scheduler.
+pub type DecisionHook = Arc<dyn Fn(&Decision, &dyn Fn() -> SchedulerSnapshot) + Send + Sync>;
+
 /// The scheduler of one simulation run. See the [module documentation](self).
 pub struct Scheduler {
     context_id: u64,
     rng: Arc<Mutex<switchy_simulation::Rng>>,
     inner: Mutex<Inner>,
+    hook: Mutex<Option<DecisionHook>>,
 }
 
 impl std::fmt::Debug for Scheduler {
@@ -333,6 +341,7 @@ impl Scheduler {
         Self {
             context_id: context.id(),
             rng,
+            hook: Mutex::new(None),
             inner: Mutex::new(Inner {
                 threads: vec![ThreadRecord {
                     name: std::thread::current().name().unwrap_or("main").to_owned(),
@@ -373,7 +382,15 @@ impl Scheduler {
     /// A read-only view of the scheduler. Taking it never changes the run.
     #[must_use]
     pub fn snapshot(&self) -> SchedulerSnapshot {
-        let inner = lock(&self.inner);
+        Self::snapshot_of(&lock(&self.inner))
+    }
+
+    /// Observe every decision of this run with `hook` (or stop, with `None`).
+    pub fn set_decision_hook(&self, hook: Option<DecisionHook>) {
+        *lock(&self.hook) = hook;
+    }
+
+    fn snapshot_of(inner: &Inner) -> SchedulerSnapshot {
         SchedulerSnapshot {
             threads: inner
                 .threads
@@ -566,6 +583,11 @@ impl Scheduler {
             inner.recent.push_back(decision);
         }
         inner.running = next;
+        let hook = lock(&self.hook).clone();
+        if let Some(hook) = hook {
+            let view: &Inner = inner;
+            hook(&decision, &|| Self::snapshot_of(view));
+        }
         if next != from
             && let Some(os) = &inner.threads[next].os
         {
@@ -764,6 +786,11 @@ pub struct ShutdownReport {
 #[must_use]
 pub fn scheduler() -> Arc<Scheduler> {
     Scheduler::current()
+}
+
+/// Observe every decision of the current run; see [`Scheduler::set_decision_hook`].
+pub fn set_decision_hook(hook: Option<DecisionHook>) {
+    scheduler().set_decision_hook(hook);
 }
 
 /// Run other simulated threads until idle; see [`Scheduler::run_until_idle`].

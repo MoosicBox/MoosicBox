@@ -88,6 +88,7 @@ use switchy::{
 };
 
 pub use config::{SimConfig, SimProperties, SimResult, SimRunProperties};
+pub use simvar_observer as observer;
 pub use simvar_utils as utils;
 
 pub use switchy;
@@ -300,6 +301,7 @@ pub fn run_simulation<B: SimBootstrap>(
     );
 
     let resp = sim_orchestrator.start();
+    notify(&simvar_observer::SimEvent::Finished);
 
     #[cfg(feature = "tui")]
     if let Some(tui_handle) = tui_handle {
@@ -523,6 +525,11 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             switchy::random::simulator::reset_seed();
         }
         let seed = switchy::random::simulator::seed();
+        let run_id = simvar_observer::RunId {
+            worker: thread_id.unwrap_or(1),
+            run: run_number,
+        };
+        let _ = switchy::simulation::state_with(|| CurrentRun(run_id));
 
         switchy::random::simulator::reset_rng();
         switchy::tcp::simulator::reset();
@@ -549,6 +556,12 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             config,
             extra: self.bootstrap.props(),
         };
+
+        notify(&simvar_observer::SimEvent::RunStarted {
+            id: run_id,
+            seed,
+            props: props.extra.clone(),
+        });
 
         logging::log_message(format!(
             "\n\
@@ -609,6 +622,15 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
                     if step.is_multiple_of(1000) {
                         print_step(&managed_sim, step);
+                    }
+                    if step.is_multiple_of(100) {
+                        #[allow(clippy::cast_precision_loss)]
+                        notify(&simvar_observer::SimEvent::Progress {
+                            id: run_id,
+                            step,
+                            progress: (duration < Duration::MAX)
+                                .then(|| (step as f64 / duration_steps as f64).clamp(0.0, 1.0)),
+                        });
                     }
 
                     self.bootstrap.on_step(&mut managed_sim);
@@ -728,12 +750,52 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         logging::log_message(result.to_string());
 
         let trace = mix(trace, u64::from(result_is_success(&result)));
+        notify(&simvar_observer::SimEvent::RunFinished {
+            id: run_id,
+            seed,
+            success: result_is_success(&result),
+            report: result.to_string(),
+        });
         (result, trace, seed)
     }
 }
 
 const fn result_is_success(result: &SimResult) -> bool {
     matches!(result, SimResult::Success { .. })
+}
+
+static OBSERVERS: std::sync::RwLock<Vec<Arc<dyn simvar_observer::SimObserver>>> =
+    std::sync::RwLock::new(Vec::new());
+
+/// Send every simulation's events to `observer` from now on.
+///
+/// # Panics
+///
+/// * If the observer list's lock is poisoned
+pub fn add_observer(observer: Arc<dyn simvar_observer::SimObserver>) {
+    OBSERVERS.write().unwrap().push(observer);
+}
+
+fn notify(event: &simvar_observer::SimEvent) {
+    let observers = OBSERVERS
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for observer in observers.iter() {
+        observer.event(event.clone());
+    }
+}
+
+/// The run the current simulation context belongs to.
+struct CurrentRun(simvar_observer::RunId);
+
+/// Send `payload` to every observer as telemetry of the current run. Callable from any thread
+/// of the run, including simulated threads. Never changes the run.
+pub fn emit(payload: Arc<dyn std::any::Any + Send + Sync>) {
+    let id = switchy::simulation::state_with(|| {
+        CurrentRun(simvar_observer::RunId { worker: 0, run: 0 })
+    })
+    .0;
+    notify(&simvar_observer::SimEvent::Telemetry { id, payload });
 }
 
 /// Whether each run is replayed to check it is deterministic: `SIMULATOR_VERIFY_DETERMINISM`

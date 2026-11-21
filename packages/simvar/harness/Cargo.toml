@@ -17,6 +17,7 @@ examples = false
 group = "simvar"
 
 [dependencies]
+simvar_observer = { workspace = true }
 simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
@@ -50,6 +51,7 @@ test-log = { workspace = true }
 default = ["pretty_env_logger", "tui"]
 
 fail-on-warnings = [
+    "simvar_observer/fail-on-warnings",
     "simvar_utils/fail-on-warnings",
     "switchy/fail-on-warnings",
     "switchy_web_server?/fail-on-warnings",

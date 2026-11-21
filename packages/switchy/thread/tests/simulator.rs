@@ -304,6 +304,26 @@ fn run_until_idle_lets_others_run_then_returns() {
 }
 
 #[test]
+fn a_decision_hook_sees_every_decision_without_changing_the_run() {
+    use std::sync::atomic::AtomicU64;
+    let plain = outcome(simulator::run(4, interleaving));
+    let seen = std::sync::Arc::new(AtomicU64::new(0));
+    let counted = std::sync::Arc::clone(&seen);
+    let observed = outcome(simulator::run(4, move || {
+        simulator::set_decision_hook(Some(std::sync::Arc::new(
+            move |decision: &simulator::Decision,
+                  snapshot: &dyn Fn() -> simulator::SchedulerSnapshot| {
+                assert_eq!(snapshot().decisions, decision.number + 1);
+                counted.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            },
+        )));
+        interleaving()
+    }));
+    assert_eq!(plain, observed, "observing must not change the run");
+    assert!(seen.load(std::sync::atomic::Ordering::Relaxed) > 0);
+}
+
+#[test]
 fn both_strategies_are_deterministic() {
     for config in [Config::random(), Config::pct(3, 30)] {
         for seed in 0..10 {

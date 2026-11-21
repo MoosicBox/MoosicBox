@@ -119,6 +119,7 @@ default-members = [
     "packages/simvar/examples/basic_web_server",
     "packages/simvar/examples/threads",
     "packages/simvar/harness",
+    "packages/simvar/observer",
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
@@ -304,6 +305,7 @@ members = [
     "packages/simvar/examples/basic_web_server",
     "packages/simvar/examples/threads",
     "packages/simvar/harness",
+    "packages/simvar/observer",
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
@@ -557,9 +559,10 @@ clippier_md             = { version = "0.5.0", default-features = false, path = 
 clippier_test_utilities = { version = "0.5.0", default-features = false, path = "packages/clippier/test_utilities" }
 
 # Internal Simvar
-simvar         = { version = "0.5.0", default-features = false, path = "packages/simvar" }
-simvar_harness = { version = "0.5.0", default-features = false, path = "packages/simvar/harness" }
-simvar_utils   = { version = "0.5.0", default-features = false, path = "packages/simvar/utils" }
+simvar          = { version = "0.5.0", default-features = false, path = "packages/simvar" }
+simvar_harness  = { version = "0.5.0", default-features = false, path = "packages/simvar/harness" }
+simvar_observer = { version = "0.5.0", default-features = false, path = "packages/simvar/observer" }
+simvar_utils    = { version = "0.5.0", default-features = false, path = "packages/simvar/utils" }
 
 app-tauri-plugin-player = { version = "0.5.0", default-features = false, path = "packages/app/tauri/tauri-plugin-player" }
 openport                = { version = "0.5.0", default-features = false, path = "packages/openport" }

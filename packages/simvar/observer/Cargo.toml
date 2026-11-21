@@ -1,0 +1,18 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools::testing", "simulation"]
+description = "Events, telemetry and replay control for observing simvar simulations"
+edition     = { workspace = true }
+keywords    = ["deterministic", "observer", "simulation", "testing"]
+license     = { workspace = true }
+name        = "simvar_observer"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[dependencies]
+
+[features]
+default = []
+
+fail-on-warnings = []

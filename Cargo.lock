@@ -17252,12 +17252,17 @@ dependencies = [
  "ratatui",
  "scoped-tls",
  "shell-words",
+ "simvar_observer",
  "simvar_utils",
  "switchy",
  "switchy_web_server",
  "test-log",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "simvar_observer"
+version = "0.5.0"
 
 [[package]]
 name = "simvar_threads_example"
