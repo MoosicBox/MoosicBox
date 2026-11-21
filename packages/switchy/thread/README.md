@@ -23,6 +23,11 @@ The simulator also provides:
 - **Two strategies**: uniformly random, and PCT (probabilistic concurrency
   testing). `SIMULATOR_SCHEDULE_STRATEGY` selects `random`, `pct` or
   `alternate` (the default: by seed parity).
+- **Replay and shrinking**: every run records its schedule (the threads it
+  picked wherever it had a choice, beyond a default that switches only when it
+  must). `SIMULATOR_SCHEDULE` (or `Strategy::Replay`) replays one without the
+  scheduling generator, and `shrink` reduces a failing one by delta debugging
+  until dropping any remaining choice makes the run pass.
 
 It depends only on `switchy_simulation` and `switchy_time`, neither of which has
 external dependencies in simulator builds.

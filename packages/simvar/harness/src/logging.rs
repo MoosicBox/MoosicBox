@@ -23,6 +23,9 @@ fn quiet() -> bool {
 /// When the TUI is enabled, or output is quiet ([`set_quiet`]), messages are sent to the log
 /// system. Otherwise they are printed directly to stdout.
 pub fn log_message(msg: impl Into<String>) {
+    if crate::silent() {
+        return;
+    }
     let msg = msg.into();
 
     if *USE_TUI || quiet() {

@@ -8,8 +8,10 @@ use simvar::run_simulation;
 use simvar_threads_example::BankBootstrap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let nondeterministic = std::env::var("BANK_NONDETERMINISTIC").is_ok();
-    let results = run_simulation(BankBootstrap { nondeterministic })?;
+    let results = run_simulation(BankBootstrap {
+        nondeterministic: std::env::var("BANK_NONDETERMINISTIC").is_ok(),
+        racy: std::env::var("BANK_RACY").is_ok(),
+    })?;
     for result in results.iter().filter(|r| !r.is_success()) {
         println!("{result}");
     }

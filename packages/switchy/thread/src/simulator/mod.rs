@@ -10,6 +10,11 @@
 //! The thread that first touches a run's scheduler becomes its *main* thread (id 0). Code
 //! usually starts a run with [`run`], which creates a fresh context, runs a closure as the main
 //! thread and reports what happened.
+//!
+//! Every run records its [`Schedule`]: which thread it picked wherever it had a choice. A
+//! schedule replays with [`Strategy::Replay`] (or `SIMULATOR_SCHEDULE`), without the
+//! scheduling generator, and [`shrink`] reduces a failing one to the fewest choices that still
+//! fail.
 
 mod memory;
 pub mod sync;
@@ -80,7 +85,7 @@ impl Op {
 }
 
 /// How the scheduler picks the next thread.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Strategy {
     /// A uniformly random runnable thread at every switch point.
     Random,
@@ -94,10 +99,92 @@ pub enum Strategy {
         /// The decision range the change points are drawn from.
         steps: u64,
     },
+    /// Follow a recorded [`Schedule`]: its choices where it has one (if that thread can run),
+    /// the default choice everywhere else.
+    Replay(Arc<Schedule>),
+}
+
+/// Where a run had a choice of thread, the ones it did not pick by default.
+///
+/// A *choice point* is a decision with more than one runnable thread. The default choice keeps
+/// the stopping thread running if it can, and otherwise picks the lowest-numbered runnable
+/// thread, so a schedule lists only the switches a run made beyond the ones it had to make.
+/// Its text form, used by `SIMULATOR_SCHEDULE`, is `choice=thread` pairs separated by commas
+/// (`none` for the default schedule), for example `3=1,17=2`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Schedule {
+    /// The choice points (numbered from 0) where a run did not take the default choice, in
+    /// order, with the thread it picked.
+    pub choices: Vec<(u64, ThreadIndex)>,
+}
+
+impl Schedule {
+    /// The default schedule: no choice beyond the default anywhere.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            choices: Vec::new(),
+        }
+    }
+
+    /// The thread to pick at choice point `point`, if the schedule names one.
+    fn at(&self, point: u64) -> Option<ThreadIndex> {
+        self.choices
+            .binary_search_by_key(&point, |&(p, _)| p)
+            .ok()
+            .map(|i| self.choices[i].1)
+    }
+}
+
+impl std::fmt::Display for Schedule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.choices.is_empty() {
+            return f.write_str("none");
+        }
+        for (i, (point, thread)) in self.choices.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{point}={thread}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::str::FromStr for Schedule {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let text = text.trim();
+        if text.is_empty() || text == "none" {
+            return Ok(Self::new());
+        }
+        let mut choices: Vec<(u64, ThreadIndex)> = text
+            .split(',')
+            .map(|pair| {
+                let (point, thread) = pair
+                    .split_once('=')
+                    .ok_or_else(|| format!("expected choice=thread, got '{pair}'"))?;
+                Ok((
+                    point
+                        .trim()
+                        .parse()
+                        .map_err(|_| format!("bad choice '{point}'"))?,
+                    thread
+                        .trim()
+                        .parse()
+                        .map_err(|_| format!("bad thread '{thread}'"))?,
+                ))
+            })
+            .collect::<Result<_, String>>()?;
+        choices.sort_unstable();
+        choices.dedup_by_key(|&mut (point, _)| point);
+        Ok(Self { choices })
+    }
 }
 
 /// The scheduler's configuration for one run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     /// How threads are picked.
     pub strategy: Strategy,
@@ -129,12 +216,23 @@ impl Config {
         }
     }
 
+    /// Replay `schedule`.
+    #[must_use]
+    pub fn replay(schedule: Schedule) -> Self {
+        Self {
+            strategy: Strategy::Replay(Arc::new(schedule)),
+            recent_decisions: 256,
+            weak_memory: false,
+        }
+    }
+
     /// The configuration from the environment for a run with `seed`:
     ///
     /// * `SIMULATOR_SCHEDULE_STRATEGY`: `random`, `pct` or `alternate` (the default), which
     ///   picks `random` for even seeds and `pct` for odd ones.
     /// * `SIMULATOR_PCT_DEPTH` (default 3) and `SIMULATOR_PCT_STEPS` (default 10000).
     /// * `SIMULATOR_WEAK_MEMORY`: `1` or `true` to model weak memory.
+    /// * `SIMULATOR_SCHEDULE`: a [`Schedule`] to replay, overriding the strategy.
     ///
     /// # Panics
     ///
@@ -145,7 +243,12 @@ impl Config {
             depth: env_number("SIMULATOR_PCT_DEPTH").unwrap_or(3),
             steps: env_number("SIMULATOR_PCT_STEPS").unwrap_or(10_000),
         };
+        let replay = std::env::var("SIMULATOR_SCHEDULE").ok().map(|text| {
+            text.parse::<Schedule>()
+                .unwrap_or_else(|error| panic!("SIMULATOR_SCHEDULE: {error}"))
+        });
         let strategy = match std::env::var("SIMULATOR_SCHEDULE_STRATEGY").as_deref() {
+            _ if replay.is_some() => Strategy::Replay(Arc::new(replay.unwrap_or_default())),
             Ok("random") => Strategy::Random,
             Ok("pct") => pct,
             Ok("alternate") | Err(_) => {
@@ -255,6 +358,9 @@ struct Inner {
     decisions: u64,
     trace_hash: u64,
     config: Config,
+    /// Choice points so far, and the non-default choices made at them.
+    choice_points: u64,
+    schedule: Schedule,
     change_points: BTreeSet<u64>,
     lowest_priority: u64,
     recent: std::collections::VecDeque<Decision>,
@@ -274,7 +380,13 @@ pub type DecisionHook = Arc<dyn Fn(&Decision, &dyn Fn() -> SchedulerSnapshot) + 
 /// The scheduler of one simulation run. See the [module documentation](self).
 pub struct Scheduler {
     context_id: u64,
+    /// Scheduling choices. Replaying a schedule draws nothing from it, so everything else
+    /// draws from streams of its own and replays the same.
     rng: Arc<Mutex<switchy_simulation::Rng>>,
+    /// Which waiter a `wake_one` wakes.
+    wake_rng: Arc<Mutex<switchy_simulation::Rng>>,
+    /// Which store a weak-memory load reads.
+    memory_rng: Arc<Mutex<switchy_simulation::Rng>>,
     inner: Mutex<Inner>,
     hook: Mutex<Option<DecisionHook>>,
 }
@@ -335,12 +447,14 @@ impl Scheduler {
         let config = context
             .state_with(|| ConfigOverride(None))
             .0
+            .clone()
             .unwrap_or_else(|| Config::from_env(context.seed()));
         let rng = context.stream("switchy_thread");
         let mut change_points = BTreeSet::new();
         let mut main_priority = 0;
         let mut lowest_priority = 0;
-        if let Strategy::Pct { depth, steps } = config.strategy {
+        if let Strategy::Pct { depth, steps } = &config.strategy {
+            let (depth, steps) = (*depth, *steps);
             let mut rng = lock(&rng);
             for _ in 0..depth {
                 change_points.insert(rng.below(steps.max(1)));
@@ -351,6 +465,8 @@ impl Scheduler {
         Self {
             context_id: context.id(),
             rng,
+            wake_rng: context.stream("switchy_thread::wake"),
+            memory_rng: context.stream("switchy_thread::memory"),
             hook: Mutex::new(None),
             inner: Mutex::new(Inner {
                 threads: vec![ThreadRecord {
@@ -366,6 +482,8 @@ impl Scheduler {
                 decisions: 0,
                 trace_hash: 0xcbf2_9ce4_8422_2325,
                 config,
+                choice_points: 0,
+                schedule: Schedule::new(),
                 change_points,
                 lowest_priority,
                 recent: std::collections::VecDeque::new(),
@@ -447,9 +565,9 @@ impl Scheduler {
         let priority = {
             let mut rng = lock(&self.rng);
             let inner = lock(&self.inner);
-            match inner.config.strategy {
-                Strategy::Pct { depth, .. } => u64::from(depth) + 1 + rng.below(u64::MAX / 2),
-                Strategy::Random => 0,
+            match &inner.config.strategy {
+                Strategy::Pct { depth, .. } => u64::from(*depth) + 1 + rng.below(u64::MAX / 2),
+                Strategy::Random | Strategy::Replay(_) => 0,
             }
         };
         let mut inner = lock(&self.inner);
@@ -500,7 +618,7 @@ impl Scheduler {
         if count <= 1 {
             return 0;
         }
-        let mut rng = lock(&self.rng);
+        let mut rng = lock(&self.memory_rng);
         if rng.chance(0.5) {
             count - 1
         } else {
@@ -577,7 +695,7 @@ impl Scheduler {
         if waiting.is_empty() {
             return false;
         }
-        let chosen = waiting[lock(&self.rng).index(waiting.len())];
+        let chosen = waiting[lock(&self.wake_rng).index(waiting.len())];
         inner.threads[chosen].state = ThreadState::Runnable;
         true
     }
@@ -695,8 +813,39 @@ impl Scheduler {
         }
     }
 
+    /// Pick among `runnable`, recording the choice in the run's schedule.
     fn pick(&self, inner: &mut Inner, from: ThreadIndex, runnable: &[ThreadIndex]) -> ThreadIndex {
-        match inner.config.strategy {
+        if runnable.len() == 1 {
+            return runnable[0];
+        }
+        let default = if runnable.contains(&from) {
+            from
+        } else {
+            runnable[0]
+        };
+        let point = inner.choice_points;
+        inner.choice_points += 1;
+        let chosen = self.choose(inner, from, runnable, point, default);
+        if chosen != default {
+            inner.schedule.choices.push((point, chosen));
+        }
+        chosen
+    }
+
+    fn choose(
+        &self,
+        inner: &mut Inner,
+        from: ThreadIndex,
+        runnable: &[ThreadIndex],
+        point: u64,
+        default: ThreadIndex,
+    ) -> ThreadIndex {
+        let strategy = inner.config.strategy.clone();
+        match &strategy {
+            Strategy::Replay(schedule) => schedule
+                .at(point)
+                .filter(|thread| runnable.contains(thread))
+                .unwrap_or(default),
             Strategy::Random => runnable[lock(&self.rng).index(runnable.len())],
             Strategy::Pct { .. } => {
                 if inner.change_points.remove(&inner.decisions) {
@@ -823,6 +972,7 @@ impl Scheduler {
                     .collect(),
                 decisions: inner.decisions,
                 trace_hash: inner.trace_hash,
+                schedule: inner.schedule.clone(),
             };
             let finished: Vec<std::thread::Thread> = inner
                 .threads
@@ -868,6 +1018,8 @@ pub struct ShutdownReport {
     pub decisions: u64,
     /// The run's final trace hash.
     pub trace_hash: u64,
+    /// The run's choices, to replay it with [`Strategy::Replay`].
+    pub schedule: Schedule,
 }
 
 /// The current run's scheduler; see [`Scheduler::current`].
@@ -908,6 +1060,104 @@ pub fn run_with<R>(config: Config, seed: u64, f: impl FnOnce() -> R) -> Outcome<
     let context = Context::new(seed);
     let _ = context.state_with(|| ConfigOverride(Some(config)));
     run_in(context, f)
+}
+
+/// Configure the scheduler of the current run, instead of the environment. For harnesses that
+/// create runs themselves (such as simvar); call it before anything in the run touches the
+/// scheduler.
+///
+/// # Panics
+///
+/// * If the current run already has a scheduler or a configuration
+pub fn configure(config: Config) {
+    let context = switchy_simulation::current();
+    let mut config = Some(config);
+    let set = context.state_with(|| ConfigOverride(config.take()));
+    assert!(
+        config.is_none() && set.0.is_some(),
+        "the current run is already configured"
+    );
+}
+
+/// The attempts [`shrink`] makes at most.
+pub const SHRINK_ATTEMPTS: usize = 1000;
+
+/// Reduce a failing run's schedule to fewer choices that still fail.
+///
+/// `fails` runs the scenario once replaying a candidate schedule (with the failing run's seed,
+/// for everything but scheduling) and returns the schedule that run actually followed if it
+/// failed, or `None` if it passed. This is delta debugging over the schedule's choices: it
+/// tries the default schedule, then each chunk of choices alone and the schedule without each
+/// chunk, halving the chunks until single choices. Whenever a candidate fails, the schedule
+/// that run followed (dropping a choice changes the choice points after it) becomes the new
+/// best. Stops after `max_attempts` runs.
+///
+/// The result fails, and (unless the attempts ran out) dropping any one of its choices makes
+/// the run pass. It is `schedule` itself if nothing smaller fails.
+pub fn shrink(
+    schedule: &Schedule,
+    max_attempts: usize,
+    mut fails: impl FnMut(&Schedule) -> Option<Schedule>,
+) -> Schedule {
+    let mut best = schedule.clone();
+    let attempts = Cell::new(0);
+    // Whether `candidate` fails with a smaller schedule (which becomes the best); false once
+    // the attempts run out.
+    let mut try_candidate = |candidate: Schedule, best: &mut Schedule| {
+        if attempts.get() >= max_attempts {
+            return false;
+        }
+        attempts.set(attempts.get() + 1);
+        match fails(&candidate) {
+            Some(followed) if followed.choices.len() < best.choices.len() => {
+                *best = followed;
+                true
+            }
+            _ => false,
+        }
+    };
+    if best.choices.is_empty() || try_candidate(Schedule::new(), &mut best) {
+        return best;
+    }
+    let mut parts = 2;
+    loop {
+        let len = best.choices.len();
+        if len == 0 {
+            break;
+        }
+        let chunk = len.div_ceil(parts.min(len));
+        let ranges: Vec<_> = (0..len)
+            .step_by(chunk)
+            .map(|start| start..(start + chunk).min(len))
+            .collect();
+        let alone = ranges.len() > 1
+            && ranges.iter().any(|range| {
+                try_candidate(
+                    Schedule {
+                        choices: best.choices[range.clone()].to_vec(),
+                    },
+                    &mut best,
+                )
+            });
+        if alone {
+            parts = 2;
+            continue;
+        }
+        let without = ranges.iter().any(|range| {
+            let mut choices = best.choices.clone();
+            choices.drain(range.clone());
+            try_candidate(Schedule { choices }, &mut best)
+        });
+        if without {
+            parts = (parts - 1).max(2);
+            continue;
+        }
+        if parts >= len || attempts.get() >= max_attempts {
+            break;
+        }
+        parts = (parts * 2).min(len);
+    }
+    best
 }
 
 /// Run `f` as the main thread of a new simulation run seeded with `seed`, then end the run.

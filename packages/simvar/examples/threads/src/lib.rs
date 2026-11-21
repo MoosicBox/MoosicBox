@@ -18,12 +18,18 @@ pub const ACCOUNTS: usize = 4;
 /// Starting balance of each account.
 pub const STARTING_BALANCE: u64 = 100;
 
-/// Runs the bank. With `nondeterministic`, tellers deliberately mix std's per-process random
-/// hasher keys into their decisions, which determinism verification must catch.
+/// Runs the bank, optionally with a deliberate bug.
+///
+/// With `nondeterministic`, tellers deliberately mix std's per-process random hasher keys into
+/// their decisions, which determinism verification must catch. With `racy`, tellers write
+/// back balances they read before letting go of the locks, so a transfer that runs in between
+/// is lost and some interleavings create or destroy money.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BankBootstrap {
     /// Mix randomness from outside the simulation into the run.
     pub nondeterministic: bool,
+    /// Lose updates under some interleavings.
+    pub racy: bool,
 }
 
 impl SimBootstrap for BankBootstrap {
@@ -33,9 +39,12 @@ impl SimBootstrap for BankBootstrap {
     }
 
     fn on_start(&self, sim: &mut impl Sim) {
-        let nondeterministic = self.nondeterministic;
+        let Self {
+            nondeterministic,
+            racy,
+        } = *self;
         sim.client("bank", async move {
-            let balances = run_bank(nondeterministic);
+            let balances = run_bank(nondeterministic, racy);
             let total: u64 = balances.iter().sum();
             assert_eq!(
                 total,
@@ -47,14 +56,15 @@ impl SimBootstrap for BankBootstrap {
     }
 }
 
-/// Three tellers transfer between accounts while an auditor reads the ledger. Returns the
-/// final balances; every transfer is recorded in the run's trace.
+/// Three tellers transfer between accounts while an auditor reads the ledger (racily, with
+/// `racy`; see [`BankBootstrap`]). Returns the final balances; every transfer is recorded in
+/// the run's trace.
 ///
 /// # Panics
 ///
 /// * If a teller or the auditor panics
 #[must_use]
-pub fn run_bank(nondeterministic: bool) -> Vec<u64> {
+pub fn run_bank(nondeterministic: bool, racy: bool) -> Vec<u64> {
     let accounts: Arc<Vec<Mutex<u64>>> = Arc::new(
         (0..ACCOUNTS)
             .map(|_| Mutex::new(STARTING_BALANCE))
@@ -94,10 +104,19 @@ pub fn run_bank(nondeterministic: bool) -> Vec<u64> {
                             (&mut *b, &mut *a)
                         };
                         let amount = (*source).min(10);
-                        *source -= amount;
-                        *target += amount;
-                        drop(a);
-                        drop(b);
+                        if racy {
+                            let (source, target) = (*source, *target);
+                            drop(a);
+                            drop(b);
+                            thread::yield_now();
+                            *accounts[from].lock().unwrap() = source - amount;
+                            *accounts[to].lock().unwrap() = target + amount;
+                        } else {
+                            *source -= amount;
+                            *target += amount;
+                            drop(a);
+                            drop(b);
+                        }
                         ledger.send((from, to, amount)).unwrap();
                     }
                 })

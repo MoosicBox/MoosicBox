@@ -183,7 +183,10 @@ sim.client("load_client", async {
 - `SIMULATOR_EPOCH_OFFSET`: Fixed simulated epoch offset override (time feature)
 - `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX`: Inclusive bounded random epoch offset (time feature)
 - `SIMULATOR_EPOCH_RANGE_PROFILE`: Epoch profile `low` | `wide` | `full` (time feature)
-- `NO_TUI`: Disable TUI interface when set at compile time
+- `SIMULATOR_VERIFY_DETERMINISM`: `1` replays every run with its seed and fails if its trace differs
+- `SIMULATOR_SHRINK` (thread feature): shrink a failing run's thread schedule (`1` for up to 1000 replays, or a number of replays) and print how to replay the result
+- `SIMULATOR_SCHEDULE` (thread feature): replay a thread schedule, as printed by `SIMULATOR_SHRINK`
+- `NO_TUI`: Disable TUI interface when set at compile or run time
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 
 When a run fails, the harness prints a copy/paste rerun command that includes both

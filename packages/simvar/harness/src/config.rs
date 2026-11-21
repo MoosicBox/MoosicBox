@@ -466,7 +466,7 @@ fn get_cargoified_args() -> Vec<String> {
     args
 }
 
-fn get_run_command(skip_env: &[&str], seed: u64, epoch_offset: Option<u64>) -> String {
+pub fn get_run_command(skip_env: &[&str], seed: u64, epoch_offset: Option<u64>) -> String {
     let args = get_cargoified_args();
     let quoted_args = args
         .iter()

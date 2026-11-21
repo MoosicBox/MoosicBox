@@ -327,14 +327,14 @@ fn a_decision_hook_sees_every_decision_without_changing_the_run() {
 fn both_strategies_are_deterministic() {
     for config in [Config::random(), Config::pct(3, 30)] {
         for seed in 0..10 {
-            let first = outcome(simulator::run_with(config, seed, interleaving));
-            let second = outcome(simulator::run_with(config, seed, interleaving));
+            let first = outcome(simulator::run_with(config.clone(), seed, interleaving));
+            let second = outcome(simulator::run_with(config.clone(), seed, interleaving));
             assert_eq!(first, second, "{config:?} seed {seed}");
         }
     }
 }
 
-const fn weak() -> Config {
+fn weak() -> Config {
     Config {
         weak_memory: true,
         ..Config::random()
@@ -420,5 +420,124 @@ fn weak_memory_runs_replay_exactly() {
         let first = outcome(simulator::run_with(weak(), seed, interleaving));
         let second = outcome(simulator::run_with(weak(), seed, interleaving));
         assert_eq!(first, second);
+    }
+}
+
+/// Two workers increment a counter with a separate load and store, among threads that only
+/// yield: an update is lost when one worker runs between the other's load and store.
+fn lost_update() -> usize {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let noise: Vec<_> = (0..3)
+        .map(|_| {
+            thread::spawn(|| {
+                for _ in 0..10 {
+                    thread::yield_now();
+                }
+            })
+        })
+        .collect();
+    let workers: Vec<_> = (0..2)
+        .map(|_| {
+            let counter = Arc::clone(&counter);
+            thread::spawn(move || {
+                let seen = counter.load(Ordering::SeqCst);
+                thread::yield_now();
+                counter.store(seen + 1, Ordering::SeqCst);
+            })
+        })
+        .collect();
+    for handle in noise.into_iter().chain(workers) {
+        handle.join().unwrap();
+    }
+    counter.load(Ordering::SeqCst)
+}
+
+#[test]
+fn replaying_a_recorded_schedule_reproduces_the_run() {
+    let weak = Config {
+        weak_memory: true,
+        ..Config::random()
+    };
+    for config in [Config::random(), Config::pct(3, 30), weak] {
+        for seed in 0..20 {
+            let recorded = simulator::run_with(config.clone(), seed, interleaving);
+            let schedule = recorded.report.schedule.clone();
+            let replay = Config {
+                weak_memory: config.weak_memory,
+                ..Config::replay(schedule.clone())
+            };
+            let replayed = simulator::run_with(replay, seed, interleaving);
+            assert_eq!(
+                outcome(recorded),
+                outcome(replayed),
+                "{config:?} seed {seed} schedule {schedule}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_default_schedule_switches_only_when_it_must() {
+    let run = simulator::run_with(Config::replay(simulator::Schedule::new()), 1, interleaving);
+    assert_eq!(run.report.schedule, simulator::Schedule::new());
+    let (log, _) = outcome(run);
+    // Each worker runs to completion before the next.
+    assert_eq!(log, [0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 20, 21, 22, 23, 24]);
+}
+
+#[test]
+fn schedules_round_trip_through_text() {
+    let schedule: simulator::Schedule = "17=2, 3=1".parse().unwrap();
+    assert_eq!(schedule.choices, [(3, 1), (17, 2)]);
+    assert_eq!(schedule.to_string(), "3=1,17=2");
+    assert_eq!(
+        "none".parse::<simulator::Schedule>().unwrap(),
+        simulator::Schedule::new()
+    );
+    assert!("3".parse::<simulator::Schedule>().is_err());
+}
+
+#[test]
+fn shrinking_leaves_only_switches_the_failure_needs() {
+    let loses = |schedule: &simulator::Schedule, seed| {
+        let run = simulator::run_with(Config::replay(schedule.clone()), seed, lost_update);
+        (*run.result.as_ref().unwrap() != 2).then_some(run.report.schedule)
+    };
+    let failing: Vec<_> = (0..200)
+        .map(|seed| {
+            (
+                seed,
+                simulator::run_with(Config::random(), seed, lost_update),
+            )
+        })
+        .filter(|(_, run)| run.result.as_ref().is_ok_and(|&count| count != 2))
+        .take(5)
+        .collect();
+    assert!(!failing.is_empty(), "some seed loses an update");
+    for (seed, run) in failing {
+        let original = run.report.schedule;
+        let shrunk = simulator::shrink(&original, simulator::SHRINK_ATTEMPTS, |candidate| {
+            loses(candidate, seed)
+        });
+        assert!(
+            shrunk.choices.len() < original.choices.len(),
+            "seed {seed}: {original} did not shrink"
+        );
+        assert!(
+            loses(&shrunk, seed).is_some(),
+            "seed {seed}: {shrunk} passes"
+        );
+        for i in 0..shrunk.choices.len() {
+            let mut fewer = shrunk.clone();
+            fewer.choices.remove(i);
+            assert!(
+                loses(&fewer, seed).is_none(),
+                "seed {seed}: {shrunk} still fails without choice {i}"
+            );
+        }
+        eprintln!(
+            "seed {seed}: {} choices shrank to {shrunk}",
+            original.choices.len()
+        );
     }
 }

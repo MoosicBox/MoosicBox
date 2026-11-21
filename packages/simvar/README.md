@@ -97,6 +97,11 @@ By default, the `all` feature is enabled. Individual features can be selected:
 
 - **`SIMULATOR_RUNS`**: Number of simulation runs to execute (default: 1)
 - **`SIMULATOR_MAX_PARALLEL`**: Maximum parallel runs (default: number of CPUs)
+- **`SIMULATOR_SEED`**: The first run's seed (default random)
+- **`SIMULATOR_VERIFY_DETERMINISM`**: `1` replays every run and fails if its trace differs
+- **`SIMULATOR_SHRINK`** (`thread` feature): shrink a failing run's thread
+  schedule (`1` for up to 1000 replays, or a number) and print how to replay it
+- **`SIMULATOR_SCHEDULE`** (`thread` feature): replay a shrunk schedule
 - **`NO_TUI`**: Disable terminal UI when set
 
 ## Dependencies

@@ -55,6 +55,9 @@
 //! * `SIMULATOR_EPOCH_OFFSET` - Fixed epoch offset override (when `time` feature is enabled)
 //! * `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX` - Bounded random epoch offset (inclusive)
 //! * `SIMULATOR_EPOCH_RANGE_PROFILE` - Epoch profile (`low`, `wide`, `full`)
+//! * `SIMULATOR_VERIFY_DETERMINISM` - Replay every run and fail if its trace differs
+//! * `SIMULATOR_SHRINK` - With the `thread` feature: shrink a failing run's thread schedule
+//!   (`1`/`true` for up to 1000 replays, or a number of replays) and print how to replay it
 //! * `NO_TUI` - Disable terminal UI when set (at build or run time); it is also off when stdout is not a terminal
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
@@ -428,7 +431,12 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                         log::debug!("thread {i} joined");
                     }
                     Err(e) => {
-                        log::error!("failed to join thread {i}: {e:?}");
+                        let message = e
+                            .downcast_ref::<String>()
+                            .map(String::as_str)
+                            .or_else(|| e.downcast_ref::<&str>().copied())
+                            .unwrap_or("(not a string)");
+                        log::error!("failed to join thread {i}: {message}");
                     }
                 }
             }
@@ -447,6 +455,51 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
     }
 }
 
+/// How [`Simulation::run_once`] picks its seed and schedule.
+#[cfg_attr(not(feature = "thread"), derive(Clone, Copy))]
+enum Replay {
+    /// The next seed in the sequence.
+    No,
+    /// An earlier run's seed.
+    Seed(u64),
+    /// An earlier run's seed with this thread schedule, reporting nothing.
+    #[cfg(feature = "thread")]
+    Silent(u64, switchy::thread::simulator::Schedule),
+}
+
+/// What one run produced.
+struct RunOutcome {
+    result: SimResult,
+    /// The run's trace hash.
+    trace: u64,
+    seed: u64,
+    /// The thread schedule it followed.
+    #[cfg(feature = "thread")]
+    schedule: switchy::thread::simulator::Schedule,
+}
+
+/// Marks a run whose reports, events and telemetry are dropped (a shrinking replay).
+struct Silent(bool);
+
+/// Whether the current run reports nothing.
+fn silent() -> bool {
+    switchy::simulation::state_with(|| Silent(false)).0
+}
+
+/// How many replays `SIMULATOR_SHRINK` allows shrinking a failure: `1` or `true` for
+/// [`switchy::thread::simulator::SHRINK_ATTEMPTS`], or a number of replays.
+#[cfg(feature = "thread")]
+fn shrink_attempts() -> Option<usize> {
+    let value = std::env::var("SIMULATOR_SHRINK").ok()?;
+    match value.as_str() {
+        "" | "0" | "false" => None,
+        "1" | "true" => Some(switchy::thread::simulator::SHRINK_ATTEMPTS),
+        other => Some(other.parse().unwrap_or_else(|_| {
+            panic!("SIMULATOR_SHRINK must be 1, true or a number of replays, got '{other}'")
+        })),
+    }
+}
+
 struct Simulation<'a, B: SimBootstrap> {
     bootstrap: &'a B,
 }
@@ -456,24 +509,36 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         Self { bootstrap }
     }
 
-    /// Run once, and with determinism verification on, run the same seed again and fail if
-    /// the two runs' traces differ.
+    /// Run once (shrinking a failure's schedule if asked to), and with determinism
+    /// verification on, run the same seed again and fail if the two runs' traces differ. A
+    /// failure ends the simulation.
     fn run(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
-        let (result, trace, seed) = self.run_once(run_number, thread_id, None);
-        if !verify_determinism() || !result.is_success() {
-            return result;
+        let result = self.run_checked(run_number, thread_id);
+        if !result.is_success() {
+            end_sim();
         }
-        let (again, replayed, _) = self.run_once(run_number, thread_id, Some(seed));
-        if !again.is_success() {
-            return again;
+        result
+    }
+
+    fn run_checked(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
+        let first = self.run_once(run_number, thread_id, Replay::No);
+        if !first.result.is_success() {
+            return self.shrunk(run_number, thread_id, first);
         }
+        if !verify_determinism() {
+            return first.result;
+        }
+        let again = self.run_once(run_number, thread_id, Replay::Seed(first.seed));
+        if !again.result.is_success() {
+            return again.result;
+        }
+        let (result, trace, seed, replayed) = (first.result, first.trace, first.seed, again.trace);
         if replayed == trace {
             return result;
         }
         let SimResult::Success { props, run } = result else {
             unreachable!("checked above")
         };
-        end_sim();
         let result = SimResult::Fail {
             props,
             run,
@@ -487,22 +552,97 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         result
     }
 
-    /// One run. `replay_seed` repeats an earlier run's seed instead of advancing the seed
-    /// sequence. Returns the result, the run's trace hash and its seed.
+    /// With `SIMULATOR_SHRINK` (and the `thread` feature), shrink the failed run's thread
+    /// schedule by replaying its seed, and report the smallest failing run with how to replay
+    /// it. Otherwise, the failed run's result.
+    #[cfg_attr(not(feature = "thread"), allow(clippy::unused_self, unused_variables))]
+    fn shrunk(&self, run_number: u64, thread_id: Option<u64>, failed: RunOutcome) -> SimResult {
+        #[cfg(feature = "thread")]
+        if let Some(attempts) = shrink_attempts() {
+            use switchy::thread::simulator::shrink;
+            let seed = failed.seed;
+            let original = failed.schedule.choices.len();
+            let schedule = shrink(&failed.schedule, attempts, |candidate| {
+                let outcome = self.run_once(
+                    run_number,
+                    thread_id,
+                    Replay::Silent(seed, candidate.clone()),
+                );
+                (!outcome.result.is_success()).then_some(outcome.schedule)
+            });
+            let last = self.run_once(
+                run_number,
+                thread_id,
+                Replay::Silent(seed, schedule.clone()),
+            );
+            if let SimResult::Fail {
+                props,
+                run,
+                error,
+                panic,
+            } = last.result
+            {
+                #[cfg(feature = "time")]
+                let epoch_offset = Some(props.config.epoch_offset);
+                #[cfg(not(feature = "time"))]
+                let epoch_offset = None;
+                let command = config::get_run_command(
+                    &[
+                        "SIMULATOR_SEED",
+                        "SIMULATOR_RUNS",
+                        "SIMULATOR_MAX_PARALLEL",
+                        "SIMULATOR_SHRINK",
+                        "SIMULATOR_SCHEDULE",
+                        "SIMULATOR_SCHEDULE_STRATEGY",
+                    ],
+                    seed,
+                    epoch_offset,
+                );
+                let note = format!(
+                    "shrunk the thread schedule from {original} choices to {}; replay with: \
+                     SIMULATOR_RUNS=1 SIMULATOR_SCHEDULE={schedule} {command}",
+                    schedule.choices.len()
+                );
+                let result = SimResult::Fail {
+                    props,
+                    run,
+                    error: Some(error.map_or_else(|| note.clone(), |e| format!("{e}\n\n{note}"))),
+                    panic,
+                };
+                logging::log_message(result.to_string());
+                return result;
+            }
+        }
+        failed.result
+    }
+
+    /// One run. `replay` repeats an earlier run's seed instead of advancing the seed sequence,
+    /// and can fix its thread schedule (silently: no reports, events or telemetry).
     #[allow(clippy::too_many_lines)]
-    fn run_once(
-        &self,
-        run_number: u64,
-        thread_id: Option<u64>,
-        replay_seed: Option<u64>,
-    ) -> (SimResult, u64, u64) {
+    fn run_once(&self, run_number: u64, thread_id: Option<u64>, replay: Replay) -> RunOutcome {
         // Each run starts from a fresh simulation context, so nothing of an earlier run on
         // this worker thread (simulated threads, clock, generator) carries over.
         switchy::simulation::set_current(None);
-        if let Some(seed) = replay_seed {
-            switchy::simulation::set_seed(seed);
-        } else if run_number > 1 {
-            switchy::random::simulator::reset_seed();
+        // A panic recorded by an earlier run on this thread is not this run's.
+        PANIC.with_borrow_mut(|panic| *panic = None);
+        match replay {
+            Replay::No => {
+                if run_number > 1 {
+                    switchy::random::simulator::reset_seed();
+                }
+            }
+            Replay::Seed(seed) => switchy::simulation::set_seed(seed),
+            #[cfg(feature = "thread")]
+            Replay::Silent(seed, schedule) => {
+                // The failure being shrunk cancelled every run; this replay must still run.
+                // No new runs start either way (see `END_SIM`).
+                simvar_utils::reset_global_simulator_cancellation_token();
+                switchy::simulation::set_seed(seed);
+                let _ = switchy::simulation::state_with(|| Silent(true));
+                let mut config = switchy::thread::simulator::Config::from_env(seed);
+                config.strategy = switchy::thread::simulator::Strategy::Replay(Arc::new(schedule));
+                switchy::thread::simulator::configure(config);
+            }
         }
         let seed = switchy::random::simulator::seed();
         let run_id = simvar_observer::RunId {
@@ -633,10 +773,10 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         let mut trace = run_trace();
         #[cfg(feature = "thread")]
-        let leaked_threads = {
+        let (leaked_threads, schedule) = {
             let report = switchy::thread::simulator::scheduler().shutdown();
             trace = mix(trace, report.trace_hash);
-            report.leaked
+            (report.leaked, report.schedule)
         };
         trace = mix(trace, steps);
 
@@ -689,7 +829,9 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         };
 
         if !result.is_success() {
-            end_sim();
+            // Start no more runs; the run's caller ends the simulation once it is done with
+            // this failure (shrinking it, for example).
+            END_SIM.store(true, std::sync::atomic::Ordering::SeqCst);
         }
 
         logging::log_message(result.to_string());
@@ -702,7 +844,13 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             report: result.to_string(),
             steps,
         });
-        (result, trace, seed)
+        RunOutcome {
+            result,
+            trace,
+            seed,
+            #[cfg(feature = "thread")]
+            schedule,
+        }
     }
 }
 
@@ -723,6 +871,9 @@ pub fn add_observer(observer: Arc<dyn simvar_observer::SimObserver>) {
 }
 
 fn notify(event: &simvar_observer::SimEvent) {
+    if silent() {
+        return;
+    }
     let observers = OBSERVERS
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
