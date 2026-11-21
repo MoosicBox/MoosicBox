@@ -268,6 +268,7 @@ struct State {
     pipes: BTreeMap<u64, Pipe>,
     next_id: u64,
     programs: BTreeMap<String, Program>,
+    io: BTreeMap<u32, ProcessIo>,
 }
 
 /// A run's simulated kernel.
@@ -337,16 +338,37 @@ pub fn terminal_written(name: &str) -> Option<Vec<u8>> {
         .map(|t| t.written.clone())
 }
 
+/// Where a process's terminal output and piped standard output went, kept after it is reaped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessIo {
+    /// The simulated path of the terminal it started on, if any.
+    pub terminal: Option<String>,
+    /// Its piped standard output, if it had one; see [`pipe_written`].
+    pub stdout_pipe: Option<u64>,
+}
+
+/// Where the process started with id `pid` (most recently, as ids are reused) sends its
+/// output. Recorded at spawn, so it stays available after the process is reaped.
+#[must_use]
+pub fn process_io(pid: u32) -> Option<ProcessIo> {
+    lock(&kernel().state).io.get(&pid).cloned()
+}
+
+/// Every byte written to pipe `pipe`, in order.
+#[must_use]
+pub fn pipe_written(pipe: u64) -> Option<Vec<u8>> {
+    lock(&kernel().state)
+        .pipes
+        .get(&pipe)
+        .map(|p| p.written.clone())
+}
+
 /// Every byte processes wrote to process `pid`'s piped standard output, in order.
 #[must_use]
 pub fn stdout_written(pid: u32) -> Option<Vec<u8>> {
-    let kernel = kernel();
-    let state = lock(&kernel.state);
-    let process = state.processes.get(&pid)?;
-    match process.streams[1] {
-        Stream::PipeWrite(pipe) => state.pipes.get(&pipe).map(|p| p.written.clone()),
-        _ => None,
-    }
+    process_io(pid)
+        .and_then(|io| io.stdout_pipe)
+        .and_then(pipe_written)
 }
 
 /// End every process still running (as `SIGKILL`), so their simulated threads finish. For the
@@ -451,6 +473,7 @@ impl Kernel {
                 pipes: BTreeMap::new(),
                 next_id: 1,
                 programs: BTreeMap::new(),
+                io: BTreeMap::new(),
             }),
         }
     }
@@ -913,6 +936,16 @@ impl Kernel {
         }
         if let Some(pipe) = stdout_pipe {
             Self::hold(&mut state, Stream::PipeRead(pipe));
+        }
+        if parent.is_none() {
+            let terminal = terminal.and_then(|t| state.terminals.get(&t).map(|t| t.name.clone()));
+            state.io.insert(
+                pid,
+                ProcessIo {
+                    terminal,
+                    stdout_pipe,
+                },
+            );
         }
         state.processes.insert(
             pid,
