@@ -195,14 +195,14 @@ impl PtyMaster {
     }
 
     /// Path of the terminal's slave device, for handing the terminal to another process.
-    #[cfg(unix)]
+    #[cfg(any(unix, feature = "simulator"))]
     #[must_use]
     pub fn tty_name(&self) -> Option<&std::path::Path> {
         self.0.tty_name()
     }
 
     /// The terminal's foreground process group, when it has one.
-    #[cfg(unix)]
+    #[cfg(any(unix, feature = "simulator"))]
     #[must_use]
     pub fn foreground_process_group(&self) -> Option<i32> {
         self.0.foreground_process_group()

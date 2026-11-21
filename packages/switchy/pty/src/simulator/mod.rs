@@ -1545,7 +1545,10 @@ pub(crate) mod backend {
         ChildExit, HANGUP_CHECKS, HANGUP_GRACE, Kernel, ProcessState, PtySize, Signal,
         SpawnCommand, State, Stream, Wait, kernel, lock,
     };
-    pub use super::{base_environment, signal_group, signal_name};
+    pub use super::{base_environment, signal_group};
+    // Signals in std exit statuses exist only on Unix.
+    #[cfg(unix)]
+    pub use super::signal_name;
 
     pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
         let kernel = kernel();
