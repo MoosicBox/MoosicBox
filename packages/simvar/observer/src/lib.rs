@@ -154,7 +154,7 @@ pub enum ReplayMode {
     Run,
     /// Stop at the next decision.
     Pause,
-    /// Run this many more decisions, then pause.
+    /// Pause at the decision this many from now (at the next one for `Step(1)`).
     Step(u64),
     /// Run until this decision number, then pause.
     Until(u64),
@@ -289,7 +289,7 @@ impl ReplayControl {
         state.decision = number;
         let reason = match state.mode {
             ReplayMode::Pause => return true,
-            ReplayMode::Step(0) => Some(format!("stepped to decision {number}")),
+            ReplayMode::Step(0 | 1) => Some(format!("stepped to decision {number}")),
             ReplayMode::Until(target) if number >= target => {
                 Some(format!("reached decision {target}"))
             }
@@ -369,18 +369,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stepping_runs_that_many_decisions_then_pauses() {
+    fn stepping_pauses_that_many_decisions_on() {
         let control = Arc::new(ReplayControl::new(ReplayMode::Step(3)));
-        for n in 0..3 {
+        for n in 0..2 {
             control.checkpoint(n);
         }
         let waiting = Arc::clone(&control);
-        let blocked = std::thread::spawn(move || waiting.checkpoint(3));
+        let blocked = std::thread::spawn(move || waiting.checkpoint(2));
         std::thread::sleep(std::time::Duration::from_millis(50));
-        assert_eq!(control.status(), (ReplayMode::Pause, 3));
+        assert_eq!(control.status(), (ReplayMode::Pause, 2));
         assert!(!blocked.is_finished());
-        control.set(ReplayMode::Run);
+        // Stepping one from a pause stops at the very next decision.
+        control.set(ReplayMode::Step(1));
         blocked.join().unwrap();
+        assert!(control.arrive(3, 0, &SchedulerView::default));
+        assert_eq!(control.hit().as_deref(), Some("stepped to decision 3"));
     }
 
     #[test]
