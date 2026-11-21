@@ -18646,6 +18646,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_pty"
+version = "0.5.0"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "switchy_random"
 version = "0.5.0"
 dependencies = [

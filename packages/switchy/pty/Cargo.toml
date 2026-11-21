@@ -1,0 +1,46 @@
+[package]
+authors = { workspace = true }
+categories = [
+    "command-line-interface",
+    "development-tools::testing",
+    "os",
+    "simulation",
+]
+description = "Pseudo-terminals and the processes running on them, with a deterministic simulator"
+edition = { workspace = true }
+keywords = ["conpty", "pseudo-terminal", "pty", "simulation", "terminal"]
+license = { workspace = true }
+name = "switchy_pty"
+readme = "README.md"
+repository = { workspace = true }
+version = "0.5.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_System_Console",
+    "Win32_System_Environment",
+    "Win32_System_JobObjects",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+] }
+
+[features]
+default = ["native"]
+
+fail-on-warnings = []
+
+# The operating system's pseudo-terminals: openpty on Unix, ConPTY on Windows.
+native = ["dep:libc", "dep:windows-sys"]

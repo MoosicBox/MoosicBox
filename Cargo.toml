@@ -139,6 +139,7 @@ default-members = [
     "packages/switchy/http/models",
     "packages/switchy/mdns",
     "packages/switchy/p2p",
+    "packages/switchy/pty",
     "packages/switchy/random",
     "packages/switchy/schema",
     "packages/switchy/schema/cli",
@@ -324,6 +325,7 @@ members = [
     "packages/switchy/http/models",
     "packages/switchy/mdns",
     "packages/switchy/p2p",
+    "packages/switchy/pty",
     "packages/switchy/random",
     "packages/switchy/schema",
     "packages/switchy/schema/cli",
@@ -501,6 +503,7 @@ switchy_http                = { version = "0.5.0", default-features = false, pat
 switchy_http_models         = { version = "0.5.0", default-features = false, path = "packages/switchy/http/models" }
 switchy_mdns                = { version = "0.5.0", default-features = false, path = "packages/switchy/mdns" }
 switchy_p2p                 = { version = "0.5.0", default-features = false, path = "packages/switchy/p2p" }
+switchy_pty                 = { version = "0.5.0", default-features = false, path = "packages/switchy/pty" }
 switchy_random              = { version = "0.5.0", default-features = false, path = "packages/switchy/random" }
 switchy_schema              = { version = "0.5.0", default-features = false, path = "packages/switchy/schema" }
 switchy_schema_cli          = { version = "0.5.0", default-features = false, path = "packages/switchy/schema/cli" }
@@ -723,7 +726,9 @@ time = "0.3.55"
 
 quote = "1.0.47"
 # Separate 0.8 API line for deterministic simulation replay (see random/tests/replay.rs).
-rand_08 = { package = "rand", version = "=0.8.8", default-features = false }
+# Any of the 0.8 releases switchy_random has been checked against, so crates built
+# against an earlier pin (=0.8.5) can share one copy with this workspace.
+rand_08 = { package = "rand", version = ">=0.8.5, <=0.8.8", default-features = false }
 rangemap = "1.8.0"
 ratatui = "0.30.2"
 raw-window-handle = { version = "0.6.2", default-features = false }
