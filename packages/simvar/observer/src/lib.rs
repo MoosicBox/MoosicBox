@@ -150,7 +150,7 @@ pub struct SchedulerView {
 /// How a run under a [`ReplayControl`] proceeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayMode {
-    /// Run freely.
+    /// Run freely (until a breakpoint).
     Run,
     /// Stop at the next decision.
     Pause,
@@ -160,13 +160,55 @@ pub enum ReplayMode {
     Until(u64),
 }
 
+/// Where a run under a [`ReplayControl`] pauses on its own. Each but [`Self::Failure`] pauses
+/// once and is then removed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Breakpoint {
+    /// At this decision number.
+    Decision(u64),
+    /// At the first decision at or after this simulation step.
+    Step(u64),
+    /// When a thread whose name contains `thread` is blocked on something containing `on`
+    /// (any wait, if empty).
+    Blocked {
+        /// Part of the thread's name.
+        thread: String,
+        /// Part of what it waits on.
+        on: String,
+    },
+    /// Whenever the simulation reports a failure (see [`ReplayControl::failure`]).
+    Failure,
+}
+
+impl fmt::Display for Breakpoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Decision(number) => write!(f, "decision {number}"),
+            Self::Step(step) => write!(f, "step {step}"),
+            Self::Blocked { thread, on } if on.is_empty() => write!(f, "{thread} blocks"),
+            Self::Blocked { thread, on } => write!(f, "{thread} blocks on {on}"),
+            Self::Failure => f.write_str("a failure"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ReplayState {
+    mode: ReplayMode,
+    decision: u64,
+    breakpoints: Vec<Breakpoint>,
+    hit: Option<String>,
+}
+
 /// Holds a run at scheduling decisions on an observer's behalf.
 ///
-/// The run calls [`Self::checkpoint`] at each decision (blocking while paused); an observer
-/// changes the mode. Pausing stops only real time: the run's decisions are the same either way.
+/// At each decision the run calls [`Self::arrive`], and if that says it stops, sends what an
+/// observer should see and then calls [`Self::wait`] (or both at once with
+/// [`Self::checkpoint`]). An observer changes the mode and the breakpoints. Pausing stops only
+/// real time: the run's decisions are the same either way.
 #[derive(Debug)]
 pub struct ReplayControl {
-    state: Mutex<(ReplayMode, u64)>,
+    state: Mutex<ReplayState>,
     changed: Condvar,
 }
 
@@ -181,44 +223,143 @@ impl ReplayControl {
     #[must_use]
     pub const fn new(mode: ReplayMode) -> Self {
         Self {
-            state: Mutex::new((mode, 0)),
+            state: Mutex::new(ReplayState {
+                mode,
+                decision: 0,
+                breakpoints: Vec::new(),
+                hit: None,
+            }),
             changed: Condvar::new(),
         }
     }
 
+    fn lock(&self) -> std::sync::MutexGuard<'_, ReplayState> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Change how the run proceeds.
     pub fn set(&self, mode: ReplayMode) {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner).0 = mode;
+        let mut state = self.lock();
+        state.mode = mode;
+        if mode != ReplayMode::Pause {
+            state.hit = None;
+        }
+        drop(state);
         self.changed.notify_all();
     }
 
     /// The current mode and the last decision the run reached.
     #[must_use]
     pub fn status(&self) -> (ReplayMode, u64) {
-        *self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        let state = self.lock();
+        (state.mode, state.decision)
     }
 
-    /// Called by the run at decision `number`: returns once the run may continue.
-    pub fn checkpoint(&self, number: u64) {
-        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        state.1 = number;
-        loop {
-            match state.0 {
-                ReplayMode::Run => return,
-                ReplayMode::Step(0) => state.0 = ReplayMode::Pause,
-                ReplayMode::Step(left) => {
-                    state.0 = ReplayMode::Step(left - 1);
-                    return;
-                }
-                ReplayMode::Until(target) if number < target => return,
-                ReplayMode::Until(_) => state.0 = ReplayMode::Pause,
-                ReplayMode::Pause => {}
+    /// Why the run last paused on its own (a breakpoint, a failure or a target decision),
+    /// until it runs again.
+    #[must_use]
+    pub fn hit(&self) -> Option<String> {
+        self.lock().hit.clone()
+    }
+
+    /// Pause at `breakpoint` too.
+    pub fn add_breakpoint(&self, breakpoint: Breakpoint) {
+        let mut state = self.lock();
+        if !state.breakpoints.contains(&breakpoint) {
+            state.breakpoints.push(breakpoint);
+        }
+    }
+
+    /// Remove every breakpoint.
+    pub fn clear_breakpoints(&self) {
+        self.lock().breakpoints.clear();
+    }
+
+    /// The breakpoints set.
+    #[must_use]
+    pub fn breakpoints(&self) -> Vec<Breakpoint> {
+        self.lock().breakpoints.clone()
+    }
+
+    /// Called by the run at decision `number`, made at simulation step `step`; `view` gives
+    /// its scheduler (taken only when a breakpoint needs it). Returns whether the run stops
+    /// here: then it should send what an observer should see, and call [`Self::wait`].
+    pub fn arrive(&self, number: u64, step: u64, view: &dyn Fn() -> SchedulerView) -> bool {
+        let mut state = self.lock();
+        state.decision = number;
+        let reason = match state.mode {
+            ReplayMode::Pause => return true,
+            ReplayMode::Step(0) => Some(format!("stepped to decision {number}")),
+            ReplayMode::Until(target) if number >= target => {
+                Some(format!("reached decision {target}"))
             }
-            self.changed.notify_all();
-            state = self
-                .changed
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
+            ReplayMode::Step(left) => {
+                state.mode = ReplayMode::Step(left - 1);
+                None
+            }
+            ReplayMode::Run | ReplayMode::Until(_) => None,
+        }
+        .or_else(|| {
+            let index = Self::matching(&state.breakpoints, number, step, view)?;
+            Some(format!("break at {}", state.breakpoints.remove(index)))
+        });
+        let Some(reason) = reason else {
+            return false;
+        };
+        state.mode = ReplayMode::Pause;
+        state.hit = Some(reason);
+        drop(state);
+        true
+    }
+
+    /// The first one-shot breakpoint matching this decision.
+    fn matching(
+        breakpoints: &[Breakpoint],
+        number: u64,
+        step: u64,
+        view: &dyn Fn() -> SchedulerView,
+    ) -> Option<usize> {
+        let mut scheduler = None;
+        breakpoints.iter().position(|breakpoint| match breakpoint {
+            Breakpoint::Decision(target) => number >= *target,
+            Breakpoint::Step(target) => step >= *target,
+            Breakpoint::Blocked { thread, on } => {
+                scheduler.get_or_insert_with(view).threads.iter().any(|t| {
+                    t.name.contains(thread.as_str())
+                        && t.state.starts_with("Blocked")
+                        && t.state.contains(on.as_str())
+                })
+            }
+            Breakpoint::Failure => false,
+        })
+    }
+
+    /// Called by the simulation when it finds a failure (`what`). Returns whether the run
+    /// stops for it (a [`Breakpoint::Failure`] is set): then it should send what an observer
+    /// should see, and call [`Self::wait`].
+    pub fn failure(&self, what: &str) -> bool {
+        let mut state = self.lock();
+        if !state.breakpoints.contains(&Breakpoint::Failure) {
+            return false;
+        }
+        state.mode = ReplayMode::Pause;
+        state.hit = Some(format!("failure: {what}"));
+        true
+    }
+
+    /// Block while the run is paused.
+    pub fn wait(&self) {
+        drop(
+            self.changed
+                .wait_while(self.lock(), |state| state.mode == ReplayMode::Pause)
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+    }
+
+    /// [`Self::arrive`] then [`Self::wait`], for runs that send nothing when they stop.
+    pub fn checkpoint(&self, number: u64) {
+        if self.arrive(number, 0, &SchedulerView::default) {
+            self.wait();
         }
     }
 }
@@ -256,5 +397,63 @@ mod tests {
         assert_eq!(control.status().0, ReplayMode::Pause);
         control.set(ReplayMode::Run);
         blocked.join().unwrap();
+    }
+
+    fn blocked(name: &str, on: &str) -> SchedulerView {
+        SchedulerView {
+            threads: vec![ThreadView {
+                name: name.into(),
+                state: format!("Blocked {{ key: {on} }}"),
+                op: String::new(),
+            }],
+            ..SchedulerView::default()
+        }
+    }
+
+    #[test]
+    fn breakpoints_pause_once_and_say_why() {
+        let control = ReplayControl::default();
+        control.add_breakpoint(Breakpoint::Decision(5));
+        control.add_breakpoint(Breakpoint::Step(1000));
+        let idle = SchedulerView::default;
+        assert!(!control.arrive(4, 10, &idle));
+        assert!(control.arrive(5, 10, &idle));
+        assert_eq!(control.hit().as_deref(), Some("break at decision 5"));
+        control.set(ReplayMode::Run);
+        assert_eq!(control.hit(), None);
+        assert!(!control.arrive(6, 999, &idle));
+        assert!(control.arrive(7, 1000, &idle));
+        control.set(ReplayMode::Run);
+        assert!(
+            !control.arrive(8, 2000, &idle),
+            "each breakpoint pauses once"
+        );
+        assert_eq!(control.breakpoints(), []);
+    }
+
+    #[test]
+    fn a_blocked_breakpoint_reads_the_scheduler_only_when_set() {
+        let control = ReplayControl::default();
+        let unread = || -> SchedulerView { panic!("read without a breakpoint needing it") };
+        assert!(!control.arrive(1, 0, &unread));
+        control.add_breakpoint(Breakpoint::Blocked {
+            thread: "driver-1".into(),
+            on: "Io".into(),
+        });
+        assert!(!control.arrive(2, 0, &|| blocked("driver-0", "Io(3)")));
+        assert!(!control.arrive(3, 0, &|| blocked("driver-1", "Join(2)")));
+        assert!(control.arrive(4, 0, &|| blocked("driver-1", "Io(3)")));
+    }
+
+    #[test]
+    fn failures_pause_only_with_a_failure_breakpoint_which_stays() {
+        let control = ReplayControl::default();
+        assert!(!control.failure("boom"));
+        control.add_breakpoint(Breakpoint::Failure);
+        assert!(control.failure("boom"));
+        assert_eq!(control.hit().as_deref(), Some("failure: boom"));
+        control.set(ReplayMode::Run);
+        assert!(control.failure("again"));
+        assert_eq!(control.breakpoints(), [Breakpoint::Failure]);
     }
 }
