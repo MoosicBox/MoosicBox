@@ -25,6 +25,7 @@ switchy_fs                  = { workspace = true, optional = true }
 switchy_http                = { workspace = true, optional = true }
 switchy_http_models         = { workspace = true, optional = true }
 switchy_mdns                = { workspace = true, optional = true }
+switchy_network             = { workspace = true, optional = true }
 switchy_random              = { workspace = true, optional = true }
 switchy_schema              = { workspace = true, optional = true, default-features = false }
 switchy_simulation          = { workspace = true, optional = true }
@@ -57,6 +58,7 @@ fail-on-warnings = [
     "switchy_http?/fail-on-warnings",
     "switchy_http_models?/fail-on-warnings",
     "switchy_mdns?/fail-on-warnings",
+    "switchy_network?/fail-on-warnings",
     "switchy_random?/fail-on-warnings",
     "switchy_schema?/fail-on-warnings",
     "switchy_simulation?/fail-on-warnings",
@@ -87,6 +89,7 @@ all = [
     "all-upnp",
     "all-uuid",
     "all-web-server",
+    "network",
     "schema",
     "simulation",
 ]
@@ -343,6 +346,7 @@ telemetry           = ["dep:switchy_telemetry"]
 telemetry-actix     = ["switchy_telemetry?/actix", "telemetry"]
 telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
 
+network    = ["dep:switchy_network"]
 simulation = ["dep:switchy_simulation"]
 
 all-thread = ["thread", "thread-simulator", "thread-std"]

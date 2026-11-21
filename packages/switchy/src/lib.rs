@@ -16,6 +16,7 @@
 //! * `fs` - Filesystem abstraction layer
 //! * `http` - HTTP client abstraction layer
 //! * `tcp` - TCP networking abstraction layer
+//! * `network` - A deterministic simulated network with partitions, latency, loss and crashes
 //! * `simulation` - The per-run simulation context, seed and portable PRNG
 //! * `thread` - Threads and blocking synchronization with a deterministic simulator
 //! * `time` - Time and timing abstractions
@@ -383,6 +384,13 @@ pub use switchy_fs as fs;
 /// Enable the `mdns` feature to use this module.
 #[cfg(feature = "mdns")]
 pub use switchy_mdns as mdns;
+
+/// The simulated network: partitions, link latency/loss/duplication/reordering and node
+/// crashes, deterministic under the run's seed.
+///
+/// Enable the `network` feature to use this module.
+#[cfg(feature = "network")]
+pub use switchy_network as network;
 
 /// Random number generation.
 ///

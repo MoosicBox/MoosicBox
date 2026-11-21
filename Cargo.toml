@@ -141,6 +141,7 @@ default-members = [
     "packages/switchy/http/examples/simple_get",
     "packages/switchy/http/models",
     "packages/switchy/mdns",
+    "packages/switchy/network",
     "packages/switchy/p2p",
     "packages/switchy/pty",
     "packages/switchy/random",
@@ -330,6 +331,7 @@ members = [
     "packages/switchy/http/examples/simple_get",
     "packages/switchy/http/models",
     "packages/switchy/mdns",
+    "packages/switchy/network",
     "packages/switchy/p2p",
     "packages/switchy/pty",
     "packages/switchy/random",
@@ -508,6 +510,7 @@ switchy_fs                  = { version = "0.5.0", default-features = false, pat
 switchy_http                = { version = "0.5.0", default-features = false, path = "packages/switchy/http" }
 switchy_http_models         = { version = "0.5.0", default-features = false, path = "packages/switchy/http/models" }
 switchy_mdns                = { version = "0.5.0", default-features = false, path = "packages/switchy/mdns" }
+switchy_network             = { version = "0.5.0", default-features = false, path = "packages/switchy/network" }
 switchy_p2p                 = { version = "0.5.0", default-features = false, path = "packages/switchy/p2p" }
 switchy_pty                 = { version = "0.5.0", default-features = false, path = "packages/switchy/pty" }
 switchy_random              = { version = "0.5.0", default-features = false, path = "packages/switchy/random" }

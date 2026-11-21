@@ -18649,6 +18649,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_network"
+version = "0.5.0"
+dependencies = [
+ "log 0.4.34",
+ "switchy_simulation",
+ "switchy_time",
+ "test-log",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "switchy_p2p"
 version = "0.5.0"
 dependencies = [
