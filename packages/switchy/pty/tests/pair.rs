@@ -419,3 +419,27 @@ fn output_ends_once_the_console_is_closed() {
     let text = terminal.close();
     assert!(text.contains("done-writing"));
 }
+
+/// Opening terminals from many threads at once succeeds (macOS's kernel can ask for an open
+/// again when they race, which must not surface as an error).
+#[test]
+fn terminals_open_concurrently() {
+    let failures = Arc::new(AtomicUsize::new(0));
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            let failures = Arc::clone(&failures);
+            std::thread::spawn(move || {
+                for _ in 0..40 {
+                    if let Err(error) = PtyPair::open(PtySize::new(80, 24)) {
+                        eprintln!("open failed: {error:?}");
+                        failures.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+    assert_eq!(failures.load(Ordering::Relaxed), 0);
+}

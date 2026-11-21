@@ -728,6 +728,12 @@ fn close_on_exec(fd: RawFd) -> io::Result<()> {
     Ok(())
 }
 
+/// macOS's internal "open the device again" status (`EREDRIVEOPEN` in XNU), which `openpty`
+/// lets through when terminals are opened concurrently. The open is simply retried.
+const REDRIVE_OPEN: i32 = -6;
+/// Attempts at opening a terminal pair while the kernel asks for the open again.
+const OPEN_ATTEMPTS: usize = 32;
+
 fn open_fds(size: PtySize) -> io::Result<(OwnedFd, OwnedFd)> {
     let mut master: libc::c_int = -1;
     let mut slave: libc::c_int = -1;
@@ -737,18 +743,24 @@ fn open_fds(size: PtySize) -> io::Result<(OwnedFd, OwnedFd)> {
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
-    // SAFETY: the out-pointers are valid for writes; null name and termios are allowed.
-    let result = unsafe {
-        libc::openpty(
-            &raw mut master,
-            &raw mut slave,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            &raw mut size,
-        )
-    };
-    if result == -1 {
-        return Err(io::Error::last_os_error());
+    for attempt in 1.. {
+        // SAFETY: the out-pointers are valid for writes; null name and termios are allowed.
+        let result = unsafe {
+            libc::openpty(
+                &raw mut master,
+                &raw mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &raw mut size,
+            )
+        };
+        if result != -1 {
+            break;
+        }
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(REDRIVE_OPEN) || attempt == OPEN_ATTEMPTS {
+            return Err(error);
+        }
     }
     // SAFETY: openpty returned two new descriptors that nothing else owns.
     let (master, slave) = unsafe { (OwnedFd::from_raw_fd(master), OwnedFd::from_raw_fd(slave)) };
