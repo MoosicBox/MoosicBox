@@ -63,7 +63,8 @@ pub enum Personality {
 /// Rates (each from 0 to 1) at which operations on the master side fail.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Faults {
-    /// Reads, writes and waits fail with [`io::ErrorKind::Interrupted`].
+    /// Reads and writes fail with [`io::ErrorKind::Interrupted`], and waits for readiness
+    /// return early, not ready (as an interrupted `poll` does natively).
     pub interrupted: f64,
     /// Reads and writes transfer only part of what they could.
     pub short: f64,
@@ -1613,7 +1614,8 @@ pub(crate) mod backend {
                 .kernel
                 .chance(lock(&self.kernel.state).config.faults.interrupted)
             {
-                return Err(io::Error::from(io::ErrorKind::Interrupted));
+                // An interrupted poll: the native backends report it as not ready.
+                return Ok(false);
             }
             let terminal = self.terminal;
             Ok(self
@@ -1701,7 +1703,8 @@ pub(crate) mod backend {
                 .kernel
                 .chance(lock(&self.kernel.state).config.faults.interrupted)
             {
-                return Err(io::Error::from(io::ErrorKind::Interrupted));
+                // An interrupted poll: the native backends report it as not ready.
+                return Ok(false);
             }
             let terminal = self.terminal;
             Ok(self
