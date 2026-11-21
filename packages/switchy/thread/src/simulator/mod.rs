@@ -52,6 +52,9 @@ pub enum WaitKey {
     /// A simulated device or kernel object (from another simulator, such as `switchy_pty`) to
     /// change; the key is from [`new_key`].
     Io(u64),
+    /// An async executor (such as `switchy_async`'s simulator) with nothing to run, to be woken
+    /// by a task's waker; the key is from [`new_key`].
+    Executor(u64),
 }
 
 /// The operation at which a thread last reached a switch point.
@@ -76,6 +79,8 @@ pub enum Op {
     Idle,
     /// An operation on a simulated device or kernel object.
     Io,
+    /// An async executor waiting for a task to wake.
+    Executor,
 }
 
 impl Op {
@@ -493,6 +498,21 @@ impl Scheduler {
                 memory: memory::Memory::default(),
             }),
         }
+    }
+
+    /// Whether any simulated thread but the caller has not finished.
+    ///
+    /// # Panics
+    ///
+    /// * If the calling OS thread is not a simulated thread of this run
+    #[must_use]
+    pub fn others_alive(&self) -> bool {
+        let me = self.me();
+        lock(&self.inner)
+            .threads
+            .iter()
+            .enumerate()
+            .any(|(index, thread)| index != me && thread.state != ThreadState::Finished)
     }
 
     /// The calling thread's index in this run.
@@ -1026,6 +1046,18 @@ pub struct ShutdownReport {
 #[must_use]
 pub fn scheduler() -> Arc<Scheduler> {
     Scheduler::current()
+}
+
+/// The current run's scheduler, if the calling OS thread is one of its simulated threads.
+///
+/// That includes the run's main thread once it has used the scheduler. Unlike [`scheduler`],
+/// it never makes the caller the run's main thread, so code that may run on any thread (a
+/// waker, for example) can use it.
+#[must_use]
+pub fn try_scheduler() -> Option<Arc<Scheduler>> {
+    let (context_id, _) = IDENTITY.get()?;
+    let context = switchy_simulation::current();
+    (context.id() == context_id).then(Scheduler::current)
 }
 
 /// Observe every decision of the current run; see [`Scheduler::set_decision_hook`].

@@ -11,6 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let results = run_simulation(BankBootstrap {
         nondeterministic: std::env::var("BANK_NONDETERMINISTIC").is_ok(),
         racy: std::env::var("BANK_RACY").is_ok(),
+        blocking: std::env::var("BANK_BLOCKING").is_ok(),
     })?;
     for result in results.iter().filter(|r| !r.is_success()) {
         println!("{result}");

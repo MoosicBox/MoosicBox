@@ -18468,6 +18468,7 @@ dependencies = [
  "scoped-tls",
  "switchy_async_macros",
  "switchy_random",
+ "switchy_thread",
  "switchy_time",
  "test-log",
  "thiserror 2.0.21",

@@ -347,9 +347,14 @@ simulation = ["dep:switchy_simulation"]
 
 all-thread = ["thread", "thread-simulator", "thread-std"]
 
-thread           = ["dep:switchy_thread"]
-thread-simulator = ["switchy_thread?/simulator", "thread"]
-thread-std       = ["switchy_thread?/std", "thread"]
+thread = ["dep:switchy_thread"]
+# Simulated threads; with the async simulator, `spawn_blocking` runs on them too.
+thread-simulator = [
+    "switchy_async?/thread-simulator",
+    "switchy_thread?/simulator",
+    "thread",
+]
+thread-std = ["switchy_thread?/std", "thread"]
 
 all-time = ["time", "time-simulator", "time-std"]
 

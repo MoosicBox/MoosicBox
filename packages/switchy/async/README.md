@@ -238,6 +238,16 @@ match handle.await {
 - **`tokio`**: Enable Tokio async runtime
 - **`simulator`**: Enable simulation runtime for testing
 
+### Simulated Threads
+
+- **`thread-simulator`**: The simulator together with `switchy_thread`'s
+  simulated threads. `spawn_blocking` work runs on a simulated thread (started
+  when the executor reaches it, so aborting it before then still drops it
+  unrun), and an executor with nothing to run blocks on the run's scheduler so
+  those threads run, on the run's clock, until a task's waker wakes it. Blocking
+  in `spawn_blocking` work then blocks only its own thread, and every
+  interleaving of tasks and threads replays by seed.
+
 ### Runtime Features
 
 - **`rt-multi-thread`**: Multi-threaded runtime support

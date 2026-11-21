@@ -1047,6 +1047,15 @@ impl ManagedSim {
             actor.tick();
         }
 
+        // Simulated threads (`spawn_blocking` work among them) run too, until none can make
+        // progress at this step's time.
+        #[cfg(feature = "thread")]
+        if let Some(scheduler) = switchy::thread::simulator::try_scheduler()
+            && scheduler.others_alive()
+        {
+            scheduler.run_until_idle();
+        }
+
         let mut remaining_hosts = vec![];
 
         for mut host in self.hosts.drain(..) {

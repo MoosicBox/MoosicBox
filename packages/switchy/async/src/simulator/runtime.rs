@@ -296,7 +296,7 @@ impl GenericRuntime for Runtime {
                     }
                     Poll::Pending => {
                         if !self.process_next_task() {
-                            std::thread::yield_now();
+                            self.idle();
                         }
                     }
                 }
@@ -309,7 +309,7 @@ impl GenericRuntime for Runtime {
         while self.tasks() > 0 {
             log::debug!("wait: processing task={}", self.tasks());
             if !self.process_next_task() {
-                std::thread::yield_now();
+                self.idle();
             }
         }
         self.active.store(false, Ordering::SeqCst);
@@ -379,6 +379,41 @@ impl Runtime {
         log::debug!("next task index={index} task_count={task_count}");
 
         Some(queue.remove(index))
+    }
+
+    /// Wait for something to do, having nothing to run.
+    ///
+    /// Within a simulation run with other simulated threads alive (`thread-simulator`), this
+    /// blocks on the run's scheduler until a task's waker wakes this executor: the threads run
+    /// meanwhile, and if all of them wait, the run's clock moves to their earliest deadline.
+    /// Otherwise it yields the OS thread.
+    // `self` is used with `thread-simulator` only.
+    #[cfg_attr(not(feature = "thread-simulator"), allow(clippy::unused_self))]
+    fn idle(&self) {
+        #[cfg(feature = "thread-simulator")]
+        if let Some(scheduler) = switchy_thread::simulator::try_scheduler()
+            && scheduler.others_alive()
+        {
+            let _ = scheduler.block(
+                switchy_thread::simulator::Op::Executor,
+                switchy_thread::simulator::WaitKey::Executor(self.id),
+                None,
+            );
+            return;
+        }
+        std::thread::yield_now();
+    }
+
+    /// Wake this executor if it waits for a task (see [`Self::idle`]).
+    #[cfg_attr(
+        not(feature = "thread-simulator"),
+        allow(clippy::unused_self, clippy::missing_const_for_fn)
+    )]
+    fn notify(&self) {
+        #[cfg(feature = "thread-simulator")]
+        if let Some(scheduler) = switchy_thread::simulator::try_scheduler() {
+            scheduler.wake_all(switchy_thread::simulator::WaitKey::Executor(self.id));
+        }
     }
 
     pub(crate) fn process_next_task(&self) -> bool {
@@ -607,9 +642,17 @@ impl Spawner {
         let (tx, rx) = futures::channel::oneshot::channel();
 
         let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
+        #[cfg(feature = "thread-simulator")]
+        let owner = runtime.clone();
         let wrapped = async move {
             let _ = futures::future::Abortable::new(
                 async move {
+                    // With simulated threads, the work starts on one when the executor reaches
+                    // this task (so aborting before then still drops it unrun), and blocking in
+                    // it blocks only that thread.
+                    #[cfg(feature = "thread-simulator")]
+                    start_blocking_thread(&owner, func, tx);
+                    #[cfg(not(feature = "thread-simulator"))]
                     let _ = tx.send(func());
                 },
                 registration,
@@ -822,7 +865,7 @@ impl Task {
             // Blocking task: poll in a loop until ready, interleaving other tasks.
             while self.poll().is_pending() {
                 if !self.runtime.process_next_task() {
-                    std::thread::yield_now();
+                    self.runtime.idle();
                 }
             }
         } else {
@@ -863,7 +906,31 @@ impl Wake for Task {
         } else {
             self.runtime.spawner.inner_spawn(&self);
         }
+        self.runtime.notify();
     }
+}
+
+/// Run `func` on a simulated thread of the current run, sending its result on `result`. The
+/// thread counts as one of `runtime`'s tasks until it returns, and wakes the executor then.
+#[cfg(feature = "thread-simulator")]
+fn start_blocking_thread<F, R>(
+    runtime: &Runtime,
+    func: F,
+    result: futures::channel::oneshot::Sender<R>,
+) where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    runtime.tasks.fetch_add(1, Ordering::SeqCst);
+    let done = runtime.clone();
+    switchy_thread::thread::Builder::new()
+        .name("spawn-blocking".to_owned())
+        .spawn(move || {
+            let _ = result.send(func());
+            done.tasks.fetch_sub(1, Ordering::SeqCst);
+            done.notify();
+        })
+        .expect("a simulated thread starts");
 }
 
 /// Builds a new simulator runtime from the given builder.
@@ -1655,6 +1722,9 @@ mod test {
         runtime.wait().unwrap();
     }
 
+    // It relies on blocking work finishing within one tick, which work on a simulated thread
+    // does not (tests/threads.rs has the threaded counterpart).
+    #[cfg(not(feature = "thread-simulator"))]
     #[test_log::test]
     fn abort_started_blocking_task_does_not_discard_result() {
         let runtime = build_runtime(&Builder::new()).unwrap();

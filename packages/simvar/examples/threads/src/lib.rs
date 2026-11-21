@@ -30,6 +30,8 @@ pub struct BankBootstrap {
     pub nondeterministic: bool,
     /// Lose updates under some interleavings.
     pub racy: bool,
+    /// Run the tellers as async `spawn_blocking` work instead of threads.
+    pub blocking: bool,
 }
 
 impl SimBootstrap for BankBootstrap {
@@ -42,9 +44,15 @@ impl SimBootstrap for BankBootstrap {
         let Self {
             nondeterministic,
             racy,
+            ..
         } = *self;
+        let blocking = self.blocking;
         sim.client("bank", async move {
-            let balances = run_bank(nondeterministic, racy);
+            let balances = if blocking {
+                run_bank_async(nondeterministic, racy).await
+            } else {
+                run_bank(nondeterministic, racy)
+            };
             let total: u64 = balances.iter().sum();
             assert_eq!(
                 total,
@@ -56,6 +64,84 @@ impl SimBootstrap for BankBootstrap {
     }
 }
 
+/// Accounts shared by the tellers.
+type Accounts = Arc<Vec<Mutex<u64>>>;
+/// Transfers as the tellers report them: from, to and amount.
+type Ledger = mpsc::SyncSender<(usize, usize, u64)>;
+
+fn new_accounts() -> Accounts {
+    Arc::new(
+        (0..ACCOUNTS)
+            .map(|_| Mutex::new(STARTING_BALANCE))
+            .collect(),
+    )
+}
+
+/// One teller's five rounds of transfers.
+fn teller(
+    teller: usize,
+    accounts: &[Mutex<u64>],
+    ledger: &Ledger,
+    nondeterministic: bool,
+    racy: bool,
+) {
+    for round in 0..5 {
+        let from = if nondeterministic {
+            // Deliberately non-deterministic: std's hasher keys are random per process and
+            // per call, so they pick a different account.
+            use std::hash::BuildHasher as _;
+            let random = std::collections::hash_map::RandomState::new().hash_one(round);
+            usize::try_from(random % ACCOUNTS as u64).unwrap()
+        } else {
+            (teller + round) % ACCOUNTS
+        };
+        let to = (from + 1 + teller) % ACCOUNTS;
+        if from == to {
+            continue;
+        }
+        // Lock in a fixed order so tellers cannot deadlock.
+        let (first, second) = (from.min(to), from.max(to));
+        let mut a = accounts[first].lock().unwrap();
+        let mut b = accounts[second].lock().unwrap();
+        let (source, target) = if from == first {
+            (&mut *a, &mut *b)
+        } else {
+            (&mut *b, &mut *a)
+        };
+        let amount = (*source).min(10);
+        if racy {
+            let (source, target) = (*source, *target);
+            drop(a);
+            drop(b);
+            thread::yield_now();
+            *accounts[from].lock().unwrap() = source - amount;
+            *accounts[to].lock().unwrap() = target + amount;
+        } else {
+            *source -= amount;
+            *target += amount;
+            drop(a);
+            drop(b);
+        }
+        ledger.send((from, to, amount)).unwrap();
+    }
+}
+
+/// Record every transfer in the run's trace, until the tellers are done.
+fn audit(ledger: &mpsc::Receiver<(usize, usize, u64)>) {
+    for (from, to, amount) in ledger {
+        simvar::record(((from as u64) << 32) | ((to as u64) << 16) | amount);
+    }
+}
+
+/// The final balances, recorded in the run's trace.
+fn balances(accounts: &[Mutex<u64>]) -> Vec<u64> {
+    let balances: Vec<u64> = accounts.iter().map(|a| *a.lock().unwrap()).collect();
+    for &balance in &balances {
+        simvar::record(balance);
+    }
+    balances
+}
+
 /// Three tellers transfer between accounts while an auditor reads the ledger (racily, with
 /// `racy`; see [`BankBootstrap`]). Returns the final balances; every transfer is recorded in
 /// the run's trace.
@@ -65,83 +151,55 @@ impl SimBootstrap for BankBootstrap {
 /// * If a teller or the auditor panics
 #[must_use]
 pub fn run_bank(nondeterministic: bool, racy: bool) -> Vec<u64> {
-    let accounts: Arc<Vec<Mutex<u64>>> = Arc::new(
-        (0..ACCOUNTS)
-            .map(|_| Mutex::new(STARTING_BALANCE))
-            .collect(),
-    );
-    let (ledger_tx, ledger_rx) = mpsc::sync_channel::<(usize, usize, u64)>(4);
-
+    let accounts = new_accounts();
+    let (ledger_tx, ledger_rx) = mpsc::sync_channel(4);
     let tellers: Vec<_> = (0..3)
-        .map(|teller| {
+        .map(|index| {
             let accounts = Arc::clone(&accounts);
             let ledger = ledger_tx.clone();
             thread::Builder::new()
-                .name(format!("teller-{teller}"))
-                .spawn(move || {
-                    for round in 0..5 {
-                        let from = if nondeterministic {
-                            // Deliberately non-deterministic: std's hasher keys are random
-                            // per process and per call, so they pick a different account.
-                            use std::hash::BuildHasher as _;
-                            let random =
-                                std::collections::hash_map::RandomState::new().hash_one(round);
-                            usize::try_from(random % ACCOUNTS as u64).unwrap()
-                        } else {
-                            (teller + round) % ACCOUNTS
-                        };
-                        let to = (from + 1 + teller) % ACCOUNTS;
-                        if from == to {
-                            continue;
-                        }
-                        // Lock in a fixed order so tellers cannot deadlock.
-                        let (first, second) = (from.min(to), from.max(to));
-                        let mut a = accounts[first].lock().unwrap();
-                        let mut b = accounts[second].lock().unwrap();
-                        let (source, target) = if from == first {
-                            (&mut *a, &mut *b)
-                        } else {
-                            (&mut *b, &mut *a)
-                        };
-                        let amount = (*source).min(10);
-                        if racy {
-                            let (source, target) = (*source, *target);
-                            drop(a);
-                            drop(b);
-                            thread::yield_now();
-                            *accounts[from].lock().unwrap() = source - amount;
-                            *accounts[to].lock().unwrap() = target + amount;
-                        } else {
-                            *source -= amount;
-                            *target += amount;
-                            drop(a);
-                            drop(b);
-                        }
-                        ledger.send((from, to, amount)).unwrap();
-                    }
-                })
+                .name(format!("teller-{index}"))
+                .spawn(move || teller(index, &accounts, &ledger, nondeterministic, racy))
                 .unwrap()
         })
         .collect();
     drop(ledger_tx);
-
     let auditor = thread::Builder::new()
         .name("auditor".into())
-        .spawn(move || {
-            for (from, to, amount) in ledger_rx {
-                simvar::record(((from as u64) << 32) | ((to as u64) << 16) | amount);
-            }
-        })
+        .spawn(move || audit(&ledger_rx))
         .unwrap();
-
     for teller in tellers {
         teller.join().unwrap();
     }
     auditor.join().unwrap();
+    balances(&accounts)
+}
 
-    let balances: Vec<u64> = accounts.iter().map(|a| *a.lock().unwrap()).collect();
-    for &balance in &balances {
-        simvar::record(balance);
+/// [`run_bank`] from async code: the tellers and the auditor are `spawn_blocking` work,
+/// awaited by the simulation's client across steps while its timers run.
+///
+/// # Panics
+///
+/// * If a teller or the auditor panics
+pub async fn run_bank_async(nondeterministic: bool, racy: bool) -> Vec<u64> {
+    use simvar::switchy::unsync::{task::spawn_blocking, time::sleep};
+
+    let accounts = new_accounts();
+    let (ledger_tx, ledger_rx) = mpsc::sync_channel(4);
+    let tellers: Vec<_> = (0..3)
+        .map(|index| {
+            let accounts = Arc::clone(&accounts);
+            let ledger = ledger_tx.clone();
+            spawn_blocking(move || teller(index, &accounts, &ledger, nondeterministic, racy))
+        })
+        .collect();
+    drop(ledger_tx);
+    let auditor = spawn_blocking(move || audit(&ledger_rx));
+    // The work runs on simulated threads while the client waits on the simulation's clock.
+    sleep(Duration::from_millis(3)).await;
+    for teller in tellers {
+        teller.await.unwrap();
     }
-    balances
+    auditor.await.unwrap();
+    balances(&accounts)
 }

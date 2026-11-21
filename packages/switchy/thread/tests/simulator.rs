@@ -541,3 +541,28 @@ fn shrinking_leaves_only_switches_the_failure_needs() {
         );
     }
 }
+
+#[test]
+fn try_scheduler_finds_only_the_run_s_own_threads() {
+    let ((found, others), _) = outcome(simulator::run(3, || {
+        // `run` makes this thread the run's main thread.
+        assert!(simulator::try_scheduler().is_some());
+        let scheduler = simulator::scheduler();
+        assert!(!scheduler.others_alive());
+        let (tx, rx) = mpsc::channel::<()>();
+        let worker = thread::spawn(move || {
+            let inside = simulator::try_scheduler().is_some();
+            rx.recv().unwrap();
+            inside
+        });
+        let alive = scheduler.others_alive();
+        let outside = std::thread::spawn(|| simulator::try_scheduler().is_none())
+            .join()
+            .unwrap();
+        tx.send(()).unwrap();
+        let inside = worker.join().unwrap();
+        (inside && outside, alive && !scheduler.others_alive())
+    }));
+    assert!(found);
+    assert!(others);
+}
