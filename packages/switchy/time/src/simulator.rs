@@ -266,6 +266,21 @@ pub fn reset_step_multiplier() {
     });
 }
 
+/// Sets the step multiplier: how many milliseconds of simulated time pass per step (at
+/// least one). Like [`reset_step_multiplier`], it invalidates captured [`crate::Instant`]
+/// values.
+///
+/// # Panics
+///
+/// * If the clock generation counter overflows.
+pub fn set_step_multiplier(millis: u64) {
+    crate::trace!("set_step_multiplier to {millis}");
+    with_clock(|clock| {
+        advance_generation(clock);
+        clock.step_multiplier = Some(millis.max(1));
+    });
+}
+
 /// Returns the current step multiplier in milliseconds per step.
 ///
 /// The step multiplier determines how much simulated time advances with each step.
@@ -587,6 +602,20 @@ mod tests {
             assert_eq!(super::advance_to(start + Duration::from_millis(25)), 3);
             assert_eq!(super::instant_now(), start + Duration::from_millis(30));
             assert_eq!(super::advance_to(start + Duration::from_millis(30)), 3);
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn set_step_multiplier_sets_the_time_per_step() {
+        std::thread::spawn(|| {
+            super::set_step_multiplier(0);
+            assert_eq!(super::step_multiplier(), 1);
+            super::set_step_multiplier(7);
+            let start = super::instant_now();
+            let _ = super::next_step();
+            assert_eq!(super::instant_now() - start, Duration::from_millis(7));
         })
         .join()
         .unwrap();
