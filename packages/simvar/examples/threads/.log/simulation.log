@@ -1,0 +1,876 @@
+[2026-11-21T18:39:40.770Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=17876040531463918309
+run=2/10
+thread_id=2
+epoch_offset=24329516611311
+step_multiplier=67016662
+tick_duration=67016662
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=360
+max_message_latency=398
+duration=1000
+==================================[2026-11-21T18:39:40.770Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=17876040531463918309
+run=2/10
+thread_id=2
+epoch_offset=24329516611311
+step_multiplier=67016662
+tick_duration=67016662
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=360
+max_message_latency=398
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.772Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=17876040531463918309
+run=2/10
+thread_id=2
+epoch_offset=24329516611311
+step_multiplier=67016662
+tick_duration=67016662
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=360
+max_message_latency=398
+duration=1000
+steps=0
+real_time_elapsed=18 hours, 36 minutes, 56s, 662ms
+simulated_time_elapsed=18 hours, 36 minutes, 56s, 662ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=17876040531463918309 SIMULATOR_EPOCH_OFFSET=24329516611311 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/Moosi[2026-11-21T18:39:40.772Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH[2026-11-21T18:39:40.772Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=7
+run=1/10
+thread_id=1
+epoch_offset=96906209898260
+step_multiplier=28
+tick_duration=28
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=107
+max_message_latency=1557
+duration=1000
+steps=0
+real_time_elapsed=28ms
+simulated_time_elapsed=28ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=7 SIMULATOR_EPOCH_OFFSET=96906209898260 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.772Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=17876040531463918309
+run=2/10
+thread_id=2
+epoch_offset=24329516611311
+step_multiplier=67016662
+tick_duration=67016662
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=360
+max_message_latency=398
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.772Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=7
+run=1/10
+thread_id=1
+epoch_offset=96906209898260
+step_multiplier=28
+tick_duration=28
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=107
+max_message_latency=1557
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.772Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=7
+run=1/10
+thread_id=1
+epoch_offset=96906209898260
+step_multiplier=28
+tick_duration=28
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=107
+max_message_latency=1557
+duration=1000
+steps=0
+real_time_elapsed=28ms
+simulated_time_elapsed=28ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=7 SIMULATOR_EPOCH_OFFSET=96906209898260 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.773Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=5791438544937527793
+run=3/10
+thread_id=1
+epoch_offset=97481840268410
+step_multiplier=3682045
+tick_duration=3682045
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=616
+max_message_latency=1125
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.773Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=17876040531463918309
+run=2/10
+thread_id=2
+epoch_offset=24329516611311
+step_multiplier=67016662
+tick_duration=67016662
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=360
+max_message_latency=398
+duration=1000
+steps=0
+real_time_elapsed=18 hours, 36 minutes, 56s, 662ms
+simulated_time_elapsed=18 hours, 36 minutes, 56s, 662ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=17876040531463918309 SIMULATOR_EPOCH_OFFSET=24329516611311 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.773Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=8186033631819050777
+run=4/10
+thread_id=2
+epoch_offset=56207245845480
+step_multiplier=3586144
+tick_duration=3586144
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=3
+max_message_latency=343
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.773Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=5791438544937527793
+run=3/10
+thread_id=1
+epoch_offset=97481840268410
+step_multiplier=3682045
+tick_duration=3682045
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=616
+max_message_latency=1125
+duration=1000
+steps=0
+real_time_elapsed=1 hour, 1 minute, 22s, 45ms
+simulated_time_elapsed=1 hour, 1 minute, 22s, 45ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=5791438544937527793 SIMULATOR_EPOCH_OFFSET=97481840268410 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.773Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=5791438544937527793
+run=3/10
+thread_id=1
+epoch_offset=97481840268410
+step_multiplier=3682045
+tick_duration=3682045
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=616
+max_message_latency=1125
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.773Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=8186033631819050777
+run=4/10
+thread_id=2
+epoch_offset=56207245845480
+step_multiplier=3586144
+tick_duration=3586144
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=3
+max_message_latency=343
+duration=1000
+steps=0
+real_time_elapsed=59 minutes, 46s, 144ms
+simulated_time_elapsed=59 minutes, 46s, 144ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=8186033631819050777 SIMULATOR_EPOCH_OFFSET=56207245845480 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.773Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=8186033631819050777
+run=4/10
+thread_id=2
+epoch_offset=56207245845480
+step_multiplier=3586144
+tick_duration=3586144
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=3
+max_message_latency=343
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.774Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=5791438544937527793
+run=3/10
+thread_id=1
+epoch_offset=97481840268410
+step_multiplier=3682045
+tick_duration=3682045
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=616
+max_message_latency=1125
+duration=1000
+steps=0
+real_time_elapsed=1 hour, 1 minute, 22s, 45ms
+simulated_time_elapsed=1 hour, 1 minute, 22s, 45ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=5791438544937527793 SIMULATOR_EPOCH_OFFSET=97481840268410 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.774Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=8186033631819050777
+run=4/10
+thread_id=2
+epoch_offset=56207245845480
+step_multiplier=3586144
+tick_duration=3586144
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=3
+max_message_latency=343
+duration=1000
+steps=0
+real_time_elapsed=59 minutes, 46s, 144ms
+simulated_time_elapsed=59 minutes, 46s, 144ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=8186033631819050777 SIMULATOR_EPOCH_OFFSET=56207245845480 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.774Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=4774370799569821733
+run=5/10
+thread_id=1
+epoch_offset=12047649584295
+step_multiplier=846837
+tick_duration=846837
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=12
+max_message_latency=825
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.774Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=7586724682685355763
+run=6/10
+thread_id=2
+epoch_offset=24398122831296
+step_multiplier=801961
+tick_duration=801961
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=357
+max_message_latency=1119
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.774Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=4774370799569821733
+run=5/10
+thread_id=1
+epoch_offset=12047649584295
+step_multiplier=846837
+tick_duration=846837
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=12
+max_message_latency=825
+duration=1000
+steps=0
+real_time_elapsed=14 minutes, 6s, 837ms
+simulated_time_elapsed=14 minutes, 6s, 837ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=4774370799569821733 SIMULATOR_EPOCH_OFFSET=12047649584295 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.774Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=4774370799569821733
+run=5/10
+thread_id=1
+epoch_offset=12047649584295
+step_multiplier=846837
+tick_duration=846837
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=12
+max_message_latency=825
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.775Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=7586724682685355763
+run=6/10
+thread_id=2
+epoch_offset=24398122831296
+step_multiplier=801961
+tick_duration=801961
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=357
+max_message_latency=1119
+duration=1000
+steps=0
+real_time_elapsed=13 minutes, 21s, 961ms
+simulated_time_elapsed=13 minutes, 21s, 961ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=7586724682685355763 SIMULATOR_EPOCH_OFFSET=24398122831296 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.775Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=7586724682685355763
+run=6/10
+thread_id=2
+epoch_offset=24398122831296
+step_multiplier=801961
+tick_duration=801961
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=357
+max_message_latency=1119
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.775Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=4774370799569821733
+run=5/10
+thread_id=1
+epoch_offset=12047649584295
+step_multiplier=846837
+tick_duration=846837
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=12
+max_message_latency=825
+duration=1000
+steps=0
+real_time_elapsed=14 minutes, 6s, 837ms
+simulated_time_elapsed=14 minutes, 6s, 837ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=4774370799569821733 SIMULATOR_EPOCH_OFFSET=12047649584295 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.775Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=14134275758010685511
+run=7/10
+thread_id=1
+epoch_offset=70262336890708
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=249
+max_message_latency=799
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.776Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=7586724682685355763
+run=6/10
+thread_id=2
+epoch_offset=24398122831296
+step_multiplier=801961
+tick_duration=801961
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=357
+max_message_latency=1119
+duration=1000
+steps=0
+real_time_elapsed=13 minutes, 21s, 961ms
+simulated_time_elapsed=13 minutes, 21s, 961ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=7586724682685355763 SIMULATOR_EPOCH_OFFSET=24398122831296 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.776Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=9641091272186540110
+run=8/10
+thread_id=2
+epoch_offset=78487896204885
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=158
+max_message_latency=1204
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.776Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=14134275758010685511
+run=7/10
+thread_id=1
+epoch_offset=70262336890708
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=249
+max_message_latency=799
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=14134275758010685511 SIMULATOR_EPOCH_OFFSET=70262336890708 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.776Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=14134275758010685511
+run=7/10
+thread_id=1
+epoch_offset=70262336890708
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=249
+max_message_latency=799
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.776Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=9641091272186540110
+run=8/10
+thread_id=2
+epoch_offset=78487896204885
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=158
+max_message_latency=1204
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=9641091272186540110 SIMULATOR_EPOCH_OFFSET=78487896204885 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.776Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=9641091272186540110
+run=8/10
+thread_id=2
+epoch_offset=78487896204885
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=158
+max_message_latency=1204
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.777Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=14134275758010685511
+run=7/10
+thread_id=1
+epoch_offset=70262336890708
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=249
+max_message_latency=799
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=14134275758010685511 SIMULATOR_EPOCH_OFFSET=70262336890708 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.777Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=2047657292819509823
+run=9/10
+thread_id=1
+epoch_offset=36420339441545
+step_multiplier=183658596
+tick_duration=183658596
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=52
+max_message_latency=148
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.777Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=9641091272186540110
+run=8/10
+thread_id=2
+epoch_offset=78487896204885
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=158
+max_message_latency=1204
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=9641091272186540110 SIMULATOR_EPOCH_OFFSET=78487896204885 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.777Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=3318943170145685324
+run=10/10
+thread_id=2
+epoch_offset=24588008829567
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=335
+max_message_latency=1162
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.777Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=2047657292819509823
+run=9/10
+thread_id=1
+epoch_offset=36420339441545
+step_multiplier=183658596
+tick_duration=183658596
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=52
+max_message_latency=148
+duration=1000
+steps=0
+real_time_elapsed=2 days, 3 hours, 0 minutes, 58s, 596ms
+simulated_time_elapsed=2 days, 3 hours, 0 minutes, 58s, 596ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=2047657292819509823 SIMULATOR_EPOCH_OFFSET=36420339441545 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.777Z] [Thread 2] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=2047657292819509823
+run=9/10
+thread_id=1
+epoch_offset=36420339441545
+step_multiplier=183658596
+tick_duration=183658596
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=52
+max_message_latency=148
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.777Z] [Thread 2] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=2047657292819509823
+run=9/10
+thread_id=1
+epoch_offset=36420339441545
+step_multiplier=183658596
+tick_duration=183658596
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=52
+max_message_latency=148
+duration=1000
+steps=0
+real_time_elapsed=2 days, 3 hours, 0 minutes, 58s, 596ms
+simulated_time_elapsed=2 days, 3 hours, 0 minutes, 58s, 596ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=2047657292819509823 SIMULATOR_EPOCH_OFFSET=36420339441545 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.778Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=3318943170145685324
+run=10/10
+thread_id=2
+epoch_offset=24588008829567
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=335
+max_message_latency=1162
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=3318943170145685324 SIMULATOR_EPOCH_OFFSET=24588008829567 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================
+[2026-11-21T18:39:40.778Z] [Thread 3] [simvar_harness::logging] [INFO] 
+=========================== START ============================
+Server simulator starting
+seed=3318943170145685324
+run=10/10
+thread_id=2
+epoch_offset=24588008829567
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=335
+max_message_latency=1162
+duration=1000
+==============================================================
+
+[2026-11-21T18:39:40.778Z] [Thread 3] [simvar_harness::logging] [INFO] =========================== FINISH ===========================
+Server simulator finished
+
+seed=3318943170145685324
+run=10/10
+thread_id=2
+epoch_offset=24588008829567
+step_multiplier=1
+tick_duration=1
+fail_rate=0
+repair_rate=1
+tcp_capacity=64
+udp_capacity=64
+enable_random_order=true
+min_message_latency=335
+max_message_latency=1162
+duration=1000
+steps=0
+real_time_elapsed=1ms
+simulated_time_elapsed=1ms (1.00x)
+
+successful=true
+
+To run again with this seed: `SIMULATOR_SEED=3318943170145685324 SIMULATOR_EPOCH_OFFSET=24588008829567 RUST_LOG=info SIMULATOR_VERIFY_DETERMINISM=1 /Users/bsteffaniak/GitHub/MoosicBox/target/debug/simvar_threads_example`
+==============================================================

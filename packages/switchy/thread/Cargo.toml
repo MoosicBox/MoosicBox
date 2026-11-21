@@ -1,0 +1,32 @@
+[package]
+authors     = { workspace = true }
+categories  = ["concurrency", "development-tools::testing", "simulation"]
+description = "Threads and blocking synchronization with a deterministic simulator backend"
+edition     = { workspace = true }
+keywords    = ["deterministic", "scheduler", "simulation", "testing", "thread"]
+license     = { workspace = true }
+name        = "switchy_thread"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+switchy_simulation = { workspace = true, optional = true }
+switchy_time       = { workspace = true, optional = true, features = ["simulator"] }
+
+[dev-dependencies]
+switchy_time = { workspace = true, features = ["simulator"] }
+
+[features]
+default = ["simulator", "std"]
+
+fail-on-warnings = [
+    "switchy_simulation?/fail-on-warnings",
+    "switchy_time?/fail-on-warnings",
+]
+
+simulator = ["dep:switchy_simulation", "dep:switchy_time"]
+std       = []

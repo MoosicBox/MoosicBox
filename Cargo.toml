@@ -117,6 +117,7 @@ default-members = [
     "packages/simvar",
     "packages/simvar/examples/api_testing",
     "packages/simvar/examples/basic_web_server",
+    "packages/simvar/examples/threads",
     "packages/simvar/harness",
     "packages/simvar/utils",
     "packages/stream_utils",
@@ -151,6 +152,7 @@ default-members = [
     "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
+    "packages/switchy/thread",
     "packages/switchy/time",
     "packages/switchy/upnp",
     "packages/switchy/uuid",
@@ -299,6 +301,7 @@ members = [
     "packages/simvar",
     "packages/simvar/examples/api_testing",
     "packages/simvar/examples/basic_web_server",
+    "packages/simvar/examples/threads",
     "packages/simvar/harness",
     "packages/simvar/utils",
     "packages/stream_utils",
@@ -334,6 +337,7 @@ members = [
     "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
+    "packages/switchy/thread",
     "packages/switchy/time",
     "packages/switchy/upnp",
     "packages/switchy/uuid",
@@ -504,6 +508,7 @@ switchy_schema_test_utils   = { version = "0.5.0", default-features = false, pat
 switchy_simulation          = { version = "0.5.0", default-features = false, path = "packages/switchy/simulation" }
 switchy_tcp                 = { version = "0.5.0", default-features = false, path = "packages/switchy/tcp" }
 switchy_telemetry           = { version = "0.5.0", default-features = false, path = "packages/switchy/telemetry" }
+switchy_thread              = { version = "0.5.0", default-features = false, path = "packages/switchy/thread" }
 switchy_time                = { version = "0.5.0", default-features = false, path = "packages/switchy/time" }
 switchy_upnp                = { version = "0.5.0", default-features = false, path = "packages/switchy/upnp" }
 switchy_uuid                = { version = "0.5.0", default-features = false, path = "packages/switchy/uuid" }

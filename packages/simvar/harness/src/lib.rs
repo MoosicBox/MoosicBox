@@ -55,7 +55,7 @@
 //! * `SIMULATOR_EPOCH_OFFSET` - Fixed epoch offset override (when `time` feature is enabled)
 //! * `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX` - Bounded random epoch offset (inclusive)
 //! * `SIMULATOR_EPOCH_RANGE_PROFILE` - Epoch profile (`low`, `wide`, `full`)
-//! * `NO_TUI` - Disable terminal UI when set
+//! * `NO_TUI` - Disable terminal UI when set (at build or run time); it is also off when stdout is not a terminal
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
@@ -127,7 +127,15 @@ pub mod plan;
 #[cfg(feature = "tui")]
 mod tui;
 
-const USE_TUI: bool = cfg!(feature = "tui") && std::option_env!("NO_TUI").is_none();
+/// Whether the TUI is shown: the `tui` feature is enabled, `NO_TUI` is set neither at build
+/// time nor at run time, and standard output is a terminal.
+static USE_TUI: LazyLock<bool> = LazyLock::new(|| {
+    use std::io::IsTerminal as _;
+    cfg!(feature = "tui")
+        && std::option_env!("NO_TUI").is_none()
+        && std::env::var_os("NO_TUI").is_none()
+        && std::io::stdout().is_terminal()
+});
 
 thread_local! {
     static PANIC: RefCell<Option<String>> = const { RefCell::new(None) };
@@ -161,7 +169,7 @@ pub enum Error {
 fn ctrl_c() {
     log::debug!("ctrl_c called");
     #[cfg(feature = "tui")]
-    if USE_TUI {
+    if *USE_TUI {
         DISPLAY_STATE.exit();
     }
     end_sim();
@@ -259,7 +267,7 @@ pub fn run_simulation<B: SimBootstrap>(
     logging::init_pretty_env_logger()?;
 
     #[cfg(feature = "tui")]
-    let tui_handle = if USE_TUI {
+    let tui_handle = if *USE_TUI {
         Some(tui::spawn(DISPLAY_STATE.clone()))
     } else {
         None
@@ -299,7 +307,7 @@ pub fn run_simulation<B: SimBootstrap>(
     }
 
     #[cfg(feature = "tui")]
-    if USE_TUI && let Ok(results) = &resp {
+    if *USE_TUI && let Ok(results) = &resp {
         eprintln!(
             "{}",
             results
@@ -466,11 +474,55 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
+    /// Run once, and with determinism verification on, run the same seed again and fail if
+    /// the two runs' traces differ.
     fn run(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
-        if run_number > 1 {
+        let (result, trace, seed) = self.run_once(run_number, thread_id, None);
+        if !verify_determinism() || !result.is_success() {
+            return result;
+        }
+        let (again, replayed, _) = self.run_once(run_number, thread_id, Some(seed));
+        if !again.is_success() {
+            return again;
+        }
+        if replayed == trace {
+            return result;
+        }
+        let SimResult::Success { props, run } = result else {
+            unreachable!("checked above")
+        };
+        end_sim();
+        let result = SimResult::Fail {
+            props,
+            run,
+            error: Some(format!(
+                "non-deterministic simulation: replaying seed {seed} produced trace {replayed:#018x}, \
+                 not {trace:#018x}"
+            )),
+            panic: None,
+        };
+        logging::log_message(result.to_string());
+        result
+    }
+
+    /// One run. `replay_seed` repeats an earlier run's seed instead of advancing the seed
+    /// sequence. Returns the result, the run's trace hash and its seed.
+    #[allow(clippy::too_many_lines)]
+    fn run_once(
+        &self,
+        run_number: u64,
+        thread_id: Option<u64>,
+        replay_seed: Option<u64>,
+    ) -> (SimResult, u64, u64) {
+        // Each run starts from a fresh simulation context, so nothing of an earlier run on
+        // this worker thread (simulated threads, clock, generator) carries over.
+        switchy::simulation::set_current(None);
+        if let Some(seed) = replay_seed {
+            switchy::simulation::set_seed(seed);
+        } else if run_number > 1 {
             switchy::random::simulator::reset_seed();
         }
+        let seed = switchy::random::simulator::seed();
 
         switchy::random::simulator::reset_rng();
         switchy::tcp::simulator::reset();
@@ -595,6 +647,15 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         managed_sim.shutdown();
 
+        let mut trace = run_trace();
+        #[cfg(feature = "thread")]
+        let leaked_threads = {
+            let report = switchy::thread::simulator::scheduler().shutdown();
+            trace = mix(trace, report.trace_hash);
+            report.leaked
+        };
+        trace = mix(trace, steps);
+
         let panic = PANIC.with_borrow(Clone::clone);
 
         let result = if let Err(e) = resp {
@@ -625,6 +686,23 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         } else {
             SimResult::Success { props, run }
         };
+        #[cfg(feature = "thread")]
+        let result = match result {
+            SimResult::Success { props, run }
+                if !leaked_threads.is_empty() && !allow_thread_leaks() =>
+            {
+                SimResult::Fail {
+                    props,
+                    run,
+                    error: Some(format!(
+                        "simulated threads never finished: {}",
+                        leaked_threads.join(", ")
+                    )),
+                    panic: None,
+                }
+            }
+            other => other,
+        };
 
         if !result.is_success() {
             end_sim();
@@ -649,8 +727,54 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         logging::log_message(result.to_string());
 
-        result
+        let trace = mix(trace, u64::from(result_is_success(&result)));
+        (result, trace, seed)
     }
+}
+
+const fn result_is_success(result: &SimResult) -> bool {
+    matches!(result, SimResult::Success { .. })
+}
+
+/// Whether each run is replayed to check it is deterministic: `SIMULATOR_VERIFY_DETERMINISM`
+/// set to `1` or `true`.
+#[must_use]
+pub fn verify_determinism() -> bool {
+    std::env::var("SIMULATOR_VERIFY_DETERMINISM").is_ok_and(|v| v == "1" || v == "true")
+}
+
+/// Whether simulated threads still blocked when a run ends are tolerated:
+/// `SIMULATOR_ALLOW_THREAD_LEAKS` set to `1` or `true`.
+#[cfg(feature = "thread")]
+fn allow_thread_leaks() -> bool {
+    std::env::var("SIMULATOR_ALLOW_THREAD_LEAKS").is_ok_and(|v| v == "1" || v == "true")
+}
+
+/// The current run's trace of recorded values.
+#[derive(Default)]
+struct RunTrace(std::sync::Mutex<u64>);
+
+fn mix(hash: u64, value: u64) -> u64 {
+    value.to_le_bytes().iter().fold(hash, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// Record an observable value of the current run (an output, an event, a final state) in its
+/// trace. With `SIMULATOR_VERIFY_DETERMINISM`, a replay of the run must record the same values
+/// in the same order.
+///
+/// # Panics
+///
+/// * If the trace's lock is poisoned
+pub fn record(value: u64) {
+    let trace = switchy::simulation::state::<RunTrace>();
+    let mut hash = trace.0.lock().unwrap();
+    *hash = mix(*hash, value);
+}
+
+fn run_trace() -> u64 {
+    *switchy::simulation::state::<RunTrace>().0.lock().unwrap()
 }
 
 /// Trait for bootstrapping and configuring simulations.

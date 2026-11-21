@@ -16,6 +16,8 @@
 //! * `fs` - Filesystem abstraction layer
 //! * `http` - HTTP client abstraction layer
 //! * `tcp` - TCP networking abstraction layer
+//! * `simulation` - The per-run simulation context, seed and portable PRNG
+//! * `thread` - Threads and blocking synchronization with a deterministic simulator
 //! * `time` - Time and timing abstractions
 //! * `all` - Enable all features (default)
 //!
@@ -407,6 +409,12 @@ pub use switchy_telemetry as telemetry;
 ///
 /// Provides runtime-agnostic time operations including delays, timeouts, and intervals.
 /// Enable the `time` feature to use this module.
+#[cfg(feature = "simulation")]
+pub use switchy_simulation as simulation;
+
+#[cfg(feature = "thread")]
+pub use switchy_thread as thread;
+
 #[cfg(feature = "time")]
 pub use switchy_time as time;
 

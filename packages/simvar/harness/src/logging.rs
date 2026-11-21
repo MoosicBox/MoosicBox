@@ -12,7 +12,7 @@ use crate::USE_TUI;
 pub fn log_message(msg: impl Into<String>) {
     let msg = msg.into();
 
-    if USE_TUI {
+    if *USE_TUI {
         log::info!("{msg}");
     } else {
         println!("{msg}");
@@ -45,7 +45,7 @@ pub fn init_pretty_env_logger() -> std::io::Result<()> {
     let mut builder = pretty_env_logger::formatted_builder();
 
     #[cfg(feature = "tui")]
-    if USE_TUI {
+    if *USE_TUI {
         use std::{fs::File, path::PathBuf, str::FromStr as _};
 
         use pretty_env_logger::env_logger::Target;

@@ -17260,6 +17260,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_threads_example"
+version = "0.5.0"
+dependencies = [
+ "log 0.4.34",
+ "simvar",
+ "switchy_thread",
+]
+
+[[package]]
 name = "simvar_utils"
 version = "0.5.0"
 dependencies = [
@@ -18420,8 +18429,10 @@ dependencies = [
  "switchy_mdns",
  "switchy_random",
  "switchy_schema",
+ "switchy_simulation",
  "switchy_tcp",
  "switchy_telemetry",
+ "switchy_thread",
  "switchy_time",
  "switchy_upnp",
  "switchy_uuid",
@@ -18751,6 +18762,14 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "switchy_thread"
+version = "0.5.0"
+dependencies = [
+ "switchy_simulation",
+ "switchy_time",
 ]
 
 [[package]]

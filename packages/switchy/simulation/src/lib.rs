@@ -134,16 +134,19 @@ impl Context {
 
     /// This run's value of `T`, created with `init` on first use.
     ///
+    /// `init` runs without any lock held, so it may itself read other state of the run. If
+    /// it (or another thread) stores a `T` first, that value wins and `init`'s is dropped.
+    ///
     /// # Panics
     ///
     /// * Never in practice: a slot is keyed by its type, so it always holds a `T`.
     #[must_use]
     pub fn state_with<T: Any + Send + Sync>(&self, init: impl FnOnce() -> T) -> Arc<T> {
-        let slot = Arc::clone(
-            lock(&self.slots)
-                .entry(TypeId::of::<T>())
-                .or_insert_with(|| Arc::new(init())),
-        );
+        let existing = lock(&self.slots).get(&TypeId::of::<T>()).map(Arc::clone);
+        let slot = existing.unwrap_or_else(|| {
+            let value: Slot = Arc::new(init());
+            Arc::clone(lock(&self.slots).entry(TypeId::of::<T>()).or_insert(value))
+        });
         slot.downcast::<T>()
             .unwrap_or_else(|_| unreachable!("slots are keyed by their type"))
     }
@@ -305,6 +308,17 @@ mod tests {
         *a.state::<Counter>().0.lock().unwrap() += 2;
         assert_eq!(*a.state::<Counter>().0.lock().unwrap(), 2);
         assert_eq!(*b.state::<Counter>().0.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn state_initializers_may_read_other_state() {
+        #[derive(Default)]
+        struct Inner(u64);
+        struct Outer(u64);
+        let context = Context::new(1);
+        let outer = context.state_with(|| Outer(context.state_with(|| Inner(4)).0 + 1));
+        assert_eq!(outer.0, 5);
+        assert_eq!(context.state::<Inner>().0, 4);
     }
 
     #[test]

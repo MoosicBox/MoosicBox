@@ -1,0 +1,26 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Deterministic multithreaded simulation example using simvar and switchy_thread"
+edition     = { workspace = true }
+keywords    = ["deterministic", "simulation", "simvar", "threads"]
+license     = { workspace = true }
+name        = "simvar_threads_example"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = { workspace = true }
+
+[dependencies]
+simvar         = { workspace = true, features = ["random", "thread", "time"] }
+switchy_thread = { workspace = true, features = ["simulator"] }
+
+log = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = [
+    "simvar/fail-on-warnings",
+    "switchy_thread/fail-on-warnings",
+]

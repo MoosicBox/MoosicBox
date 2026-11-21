@@ -27,8 +27,10 @@ switchy_http_models         = { workspace = true, optional = true }
 switchy_mdns                = { workspace = true, optional = true }
 switchy_random              = { workspace = true, optional = true }
 switchy_schema              = { workspace = true, optional = true, default-features = false }
+switchy_simulation          = { workspace = true, optional = true }
 switchy_tcp                 = { workspace = true, optional = true }
 switchy_telemetry           = { workspace = true, optional = true }
+switchy_thread              = { workspace = true, optional = true }
 switchy_time                = { workspace = true, optional = true }
 switchy_upnp                = { workspace = true, optional = true }
 switchy_uuid                = { workspace = true, optional = true }
@@ -57,8 +59,10 @@ fail-on-warnings = [
     "switchy_mdns?/fail-on-warnings",
     "switchy_random?/fail-on-warnings",
     "switchy_schema?/fail-on-warnings",
+    "switchy_simulation?/fail-on-warnings",
     "switchy_tcp?/fail-on-warnings",
     "switchy_telemetry?/fail-on-warnings",
+    "switchy_thread?/fail-on-warnings",
     "switchy_time?/fail-on-warnings",
     "switchy_upnp?/fail-on-warnings",
     "switchy_uuid?/fail-on-warnings",
@@ -78,11 +82,13 @@ all = [
     "all-random",
     "all-tcp",
     "all-telemetry",
+    "all-thread",
     "all-time",
     "all-upnp",
     "all-uuid",
     "all-web-server",
     "schema",
+    "simulation",
 ]
 
 simulator = [
@@ -96,6 +102,7 @@ simulator = [
     "switchy_random?/simulator",
     "switchy_tcp?/simulator",
     "switchy_telemetry?/simulator",
+    "switchy_thread?/simulator",
     "switchy_time?/random",
     "switchy_time?/simulator",
     "switchy_upnp?/simulator",
@@ -335,6 +342,14 @@ all-telemetry = ["telemetry", "telemetry-actix", "telemetry-simulator"]
 telemetry           = ["dep:switchy_telemetry"]
 telemetry-actix     = ["switchy_telemetry?/actix", "telemetry"]
 telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
+
+simulation = ["dep:switchy_simulation"]
+
+all-thread = ["thread", "thread-simulator", "thread-std"]
+
+thread           = ["dep:switchy_thread"]
+thread-simulator = ["switchy_thread?/simulator", "thread"]
+thread-std       = ["switchy_thread?/std", "thread"]
 
 all-time = ["time", "time-simulator", "time-std"]
 

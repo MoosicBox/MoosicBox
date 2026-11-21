@@ -37,6 +37,7 @@ all = [
     "random",
     "tcp",
     "telemetry",
+    "thread",
     "time",
     "tui",
     "upnp",
@@ -53,6 +54,7 @@ mdns                 = ["simvar_harness/mdns"]
 random               = ["simvar_harness/random"]
 tcp                  = ["simvar_harness/tcp"]
 telemetry            = ["simvar_harness/telemetry"]
+thread               = ["simvar_harness/thread"]
 time                 = ["simvar_harness/time"]
 upnp                 = ["simvar_harness/upnp"]
 web-server           = ["simvar_harness/web-server"]

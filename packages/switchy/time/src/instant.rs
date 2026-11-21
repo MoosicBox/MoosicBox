@@ -5,8 +5,9 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Clock {
     Real,
+    /// A simulation run's clock: its context id and the clock generation.
     #[cfg(feature = "simulator")]
-    Simulated(std::thread::ThreadId, u64),
+    Simulated(u64, u64),
 }
 
 /// A monotonic timestamp whose elapsed time uses its originating clock.
@@ -38,7 +39,7 @@ impl Instant {
             return Self {
                 value: crate::simulator::monotonic_instant_now(),
                 clock: Clock::Simulated(
-                    std::thread::current().id(),
+                    switchy_simulation::current().id(),
                     crate::simulator::clock_generation(),
                 ),
             };
@@ -53,7 +54,7 @@ impl Instant {
     ///
     /// # Panics
     ///
-    /// * If a simulated instant is observed on another thread or after a clock reset.
+    /// * If a simulated instant is observed in another simulation run or after a clock reset.
     /// * If the simulator clock configuration is invalid or overflows.
     #[must_use]
     pub fn elapsed(self) -> Duration {
@@ -64,7 +65,7 @@ impl Instant {
     ///
     /// # Panics
     ///
-    /// * If a simulated instant is observed on another thread or after a clock reset.
+    /// * If a simulated instant is observed in another simulation run or after a clock reset.
     /// * If the simulator clock configuration is invalid or overflows.
     #[must_use]
     pub fn remaining(self) -> Duration {
@@ -123,11 +124,11 @@ impl Instant {
         match self.clock {
             Clock::Real => std::time::Instant::now(),
             #[cfg(feature = "simulator")]
-            Clock::Simulated(thread, generation) => {
+            Clock::Simulated(run, generation) => {
                 assert_eq!(
-                    thread,
-                    std::thread::current().id(),
-                    "simulation clock belongs to another thread"
+                    run,
+                    switchy_simulation::current().id(),
+                    "simulation clock belongs to another simulation run"
                 );
                 assert_eq!(
                     generation,
@@ -172,13 +173,23 @@ mod tests {
     #[cfg(feature = "simulator")]
     #[test]
     #[serial_test::serial]
-    fn simulated_instant_rejects_an_unrelated_thread_clock() {
+    fn simulated_instant_is_shared_within_a_run_and_rejected_outside_it() {
         let started = Instant::now();
+        // A thread without the run's context belongs to another run.
         assert!(
             std::thread::spawn(move || started.elapsed())
                 .join()
                 .is_err()
         );
+        // A thread given the run's context (as switchy_thread does) shares its clock.
+        let run = switchy_simulation::current();
+        let elapsed = std::thread::spawn(move || {
+            switchy_simulation::set_current(Some(run));
+            started.elapsed()
+        })
+        .join()
+        .unwrap();
+        assert_eq!(elapsed, started.elapsed());
     }
 
     #[cfg(feature = "simulator")]

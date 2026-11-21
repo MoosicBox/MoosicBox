@@ -347,6 +347,28 @@ pub fn reset_step() {
     });
 }
 
+/// Advances the simulation to the first step at which [`instant_now`] is at or after
+/// `target`, returning the step. Does nothing when `target` has already passed.
+///
+/// Simulated time only moves in whole steps, so the clock may land past `target` by up to one
+/// step multiplier.
+///
+/// # Panics
+///
+/// * If the step counter would overflow
+#[must_use]
+pub fn advance_to(target: Instant) -> u64 {
+    let now = monotonic_instant_now();
+    let step = current_step();
+    if target <= now {
+        return step;
+    }
+    let step_nanos = u128::from(step_multiplier()) * 1_000_000;
+    let steps = (target - now).as_nanos().div_ceil(step_nanos);
+    let steps = u64::try_from(steps).expect("simulation step overflow");
+    set_step(step.checked_add(steps).expect("simulation step overflow"))
+}
+
 /// Returns the current simulation step.
 ///
 /// # Panics
@@ -550,6 +572,21 @@ mod tests {
             super::with_clock(|clock| clock.epoch_offset = Some(1));
             assert_eq!(super::now(), UNIX_EPOCH + Duration::from_millis(2));
             assert_eq!(super::instant_now(), baseline + Duration::from_millis(1));
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn advance_to_lands_on_the_first_step_reaching_the_target() {
+        std::thread::spawn(|| {
+            super::with_clock(|clock| clock.step_multiplier = Some(10));
+            let start = super::instant_now();
+            assert_eq!(super::advance_to(start), 0);
+            assert_eq!(super::advance_to(start + Duration::from_millis(1)), 1);
+            assert_eq!(super::advance_to(start + Duration::from_millis(25)), 3);
+            assert_eq!(super::instant_now(), start + Duration::from_millis(30));
+            assert_eq!(super::advance_to(start + Duration::from_millis(30)), 3);
         })
         .join()
         .unwrap();

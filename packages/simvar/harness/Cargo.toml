@@ -21,6 +21,7 @@ simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
     "random",
+    "simulation",
     "simulator",
     "tcp",
     "time",
@@ -63,6 +64,7 @@ mdns = ["switchy/mdns"]
 random = ["switchy/random"]
 tcp = ["switchy/tcp"]
 telemetry = ["switchy/telemetry"]
+thread = ["switchy/thread", "switchy/thread-simulator"]
 time = ["switchy/time"]
 upnp = ["switchy/upnp"]
 web-server = [
