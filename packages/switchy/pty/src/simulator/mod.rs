@@ -13,9 +13,10 @@
 //!
 //! * **Terminals**: bounded buffers in each direction, so a writer that is not read blocks; a
 //!   line discipline subset (echo, `\r` to `\n` on input, `\n` to `\r\n` on output, `ctrl+c`
-//!   interrupting the foreground group, the end-of-file character); window size changes with
-//!   `SIGWINCH`; hang-up when the master closes; end of file on the master once nothing holds
-//!   the slave side.
+//!   interrupting the foreground group); canonical input, where typed lines are edited (erase,
+//!   word erase, kill) before a program reads them a line at a time, and the end-of-file
+//!   character ends a partial line or the input; window size changes with `SIGWINCH`; hang-up
+//!   when the master closes; end of file on the master once nothing holds the slave side.
 //! * **Personalities** ([`Personality`]): on Linux a terminal stays open while anything that
 //!   inherited it is alive; on macOS it ends with its session.
 //! * **Processes**: sessions, process groups, controlling terminals, zombies and reaping,
@@ -216,6 +217,24 @@ enum Stream {
     Null,
 }
 
+/// What a terminal's reader gets next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Typed {
+    Byte(u8),
+    /// The end of a canonical line: a read returns no further.
+    LineEnd,
+    /// End of file: a read returns nothing.
+    Eof,
+}
+
+/// The canonical-mode editing characters (the defaults on Linux and macOS).
+const ERASE: u8 = 0x7f;
+const WORD_ERASE: u8 = 0x17;
+const KILL: u8 = 0x15;
+const END_OF_FILE: u8 = 0x04;
+/// What echoing an erased character writes: back, blank, back.
+const ECHO_ERASE: &[u8] = b"\x08 \x08";
+
 // The flags are the terminal's line discipline settings.
 #[allow(clippy::struct_excessive_bools)]
 struct Terminal {
@@ -223,8 +242,10 @@ struct Terminal {
     size: PtySize,
     /// Slave to master.
     output: VecDeque<u8>,
-    /// Master to slave; `None` is an end-of-file mark.
-    input: VecDeque<Option<u8>>,
+    /// Master to slave, ready to read.
+    input: VecDeque<Typed>,
+    /// In canonical mode, the line being typed, not yet readable.
+    line: Vec<u8>,
     capacity: usize,
     master_handles: usize,
     slave_holders: usize,
@@ -236,7 +257,76 @@ struct Terminal {
     echo: bool,
     isig: bool,
     icrnl: bool,
+    icanon: bool,
     written: Vec<u8>,
+}
+
+impl Terminal {
+    /// Bytes typed and not yet read.
+    fn typed(&self) -> usize {
+        self.input.len() + self.line.len()
+    }
+
+    /// Erase the last `count` characters of the line being typed, echoing it.
+    fn erase(&mut self, count: usize) {
+        for _ in 0..count.min(self.line.len()) {
+            self.line.pop();
+            if self.echo {
+                self.output.extend(ECHO_ERASE);
+            }
+        }
+    }
+
+    /// Make the line typed so far readable, ending it as a line.
+    fn end_line(&mut self) {
+        self.input
+            .extend(self.line.drain(..).map(Typed::Byte).chain([Typed::LineEnd]));
+    }
+
+    /// Echo `byte` as typed.
+    fn echo_byte(&mut self, byte: u8) {
+        if !self.echo {
+            return;
+        }
+        if byte == b'\n' {
+            self.output.extend(b"\r\n");
+        } else {
+            self.output.push_back(byte);
+        }
+    }
+
+    /// Take one typed byte through canonical editing.
+    fn canonical(&mut self, byte: u8) {
+        match byte {
+            ERASE => self.erase(1),
+            KILL => self.erase(self.line.len()),
+            WORD_ERASE => {
+                let spaces = self
+                    .line
+                    .iter()
+                    .rev()
+                    .take_while(|b| b.is_ascii_whitespace())
+                    .count();
+                let word = self.line[..self.line.len() - spaces]
+                    .iter()
+                    .rev()
+                    .take_while(|b| !b.is_ascii_whitespace())
+                    .count();
+                self.erase(spaces + word);
+            }
+            END_OF_FILE if self.line.is_empty() => self.input.push_back(Typed::Eof),
+            END_OF_FILE => self.end_line(),
+            b'\n' => {
+                self.line.push(b'\n');
+                self.echo_byte(b'\n');
+                self.end_line();
+            }
+            byte => {
+                self.line.push(byte);
+                self.echo_byte(byte);
+            }
+        }
+    }
 }
 
 struct Pipe {
@@ -619,7 +709,7 @@ impl Kernel {
                     slave_holders: t.slave_holders,
                     hung_up: t.hung_up,
                     output_buffered: t.output.len(),
-                    input_buffered: t.input.len(),
+                    input_buffered: t.typed(),
                     written: t.written.len(),
                 })
                 .collect(),
@@ -833,6 +923,7 @@ impl Kernel {
                     Signal::Quit
                 };
                 t.input.clear();
+                t.line.clear();
                 if t.echo {
                     t.output.extend(if byte == 0x03 { b"^C" } else { b"^\\" });
                 }
@@ -840,25 +931,19 @@ impl Kernel {
                 consumed += 1;
                 continue;
             }
-            if t.input.len() >= t.capacity {
+            if t.typed() >= t.capacity {
                 break;
             }
-            if byte == 0x04 && t.isig {
-                t.input.push_back(None);
+            let byte = if t.icrnl && byte == b'\r' {
+                b'\n'
             } else {
-                let byte = if t.icrnl && byte == b'\r' {
-                    b'\n'
-                } else {
-                    byte
-                };
-                t.input.push_back(Some(byte));
-                if t.echo {
-                    if byte == b'\n' {
-                        t.output.extend(b"\r\n");
-                    } else {
-                        t.output.push_back(byte);
-                    }
-                }
+                byte
+            };
+            if t.icanon {
+                t.canonical(byte);
+            } else {
+                t.input.push_back(Typed::Byte(byte));
+                t.echo_byte(byte);
             }
             consumed += 1;
         }
@@ -877,6 +962,7 @@ impl Kernel {
                 size,
                 output: VecDeque::new(),
                 input: VecDeque::new(),
+                line: Vec::new(),
                 capacity,
                 // The master and the slave handle.
                 master_handles: 1,
@@ -889,6 +975,7 @@ impl Kernel {
                 echo: true,
                 isig: true,
                 icrnl: true,
+                icanon: true,
                 written: Vec::new(),
             },
         );
@@ -1178,17 +1265,24 @@ impl Process {
                     let Some(t) = state.terminals.get_mut(&t) else {
                         return Wait::Done(Ok(0));
                     };
-                    if t.input.front() == Some(&None) {
-                        t.input.pop_front();
-                        return Wait::Done(Ok(0));
-                    }
                     let mut read = 0;
-                    while read < buffer.len() {
-                        match t.input.front() {
-                            Some(Some(byte)) => {
-                                buffer[read] = *byte;
+                    loop {
+                        match t.input.front().copied() {
+                            Some(Typed::Byte(byte)) if read < buffer.len() => {
+                                buffer[read] = byte;
                                 t.input.pop_front();
                                 read += 1;
+                            }
+                            // A canonical read returns one line at most.
+                            Some(Typed::LineEnd) => {
+                                t.input.pop_front();
+                                if read > 0 {
+                                    break;
+                                }
+                            }
+                            Some(Typed::Eof) if read == 0 => {
+                                t.input.pop_front();
+                                return Wait::Done(Ok(0));
                             }
                             _ => break,
                         }
@@ -1380,8 +1474,8 @@ impl Process {
         state.terminals.get(&terminal).map(|t| t.size)
     }
 
-    /// Turn the terminal's line discipline off (`raw`) or back on: echo, `ctrl+c` handling
-    /// and `\r` translation.
+    /// Turn the terminal's line discipline off (`raw`) or back on: echo, `ctrl+c` handling,
+    /// `\r` translation and canonical input (a line typed so far becomes readable).
     pub fn set_raw(&mut self, raw: bool) {
         self.kernel.switch();
         let mut state = lock(&self.kernel.state);
@@ -1391,6 +1485,11 @@ impl Process {
             t.echo = !raw;
             t.isig = !raw;
             t.icrnl = !raw;
+            t.icanon = !raw;
+            if raw {
+                let line = std::mem::take(&mut t.line);
+                t.input.extend(line.into_iter().map(Typed::Byte));
+            }
         }
         drop(state);
     }
@@ -1747,9 +1846,7 @@ pub(crate) mod backend {
                 .kernel
                 .wait_for(scheduler::deadline_after(timeout), |state| {
                     match state.terminals.get(&terminal) {
-                        Some(t) if t.input.len() >= t.capacity && t.slave_holders > 0 => {
-                            Wait::Again
-                        }
+                        Some(t) if t.typed() >= t.capacity && t.slave_holders > 0 => Wait::Again,
                         _ => Wait::Done(()),
                     }
                 })

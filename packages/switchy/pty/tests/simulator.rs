@@ -114,6 +114,38 @@ fn typed_input_is_echoed_and_read_by_the_program() {
 }
 
 #[test]
+fn typed_lines_are_edited_and_read_a_line_at_a_time() {
+    for personality in [Personality::Linux, Personality::MacOs] {
+        let output = run(2, personality, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+            drop(slave);
+            let mut writer = master.take_writer().unwrap();
+            // Erase, kill and word erase edit the line; end of file sends a partial line,
+            // then ends the input.
+            writer
+                .write_all(b"abc\x7f\x7fd\rxyz\x15hi\rone two\x17three\rpart\x04\x04")
+                .unwrap();
+            let exit = child.wait().unwrap();
+            assert!(exit.success());
+            drop(writer);
+            let mut reader = master.try_clone_reader().unwrap();
+            read_all(&mut reader)
+        });
+        let text = String::from_utf8_lossy(&output);
+        // The echo shows the editing; cat copies each finished line, and the partial one.
+        assert!(
+            text.starts_with("abc\x08 \x08\x08 \x08d\r\nxyz\x08 \x08\x08 \x08\x08 \x08hi\r\n"),
+            "{text:?}"
+        );
+        assert!(
+            text.contains("ad\r\nhi\r\none three\r\npart"),
+            "{personality:?}: {text:?}"
+        );
+    }
+}
+
+#[test]
 fn interrupt_reaches_the_whole_process_group() {
     for seed in 0..10 {
         let signals = run(seed, Personality::Linux, || {
