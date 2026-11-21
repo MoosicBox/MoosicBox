@@ -88,6 +88,7 @@ use switchy::{
 };
 
 pub use config::{SimConfig, SimProperties, SimResult, SimRunProperties};
+pub use logging::set_quiet;
 pub use simvar_observer as observer;
 pub use simvar_utils as utils;
 

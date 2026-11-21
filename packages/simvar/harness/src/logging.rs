@@ -5,14 +5,27 @@
 
 use crate::USE_TUI;
 
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Send run reports to the log system instead of stdout, as when the built-in TUI is shown;
+/// for observers that draw on the terminal themselves. `SIMULATOR_QUIET` does the same.
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn quiet() -> bool {
+    QUIET.load(std::sync::atomic::Ordering::Relaxed)
+        || std::env::var_os("SIMULATOR_QUIET").is_some()
+}
+
 /// Logs a message either to the log system or stdout.
 ///
-/// When the TUI is enabled, messages are sent to the log system.
-/// When the TUI is disabled, messages are printed directly to stdout.
+/// When the TUI is enabled, or output is quiet ([`set_quiet`]), messages are sent to the log
+/// system. Otherwise they are printed directly to stdout.
 pub fn log_message(msg: impl Into<String>) {
     let msg = msg.into();
 
-    if *USE_TUI {
+    if *USE_TUI || quiet() {
         log::info!("{msg}");
     } else {
         println!("{msg}");
