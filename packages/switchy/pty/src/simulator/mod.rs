@@ -933,6 +933,16 @@ impl Kernel {
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "no program to run"))?;
         let base = name.rsplit('/').next().unwrap_or(name).to_owned();
         let mut state = lock(&self.state);
+        // A process a fatal signal already ended cannot start children (natively, fork fails
+        // while a fatal signal is pending), so a group kill cannot miss a child it races with.
+        if let Some((parent_pid, _, _)) = parent
+            && state
+                .processes
+                .get(&parent_pid)
+                .is_some_and(|p| p.fatal.is_some())
+        {
+            return Err(io::Error::from(io::ErrorKind::Interrupted));
+        }
         let Some(program) = state.programs.get(&base).cloned() else {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -1400,10 +1410,12 @@ impl Process {
         }
         command.cwd(&self.cwd);
         let streams = self.streams();
-        let (pid, _, _) =
-            self.kernel
-                .spawn(&command, None, Some((self.pid, streams, new_group)))?;
-        Ok(pid)
+        let spawned = self
+            .kernel
+            .spawn(&command, None, Some((self.pid, streams, new_group)));
+        // Refused because a signal ended this process: end it now.
+        self.check(&lock(&self.kernel.state));
+        Ok(spawned?.0)
     }
 
     /// End the process with exit code `code`.

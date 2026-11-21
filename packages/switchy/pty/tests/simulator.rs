@@ -222,6 +222,27 @@ fn resizing_notifies_the_program() {
 }
 
 #[test]
+fn a_group_kill_racing_a_fork_leaves_no_child_behind() {
+    for seed in 0..40 {
+        let survivors = run(seed, Personality::Linux, || {
+            let PtyPair { slave, master: _master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(SpawnCommand::new("shell").arg("3")).unwrap();
+            drop(slave);
+            // Kill at once, while the shell may still be starting its children.
+            switchy_pty::signal_group(child.id(), Signal::Kill).unwrap();
+            child.wait().unwrap();
+            scheduler::run_until_idle();
+            simulator::snapshot()
+                .processes
+                .into_iter()
+                .filter(|p| p.state == ProcessState::Running)
+                .count()
+        });
+        assert_eq!(survivors, 0, "seed {seed}");
+    }
+}
+
+#[test]
 fn missing_programs_are_not_found() {
     let error = run(6, Personality::Linux, || {
         let PtyPair { slave, .. } = PtyPair::open(PtySize::new(80, 24)).unwrap();
