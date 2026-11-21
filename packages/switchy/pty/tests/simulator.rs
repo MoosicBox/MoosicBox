@@ -225,7 +225,10 @@ fn resizing_notifies_the_program() {
 fn a_group_kill_racing_a_fork_leaves_no_child_behind() {
     for seed in 0..40 {
         let survivors = run(seed, Personality::Linux, || {
-            let PtyPair { slave, master: _master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let PtyPair {
+                slave,
+                master: _master,
+            } = PtyPair::open(PtySize::new(80, 24)).unwrap();
             let mut child = slave.spawn(SpawnCommand::new("shell").arg("3")).unwrap();
             drop(slave);
             // Kill at once, while the shell may still be starting its children.
@@ -240,6 +243,30 @@ fn a_group_kill_racing_a_fork_leaves_no_child_behind() {
         });
         assert_eq!(survivors, 0, "seed {seed}");
     }
+}
+
+#[test]
+fn an_unreaped_exit_keeps_the_id_from_reuse() {
+    let reused = run(9, Personality::Linux, || {
+        let PtyPair {
+            slave,
+            master: _master,
+        } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let mut first = slave.spawn(SpawnCommand::new("exit").arg("0")).unwrap();
+        let exit = first.wait_unreaped().unwrap();
+        assert!(exit.success());
+        // While the zombie stands, no new process may take its id.
+        let others: Vec<_> = (0..20)
+            .map(|_| slave.spawn(SpawnCommand::new("exit").arg("0")).unwrap())
+            .collect();
+        let reused = others.iter().any(|c| c.id() == first.id());
+        assert_eq!(first.wait().unwrap(), exit);
+        for mut other in others {
+            other.wait().unwrap();
+        }
+        reused
+    });
+    assert!(!reused);
 }
 
 #[test]

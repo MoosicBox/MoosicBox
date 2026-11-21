@@ -478,6 +478,42 @@ impl Child {
         self.child.wait().map(ChildExit::from)
     }
 
+    /// `waitid` with `WNOWAIT`: the exit, leaving the process a zombie.
+    // Exclusive like `wait`, though waiting without reaping changes nothing here.
+    #[allow(clippy::needless_pass_by_ref_mut)]
+    pub fn wait_unreaped(&mut self) -> io::Result<ChildExit> {
+        let pid = libc::id_t::from(self.child.id());
+        // SAFETY: zeroed is a valid siginfo_t to be overwritten.
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        loop {
+            // SAFETY: `info` is valid for writes; waitid has no other preconditions.
+            let result = unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    pid,
+                    &raw mut info,
+                    libc::WEXITED | libc::WNOWAIT,
+                )
+            };
+            if result == 0 {
+                break;
+            }
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                return Err(error);
+            }
+        }
+        #[cfg(target_os = "linux")]
+        // SAFETY: waitid filled `info` for a child state change, where si_status is valid.
+        let status = unsafe { info.si_status() };
+        #[cfg(not(target_os = "linux"))]
+        let status = info.si_status;
+        Ok(match info.si_code {
+            libc::CLD_EXITED => ChildExit::with_exit_code(u32::from_ne_bytes(status.to_ne_bytes())),
+            _ => ChildExit::signaled(status, &signal_name(status)),
+        })
+    }
+
     /// Hang up on the process, as a closing terminal would, and kill it if it has not exited
     /// shortly after.
     pub fn kill(&mut self) -> io::Result<()> {

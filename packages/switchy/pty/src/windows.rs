@@ -780,6 +780,12 @@ impl Child {
         exit_code(&self.process).map(ChildExit::with_exit_code)
     }
 
+    /// The handle this holds keeps the id from reuse until it closes, so waiting reaps
+    /// nothing.
+    pub fn wait_unreaped(&mut self) -> io::Result<ChildExit> {
+        self.wait()
+    }
+
     pub fn kill(&mut self) -> io::Result<()> {
         terminate(&self.process)
     }

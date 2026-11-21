@@ -279,6 +279,24 @@ fn a_missing_program_is_reported() {
     terminal.close();
 }
 
+#[cfg(unix)]
+#[test]
+fn an_unreaped_exit_is_reported_and_reaped_later() {
+    let (_terminal, slave) = Terminal::open(PtySize::new(80, 24));
+    let mut child = slave.spawn(&script("exit 7")).unwrap();
+    drop(slave);
+    let exit = child.wait_unreaped().unwrap();
+    assert_eq!(exit.exit_code(), 7);
+    // Still a zombie: its id is taken until it is reaped.
+    let alive = std::process::Command::new("kill")
+        .args(["-0", &child.id().to_string()])
+        .status()
+        .unwrap()
+        .success();
+    assert!(alive, "a zombie still holds its id");
+    assert_eq!(wait(&mut child), exit);
+}
+
 #[test]
 fn kill_ends_the_process() {
     let (terminal, slave) = Terminal::open(PtySize::new(80, 24));

@@ -1860,6 +1860,22 @@ pub(crate) mod backend {
                 .unwrap_or_else(|| unreachable!("waits without a deadline do not time out"))
         }
 
+        pub fn wait_unreaped(&mut self) -> io::Result<ChildExit> {
+            self.kernel.switch();
+            let pid = self.pid;
+            self.kernel
+                .wait_for(None, |state| {
+                    state.processes.get(&pid).map_or_else(
+                        || Wait::Done(Err(io::Error::other("the process was already waited for"))),
+                        |process| match &process.state {
+                            ProcessState::Zombie(exit) => Wait::Done(Ok(exit.clone())),
+                            ProcessState::Running => Wait::Again,
+                        },
+                    )
+                })
+                .unwrap_or_else(|| unreachable!("waits without a deadline do not time out"))
+        }
+
         pub fn kill(&mut self) -> io::Result<()> {
             if self.exited()? {
                 return Ok(());

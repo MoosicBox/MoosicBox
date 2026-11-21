@@ -386,6 +386,18 @@ impl PtyChild {
         self.0.try_wait()
     }
 
+    /// Wait for the process to end without reaping it: it stays a zombie, so its process id,
+    /// and the process group it leads, cannot be reused by another process until
+    /// [`Self::wait`] (or [`Self::try_wait`]) reaps it. A caller that may still signal the
+    /// process's group after it exits waits this way, so the signal cannot reach a newer
+    /// process that was given the same id.
+    ///
+    /// # Errors
+    /// * [`io::Error`] when the process cannot be waited for.
+    pub fn wait_unreaped(&mut self) -> io::Result<ChildExit> {
+        self.0.wait_unreaped()
+    }
+
     /// Wait for the process to end.
     ///
     /// # Errors
