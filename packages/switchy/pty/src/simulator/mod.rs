@@ -290,6 +290,8 @@ struct State {
     programs: BTreeMap<String, Program>,
     io: BTreeMap<u32, ProcessIo>,
     signal_log: Vec<SignalRecord>,
+    /// The last top-level spawn by each simulated thread.
+    last_spawned: BTreeMap<usize, Spawned>,
 }
 
 /// A run's simulated kernel.
@@ -379,6 +381,25 @@ pub struct ProcessIo {
     pub terminal: Option<String>,
     /// Its piped standard output, if it had one; see [`pipe_written`].
     pub stdout_pipe: Option<u64>,
+}
+
+/// A process started directly on a terminal, as recorded when it was spawned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spawned {
+    /// Its id.
+    pub pid: u32,
+    /// Its serial (see [`ProcessSnapshot::serial`]).
+    pub serial: u64,
+    /// Where its output goes.
+    pub io: ProcessIo,
+}
+
+/// The last process the calling simulated thread started on a terminal. Exact even when the
+/// process already exited and its id was reused, unlike looking it up by id.
+#[must_use]
+pub fn last_spawned() -> Option<Spawned> {
+    let me = scheduler::scheduler().me();
+    lock(&kernel().state).last_spawned.get(&me).cloned()
 }
 
 /// Where the process started with id `pid` (most recently, as ids are reused) sends its
@@ -509,6 +530,7 @@ impl Kernel {
                 programs: BTreeMap::new(),
                 io: BTreeMap::new(),
                 signal_log: Vec::new(),
+                last_spawned: BTreeMap::new(),
             }),
         }
     }
@@ -988,13 +1010,15 @@ impl Kernel {
         }
         if parent.is_none() {
             let terminal = terminal.and_then(|t| state.terminals.get(&t).map(|t| t.name.clone()));
-            state.io.insert(
-                pid,
-                ProcessIo {
-                    terminal,
-                    stdout_pipe,
-                },
-            );
+            let io = ProcessIo {
+                terminal,
+                stdout_pipe,
+            };
+            state.io.insert(pid, io.clone());
+            let spawner = scheduler::scheduler().me();
+            state
+                .last_spawned
+                .insert(spawner, Spawned { pid, serial, io });
         }
         state.processes.insert(
             pid,
