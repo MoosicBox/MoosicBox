@@ -126,6 +126,16 @@ impl Handle {
         self.runtime.block_on(f)
     }
 
+    /// Make this runtime current on the calling thread (for `Handle::current` and spawning)
+    /// until the guard drops, as tokio's `Handle::enter` does.
+    #[must_use]
+    pub fn enter(&self) -> EnterGuard {
+        ENTERED.with_borrow_mut(|entered| entered.push((*self.runtime).clone()));
+        EnterGuard {
+            _not_send: std::marker::PhantomData,
+        }
+    }
+
     /// How the runtime runs its tasks: [`crate::RuntimeFlavor::MultiThread`], since tasks
     /// may block in place and nest [`Self::block_on`] (see there).
     #[must_use]
@@ -262,6 +272,24 @@ scoped_thread_local! {
     static RUNTIME: Runtime
 }
 
+thread_local! {
+    /// Runtimes entered on this thread with [`Handle::enter`], innermost last.
+    static ENTERED: RefCell<Vec<Runtime>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Makes a runtime current on this thread until dropped; see [`Handle::enter`].
+#[derive(Debug)]
+pub struct EnterGuard {
+    // Entered on, and left on, one thread.
+    _not_send: std::marker::PhantomData<*const ()>,
+}
+
+impl Drop for EnterGuard {
+    fn drop(&mut self) {
+        ENTERED.with_borrow_mut(Vec::pop);
+    }
+}
+
 /// A simulator-based async runtime.
 ///
 /// This provides a deterministic simulator runtime for testing async code with controlled
@@ -358,13 +386,12 @@ impl Runtime {
     /// Returns a handle to this runtime.
     ///
     /// The handle can be used to spawn tasks onto the runtime from other threads.
-    ///
-    /// # Panics
-    ///
-    /// * If `handle` is empty
     #[must_use]
     pub fn handle(&self) -> Handle {
-        self.handle.clone().unwrap()
+        // The runtime a handle holds is a copy without a handle of its own.
+        self.handle.clone().unwrap_or_else(|| Handle {
+            runtime: Arc::new(self.clone()),
+        })
     }
 
     fn start(&self) {
@@ -557,7 +584,7 @@ impl Runtime {
         if RUNTIME.is_set() {
             Some(RUNTIME.with(Clone::clone))
         } else {
-            None
+            ENTERED.with_borrow(|entered| entered.last().cloned())
         }
     }
 }

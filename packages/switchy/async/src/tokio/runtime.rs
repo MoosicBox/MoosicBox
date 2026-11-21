@@ -161,6 +161,11 @@ impl Handle {
         }
     }
 
+    /// Make this runtime current on the calling thread until the guard drops.
+    pub fn enter(&self) -> tokio::runtime::EnterGuard<'_> {
+        self.inner.enter()
+    }
+
     /// How the runtime runs its tasks.
     #[must_use]
     pub fn runtime_flavor(&self) -> crate::RuntimeFlavor {

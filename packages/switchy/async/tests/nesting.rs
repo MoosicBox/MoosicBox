@@ -55,3 +55,21 @@ fn a_spawned_task_can_nest_block_on_without_polling_itself() {
     assert_eq!(value, 6);
     runtime.wait().unwrap();
 }
+
+#[test]
+fn entering_a_runtime_makes_it_current_on_another_thread() {
+    let runtime = Runtime::new();
+    let handle = runtime.handle();
+    let value = std::thread::spawn(move || {
+        assert!(Handle::try_current().is_err());
+        let guard = handle.enter();
+        let current = Handle::current();
+        let value = current.block_on(async { 9 });
+        drop(guard);
+        assert!(Handle::try_current().is_err());
+        value
+    })
+    .join()
+    .unwrap();
+    assert_eq!(value, 9);
+}
