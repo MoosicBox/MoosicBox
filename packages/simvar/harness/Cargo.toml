@@ -18,6 +18,7 @@ group = "simvar"
 
 [dependencies]
 simvar_observer = { workspace = true }
+simvar_ratatui = { workspace = true, optional = true }
 simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
@@ -37,10 +38,6 @@ scoped-tls      = { workspace = true }
 shell-words     = { workspace = true }
 thiserror       = { workspace = true }
 
-# TUI
-oneshot = { workspace = true, optional = true, features = ["std"] }
-ratatui = { workspace = true, optional = true }
-
 # Logging
 pretty_env_logger = { workspace = true, optional = true }
 
@@ -52,6 +49,7 @@ default = ["pretty_env_logger", "tui"]
 
 fail-on-warnings = [
     "simvar_observer/fail-on-warnings",
+    "simvar_ratatui?/fail-on-warnings",
     "simvar_utils/fail-on-warnings",
     "switchy/fail-on-warnings",
     "switchy_web_server?/fail-on-warnings",
@@ -75,4 +73,4 @@ web-server = [
     "switchy_web_server/simulator",
 ]
 
-tui = ["dep:oneshot", "dep:ratatui"]
+tui = ["dep:simvar_ratatui"]

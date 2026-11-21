@@ -213,14 +213,14 @@ The package supports the following features:
 
 ### TUI Interface
 
-When built with the `tui` feature (enabled by default), provides:
+When built with the `tui` feature (enabled by default), the harness shows
+[`simvar_ratatui`](../ratatui)'s progress display whenever standard output is
+a terminal. The display is an ordinary observer (see `simvar_observer`): the
+run loop only sends events, and any other front end can subscribe to the same
+ones with `add_observer`.
 
-- Real-time simulation progress
-- Run status and results
-- Error display and debugging
-- Interactive simulation monitoring
-
-Disable by excluding default features, or by setting `NO_TUI` at compile time.
+Disable by excluding default features, or by setting `NO_TUI` at compile or
+run time.
 
 ### Optional Features
 
@@ -257,7 +257,7 @@ Comprehensive error types:
 - **switchy**: Async runtime and simulation utilities
 - **simvar_utils**: Simulation utilities and helpers
 - **color-backtrace**: Enhanced error reporting
-- **ratatui**: Optional terminal interface (with `tui` feature)
+- **simvar_ratatui**: Optional terminal display (with `tui` feature)
 - **pretty_env_logger**: Optional environment logger integration (default feature)
 
 ## Integration

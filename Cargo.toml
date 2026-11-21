@@ -120,6 +120,7 @@ default-members = [
     "packages/simvar/examples/threads",
     "packages/simvar/harness",
     "packages/simvar/observer",
+    "packages/simvar/ratatui",
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
@@ -306,6 +307,7 @@ members = [
     "packages/simvar/examples/threads",
     "packages/simvar/harness",
     "packages/simvar/observer",
+    "packages/simvar/ratatui",
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
@@ -562,6 +564,7 @@ clippier_test_utilities = { version = "0.5.0", default-features = false, path = 
 simvar          = { version = "0.5.0", default-features = false, path = "packages/simvar" }
 simvar_harness  = { version = "0.5.0", default-features = false, path = "packages/simvar/harness" }
 simvar_observer = { version = "0.5.0", default-features = false, path = "packages/simvar/observer" }
+simvar_ratatui  = { version = "0.5.0", default-features = false, path = "packages/simvar/ratatui" }
 simvar_utils    = { version = "0.5.0", default-features = false, path = "packages/simvar/utils" }
 
 app-tauri-plugin-player = { version = "0.5.0", default-features = false, path = "packages/app/tauri/tauri-plugin-player" }
@@ -690,7 +693,6 @@ nanoid = "0.5.0"
 native-tls = "0.2.18"
 net2 = "0.2.39"
 ogg = "0.9.2"
-oneshot = "0.2.1"
 open = "5.4.5"
 openssl = { version = "0.10.81", features = ["v110"] }
 opentelemetry = { version = "0.33.1", features = ["trace"] }

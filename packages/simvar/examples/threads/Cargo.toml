@@ -15,8 +15,6 @@ version     = { workspace = true }
 simvar         = { workspace = true, features = ["random", "thread", "time"] }
 switchy_thread = { workspace = true, features = ["simulator"] }
 
-log = { workspace = true }
-
 [features]
 default = []
 

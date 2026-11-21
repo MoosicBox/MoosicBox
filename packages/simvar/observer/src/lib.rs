@@ -27,7 +27,15 @@ pub struct RunId {
 
 /// Something that happened in a simulation.
 #[derive(Clone)]
+#[non_exhaustive]
 pub enum SimEvent {
+    /// The simulation started.
+    Started {
+        /// How many runs it will make.
+        runs: u64,
+        /// How many runs it makes at once.
+        max_parallel: u64,
+    },
     /// A run started.
     RunStarted {
         /// Which run.
@@ -36,6 +44,8 @@ pub enum SimEvent {
         seed: u64,
         /// Its configuration and the simulation's properties, as name and value.
         props: Vec<(String, String)>,
+        /// Its length in steps, when it has a fixed duration.
+        steps: Option<u64>,
     },
     /// A run advanced.
     Progress {
@@ -56,6 +66,8 @@ pub enum SimEvent {
         success: bool,
         /// The harness's report of the run, including how to replay it.
         report: String,
+        /// The steps it ran.
+        steps: u64,
     },
     /// Data a simulation emitted, such as a [`SchedulerView`]; observers downcast it.
     Telemetry {
@@ -71,6 +83,9 @@ pub enum SimEvent {
 impl fmt::Debug for SimEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Started { runs, max_parallel } => {
+                write!(f, "Started({runs} runs, {max_parallel} at once)")
+            }
             Self::RunStarted { id, seed, .. } => {
                 write!(f, "RunStarted({id:?}, seed {seed})")
             }

@@ -13358,12 +13358,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "269bca4c2591a28585d6bf10d9ed0332b7d76900a1b02bec41bdc3a2cdcda107"
 
 [[package]]
-name = "oneshot"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe21416a02c693fb9f980befcb230ecc70b0b3d1cc4abf88b9675c4c1457f0c"
-
-[[package]]
 name = "onig"
 version = "6.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17247,12 +17241,11 @@ dependencies = [
  "color-backtrace",
  "ctrlc",
  "log 0.4.34",
- "oneshot 0.2.1",
  "pretty_env_logger",
- "ratatui",
  "scoped-tls",
  "shell-words",
  "simvar_observer",
+ "simvar_ratatui",
  "simvar_utils",
  "switchy",
  "switchy_web_server",
@@ -17265,10 +17258,18 @@ name = "simvar_observer"
 version = "0.5.0"
 
 [[package]]
-name = "simvar_threads_example"
+name = "simvar_ratatui"
 version = "0.5.0"
 dependencies = [
  "log 0.4.34",
+ "ratatui",
+ "simvar_observer",
+]
+
+[[package]]
+name = "simvar_threads_example"
+version = "0.5.0"
+dependencies = [
  "simvar",
  "switchy_thread",
 ]
@@ -19406,7 +19407,7 @@ dependencies = [
  "measure_time",
  "memmap2",
  "once_cell",
- "oneshot 0.1.13",
+ "oneshot",
  "rayon",
  "regex",
  "rustc-hash 2.1.3",

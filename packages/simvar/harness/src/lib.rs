@@ -126,9 +126,6 @@ mod logging;
 /// [`InteractionPlan`]: plan::InteractionPlan
 pub mod plan;
 
-#[cfg(feature = "tui")]
-mod tui;
-
 /// Whether the TUI is shown: the `tui` feature is enabled, `NO_TUI` is set neither at build
 /// time nor at run time, and standard output is a terminal.
 static USE_TUI: LazyLock<bool> = LazyLock::new(|| {
@@ -151,8 +148,9 @@ static RUNS: LazyLock<u64> = LazyLock::new(|| {
 
 static END_SIM: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
+/// simvar's terminal display, while it is shown.
 #[cfg(feature = "tui")]
-static DISPLAY_STATE: LazyLock<tui::DisplayState> = LazyLock::new(tui::DisplayState::new);
+static DISPLAY: Mutex<Option<Arc<simvar_ratatui::Display>>> = Mutex::new(None);
 
 /// Errors that can occur during simulation execution.
 #[derive(Debug, thiserror::Error)]
@@ -171,8 +169,11 @@ pub enum Error {
 fn ctrl_c() {
     log::debug!("ctrl_c called");
     #[cfg(feature = "tui")]
-    if *USE_TUI {
-        DISPLAY_STATE.exit();
+    if let Some(display) = &*DISPLAY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        display.exit();
     }
     end_sim();
 }
@@ -268,9 +269,15 @@ pub fn run_simulation<B: SimBootstrap>(
     #[cfg(feature = "pretty_env_logger")]
     logging::init_pretty_env_logger()?;
 
+    // The display is an observer like any other: it learns everything from run events.
     #[cfg(feature = "tui")]
-    let tui_handle = if *USE_TUI {
-        Some(tui::spawn(DISPLAY_STATE.clone()))
+    let display = if *USE_TUI {
+        let display = simvar_ratatui::spawn(end_sim)?;
+        add_observer(display.clone());
+        *DISPLAY
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::clone(&display));
+        Some(display)
     } else {
         None
     };
@@ -293,20 +300,19 @@ pub fn run_simulation<B: SimBootstrap>(
 
     log::debug!("Running simulation with max_parallel={max_parallel}");
 
-    let sim_orchestrator = SimOrchestrator::new(
-        bootstrap,
-        runs,
-        max_parallel,
-        #[cfg(feature = "tui")]
-        DISPLAY_STATE.clone(),
-    );
+    notify(&simvar_observer::SimEvent::Started { runs, max_parallel });
+    let sim_orchestrator = SimOrchestrator::new(bootstrap, runs, max_parallel);
 
     let resp = sim_orchestrator.start();
     notify(&simvar_observer::SimEvent::Finished);
 
+    // The display stays up once every run is done, until the user quits it.
     #[cfg(feature = "tui")]
-    if let Some(tui_handle) = tui_handle {
-        tui_handle.join().unwrap()?;
+    if let Some(display) = display {
+        display.join()?;
+        *DISPLAY
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     #[cfg(feature = "tui")]
@@ -329,23 +335,14 @@ struct SimOrchestrator<B: SimBootstrap> {
     bootstrap: B,
     runs: u64,
     max_parallel: u64,
-    #[cfg(feature = "tui")]
-    display_state: tui::DisplayState,
 }
 
 impl<B: SimBootstrap> SimOrchestrator<B> {
-    const fn new(
-        bootstrap: B,
-        runs: u64,
-        max_parallel: u64,
-        #[cfg(feature = "tui")] display_state: tui::DisplayState,
-    ) -> Self {
+    const fn new(bootstrap: B, runs: u64, max_parallel: u64) -> Self {
         Self {
             bootstrap,
             runs,
             max_parallel,
-            #[cfg(feature = "tui")]
-            display_state,
         }
     }
 
@@ -359,11 +356,7 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
 
         if self.max_parallel == 0 {
             for run_number in 1..=self.runs {
-                let simulation = Simulation::new(
-                    &*bootstrap,
-                    #[cfg(feature = "tui")]
-                    self.display_state.clone(),
-                );
+                let simulation = Simulation::new(&*bootstrap);
 
                 let result = simulation.run(run_number, None);
 
@@ -383,17 +376,11 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
                 let bootstrap = bootstrap.clone();
                 let runs = self.runs;
                 let results = results.clone();
-                #[cfg(feature = "tui")]
-                let display_state = self.display_state.clone();
 
                 let handle = std::thread::spawn(move || {
                     let _ = thread_id();
                     let thread_id = worker_thread_id();
-                    let simulation = Simulation::new(
-                        &*bootstrap,
-                        #[cfg(feature = "tui")]
-                        display_state.clone(),
-                    );
+                    let simulation = Simulation::new(&*bootstrap);
 
                     loop {
                         if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
@@ -461,21 +448,12 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
 }
 
 struct Simulation<'a, B: SimBootstrap> {
-    #[cfg(feature = "tui")]
-    display_state: tui::DisplayState,
     bootstrap: &'a B,
 }
 
 impl<'a, B: SimBootstrap> Simulation<'a, B> {
-    const fn new(
-        bootstrap: &'a B,
-        #[cfg(feature = "tui")] display_state: tui::DisplayState,
-    ) -> Self {
-        Self {
-            #[cfg(feature = "tui")]
-            display_state,
-            bootstrap,
-        }
+    const fn new(bootstrap: &'a B) -> Self {
+        Self { bootstrap }
     }
 
     /// Run once, and with determinism verification on, run the same seed again and fail if
@@ -563,6 +541,8 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             id: run_id,
             seed,
             props: props.extra.clone(),
+            steps: (duration < Duration::MAX)
+                .then(|| u64::try_from(duration_steps).unwrap_or(u64::MAX)),
         });
 
         logging::log_message(format!(
@@ -575,10 +555,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         let start = switchy::time::now();
 
-        #[cfg(feature = "tui")]
-        self.display_state
-            .update_sim_state(thread_id.unwrap_or(1), run_number, config, 0.0, false);
-
         self.bootstrap.on_start(&mut managed_sim);
 
         let resp = std::panic::catch_unwind(AssertUnwindSafe(|| {
@@ -586,15 +562,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                 if duration < Duration::MAX {
                     #[allow(clippy::cast_precision_loss)]
                     let progress = (step as f64 / duration_steps as f64).clamp(0.0, 1.0);
-
-                    #[cfg(feature = "tui")]
-                    self.display_state.update_sim_state(
-                        thread_id.unwrap_or(1),
-                        run_number,
-                        config,
-                        progress,
-                        false,
-                    );
 
                     log::info!(
                         "step {step} ({}) ({:.1}%)",
@@ -636,10 +603,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                     }
 
                     self.bootstrap.on_step(&mut managed_sim);
-
-                    #[cfg(feature = "tui")]
-                    self.display_state
-                        .update_sim_step(thread_id.unwrap_or(1), step);
                 }
 
                 if managed_sim.step()? {
@@ -657,9 +620,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
         let sim_time_millis = managed_sim.elapsed().as_millis();
         let steps = current_step() - 1;
-
-        #[cfg(feature = "tui")]
-        self.display_state.run_completed();
 
         log::debug!("after simulation run");
 
@@ -732,23 +692,6 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             end_sim();
         }
 
-        #[cfg(feature = "tui")]
-        self.display_state
-            .update_sim_step(thread_id.unwrap_or(1), steps);
-        #[cfg(feature = "tui")]
-        self.display_state.update_sim_state(
-            thread_id.unwrap_or(1),
-            run_number,
-            config,
-            #[allow(clippy::cast_precision_loss)]
-            if duration < Duration::MAX {
-                (current_step() as f64 / duration_steps as f64).clamp(0.0, 1.0)
-            } else {
-                0.0
-            },
-            !result.is_success(),
-        );
-
         logging::log_message(result.to_string());
 
         let trace = mix(trace, u64::from(result_is_success(&result)));
@@ -757,6 +700,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             seed,
             success: result_is_success(&result),
             report: result.to_string(),
+            steps,
         });
         (result, trace, seed)
     }

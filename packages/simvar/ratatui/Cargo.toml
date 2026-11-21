@@ -1,0 +1,25 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools::testing", "simulation"]
+description = "simvar's terminal display: a progress gauge per simulation run, from observer events"
+edition     = { workspace = true }
+keywords    = ["deterministic", "simulation", "testing", "tui"]
+license     = { workspace = true }
+name        = "simvar_ratatui"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata.workspaces]
+group = "simvar"
+
+[dependencies]
+simvar_observer = { workspace = true }
+
+log     = { workspace = true }
+ratatui = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = ["simvar_observer/fail-on-warnings"]
