@@ -558,6 +558,7 @@ simulator = [
     "switchy_mdns/simulator",
     "switchy_random/simulator",
     "switchy_telemetry?/simulator",
+    "switchy_time/random",
     "switchy_time/simulator",
     "switchy_upnp?/simulator",
 ]

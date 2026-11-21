@@ -14,7 +14,7 @@ tests = true
 [dependencies]
 switchy_async  = { workspace = true, features = ["time", "tokio"] }
 switchy_random = { workspace = true, features = ["simulator"] }
-switchy_time   = { workspace = true, features = ["simulator"] }
+switchy_time   = { workspace = true, features = ["random", "simulator"] }
 
 pretty_env_logger = { workspace = true }
 
@@ -30,5 +30,6 @@ fail-on-warnings = [
 simulator = [
     "switchy_async/simulator",
     "switchy_random/simulator",
+    "switchy_time/random",
     "switchy_time/simulator",
 ]

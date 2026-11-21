@@ -19,7 +19,7 @@ simvar              = { workspace = true, features = ["http", "tcp", "time", "we
 switchy_async       = { workspace = true, features = ["simulator", "tokio"] }
 switchy_http        = { workspace = true, features = ["simulator"] }
 switchy_http_models = { workspace = true }
-switchy_time        = { workspace = true, features = ["simulator"] }
+switchy_time        = { workspace = true, features = ["random", "simulator"] }
 switchy_web_server  = { workspace = true, features = ["actix", "cors", "serde"] }
 
 log        = { workspace = true }

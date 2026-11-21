@@ -148,6 +148,7 @@ default-members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
     "packages/switchy/time",
@@ -330,6 +331,7 @@ members = [
     "packages/switchy/schema/examples/state_migration_test",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/test_utils",
+    "packages/switchy/simulation",
     "packages/switchy/tcp",
     "packages/switchy/telemetry",
     "packages/switchy/time",
@@ -499,6 +501,7 @@ switchy_random              = { version = "0.5.0", default-features = false, pat
 switchy_schema              = { version = "0.5.0", default-features = false, path = "packages/switchy/schema" }
 switchy_schema_cli          = { version = "0.5.0", default-features = false, path = "packages/switchy/schema/cli" }
 switchy_schema_test_utils   = { version = "0.5.0", default-features = false, path = "packages/switchy/schema/test_utils" }
+switchy_simulation          = { version = "0.5.0", default-features = false, path = "packages/switchy/simulation" }
 switchy_tcp                 = { version = "0.5.0", default-features = false, path = "packages/switchy/tcp" }
 switchy_telemetry           = { version = "0.5.0", default-features = false, path = "packages/switchy/telemetry" }
 switchy_time                = { version = "0.5.0", default-features = false, path = "packages/switchy/time" }

@@ -1,0 +1,21 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools::testing", "simulation"]
+description = "Per-run simulation context, seed and portable PRNG shared by switchy simulators"
+edition     = { workspace = true }
+keywords    = ["deterministic", "random", "seed", "simulation", "testing"]
+license     = { workspace = true }
+name        = "switchy_simulation"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+
+[features]
+default = []
+
+fail-on-warnings = []

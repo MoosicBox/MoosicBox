@@ -272,6 +272,7 @@ turso-mimalloc = ["turso", "turso/mimalloc"]
 simulator = [
     "sqlite-rusqlite",
     "switchy_async/simulator",
+    "switchy_time/random",
     "switchy_time/simulator",
 ]
 

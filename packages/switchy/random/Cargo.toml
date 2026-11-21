@@ -17,6 +17,8 @@ examples = true
 group = "switchy"
 
 [dependencies]
+switchy_simulation = { workspace = true, optional = true }
+
 log     = { workspace = true }
 rand_08 = { workspace = true, features = ["small_rng", "std", "std_rng"] }
 
@@ -26,7 +28,7 @@ test-log = { workspace = true }
 [features]
 default = ["rand", "simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_simulation?/fail-on-warnings"]
 
 rand      = []
-simulator = []
+simulator = ["dep:switchy_simulation"]

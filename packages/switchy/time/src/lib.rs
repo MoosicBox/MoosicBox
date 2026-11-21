@@ -34,6 +34,21 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// Trace logging through `log` when the `log` feature is enabled; compiled out otherwise.
+#[allow(unused_macros)]
+macro_rules! trace {
+    ($($arg:tt)*) => {{
+        #[cfg(feature = "log")]
+        ::log::trace!($($arg)*);
+        #[cfg(not(feature = "log"))]
+        if false {
+            let _ = ::core::format_args!($($arg)*);
+        }
+    }};
+}
+#[allow(unused_imports)]
+pub(crate) use trace;
+
 #[cfg(any(feature = "std", feature = "simulator"))]
 mod instant;
 #[cfg(any(feature = "std", feature = "simulator"))]

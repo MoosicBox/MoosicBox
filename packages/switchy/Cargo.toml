@@ -96,6 +96,7 @@ simulator = [
     "switchy_random?/simulator",
     "switchy_tcp?/simulator",
     "switchy_telemetry?/simulator",
+    "switchy_time?/random",
     "switchy_time?/simulator",
     "switchy_upnp?/simulator",
     "switchy_uuid?/simulator",
@@ -338,7 +339,7 @@ telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
 all-time = ["time", "time-simulator", "time-std"]
 
 time           = ["dep:switchy_time", "switchy_async?/time"]
-time-simulator = ["switchy_time?/simulator", "time"]
+time-simulator = ["switchy_time?/random", "switchy_time?/simulator", "time"]
 time-std       = ["switchy_time?/std", "time"]
 
 all-upnp = ["upnp", "upnp-api", "upnp-openapi", "upnp-simulator"]

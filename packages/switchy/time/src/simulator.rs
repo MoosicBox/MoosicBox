@@ -13,12 +13,10 @@
 //! Simulated time is calculated as: `epoch_offset + (step * step_multiplier)`
 
 use std::{
-    cell::{Cell, RefCell},
-    sync::{LazyLock, RwLock},
+    cell::Cell,
+    sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-use scoped_tls::scoped_thread_local;
 
 /// Marker type for temporarily using real system time instead of simulated time.
 ///
@@ -27,8 +25,81 @@ use scoped_tls::scoped_thread_local;
 /// and is only used as a scoped thread-local marker.
 pub struct RealTime;
 
-scoped_thread_local! {
-    static REAL_TIME: RealTime
+thread_local! {
+    /// How many [`with_real_time`] scopes the current thread is inside. A property of the
+    /// call stack, not of the simulation run, so it stays per OS thread.
+    static REAL_TIME_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+/// The simulated clock of one simulation run, kept in its [`switchy_simulation::Context`] so
+/// every simulated thread of the run reads the same time.
+#[derive(Default)]
+struct Clock(Mutex<ClockState>);
+
+#[derive(Default)]
+struct ClockState {
+    epoch_offset: Option<u64>,
+    step_multiplier: Option<u64>,
+    clock_generation: u64,
+    step: u64,
+}
+
+fn clock() -> Arc<Clock> {
+    switchy_simulation::state::<Clock>()
+}
+
+fn clock_state(clock: &Clock) -> MutexGuard<'_, ClockState> {
+    clock.0.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn with_clock<R>(f: impl FnOnce(&mut ClockState) -> R) -> R {
+    let clock = clock();
+    let mut state = clock_state(&clock);
+    f(&mut state)
+}
+
+/// A uniform draw in `min..=max` for the clock's random parameters.
+///
+/// With the `random` feature the run's `switchy_random` generator is used, which keeps the
+/// sequences of earlier releases; without it a dedicated `switchy_simulation` stream is used,
+/// so the simulator needs no `rand`.
+fn draw_inclusive(min: u64, max: u64) -> u64 {
+    #[cfg(feature = "random")]
+    {
+        switchy_random::rng().gen_range(min..=max)
+    }
+    #[cfg(not(feature = "random"))]
+    {
+        switchy_simulation::stream("switchy_time")
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .range_inclusive(min..=max)
+    }
+}
+
+/// A step multiplier in `1..1_000_000_000`, skewed strongly towards small values.
+fn draw_step_multiplier() -> u64 {
+    #[cfg(feature = "random")]
+    {
+        switchy_random::rng().gen_range_disti(1..1_000_000_000, 20)
+    }
+    #[cfg(not(feature = "random"))]
+    {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        {
+            let (value, unit) = {
+                let stream = switchy_simulation::stream("switchy_time");
+                let mut rng = stream.lock().unwrap_or_else(PoisonError::into_inner);
+                (rng.range(1..1_000_000_000) as f64, rng.unit_f64())
+            };
+            let factor = unit.mul_add(1.0 - 0.0001, 0.0001);
+            (value * factor.powi(20)).round() as u64
+        }
+    }
 }
 
 /// Executes a function using real system time instead of simulated time.
@@ -47,15 +118,19 @@ scoped_thread_local! {
 /// });
 /// ```
 pub fn with_real_time<T>(f: impl FnOnce() -> T) -> T {
-    REAL_TIME.set(&RealTime, f)
+    struct Leave;
+    impl Drop for Leave {
+        fn drop(&mut self) {
+            REAL_TIME_DEPTH.set(REAL_TIME_DEPTH.get() - 1);
+        }
+    }
+    REAL_TIME_DEPTH.set(REAL_TIME_DEPTH.get() + 1);
+    let _leave = Leave;
+    f()
 }
 
 pub(crate) fn is_real_time() -> bool {
-    REAL_TIME.is_set()
-}
-
-thread_local! {
-    static EPOCH_OFFSET: RefCell<RwLock<Option<u64>>> = const { RefCell::new(RwLock::new(None)) };
+    REAL_TIME_DEPTH.get() > 0
 }
 
 const EPOCH_PROFILE_LOW_MIN: u64 = 946_684_800_000;
@@ -118,7 +193,7 @@ fn gen_epoch_offset() -> u64 {
 
     let (min, max) = epoch_bounds();
 
-    switchy_random::rng().gen_range(min..=max)
+    draw_inclusive(min, max)
 }
 
 /// Resets the epoch offset to a new random value.
@@ -135,8 +210,8 @@ fn gen_epoch_offset() -> u64 {
 /// * If `SIMULATOR_EPOCH_RANGE_PROFILE` is set to an unsupported value
 pub fn reset_epoch_offset() {
     let value = gen_epoch_offset();
-    log::trace!("reset_epoch_offset to seed={value}");
-    EPOCH_OFFSET.with_borrow_mut(|x| *x.write().unwrap() = Some(value));
+    crate::trace!("reset_epoch_offset to seed={value}");
+    with_clock(|clock| clock.epoch_offset = Some(value));
 }
 
 /// Returns the current epoch offset in milliseconds.
@@ -154,22 +229,17 @@ pub fn reset_epoch_offset() {
 /// * If `SIMULATOR_EPOCH_RANGE_PROFILE` is set to an unsupported value
 #[must_use]
 pub fn epoch_offset() -> u64 {
-    let value = EPOCH_OFFSET.with_borrow(|x| *x.read().unwrap());
-    value.unwrap_or_else(|| {
-        let value = gen_epoch_offset();
-        EPOCH_OFFSET.with_borrow_mut(|x| *x.write().unwrap() = Some(value));
-        value
-    })
-}
-
-thread_local! {
-    static STEP_MULTIPLIER: RefCell<RwLock<Option<u64>>> = const { RefCell::new(RwLock::new(None)) };
+    if let Some(value) = with_clock(|clock| clock.epoch_offset) {
+        return value;
+    }
+    let value = gen_epoch_offset();
+    with_clock(|clock| *clock.epoch_offset.get_or_insert(value))
 }
 
 fn gen_step_multiplier() -> u64 {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let value = {
-        let value = switchy_random::rng().gen_range_disti(1..1_000_000_000, 20);
+        let value = draw_step_multiplier();
         if value == 0 { 1 } else { value }
     };
     std::env::var("SIMULATOR_STEP_MULTIPLIER")
@@ -189,9 +259,11 @@ fn gen_step_multiplier() -> u64 {
 /// * If the `SIMULATOR_STEP_MULTIPLIER` environment variable is set but cannot be parsed as a `u64`
 pub fn reset_step_multiplier() {
     let value = gen_step_multiplier();
-    log::trace!("reset_step_multiplier to seed={value}");
-    advance_clock_generation();
-    STEP_MULTIPLIER.with_borrow_mut(|x| *x.write().unwrap() = Some(value));
+    crate::trace!("reset_step_multiplier to seed={value}");
+    with_clock(|clock| {
+        advance_generation(clock);
+        clock.step_multiplier = Some(value);
+    });
 }
 
 /// Returns the current step multiplier in milliseconds per step.
@@ -205,29 +277,22 @@ pub fn reset_step_multiplier() {
 /// * If the `SIMULATOR_STEP_MULTIPLIER` environment variable is set but cannot be parsed as a `u64`
 #[must_use]
 pub fn step_multiplier() -> u64 {
-    let value = STEP_MULTIPLIER.with_borrow(|x| *x.read().unwrap());
-    value.unwrap_or_else(|| {
-        let value = gen_step_multiplier();
-        STEP_MULTIPLIER.with_borrow_mut(|x| *x.write().unwrap() = Some(value));
-        value
-    })
-}
-
-thread_local! {
-    static CLOCK_GENERATION: Cell<u64> = const { Cell::new(0) };
-    static STEP: RefCell<RwLock<u64>> = const { RefCell::new(RwLock::new(0)) };
+    if let Some(value) = with_clock(|clock| clock.step_multiplier) {
+        return value;
+    }
+    let value = gen_step_multiplier();
+    with_clock(|clock| *clock.step_multiplier.get_or_insert(value))
 }
 
 pub(crate) fn clock_generation() -> u64 {
-    CLOCK_GENERATION.get()
+    with_clock(|clock| clock.clock_generation)
 }
 
-fn advance_clock_generation() {
-    CLOCK_GENERATION.set(
-        clock_generation()
-            .checked_add(1)
-            .expect("simulation clock generation overflow"),
-    );
+const fn advance_generation(clock: &mut ClockState) {
+    clock.clock_generation = clock
+        .clock_generation
+        .checked_add(1)
+        .expect("simulation clock generation overflow");
 }
 
 /// Sets the current simulation step to the specified value.
@@ -241,11 +306,13 @@ fn advance_clock_generation() {
 /// * If the `STEP` `RwLock` fails to write to
 #[must_use]
 pub fn set_step(step: u64) -> u64 {
-    log::trace!("set_step to step={step}");
-    if step < current_step() {
-        advance_clock_generation();
-    }
-    STEP.with_borrow_mut(|x| *x.write().unwrap() = step);
+    crate::trace!("set_step to step={step}");
+    with_clock(|clock| {
+        if step < clock.step {
+            advance_generation(clock);
+        }
+        clock.step = step;
+    });
     step
 }
 
@@ -274,8 +341,10 @@ pub fn next_step() -> u64 {
 /// * If the clock generation counter overflows.
 /// * If the `STEP` `RwLock` fails to write to
 pub fn reset_step() {
-    advance_clock_generation();
-    STEP.with_borrow_mut(|x| *x.write().unwrap() = 0);
+    with_clock(|clock| {
+        advance_generation(clock);
+        clock.step = 0;
+    });
 }
 
 /// Returns the current simulation step.
@@ -285,7 +354,7 @@ pub fn reset_step() {
 /// * If the `STEP` `RwLock` fails to read from
 #[must_use]
 pub fn current_step() -> u64 {
-    STEP.with_borrow(|x| *x.read().unwrap())
+    with_clock(|clock| clock.step)
 }
 
 /// Returns the current simulated system time, or real time if in a `with_real_time` context.
@@ -314,7 +383,7 @@ pub fn current_step() -> u64 {
 /// * If adding the simulated duration to `UNIX_EPOCH` overflows
 #[must_use]
 pub fn now() -> SystemTime {
-    if REAL_TIME.is_set() {
+    if is_real_time() {
         return SystemTime::now();
     }
 
@@ -323,7 +392,7 @@ pub fn now() -> SystemTime {
     let step = current_step();
     let mult_step = step.checked_mul(step_multiplier).unwrap();
     let millis = epoch_offset.checked_add(mult_step).unwrap();
-    log::trace!(
+    crate::trace!(
         "now: epoch_offset={epoch_offset} step={step} step_multiplier={step_multiplier} millis={millis}"
     );
     UNIX_EPOCH
@@ -357,7 +426,7 @@ static BASE_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
 /// * If multiplication overflows while calculating simulated milliseconds
 #[must_use]
 pub fn instant_now() -> Instant {
-    if REAL_TIME.is_set() {
+    if is_real_time() {
         return Instant::now();
     }
 
@@ -371,7 +440,7 @@ pub(crate) fn monotonic_instant_now() -> Instant {
     let mult_step = step.checked_mul(step_multiplier).unwrap();
     let duration = Duration::from_millis(mult_step);
 
-    log::trace!(
+    crate::trace!(
         "instant_now: step={step} step_multiplier={step_multiplier} duration_millis={mult_step}"
     );
 
@@ -386,7 +455,7 @@ pub(crate) fn monotonic_instant_now() -> Instant {
 #[cfg(feature = "chrono")]
 #[must_use]
 pub fn datetime_local_now() -> chrono::DateTime<chrono::Local> {
-    if REAL_TIME.is_set() {
+    if is_real_time() {
         return chrono::Local::now();
     }
 
@@ -403,7 +472,7 @@ pub fn datetime_local_now() -> chrono::DateTime<chrono::Local> {
 #[cfg(feature = "chrono")]
 #[must_use]
 pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
-    if REAL_TIME.is_set() {
+    if is_real_time() {
         return chrono::Utc::now();
     }
 
@@ -417,27 +486,23 @@ mod tests {
     #[test]
     fn real_time_scope_restores_simulation_after_unwind() {
         std::thread::spawn(|| {
-            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(1);
-            });
-            super::EPOCH_OFFSET.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(1);
-            });
+            super::with_clock(|clock| clock.step_multiplier = Some(1));
+            super::with_clock(|clock| clock.epoch_offset = Some(1));
             let wall = super::now();
             let monotonic = super::instant_now();
             let result = std::panic::catch_unwind(|| {
                 super::with_real_time(|| {
-                    assert!(super::REAL_TIME.is_set());
+                    assert!(super::is_real_time());
                     let nested = std::panic::catch_unwind(|| {
                         super::with_real_time(|| panic!("nested scope failure"));
                     });
                     assert!(nested.is_err());
-                    assert!(super::REAL_TIME.is_set());
+                    assert!(super::is_real_time());
                     panic!("outer scope failure");
                 });
             });
             assert!(result.is_err());
-            assert!(!super::REAL_TIME.is_set());
+            assert!(!super::is_real_time());
             assert_eq!(super::now(), wall);
             assert_eq!(super::instant_now(), monotonic);
             let _ = super::next_step();
@@ -452,12 +517,8 @@ mod tests {
     fn overflowing_clock_reads_preserve_state() {
         std::thread::spawn(|| {
             // Set private thread-local fixtures instead of mutating process environment.
-            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(2);
-            });
-            super::EPOCH_OFFSET.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(1);
-            });
+            super::with_clock(|clock| clock.step_multiplier = Some(2));
+            super::with_clock(|clock| clock.epoch_offset = Some(1));
             let wall = super::now();
             let monotonic = super::instant_now();
             let _ = super::set_step(u64::MAX);
@@ -477,12 +538,8 @@ mod tests {
     #[test]
     fn epoch_addition_overflow_does_not_break_monotonic_time() {
         std::thread::spawn(|| {
-            super::STEP_MULTIPLIER.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(1);
-            });
-            super::EPOCH_OFFSET.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(u64::MAX);
-            });
+            super::with_clock(|clock| clock.step_multiplier = Some(1));
+            super::with_clock(|clock| clock.epoch_offset = Some(u64::MAX));
             let baseline = super::instant_now();
             let _ = super::next_step();
             assert!(std::panic::catch_unwind(super::now).is_err());
@@ -490,9 +547,7 @@ mod tests {
             assert_eq!(super::epoch_offset(), u64::MAX);
             assert_eq!(super::instant_now(), baseline + Duration::from_millis(1));
             // Repair only the wall-clock fixture; do not rewind monotonic time.
-            super::EPOCH_OFFSET.with_borrow_mut(|value| {
-                *value.write().unwrap() = Some(1);
-            });
+            super::with_clock(|clock| clock.epoch_offset = Some(1));
             assert_eq!(super::now(), UNIX_EPOCH + Duration::from_millis(2));
             assert_eq!(super::instant_now(), baseline + Duration::from_millis(1));
         })
@@ -514,6 +569,7 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use std::{collections::BTreeMap, time::Duration};
+    #[cfg(feature = "random")]
     use switchy_random::rand::rand::Rng as _;
 
     // Note: All tests in this module use #[serial] because they interact with:
@@ -703,6 +759,7 @@ mod tests {
         assert!((EPOCH_PROFILE_FULL_MIN..=EPOCH_PROFILE_FULL_MAX).contains(&offset));
     }
 
+    #[cfg(feature = "random")]
     #[test_log::test]
     #[serial]
     fn test_seeded_epoch_offsets_follow_deterministic_sequence() {

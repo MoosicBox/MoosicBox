@@ -18640,6 +18640,7 @@ version = "0.5.0"
 dependencies = [
  "log 0.4.34",
  "rand 0.8.8",
+ "switchy_simulation",
  "test-log",
 ]
 
@@ -18711,6 +18712,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_simulation"
+version = "0.5.0"
+
+[[package]]
 name = "switchy_tcp"
 version = "0.5.0"
 dependencies = [
@@ -18754,9 +18759,9 @@ version = "0.5.0"
 dependencies = [
  "chrono",
  "log 0.4.34",
- "scoped-tls",
  "serial_test",
  "switchy_random",
+ "switchy_simulation",
  "test-log",
 ]
 

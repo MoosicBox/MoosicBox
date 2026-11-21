@@ -17,25 +17,28 @@ examples = true
 group = "switchy"
 
 [dependencies]
-switchy_random = { workspace = true, optional = true, features = ["rand"] }
+switchy_random     = { workspace = true, optional = true, features = ["rand"] }
+switchy_simulation = { workspace = true, optional = true }
 
-chrono     = { workspace = true, optional = true }
-log        = { workspace = true }
-scoped-tls = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+log    = { workspace = true, optional = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
 test-log    = { workspace = true }
 
 [features]
-default = ["simulator", "std"]
+default = ["log", "random", "simulator", "std"]
 
-fail-on-warnings = ["switchy_random?/fail-on-warnings"]
+fail-on-warnings = [
+    "switchy_random?/fail-on-warnings",
+    "switchy_simulation?/fail-on-warnings",
+]
 
 chrono = ["dep:chrono"]
-simulator = [
-    "dep:scoped-tls",
-    "dep:switchy_random",
-    "switchy_random?/simulator",
-]
-std = []
+log    = ["dep:log"]
+# Draw the simulated clock's random parameters from the run's `switchy_random` generator,
+# keeping the sequences of earlier releases. Without it the simulator needs no `rand`.
+random    = ["dep:switchy_random", "simulator", "switchy_random?/simulator"]
+simulator = ["dep:switchy_simulation"]
+std       = []

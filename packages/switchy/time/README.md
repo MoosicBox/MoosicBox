@@ -9,7 +9,8 @@ A simple time abstraction library providing unified time access with support for
 - **Simulated Time**: Controllable time simulation for testing and development
 - **Step Control**: Manually advance simulated time in discrete steps
 - **Epoch Offset**: Configurable time offset for simulation scenarios
-- **Thread Local State**: Per-thread time simulation state management
+- **Per-Run State**: The simulated clock belongs to the current `switchy_simulation` run context, shared by every simulated thread of the run
+- **No `rand` Needed**: Without the `random` feature the simulator draws its parameters from a `switchy_simulation` stream; with it (the default) they come from `switchy_random`, matching earlier releases
 - **Chrono Integration**: Optional `chrono` support with `datetime_local_now()` and `datetime_utc_now()` functions
 
 ## Installation

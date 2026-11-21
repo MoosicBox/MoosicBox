@@ -4,10 +4,12 @@
 //! that require reproducible random sequences. The initial seed can be configured via
 //! the `SIMULATOR_SEED` environment variable.
 //!
-//! # Thread-Local State
+//! # Per-Run State
 //!
-//! The simulator maintains thread-local RNG state to ensure deterministic behavior in
-//! multi-threaded simulations. Each thread has its own seed that can be reset independently.
+//! The seed and generator belong to the current simulation run's
+//! [`switchy_simulation::Context`]. Threads that were never given a context each get their
+//! own, so they stay independent; simulated threads spawned by `switchy_thread` share their
+//! run's context, and so its seed and generator.
 //!
 //! # Examples
 //!
@@ -21,10 +23,7 @@
 //! # }
 //! ```
 
-use std::{
-    cell::RefCell,
-    sync::{Arc, LazyLock, Mutex, RwLock},
-};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use rand_08::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 
@@ -36,16 +35,6 @@ use crate::GenericRng;
 /// random sequences are required. It can be seeded from the `SIMULATOR_SEED` environment variable.
 pub struct SimulatorRng(Arc<Mutex<SmallRng>>);
 
-static INITIAL_SEED: LazyLock<u64> = LazyLock::new(|| {
-    std::env::var("SIMULATOR_SEED").ok().map_or_else(
-        || SmallRng::from_entropy().next_u64(),
-        |x| x.parse::<u64>().unwrap(),
-    )
-});
-
-static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
-    LazyLock::new(|| Mutex::new(SmallRng::seed_from_u64(*INITIAL_SEED)));
-
 /// Returns the initial seed used for simulation.
 ///
 /// This seed is either read from the `SIMULATOR_SEED` environment variable
@@ -56,26 +45,39 @@ static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
 /// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 #[must_use]
 pub fn initial_seed() -> u64 {
-    *INITIAL_SEED
+    switchy_simulation::initial_seed()
 }
 
-thread_local! {
-    static SEED: RefCell<RwLock<u64>> = RefCell::new(RwLock::new(*INITIAL_SEED));
+/// The simulation run's shared generator, kept in its [`switchy_simulation::Context`] so
+/// every simulated thread of the run draws from the same sequence.
+struct RunRng(crate::Rng);
 
-    static RNG: RefCell<crate::Rng> = RefCell::new(crate::Rng::new());
+fn run_rng() -> Arc<RunRng> {
+    switchy_simulation::state_with(|| RunRng(crate::Rng::from_seed(switchy_simulation::seed())))
 }
 
-/// Returns a clone of the thread-local random number generator for simulation.
+fn reseed(seed: u64) {
+    *run_rng().0.0.lock().unwrap().0.lock().unwrap() = SmallRng::seed_from_u64(seed);
+}
+
+/// Returns a clone of the simulation run's random number generator.
+///
+/// Clones share state, and observe [`reset_rng`] and [`reset_seed`].
 ///
 /// # Panics
 ///
 /// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
 #[must_use]
 pub fn rng() -> crate::Rng {
-    RNG.with_borrow(Clone::clone)
+    run_rng().0.clone()
 }
 
-/// Generates a new seed value from the initial RNG.
+/// The process-wide sequence that seeds simulation runs, kept on `SmallRng` so recorded run
+/// seeds (`SIMULATOR_RUNS > 1`) replay exactly as before.
+static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
+    LazyLock::new(|| Mutex::new(SmallRng::seed_from_u64(initial_seed())));
+
+/// Generates a new seed value from the process-wide seed sequence.
 ///
 /// # Panics
 ///
@@ -88,45 +90,42 @@ pub fn gen_seed() -> u64 {
 /// Returns whether a fixed seed was provided via the `SIMULATOR_SEED` environment variable.
 #[must_use]
 pub fn contains_fixed_seed() -> bool {
-    std::env::var("SIMULATOR_SEED").is_ok()
+    switchy_simulation::contains_fixed_seed()
 }
 
-/// Resets the thread-local seed to a new generated value.
+/// Gives the simulation run a new generated seed and restarts its generator from it.
 ///
 /// # Panics
 ///
 /// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
-/// * If the `SEED` `RwLock` fails to write to
 /// * If the `RNG` `Mutex` fails to lock
 pub fn reset_seed() {
     let seed = gen_seed();
     log::debug!("reset_seed to seed={seed}");
-    SEED.with_borrow_mut(|x| *x.write().unwrap() = seed);
-    RNG.with_borrow_mut(|x| *x.0.lock().unwrap().0.lock().unwrap() = SmallRng::seed_from_u64(seed));
+    switchy_simulation::set_seed(seed);
+    reseed(seed);
 }
 
-/// Returns the current thread-local seed value.
+/// Returns the simulation run's seed.
 ///
 /// # Panics
 ///
 /// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
-/// * If the `SEED` `RwLock` fails to read from
 #[must_use]
 pub fn seed() -> u64 {
-    SEED.with_borrow(|x| *x.read().unwrap())
+    switchy_simulation::seed()
 }
 
-/// Resets the thread-local RNG to use the current seed value.
+/// Restarts the simulation run's generator from its current seed.
 ///
 /// # Panics
 ///
 /// * If `SIMULATOR_SEED` is set but cannot be parsed as `u64`
-/// * If the `SEED` `RwLock` fails to read from
 /// * If the `RNG` `Mutex` fails to lock
 pub fn reset_rng() {
     let seed = seed();
     log::debug!("reset_rng to seed={seed}");
-    RNG.with_borrow_mut(|x| *x.0.lock().unwrap().0.lock().unwrap() = SmallRng::seed_from_u64(seed));
+    reseed(seed);
 }
 
 impl SimulatorRng {
