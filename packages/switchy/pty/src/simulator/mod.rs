@@ -153,6 +153,10 @@ pub enum ProcessState {
 /// A read-only view of one process.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessSnapshot {
+    /// A number unique to this process within the run (ids are reused; serials are not).
+    pub serial: u64,
+    /// The serial of its session's leader.
+    pub session_serial: u64,
     /// Its id.
     pub pid: u32,
     /// The process that started it, if a simulated one did.
@@ -243,7 +247,22 @@ struct Pipe {
     written: Vec<u8>,
 }
 
+/// One delivered signal, kept for the whole run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SignalRecord {
+    /// The receiving process's serial (see [`ProcessSnapshot::serial`]).
+    pub serial: u64,
+    /// Its id when the signal arrived.
+    pub pid: u32,
+    /// The serial of its session's leader.
+    pub session_serial: u64,
+    /// The signal.
+    pub signal: Signal,
+}
+
 struct Proc {
+    serial: u64,
+    session_serial: u64,
     parent: Option<u32>,
     group: u32,
     session: u32,
@@ -269,6 +288,7 @@ struct State {
     next_id: u64,
     programs: BTreeMap<String, Program>,
     io: BTreeMap<u32, ProcessIo>,
+    signal_log: Vec<SignalRecord>,
 }
 
 /// A run's simulated kernel.
@@ -324,6 +344,19 @@ pub fn register_program(name: &str, program: impl Fn(&mut Process) -> i32 + Send
 #[must_use]
 pub fn snapshot() -> KernelSnapshot {
     kernel().snapshot()
+}
+
+/// Every signal delivered in the current run so far, in order.
+#[must_use]
+pub fn signal_log() -> Vec<SignalRecord> {
+    lock(&kernel().state).signal_log.clone()
+}
+
+/// The serial of the running or exited process with id `pid`; see
+/// [`ProcessSnapshot::serial`].
+#[must_use]
+pub fn serial_of(pid: u32) -> Option<u64> {
+    lock(&kernel().state).processes.get(&pid).map(|p| p.serial)
 }
 
 /// Every byte processes wrote to the terminal at simulated path `name`, in order.
@@ -474,6 +507,7 @@ impl Kernel {
                 next_id: 1,
                 programs: BTreeMap::new(),
                 io: BTreeMap::new(),
+                signal_log: Vec::new(),
             }),
         }
     }
@@ -537,6 +571,8 @@ impl Kernel {
                 .processes
                 .iter()
                 .map(|(&pid, p)| ProcessSnapshot {
+                    serial: p.serial,
+                    session_serial: p.session_serial,
                     pid,
                     parent: p.parent,
                     group: p.group,
@@ -657,6 +693,16 @@ impl Kernel {
             return;
         }
         process.signals.push(signal);
+        let record = SignalRecord {
+            serial: process.serial,
+            pid,
+            session_serial: process.session_serial,
+            signal,
+        };
+        state.signal_log.push(record);
+        let Some(process) = state.processes.get_mut(&pid) else {
+            return;
+        };
         let disposition = if signal == Signal::Kill {
             Disposition::Default
         } else {
@@ -882,6 +928,8 @@ impl Kernel {
             ));
         }
         let pid = self.allocate_pid(&mut state);
+        let serial = Self::new_id(&mut state);
+        let session_serial = parent.map_or(serial, |(p, _, _)| state.processes[&p].session_serial);
         let mut stdin_pipe = None;
         let mut stdout_pipe = None;
         let (group, session, streams, controlling, inherited) =
@@ -950,6 +998,8 @@ impl Kernel {
         state.processes.insert(
             pid,
             Proc {
+                serial,
+                session_serial,
                 parent: parent.map(|(p, _, _)| p),
                 group,
                 session,
