@@ -53,10 +53,23 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
             // Wrap the future with .fuse() using the provided crate path
             let fused_future = quote! { #crate_path::futures::FutureExt::fuse(#future) };
 
-            // Reconstruct the branch with the fused future
+            // `futures::select!` has no preconditions. As in `tokio::select!`, a disabled
+            // branch's future is still created but never polled: it becomes a terminated
+            // future, which `futures::select!` never picks.
             guard.map_or_else(
                 || quote! { #pattern = #fused_future => #handler },
-                |guard_expr| quote! { #pattern = #fused_future, if #guard_expr => #handler },
+                |guard_expr| {
+                    quote! {
+                        #pattern = {
+                            let switchy_select_future = #future;
+                            if #guard_expr {
+                                #crate_path::futures::FutureExt::fuse(switchy_select_future)
+                            } else {
+                                #crate_path::futures::future::Fuse::terminated()
+                            }
+                        } => #handler
+                    }
+                },
             )
         })
         .collect();

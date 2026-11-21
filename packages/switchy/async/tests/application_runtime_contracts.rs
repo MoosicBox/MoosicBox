@@ -1184,7 +1184,7 @@ async fn abort_preserves_completed_result() {
     let handle = switchy_async::task::spawn(async { 42 });
     // Simulator caches the received result when checking completion.
     #[cfg(feature = "simulator")]
-    let mut handle = handle;
+    let handle = handle;
     while !handle.is_finished() {
         switchy_async::task::yield_now().await;
     }

@@ -572,6 +572,25 @@ pub struct JoinHandle<T> {
     result: Option<Result<T, task::JoinError>>,
     finished: bool,
     abort_handle: Option<futures::future::AbortHandle>,
+    /// Set once the task's result is sent or the task is dropped (see [`Finished`]).
+    done: Arc<AtomicBool>,
+}
+
+/// Marks a task finished when dropped: when its future completes, or is dropped unfinished
+/// (aborted), or (for blocking work on a simulated thread) when that work returns.
+struct Finished(Arc<AtomicBool>);
+
+impl Finished {
+    fn new() -> (Self, Arc<AtomicBool>) {
+        let done = Arc::new(AtomicBool::new(false));
+        (Self(Arc::clone(&done)), done)
+    }
+}
+
+impl Drop for Finished {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
 }
 
 impl<T: Send + Unpin> JoinHandle<T> {
@@ -579,25 +598,8 @@ impl<T: Send + Unpin> JoinHandle<T> {
     ///
     /// Returns `true` if the task has finished executing, `false` otherwise.
     #[must_use]
-    pub fn is_finished(&mut self) -> bool {
-        if self.finished {
-            return true;
-        }
-
-        // A status probe must not replace the waker registered by a join waiter.
-        match self.rx.try_recv() {
-            Ok(Some(value)) => {
-                self.finished = true;
-                self.result = Some(Ok(value));
-                true
-            }
-            Err(_) => {
-                self.finished = true;
-                self.result = Some(Err(task::JoinError::new()));
-                true
-            }
-            Ok(None) => false,
-        }
+    pub fn is_finished(&self) -> bool {
+        self.finished || self.done.load(Ordering::SeqCst)
     }
 
     /// Requests cancellation of an asynchronous task at its next poll.
@@ -649,9 +651,11 @@ impl Spawner {
         let (tx, rx) = futures::channel::oneshot::channel();
 
         let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
+        let (finished, done) = Finished::new();
         let wrapped = async move {
             let _ = futures::future::Abortable::new(
                 async move {
+                    let _finished = finished;
                     let _ = tx.send(future.await);
                 },
                 registration,
@@ -666,6 +670,7 @@ impl Spawner {
             result: None,
             finished: false,
             abort_handle: Some(abort_handle),
+            done,
         }
     }
 
@@ -678,6 +683,7 @@ impl Spawner {
         let (tx, rx) = futures::channel::oneshot::channel();
 
         let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
+        let (finished, done) = Finished::new();
         #[cfg(feature = "thread-simulator")]
         let owner = runtime.clone();
         let wrapped = async move {
@@ -687,9 +693,12 @@ impl Spawner {
                     // this task (so aborting before then still drops it unrun), and blocking in
                     // it blocks only that thread.
                     #[cfg(feature = "thread-simulator")]
-                    start_blocking_thread(&owner, func, tx);
+                    start_blocking_thread(&owner, func, tx, finished);
                     #[cfg(not(feature = "thread-simulator"))]
-                    let _ = tx.send(func());
+                    {
+                        let _finished = finished;
+                        let _ = tx.send(func());
+                    }
                 },
                 registration,
             )
@@ -703,6 +712,7 @@ impl Spawner {
             result: None,
             finished: false,
             abort_handle: Some(abort_handle),
+            done,
         }
     }
 
@@ -717,7 +727,9 @@ impl Spawner {
         // Create a Send proxy that references the non-Send future in thread-local storage
         let proxy = LocalFutureProxy::new(future, tx);
         let (abort_handle, registration) = futures::future::AbortHandle::new_pair();
+        let (finished, done) = Finished::new();
         let wrapped = async move {
+            let _finished = finished;
             let _ = futures::future::Abortable::new(proxy, registration).await;
         };
 
@@ -728,6 +740,7 @@ impl Spawner {
             result: None,
             finished: false,
             abort_handle: Some(abort_handle),
+            done,
         }
     }
 
@@ -960,6 +973,7 @@ fn start_blocking_thread<F, R>(
     runtime: &Runtime,
     func: F,
     result: futures::channel::oneshot::Sender<R>,
+    finished: Finished,
 ) where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -970,6 +984,7 @@ fn start_blocking_thread<F, R>(
         .name("spawn-blocking".to_owned())
         .spawn(move || {
             let _ = result.send(func());
+            drop(finished);
             done.tasks.fetch_sub(1, Ordering::SeqCst);
             done.notify();
         })
@@ -1247,7 +1262,7 @@ mod test {
     fn join_handle_is_finished_detects_completion() {
         let runtime = build_runtime(&Builder::new()).unwrap();
 
-        let mut join_handle = runtime.spawn(async { 42 });
+        let join_handle = runtime.spawn(async { 42 });
 
         // Initially not finished
         assert!(!join_handle.is_finished());
@@ -1466,7 +1481,7 @@ mod test {
             let runtime = build_runtime(&Builder::new()).unwrap();
             let state = Arc::new(());
             let weak = Arc::downgrade(&state);
-            let mut handle = runtime.spawn(async move {
+            let handle = runtime.spawn(async move {
                 crate::time::timeout(period, async move {
                     std::future::pending::<()>().await;
                     drop(state);
@@ -1504,7 +1519,7 @@ mod test {
             let second = build_runtime(&Builder::new()).unwrap();
             let state = Arc::new(());
             let weak = Arc::downgrade(&state);
-            let mut sleeper = second.spawn(async move {
+            let sleeper = second.spawn(async move {
                 crate::time::sleep(period).await;
                 drop(state);
                 19
@@ -1550,7 +1565,7 @@ mod test {
             let weak = std::rc::Rc::downgrade(&state);
             let completed = std::rc::Rc::new(std::cell::Cell::new(false));
             let effect = completed.clone();
-            let mut handle = runtime.spawn_local(async move {
+            let handle = runtime.spawn_local(async move {
                 crate::time::sleep(period).await;
                 effect.set(true);
                 drop(state);
@@ -1599,7 +1614,7 @@ mod test {
             let events = Arc::new(Mutex::new(Vec::new()));
             let observed = events.clone();
             let start = switchy_time::instant_now();
-            let mut handle = runtime.spawn(async move {
+            let handle = runtime.spawn(async move {
                 let mut interval = crate::time::interval(period);
                 for _ in 0..4 {
                     let deadline = interval.tick().await;

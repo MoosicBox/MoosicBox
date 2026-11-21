@@ -193,6 +193,21 @@ macro_rules! atomic_common {
                 self.update(set_order, |old| f(old))
             }
 
+            /// Update the value with `f` unless it returns `None`, returning the previous value
+            /// (`Ok`) or the unchanged one (`Err`); `std`'s `try_update`. A switch point.
+            ///
+            /// # Errors
+            ///
+            /// * The current value, if `f` returned `None`
+            pub fn try_update<F: FnMut($value) -> Option<$value>>(
+                &self,
+                set_order: Ordering,
+                fetch_order: Ordering,
+                f: F,
+            ) -> Result<$value, $value> {
+                self.fetch_update(set_order, fetch_order, f)
+            }
+
             /// The value, consuming the atomic.
             pub const fn into_inner(self) -> $value {
                 self.inner.into_inner()

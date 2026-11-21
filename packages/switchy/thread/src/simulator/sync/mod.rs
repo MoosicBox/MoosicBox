@@ -271,6 +271,40 @@ impl Condvar {
         }
     }
 
+    /// Like [`Self::wait_while`], but for at most `timeout` of simulated time in all.
+    ///
+    /// # Errors
+    ///
+    /// * If a thread panicked while holding the lock; the guard is still returned
+    pub fn wait_timeout_while<'a, T, F: FnMut(&mut T) -> bool>(
+        &self,
+        mut guard: MutexGuard<'a, T>,
+        timeout: Duration,
+        mut condition: F,
+    ) -> LockResult<(MutexGuard<'a, T>, WaitTimeoutResult)> {
+        let deadline = deadline_after(timeout);
+        loop {
+            if !condition(&mut *guard) {
+                return Ok((guard, WaitTimeoutResult(false)));
+            }
+            let (result, timed_out) = self.wait_until(guard, deadline);
+            match result {
+                Ok(next) if timed_out => {
+                    guard = next;
+                    let still = condition(&mut *guard);
+                    return Ok((guard, WaitTimeoutResult(still)));
+                }
+                Ok(next) => guard = next,
+                Err(poisoned) => {
+                    return Err(PoisonError::new((
+                        poisoned.into_inner(),
+                        WaitTimeoutResult(timed_out),
+                    )));
+                }
+            }
+        }
+    }
+
     fn wait_until<'a, T>(
         &self,
         guard: MutexGuard<'a, T>,

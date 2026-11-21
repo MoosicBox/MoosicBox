@@ -52,3 +52,24 @@ async fn selecting_shutdown_drops_owned_pending_work() {
     }
     assert!(dropped.load(Ordering::SeqCst));
 }
+
+/// A branch whose precondition is false is not polled, and the others still run.
+#[cfg(feature = "simulator")]
+#[test]
+fn preconditions_disable_branches() {
+    let runtime = switchy_async::simulator::runtime::Runtime::new();
+    let picked = runtime.block_on(async {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<u32>();
+        tx.send(7).unwrap();
+        let mut picked = Vec::new();
+        let mut ready = std::future::ready(1);
+        for enabled in [false, true] {
+            switchy_async::select! {
+                value = &mut ready, if enabled => picked.push(("ready", value)),
+                value = rx.recv(), if !enabled => picked.push(("recv", value.unwrap())),
+            }
+        }
+        picked
+    });
+    assert_eq!(picked, [("recv", 7), ("ready", 1)]);
+}
