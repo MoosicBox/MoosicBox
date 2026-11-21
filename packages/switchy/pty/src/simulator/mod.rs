@@ -175,6 +175,8 @@ pub struct ProcessSnapshot {
     pub terminal: Option<String>,
     /// Every signal delivered to it, in order.
     pub signals: Vec<Signal>,
+    /// Its working directory.
+    pub cwd: PathBuf,
 }
 
 /// A read-only view of one terminal.
@@ -367,6 +369,7 @@ struct Proc {
     /// Whether a [`Child`] handle will wait for it; otherwise it is reaped when it exits.
     waited: bool,
     signals: Vec<Signal>,
+    cwd: PathBuf,
 }
 
 struct State {
@@ -573,6 +576,31 @@ pub fn base_environment() -> Vec<(OsString, OsString)> {
     .collect()
 }
 
+/// Signal process `pid`.
+///
+/// # Errors
+///
+/// * [`io::ErrorKind::NotFound`] if no running process has that id (as `ESRCH`)
+pub fn signal_process(pid: u32, signal: Signal) -> io::Result<()> {
+    let kernel = kernel();
+    kernel.switch();
+    let mut state = lock(&kernel.state);
+    if !state
+        .processes
+        .get(&pid)
+        .is_some_and(|p| p.state == ProcessState::Running)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("no running process {pid}"),
+        ));
+    }
+    Kernel::deliver(&mut state, pid, signal);
+    drop(state);
+    kernel.wake();
+    Ok(())
+}
+
 /// Signal every process in `group`.
 ///
 /// # Errors
@@ -697,6 +725,7 @@ impl Kernel {
                         _ => None,
                     }),
                     signals: p.signals.clone(),
+                    cwd: p.cwd.clone(),
                 })
                 .collect(),
             terminals: state
@@ -1117,6 +1146,9 @@ impl Kernel {
                 .last_spawned
                 .insert(spawner, Spawned { pid, serial, io });
         }
+        let cwd = spec
+            .get_cwd()
+            .map_or_else(|| PathBuf::from("/home/sim"), PathBuf::from);
         state.processes.insert(
             pid,
             Proc {
@@ -1134,6 +1166,7 @@ impl Kernel {
                 fatal: None,
                 waited: parent.is_none(),
                 signals: Vec::new(),
+                cwd: cwd.clone(),
             },
         );
         drop(state);
@@ -1142,9 +1175,6 @@ impl Kernel {
             .utf8_environment()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect();
-        let cwd = spec
-            .get_cwd()
-            .map_or_else(|| PathBuf::from("/home/sim"), PathBuf::from);
         switchy_thread::thread::Builder::new()
             .name(format!("proc-{pid}-{base}"))
             .spawn(move || {

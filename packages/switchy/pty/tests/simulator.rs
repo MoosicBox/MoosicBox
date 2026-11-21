@@ -406,3 +406,31 @@ fn faults_interrupt_and_shorten_master_reads() {
     assert_eq!(output.0, expected);
     assert!(output.1 > 0);
 }
+
+#[test]
+fn a_single_process_can_be_signalled_and_reports_its_directory() {
+    run(3, Personality::Linux, || {
+        let PtyPair {
+            slave,
+            master: _master,
+        } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+        let mut command = SpawnCommand::new("sleep");
+        command.arg("60000").cwd("/work/here");
+        let mut child = slave.spawn(&command).unwrap();
+        let pid = child.id();
+        let process = simulator::snapshot()
+            .processes
+            .into_iter()
+            .find(|p| p.pid == pid)
+            .unwrap();
+        assert_eq!(process.cwd, std::path::Path::new("/work/here"));
+        simulator::signal_process(pid, Signal::Kill).unwrap();
+        assert!(child.wait().unwrap().signal_number().is_some());
+        assert_eq!(
+            simulator::signal_process(pid, Signal::Kill)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+    });
+}
