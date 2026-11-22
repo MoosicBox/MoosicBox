@@ -59,8 +59,12 @@ jobs:
             - uses: actions/setup-python@v6
               with:
                   python-version: "3.13"
-            - name: Explicit locked dependency provisioning (network only here)
-              run: cargo fetch --locked
+            - name: Provision locked dependencies and pinned range-test oracle (network only here)
+              shell: bash
+              run: |
+                  git submodule update --init --depth 1 -- packages/opus_native/libopus/opus
+                  test "$(git -C packages/opus_native/libopus/opus rev-parse HEAD)" = 34bba701ae97c913de719b1f7c10686f62cddb15
+                  cargo fetch --locked
             - name: Offline native tests and repeated immutable fingerprint probe
               shell: bash
               run: |
