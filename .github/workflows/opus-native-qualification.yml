@@ -101,7 +101,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                shard: [core, live-0, live-1, live-2, live-3, live-4, live-5, live-6, live-7, live-8, public-0, public-1, public-2, public-3, public-4, public-5, public-6, public-7, public-8, public-9, public-10, public-11, public-12, public-13, public-14, public-15, public-16, public-17, public-18, public-19, public-20, public-21, public-22, public-23]
+                shard: [core, live-0, live-1, live-2, live-3, live-4, live-5, live-6, live-7, live-8, public-0, public-1, public-2, public-3, public-4, public-5, public-6, public-7, public-8, public-9, public-10, public-11, public-12, public-13, public-14, public-15, public-16, public-17, public-18, public-19, public-20, public-21, public-22, public-23, floor-0, floor-1, floor-2, floor-3, floor-4, floor-5, floor-6, floor-7, floor-8, floor-9, floor-10, floor-11, floor-12, floor-13, floor-14, floor-15, floor-16, floor-17, floor-18, floor-19, floor-20, floor-21, floor-22, floor-23, floor-24, floor-25, floor-26, floor-27]
                 platform:
                     - {id: linux-x64, runner: ubuntu-24.04}
                     - {id: linux-arm64, runner: ubuntu-24.04-arm}
@@ -163,7 +163,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                shard: [layout-0, layout-1, layout-2, layout-3, layout-4, layout-5, layout-6, layout-7, layout-8, layout-9, layout-10, layout-11, layout-12, layout-13, layout-14, layout-15, layout-16, layout-17, layout-18, layout-19, layout-20, layout-21, layout-22, layout-23, layout-24, layout-25, layout-26, layout-27, layout-28, layout-29, layout-30, layout-31, layout-32, layout-33, layout-34, layout-35, layout-36, layout-37, layout-38, layout-39]
+                shard: [layout-0, layout-1, layout-2, layout-3, layout-4, layout-5, layout-6, layout-7, layout-8, layout-9, layout-10, layout-11, layout-12, layout-13, layout-14, layout-15, layout-16, layout-17, layout-18, layout-19, layout-20, layout-21, layout-22, layout-23, layout-24, layout-25, layout-26, layout-27, layout-28, layout-29, layout-30, layout-31, layout-32, layout-33, layout-34, layout-35, layout-36, layout-37, layout-38, layout-39, floor-28, floor-29, floor-30, floor-31, floor-32, floor-33, floor-34, floor-35, floor-36, floor-37, floor-38, floor-39, floor-40, floor-41, floor-42, floor-43, floor-44, floor-45, floor-46, floor-47, floor-48, floor-49, floor-50]
                 platform:
                     - {id: linux-x64, runner: ubuntu-24.04}
                     - {id: linux-arm64, runner: ubuntu-24.04-arm}
@@ -225,7 +225,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                shard: [hybrid-0, hybrid-1, hybrid-2, hybrid-3, hybrid-4, hybrid-5, hybrid-6, hybrid-7, hybrid-8, hybrid-9, hybrid-10, hybrid-11, hybrid-12, hybrid-13, hybrid-14, hybrid-15, hybrid-16, hybrid-17, hybrid-18, hybrid-19, hybrid-20, hybrid-21, hybrid-22, hybrid-23, hybrid-24, hybrid-25, hybrid-26, hybrid-27, hybrid-28, hybrid-29, hybrid-30, hybrid-31, hybrid-32, hybrid-33, hybrid-34, hybrid-35, hybrid-36, hybrid-37, hybrid-38, hybrid-39, hybrid-40, hybrid-41, hybrid-42, hybrid-43, hybrid-44, hybrid-45, hybrid-46, hybrid-47]
+                shard: [hybrid-0, hybrid-1, hybrid-2, hybrid-3, hybrid-4, hybrid-5, hybrid-6, hybrid-7, hybrid-8, hybrid-9, hybrid-10, hybrid-11, hybrid-12, hybrid-13, hybrid-14, hybrid-15, hybrid-16, hybrid-17, hybrid-18, hybrid-19, hybrid-20, hybrid-21, hybrid-22, hybrid-23, hybrid-24, hybrid-25, hybrid-26, hybrid-27, hybrid-28, hybrid-29, hybrid-30, hybrid-31, hybrid-32, hybrid-33, hybrid-34, hybrid-35, hybrid-36, hybrid-37, hybrid-38, hybrid-39, hybrid-40, hybrid-41, hybrid-42, hybrid-43, hybrid-44, hybrid-45, hybrid-46, hybrid-47, floor-51, floor-52, floor-53, floor-54, floor-55, floor-56, floor-57, floor-58, floor-59, floor-60, floor-61, floor-62, floor-63, floor-64, floor-65, floor-66]
                 platform:
                     - {id: linux-x64, runner: ubuntu-24.04}
                     - {id: linux-arm64, runner: ubuntu-24.04-arm}
@@ -297,7 +297,7 @@ jobs:
                   pattern: opus-platform-*
                   path: platform-evidence
                   merge-multiple: false
-            - name: Verify all 492 executions, retained bytes and exact debug/release/platform agreement
+            - name: Verify all 764 executions, retained bytes and exact debug/release/platform agreement
               shell: bash
               env:
                   NATIVE_RESULT: ${{ needs.native.result }}

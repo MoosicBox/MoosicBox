@@ -405,6 +405,8 @@ fn public_silk_bitrate_range() {
 }
 
 fn qualify_public_matrix(speech: Option<&[i16]>) {
+    let filter = speech.and_then(|_| std::env::var("MOOSICBOX_OPUS_SILK_CASE").ok());
+    let mut executed = 0;
     for rate in [8000, 12000, 16000, 24000, 48000] {
         let speech = speech.map(|input| convert_speech(input, rate));
         for channels in [crate::Channels::Mono, crate::Channels::Stereo] {
@@ -428,21 +430,33 @@ fn qualify_public_matrix(speech: Option<&[i16]>) {
                     ]
                 };
                 for &kind in kinds {
-                    qualify_public_case(config, kind, speech.as_deref());
-                    // Keep the previously exercised valid stereo operating point too.
-                    if channels == crate::Channels::Stereo {
+                    let count = super::super::channel_count(channels);
+                    for &bitrate in if count == 1 {
+                        &[16_000][..]
+                    } else {
+                        &[16_000, 24_000][..]
+                    } {
+                        let case = format!("{kind}/{rate}/{count}/{milliseconds}/{bitrate}");
+                        if filter.as_ref().is_some_and(|selected| selected != &case) {
+                            continue;
+                        }
+                        if speech.is_some() {
+                            eprintln!("public speech SILK CASE START {case}");
+                        }
                         qualify_public_case(
-                            EncoderConfig {
-                                bitrate: 24_000,
-                                ..config
-                            },
+                            EncoderConfig { bitrate, ..config },
                             kind,
                             speech.as_deref(),
                         );
+                        executed += 1;
                     }
                 }
             }
         }
+    }
+    if speech.is_some() {
+        assert_eq!(executed, if filter.is_some() { 1 } else { 120 });
+        eprintln!("public speech SILK matrix executed={executed} failures=0");
     }
 }
 

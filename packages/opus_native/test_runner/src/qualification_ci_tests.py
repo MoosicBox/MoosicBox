@@ -32,7 +32,12 @@ class SelectionTests(unittest.TestCase):
             for row in ci.acceptance_inventory()
             if row[2] not in (ci.PUBLIC_MEDIA_TEST, ci.LAYOUT_TEST, ci.HYBRID_TEST)
         }
-        self.assertEqual(set(flat), required)
+        self.assertEqual(set(flat) | {("--lib", None, ci.SPEECH_TEST), ("--lib", None, ci.EXTENDED_TEST)}, required)
+        pairs = [pair for shard in ci.FLOOR_SHARDS for pair in ci.floor_cases(shard)]
+        self.assertEqual(len(pairs), 536)
+        self.assertEqual(len(set(pairs)), 536)
+        self.assertEqual(sum(name == ci.SPEECH_TEST for name, _ in pairs), 120)
+        self.assertEqual(set(pairs), set(ci.floor_cases()))
         cases = [case for shard in ci.PUBLIC_SHARDS for case in ci.public_cases(shard)]
         self.assertEqual(len(cases), 192)
         self.assertEqual(len(set(cases)), 192)
@@ -95,6 +100,8 @@ class SelectionTests(unittest.TestCase):
                                         dest / "media-transform.json"
                                     ),
                                 )
+                                if shard in ci.FLOOR_SHARDS:
+                                    row["floor_cases"] = ci.floor_cases(shard)
                                 if shard in ci.HYBRID_SHARDS:
                                     row["hybrid_cells"] = ci.hybrid_cells(shard)
                                 if shard in ci.LAYOUT_SHARDS:
@@ -105,7 +112,7 @@ class SelectionTests(unittest.TestCase):
             with patch("builtins.print"):
                 ci.compare(argparse.Namespace(root=root))
             summary = json.loads((root / "platform-acceptance.json").read_text())
-            self.assertEqual(len(summary["executions"]), 496)
+            self.assertEqual(len(summary["executions"]), 764)
             public_report = root / "linux-x64-release-quality-public-0/ci.json"
             public_original = public_report.read_text()
             forged_public = json.loads(public_original)

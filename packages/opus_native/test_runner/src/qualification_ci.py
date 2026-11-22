@@ -36,7 +36,10 @@ PUBLIC_SHARDS = tuple(f"public-{index}" for index in range(24))
 LAYOUT_SHARDS = tuple(f"layout-{index}" for index in range(40))
 HYBRID_SHARDS = tuple(f"hybrid-{index}" for index in range(48))
 HYBRID_TEST = "encoder::adaptive::tests::reference_public_hybrid_auto_matrix"
-QUALITY_SHARDS = ("core",) + LIVE_SHARDS + PUBLIC_SHARDS + LAYOUT_SHARDS + HYBRID_SHARDS
+FLOOR_SHARDS = tuple(f"floor-{index}" for index in range(67))
+SPEECH_TEST = "encoder::silk::public::public_floor_real_speech_matrix"
+EXTENDED_TEST = "encoder::silk::public::public_extended_floor_media_matrix"
+QUALITY_SHARDS = ("core",) + LIVE_SHARDS + PUBLIC_SHARDS + LAYOUT_SHARDS + HYBRID_SHARDS + FLOOR_SHARDS
 LAYOUT_TEST = "encoder::adaptive::tests::reference_practical_layout_quality"
 PUBLIC_MEDIA_TEST = "encoder::silk::public::public_practical_floor_media_matrix"
 
@@ -374,10 +377,36 @@ def hybrid_cells(shard):
     return cells[int(shard.removeprefix("hybrid-"))::len(HYBRID_SHARDS)]
 
 
+def floor_cases(shard=None):
+    """Ordered (test, selector) pairs. Each floor shard owns eight whole streams."""
+    rates = (8000, 12000, 16000, 24000, 48000)
+    speech = [(SPEECH_TEST, f"{kind}/{rate}/{ch}/{ms}/{bps}")
+              for rate in rates for ch in (1, 2) for ms in (10, 20, 40, 60)
+              for kind in ("speech", "quiet_speech")
+              for bps in ((16000,) if ch == 1 else (16000, 24000))]
+    extended = [(EXTENDED_TEST, f"{kind}/{rate}/{ch}/{ms}/{bps}/{scale}")
+                for kind in ("speech", "music") for rate in rates for ch in (1, 2)
+                for ms in (10, 20, 40, 60) for bps in (16000, 24000, 32000, 48000, 64000)
+                if rate > 16000 or (ch == 2 and bps <= 24000) for scale in ("1", "0.01")]
+    if len(set(speech)) != 120 or len(set(extended)) != 416:
+        raise RuntimeError("floor case enumeration changed")
+    cases = speech + extended
+    return cases if shard is None else cases[FLOOR_SHARDS.index(shard)::len(FLOOR_SHARDS)]
+
+
+def require_floor_pass(output, name, case):
+    prefix = "public speech" if name == SPEECH_TEST else "public extended"
+    lines = [line for line in output.splitlines() if line.startswith(prefix + " SILK ")]
+    if lines != [f"{prefix} SILK CASE START {case}", f"{prefix} SILK matrix executed=1 failures=0"]:
+        raise RuntimeError(f"floor test did not prove exactly one successful case: {case}")
+
+
 def selected_live_tests(shard=None):
     required = acceptance_inventory()
     if shard is None:
         return required
+    if shard in FLOOR_SHARDS:
+        return [("--lib", None, name) for name in dict.fromkeys(n for n, _ in floor_cases(shard))]
     if shard in HYBRID_SHARDS:
         return [("--lib", None, HYBRID_TEST)]
     if shard in LAYOUT_SHARDS:
@@ -391,7 +420,7 @@ def selected_live_tests(shard=None):
         row for row in required if row[2] not in (PUBLIC_MEDIA_TEST, LAYOUT_TEST, HYBRID_TEST)
     ]
     # Stable round-robin selection is independent of hosted runner scheduling.
-    return required[index::LIVE_SHARD_COUNT]
+    return [row for row in required[index::LIVE_SHARD_COUNT] if row[2] not in (SPEECH_TEST, EXTENDED_TEST)]
 
 
 # These logical inventory entries are Rust test_case families, not runnable names.
@@ -459,6 +488,8 @@ def live_acceptance(execution, profile, env, shard=None):
     invocations = []
     for kind, target, name in required:
         filters = cases_to_run if name == PUBLIC_MEDIA_TEST else (None,)
+        if name in (SPEECH_TEST, EXTENDED_TEST):
+            filters = [case for test, case in floor_cases(shard) if test == name]
         if name == HYBRID_TEST and shard in HYBRID_SHARDS:
             filters = hybrid_cells(shard)
         for case in filters:
@@ -501,6 +532,8 @@ def live_acceptance(execution, profile, env, shard=None):
         ]
         output = execution.run(args, timeout=600, env=selected_env)
         require_exact_pass(output, name)
+        if name in (SPEECH_TEST, EXTENDED_TEST):
+            require_floor_pass(output, name, case)
         if name == HYBRID_TEST and shard in HYBRID_SHARDS:
             if "public coverage executed=1 failed=0 filtered=true" not in output:
                 raise RuntimeError("hybrid cell did not prove exactly one successful execution")
@@ -757,6 +790,8 @@ def run(args):
             )
             live_acceptance(execution, args.profile, live_env, args.quality_shard)
             report["required_tests"] = selected_live_tests(args.quality_shard)
+            if args.quality_shard in FLOOR_SHARDS:
+                report["floor_cases"] = floor_cases(args.quality_shard)
             if args.quality_shard in HYBRID_SHARDS:
                 report["hybrid_cells"] = hybrid_cells(args.quality_shard)
             if args.quality_shard in LAYOUT_SHARDS:
@@ -848,6 +883,9 @@ def compare(args):
             ]
             if report.get("required_tests") != required:
                 raise RuntimeError("live shard required-test coverage changed")
+            if report["quality_shard"] in FLOOR_SHARDS:
+                if report.get("floor_cases") != [list(pair) for pair in floor_cases(report["quality_shard"])]:
+                    raise RuntimeError("required floor cell coverage changed")
             if report["quality_shard"] in HYBRID_SHARDS:
                 if report.get("hybrid_cells") != hybrid_cells(report["quality_shard"]):
                     raise RuntimeError("public hybrid 1728-cell coverage changed")
@@ -897,7 +935,7 @@ def compare(args):
     )
     print(
         "Exact packet/PCM/input/corpus SHA-256 agreement: eight native executions; "
-        "four strict frozen/media core runs and all 480 required live/public/layout/hybrid shards accepted. "
+        "four strict frozen/media core runs and all required live/public/layout/hybrid/floor shards accepted. "
         "No unexecuted platform claim."
     )
 
