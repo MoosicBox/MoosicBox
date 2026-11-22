@@ -835,11 +835,21 @@ impl Scheduler {
         let mut inner = lock(&self.inner);
         if inner.threads[me].fate != Fate::Alive {
             // A destructor of a killed thread reached a switch point while it unwound. A
-            // yield passes; a wait could never end well, so the thread goes no further.
-            if block.is_none() {
+            // yield passes. A wait hands the baton back to the killer, which runs the thread
+            // again if what it waits for comes (another victim's unwinding may release it),
+            // and otherwise parks it for good once the killing is done.
+            let Some((key, deadline)) = block else {
                 return false;
+            };
+            if inner.killer.is_none() {
+                self.abandon(inner, me);
             }
-            self.abandon(inner, me);
+            inner.threads[me].op = op;
+            inner.threads[me].state = ThreadState::Blocked { key, deadline };
+            self.return_to_killer(&mut inner, me);
+            drop(inner);
+            self.wait_turn(me);
+            return false;
         }
         if inner.config.weak_memory
             && !matches!(op, Op::AtomicLoad | Op::AtomicStore | Op::AtomicUpdate)
@@ -871,10 +881,14 @@ impl Scheduler {
     /// gets the baton once, right away, to unwind from that switch point with a [`Killed`]
     /// payload, so the values on its stack are dropped, as a dropped future's are (locks it
     /// holds are released, poisoned), and then finishes. Joining it returns that payload as an
-    /// error. A thread killed before it started drops its closure without calling it. A
-    /// destructor that blocks while the thread unwinds (waiting for a lock, say) stops it there
-    /// for good: the thread is parked forever, keeping whatever it still holds. Each kill hands the baton straight back
-    /// to the caller, so no other thread runs meanwhile, and killing is deterministic.
+    /// error. A thread killed before it started drops its closure without calling it.
+    ///
+    /// A destructor that blocks while its thread unwinds (waiting for a lock, say) pauses that
+    /// thread; once every victim had its turn, those whose wait ended (another victim's
+    /// unwinding released the lock) go on, in index order, again until none can. The rest are
+    /// parked forever, keeping whatever they still hold. A sleep while unwinding returns at once.
+    /// Each turn hands the baton straight back to the caller, so no other thread runs meanwhile,
+    /// and killing is deterministic.
     ///
     /// Group 0 (threads without a group) is never killed.
     ///
@@ -898,7 +912,7 @@ impl Scheduler {
                 .map(|(i, _)| i)
                 .collect()
         };
-        for victim in victims {
+        for &victim in &victims {
             let mut inner = lock(&self.inner);
             if inner.threads[victim].state == ThreadState::Finished {
                 continue;
@@ -906,15 +920,54 @@ impl Scheduler {
             inner.trace_hash = hash_u64(inner.trace_hash, victim as u64);
             inner.threads[victim].fate = Fate::Killed;
             inner.threads[victim].state = ThreadState::Runnable;
-            inner.killer = Some(me);
-            inner.running = victim;
-            if let Some(os) = &inner.threads[victim].os {
-                os.unpark();
-            }
             drop(inner);
-            self.wait_turn(me);
-            lock(&self.inner).killer = None;
+            self.hand_to_victim(me, victim);
         }
+        // Victims that blocked while unwinding go on when what they waited for came (another
+        // victim's unwinding released it), in index order, until none can.
+        loop {
+            let woken: Vec<ThreadIndex> = {
+                let inner = lock(&self.inner);
+                victims
+                    .iter()
+                    .copied()
+                    .filter(|&v| {
+                        inner.threads[v].fate == Fate::Killed
+                            && inner.threads[v].state == ThreadState::Runnable
+                    })
+                    .collect()
+            };
+            if woken.is_empty() {
+                break;
+            }
+            for victim in woken {
+                self.hand_to_victim(me, victim);
+            }
+        }
+        // The rest wait for what will never come: parked for good.
+        let mut inner = lock(&self.inner);
+        for &victim in &victims {
+            if inner.threads[victim].fate == Fate::Killed
+                && matches!(inner.threads[victim].state, ThreadState::Blocked { .. })
+            {
+                inner.threads[victim].fate = Fate::Abandoned;
+                inner.threads[victim].state = ThreadState::Finished;
+                inner.threads[victim].op = Op::Exit;
+            }
+        }
+    }
+
+    /// Hand the baton to the killed thread `victim` until it finishes unwinding or blocks.
+    fn hand_to_victim(&self, me: ThreadIndex, victim: ThreadIndex) {
+        let mut inner = lock(&self.inner);
+        inner.killer = Some(me);
+        inner.running = victim;
+        if let Some(os) = &inner.threads[victim].os {
+            os.unpark();
+        }
+        drop(inner);
+        self.wait_turn(me);
+        lock(&self.inner).killer = None;
     }
 
     /// Whether the calling thread has been killed (and should not run its code).

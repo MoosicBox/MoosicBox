@@ -747,3 +747,52 @@ fn a_killed_thread_sleeping_in_a_destructor_still_finishes_unwinding() {
         assert!(killed, "seed {seed}");
     }
 }
+
+#[test]
+fn a_killed_thread_waiting_on_another_victims_lock_finishes_unwinding() {
+    struct LockOnDrop(Arc<Mutex<()>>, Arc<AtomicUsize>);
+    impl Drop for LockOnDrop {
+        fn drop(&mut self) {
+            let _guard = self.0.lock();
+            self.1.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    for seed in 0..10 {
+        let outcome = simulator::run(seed, || {
+            let group = simulator::new_key();
+            let lock = Arc::new(Mutex::new(()));
+            let unwound = Arc::new(AtomicUsize::new(0));
+            let (first_lock, first_unwound) = (Arc::clone(&lock), Arc::clone(&unwound));
+            let held = Arc::new(AtomicUsize::new(0));
+            let first_started = Arc::clone(&held);
+            // Killed first: its destructor needs the lock the second victim holds.
+            let first = thread::Builder::new()
+                .group(group)
+                .spawn(move || {
+                    let _blocker = LockOnDrop(first_lock, first_unwound);
+                    first_started.fetch_add(1, Ordering::SeqCst);
+                    thread::sleep(Duration::from_secs(3600));
+                })
+                .unwrap();
+            let second_lock = Arc::clone(&lock);
+            let second_held = Arc::clone(&held);
+            let second = thread::Builder::new()
+                .group(group)
+                .spawn(move || {
+                    let _guard = second_lock.lock().unwrap();
+                    second_held.fetch_add(1, Ordering::SeqCst);
+                    thread::sleep(Duration::from_secs(3600));
+                })
+                .unwrap();
+            while held.load(Ordering::SeqCst) < 2 {
+                thread::sleep(Duration::from_millis(1));
+            }
+            simulator::scheduler().kill_group(group);
+            let _ = first.join();
+            let _ = second.join();
+            unwound.load(Ordering::SeqCst)
+        });
+        assert!(outcome.report.leaked.is_empty(), "{:?}", outcome.report);
+        assert_eq!(outcome.result.unwrap(), 1, "seed {seed}");
+    }
+}
