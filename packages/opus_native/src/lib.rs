@@ -643,7 +643,10 @@ impl Decoder {
                     offset += count * self.channels as usize;
                 }
             }
-            self.prev_redundancy = false;
+            #[cfg(feature = "celt")]
+            {
+                self.prev_redundancy = false;
+            }
             return Ok(samples_per_channel);
         }
         Err(Error::Unsupported(
@@ -787,7 +790,10 @@ impl Decoder {
             )?;
         }
         self.prev_mode = Some(config.mode);
-        self.prev_redundancy = false;
+        #[cfg(feature = "celt")]
+        {
+            self.prev_redundancy = false;
+        }
         self.last_packet_samples = requested;
         Ok(requested)
     }
