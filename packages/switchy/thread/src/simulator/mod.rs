@@ -237,10 +237,14 @@ impl Config {
 
     /// The configuration from the environment for a run with `seed`:
     ///
-    /// * `SIMULATOR_SCHEDULE_STRATEGY`: `random`, `pct` or `alternate` (the default), which
-    ///   picks `random` for even seeds and `pct` for odd ones.
-    /// * `SIMULATOR_PCT_DEPTH` (default 3) and `SIMULATOR_PCT_STEPS` (default 10000).
-    /// * `SIMULATOR_WEAK_MEMORY`: `1` or `true` to model weak memory.
+    /// * `SIMULATOR_SCHEDULE_STRATEGY`: `random`, `pct`, `alternate` (the default), which
+    ///   picks `random` for even seeds and `pct` for odd ones, or `swarm`, which draws the
+    ///   strategy and PCT's depth and steps from the seed (one run in three random, the rest
+    ///   PCT with a depth from 1 to 6 among the first 1000, 10000 or 100000 decisions).
+    /// * `SIMULATOR_PCT_DEPTH` (default 3) and `SIMULATOR_PCT_STEPS` (default 10000); under
+    ///   `swarm`, they fix what they name instead of drawing it.
+    /// * `SIMULATOR_WEAK_MEMORY`: `1` or `true` to model weak memory, or `swarm` to model it in
+    ///   one run in four, drawn from the seed.
     /// * `SIMULATOR_SCHEDULE`: a [`Schedule`] to replay, overriding the strategy.
     ///
     /// # Panics
@@ -260,6 +264,19 @@ impl Config {
             _ if replay.is_some() => Strategy::Replay(Arc::new(replay.unwrap_or_default())),
             Ok("random") => Strategy::Random,
             Ok("pct") => pct,
+            Ok("swarm") => {
+                if draw(seed, 1, 3) == 0 {
+                    Strategy::Random
+                } else {
+                    Strategy::Pct {
+                        depth: env_number("SIMULATOR_PCT_DEPTH")
+                            .unwrap_or_else(|| 1 + u32::try_from(draw(seed, 2, 6)).unwrap_or(0)),
+                        steps: env_number("SIMULATOR_PCT_STEPS").unwrap_or_else(|| {
+                            [1_000, 10_000, 100_000][usize::try_from(draw(seed, 3, 3)).unwrap_or(0)]
+                        }),
+                    }
+                }
+            }
             Ok("alternate") | Err(_) => {
                 if seed.is_multiple_of(2) {
                     Strategy::Random
@@ -274,10 +291,38 @@ impl Config {
         Self {
             strategy,
             recent_decisions: 256,
-            weak_memory: std::env::var("SIMULATOR_WEAK_MEMORY")
-                .is_ok_and(|v| v == "1" || v == "true"),
+            weak_memory: match std::env::var("SIMULATOR_WEAK_MEMORY").as_deref() {
+                Ok("1" | "true") => true,
+                Ok("swarm") => draw(seed, 4, 4) == 0,
+                _ => false,
+            },
         }
     }
+
+    /// The configuration in a few words, for people: `random`, `pct(3/10000)`, and `+weak`
+    /// when it models weak memory.
+    #[must_use]
+    pub fn describe(&self) -> String {
+        let strategy = match &self.strategy {
+            Strategy::Random => "random".to_owned(),
+            Strategy::Pct { depth, steps } => format!("pct({depth}/{steps})"),
+            Strategy::Replay(_) => "replay".to_owned(),
+        };
+        if self.weak_memory {
+            format!("{strategy}+weak")
+        } else {
+            strategy
+        }
+    }
+}
+
+/// A number below `bound` drawn from `seed` for the configuration choice `salt` (a `SplitMix64` step),
+/// so each choice is fixed by the seed and independent of the others.
+fn draw(seed: u64, salt: u64, bound: u64) -> u64 {
+    let mut z = seed.wrapping_add(salt.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    (z ^ (z >> 31)) % bound.max(1)
 }
 
 fn env_number<T: std::str::FromStr>(name: &str) -> Option<T> {
@@ -610,6 +655,12 @@ impl Scheduler {
             trace_hash: inner.trace_hash,
             recent: inner.recent.iter().copied().collect(),
         }
+    }
+
+    /// The run's configuration.
+    #[must_use]
+    pub fn config(&self) -> Config {
+        lock(&self.inner).config.clone()
     }
 
     /// The running hash of every scheduling decision so far.
@@ -1378,4 +1429,26 @@ pub fn new_key() -> u64 {
 #[must_use]
 pub fn deadline_after(timeout: Duration) -> Option<Instant> {
     switchy_time::simulator::instant_now().checked_add(timeout)
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::*;
+
+    #[test]
+    fn swarm_draws_differ_by_seed_and_choice_and_stay_in_bounds() {
+        let draws: BTreeSet<u64> = (0..64).map(|seed| draw(seed, 2, 6)).collect();
+        assert_eq!(draws, (0..6).collect(), "every depth is drawn");
+        assert!((0..64).any(|seed| draw(seed, 1, 3) != draw(seed, 4, 3)));
+        assert_eq!(draw(7, 1, 3), draw(7, 1, 3));
+    }
+
+    #[test]
+    fn a_configuration_describes_itself() {
+        assert_eq!(Config::random().describe(), "random");
+        let mut config = Config::pct(3, 10_000);
+        assert_eq!(config.describe(), "pct(3/10000)");
+        config.weak_memory = true;
+        assert_eq!(config.describe(), "pct(3/10000)+weak");
+    }
 }

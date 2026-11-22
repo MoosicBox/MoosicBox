@@ -21,8 +21,10 @@ The simulator also provides:
 - **Trace hash**: a running hash of every decision, for checking that a seed
   replays identically.
 - **Two strategies**: uniformly random, and PCT (probabilistic concurrency
-  testing). `SIMULATOR_SCHEDULE_STRATEGY` selects `random`, `pct` or
-  `alternate` (the default: by seed parity).
+  testing). `SIMULATOR_SCHEDULE_STRATEGY` selects `random`, `pct`,
+  `alternate` (the default: by seed parity) or `swarm` (the strategy and PCT's
+  depth and steps drawn from each run's seed). `SIMULATOR_WEAK_MEMORY=swarm`
+  models weak memory in one run in four.
 - **Replay and shrinking**: every run records its schedule (the threads it
   picked wherever it had a choice, beyond a default that switches only when it
   must). `SIMULATOR_SCHEDULE` (or `Strategy::Replay`) replays one without the
