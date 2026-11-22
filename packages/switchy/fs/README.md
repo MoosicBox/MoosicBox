@@ -71,6 +71,8 @@ The switchy_fs package provides:
 - **Read**: Open file for reading
 - **Write**: Open file for writing
 - **Truncate**: Clear existing file content
+- **Create New**: Exclusive creation (`O_EXCL`)
+- **No-follow / Directory / Mode**: `O_NOFOLLOW`, `O_DIRECTORY` and creation permission bits (Unix)
 
 ## Installation
 
@@ -310,6 +312,70 @@ mod tests {
 }
 ```
 
+### POSIX Simulation Model
+
+The simulator is an in-memory inode filesystem built to run storage code under
+deterministic simulation:
+
+- **Inodes and paths**: directories map names to inodes; paths resolve one component
+  at a time and follow symbolic links (40 at most, then `ELOOP`). Handles refer to
+  inodes, so renaming or unlinking an open file behaves as on POSIX. Hard links,
+  symbolic links, permission bits, ownership and a simulated effective user
+  (`Filesystem::with_credentials`, `current_uid`) are modeled. Errors carry the host
+  `errno` (`ENOENT`, `EEXIST`, `ENOTDIR`, `EISDIR`, `ENOTEMPTY`, `ELOOP`, `EACCES`, ...).
+- **Durability**: file data becomes durable on `sync_data`/`sync_all`; directory changes
+  (create, link, unlink, rename) become durable only when their directory is
+  synchronized (`Dir::sync` or `sync_directory`). A rename is atomic across crashes.
+- **Crashes**: `Filesystem::crash(&CrashPolicy)` reverts to durable state, invalidates
+  open handles (`ESTALE`) and releases locks. `CrashPolicy::power_loss()` (the default)
+  keeps a random torn prefix of unsynchronized writes and an ordered random subset of
+  unsynchronized directory changes; `drop_all_pending()` and `process_crash()` are the
+  deterministic extremes.
+- **Faults**: `FaultPlan` injects `EIO`, `ENOSPC` and short writes per `OpClass` with a
+  seeded probability, `Filesystem::inject_fault` queues one-shot faults, and
+  `Filesystem::set_quota` limits stored bytes. A failed file synchronization forgets the
+  pending data (Linux "fsyncgate" semantics).
+- **Determinism**: every random choice draws from named streams of the current
+  `switchy_simulation` run, and each run has its own default `Filesystem`.
+
+```rust
+use std::{io::Write as _, sync::Arc};
+use switchy_fs::simulator::{CrashPolicy, Filesystem, with_filesystem};
+use switchy_fs::sync::{Dir, OpenOptions, read};
+
+let fs = Arc::new(Filesystem::new());
+with_filesystem(&fs, || {
+    let dir = Dir::open("/").unwrap();
+    let mut file = dir
+        .open_file_at("state", &OpenOptions::new().write(true).create_new(true))
+        .unwrap();
+    file.write_all(b"v1").unwrap();
+    file.sync_all().unwrap(); // data durable
+    dir.sync().unwrap(); // directory entry durable
+    file.write_all(b" unsynced").unwrap();
+});
+
+fs.crash(&CrashPolicy::drop_all_pending());
+
+with_filesystem(&fs, || assert_eq!(read("/state").unwrap(), b"v1"));
+```
+
+### Directory Handles and Publishing
+
+`sync::Dir` is a capability-style directory handle: it is opened without following a
+final symbolic link, and `open_file_at`, `create_dir_at`, `metadata_at` (no-follow),
+`remove_file_at`, `remove_dir_at`, `rename_at`, `rename_noreplace_at`, `hard_link_at`,
+`symlink_at`, `read_link_at`, `entries` and `sync` take single entry names. On Unix the
+real backend uses `openat`-family system calls; on Windows `Dir` returns `Unsupported`.
+
+`sync::rename_noreplace` and `sync::publish_file_noclobber` publish a file only if the
+destination does not exist (`renameat2(RENAME_NOREPLACE)` on Linux, `renameatx_np` on
+Apple platforms, link-and-unlink elsewhere). `sync::tempfile`/`tempfile_in` create
+anonymous temporary files.
+
+The conformance suite (`tests/conformance.rs`) runs the same cases against the `std`
+backend in a real temporary directory and against the simulator.
+
 ### Simulator Real Filesystem Access
 
 With the `simulator-real-fs` feature, you can temporarily access the real filesystem within simulator mode:
@@ -434,7 +500,8 @@ match OpenOptions::new().read(true).open("nonexistent.txt") {
 
 - **log**: Logging facade for diagnostic messages
 - **switchy_async**: Async I/O trait abstractions (optional)
-- **bytes**: Byte buffer utilities for simulator backend (optional)
+- **switchy_simulation**: Per-run seed, RNG streams and default namespace for the simulator (optional)
+- **rustix**: `openat`-family calls, `errno` values and effective user id on Unix (optional)
 - **scoped-tls**: Thread-local storage for simulator real-fs mode (optional)
 - **tempfile**: Temporary file management for standard library backend (optional)
 - **tokio**: Async filesystem operations (optional)

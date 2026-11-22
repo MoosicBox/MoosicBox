@@ -14,6 +14,10 @@
 //! * `sync` - Synchronous filesystem operations (enabled by default)
 //! * `async` - Asynchronous filesystem operations (enabled by default)
 //!
+//! The simulator models POSIX semantics (inodes, symbolic links, permissions, `errno`
+//! values), durability, crashes and injected faults; see the `simulator` module when the
+//! `simulator` feature is enabled. Backend-neutral value types live in [`types`].
+//!
 //! # Examples
 //!
 //! Basic file operations:
@@ -290,7 +294,7 @@ macro_rules! impl_sync_fs {
             /// file for caller-owned maintenance. Errors after rename can mean publication
             /// succeeded: inspect the destination before retrying. Native staging files use
             /// owner-only Unix permissions from creation; unsupported platforms fail closed.
-            /// This API does not establish a private directory or model simulator permissions.
+            /// This API does not establish a private directory.
             ///
             /// Native synchronization follows the backend's durability guarantees; the
             /// simulator makes the file data and the rename durable in its crash model.
