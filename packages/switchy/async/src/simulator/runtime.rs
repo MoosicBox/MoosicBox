@@ -1265,6 +1265,14 @@ fn start_blocking_thread<F, R>(
         .expect("a simulated thread starts");
 }
 
+/// The current run's number of workers for runtimes that do not fix their own (see the
+/// `Runtime` docs on workers): from `SIMULATOR_ASYNC_WORKERS`, else 1.
+#[cfg(feature = "thread-simulator")]
+#[must_use]
+pub fn run_workers() -> usize {
+    super::workers::run_workers()
+}
+
 /// Builds a new simulator runtime from the given builder.
 ///
 /// # Errors
