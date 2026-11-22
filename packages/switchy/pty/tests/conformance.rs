@@ -129,7 +129,9 @@ impl Terminal {
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack.windows(needle.len()).any(|window| window == needle)
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
 }
 
 fn position(haystack: &[u8], needle: &[u8]) -> Option<usize> {

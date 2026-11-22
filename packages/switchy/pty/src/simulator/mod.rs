@@ -1059,6 +1059,21 @@ impl Kernel {
             {
                 t.hung_up = true;
             }
+            // And the terminal is no longer the session's (POSIX): it names no session or
+            // foreground group, and the session's other members lose it as their controlling
+            // terminal. The session's id may be reused once it is empty; the terminal must not
+            // reach whoever reuses it.
+            if let Some(t) = state.terminals.get_mut(&terminal)
+                && t.session == Some(pid)
+            {
+                t.session = None;
+                t.foreground = None;
+            }
+            for process in state.processes.values_mut() {
+                if process.session == pid && process.controlling == Some(terminal) {
+                    process.controlling = None;
+                }
+            }
         }
         if !waited {
             state.processes.remove(&pid);

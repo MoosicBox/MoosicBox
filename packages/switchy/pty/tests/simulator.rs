@@ -629,3 +629,25 @@ fn closing_masters_hangs_up_unix_terminals_and_closes_windows_consoles() {
         }
     }
 }
+
+#[test]
+fn a_terminal_forgets_its_session_when_the_leader_exits() {
+    for personality in [Personality::Linux, Personality::MacOs] {
+        for seed in 0..5 {
+            run(seed, personality, || {
+                let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let mut child = slave.spawn(SpawnCommand::new("exit").arg("0")).unwrap();
+                let mut reader = master.try_clone_reader().unwrap();
+                let _ = read_until(&mut reader, b"bye\r\n");
+                child.wait().unwrap();
+                assert_eq!(master.foreground_process_group(), None, "{personality:?}");
+                // A new session that reuses the old one's id is not reached by this terminal.
+                let other = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let mut unrelated = other.slave.spawn(&SpawnCommand::new("sleep")).unwrap();
+                drop((slave, master, reader));
+                assert!(unrelated.try_wait().unwrap().is_none(), "{personality:?}");
+                drop(other);
+            });
+        }
+    }
+}
