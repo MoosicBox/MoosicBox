@@ -611,6 +611,10 @@ impl Runtime {
     /// the runtime never runs a task again: a task spawned onto it afterwards is dropped at
     /// once, and [`Self::tick`] does nothing.
     ///
+    /// With `thread-simulator`, a poll of one of its tasks under way on another thread (one
+    /// stepping it from outside its thread group) runs to its next await first: the task is
+    /// dropped then, and nothing of the runtime runs once this returns.
+    ///
     /// With `thread-simulator`, the simulated threads its tasks started (`spawn_blocking`, or
     /// `switchy_thread` spawns from a task), and the threads they started, are killed too: see
     /// `switchy_thread::simulator::Scheduler::kill_group`. A blocking closure is stopped at its
@@ -645,11 +649,43 @@ impl Runtime {
             #[cfg(feature = "thread-simulator")]
             if let Some(scheduler) = switchy_thread::simulator::try_scheduler() {
                 scheduler.kill_group(self.thread_group);
+                self.await_polls_elsewhere();
             }
         });
         let queued =
             std::mem::take(&mut *self.queue.lock().unwrap_or_else(PoisonError::into_inner));
         drop(queued);
+    }
+
+    /// Wait until no thread outside this runtime's group (one stepping it: a worker of another
+    /// runtime, say) is still polling one of its tasks. Killing the group cannot stop such a
+    /// poll, and a runtime shut down must not go on: the poll returns at its next await, and
+    /// drops the task then.
+    ///
+    /// # Panics
+    ///
+    /// * If such a poll never returns (it waits for the caller)
+    #[cfg(feature = "thread-simulator")]
+    fn await_polls_elsewhere(&self) {
+        const PATIENCE: u32 = 1_000_000;
+        for _ in 0..PATIENCE {
+            let polled = {
+                let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+                registry
+                    .values()
+                    .filter_map(Weak::upgrade)
+                    .any(|task| task.polled_elsewhere())
+            };
+            if !polled {
+                return;
+            }
+            switchy_thread::thread::yield_now();
+        }
+        panic!(
+            "shutting runtime {} down: a poll of one of its tasks on another thread never \
+             returned (does it wait for the thread shutting it down?)",
+            self.id
+        );
     }
 
     /// Whether [`Self::shutdown_now`] stopped this runtime.
@@ -1105,6 +1141,8 @@ pub(crate) struct Task {
     /// Killed (its runtime shut down) while being polled elsewhere: the poll that holds its
     /// future drops it when it returns.
     killed: AtomicBool,
+    /// The thread polling its future right now, if any.
+    poller: std::sync::Mutex<Option<std::thread::ThreadId>>,
 }
 
 impl std::fmt::Debug for Task {
@@ -1132,6 +1170,7 @@ impl Task {
             finished: AtomicBool::new(false),
             block,
             polling: AtomicBool::new(false),
+            poller: std::sync::Mutex::new(None),
             local: AtomicBool::new(false),
             killed: AtomicBool::new(false),
         });
@@ -1161,6 +1200,26 @@ impl Task {
         };
         drop(future);
         self.finish();
+    }
+
+    /// Set the thread polling its future, returning the one before.
+    fn set_poller(
+        &self,
+        poller: Option<std::thread::ThreadId>,
+    ) -> Option<std::thread::ThreadId> {
+        std::mem::replace(
+            &mut *self.poller.lock().unwrap_or_else(PoisonError::into_inner),
+            poller,
+        )
+    }
+
+    /// Whether a thread other than the calling one is polling its future right now.
+    #[cfg(feature = "thread-simulator")]
+    fn polled_elsewhere(&self) -> bool {
+        self.poller
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some_and(|poller| poller != std::thread::current().id())
     }
 
     /// Whether the task was killed (and is finished, or about to be when its poll returns).
@@ -1195,7 +1254,9 @@ impl Task {
             return Poll::Ready(());
         }
         self.polling.store(true, Ordering::SeqCst);
+        let outer = self.set_poller(Some(std::thread::current().id()));
         let poll = future.as_mut().poll(&mut ctx);
+        self.set_poller(outer);
         self.polling.store(false, Ordering::SeqCst);
         // Killed while it ran (on another worker): drop it now.
         let poll = if self.killed() { Poll::Ready(()) } else { poll };

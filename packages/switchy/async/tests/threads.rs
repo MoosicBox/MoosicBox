@@ -6,7 +6,11 @@ use std::time::Duration;
 use switchy_async::simulator::runtime::Runtime;
 use switchy_thread::{
     simulator,
-    sync::{Arc, Mutex, mpsc},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
     thread,
 };
 
@@ -385,7 +389,8 @@ mod workers {
 
 #[cfg(feature = "rt-multi-thread")]
 #[test]
-fn shutting_down_a_runtime_while_another_worker_polls_its_task_does_not_wait_for_it() {
+fn shutting_down_a_runtime_while_another_thread_polls_its_task_ends_it_at_that_poll() {
+    let mut interrupted = 0;
     for seed in 0..20 {
         let outcome = simulator::run(seed, || {
             let server = Runtime::new();
@@ -397,35 +402,49 @@ fn shutting_down_a_runtime_while_another_worker_polls_its_task_does_not_wait_for
                 builder.build().unwrap()
             };
             // A server task that blocks a while within one poll (a switch point inside).
-            drop(server.handle().spawn(async {
+            let progress = Arc::new(AtomicUsize::new(0));
+            let counted = Arc::clone(&progress);
+            drop(server.handle().spawn(async move {
                 let lock = Arc::new(Mutex::new(()));
                 for _ in 0..50 {
                     drop(lock.lock().unwrap());
+                    counted.fetch_add(1, Ordering::SeqCst);
                 }
                 switchy_async::time::sleep(Duration::from_secs(3600)).await;
             }));
             let (pumped, killed) = (server.clone(), server.clone());
-            client.block_on(async move {
+            let watched = Arc::clone(&progress);
+            let at_shutdown = client.block_on(async move {
                 let pump = switchy_async::task::spawn(async move {
                     for _ in 0..20 {
                         pumped.tick();
                         switchy_async::task::yield_now().await;
                     }
                 });
+                // Ready in the pump's first step, so the two may run at once.
                 let crash = switchy_async::task::spawn(async move {
-                    switchy_async::task::yield_now().await;
+                    let before = watched.load(Ordering::SeqCst);
                     killed.shutdown_now();
+                    (before, watched.load(Ordering::SeqCst))
                 });
                 pump.await.unwrap();
-                crash.await.unwrap();
+                crash.await.unwrap()
             });
             assert!(server.is_shut_down());
+            // Nothing of the server runs once its shutdown returned, not even the poll the
+            // pump was in the middle of.
+            assert_eq!(progress.load(Ordering::SeqCst), at_shutdown.1, "seed {seed}");
+            at_shutdown.0
         });
         assert!(
             outcome.report.leaked.is_empty(),
             "seed {seed}: {:?}",
             outcome.report
         );
-        outcome.result.unwrap();
+        let before_shutdown = outcome.result.unwrap();
+        if (1..50).contains(&before_shutdown) {
+            interrupted += 1;
+        }
     }
+    assert!(interrupted > 0, "no seed shut the server down mid-poll");
 }
