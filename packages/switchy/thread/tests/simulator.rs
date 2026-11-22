@@ -566,3 +566,149 @@ fn try_scheduler_finds_only_the_run_s_own_threads() {
     assert!(found);
     assert!(others);
 }
+
+/// Records a drop.
+struct DropFlag(Arc<AtomicUsize>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// A worker in `group` that counts its loop iterations and holds a [`DropFlag`].
+fn worker(
+    group: Option<u64>,
+    progress: &Arc<AtomicUsize>,
+    dropped: &Arc<AtomicUsize>,
+) -> thread::JoinHandle<()> {
+    let progress = Arc::clone(progress);
+    let flag = DropFlag(Arc::clone(dropped));
+    let builder = thread::Builder::new();
+    let builder = match group {
+        Some(group) => builder.group(group),
+        None => builder,
+    };
+    builder
+        .spawn(move || {
+            let _flag = flag;
+            loop {
+                progress.fetch_add(1, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(1));
+            }
+        })
+        .unwrap()
+}
+
+/// Kill a group of two busy threads (one with a child) while another thread keeps running.
+fn kill_scenario() -> (usize, usize, usize, bool) {
+    let group = simulator::new_key();
+    let progress = Arc::new(AtomicUsize::new(0));
+    let dropped = Arc::new(AtomicUsize::new(0));
+    let first = worker(Some(group), &progress, &dropped);
+    // A child inherits its parent's group.
+    let child_progress = Arc::clone(&progress);
+    let child_dropped = Arc::clone(&dropped);
+    let _parent = thread::Builder::new()
+        .group(group)
+        .spawn(move || {
+            let _child = worker(None, &child_progress, &child_dropped);
+            thread::sleep(Duration::from_secs(3600));
+        })
+        .unwrap();
+    // Not in the group: survives.
+    let survivor_progress = Arc::new(AtomicUsize::new(0));
+    let survivor = {
+        let progress = Arc::clone(&survivor_progress);
+        thread::spawn(move || {
+            for _ in 0..50 {
+                progress.fetch_add(1, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(1));
+            }
+        })
+    };
+    // A killed thread that never started drops its closure without running it.
+    let never_started = Arc::new(AtomicUsize::new(0));
+    let unstarted_dropped = Arc::new(AtomicUsize::new(0));
+    let unstarted = {
+        let ran = Arc::clone(&never_started);
+        let flag = DropFlag(Arc::clone(&unstarted_dropped));
+        thread::Builder::new()
+            .group(group)
+            .spawn(move || {
+                let _flag = flag;
+                ran.fetch_add(1, Ordering::SeqCst);
+            })
+            .unwrap()
+    };
+    let _ = unstarted;
+
+    thread::sleep(Duration::from_millis(5));
+    simulator::scheduler().kill_group(group);
+    let frozen = progress.load(Ordering::SeqCst);
+    thread::sleep(Duration::from_millis(20));
+    let joined = first.join();
+    survivor.join().unwrap();
+    assert_eq!(
+        progress.load(Ordering::SeqCst),
+        frozen,
+        "a killed thread ran"
+    );
+    assert_eq!(survivor_progress.load(Ordering::SeqCst), 50);
+    (
+        dropped.load(Ordering::SeqCst),
+        unstarted_dropped.load(Ordering::SeqCst),
+        never_started.load(Ordering::SeqCst),
+        joined.is_err_and(|payload| payload.is::<simulator::Killed>()),
+    )
+}
+
+#[test]
+fn killing_a_group_unwinds_its_threads_and_no_other() {
+    for seed in 0..10 {
+        let outcome = simulator::run(seed, kill_scenario);
+        assert!(outcome.report.leaked.is_empty(), "{:?}", outcome.report);
+        assert!(outcome.report.panicked.is_empty(), "{:?}", outcome.report);
+        let (dropped, unstarted_dropped, unstarted_ran, joined_killed) = outcome.result.unwrap();
+        // The first worker and the parent's child (which inherits the group) dropped their
+        // flags.
+        assert_eq!(dropped, 2, "seed {seed}");
+        assert!(joined_killed, "seed {seed}");
+        if unstarted_ran == 0 {
+            assert_eq!(unstarted_dropped, 1, "seed {seed}");
+        }
+        let again = simulator::run(seed, kill_scenario);
+        assert_eq!(
+            outcome.report.trace_hash, again.report.trace_hash,
+            "seed {seed}"
+        );
+    }
+}
+
+#[test]
+fn a_killed_thread_blocking_in_a_destructor_is_parked_for_good() {
+    struct BlockOnDrop(Arc<Mutex<()>>);
+    impl Drop for BlockOnDrop {
+        fn drop(&mut self) {
+            let _guard = self.0.lock();
+        }
+    }
+    let outcome = simulator::run(1, || {
+        let group = simulator::new_key();
+        let lock = Arc::new(Mutex::new(()));
+        let held = lock.lock().unwrap();
+        let victim_lock = Arc::clone(&lock);
+        let _victim = thread::Builder::new()
+            .group(group)
+            .spawn(move || {
+                let _blocker = BlockOnDrop(victim_lock);
+                thread::sleep(Duration::from_secs(3600));
+            })
+            .unwrap();
+        thread::sleep(Duration::from_millis(1));
+        simulator::scheduler().kill_group(group);
+        drop(held);
+    });
+    outcome.result.unwrap();
+    assert!(outcome.report.leaked.is_empty(), "{:?}", outcome.report);
+}

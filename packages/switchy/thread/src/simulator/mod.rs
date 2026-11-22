@@ -11,6 +11,10 @@
 //! usually starts a run with [`run`], which creates a fresh context, runs a closure as the main
 //! thread and reports what happened.
 //!
+//! A thread belongs to a *group* (see [`with_group`] and [`thread::Builder::group`]), and
+//! [`Scheduler::kill_group`] kills a group's threads, as a crashed process's threads die: see
+//! there for what that means for a thread in the middle of its work.
+//!
 //! Every run records its [`Schedule`]: which thread it picked wherever it had a choice. A
 //! schedule replays with [`Strategy::Replay`] (or `SIMULATOR_SCHEDULE`), without the
 //! scheduling generator, and [`shrink`] reduces a failing one to the fewest choices that still
@@ -355,6 +359,20 @@ struct ThreadRecord {
     priority: u64,
     timed_out: bool,
     panicked: bool,
+    /// The thread's group (0 for none); see [`Scheduler::kill_group`].
+    group: u64,
+    /// Whether it was killed; see [`Scheduler::kill_group`].
+    fate: Fate,
+}
+
+/// Whether a thread was killed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Fate {
+    Alive,
+    /// Killed: it unwinds at its next switch point, running no more of its code.
+    Killed,
+    /// Killed, and blocked again while unwinding: parked for good.
+    Abandoned,
 }
 
 struct Inner {
@@ -373,6 +391,8 @@ struct Inner {
     shutting_down: bool,
     os_handles: Vec<std::thread::JoinHandle<()>>,
     memory: memory::Memory,
+    /// The thread waiting in [`Scheduler::kill_group`] for a killed thread to unwind.
+    killer: Option<ThreadIndex>,
 }
 
 /// Called at every scheduling decision, before the chosen thread runs.
@@ -407,6 +427,35 @@ impl std::fmt::Debug for Scheduler {
 thread_local! {
     /// The (context id, thread index) of the simulated thread running on this OS thread.
     static IDENTITY: Cell<Option<(u64, ThreadIndex)>> = const { Cell::new(None) };
+    /// The group threads spawned from this OS thread join, if set by [`with_group`].
+    static GROUP: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+/// The panic payload a killed thread unwinds with (see [`Scheduler::kill_group`]).
+///
+/// It unwinds with [`std::panic::resume_unwind`], so no panic hook sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Killed;
+
+/// Run `f` with the threads it spawns (directly, from the calling OS thread) in `group`.
+///
+/// That is unless they are given one with [`thread::Builder::group`]. Threads spawned by those
+/// threads inherit their group. An async executor wraps each task's poll in this, so the threads a task
+/// starts belong to its executor.
+pub fn with_group<R>(group: u64, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<u64>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            GROUP.set(self.0);
+        }
+    }
+    let _restore = Restore(GROUP.replace(Some(group)));
+    f()
+}
+
+/// The group set by [`with_group`] on the calling OS thread, if any.
+pub(crate) fn current_group() -> Option<u64> {
+    GROUP.get()
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -482,6 +531,8 @@ impl Scheduler {
                     priority: main_priority,
                     timed_out: false,
                     panicked: false,
+                    group: 0,
+                    fate: Fate::Alive,
                 }],
                 running: 0,
                 decisions: 0,
@@ -496,6 +547,7 @@ impl Scheduler {
                 shutting_down: false,
                 os_handles: Vec::new(),
                 memory: memory::Memory::default(),
+                killer: None,
             }),
         }
     }
@@ -581,7 +633,7 @@ impl Scheduler {
 
     /// Register a new simulated thread, returning its index. It starts runnable but does not
     /// run until picked.
-    fn add_thread(&self, parent: ThreadIndex, name: String) -> ThreadIndex {
+    fn add_thread(&self, parent: ThreadIndex, name: String, group: Option<u64>) -> ThreadIndex {
         let priority = {
             let mut rng = lock(&self.rng);
             let inner = lock(&self.inner);
@@ -591,6 +643,7 @@ impl Scheduler {
             }
         };
         let mut inner = lock(&self.inner);
+        let group = group.unwrap_or(inner.threads[parent].group);
         inner.threads.push(ThreadRecord {
             name,
             state: ThreadState::Runnable,
@@ -599,6 +652,8 @@ impl Scheduler {
             priority,
             timed_out: false,
             panicked: false,
+            group,
+            fate: Fate::Alive,
         });
         let child = inner.threads.len() - 1;
         if inner.config.weak_memory {
@@ -727,6 +782,14 @@ impl Scheduler {
     fn switch(&self, op: Op, block: Option<(WaitKey, Option<Instant>)>) -> bool {
         let me = self.me();
         let mut inner = lock(&self.inner);
+        if inner.threads[me].fate != Fate::Alive {
+            // A destructor of a killed thread reached a switch point while it unwound. A
+            // yield passes; a wait could never end well, so the thread goes no further.
+            if block.is_none() {
+                return false;
+            }
+            self.abandon(inner, me);
+        }
         if inner.config.weak_memory
             && !matches!(op, Op::AtomicLoad | Op::AtomicStore | Op::AtomicUpdate)
         {
@@ -743,7 +806,93 @@ impl Scheduler {
         drop(inner);
         self.wait_turn(me);
         let mut inner = lock(&self.inner);
+        if inner.threads[me].fate != Fate::Alive {
+            drop(inner);
+            std::panic::resume_unwind(Box::new(Killed));
+        }
         std::mem::take(&mut inner.threads[me].timed_out)
+    }
+
+    /// Kill every unfinished thread of `group` (other than the caller), in index order.
+    ///
+    /// A killed thread runs none of its code again. It is stopped where it is: at a switch
+    /// point (blocked, or runnable and waiting for its turn), since only the caller runs. It
+    /// gets the baton once, right away, to unwind from that switch point with a [`Killed`]
+    /// payload, so the values on its stack are dropped, as a dropped future's are (locks it
+    /// holds are released, poisoned), and then finishes. Joining it returns that payload as an
+    /// error. A thread killed before it started drops its closure without calling it. A
+    /// destructor that blocks while the thread unwinds (waiting for a lock, say) stops it there
+    /// for good: the thread is parked forever, keeping whatever it still holds. Each kill hands the baton straight back
+    /// to the caller, so no other thread runs meanwhile, and killing is deterministic.
+    ///
+    /// Group 0 (threads without a group) is never killed.
+    ///
+    /// # Panics
+    ///
+    /// * If the calling OS thread is not a simulated thread of this run
+    pub fn kill_group(&self, group: u64) {
+        if group == 0 {
+            return;
+        }
+        let me = self.me();
+        let victims: Vec<ThreadIndex> = {
+            let inner = lock(&self.inner);
+            inner
+                .threads
+                .iter()
+                .enumerate()
+                .filter(|(i, t)| {
+                    *i != me && *i != 0 && t.group == group && t.state != ThreadState::Finished
+                })
+                .map(|(i, _)| i)
+                .collect()
+        };
+        for victim in victims {
+            let mut inner = lock(&self.inner);
+            if inner.threads[victim].state == ThreadState::Finished {
+                continue;
+            }
+            inner.trace_hash = hash_u64(inner.trace_hash, victim as u64);
+            inner.threads[victim].fate = Fate::Killed;
+            inner.threads[victim].state = ThreadState::Runnable;
+            inner.killer = Some(me);
+            inner.running = victim;
+            if let Some(os) = &inner.threads[victim].os {
+                os.unpark();
+            }
+            drop(inner);
+            self.wait_turn(me);
+            lock(&self.inner).killer = None;
+        }
+    }
+
+    /// Whether the calling thread has been killed (and should not run its code).
+    pub(crate) fn is_killed(&self, me: ThreadIndex) -> bool {
+        lock(&self.inner).threads[me].fate != Fate::Alive
+    }
+
+    /// Park a killed thread for good, handing the baton back to its killer.
+    fn abandon(&self, mut inner: MutexGuard<'_, Inner>, me: ThreadIndex) -> ! {
+        inner.threads[me].fate = Fate::Abandoned;
+        inner.threads[me].state = ThreadState::Finished;
+        inner.threads[me].op = Op::Exit;
+        self.return_to_killer(&mut inner, me);
+        drop(inner);
+        loop {
+            std::thread::park();
+        }
+    }
+
+    /// Hand the baton from the killed thread `me` back to the thread that killed it.
+    fn return_to_killer(&self, inner: &mut Inner, me: ThreadIndex) {
+        let _ = self;
+        let killer = inner.killer.unwrap_or(0);
+        inner.running = killer;
+        if killer != me
+            && let Some(os) = &inner.threads[killer].os
+        {
+            os.unpark();
+        }
     }
 
     /// Pick the next thread after `from` reached a switch point at `op`, and hand it the
@@ -913,7 +1062,10 @@ impl Scheduler {
                 if inner.running == me && inner.threads[me].state == ThreadState::Runnable {
                     return;
                 }
-                if inner.shutting_down && inner.threads[me].state == ThreadState::Finished {
+                if inner.shutting_down
+                    && inner.threads[me].state == ThreadState::Finished
+                    && inner.threads[me].fate != Fate::Abandoned
+                {
                     return;
                 }
             }
@@ -936,7 +1088,11 @@ impl Scheduler {
                 thread.state = ThreadState::Runnable;
             }
         }
-        self.schedule(&mut inner, me, Op::Exit);
+        if inner.threads[me].fate == Fate::Alive {
+            self.schedule(&mut inner, me, Op::Exit);
+        } else {
+            self.return_to_killer(&mut inner, me);
+        }
         drop(inner);
     }
 
@@ -998,7 +1154,7 @@ impl Scheduler {
                 .threads
                 .iter()
                 .skip(1)
-                .filter(|t| t.state == ThreadState::Finished)
+                .filter(|t| t.state == ThreadState::Finished && t.fate != Fate::Abandoned)
                 .filter_map(|t| t.os.clone())
                 .collect();
             for thread in &finished {
@@ -1014,7 +1170,7 @@ impl Scheduler {
                 .threads
                 .iter()
                 .skip(1)
-                .filter(|t| t.state == ThreadState::Finished)
+                .filter(|t| t.state == ThreadState::Finished && t.fate != Fate::Abandoned)
                 .filter_map(|t| t.os.as_ref().map(std::thread::Thread::id))
                 .collect()
         };

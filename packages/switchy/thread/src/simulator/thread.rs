@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use super::{IDENTITY, Op, Scheduler, ThreadIndex, WaitKey, deadline_after, scheduler};
+use super::{IDENTITY, Killed, Op, Scheduler, ThreadIndex, WaitKey, deadline_after, scheduler};
 
 pub use std::thread::{current, panicking};
 
@@ -65,6 +65,7 @@ impl<T> JoinHandle<T> {
 pub struct Builder {
     name: Option<String>,
     stack_size: Option<usize>,
+    group: Option<u64>,
 }
 
 impl Builder {
@@ -74,7 +75,16 @@ impl Builder {
         Self {
             name: None,
             stack_size: None,
+            group: None,
         }
+    }
+
+    /// Put the thread in `group` (see [`Scheduler::kill_group`]), rather than the group set by
+    /// [`super::with_group`] or else its parent's.
+    #[must_use]
+    pub const fn group(mut self, group: u64) -> Self {
+        self.group = Some(group);
+        self
     }
 
     /// Name the thread. Names appear in deadlock reports and traces.
@@ -108,7 +118,8 @@ impl Builder {
             let count = scheduler.snapshot().threads.len();
             format!("sim-thread-{count}")
         });
-        let index = scheduler.add_thread(scheduler.me(), name.clone());
+        let group = self.group.or_else(super::current_group);
+        let index = scheduler.add_thread(scheduler.me(), name.clone(), group);
         let result = Arc::new(Mutex::new(None));
         let mut builder = std::thread::Builder::new().name(name);
         if let Some(size) = self.stack_size {
@@ -120,8 +131,16 @@ impl Builder {
             switchy_simulation::set_current(Some(context));
             IDENTITY.set(Some((context_id, index)));
             child_scheduler.wait_turn(index);
-            let outcome = std::panic::catch_unwind(AssertUnwindSafe(f));
-            let panicked = outcome.is_err();
+            let outcome = if child_scheduler.is_killed(index) {
+                // Killed before it started: its closure never runs.
+                drop(f);
+                Err(Box::new(Killed) as Box<dyn std::any::Any + Send>)
+            } else {
+                std::panic::catch_unwind(AssertUnwindSafe(f))
+            };
+            let panicked = outcome
+                .as_ref()
+                .is_err_and(|payload| !payload.is::<Killed>());
             *child_result.lock().unwrap_or_else(PoisonError::into_inner) = Some(outcome);
             child_scheduler.exit(index, panicked);
             // Stay alive (parked) until the run ends, so this thread's thread-local
