@@ -1700,9 +1700,19 @@ impl Kernel {
             .utf8_environment()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect();
+        // If the program never runs (its thread killed before it started, or never started),
+        // the process ends as killed: it must not run forever without a program.
+        let unborn = Unborn {
+            kernel: Arc::clone(&kernel),
+            pid: Some(pid),
+        };
         switchy_thread::thread::Builder::new()
             .name(format!("proc-{pid}-{base}"))
+            // A process outlives the threads that started it (a server that crashes, a runtime
+            // shut down): its program belongs to no thread group.
+            .group(0)
             .spawn(move || {
+                unborn.born();
                 let mut process = Process {
                     kernel: Arc::clone(&kernel),
                     pid,
@@ -1742,6 +1752,35 @@ impl Kernel {
                 kernel.exit(pid, exit);
             })?;
         Ok((pid, stdin_pipe, stdout_pipe))
+    }
+}
+
+/// A process whose program has not started: ends it as killed if dropped (its program never
+/// runs).
+struct Unborn {
+    kernel: Arc<Kernel>,
+    /// `None` once the program starts.
+    pid: Option<u32>,
+}
+
+impl Unborn {
+    /// The program started: the process ends as it does.
+    fn born(mut self) {
+        self.pid = None;
+    }
+}
+
+impl Drop for Unborn {
+    fn drop(&mut self) {
+        let Some(pid) = self.pid else {
+            return;
+        };
+        let exit = if lock(&self.kernel.state).config.personality.is_windows() {
+            ChildExit::with_exit_code(KILLED_EXIT_CODE)
+        } else {
+            ChildExit::signaled(signal_number(Signal::Kill), &signal_name(9))
+        };
+        self.kernel.exit(pid, exit);
     }
 }
 

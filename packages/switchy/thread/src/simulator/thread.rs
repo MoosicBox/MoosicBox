@@ -91,7 +91,7 @@ impl Builder {
     }
 
     /// Put the thread in `group` (see [`Scheduler::kill_group`]), rather than the group set by
-    /// [`super::with_group`] or else its parent's.
+    /// [`super::with_group`] or else its parent's. Group 0 is none: no group kill reaches it.
     #[must_use]
     pub const fn group(mut self, group: u64) -> Self {
         self.group = Some(group);

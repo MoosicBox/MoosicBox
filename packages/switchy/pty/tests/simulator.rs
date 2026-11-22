@@ -957,3 +957,33 @@ fn closing_a_console_ends_even_processes_that_ignore_hang_ups() {
         assert_eq!(exit.exit_code(), 0xC000_013A, "seed {seed}");
     }
 }
+
+/// A process outlives the threads that started it: killing their group (a server that crashes)
+/// leaves its program running.
+#[test]
+fn killing_the_spawners_thread_group_leaves_their_processes_running() {
+    for seed in 0..20 {
+        let running = run(seed, Personality::Linux, || {
+            let group = scheduler::new_key();
+            let spawner = switchy_thread::thread::Builder::new()
+                .group(group)
+                .spawn(|| {
+                    let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                    let child = slave.spawn(SpawnCommand::new("sleep").arg("3600000")).unwrap();
+                    let pid = child.id();
+                    // Hold the terminal open, as the dead server's leaked handles would.
+                    std::mem::forget((child, master, slave));
+                    pid
+                })
+                .unwrap();
+            let pid = spawner.join().unwrap();
+            scheduler::scheduler().kill_group(group);
+            scheduler::run_until_idle();
+            simulator::snapshot()
+                .processes
+                .iter()
+                .any(|p| p.pid == pid && p.state == ProcessState::Running)
+        });
+        assert!(running, "seed {seed}");
+    }
+}
