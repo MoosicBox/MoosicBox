@@ -652,11 +652,15 @@ impl Runtime {
         self.shut_down.load(Ordering::SeqCst)
     }
 
-    /// The unfinished tasks, in the order they were spawned.
+    /// The unfinished tasks not killed yet, in the order they were spawned.
     fn live_tasks(&self) -> Vec<Arc<Task>> {
         let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
         registry.retain(|_, task| task.strong_count() > 0);
-        registry.values().filter_map(Weak::upgrade).collect()
+        registry
+            .values()
+            .filter_map(Weak::upgrade)
+            .filter(|task| !task.killed())
+            .collect()
     }
 
     /// Finish this runtime only if every admitted task has released its future.
@@ -1092,6 +1096,9 @@ pub(crate) struct Task {
     polling: AtomicBool,
     /// Whether its future must be polled on the thread that spawned it (`spawn_local`).
     pub(crate) local: AtomicBool,
+    /// Killed (its runtime shut down) while being polled elsewhere: the poll that holds its
+    /// future drops it when it returns.
+    killed: AtomicBool,
 }
 
 impl std::fmt::Debug for Task {
@@ -1120,6 +1127,7 @@ impl Task {
             block,
             polling: AtomicBool::new(false),
             local: AtomicBool::new(false),
+            killed: AtomicBool::new(false),
         });
         registry
             .lock()
@@ -1132,14 +1140,26 @@ impl Task {
         task
     }
 
-    /// Drop the task's future now, unpolled, and count it finished.
+    /// Drop the task's future now, unpolled, and count it finished. If another thread is
+    /// polling it right now (another worker), that poll drops it when it returns: a kill never
+    /// waits for a poll.
     fn kill(&self) {
-        let future = {
-            let mut future = self.future.lock().unwrap_or_else(PoisonError::into_inner);
-            std::mem::replace(&mut *future, Box::pin(std::future::ready(())))
+        self.killed.store(true, Ordering::SeqCst);
+        let future = match self.future.try_lock() {
+            Ok(mut future) => std::mem::replace(&mut *future, Box::pin(std::future::ready(()))),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => {
+                let mut future = poisoned.into_inner();
+                std::mem::replace(&mut *future, Box::pin(std::future::ready(())))
+            }
+            Err(std::sync::TryLockError::WouldBlock) => return,
         };
         drop(future);
         self.finish();
+    }
+
+    /// Whether the task was killed (and is finished, or about to be when its poll returns).
+    fn killed(&self) -> bool {
+        self.killed.load(Ordering::SeqCst)
     }
 
     fn waker(self: &Arc<Self>) -> Waker {
@@ -1161,9 +1181,18 @@ impl Task {
                 return Poll::Pending;
             }
         };
+        if self.killed() {
+            let killed = std::mem::replace(&mut *future, Box::pin(std::future::ready(())));
+            drop(future);
+            drop(killed);
+            self.finish();
+            return Poll::Ready(());
+        }
         self.polling.store(true, Ordering::SeqCst);
         let poll = future.as_mut().poll(&mut ctx);
         self.polling.store(false, Ordering::SeqCst);
+        // Killed while it ran (on another worker): drop it now.
+        let poll = if self.killed() { Poll::Ready(()) } else { poll };
         match poll {
             Poll::Ready(()) => {
                 // Retained wakers may keep Task alive indefinitely. Release user state

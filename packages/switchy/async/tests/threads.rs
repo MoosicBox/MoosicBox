@@ -358,3 +358,50 @@ mod workers {
         }
     }
 }
+
+#[cfg(feature = "rt-multi-thread")]
+#[test]
+fn shutting_down_a_runtime_while_another_worker_polls_its_task_does_not_wait_for_it() {
+    for seed in 0..20 {
+        let outcome = simulator::run(seed, || {
+            let server = Runtime::new();
+            let client = {
+                let mut builder = switchy_async::Builder::new();
+                builder
+                    .flavor(switchy_async::RuntimeFlavor::MultiThread)
+                    .worker_threads(2);
+                builder.build().unwrap()
+            };
+            // A server task that blocks a while within one poll (a switch point inside).
+            drop(server.handle().spawn(async {
+                let lock = Arc::new(Mutex::new(()));
+                for _ in 0..50 {
+                    drop(lock.lock().unwrap());
+                }
+                switchy_async::time::sleep(Duration::from_secs(3600)).await;
+            }));
+            let (pumped, killed) = (server.clone(), server.clone());
+            client.block_on(async move {
+                let pump = switchy_async::task::spawn(async move {
+                    for _ in 0..20 {
+                        pumped.tick();
+                        switchy_async::task::yield_now().await;
+                    }
+                });
+                let crash = switchy_async::task::spawn(async move {
+                    switchy_async::task::yield_now().await;
+                    killed.shutdown_now();
+                });
+                pump.await.unwrap();
+                crash.await.unwrap();
+            });
+            assert!(server.is_shut_down());
+        });
+        assert!(
+            outcome.report.leaked.is_empty(),
+            "seed {seed}: {:?}",
+            outcome.report
+        );
+        outcome.result.unwrap();
+    }
+}
