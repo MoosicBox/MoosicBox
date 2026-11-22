@@ -1,7 +1,7 @@
 """Portable selection tests: no Cargo, codec executable, network or baseline writes."""
 
 import argparse
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -18,6 +18,11 @@ def named_pass(execution):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_source_keys_are_portable_without_changing_case(self):
+        for root in (PureWindowsPath('C:/work'), PurePosixPath('/work')):
+            with self.subTest(root=root):
+                self.assertEqual(ci.source_key(root / 'packages/Opus/File.rs', root),
+                                 'packages/Opus/File.rs')
     def test_shards_cover_required_inventory_once(self):
         shards = [ci.selected_live_tests(shard) for shard in ci.LIVE_SHARDS]
         flat = [tuple(row) for shard in shards for row in shard]

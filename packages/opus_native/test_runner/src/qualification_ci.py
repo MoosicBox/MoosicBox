@@ -55,6 +55,11 @@ def write_json(path, value):
     )
 
 
+def source_key(path, root):
+    # Receipt keys identify repository paths, not native filesystem spellings.
+    return path.relative_to(root).as_posix()
+
+
 def sources():
     paths = [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / ".cargo/config.toml"]
     paths += sorted((ROOT / "packages/opus_native").rglob("*.rs"))
@@ -70,7 +75,7 @@ def sources():
     ]
     # C source provenance is independently checked by reference_oracle.
     return {
-        str(path.relative_to(ROOT)): digest(path)
+        source_key(path, ROOT): digest(path)
         for path in paths
         if "target" not in path.relative_to(ROOT).parts
     }
