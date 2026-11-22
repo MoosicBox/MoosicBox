@@ -563,7 +563,11 @@ impl Search<'_> {
                 })
                 .unwrap()
         });
-        for pressure in [3, 5] {
+        for &pressure in if self.encoder.config.frame_size == 160 {
+            &[2, 4, 8][..]
+        } else {
+            &[3, 5][..]
+        } {
             let (mut lo, mut hi) = (-centers[0].max(centers[1]), 63 - centers[0].min(centers[1]));
             while lo <= hi {
                 let offset = lo + (hi - lo) / 2;
@@ -824,7 +828,7 @@ impl SilkEncoder {
                 })
                 .map(Some);
         }
-        if self.config.frame_size == 320 {
+        if self.short_rate_control || self.config.frame_size == 320 {
             search.rate_control()?;
             if search.best.is_none() {
                 return Err(crate::Error::Unsupported(

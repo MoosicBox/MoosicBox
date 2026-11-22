@@ -752,7 +752,16 @@ impl Encoder {
                 }
                 prepared_state = Some(state);
             }
-            for db in [0, -1, -2, -3, -6] {
+            let quiet = self.config.sample_rate == SampleRate::Hz48000
+                && control.bitrate >= 64_000
+                && internal_size == 480
+                && self.config.channels == Channels::Stereo
+                && target.iter().all(|&x| x.unsigned_abs() <= 2);
+            for &db in if quiet {
+                &[0, -1, 1, -2, 2][..]
+            } else {
+                &[0, -1, -2, -3, -6][..]
+            } {
                 if db != 0 && !eligible {
                     continue;
                 }
@@ -1346,6 +1355,21 @@ impl Encoder {
         let analysis_pcm = delayed.as_deref().unwrap_or(pcm);
         #[cfg(not(feature = "hybrid"))]
         let analysis_pcm = pcm;
+        let quantized;
+        let analysis_pcm = if hybrid
+            && self.config.channels == Channels::Stereo
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.bitrate >= 64_000
+            && self.config.frame_size == 480
+        {
+            quantized = analysis_pcm
+                .iter()
+                .map(|&v| (v * 32768.0).round() / 32768.0)
+                .collect::<Vec<_>>();
+            &quantized[..]
+        } else {
+            analysis_pcm
+        };
         let resampled = self.interpolator.process(analysis_pcm);
         let internal_size = self.config.frame_size * rate_factor(self.config.sample_rate);
         let bytes = (self.config.bitrate as usize * internal_size / 384_000)
@@ -1409,6 +1433,10 @@ impl Encoder {
             let original = silk.clone();
             let incoming = enc.clone();
             if let Some(scorer) = &mut self.native_prefix_score {
+                // Preserve full-rate SILK prediction history across subsequent rate changes.
+                silk.short_rate_control = self.config.sample_rate == SampleRate::Hz48000
+                    && (64_000..128_000).contains(&self.config.bitrate)
+                    && self.config.frame_size == 480;
                 silk.encode_prefix_scored(&low, &mut enc, scorer.as_mut())?;
                 #[cfg(test)]
                 scorer.verify(&enc.clone().finish().map_err(entropy)?)?;

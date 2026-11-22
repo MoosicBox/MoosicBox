@@ -61,6 +61,7 @@ struct PrefixScoring<'a> {
 
 #[derive(Clone)]
 pub(super) struct SilkEncoder {
+    pub(super) short_rate_control: bool,
     config: EncoderConfig,
     history: [[i32; 16]; 2],
     gain: [i32; 2],
@@ -506,6 +507,7 @@ impl SilkEncoder {
             ));
         }
         Ok(Self {
+            short_rate_control: false,
             config,
             history: [[0; 16]; 2],
             gain: [65536; 2],
@@ -1079,6 +1081,8 @@ impl SilkEncoder {
         let mut best = None;
         let masks: &[u8] = if self.config.channels == crate::Channels::Mono {
             &[0, 1, 4, 5]
+        } else if self.short_rate_control {
+            &[0]
         } else if self.config.frame_size == 320 {
             &[0, 3]
         } else {
