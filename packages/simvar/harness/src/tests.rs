@@ -18,7 +18,7 @@ use switchy::{
 };
 
 use crate::{
-    Replay, Sim, SimBootstrap, SimConfig, SimResult, Simulation,
+    Replay, RunSpec, Sim, SimBootstrap, SimConfig, SimResult, Simulation,
     client::ClientResult,
     fault::{self, HostStatus},
     host::{self, HostResult},
@@ -26,7 +26,8 @@ use crate::{
 
 /// Run `bootstrap` once with `seed`, returning its result and trace.
 fn run(bootstrap: &impl SimBootstrap, seed: u64) -> (SimResult, u64) {
-    let outcome = Simulation::new(bootstrap).run_once(1, None, Replay::Seed(seed));
+    let outcome =
+        Simulation::new(bootstrap).run_once(1, None, Replay::Seed(seed), &RunSpec::fleet(1));
     // Leave no context behind for the next test on this thread.
     switchy::simulation::set_current(None);
     (outcome.result, outcome.trace)
