@@ -187,13 +187,14 @@ fn epoch_bounds() -> (u64, u64) {
 }
 
 fn gen_epoch_offset() -> u64 {
-    if let Ok(value) = std::env::var("SIMULATOR_EPOCH_OFFSET") {
-        return parse_u64_env("SIMULATOR_EPOCH_OFFSET", &value);
-    }
-
+    // Draw even when the offset is given, so a run replayed with its recorded
+    // `SIMULATOR_EPOCH_OFFSET` takes as many draws from the run's generator as the original
+    // did, and every later draw matches.
     let (min, max) = epoch_bounds();
-
-    draw_inclusive(min, max)
+    let drawn = draw_inclusive(min, max);
+    std::env::var("SIMULATOR_EPOCH_OFFSET").map_or(drawn, |value| {
+        parse_u64_env("SIMULATOR_EPOCH_OFFSET", &value)
+    })
 }
 
 /// Resets the epoch offset to a new random value.
