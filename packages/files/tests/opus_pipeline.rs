@@ -66,7 +66,7 @@ async fn intended_public_file_mode_acceptance(
         "/tests/fixtures/silk.ogg"
     ))
     .unwrap();
-    let decode = |bytes: Vec<u8>| {
+    let decode = |bytes: Vec<u8>, seek| {
         let format = moosicbox_audio_decoder::create_format_probe()
             .probe(
                 &Hint::new(),
@@ -78,13 +78,26 @@ async fn intended_public_file_mode_acceptance(
         let buffers: Vec<_> = moosicbox_audio_decoder::unsync::decode_with_options_result(
             format,
             None,
-            None,
+            seek,
             options(),
         )
         .unwrap()
         .iter()
         .map(Result::unwrap)
         .collect();
+        for buffer in &buffers {
+            assert_eq!(
+                buffer.spec().channels().count(),
+                1,
+                "file mono layout changed"
+            );
+            assert!(
+                buffer
+                    .iter_planes()
+                    .flatten()
+                    .all(|sample| sample.is_finite())
+            );
+        }
         let frames = buffers.iter().map(Audio::frames).sum::<usize>();
         assert!(
             buffers
@@ -97,7 +110,8 @@ async fn intended_public_file_mode_acceptance(
     use futures::FutureExt;
     let mut failures = Vec::new();
     let mut attempted = 0;
-    let source_frames = decode(original.clone());
+    let mut cells = ProductCells::new(rates.len() * bitrates.len());
+    let source_frames = decode(original.clone(), None);
     for &sample_rate in rates {
         for &bitrate in bitrates {
             let config = OpusEncodeConfig {
@@ -105,6 +119,9 @@ async fn intended_public_file_mode_acceptance(
                 bitrate,
                 ..config(sample_rate)
             };
+            if !cells.start(&format!("{config:?}")) {
+                continue;
+            }
             attempted += 1;
             let outcome = std::panic::AssertUnwindSafe(async {
                 // collect() unwraps both layers of terminal stream errors: a closed
@@ -112,9 +129,14 @@ async fn intended_public_file_mode_acceptance(
                 let bytes = collect(config).await;
                 assert_ne!(bytes, original, "must actually transcode: {config:?}");
                 assert_eq!(
-                    decode(bytes.clone()),
+                    decode(bytes.clone(), None),
                     source_frames,
                     "public file clock: {config:?}"
+                );
+                assert_eq!(
+                    decode(bytes.clone(), Some(0.05)),
+                    source_frames - 2400,
+                    "public file seek clock: {config:?}"
                 );
                 assert_eq!(
                     bytes,
@@ -124,6 +146,12 @@ async fn intended_public_file_mode_acceptance(
             })
             .catch_unwind()
             .await;
+            cells.finish(
+                outcome
+                    .as_ref()
+                    .err()
+                    .map(|payload| public_case_failure(payload.as_ref())),
+            );
             if let Err(payload) = outcome {
                 failures.push(format!(
                     "{config:?}: {}",
@@ -132,6 +160,7 @@ async fn intended_public_file_mode_acceptance(
             }
         }
     }
+    cells.complete();
     assert!(
         failures.is_empty(),
         "{} / {attempted} public file cells failed:\n{}",
@@ -333,4 +362,76 @@ async fn dropping_consumer_does_not_poison_next_transcode() {
         .unwrap();
     drop(result);
     assert_eq!(collect(config(48000)).await, collect(config(48000)).await);
+}
+
+// Diagnostic selection never changes the default acceptance matrix. Use --nocapture.
+struct ProductCells {
+    selector: Option<usize>,
+    expected: usize,
+    seen: usize,
+    started: usize,
+    passed: usize,
+    current: String,
+}
+impl ProductCells {
+    fn new(expected: usize) -> Self {
+        let selector = std::env::var("MOOSICBOX_OPUS_PRODUCT_CELL")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .expect("MOOSICBOX_OPUS_PRODUCT_CELL must be a zero-based cell index")
+            });
+        Self {
+            selector,
+            expected,
+            seen: 0,
+            started: 0,
+            passed: 0,
+            current: String::new(),
+        }
+    }
+    fn start(&mut self, context: &str) -> bool {
+        let index = self.seen;
+        self.seen += 1;
+        if self.selector.is_some_and(|selected| selected != index) {
+            return false;
+        }
+        self.started += 1;
+        self.current = format!("cell={index} {context}");
+        eprintln!("PRODUCT_CELL_START {}", self.current);
+        true
+    }
+    fn finish(&mut self, error: Option<&str>) {
+        if let Some(error) = error {
+            eprintln!("PRODUCT_CELL_FAIL {}: {error}", self.current);
+        } else {
+            self.passed += 1;
+            eprintln!("PRODUCT_CELL_PASS {}", self.current);
+        }
+    }
+    fn complete(&self) {
+        eprintln!(
+            "PRODUCT_COVERAGE kind={} expected={} seen={} attempted={} passed={} failed={} omitted={}",
+            if self.selector.is_some() {
+                "PARTIAL_DIAGNOSTIC"
+            } else {
+                "FULL"
+            },
+            self.expected,
+            self.seen,
+            self.started,
+            self.passed,
+            self.started - self.passed,
+            self.expected - self.started
+        );
+        assert_eq!(
+            self.seen, self.expected,
+            "acceptance matrix enumeration changed"
+        );
+        assert!(self.started > 0, "cell selector matched zero cells");
+        if self.selector.is_none() {
+            assert_eq!(self.started, self.expected);
+        }
+    }
 }

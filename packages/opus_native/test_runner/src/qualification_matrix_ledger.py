@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import qualification_matrix as matrix
+import qualification_ci as ci
 import qualification_performance as performance
 import qualification_silk as silk
 from qualification_inputs import MANIFEST, verify_inputs
@@ -166,6 +167,19 @@ def build_ledger(media_directory):
         missing_intended_media=[
             "reviewed fullband speech and rate/layout variants if required for broader public support"
         ],
+        required_scored_tests=ci.acceptance_inventory(),
+        required_layout_cells=[ci.layout_cell(shard) for shard in ci.LAYOUT_SHARDS],
+        required_platform_executions=[dict(platform=pid, profile=profile)
+                                      for pid in ci.PLATFORMS for profile in ("debug", "release")],
+        required_pipeline_suites=list(ci.PRODUCT_TESTS) + [
+            ("moosicbox_audio_output", "opus-native", "opus_native_pipeline"),
+            ("moosicbox_files", "encoder-opus-native", "opus_pipeline"),
+        ],
+        unit_completion_policy="actual --list minus --ignored --list; complete full suite or bounded shards in debug/release; timeout is failure",
+        required_final_performance=dict(frames=500, minimum_repetitions=2,
+                                        minimum_encode_realtime_multiple=1,
+                                        minimum_decode_realtime_multiple=1,
+                                        raw_child_rss_scope="actual raw totals where available; explicit unavailable-platform limitation otherwise; no allocation budget"),
         accepted=False,
         limitation="inventory only; test presence, synthetic timing and internal candidates do not establish public/perceptual/platform acceptance",
     )

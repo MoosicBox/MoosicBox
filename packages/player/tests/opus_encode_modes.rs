@@ -273,6 +273,7 @@ fn public_case_failure(payload: &(dyn std::any::Any + Send)) -> &str {
 fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
     let mut failures = Vec::new();
     let mut attempted = 0;
+    let mut cells = ProductCells::new(bitrates.len() * 8);
     for &bitrate in bitrates {
         for channels in [1, 2] {
             for frame_size in [480, 960] {
@@ -285,6 +286,11 @@ fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
                         frame_size,
                         bitrate,
                     };
+                    if !cells.start(&format!(
+                        "{config:?}, input_rate={input_rate}, input_frames={input_frames}"
+                    )) {
+                        continue;
+                    }
                     attempted += 1;
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let mut encoder =
@@ -303,11 +309,61 @@ fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
                             }),
                         );
                         assert!(encoder.finish().unwrap().is_empty(), "{config:?}");
+                        // Probe only bytes emitted by the actual public encoder.
+                        let mut probe = moosicbox_audio_decoder::create_format_probe()
+                            .probe(
+                                &Hint::new(),
+                                MediaSourceStream::new(
+                                    Box::new(Cursor::new(bytes.clone())),
+                                    Default::default(),
+                                ),
+                                Default::default(),
+                                Default::default(),
+                            )
+                            .unwrap();
+                        while let Some(packet) = probe.next_packet().unwrap() {
+                            let toc = packet.data[0] >> 3;
+                            match mode {
+                                OpusEncodeMode::Silk => {
+                                    assert!(toc < 12, "public SILK fallback: {config:?}, toc={toc}")
+                                }
+                                OpusEncodeMode::Hybrid => assert!(
+                                    (12..16).contains(&toc),
+                                    "public Hybrid fallback: {config:?}, toc={toc}"
+                                ),
+                                OpusEncodeMode::Auto => {}
+                                _ => unreachable!(),
+                            }
+                        }
                         let full = play(bytes.clone(), None);
                         assert_eq!(full.len(), usize::from(channels), "{config:?}");
                         for plane in &full {
                             assert_eq!(plane.len(), 2457, "{config:?}, input_rate={input_rate}");
                             assert!(plane.iter().all(|sample| sample.is_finite()), "{config:?}");
+                            assert!(
+                                plane.iter().any(|sample| sample.abs() > 0.001),
+                                "{config:?}"
+                            );
+                        }
+                        // Exercise the workspace consumer, not only direct playback:
+                        // decode the produced Ogg and encode it again via SignalChainStep.
+                        let mut processor = moosicbox_player::signal_chain::SignalChainStep::new()
+                            .with_decode_options(options())
+                            .with_opus_encoder(config)
+                            .unwrap()
+                            .process(Box::new(Cursor::new(bytes.clone())))
+                            .unwrap();
+                        let mut reencoded = Vec::new();
+                        processor
+                            .read_to_end(&mut reencoded)
+                            .unwrap_or_else(|error| {
+                                panic!("public signal chain {config:?}: {error}")
+                            });
+                        let replay = play(reencoded, None);
+                        assert_eq!(replay.len(), usize::from(channels));
+                        for plane in replay {
+                            assert_eq!(plane.len(), 2457, "signal-chain tail: {config:?}");
+                            assert!(plane.iter().all(|sample| sample.is_finite()));
                             assert!(
                                 plane.iter().any(|sample| sample.abs() > 0.001),
                                 "{config:?}"
@@ -336,6 +392,12 @@ fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
                             }
                         }
                     }));
+                    cells.finish(
+                        outcome
+                            .as_ref()
+                            .err()
+                            .map(|payload| public_case_failure(payload.as_ref())),
+                    );
                     if let Err(payload) = outcome {
                         failures.push(format!(
                             "{config:?}, input_rate={input_rate}, input_frames={input_frames}: {}",
@@ -346,6 +408,7 @@ fn intended_public_low_rate_playback(mode: OpusEncodeMode, bitrates: &[u32]) {
             }
         }
     }
+    cells.complete();
     assert!(
         failures.is_empty(),
         "{} / {attempted} public player cells failed:\n{}",
@@ -368,6 +431,7 @@ fn intended_public_hybrid_low_rates_reach_player_and_seek() {
 fn intended_public_auto_low_budget_mode_controls_reach_player() {
     let mut failures = Vec::new();
     let mut attempted = 0;
+    let mut cells = ProductCells::new(8);
     use moosicbox_audio_output::encoder::opus::EncoderMode;
 
     for bitrate in [32_000, 64_000] {
@@ -381,6 +445,9 @@ fn intended_public_auto_low_budget_mode_controls_reach_player() {
                     frame_size,
                     bitrate,
                 };
+                if !cells.start(&format!("{config:?}")) {
+                    continue;
+                }
                 attempted += 1;
                 let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let mut encoder = SelectedOpusEncoder::new(config)
@@ -429,6 +496,12 @@ fn intended_public_auto_low_budget_mode_controls_reach_player() {
                         assert_eq!(actual, &expected[2400..], "controlled seek: {config:?}");
                     }
                 }));
+                cells.finish(
+                    outcome
+                        .as_ref()
+                        .err()
+                        .map(|payload| public_case_failure(payload.as_ref())),
+                );
                 if let Err(payload) = outcome {
                     failures.push(format!(
                         "{config:?}: {}",
@@ -438,6 +511,7 @@ fn intended_public_auto_low_budget_mode_controls_reach_player() {
             }
         }
     }
+    cells.complete();
     assert!(
         failures.is_empty(),
         "{} / {attempted} public player cells failed:\n{}",
@@ -1052,5 +1126,77 @@ fn unsupported_mode_combinations_are_errors_not_fallbacks() {
         },
     ] {
         assert!(SelectedOpusEncoder::new(config).is_err(), "{config:?}");
+    }
+}
+
+// Diagnostic selection never changes the default acceptance matrix. Use --nocapture.
+struct ProductCells {
+    selector: Option<usize>,
+    expected: usize,
+    seen: usize,
+    started: usize,
+    passed: usize,
+    current: String,
+}
+impl ProductCells {
+    fn new(expected: usize) -> Self {
+        let selector = std::env::var("MOOSICBOX_OPUS_PRODUCT_CELL")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .expect("MOOSICBOX_OPUS_PRODUCT_CELL must be a zero-based cell index")
+            });
+        Self {
+            selector,
+            expected,
+            seen: 0,
+            started: 0,
+            passed: 0,
+            current: String::new(),
+        }
+    }
+    fn start(&mut self, context: &str) -> bool {
+        let index = self.seen;
+        self.seen += 1;
+        if self.selector.is_some_and(|selected| selected != index) {
+            return false;
+        }
+        self.started += 1;
+        self.current = format!("cell={index} {context}");
+        eprintln!("PRODUCT_CELL_START {}", self.current);
+        true
+    }
+    fn finish(&mut self, error: Option<&str>) {
+        if let Some(error) = error {
+            eprintln!("PRODUCT_CELL_FAIL {}: {error}", self.current);
+        } else {
+            self.passed += 1;
+            eprintln!("PRODUCT_CELL_PASS {}", self.current);
+        }
+    }
+    fn complete(&self) {
+        eprintln!(
+            "PRODUCT_COVERAGE kind={} expected={} seen={} attempted={} passed={} failed={} omitted={}",
+            if self.selector.is_some() {
+                "PARTIAL_DIAGNOSTIC"
+            } else {
+                "FULL"
+            },
+            self.expected,
+            self.seen,
+            self.started,
+            self.passed,
+            self.started - self.passed,
+            self.expected - self.started
+        );
+        assert_eq!(
+            self.seen, self.expected,
+            "acceptance matrix enumeration changed"
+        );
+        assert!(self.started > 0, "cell selector matched zero cells");
+        if self.selector.is_none() {
+            assert_eq!(self.started, self.expected);
+        }
     }
 }

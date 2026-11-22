@@ -30,10 +30,12 @@ pub(super) struct Adaptive {
     pub control: EncoderControl,
     pub active: EncoderMode,
     pub next_celt: bool,
+    #[cfg(feature = "hybrid")]
     pub tail: Vec<f32>,
     pub end: usize,
 }
 
+#[cfg(feature = "hybrid")]
 impl Adaptive {
     pub(super) const fn new(bitrate: u32) -> Self {
         Self {
@@ -52,6 +54,12 @@ impl Adaptive {
     pub(super) fn target(&self) -> EncoderMode {
         match self.control.mode {
             EncoderMode::Auto if self.control.bandwidth == Bandwidth::Wideband => EncoderMode::Silk,
+            EncoderMode::Auto
+                if self.control.bandwidth == Bandwidth::SuperWideband
+                    && self.control.bitrate <= 128_000 =>
+            {
+                EncoderMode::Hybrid
+            }
             EncoderMode::Auto if self.control.bitrate >= 224_000 => EncoderMode::Celt,
             EncoderMode::Auto
                 if self.control.bitrate < 160_000 && self.active == EncoderMode::Hybrid =>
@@ -78,12 +86,12 @@ pub(super) fn validate_celt(control: EncoderControl, minimum: u32) -> Result<()>
     }
     let predictive = control.mode == EncoderMode::Silk
         || (control.mode == EncoderMode::Auto && control.bandwidth == Bandwidth::Wideband);
-    if control.bandwidth
-        != if predictive {
-            Bandwidth::Wideband
-        } else {
-            Bandwidth::Fullband
-        }
+    let transform_bandwidth = matches!(
+        control.bandwidth,
+        Bandwidth::Fullband | Bandwidth::SuperWideband
+    );
+    if (predictive && control.bandwidth != Bandwidth::Wideband)
+        || (!predictive && !transform_bandwidth)
     {
         return Err(unavailable(
             "only Wideband SILK and Fullband CELT/hybrid are qualified control targets",
@@ -97,6 +105,111 @@ pub(super) fn validate_celt(control: EncoderControl, minimum: u32) -> Result<()>
 // arithmetic would change the PCM fixtures being compared against the oracle.
 #[allow(clippy::suboptimal_flops)]
 mod tests {
+    struct Pool48Scope(bool);
+    impl Pool48Scope {
+        fn enter() -> Self {
+            Self(super::super::hybrid::POOL48.replace(true))
+        }
+    }
+    impl Drop for Pool48Scope {
+        fn drop(&mut self) {
+            super::super::hybrid::POOL48.set(self.0);
+        }
+    }
+
+    #[test]
+    #[ignore = "same committed production snapshot versus pool48 at exact short-frame boundaries"]
+    fn prototype_pool48_common_snapshot_diagnostic() {
+        let media: Vec<f32> =
+            std::fs::read(std::env::var_os("MOOSICBOX_OPUS_HYBRID_REAL_PCM").unwrap())
+                .unwrap()
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|b| f32::from(i16::from_le_bytes(*b)) / 32768.0)
+                .collect();
+        for shape in [2, 3] {
+            let config = EncoderConfig {
+                frame_size: 480,
+                bitrate: 64000,
+                ..EncoderConfig::default()
+            };
+            let mut production = Encoder::new_auto(config).unwrap();
+            for frame in 0..18 {
+                let (mode, bitrate) = if (4..12).contains(&frame) {
+                    (EncoderMode::Hybrid, 32000)
+                } else if (16..24).contains(&frame) {
+                    (EncoderMode::Auto, 64000)
+                } else {
+                    (EncoderMode::Celt, 64000)
+                };
+                production
+                    .set_control(EncoderControl {
+                        mode,
+                        bitrate,
+                        bandwidth: Bandwidth::Fullband,
+                    })
+                    .unwrap();
+                let pcm = candidate_hybrid_shape(shape, frame, 480, &media);
+                if [4, 6, 16].contains(&frame) {
+                    let mut pool = production.clone();
+                    eprintln!(
+                        "COMMON_SNAPSHOT shape={shape} frame={frame} mode={mode:?} bitrate={bitrate}"
+                    );
+                    super::super::hybrid::POOL_DIAGNOSE_SKIP.set(0);
+                    super::super::hybrid::POOL_DIAGNOSE.set(12);
+                    let _scope = Pool48Scope::enter();
+                    let candidate = pool.encode(&pcm).unwrap();
+                    eprintln!(
+                        "COMMON_PACKET shape={shape} frame={frame} pool_bytes={}",
+                        candidate.len()
+                    );
+                    super::super::hybrid::POOL_DIAGNOSE.set(0);
+                }
+                if [4, 6, 16].contains(&frame) {
+                    super::super::hybrid::POOL_DIAGNOSE.set(1);
+                }
+                let packet = production.encode(&pcm).unwrap();
+                super::super::hybrid::POOL_DIAGNOSE.set(0);
+                eprintln!(
+                    "COMMON_PRODUCTION shape={shape} frame={frame} packet_bytes={}",
+                    packet.len()
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "full versus pool48 same-state winner diagnostic; selected unchanged layout assertion"]
+    fn prototype_pool48_winner_diagnostic() {
+        let _scope = Pool48Scope::enter();
+        super::super::hybrid::POOL_DIAGNOSE.set(24);
+        super::super::hybrid::POOL_DIAGNOSE_SKIP.set(0);
+        reference_practical_layout_quality();
+        super::super::hybrid::POOL_DIAGNOSE.set(0);
+    }
+
+    #[test]
+    #[ignore = "test-only pool48; unchanged public assertions, not production acceptance"]
+    fn prototype_pool48_public_matrix() {
+        let _scope = Pool48Scope::enter();
+        reference_public_hybrid_auto_matrix();
+    }
+
+    #[test]
+    #[ignore = "test-only pool48; unchanged 40-layout assertions"]
+    fn prototype_pool48_layout_matrix() {
+        let _scope = Pool48Scope::enter();
+        reference_practical_layout_quality();
+    }
+
+    #[test]
+    #[ignore = "test-only pool48; unchanged 24 cold/practical assertions"]
+    fn prototype_pool48_cold_matrix() {
+        let _scope = Pool48Scope::enter();
+        reference_public_practical_rd_quality();
+    }
+
     use super::super::{Encoder, EncoderConfig};
     #[cfg(feature = "hybrid")]
     use super::{Bandwidth, EncoderControl, EncoderMode};
@@ -801,6 +914,100 @@ mod tests {
         }
     }
 
+    // Parse the actual cold packets, retaining prefix/resampler history. The
+    // difference full-minus-prefix includes CELT and its normative entry fade.
+    #[cfg(feature = "hybrid")]
+    fn trace_public_entry(
+        packets: &[Vec<u8>],
+        decoded: &[f32],
+        source: &[f32],
+        config: EncoderConfig,
+        lookahead: usize,
+    ) {
+        if std::env::var_os("MOOSICBOX_OPUS_PUBLIC_ENTRY_TRACE").is_none() {
+            return;
+        }
+        let count = super::super::channel_count(config.channels);
+        let size = config.frame_size;
+        let internal = size * super::super::rate_factor(config.sample_rate) / 3;
+        let mut silk = crate::silk::SilkDecoder::new(
+            crate::SampleRate::Hz16000,
+            config.channels,
+            (internal / 16) as u8,
+        )
+        .unwrap();
+        let mut converters: Vec<_> = (0..count)
+            .map(|_| {
+                crate::silk::resampler::SilkResampler::new(16000, config.sample_rate as u32)
+                    .unwrap()
+            })
+            .collect();
+        for (frame, packet) in packets.iter().take(3).enumerate() {
+            eprintln!("public entry packet={frame} lookahead={lookahead} bytes={packet:02x?}");
+            if !(12..16).contains(&(packet[0] >> 3)) {
+                return;
+            }
+            let mut range = crate::range::RangeDecoder::new(&packet[1..]).unwrap();
+            silk.begin_packet();
+            silk.decode_header_bits(&mut range, count == 2).unwrap();
+            let mut low = vec![0_i16; internal * count];
+            silk.decode_silk_frame(&mut range, true, &mut low).unwrap();
+            let planar: Vec<_> = converters
+                .iter_mut()
+                .enumerate()
+                .map(|(c, converter)| {
+                    converter
+                        .process(
+                            &low.iter()
+                                .skip(c)
+                                .step_by(count)
+                                .copied()
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap()
+                })
+                .collect();
+            assert!(planar.iter().all(|p| p.len() == size));
+            let mut cuts = vec![
+                0,
+                config.sample_rate as usize / 400,
+                lookahead.min(size),
+                size,
+            ];
+            cuts.sort_unstable();
+            cuts.dedup();
+            for cut in cuts.windows(2) {
+                let mut low_error = 0.0_f64;
+                let mut full_error = 0.0_f64;
+                let mut added_energy = 0.0_f64;
+                let mut cross = 0.0_f64;
+                let mut peaks = [0.0_f64; 3];
+                for (c, channel) in planar.iter().enumerate() {
+                    for (i, &sample) in channel.iter().enumerate().take(cut[1]).skip(cut[0]) {
+                        let position = frame * size + i;
+                        let target = position
+                            .checked_sub(lookahead)
+                            .map_or(0.0, |p| f64::from(source[p * count + c]));
+                        let prefix = f64::from(sample) / 32768.0;
+                        let full = f64::from(decoded[position * count + c]);
+                        let added = full - prefix;
+                        low_error += (target - prefix).powi(2);
+                        full_error += (target - full).powi(2);
+                        added_energy += added.powi(2);
+                        cross += 2.0 * (target - prefix) * added;
+                        for (peak, value) in peaks.iter_mut().zip([prefix, added, full]) {
+                            *peak = peak.max(value.abs());
+                        }
+                    }
+                }
+                eprintln!(
+                    "public entry frame={frame} cut={cut:?} prefix_bits={} low_error={low_error} full_error={full_error} added_energy={added_energy} cross={cross} peaks={peaks:?}",
+                    range.ec_tell()
+                );
+            }
+        }
+    }
+
     #[test]
     #[cfg(feature = "hybrid")]
     fn ordinary_practical_constructor_and_layout_guards() {
@@ -832,17 +1039,406 @@ mod tests {
                     (crate::SampleRate::Hz24000, Channels::Stereo, frame_size / 2),
                     (crate::SampleRate::Hz48000, Channels::Mono, frame_size),
                 ] {
+                    let mut admitted = Encoder::new_hybrid(EncoderConfig {
+                        sample_rate,
+                        channels,
+                        frame_size: size,
+                        ..config
+                    })
+                    .unwrap();
+                    let factor = super::super::rate_factor(sample_rate);
+                    let pcm: Vec<_> = candidate_hybrid_shape(1, 0, frame_size, &[])
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .step_by(factor)
+                        .flat_map(|pair| {
+                            if channels == Channels::Mono {
+                                vec![f32::midpoint(pair[0], pair[1])]
+                            } else {
+                                pair.to_vec()
+                            }
+                        })
+                        .collect();
+                    admitted.encode(&pcm).unwrap();
+                    assert_eq!(admitted.active_mode(), EncoderMode::Hybrid);
                     assert!(
                         Encoder::new_hybrid(EncoderConfig {
                             sample_rate,
                             channels,
-                            frame_size: size,
+                            frame_size: size / 4,
                             ..config
                         })
                         .is_err()
                     );
                 }
             }
+        }
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn public_pcm_reference(sample: f32) -> f32 {
+        (sample * 32768.0).round().clamp(-32768.0, 32767.0) / 32768.0
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    fn public_sub_lsb_reference_has_zero_optimum() {
+        for input in [-0.495_f32 / 32768.0, 0.36 / 32768.0, 0.495 / 32768.0] {
+            assert_ne!(input, 0.0);
+            assert_eq!(public_pcm_reference(input), 0.0);
+            let optimum = f64::from(input).powi(2);
+            for output in [-1_i16, 0, 1] {
+                let error = (f64::from(input) - f64::from(output) / 32768.0).powi(2);
+                assert!(error >= optimum);
+            }
+        }
+    }
+
+    /// Public-only matrix: RATE:CHANNELS:MS:BITRATE:MODE:SCENARIO:BANDWIDTH:SHAPE.
+    /// MODE 0/1 = Hybrid/Auto; SCENARIO 0/1/2 = cold/steady/transitions;
+    /// BANDWIDTH 0/1 = SWB/FB; SHAPE 0..4 retains the layout matrix, 5 is silence.
+    /// Cold explicit-Hybrid/SWB cells are negative controls: the constructor has
+    /// no bandwidth argument. The other 1,584 cells require actual stream gates.
+    /// This supplementary grid does not redefine the agreed acceptance scope.
+    #[test]
+    #[cfg(feature = "hybrid")]
+    #[ignore = "public acceptance; explicit frozen oracle and reviewed PCM; run bounded cells"]
+    fn reference_public_hybrid_auto_matrix() {
+        let oracle = std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE").expect("explicit oracle");
+        let media: Vec<f32> = std::fs::read(
+            std::env::var_os("MOOSICBOX_OPUS_HYBRID_REAL_PCM").expect("reviewed real PCM"),
+        )
+        .unwrap()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| f32::from(i16::from_le_bytes(*b)) / 32768.0)
+        .collect();
+        let cells = public_hybrid_auto_cells();
+        let selected = std::env::var("MOOSICBOX_OPUS_PUBLIC_CELL")
+            .ok()
+            .map(|text| {
+                let values: Vec<usize> = text
+                    .split(':')
+                    .map(|v| v.parse().expect("numeric cell"))
+                    .collect();
+                let cell: [usize; 8] = values.try_into().expect("eight cell fields required");
+                assert!(cells.contains(&cell), "unknown public cell: {cell:?}");
+                cell
+            });
+        // No PUBLIC_RD_QUALIFIER, CLOSED_LOOP_PROOF or internal constructor:
+        // rejected intended configurations remain failures until production is ready.
+        assert!(!PUBLIC_RD_QUALIFIER.get());
+        let mut executed = 0;
+        let mut failures = Vec::new();
+        for cell in cells {
+            if selected.is_some_and(|wanted| wanted != cell) {
+                continue;
+            }
+            executed += 1;
+            let result =
+                std::panic::catch_unwind(|| qualify_public_hybrid_auto(cell, &media, &oracle));
+            match result {
+                Ok(Ok(())) => eprintln!("public cell={cell:?} PASS"),
+                Ok(Err(error)) => {
+                    eprintln!("public cell={cell:?} FAIL {error}");
+                    failures.push(format!("{cell:?}: {error}"));
+                }
+                Err(_) => {
+                    eprintln!("public cell={cell:?} FAIL assertion/oracle");
+                    failures.push(format!("{cell:?}: assertion/oracle"));
+                }
+            }
+        }
+        assert_eq!(executed, if selected.is_some() { 1 } else { 1728 });
+        eprintln!(
+            "public coverage executed={executed} failed={} filtered={}",
+            failures.len(),
+            selected.is_some()
+        );
+        assert!(
+            failures.is_empty(),
+            "unqualified public cells: {failures:?}"
+        );
+    }
+
+    #[cfg(feature = "hybrid")]
+    fn public_hybrid_auto_cells() -> Vec<[usize; 8]> {
+        let mut cells = Vec::new();
+        for rate in [24000, 48000] {
+            for channels in [1, 2] {
+                for ms in [10, 20] {
+                    for bitrate in [32000, 64000, 128_000] {
+                        for mode in 0..2 {
+                            for scenario in 0..3 {
+                                for bandwidth in 0..2 {
+                                    for shape in 0..6 {
+                                        cells.push([
+                                            rate, channels, ms, bitrate, mode, scenario, bandwidth,
+                                            shape,
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        cells
+    }
+
+    #[test]
+    #[cfg(feature = "hybrid")]
+    fn public_hybrid_auto_matrix_coverage_is_complete() {
+        let cells = public_hybrid_auto_cells();
+        assert_eq!(cells.len(), 1728);
+        assert_eq!(
+            cells
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            1728
+        );
+        // The old mandatory fullband five-shape layouts are a strict subset;
+        // neither a filter nor new negative controls can erase them.
+        for cell in cells {
+            assert!(matches!(cell[0], 24000 | 48000));
+            assert!(matches!(cell[3], 32000 | 64000 | 128_000));
+        }
+    }
+
+    #[cfg(feature = "hybrid")]
+    #[allow(clippy::too_many_lines)] // Public construction/control failures and every stream gate retain exact cell context.
+    fn qualify_public_hybrid_auto(
+        cell: [usize; 8],
+        media: &[f32],
+        oracle: &std::ffi::OsStr,
+    ) -> std::result::Result<(), String> {
+        let [rate, count, ms, bitrate, mode, scenario, bandwidth, shape] = cell;
+        let sample_rate = crate::SampleRate::from_hz(rate as u32).unwrap();
+        let channels = if count == 1 {
+            Channels::Mono
+        } else {
+            Channels::Stereo
+        };
+        let frame_size = rate * ms / 1000;
+        let bandwidth = if bandwidth == 0 {
+            Bandwidth::SuperWideband
+        } else {
+            Bandwidth::Fullband
+        };
+        let mode = if mode == 0 {
+            EncoderMode::Hybrid
+        } else {
+            EncoderMode::Auto
+        };
+        let initial_bitrate = if scenario == 0 {
+            bitrate as u32
+        } else {
+            128_000
+        };
+        let config = EncoderConfig {
+            sample_rate,
+            channels,
+            frame_size,
+            bitrate: initial_bitrate,
+        };
+        let cold_explicit = scenario == 0 && mode == EncoderMode::Hybrid;
+        if cold_explicit && bandwidth == Bandwidth::SuperWideband {
+            // The explicit constructor has no bandwidth argument and promises
+            // fullband output. Exercise rejection, not fictitious SWB support.
+            // Use an established constructor rate so a bitrate guard cannot
+            // accidentally stand in for the bandwidth negative control.
+            let mut negative = Encoder::new_hybrid(EncoderConfig {
+                bitrate: 128_000,
+                ..config
+            })
+            .map_err(|e| format!("negative-control constructor: {e}"))?;
+            let before = negative.control();
+            let requested = EncoderControl {
+                mode,
+                bitrate: 128_000,
+                bandwidth,
+            };
+            if negative.set_control(requested).is_ok() {
+                return Err(
+                    "explicit constructor unexpectedly accepted SWB runtime control".into(),
+                );
+            }
+            if negative.control() != before {
+                return Err("rejected explicit control mutated state".into());
+            }
+            eprintln!("public negative-control cell={cell:?} explicit-SWB rejection PASS");
+            return Ok(());
+        }
+        let mut encoder = if cold_explicit {
+            Encoder::new_hybrid(config)
+        } else {
+            // Steady and transition scenarios require runtime controls. Warm
+            // Hybrid via the adaptive constructor, never a nonadaptive encoder.
+            Encoder::new_auto(config)
+        }
+        .map_err(|e| format!("public constructor: {e}"))?;
+        let lookahead = encoder.lookahead();
+        let mut packets = Vec::new();
+        let mut source = Vec::new();
+        for frame in 0..32 {
+            let requested_mode =
+                if scenario == 2 && !(4..12).contains(&frame) && !(16..24).contains(&frame) {
+                    EncoderMode::Celt
+                } else if scenario == 1 && frame < 4 {
+                    EncoderMode::Hybrid
+                } else {
+                    mode
+                };
+            let requested_rate = if (scenario == 2 && requested_mode == EncoderMode::Celt)
+                || (scenario == 1 && frame < 4)
+            {
+                128_000
+            } else {
+                bitrate as u32
+            };
+            let control = EncoderControl {
+                mode: requested_mode,
+                bitrate: requested_rate,
+                bandwidth,
+            };
+            if !cold_explicit {
+                encoder
+                    .set_control(control)
+                    .map_err(|e| format!("frame={frame} public set_control {control:?}: {e}"))?;
+            }
+            let stereo = if shape == 5 {
+                vec![0.0; 48 * ms * 2]
+            } else {
+                candidate_hybrid_shape(if shape == 4 { 3 } else { shape }, frame, 48 * ms, media)
+            };
+            let factor = 48000 / rate;
+            let pcm: Vec<f32> = stereo
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .step_by(factor)
+                .flat_map(|pair| {
+                    let gain = if shape == 4 { 0.01 } else { 1.0 };
+                    if count == 1 {
+                        vec![gain * f32::midpoint(pair[0], pair[1])]
+                    } else {
+                        vec![gain * pair[0], gain * pair[1]]
+                    }
+                })
+                .collect();
+            let packet = encoder
+                .encode(&pcm)
+                .map_err(|e| format!("frame={frame} public encode: {e}"))?;
+            if packet.len() * 8 * rate > requested_rate as usize * frame_size {
+                return Err(format!("frame={frame} packet budget exceeded"));
+            }
+            if (packet[0] & 4 != 0) != (count == 2) {
+                return Err(format!("frame={frame} TOC channels"));
+            }
+            if requested_mode == EncoderMode::Hybrid && encoder.active_mode() != EncoderMode::Hybrid
+            {
+                return Err(format!(
+                    "frame={frame} explicit Hybrid silently routed elsewhere"
+                ));
+            }
+            source.extend(pcm);
+            packets.push(packet);
+        }
+        let last_rate = if scenario == 2 {
+            128_000
+        } else {
+            bitrate as u32
+        };
+        let tail = encoder
+            .finish()
+            .map_err(|e| format!("public finish: {e}"))?;
+        if tail.len() != lookahead.div_ceil(frame_size) {
+            return Err("finish tail count".into());
+        }
+        if tail
+            .iter()
+            .any(|p| p.len() * 8 * rate > last_rate as usize * frame_size)
+        {
+            return Err("finish packet budget".into());
+        }
+        packets.extend(tail);
+        let decoded = decode_candidate_rate(&packets, oracle, count, rate as u32);
+        if decoded.len() != packets.len() * frame_size * count {
+            return Err("C duration".into());
+        }
+        let mut native = crate::Decoder::new(sample_rate, channels).unwrap();
+        for (index, (packet, expected)) in packets
+            .iter()
+            .zip(decoded.chunks_exact(frame_size * count))
+            .enumerate()
+        {
+            let mut output = vec![0_i16; frame_size * count];
+            if native
+                .decode(Some(packet), &mut output, false)
+                .map_err(|e| format!("native packet={index}: {e}"))?
+                != frame_size
+            {
+                return Err(format!("packet={index} native duration"));
+            }
+            if output
+                .iter()
+                .zip(expected)
+                .any(|(&a, &b)| (f32::from(a) / 32768.0 - b).abs() > 1.0 / 32768.0)
+            {
+                return Err(format!("packet={index} native/C parity > 1 LSB"));
+            }
+        }
+        // Supplementary public matrix compares in its decoder's int16 domain.
+        // Keep the original floating PCM as encoder input; do not change any
+        // established corpus/window/threshold or the original layout matrix.
+        let source: Vec<f32> = source.iter().map(|&x| public_pcm_reference(x)).collect();
+        trace_public_entry(&packets, &decoded, &source, config, lookahead);
+        let aligned = &decoded[lookahead * count..lookahead * count + source.len()];
+        let mut quality_failures: Vec<String> = Vec::new();
+        for (begin, end) in [
+            (0, 2),
+            (2, 4),
+            (4, 6),
+            (6, 12),
+            (12, 14),
+            (16, 18),
+            (18, 24),
+            (24, 26),
+            (26, 32),
+        ] {
+            let range = begin * frame_size * count..end * frame_size * count;
+            let signal: f64 = source[range.clone()]
+                .iter()
+                .map(|&x| f64::from(x).powi(2))
+                .sum();
+            let error: f64 = source[range.clone()]
+                .iter()
+                .zip(&aligned[range.clone()])
+                .map(|(&a, &b)| f64::from(a - b).powi(2))
+                .sum();
+            let snr = 10.0 * (signal / error).log10();
+            let pass = if signal <= 1e-12 {
+                (error / range.len() as f64).sqrt() <= 1.0 / 32768.0
+            } else {
+                snr.is_finite() && snr > 3.0
+            };
+            eprintln!(
+                "public quality cell={cell:?} region={begin}..{end} signal={signal} error={error} SNR={snr} pass={pass}"
+            );
+            if !pass {
+                quality_failures.push(format!(
+                    "quality region={begin}..{end} SNR={snr} signal={signal} error={error}"
+                ));
+            }
+        }
+        if quality_failures.is_empty() {
+            Ok(())
+        } else {
+            Err(quality_failures.join("; "))
         }
     }
 

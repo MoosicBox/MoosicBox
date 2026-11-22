@@ -21,6 +21,7 @@ fn public_case_failure(payload: &(dyn std::any::Any + Send)) -> &str {
 fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
     let mut failures = Vec::new();
     let mut attempted = 0;
+    let mut cells = ProductCells::new(rates.len() * 4 * bitrates.len());
     for &sample_rate in rates {
         for channels in [1_u8, 2] {
             for divisor in [100, 50] {
@@ -33,6 +34,9 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
                         bitrate,
                         frame_size: sample_rate as usize / divisor,
                     };
+                    if !cells.start(&format!("{config:?}")) {
+                        continue;
+                    }
                     attempted += 1;
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let frames = 2457;
@@ -78,8 +82,17 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
                         .unwrap();
                         #[cfg(feature = "opus")]
                         let mut reference_pcm = Vec::new();
+                        let mut native = moosicbox_opus_native::Decoder::new(
+                            moosicbox_opus_native::SampleRate::Hz48000,
+                            if channels == 1 {
+                                moosicbox_opus_native::Channels::Mono
+                            } else {
+                                moosicbox_opus_native::Channels::Stereo
+                            },
+                        )
+                        .unwrap();
+                        let mut native_pcm = Vec::new();
                         let mut audible = 0_u64;
-                        let mut first_packet = true;
                         while let Some(packet) = reader.next_packet().unwrap() {
                             let toc = packet.data[0] >> 3;
                             match mode {
@@ -90,15 +103,24 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
                                     (12..16).contains(&toc),
                                     "Hybrid fallback: {config:?}, toc={toc}"
                                 ),
-                                OpusEncodeMode::Auto if first_packet => assert!(
-                                    toc >= 16,
-                                    "initial low-rate Auto policy: {config:?}, toc={toc}"
-                                ),
-                                OpusEncodeMode::Auto => {}
+                                // Auto is a selection policy, not a promise of initial CELT.
+                                OpusEncodeMode::Auto => {
+                                    assert!(toc < 32, "illegal Auto TOC: {config:?}, toc={toc}")
+                                }
                                 _ => unreachable!(),
                             }
-                            first_packet = false;
                             audible += u64::from(packet.audible_samples());
+                            let mut decoded = vec![0_i16; 5760 * usize::from(channels)];
+                            let count = native
+                                .decode(Some(&packet.data), &mut decoded, false)
+                                .unwrap_or_else(|error| {
+                                    panic!("native decode {config:?}: {error}")
+                                });
+                            assert_eq!(count, packet.duration as usize, "{config:?}");
+                            native_pcm.extend_from_slice(
+                                &decoded[packet.trim_start as usize * usize::from(channels)
+                                    ..(count - packet.trim_end as usize) * usize::from(channels)],
+                            );
                             #[cfg(feature = "opus")]
                             {
                                 let mut pcm = vec![0_i16; 5760 * usize::from(channels)];
@@ -113,6 +135,12 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
                             }
                         }
                         assert_eq!(audible, expected, "{config:?}");
+                        assert_eq!(
+                            native_pcm.len() as u64,
+                            expected * u64::from(channels),
+                            "{config:?}"
+                        );
+                        assert!(native_pcm.iter().any(|sample| *sample != 0), "{config:?}");
                         #[cfg(feature = "opus")]
                         {
                             assert_eq!(
@@ -120,12 +148,26 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
                                 expected * u64::from(channels),
                                 "{config:?}"
                             );
+                            for (index, (&native, &reference)) in
+                                native_pcm.iter().zip(&reference_pcm).enumerate()
+                            {
+                                assert!(
+                                    (i32::from(native) - i32::from(reference)).abs() <= 2,
+                                    "C parity exceeds 2 LSB: {config:?}, interleaved_sample={index}, native={native}, reference={reference}"
+                                );
+                            }
                             assert!(
                                 reference_pcm.iter().any(|sample| *sample != 0),
                                 "{config:?}"
                             );
                         }
                     }));
+                    cells.finish(
+                        outcome
+                            .as_ref()
+                            .err()
+                            .map(|payload| public_case_failure(payload.as_ref())),
+                    );
                     if let Err(payload) = outcome {
                         failures.push(format!(
                             "{config:?}: {}",
@@ -136,6 +178,7 @@ fn accept(mode: OpusEncodeMode, rates: &[u32], bitrates: &[u32]) {
             }
         }
     }
+    cells.complete();
     assert!(
         failures.is_empty(),
         "{} / {attempted} public encoder cells failed:\n{}",
@@ -161,4 +204,76 @@ fn public_hybrid_intended_low_rate_matrix() {
 #[test]
 fn public_auto_intended_low_rate_matrix() {
     accept(OpusEncodeMode::Auto, &[48_000], &[32_000, 64_000]);
+}
+
+// Diagnostic selection never changes the default acceptance matrix. Use --nocapture.
+struct ProductCells {
+    selector: Option<usize>,
+    expected: usize,
+    seen: usize,
+    started: usize,
+    passed: usize,
+    current: String,
+}
+impl ProductCells {
+    fn new(expected: usize) -> Self {
+        let selector = std::env::var("MOOSICBOX_OPUS_PRODUCT_CELL")
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<usize>()
+                    .expect("MOOSICBOX_OPUS_PRODUCT_CELL must be a zero-based cell index")
+            });
+        Self {
+            selector,
+            expected,
+            seen: 0,
+            started: 0,
+            passed: 0,
+            current: String::new(),
+        }
+    }
+    fn start(&mut self, context: &str) -> bool {
+        let index = self.seen;
+        self.seen += 1;
+        if self.selector.is_some_and(|selected| selected != index) {
+            return false;
+        }
+        self.started += 1;
+        self.current = format!("cell={index} {context}");
+        eprintln!("PRODUCT_CELL_START {}", self.current);
+        true
+    }
+    fn finish(&mut self, error: Option<&str>) {
+        if let Some(error) = error {
+            eprintln!("PRODUCT_CELL_FAIL {}: {error}", self.current);
+        } else {
+            self.passed += 1;
+            eprintln!("PRODUCT_CELL_PASS {}", self.current);
+        }
+    }
+    fn complete(&self) {
+        eprintln!(
+            "PRODUCT_COVERAGE kind={} expected={} seen={} attempted={} passed={} failed={} omitted={}",
+            if self.selector.is_some() {
+                "PARTIAL_DIAGNOSTIC"
+            } else {
+                "FULL"
+            },
+            self.expected,
+            self.seen,
+            self.started,
+            self.passed,
+            self.started - self.passed,
+            self.expected - self.started
+        );
+        assert_eq!(
+            self.seen, self.expected,
+            "acceptance matrix enumeration changed"
+        );
+        assert!(self.started > 0, "cell selector matched zero cells");
+        if self.selector.is_none() {
+            assert_eq!(self.started, self.expected);
+        }
+    }
 }

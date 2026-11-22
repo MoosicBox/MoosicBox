@@ -2,10 +2,10 @@
 #![cfg(feature = "celt")]
 #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 #[cfg(feature = "hybrid")]
-use moosicbox_opus_native::Decoder;
-#[cfg(feature = "hybrid")]
 use moosicbox_opus_native::encoder::{EncoderControl, EncoderMode};
-use moosicbox_opus_native::{Bandwidth, Channels, Encoder, EncoderConfig};
+use moosicbox_opus_native::{Bandwidth, Encoder, EncoderConfig};
+#[cfg(feature = "hybrid")]
+use moosicbox_opus_native::{Channels, Decoder};
 #[cfg(feature = "silk")]
 use std::io::Write;
 #[cfg(feature = "silk")]
@@ -38,15 +38,10 @@ fn practical_hybrid_controls_preserve_mode_after_entry() {
         ..EncoderConfig::default()
     })
     .unwrap();
-    let before = encoder.control();
-    assert!(
-        encoder
-            .set_control(control(32000, EncoderMode::Hybrid))
-            .is_err()
-    );
-    assert_eq!(encoder.control(), before);
+    // Exercise low-budget entry through the practical candidate path, not
+    // just a bitrate change after an expensive high-bitrate entry frame.
     encoder
-        .set_control(control(192000, EncoderMode::Hybrid))
+        .set_control(control(32000, EncoderMode::Hybrid))
         .unwrap();
     encoder.encode(&input(0, 2)).unwrap();
     assert_eq!(encoder.active_mode(), EncoderMode::Hybrid);
@@ -58,15 +53,9 @@ fn practical_hybrid_controls_preserve_mode_after_entry() {
             assert_eq!(encoder.active_mode(), EncoderMode::Hybrid);
         }
     }
-    let before = encoder.control();
-    assert!(
-        encoder
-            .set_control(control(32000, EncoderMode::Celt))
-            .is_err()
-    );
-    assert_eq!(encoder.control(), before);
-    encoder.encode(&input(1, 2)).unwrap();
-    assert_eq!(encoder.active_mode(), EncoderMode::Hybrid);
+    encoder.set_control(control(32000, EncoderMode::Celt)).unwrap();
+    encoder.encode(&input(2, 2)).unwrap();
+    assert_eq!(encoder.active_mode(), EncoderMode::Celt);
 }
 
 #[test]

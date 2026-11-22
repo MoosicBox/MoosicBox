@@ -9,6 +9,7 @@ use crate::celt::fixed_point::celt_cos_norm;
 /// before 3:1 decimation. The 24 kHz path inserts zeros at 48 kHz and applies
 /// twice the filter gain. Convolution, coefficients, and phase are integer;
 /// floating point is used only at the normalized PCM input/output boundaries.
+#[cfg(any(feature = "silk", test))]
 #[derive(Clone)]
 pub(super) struct SilkInput {
     history: Vec<[i32; 97]>,
@@ -17,6 +18,7 @@ pub(super) struct SilkInput {
     phase: usize,
 }
 
+#[cfg(any(feature = "silk", test))]
 impl SilkInput {
     /// Create an input converter. Other rates/channel layouts are unsupported.
     pub(super) fn new(channels: usize, input_rate: u32) -> crate::Result<Self> {

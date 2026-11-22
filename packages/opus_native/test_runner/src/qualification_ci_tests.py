@@ -18,7 +18,7 @@ class SelectionTests(unittest.TestCase):
         required = {
             row
             for row in ci.acceptance_inventory()
-            if row[2] not in (ci.PUBLIC_MEDIA_TEST, ci.LAYOUT_TEST)
+            if row[2] not in (ci.PUBLIC_MEDIA_TEST, ci.LAYOUT_TEST, ci.HYBRID_TEST)
         }
         self.assertEqual(set(flat), required)
         cases = [case for shard in ci.PUBLIC_SHARDS for case in ci.public_cases(shard)]
@@ -60,6 +60,8 @@ class SelectionTests(unittest.TestCase):
                                 (dest / "data").mkdir()
                                 (dest / "data/test.pcm").write_bytes(b"\\x01\\x00")
                                 (dest / "probe").write_bytes(pid.encode())
+                                row["products"] = [dict(package=p, features=f, target=t, passed=1)
+                                                   for p, f, t in ci.PRODUCT_TESTS]
                                 row.update(
                                     executable_file="probe",
                                     executable_sha256=ci.digest(dest / "probe"),
@@ -81,6 +83,8 @@ class SelectionTests(unittest.TestCase):
                                         dest / "media-transform.json"
                                     ),
                                 )
+                                if shard in ci.HYBRID_SHARDS:
+                                    row["hybrid_cells"] = ci.hybrid_cells(shard)
                                 if shard in ci.LAYOUT_SHARDS:
                                     row["layout_cell"] = ci.layout_cell(shard)
                                 if shard in ci.PUBLIC_SHARDS:
@@ -89,7 +93,7 @@ class SelectionTests(unittest.TestCase):
             with patch("builtins.print"):
                 ci.compare(argparse.Namespace(root=root))
             summary = json.loads((root / "platform-acceptance.json").read_text())
-            self.assertEqual(len(summary["executions"]), 300)
+            self.assertEqual(len(summary["executions"]), 496)
             public_report = root / "linux-x64-release-quality-public-0/ci.json"
             public_original = public_report.read_text()
             forged_public = json.loads(public_original)
@@ -177,6 +181,81 @@ class SelectionTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(RuntimeError, "exactly one filtered cell"):
                 ci.live_acceptance(execution, "release", {}, "layout-0")
+
+    def test_product_suites_native_only_and_zero_tests_fail(self):
+        execution = Mock(env={})
+        execution.run.return_value = "test result: ok. 3 passed; 0 failed; 0 ignored;"
+        results = ci.product_tests(execution, "release")
+        self.assertEqual(len(results), len(ci.PRODUCT_TESTS))
+        for call, (package, features, target) in zip(execution.run.call_args_list, ci.PRODUCT_TESTS):
+            argv = call.args[0]
+            self.assertEqual(argv[argv.index("-p")+1], package)
+            self.assertEqual(argv[argv.index("--features")+1], features)
+            self.assertEqual(argv[argv.index("--test")+1], target)
+            self.assertIn("--no-default-features", argv)
+            self.assertIn("--release", argv)
+            self.assertNotIn("--skip", argv)
+        execution.run.return_value = "test result: ok. 0 passed; 0 failed;"
+        with self.assertRaisesRegex(RuntimeError, "did not execute"):
+            ci.product_tests(execution, "debug")
+
+    def test_required_product_oracle_tests_are_exact_and_fail_closed(self):
+        execution = Mock(env={})
+        execution.run.return_value = "test result: ok. 1 passed; 0 failed; 0 ignored;"
+        ci.product_live_tests(execution, Path("frozen-reference"))
+        self.assertEqual(execution.run.call_count, 2)
+        for call in execution.run.call_args_list:
+            self.assertIn("--exact", call.args[0])
+            self.assertIn("--ignored", call.args[0])
+            self.assertEqual(call.kwargs["env"]["MOOSICBOX_OPUS_REFERENCE_ORACLE"], "frozen-reference")
+        execution.run.return_value = "test result: ok. 0 passed; 0 failed;"
+        with self.assertRaisesRegex(RuntimeError, "did not execute once"):
+            ci.product_live_tests(execution, Path("frozen-reference"))
+
+    def test_full_acceptance_clears_diagnostics_and_rejects_partial(self):
+        dirty = {"MOOSICBOX_OPUS_PRODUCT_CELL":"0", "MOOSICBOX_OPUS_BOUNDED_PREFIX":"1",
+                 "MOOSICBOX_OPUS_PUBLIC_CELL":"x", "retained":"yes"}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(ci.os.environ, dirty):
+                self.assertNotIn("MOOSICBOX_OPUS_BOUNDED_PREFIX", ci.Execution(Path(directory)).env)
+        execution = Mock(env=dirty)
+        execution.run.return_value = "test result: ok. 1 passed; 0 failed; PARTIAL_DIAGNOSTIC"
+        with self.assertRaisesRegex(RuntimeError,"partial diagnostic"):
+            ci.product_tests(execution,"release")
+        self.assertNotIn("MOOSICBOX_OPUS_PRODUCT_CELL", execution.run.call_args.kwargs["env"])
+        self.assertEqual(execution.run.call_args.kwargs["env"]["retained"], "yes")
+        with self.assertRaisesRegex(RuntimeError,"partial diagnostic"):
+            ci.product_live_tests(execution,Path("reference"))
+        self.assertIn("bounded_reviewed_music_layout",ci.DEVELOPMENT_ONLY)
+        self.assertIn("packages/opus_native/src/encoder/silk/bounded.rs",ci.sources())
+
+    def test_source_identity_includes_scored_and_product_tests(self):
+        source = ci.sources()
+        self.assertIn("packages/opus_native/src/encoder/silk_scored.rs", source)
+        self.assertIn("packages/audio_encoder/tests/opus_public_acceptance.rs", source)
+        self.assertIn("packages/player/tests/opus_encode_modes.rs", source)
+
+    def test_public_hybrid_matrix_exact_shards_and_proof(self):
+        import itertools
+        cells = [cell for shard in ci.HYBRID_SHARDS for cell in ci.hybrid_cells(shard)]
+        expected = {':'.join(map(str, row)) for row in itertools.product(
+            (24000,48000),(1,2),(10,20),(32000,64000,128000),(0,1),(0,1,2),(0,1),range(6))}
+        self.assertEqual(len(cells),1728)
+        self.assertEqual(set(cells),expected)
+        self.assertEqual(len(set(cells)),len(cells))
+        self.assertTrue(all(len(ci.hybrid_cells(s))==36 for s in ci.HYBRID_SHARDS))
+        self.assertLessEqual(len(ci.HYBRID_SHARDS)*len(ci.PLATFORMS),256)
+        with tempfile.TemporaryDirectory() as directory:
+            execution=Mock(output=Path(directory))
+            execution.run.return_value=('test result: ok. 1 passed; 0 failed; 0 ignored;\n'
+                                        'public coverage executed=1 failed=0 filtered=true\n')
+            ci.live_acceptance(execution,'release',{'MOOSICBOX_OPUS_PUBLIC_CELL':'wrong'},'hybrid-0')
+            self.assertEqual(execution.run.call_count,36)
+            observed=[call.kwargs['env']['MOOSICBOX_OPUS_PUBLIC_CELL'] for call in execution.run.call_args_list]
+            self.assertEqual(observed,ci.hybrid_cells('hybrid-0'))
+            execution.run.return_value='test result: ok. 1 passed; 0 failed; 0 ignored;'
+            with self.assertRaisesRegex(RuntimeError,'exactly one successful'):
+                ci.live_acceptance(execution,'release',{},'hybrid-0')
 
     def test_current_ignored_inventory_is_explicitly_classified(self):
         required = ci.acceptance_inventory()

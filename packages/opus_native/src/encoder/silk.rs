@@ -3,6 +3,11 @@
 mod prediction;
 #[path = "silk_pulse.rs"]
 mod pulse;
+#[path = "silk/replay.rs"]
+mod replay;
+#[cfg(all(test, feature = "hybrid"))]
+#[path = "silk/replay_tests.rs"]
+mod replay_tests;
 use super::{EncoderConfig, entropy};
 use crate::range::RangeEncoder;
 use crate::silk::{self, SilkDecoder};
@@ -10,6 +15,8 @@ use crate::{Bandwidth, Error, Result, SampleRate};
 use prediction::Pitch;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
+#[path = "silk/bounded.rs"]
+mod bounded;
 #[cfg(test)]
 #[path = "silk_cold.rs"]
 mod cold;
@@ -37,6 +44,14 @@ mod scored;
 #[cfg_attr(not(test), allow(dead_code))] // Opt-in integration is wired separately.
 pub(super) trait PrefixCandidateScorer {
     fn score(&mut self, config: EncoderConfig, replay: &[u8]) -> Result<i128>;
+    #[cfg(test)]
+    fn proposal_score(&mut self, _: EncoderConfig, _: &[i16], _: &[i16]) -> Result<Option<i128>> {
+        Ok(None)
+    }
+    #[cfg(test)]
+    fn diagnostic_fork(&self) -> Option<Box<dyn PrefixCandidateScorer>> {
+        None
+    }
 }
 
 struct PrefixScoring<'a> {
@@ -55,6 +70,8 @@ pub(super) struct SilkEncoder {
     transmitted_voiced: usize,
     #[cfg(test)]
     quantizer_cache_disabled: bool,
+    #[cfg(test)]
+    pub(super) bounded_prefix_search: bool,
     /// Actual quantizations and exact-key hits, including every ranked mask.
     #[cfg(test)]
     quantizer_cache_counts: (usize, usize),
@@ -68,11 +85,93 @@ type SharedQuantizedFrame = Rc<QuantizedFrame>;
 type PitchIdentity = (usize, usize, Vec<usize>);
 type QuantizerModelIdentity = (usize, Vec<i16>, Option<PitchIdentity>);
 
+type TrialKey = (usize, i32, u32, bool);
+struct TrialEntry {
+    key: TrialKey,
+    frame: SharedQuantizedFrame,
+    distortion: i128,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static TREE_TRIAL_CACHE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[derive(Default)]
+struct TrialCache {
+    models: Vec<Vec<Option<TrialEntry>>>,
+    #[cfg(test)]
+    tree: BTreeMap<TrialKey, TrialEntry>,
+}
+
+impl TrialCache {
+    fn slot(key: TrialKey) -> usize {
+        assert!(
+            (0..64).contains(&key.1),
+            "trial gain outside exact cache domain"
+        );
+        assert!(key.2 < 13, "bounded pressure13 has a separate cache");
+        (usize::try_from(key.1).expect("validated gain") * 13 + key.2 as usize) * 2
+            + usize::from(key.3)
+    }
+
+    fn entry(&self, key: TrialKey) -> Option<&TrialEntry> {
+        let slot = Self::slot(key);
+        #[cfg(test)]
+        if TREE_TRIAL_CACHE.get() {
+            return self.tree.get(&key);
+        }
+        self.models
+            .get(key.0)
+            .and_then(|model| model.get(slot))
+            .and_then(Option::as_ref)
+    }
+
+    fn insert(&mut self, key: TrialKey, frame: SharedQuantizedFrame, distortion: i128) {
+        let slot = Self::slot(key);
+        let entry = TrialEntry {
+            key,
+            frame,
+            distortion,
+        };
+        #[cfg(test)]
+        if TREE_TRIAL_CACHE.get() {
+            self.tree.insert(key, entry);
+            return;
+        }
+        if self.models.len() <= key.0 {
+            self.models.resize_with(key.0 + 1, Vec::new);
+        }
+        let model = &mut self.models[key.0];
+        if model.is_empty() {
+            model.resize_with(64 * 13 * 2, || None);
+        }
+        model[slot] = Some(entry);
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&TrialKey, &SharedQuantizedFrame)> {
+        let indexed = self
+            .models
+            .iter()
+            .flatten()
+            .filter_map(Option::as_ref)
+            .map(|entry| (&entry.key, &entry.frame));
+        #[cfg(test)]
+        let indexed = indexed.chain(self.tree.values().map(|entry| (&entry.key, &entry.frame)));
+        indexed
+    }
+}
+
 #[derive(Default)]
 struct QuantizerCache {
     models: Vec<QuantizerModelIdentity>,
-    frames: BTreeMap<(usize, i32, u32, bool), SharedQuantizedFrame>,
-    distortions: BTreeMap<(usize, i32, u32, bool), i128>,
+    // Frame-local: all model masks start from identical PCM, predictive
+    // history, gain and configuration. Only the per-channel analysis-rate
+    // choice differs; do not redo the full NLSF search for the opposing mask.
+    analysis: BTreeMap<(usize, bool), Model>,
+    // Bounded zero-pulse pressure=13 is a distinct quantizer domain.
+    bounded_frames: BTreeMap<(usize, i32, u32, bool), SharedQuantizedFrame>,
+    frames: TrialCache,
 }
 
 impl QuantizerCache {
@@ -114,6 +213,248 @@ struct PairSearch<'a> {
     bandwidth: Bandwidth,
 }
 
+// SILK syntax emits only inverse-CDF symbols. Record their validated binary
+// intervals once; replay uses the existing arithmetic encoder, not a second
+// implementation. Tables/pulse shells are independent of the incoming range.
+trait SilkEntropy {
+    #[cfg(test)]
+    fn semantic_parameters(&mut self, _: &FrameParameters<'_>) {}
+    #[cfg(test)]
+    fn semantic_pulses(&mut self, _: &[i16]) {}
+    fn ec_enc_icdf(
+        &mut self,
+        symbol: usize,
+        table: &[u8],
+        bits: u32,
+    ) -> std::result::Result<(), crate::range::RangeEncoderError>;
+}
+
+impl SilkEntropy for RangeEncoder {
+    fn ec_enc_icdf(
+        &mut self,
+        symbol: usize,
+        table: &[u8],
+        bits: u32,
+    ) -> std::result::Result<(), crate::range::RangeEncoderError> {
+        Self::ec_enc_icdf(self, symbol, table, bits)
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    pub(super) static TYPED_SCORE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static SEMANTIC_CHANNELS: std::cell::RefCell<Vec<SemanticFixture>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+#[cfg(test)]
+fn record_semantic(value: SemanticFixture) {
+    if TYPED_SCORE.get() {
+        SEMANTIC_CHANNELS.with_borrow_mut(|channels| {
+            channels.push(value);
+            if channels.len() > 2 {
+                channels.remove(0);
+            }
+        });
+    }
+}
+#[cfg(test)]
+pub(super) fn take_semantic_channels() -> Vec<SemanticFixture> {
+    SEMANTIC_CHANNELS.with_borrow_mut(std::mem::take)
+}
+
+#[derive(Default)]
+struct SilkProgram(Vec<(u32, u32, u32)>, #[cfg(test)] Option<SemanticFixture>);
+
+impl SilkEntropy for SilkProgram {
+    #[cfg(test)]
+    fn semantic_parameters(&mut self, p: &FrameParameters<'_>) {
+        if p.pitch.is_none() && p.bandwidth == Bandwidth::Wideband {
+            self.1 = Some((
+                p.model.stage1,
+                p.model.residual.clone(),
+                p.gain.max(p.previous_gain - 16),
+                Vec::new(),
+            ));
+        }
+    }
+    #[cfg(test)]
+    fn semantic_pulses(&mut self, pulses: &[i16]) {
+        if let Some(value) = &mut self.1 {
+            value.3 = pulses.to_vec();
+        }
+    }
+    fn ec_enc_icdf(
+        &mut self,
+        symbol: usize,
+        table: &[u8],
+        bits: u32,
+    ) -> std::result::Result<(), crate::range::RangeEncoderError> {
+        // Validate using the canonical API once at program construction, then
+        // retain precisely the interval that API passes to ec_encode_bin.
+        RangeEncoder::new(16)?.ec_enc_icdf(symbol, table, bits)?;
+        let total = 1_u32 << bits;
+        let previous = if symbol == 0 {
+            total
+        } else {
+            u32::from(table[symbol - 1])
+        };
+        self.0
+            .push((total - previous, total - u32::from(table[symbol]), bits));
+        Ok(())
+    }
+}
+
+impl SilkProgram {
+    fn replay(&self, coder: &mut RangeEncoder) -> Result<()> {
+        #[cfg(test)]
+        if let Some(value) = &self.1 {
+            record_semantic(value.clone());
+        }
+        for &(low, high, bits) in &self.0 {
+            coder.ec_encode_bin(low, high, bits).map_err(entropy)?;
+        }
+        Ok(())
+    }
+
+    // Whole-bit tell is monotone as symbols are appended. Once a pair exceeds
+    // the actual incoming budget, no remaining symbol can make it a fit. Keep
+    // the same candidate frontier/order but avoid finishing impossible replays.
+    fn replay_fitting(&self, coder: &mut RangeEncoder, initial: u64, budget: usize) -> bool {
+        for symbols in self.0.chunks(8) {
+            for &(low, high, bits) in symbols {
+                if coder.ec_encode_bin(low, high, bits).is_err() {
+                    return false;
+                }
+            }
+            if coder.tell().saturating_sub(initial) as usize > budget {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static REFERENCE_PAIRS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+// Each sorted row is monotone in (distortion,left,right). Merging its head
+// produces the same total order as the original grid frontier, including ties,
+// with one heap entry per row and no quadratic visited set.
+#[cfg(test)]
+type ReferenceFrontier = (BTreeSet<(i128, usize, usize)>, BTreeSet<(usize, usize)>);
+
+struct PairQueue {
+    heap: std::collections::BinaryHeap<std::cmp::Reverse<(i128, usize, usize)>>,
+    #[cfg(test)]
+    reference: Option<ReferenceFrontier>,
+}
+
+impl PairQueue {
+    fn new(candidates: &[Vec<PairCandidate<'_>>]) -> Self {
+        #[cfg(test)]
+        if REFERENCE_PAIRS.get() {
+            return Self {
+                heap: std::collections::BinaryHeap::new(),
+                reference: Some((
+                    BTreeSet::from([(candidates[0][0].0 + candidates[1][0].0, 0, 0)]),
+                    BTreeSet::from([(0, 0)]),
+                )),
+            };
+        }
+        Self {
+            heap: candidates[0]
+                .iter()
+                .enumerate()
+                .map(|(left, frame)| std::cmp::Reverse((frame.0 + candidates[1][0].0, left, 0)))
+                .collect(),
+            #[cfg(test)]
+            reference: None,
+        }
+    }
+
+    fn pop(&mut self, candidates: &[Vec<PairCandidate<'_>>]) -> Option<(i128, usize, usize)> {
+        #[cfg(test)]
+        if let Some((pending, visited)) = &mut self.reference {
+            let entry = pending.pop_first()?;
+            for (left, right) in [(entry.1 + 1, entry.2), (entry.1, entry.2 + 1)] {
+                if left < candidates[0].len()
+                    && right < candidates[1].len()
+                    && visited.insert((left, right))
+                {
+                    pending.insert((candidates[0][left].0 + candidates[1][right].0, left, right));
+                }
+            }
+            return Some(entry);
+        }
+        let std::cmp::Reverse(entry) = self.heap.pop()?;
+        let next = entry.2 + 1;
+        if next < candidates[1].len() {
+            self.heap.push(std::cmp::Reverse((
+                candidates[0][entry.1].0 + candidates[1][next].0,
+                entry.1,
+                next,
+            )));
+        }
+        Some(entry)
+    }
+}
+
+fn pair_programs(
+    context: PairSearch<'_>,
+    candidates: &[Vec<PairCandidate<'_>>],
+    previous_indices: [i32; 2],
+    long: bool,
+    enabled: bool,
+) -> Vec<Vec<Option<SilkProgram>>> {
+    if enabled {
+        candidates
+            .iter()
+            .enumerate()
+            .map(|(channel, frames)| {
+                frames
+                    .iter()
+                    .map(|&(_, key, frame)| {
+                        let mut program = SilkProgram::default();
+                        let result = encode_parameters(
+                            &mut program,
+                            FrameParameters {
+                                model: &context.models[channel],
+                                gain: key.1,
+                                previous_gain: previous_indices[channel],
+                                long,
+                                bandwidth: context.bandwidth,
+                                pitch: None,
+                                rate: context.rate,
+                            },
+                        )
+                        .and_then(|()| encode_pulses(&mut program, &frame.0, false));
+                        result.map(|()| program).ok()
+                    })
+                    .collect()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+#[cfg(test)]
+fn report_pair_cost(
+    tested: usize,
+    program_us: u128,
+    started: std::time::Instant,
+    candidates: &[Vec<PairCandidate<'_>>],
+    best: Option<&PacketCandidate>,
+) {
+    eprintln!(
+        "SILK_PAIR_COMPLETE tested={tested} program_us={program_us} total_us={} sizes={:?} best={:?}",
+        started.elapsed().as_micros(),
+        candidates.iter().map(Vec::len).collect::<Vec<_>>(),
+        best.as_ref().map(|frame| frame.distortion)
+    );
+}
+
 type PairCandidate<'a> = (i128, (usize, i32, u32, bool), &'a SharedQuantizedFrame);
 
 fn pair_candidates(context: PairSearch<'_>, optimized: bool) -> Vec<Vec<PairCandidate<'_>>> {
@@ -147,6 +488,7 @@ fn pair_candidates(context: PairSearch<'_>, optimized: bool) -> Vec<Vec<PairCand
         .collect()
 }
 
+#[derive(Clone)]
 struct Model {
     stage1: u8,
     residual: Vec<i8>,
@@ -173,6 +515,8 @@ impl SilkEncoder {
             transmitted_voiced: 0,
             #[cfg(test)]
             quantizer_cache_disabled: false,
+            #[cfg(test)]
+            bounded_prefix_search: true,
             #[cfg(test)]
             quantizer_cache_counts: (0, 0),
         })
@@ -287,6 +631,7 @@ impl SilkEncoder {
     // No additive entropy estimate is used. Distortion alone provides an exact
     // lower bound; every improving pair is checked against the incoming coder.
     // Equal-distortion pairs never replace the historical search winner.
+    #[allow(clippy::too_many_lines)] // Exact frontier, entropy feasibility and atomic winner commit.
     fn search_pairs(&self, context: PairSearch<'_>, best: &mut Option<PacketCandidate>) {
         let optimized = true;
         #[cfg(test)]
@@ -300,12 +645,24 @@ impl SilkEncoder {
         // Cache failures too: the incoming state and channel-zero syntax are
         // fixed, independent of whichever channel-one candidate follows.
         let mut prefixes: BTreeMap<usize, Option<RangeEncoder>> = BTreeMap::new();
-        let distortion = |left: usize, right: usize| candidates[0][left].0 + candidates[1][right].0;
-        let mut pending = BTreeSet::from([(distortion(0, 0), 0, 0)]);
-        let mut visited = BTreeSet::from([(0, 0)]);
+        let programs_enabled = true;
+        #[cfg(test)]
+        let programs_enabled = programs_enabled && !REFERENCE_PAIRS.get();
+        #[cfg(test)]
+        let pair_started = std::time::Instant::now();
+        let programs = pair_programs(
+            context,
+            &candidates,
+            self.previous_index,
+            self.config.frame_size == context.rate / 50,
+            programs_enabled,
+        );
+        #[cfg(test)]
+        let program_us = pair_started.elapsed().as_micros();
+        let mut pending = PairQueue::new(&candidates);
         #[cfg(test)]
         let mut tested = 0_usize;
-        while let Some((error, left, right)) = pending.pop_first() {
+        while let Some((error, left, right)) = pending.pop(&candidates) {
             if best
                 .as_ref()
                 .is_some_and(|winner| error >= winner.distortion)
@@ -314,6 +671,12 @@ impl SilkEncoder {
             }
             let pair = [candidates[0][left], candidates[1][right]];
             let encode_channel = |coder: &mut RangeEncoder, channel: usize| -> Result<()> {
+                if programs_enabled {
+                    return programs[channel][if channel == 0 { left } else { right }]
+                        .as_ref()
+                        .ok_or_else(|| Error::Unsupported("invalid SILK entropy program".into()))?
+                        .replay(coder);
+                }
                 let (_, key, frame) = pair[channel];
                 encode_parameters(
                     coder,
@@ -343,7 +706,14 @@ impl SilkEncoder {
                     .then_some(prefix)
             };
             let fits = coder.as_mut().is_some_and(|state| {
-                encode_channel(state, 1).is_ok()
+                let replay_fits = if programs_enabled {
+                    programs[1][right].as_ref().is_some_and(|program| {
+                        program.replay_fitting(state, context.incoming.tell(), context.budget)
+                    })
+                } else {
+                    encode_channel(state, 1).is_ok()
+                };
+                replay_fits
                     && state.tell().saturating_sub(context.incoming.tell()) as usize
                         <= context.budget
             });
@@ -353,12 +723,6 @@ impl SilkEncoder {
             }
             if fits {
                 let coder = coder.expect("fitting pair has entropy state");
-                #[cfg(test)]
-                eprintln!(
-                    "SILK_PAIR tested={tested} bits={} error={error} keys={:?}",
-                    coder.tell(),
-                    [pair[0].1, pair[1].1]
-                );
                 *best = Some(PacketCandidate {
                     distortion: error,
                     payload: Vec::new(),
@@ -372,21 +736,9 @@ impl SilkEncoder {
                 });
                 break;
             }
-            for (next_left, next_right) in [(left + 1, right), (left, right + 1)] {
-                if next_left < candidates[0].len()
-                    && next_right < candidates[1].len()
-                    && visited.insert((next_left, next_right))
-                {
-                    pending.insert((distortion(next_left, next_right), next_left, next_right));
-                }
-            }
         }
         #[cfg(test)]
-        eprintln!(
-            "SILK_PAIR_COMPLETE tested={tested} sizes={:?} best={:?}",
-            candidates.iter().map(Vec::len).collect::<Vec<_>>(),
-            best.as_ref().map(|winner| winner.distortion)
-        );
+        report_pair_cost(tested, program_us, pair_started, &candidates, best.as_ref());
     }
 
     fn commit_quantized(
@@ -448,9 +800,7 @@ impl SilkEncoder {
             {
                 return Ok(None);
             }
-            let mut replay = RangeEncoder::new(65536).map_err(entropy)?;
-            encode(&mut replay)?;
-            let replay = replay.finish().map_err(entropy)?;
+            let replay = replay::encode(encode)?;
             Ok(Some((scorer.score(self.config, &replay)?, coder)))
         };
         let (error, coder) = evaluate(&winner.indices, &winner.quantized, scoring.scorer)?
@@ -461,7 +811,7 @@ impl SilkEncoder {
         // through both channels keep the opposing component fixed per proposal.
         for _ in 0..2 {
             for channel in 0..2 {
-                for (key, frame) in &context.cache.frames {
+                for (key, frame) in context.cache.frames.iter() {
                     if key.0 != context.model_ids[channel] {
                         continue;
                     }
@@ -480,6 +830,27 @@ impl SilkEncoder {
                     }
                 }
             }
+        }
+        #[cfg(test)]
+        if std::env::var_os("MOOSICBOX_OPUS_BOUNDED_TRACE").is_some() {
+            let keys: Vec<_> = (0..2)
+                .map(|channel| {
+                    context
+                        .cache
+                        .frames
+                        .iter()
+                        .find(|(key, frame)| {
+                            key.0 == context.model_ids[channel]
+                                && key.1 == winner.indices[channel]
+                                && ***frame == *winner.quantized[channel]
+                        })
+                        .map(|(key, _)| *key)
+                })
+                .collect();
+            eprintln!(
+                "SILK_EXHAUSTIVE_WIN score={} keys={keys:?}",
+                winner.distortion
+            );
         }
         scoring.winner = winner.distortion;
         *best = Some(winner);
@@ -541,9 +912,23 @@ impl SilkEncoder {
         shared: Option<&mut RangeEncoder>,
         rank_prefix: bool,
     ) -> Result<Vec<u8>> {
-        if shared.is_none()
-            && self.config.bitrate / super::channel_count(self.config.channels) as u32 <= 32_000
-        {
+        if shared.is_none() {
+            if self.config.bitrate / super::channel_count(self.config.channels) as u32 > 32_000 {
+                let mut legacy = self.clone();
+                if let Ok(packet) = legacy.encode_search_policy(
+                    pcm,
+                    None,
+                    false,
+                    0,
+                    &mut QuantizerCache::default(),
+                    None,
+                    false,
+                ) && legacy.standalone_reconstruction_suitable(pcm)
+                {
+                    *self = legacy;
+                    return Ok(packet);
+                }
+            }
             return self.encode_standalone_ranked(pcm);
         }
         if rank_prefix
@@ -563,6 +948,45 @@ impl SilkEncoder {
         )
     }
 
+    // Quantization synthesizes the transmitted excitation using the committed
+    // decoder history. Inspect only this candidate frame, not older output.
+    // A candidate which clips cannot be retained merely for compatibility.
+    fn standalone_reconstruction_suitable(&self, pcm: &[f32]) -> bool {
+        let channels = super::channel_count(self.config.channels);
+        let length = pcm.len() / channels;
+        let mut signal = [0_i128; 2];
+        let mut error = [0_i128; 2];
+        for (i, frame) in pcm.chunks_exact(channels).enumerate() {
+            let component = |channel: usize| {
+                let history = &self.pcm_history[channel];
+                i32::from(history[history.len() - length + i])
+            };
+            let mid = component(0);
+            let side = if channels == 2 { component(1) } else { 0 };
+            for channel in 0..channels {
+                let reconstructed = if channels == 1 {
+                    mid
+                } else if channel == 0 {
+                    mid + side
+                } else {
+                    mid - side
+                };
+                if reconstructed <= i32::from(i16::MIN) || reconstructed >= i32::from(i16::MAX) {
+                    return false;
+                }
+                let target = (f64::from(frame[channel]) * 32768.0).round() as i128;
+                signal[channel] += target * target;
+                error[channel] += (target - i128::from(reconstructed)).pow(2);
+            }
+        }
+        // Reuse the public 3 dB waveform gate, not a bitrate-specific tolerance.
+        // Zero input has no defined SNR; clipping remains forbidden there.
+        // 10^(3/10), represented to nine decimal places. Keep the PCM score
+        // integer like the quantizer; no platform log/libm decision in coding.
+        (0..channels)
+            .all(|c| signal[c] == 0 || signal[c] * 1_000_000_000 > error[c] * 1_995_262_315)
+    }
+
     // Rate-only open-loop model choice can make all budget fits ring, especially
     // after quiet input. Compare transmitted reconstructions, including the
     // historical spectral/pitch policy, before committing predictive state.
@@ -571,12 +995,15 @@ impl SilkEncoder {
         let mut best: Option<(i128, Self, Vec<u8>)> = None;
         let mut failure = None;
         let masks = if channels == 1 {
-            vec![0, 1, 4, 5]
+            vec![0, 1, 4, 5, 16, 17, 20, 21]
         } else {
-            vec![0, 1, 2, 3]
+            vec![0, 1, 2, 3, 16, 17, 18, 19]
         };
         let mut cache = QuantizerCache::default();
         for mask in masks {
+            if mask == 16 && best.is_some() {
+                break;
+            }
             let mut candidate = self.clone();
             // Exact pitch and LPC identity are included in the frame-local
             // cache; entropy/model signaling remains separately evaluated.
@@ -747,11 +1174,33 @@ impl SilkEncoder {
     fn encode_search(
         &mut self,
         pcm: &[f32],
+        shared: Option<&mut RangeEncoder>,
+        rank_prefix: bool,
+        model_mask: u8,
+        quantizer_cache: &mut QuantizerCache,
+        scoring: Option<&mut PrefixScoring<'_>>,
+    ) -> Result<Vec<u8>> {
+        self.encode_search_policy(
+            pcm,
+            shared,
+            rank_prefix,
+            model_mask,
+            quantizer_cache,
+            scoring,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)] // Ordered entropy search with explicit standalone coverage.
+    fn encode_search_policy(
+        &mut self,
+        pcm: &[f32],
         mut shared: Option<&mut RangeEncoder>,
         rank_prefix: bool,
         model_mask: u8,
         quantizer_cache: &mut QuantizerCache,
         mut scoring: Option<&mut PrefixScoring<'_>>,
+        expanded_standalone: bool,
     ) -> Result<Vec<u8>> {
         let rate = sample_rate(self.config.sample_rate)?;
         let bandwidth = bandwidth(self.config.sample_rate);
@@ -767,33 +1216,59 @@ impl SilkEncoder {
                 inputs[1].push((left - right) / 2);
             }
         }
-        let models: Vec<_> = inputs
+        #[cfg(test)]
+        let model_started = std::time::Instant::now();
+        let mut models: Vec<_> = inputs
             .iter()
             .enumerate()
             .map(|(channel, input)| {
-                if input.iter().all(|&sample| sample == 0) {
-                    return self.silence_model(input, channel, bandwidth, rate);
+                let choice = (channel, model_mask & (1 << channel) != 0);
+                let reuse_analysis = true;
+                #[cfg(test)]
+                let reuse_analysis = reuse_analysis && !self.quantizer_cache_disabled;
+                if reuse_analysis && let Some(model) = quantizer_cache.analysis.get(&choice) {
+                    return Ok(model.clone());
                 }
-                let mut analysis: Vec<i32> = self.history[channel]
-                    .iter()
-                    .map(|&x| {
-                        ((i64::from(x) * i64::from(self.gain[channel])) >> 30).clamp(-32768, 32767)
-                            as i32
-                    })
-                    .collect();
-                analysis.extend_from_slice(input);
-                let bitrate = self.config.bitrate / channels as u32;
-                analyze_rate(
-                    &analysis,
-                    bandwidth,
-                    if model_mask & (1 << channel) != 0 {
-                        48_000
-                    } else {
-                        bitrate
-                    },
-                )
+                let model = if input.iter().all(|&sample| sample == 0) {
+                    self.silence_model(input, channel, bandwidth, rate)?
+                } else {
+                    let mut analysis: Vec<i32> = self.history[channel]
+                        .iter()
+                        .map(|&x| {
+                            ((i64::from(x) * i64::from(self.gain[channel])) >> 30)
+                                .clamp(-32768, 32767) as i32
+                        })
+                        .collect();
+                    analysis.extend_from_slice(input);
+                    let bitrate = self.config.bitrate / channels as u32;
+                    analyze_rate(
+                        &analysis,
+                        bandwidth,
+                        if model_mask & (1 << channel) != 0 {
+                            48_000
+                        } else {
+                            bitrate
+                        },
+                    )?
+                };
+                if reuse_analysis {
+                    quantizer_cache.analysis.insert(choice, model.clone());
+                }
+                Ok(model)
             })
             .collect::<Result<_>>()?;
+        #[cfg(test)]
+        let model_ns = model_started.elapsed().as_nanos();
+        // If all analysis models are infeasible, probe a finite coarse-NLSF
+        // fallback. Zero residuals are legal codebook symbols, not zeroed PCM
+        // or dropped side-channel excitation. Reconstruct the transmitted LPC.
+        if model_mask & 16 != 0 {
+            for model in &mut models {
+                model.residual.fill(0);
+                let lsf = SilkDecoder::reconstruct_lsf(model.stage1, &model.residual, bandwidth)?;
+                model.lpc = SilkDecoder::limit_lpc_coefficients(&lsf, bandwidth)?;
+            }
+        }
         let pitches: Vec<_> = inputs
             .iter()
             .enumerate()
@@ -809,6 +1284,49 @@ impl SilkEncoder {
             .collect();
         let bytes =
             (self.config.bitrate as usize * self.config.frame_size / (rate * 8)).saturating_sub(1);
+        #[cfg(not(test))]
+        let bounded_enabled = true;
+        #[cfg(test)]
+        let bounded_enabled = self.bounded_prefix_search;
+        let feasibility_fallback =
+            bounded_enabled && channels == 2 && rank_prefix && scoring.is_some();
+        if bounded_enabled
+            && channels == 2
+            && rank_prefix
+            && let Some(scoring) = scoring.as_deref_mut()
+        {
+            #[cfg(test)]
+            let bounded_started = std::time::Instant::now();
+            let result = self.bounded_stereo_search(
+                &inputs,
+                &models,
+                shared
+                    .as_deref()
+                    .expect("bounded prefix requires shared range"),
+                scoring.scorer,
+                quantizer_cache,
+            )?;
+            #[cfg(test)]
+            if std::env::var_os("MOOSICBOX_OPUS_RD_PHASE_PROFILE").is_some() {
+                eprintln!(
+                    "SILK_MODEL_PHASE mask={model_mask} model_ns={model_ns} bounded_ns={}",
+                    bounded_started.elapsed().as_nanos()
+                );
+            }
+            if let Some(candidate) = result {
+                scoring.winner = candidate.distortion;
+                *shared.expect("bounded prefix requires shared range") = candidate
+                    .prefix
+                    .expect("bounded prefix carries range state");
+                self.commit_quantized(
+                    &candidate.quantized,
+                    &candidate.gains,
+                    &candidate.indices,
+                    rate,
+                );
+                return Ok(Vec::new());
+            }
+        }
         // Actual entropy budgeting with transactional reconstruction. Raising
         // the common gain reduces excitation density without packet truncation.
         let mut last_failure = String::new();
@@ -896,8 +1414,11 @@ impl SilkEncoder {
         // A standalone packet also needs the complete gain/pressure lattice:
         // at medium/wideband the gain-63 first fit can be a clipped zero-pulse
         // reconstruction, not a useful anchor for sparse local refinement.
-        let complete_prefix_search =
-            (shared.is_none() || rank_prefix) && per_channel_bitrate <= 32_000;
+        // Standalone high-rate frames also need independent gain/pressure
+        // coverage: a sharp model can otherwise fit only at gain 63 and ring
+        // into clipping. Keep the shared-prefix policy unchanged.
+        let complete_prefix_search = (shared.is_none() && expanded_standalone)
+            || ((shared.is_none() || rank_prefix) && per_channel_bitrate <= 32_000);
         let trials = baseline_search_trials + if complete_prefix_search { 64 * 13 } else { 0 };
         let common_trials = trials * gain_offsets.len() as i32;
         // Refine one component while retaining the other's exact winning
@@ -940,7 +1461,18 @@ impl SilkEncoder {
         let cache_enabled = true;
         #[cfg(test)]
         let cache_enabled = cache_enabled && !self.quantizer_cache_disabled;
-        for search_trial in 0..common_trials + coordinate_trials {
+        #[cfg(test)]
+        let mut fallback_calls = 0_usize;
+        let search_trials = if feasibility_fallback {
+            (common_trials + coordinate_trials).min(16)
+        } else {
+            common_trials + coordinate_trials
+        };
+        for search_trial in 0..search_trials {
+            #[cfg(test)]
+            if feasibility_fallback {
+                fallback_calls += 1;
+            }
             let coordinate = search_trial >= common_trials;
             if coordinate && best.is_none() {
                 break;
@@ -967,7 +1499,11 @@ impl SilkEncoder {
                         .indices,
                 );
             }
-            let (gain_index, rate_pressure) = if coordinate {
+            let (gain_index, rate_pressure) = if feasibility_fallback {
+                // Coarse descending coverage of the legal 0..63 gain lattice.
+                // Maximum pulse penalty; stop at the first legal fit, not RD.
+                (63 - 4 * search_trial, 12)
+            } else if coordinate {
                 (
                     coordinate_anchor[coordinate_channel] + (trial / 13) % 17 - 8,
                     (trial % 13) as u32,
@@ -1023,23 +1559,33 @@ impl SilkEncoder {
                 .iter()
                 .map(|&index| SilkDecoder::dequantize_gain(index))
                 .collect();
+            let mut channel_distortions = [0_i128; 2];
             let quantized: Vec<_> = (0..channels)
                 .map(|c| {
                     if coordinate && c != coordinate_channel {
-                        return best
+                        let frame = best
                             .as_ref()
                             .expect("coordinate search requires a fit")
                             .quantized[c]
                             .clone();
+                        channel_distortions[c] = inputs[c]
+                            .iter()
+                            .zip(&frame.2)
+                            .map(|(&target, &sample)| {
+                                (i128::from(target) - i128::from(sample)).pow(2)
+                            })
+                            .sum();
+                        return frame;
                     }
                     let unshaped = coordinate && trial >= 2 * 2 * 17 * 13;
                     let key = (model_ids[c], indices[c], rate_pressure, unshaped);
-                    if cache_enabled && let Some(quantized) = quantizer_cache.frames.get(&key) {
+                    if cache_enabled && let Some(entry) = quantizer_cache.frames.entry(key) {
                         #[cfg(test)]
                         {
                             cache_hits += 1;
                         }
-                        return quantized.clone();
+                        channel_distortions[c] = entry.distortion;
+                        return entry.frame.clone();
                     }
                     #[cfg(test)]
                     {
@@ -1071,28 +1617,14 @@ impl SilkEncoder {
                         .zip(&quantized.2)
                         .map(|(&target, &sample)| (i128::from(target) - i128::from(sample)).pow(2))
                         .sum();
-                    quantizer_cache.distortions.insert(key, distortion);
-                    quantizer_cache.frames.insert(key, quantized.clone());
+                    channel_distortions[c] = distortion;
+                    quantizer_cache
+                        .frames
+                        .insert(key, quantized.clone(), distortion);
                     quantized
                 })
                 .collect();
-            let distortion: i128 = (0..channels)
-                .map(|c| {
-                    if coordinate && c != coordinate_channel {
-                        inputs[c]
-                            .iter()
-                            .zip(&quantized[c].2)
-                            .map(|(&target, &sample)| {
-                                (i128::from(target) - i128::from(sample)).pow(2)
-                            })
-                            .sum()
-                    } else {
-                        let unshaped = coordinate && trial >= 2 * 2 * 17 * 13;
-                        quantizer_cache.distortions
-                            [&(model_ids[c], indices[c], rate_pressure, unshaped)]
-                    }
-                })
-                .sum();
+            let distortion: i128 = channel_distortions[..channels].iter().sum();
             // First-fit affects later gain proposals and resets for each offset.
             // Preserve all entropy work until it is known, then an equal/worse
             // reconstruction cannot replace the strict-distortion winner.
@@ -1161,17 +1693,17 @@ impl SilkEncoder {
                     continue;
                 }
                 first_fit.get_or_insert(gain_index);
-                let distortion =
-                    if let Some(scoring) = scoring.as_deref_mut().filter(|_| channels == 1) {
-                        // Replay independently: never terminate the incoming shared
-                        // stream, whose entropy state and prefix budget stay exact.
-                        let mut replay = RangeEncoder::new(65536).map_err(entropy)?;
-                        encode(&mut replay)?;
-                        let replay = replay.finish().map_err(entropy)?;
-                        scoring.scorer.score(self.config, &replay)?
-                    } else {
-                        distortion
-                    };
+                let distortion = if let Some(scoring) = scoring
+                    .as_deref_mut()
+                    .filter(|_| channels == 1 || feasibility_fallback)
+                {
+                    // Replay independently: never terminate the incoming shared
+                    // stream, whose entropy state and prefix budget stay exact.
+                    let replay = replay::encode(encode)?;
+                    scoring.scorer.score(self.config, &replay)?
+                } else {
+                    distortion
+                };
 
                 if best
                     .as_ref()
@@ -1215,6 +1747,10 @@ impl SilkEncoder {
                         gains,
                         quantized,
                     });
+                }
+                #[cfg(test)]
+                if feasibility_fallback {
+                    break;
                 }
                 continue;
             }
@@ -1295,7 +1831,15 @@ impl SilkEncoder {
                 }
             }
         }
-        if rank_prefix && channels == 2 && per_channel_bitrate <= 24_000 {
+        #[cfg(test)]
+        if feasibility_fallback {
+            eprintln!(
+                "SILK_BOUNDED_FALLBACK calls={fallback_calls} first_fit={} tail_us={}",
+                best.is_some(),
+                started.elapsed().as_micros()
+            );
+        }
+        if rank_prefix && channels == 2 && per_channel_bitrate <= 24_000 && !feasibility_fallback {
             self.search_pairs(
                 PairSearch {
                     inputs: &inputs,
@@ -1311,6 +1855,7 @@ impl SilkEncoder {
             );
         }
         if channels == 2
+            && !feasibility_fallback
             && let Some(scoring) = scoring
         {
             self.score_stereo_coordinates(
@@ -1370,6 +1915,35 @@ impl SilkEncoder {
             let mut packet = vec![(config << 3) | if channels == 2 { 4 } else { 0 }];
             packet.extend(candidate.payload);
             return Ok(packet);
+        }
+        #[cfg(test)]
+        if std::env::var_os("MOOSICBOX_OPUS_SILK_BUDGET_DIAGNOSTIC").is_some() {
+            let mut diagnostic = RangeEncoder::new(1024).map_err(entropy)?;
+            encode_header(&mut diagnostic, channels)?;
+            let mut costs = vec![diagnostic.tell()];
+            for (c, model) in models.iter().enumerate() {
+                encode_parameters(
+                    &mut diagnostic,
+                    FrameParameters {
+                        model,
+                        gain: 63,
+                        previous_gain: self.previous_index[c],
+                        long: self.config.frame_size == rate / 50,
+                        bandwidth,
+                        pitch: None,
+                        rate,
+                    },
+                )?;
+                costs.push(diagnostic.tell());
+                encode_pulses(&mut diagnostic, &vec![0; self.config.frame_size], false)?;
+                costs.push(diagnostic.tell());
+            }
+            eprintln!(
+                "BUDGET_ROOT mask={model_mask} payload_bits={} cumulative_header_parameters_pulses={costs:?} measured_bytes={} residuals={:?}",
+                bytes * 8,
+                diagnostic.tell().div_ceil(8),
+                models.iter().map(|m| &m.residual).collect::<Vec<_>>()
+            );
         }
         Err(Error::Unsupported(format!(
             "SILK excitation cannot fit packet bitrate budget: {last_failure}"
@@ -1533,6 +2107,13 @@ const fn shaping_coefficient(bitrate: u32, unshaped: bool) -> i64 {
 }
 
 fn quantize(context: QuantizerInput<'_>) -> (Vec<i16>, [i32; 16], Vec<i16>) {
+    quantize_levels(context, false)
+}
+
+fn quantize_levels(
+    context: QuantizerInput<'_>,
+    zero_pulses: bool,
+) -> (Vec<i16>, [i32; 16], Vec<i16>) {
     let QuantizerInput {
         input,
         lpc,
@@ -1612,6 +2193,7 @@ fn quantize(context: QuantizerInput<'_>) -> (Vec<i16>, [i32; 16], Vec<i16>) {
         };
         #[cfg(not(test))]
         let pulse = pulse_cost.select(residual);
+        let pulse = if zero_pulses { 0 } else { pulse };
         let level = i32::from(pulse) * 16384 - i32::from(pulse.signum()) * 1280 + offset;
         let excitation = (i64::from(level) * sign) as i32;
         seed = seed.wrapping_add(pulse as u32);
@@ -1668,11 +2250,13 @@ fn encode_header(encoder: &mut RangeEncoder, channels: usize) -> Result<()> {
     Ok(())
 }
 
-fn encode_parameters(enc: &mut RangeEncoder, parameters: FrameParameters<'_>) -> Result<()> {
+fn encode_parameters(enc: &mut impl SilkEntropy, parameters: FrameParameters<'_>) -> Result<()> {
     use silk::constants::{
         FRAME_TYPE_PDF_ACTIVE, GAIN_PDF_DELTA, GAIN_PDF_LSB, GAIN_PDF_UNVOICED, GAIN_PDF_VOICED,
     };
 
+    #[cfg(test)]
+    enc.semantic_parameters(&parameters);
     let FrameParameters {
         model,
         gain,
@@ -1812,7 +2396,10 @@ fn pulse_rate_level(pulses: &[i16], voiced: bool) -> usize {
         .unwrap_or(8)
 }
 
-fn encode_pulses(enc: &mut RangeEncoder, pulses: &[i16], voiced: bool) -> Result<()> {
+#[allow(clippy::too_many_lines)] // Ordered shell, LSB and sign entropy syntax plus test semantic hook.
+fn encode_pulses(enc: &mut impl SilkEntropy, pulses: &[i16], voiced: bool) -> Result<()> {
+    #[cfg(test)]
+    enc.semantic_pulses(pulses);
     let level = pulse_rate_level(pulses, voiced);
     let levels = [
         silk::PULSE_COUNT_PDF_LEVEL_0,
@@ -1914,7 +2501,278 @@ fn encode_pulses(enc: &mut RangeEncoder, pulses: &[i16], voiced: bool) -> Result
     Ok(())
 }
 
-fn shell(enc: &mut RangeEncoder, magnitudes: &[u16]) -> Result<()> {
+#[cfg(test)]
+#[test]
+fn bounded_entropy_replay_matches_complete_budget_decision() {
+    let mut program = SilkProgram::default();
+    for i in 0..600 {
+        program.ec_enc_icdf(i % 4, &[210, 110, 35, 0], 8).unwrap();
+    }
+    for leading in [0, 3, 19] {
+        let mut incoming = RangeEncoder::new(512).unwrap();
+        for i in 0..leading {
+            incoming.ec_enc_bit_logp(i % 2 == 0, 3).unwrap();
+        }
+        // Include nonzero head bytes, pending carry chains and unrelated raw
+        // tail bits; only forward arithmetic symbols are budget-short-circuited.
+        for i in 0..97 {
+            incoming
+                .ec_enc_icdf((i * 13 + leading) % 4, &[255, 170, 3, 0], 8)
+                .unwrap();
+        }
+        incoming.ec_enc_bits(0b101_0110, 7).unwrap();
+        let initial = incoming.tell();
+        let mut complete = incoming.clone();
+        program.replay(&mut complete).unwrap();
+        let used = complete.tell().saturating_sub(initial) as usize;
+        for budget in [0, 8, used - 1, used, used + 1] {
+            let mut bounded = incoming.clone();
+            assert_eq!(
+                program.replay_fitting(&mut bounded, initial, budget),
+                used <= budget
+            );
+            if used <= budget {
+                assert_eq!(
+                    bounded.finish().unwrap(),
+                    complete.clone().finish().unwrap()
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) type SemanticFixture = (u8, Vec<i8>, i32, Vec<i16>);
+
+#[cfg(test)]
+pub(super) fn component_reuse_fixture(frame_size: usize, scale: f32) -> Vec<Vec<u8>> {
+    component_semantic_fixture(frame_size, scale).0
+}
+
+#[cfg(test)]
+pub(super) fn component_semantic_fixture(
+    frame_size: usize,
+    scale: f32,
+) -> (Vec<Vec<u8>>, Vec<Vec<SemanticFixture>>) {
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels: crate::Channels::Stereo,
+        bitrate: 64000,
+        frame_size,
+    };
+    let state = SilkEncoder::new(config).unwrap();
+    let mut programs = Vec::new();
+    let mut semantic_channels = Vec::new();
+    for channel in 0..2 {
+        let mut choices = Vec::new();
+        let mut semantics = Vec::new();
+        for choice in 0..2 {
+            let input: Vec<i32> = (0..frame_size)
+                .map(|i| {
+                    ((std::f32::consts::TAU * (173 + channel * 113) as f32 * i as f32 / 16000.0)
+                        .sin()
+                        * scale
+                        * 32768.0) as i32
+                })
+                .collect();
+            let model = analyze_rate(&input, Bandwidth::Wideband, 32000).unwrap();
+            let index = 35 + choice * 4;
+            let quantized = quantize(QuantizerInput {
+                input: &input,
+                lpc: &model.lpc,
+                history: &state.history[channel],
+                old_gain: state.gain[channel],
+                gain: SilkDecoder::dequantize_gain(index),
+                pitch: None,
+                previous_pcm: &[],
+                rate: 16000,
+                bitrate: 32000,
+                rate_pressure: choice as u32 * 3,
+                optimize_pulse_cost: true,
+                unshaped: choice != 0,
+            });
+            let mut program = SilkProgram::default();
+            encode_parameters(
+                &mut program,
+                FrameParameters {
+                    model: &model,
+                    gain: index,
+                    previous_gain: 10,
+                    long: frame_size == 320,
+                    bandwidth: Bandwidth::Wideband,
+                    pitch: None,
+                    rate: 16000,
+                },
+            )
+            .unwrap();
+            encode_pulses(&mut program, &quantized.0, false).unwrap();
+            choices.push(program);
+            semantics.push((
+                model.stage1,
+                model.residual.clone(),
+                index,
+                quantized.0.clone(),
+            ));
+        }
+        programs.push(choices);
+        semantic_channels.push(semantics);
+    }
+    let mut packets = Vec::new();
+    let mut semantic_packets = Vec::new();
+    for mid in 0..2 {
+        for side in 0..2 {
+            let mut coder = RangeEncoder::new(512).unwrap();
+            encode_header(&mut coder, 2).unwrap();
+            programs[0][mid].replay(&mut coder).unwrap();
+            programs[1][side].replay(&mut coder).unwrap();
+            packets.push(coder.finish().unwrap());
+            semantic_packets.push(vec![
+                semantic_channels[0][mid].clone(),
+                semantic_channels[1][side].clone(),
+            ]);
+        }
+    }
+    (packets, semantic_packets)
+}
+
+#[cfg(test)]
+#[test]
+fn indexed_trial_cache_order_and_domain() {
+    let mut indexed = TrialCache::default();
+    let mut expected = BTreeMap::new();
+    for model in [2, 0, 1] {
+        for gain in (0..64).rev() {
+            for pressure in (0..13).rev() {
+                for shaping in [true, false] {
+                    let key = (model, gain, pressure, shaping);
+                    let frame = Rc::new((vec![i16::try_from(gain).unwrap()], [0; 16], vec![1]));
+                    let error = i128::from(gain) * 13 + i128::from(pressure);
+                    indexed.insert(key, frame.clone(), error);
+                    expected.insert(key, (frame, error));
+                }
+            }
+        }
+    }
+    assert_eq!(
+        indexed.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+        expected.keys().copied().collect::<Vec<_>>()
+    );
+    for (key, (frame, error)) in expected {
+        let entry = indexed.entry(key).unwrap();
+        assert_eq!(*entry.frame, *frame);
+        assert_eq!(entry.distortion, error);
+    }
+    assert!(std::panic::catch_unwind(|| TrialCache::slot((0, 64, 0, false))).is_err());
+    assert!(std::panic::catch_unwind(|| TrialCache::slot((0, 0, 13, false))).is_err());
+}
+
+#[cfg(test)]
+#[test]
+#[allow(clippy::too_many_lines)] // Identical frame streams compare both storage implementations and persistent state.
+fn indexed_trial_cache_stream_parity() {
+    struct TreeScope(bool);
+    impl TreeScope {
+        fn enter() -> Self {
+            Self(TREE_TRIAL_CACHE.replace(true))
+        }
+    }
+    impl Drop for TreeScope {
+        fn drop(&mut self) {
+            TREE_TRIAL_CACHE.set(self.0);
+        }
+    }
+    for (rate, channels, size, bitrate) in [
+        (SampleRate::Hz8000, crate::Channels::Mono, 80, 16000),
+        (SampleRate::Hz12000, crate::Channels::Stereo, 120, 16000),
+        (SampleRate::Hz16000, crate::Channels::Stereo, 160, 16000),
+        (SampleRate::Hz16000, crate::Channels::Stereo, 160, 32000),
+        (SampleRate::Hz16000, crate::Channels::Stereo, 320, 48000),
+        (SampleRate::Hz16000, crate::Channels::Mono, 320, 128_000),
+    ] {
+        let config = EncoderConfig {
+            sample_rate: rate,
+            channels,
+            frame_size: size,
+            bitrate,
+        };
+        let mut indexed = SilkEncoder::new(config).unwrap();
+        let mut tree = indexed.clone();
+        let mut pcm_a = crate::Decoder::new(rate, channels).unwrap();
+        let mut pcm_b = pcm_a.clone();
+        for frame in 0..4 {
+            let input: Vec<f32> = (0..size)
+                .flat_map(|i| {
+                    let scale = if frame == 0 {
+                        0.0
+                    } else if frame == 2 {
+                        0.001
+                    } else {
+                        0.1
+                    };
+                    let x = (std::f32::consts::TAU * 173.0 * (i + frame * size) as f32
+                        / rate as u32 as f32)
+                        .sin()
+                        * scale;
+                    [x, -x * 0.6].into_iter().take(channels as usize)
+                })
+                .collect();
+            let actual = indexed.encode(&input);
+            let expected = {
+                let _scope = TreeScope::enter();
+                tree.encode(&input)
+            };
+            match (actual, expected) {
+                (Ok(actual), Ok(expected)) => {
+                    assert_eq!(actual, expected, "{config:?} frame={frame}");
+                    let mut a = vec![0; size * channels as usize];
+                    let mut b = a.clone();
+                    assert_eq!(
+                        pcm_a.decode(Some(&actual), &mut a, false).unwrap(),
+                        pcm_b.decode(Some(&expected), &mut b, false).unwrap()
+                    );
+                    assert_eq!(a, b);
+                }
+                (Err(actual), Err(expected)) => {
+                    assert_eq!(actual.to_string(), expected.to_string());
+                }
+                result => panic!("storage result mismatch {result:?}"),
+            }
+            assert_eq!(indexed.history, tree.history);
+            assert_eq!(indexed.gain, tree.gain);
+            assert_eq!(indexed.previous_index, tree.previous_index);
+            assert_eq!(indexed.pcm_history, tree.pcm_history);
+        }
+    }
+    for rate in [SampleRate::Hz24000, SampleRate::Hz48000] {
+        let config = EncoderConfig {
+            sample_rate: rate,
+            channels: crate::Channels::Stereo,
+            frame_size: rate as usize / 100,
+            bitrate: 16000,
+        };
+        let mut indexed = super::Encoder::new_silk(config).unwrap();
+        let mut tree = indexed.clone();
+        for frame in 0..3 {
+            let input: Vec<_> = (0..config.frame_size * 2)
+                .map(|i| ((i * 37 + frame * 11) % 997) as f32 / 65536.0)
+                .collect();
+            let actual = indexed.encode(&input).unwrap();
+            let expected = {
+                let _scope = TreeScope::enter();
+                tree.encode(&input).unwrap()
+            };
+            assert_eq!(actual, expected);
+        }
+        let actual = indexed.finish().unwrap();
+        let expected = {
+            let _scope = TreeScope::enter();
+            tree.finish().unwrap()
+        };
+        assert_eq!(actual, expected);
+    }
+}
+
+fn shell(enc: &mut impl SilkEntropy, magnitudes: &[u16]) -> Result<()> {
     let total = magnitudes.iter().sum::<u16>();
     if total == 0 || magnitudes.len() == 1 {
         return Ok(());

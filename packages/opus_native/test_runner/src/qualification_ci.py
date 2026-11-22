@@ -30,11 +30,13 @@ PLATFORMS = {
     "windows-x64": ("Windows", {"amd64", "x86_64"}),
 }
 FEATURES = "celt,silk,hybrid"
-LIVE_SHARD_COUNT = 8
+LIVE_SHARD_COUNT = 9
 LIVE_SHARDS = tuple(f"live-{index}" for index in range(LIVE_SHARD_COUNT))
 PUBLIC_SHARDS = tuple(f"public-{index}" for index in range(24))
 LAYOUT_SHARDS = tuple(f"layout-{index}" for index in range(40))
-QUALITY_SHARDS = ("core",) + LIVE_SHARDS + PUBLIC_SHARDS + LAYOUT_SHARDS
+HYBRID_SHARDS = tuple(f"hybrid-{index}" for index in range(48))
+HYBRID_TEST = "encoder::adaptive::tests::reference_public_hybrid_auto_matrix"
+QUALITY_SHARDS = ("core",) + LIVE_SHARDS + PUBLIC_SHARDS + LAYOUT_SHARDS + HYBRID_SHARDS
 LAYOUT_TEST = "encoder::adaptive::tests::reference_practical_layout_quality"
 PUBLIC_MEDIA_TEST = "encoder::silk::public::public_practical_floor_media_matrix"
 
@@ -58,6 +60,10 @@ def sources():
     paths += sorted((ROOT / "packages/opus_native").rglob("*.rs"))
     paths += sorted((ROOT / "packages/opus_native").rglob("Cargo.toml"))
     paths += sorted((ROOT / "packages/opus_native").rglob("*.py"))
+    for package in ("audio_encoder", "audio_output", "audio_decoder", "opus", "ogg_opus", "player"):
+        directory = ROOT / "packages" / package
+        paths += sorted(directory.rglob("*.rs"))
+        paths += [directory / "Cargo.toml"]
     paths += [
         ROOT / "packages/opus_native/test_runner/fixtures/qualification_inputs.json",
         ROOT / ".github/workflows/opus-native-qualification.yml",
@@ -70,11 +76,26 @@ def sources():
     }
 
 
+def acceptance_environment(environment):
+    """Remove diagnostic selectors and unpromoted experiment switches."""
+    clean = dict(environment)
+    for key in ("MOOSICBOX_OPUS_PRODUCT_CELL", "MOOSICBOX_OPUS_BOUNDED_PREFIX",
+                "MOOSICBOX_OPUS_SILK_CASE", "MOOSICBOX_OPUS_LAYOUT_CELL",
+                "MOOSICBOX_OPUS_PUBLIC_CELL"):
+        clean.pop(key, None)
+    return clean
+
+
+def reject_partial(output):
+    if "PARTIAL_DIAGNOSTIC" in output:
+        raise RuntimeError("partial diagnostic output cannot establish full acceptance")
+
+
 class Execution:
     def __init__(self, output):
         self.output = output
         self.commands = []
-        self.env = dict(os.environ, CARGO_BUILD_JOBS="2", CARGO_NET_OFFLINE="true")
+        self.env = acceptance_environment(dict(os.environ, CARGO_BUILD_JOBS="2", CARGO_NET_OFFLINE="true"))
         self.env["CARGO_TARGET_DIR"] = str(output / "target")
 
     def run(self, arguments, timeout=900, env=None):
@@ -187,10 +208,17 @@ LIVE_INTEGRATION = {
     "stream_decoder_tests": "persistent_silk_duration_changes_match_public_c_decoder public_celt_loss_bursts_and_recovery_match_pinned_api public_celt_loss_output_rates_match_pinned_api public_silk_loss_prototype_matches_pinned_api persistent_mode_transitions_match_public_c legal_empty_constituent_matches_public_c public_hybrid_loss_matches_pinned_api public_hybrid_short_loss_matches_pinned_api missing_lbrr_uses_real_plc_and_preserves_current_packet exhausted_hybrid_and_empty_constituent_match_public_c",
 }
 LIVE_LIBRARY = (
+    HYBRID_TEST,
+    "encoder::hybrid::tests::native_prefix_scorer_cost_profile",
     LAYOUT_TEST,
     "encoder::silk::public::standalone_reviewed_first_frame_search_parity",
     "encoder::silk::public::standalone_reviewed_pulse_kernel_parity",
     PUBLIC_MEDIA_TEST,
+    "encoder::silk::public::public_extended_floor_media_matrix",
+    "encoder::silk::public::reviewed_stereo_search_optimization_parity",
+    "encoder::hybrid::tests::canonical_typed_channel_boundary_proof",
+    "encoder::hybrid::tests::channel_component_2x2_proof",
+    "encoder::hybrid::tests::practical_cache_lifecycle_packet_state_identity",
     "encoder::adaptive::tests::practical_prepared_prefix_exact_identity",
     "encoder::silk::public::public_floor_synthetic_matrix",
     "encoder::silk::public::public_floor_real_speech_matrix",
@@ -208,6 +236,18 @@ LIVE_LIBRARY = (
 # those intentionally fail until guards/capability satisfy the acceptance contract.
 # Cold-prefix diagnostics require independent captured state, not fabricated input.
 DEVELOPMENT_ONLY = {
+    "prototype_pool48_common_snapshot_diagnostic": "prototype search snapshot, not production policy",
+    "prototype_pool48_winner_diagnostic": "prototype candidate selection diagnostic",
+    "prototype_pool48_public_matrix": "prototype pool, not the production public matrix",
+    "prototype_pool48_layout_matrix": "prototype pool layout experiment",
+    "prototype_pool48_cold_matrix": "prototype pool cold-start experiment",
+    "prototype_pool48_first_screen": "prototype candidate screening",
+    "prototype_pool48_reviewed_music_screen": "prototype candidate screening on reviewed music",
+    "typed_full_search_timing": "component timing, not the realtime gate",
+    "channel_reuse_full_search_timing": "component timing, not the realtime gate",
+    "standalone_high_rate_clipping_root": "clipping root-cause diagnostic",
+    "stereo_low_budget_first_infeasible_model": "first infeasible model diagnostic",
+    "bounded_reviewed_music_layout": "test-only bounded_prefix_search explicitly enabled; unpromoted candidate, never substitutes for public layout acceptance",
     "captured_prefix_budget_frontier": "development replay requires an actual independent SILK prefix snapshot",
     "reference_public_practical_rd_voiced_10ms": "focused voiced diagnostic; full public RD matrix remains required",
     "practical_rd_voiced_proof_packet_identity": "production/proof state-equivalence diagnostic; not public quality acceptance",
@@ -256,6 +296,47 @@ def acceptance_inventory():
     return required
 
 
+PRODUCT_TESTS = (
+    ("moosicbox_audio_encoder", "opus-native", "opus_public_acceptance"),
+    ("moosicbox_audio_encoder", "opus-native", "opus_long_frames"),
+    ("moosicbox_audio_encoder", "opus-native", "opus_mode_boundaries"),
+    ("moosicbox_audio_encoder", "opus-native", "opus_stream_lifecycle"),
+    ("moosicbox_player", "encoder-opus-native", "opus_encode_modes"),
+)
+
+
+def product_tests(execution, profile):
+    results = []
+    for package, features, target in PRODUCT_TESTS:
+        argv = ["cargo", "test", "--locked", "--offline", "-j", "2", "-p", package,
+                "--no-default-features", "--features", features, "--test", target]
+        if profile == "release":
+            argv.append("--release")
+        argv += ["--", "--test-threads=1", "--show-output"]
+        output = execution.run(argv, timeout=1800, env=acceptance_environment(execution.env))
+        reject_partial(output)
+        match = re.search(r"test result: ok\. ([1-9][0-9]*) passed; 0 failed;", output)
+        if not match:
+            raise RuntimeError(f"required product suite did not execute: {target}")
+        results.append({"package": package, "features": features, "target": target,
+                        "passed": int(match[1])})
+    return results
+
+
+def product_live_tests(execution, reference):
+    env = dict(acceptance_environment(execution.env), MOOSICBOX_OPUS_REFERENCE_ORACLE=str(reference))
+    for name in ("selected_modes_match_qualified_public_c_pcm",
+                 "changing_mode_ogg_file_matches_public_c_and_player_seek"):
+        output = execution.run([
+            "cargo", "test", "--locked", "--offline", "-j", "2", "-p", "moosicbox_player",
+            "--no-default-features", "--features", "encoder-opus-native", "--release",
+            "--test", "opus_encode_modes", name, "--", "--ignored", "--exact", "--test-threads=1", "--show-output",
+        ], timeout=1800, env=env)
+        reject_partial(output)
+        if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
+            raise RuntimeError(f"required product oracle test did not execute once: {name}")
+
+
 def public_cases(shard):
     if shard not in PUBLIC_SHARDS:
         raise ValueError("public case selection requires a public-N shard")
@@ -280,10 +361,22 @@ def layout_cell(shard):
     return cells[int(shard.removeprefix("layout-"))]
 
 
+def hybrid_cells(shard):
+    if shard not in HYBRID_SHARDS:
+        raise ValueError("hybrid selection requires a hybrid-N shard")
+    cells = [f"{r}:{c}:{ms}:{b}:{m}:{s}:{bw}:{shape}"
+             for r in (24000,48000) for c in (1,2) for ms in (10,20)
+             for b in (32000,64000,128000) for m in (0,1) for s in (0,1,2)
+             for bw in (0,1) for shape in range(6)]
+    return cells[int(shard.removeprefix("hybrid-"))::len(HYBRID_SHARDS)]
+
+
 def selected_live_tests(shard=None):
     required = acceptance_inventory()
     if shard is None:
         return required
+    if shard in HYBRID_SHARDS:
+        return [("--lib", None, HYBRID_TEST)]
     if shard in LAYOUT_SHARDS:
         return [("--lib", None, LAYOUT_TEST)]
     if shard in PUBLIC_SHARDS:
@@ -292,7 +385,7 @@ def selected_live_tests(shard=None):
         raise ValueError("live acceptance requires a known live-N or public-N shard")
     index = int(shard.removeprefix("live-"))
     required = [
-        row for row in required if row[2] not in (PUBLIC_MEDIA_TEST, LAYOUT_TEST)
+        row for row in required if row[2] not in (PUBLIC_MEDIA_TEST, LAYOUT_TEST, HYBRID_TEST)
     ]
     # Stable round-robin selection is independent of hosted runner scheduling.
     return required[index::LIVE_SHARD_COUNT]
@@ -322,14 +415,18 @@ def live_acceptance(execution, profile, env, shard=None):
     invocations = []
     for kind, target, name in required:
         filters = cases_to_run if name == PUBLIC_MEDIA_TEST else (None,)
+        if name == HYBRID_TEST and shard in HYBRID_SHARDS:
+            filters = hybrid_cells(shard)
         for case in filters:
-            clean_env = dict(env)
+            clean_env = acceptance_environment(env)
             clean_env.pop("MOOSICBOX_OPUS_SILK_CASE", None)
             clean_env.pop("MOOSICBOX_OPUS_LAYOUT_CELL", None)
+            clean_env.pop("MOOSICBOX_OPUS_PUBLIC_CELL", None)
             if name == LAYOUT_TEST and shard in LAYOUT_SHARDS:
                 clean_env["MOOSICBOX_OPUS_LAYOUT_CELL"] = layout_cell(shard)
             if case is not None:
-                clean_env["MOOSICBOX_OPUS_SILK_CASE"] = case
+                key = "MOOSICBOX_OPUS_PUBLIC_CELL" if name == HYBRID_TEST else "MOOSICBOX_OPUS_SILK_CASE"
+                clean_env[key] = case
             invocations.append((kind, target, name, case, clean_env))
     for kind, target, name, case, selected_env in invocations:
         args = [
@@ -359,9 +456,13 @@ def live_acceptance(execution, profile, env, shard=None):
             "--show-output",
         ]
         output = execution.run(args, timeout=600, env=selected_env)
+        reject_partial(output)
         # Cargo exits zero for a misspelled/filtered test: fail closed on zero runs.
         if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
             raise RuntimeError(f"required exact live test did not execute once: {name}")
+        if name == HYBRID_TEST and shard in HYBRID_SHARDS:
+            if "public coverage executed=1 failed=0 filtered=true" not in output:
+                raise RuntimeError("hybrid cell did not prove exactly one successful execution")
         if name == LAYOUT_TEST and shard in LAYOUT_SHARDS:
             # Rust harness diagnostics are normally captured on success. Request
             # --show-output below so the cell's explicit proof count is retained.
@@ -524,6 +625,7 @@ def run(args):
                 f"unreviewed production native graph: {sorted(unexpected)}"
             )
         native_tests(execution, args.profile)
+        report["products"] = product_tests(execution, args.profile)
         executable = execution.build(
             "moosicbox_opus_native", "qualification_probe", args.profile
         )
@@ -577,6 +679,7 @@ def run(args):
         write_json(output / "build-receipt.json", receipt)
         execution.run([reference, "provenance"], timeout=30)
         if args.quality_shard == "core":
+            product_live_tests(execution, reference)
             execution.run(
                 [
                     sys.executable,
@@ -602,6 +705,8 @@ def run(args):
             )
             live_acceptance(execution, args.profile, live_env, args.quality_shard)
             report["required_tests"] = selected_live_tests(args.quality_shard)
+            if args.quality_shard in HYBRID_SHARDS:
+                report["hybrid_cells"] = hybrid_cells(args.quality_shard)
             if args.quality_shard in LAYOUT_SHARDS:
                 report["layout_cell"] = layout_cell(args.quality_shard)
             if args.quality_shard in PUBLIC_SHARDS:
@@ -661,6 +766,11 @@ def compare(args):
         identities.add(identity)
         reports.append(report)
         if report["mode"] == "native":
+            expected_products = [(package, features, target) for package, features, target in PRODUCT_TESTS]
+            products = report.get("products", [])
+            if ([(row["package"], row["features"], row["target"]) for row in products] != expected_products
+                    or any(type(row.get("passed")) is not int or row["passed"] < 1 for row in products)):
+                raise RuntimeError("required product execution evidence missing")
             if probe_files(path.parent / "data") != report["fingerprints"]:
                 raise RuntimeError(
                     "downloaded probe artifact bytes differ from fingerprints"
@@ -686,6 +796,9 @@ def compare(args):
             ]
             if report.get("required_tests") != required:
                 raise RuntimeError("live shard required-test coverage changed")
+            if report["quality_shard"] in HYBRID_SHARDS:
+                if report.get("hybrid_cells") != hybrid_cells(report["quality_shard"]):
+                    raise RuntimeError("public hybrid 1728-cell coverage changed")
             if report["quality_shard"] in LAYOUT_SHARDS:
                 if report.get("layout_cell") != layout_cell(report["quality_shard"]):
                     raise RuntimeError("required 40-cell layout coverage changed")
@@ -732,7 +845,7 @@ def compare(args):
     )
     print(
         "Exact packet/PCM/input/corpus SHA-256 agreement: eight native executions; "
-        "four strict frozen/media core runs and all 288 required live/public/layout shards accepted. "
+        "four strict frozen/media core runs and all 480 required live/public/layout/hybrid shards accepted. "
         "No unexecuted platform claim."
     )
 

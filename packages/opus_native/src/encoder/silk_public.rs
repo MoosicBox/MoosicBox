@@ -55,7 +55,7 @@ fn practical_floor_media_matrix(public: bool) {
                                 let mut encoder = if public {
                                     // No private overrides: constructor rejection is a
                                     // failed public case, not an internal candidate pass.
-                                    super::super::Encoder::new(config).unwrap()
+                                    super::super::Encoder::new_silk(config).unwrap()
                                 } else {
                                     let mut encoder =
                                         super::super::Encoder::new(EncoderConfig::default())
@@ -134,6 +134,56 @@ fn standalone_reviewed_first_frame_search_parity() {
             assert_eq!(optimized.gain, reference.gain);
             assert_eq!(optimized.previous_index, reference.previous_index);
             assert_eq!(optimized.pcm_history, reference.pcm_history);
+        }
+    }
+}
+
+#[test]
+#[ignore = "reviewed music exact analysis-cache and entropy-budget parity; allocated release slot"]
+fn reviewed_stereo_search_optimization_parity() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let source = reviewed_media(&directory, "music");
+    let samples = candidate_media(&source, 48000, 2, 16000, 2);
+    for scale in [1.0_f32, 0.01] {
+        let config = EncoderConfig {
+            sample_rate: SampleRate::Hz16000,
+            channels: crate::Channels::Stereo,
+            bitrate: 32000,
+            frame_size: 160,
+        };
+        let mut optimized = SilkEncoder::new(config).unwrap();
+        let mut reference = optimized.clone();
+        reference.quantizer_cache_disabled = true;
+        let mut actual_decoder =
+            crate::Decoder::new(SampleRate::Hz16000, crate::Channels::Stereo).unwrap();
+        let mut expected_decoder = actual_decoder.clone();
+        for frame in 0..6 {
+            let start = (32000 + frame * 160) * 2;
+            let input: Vec<f32> = samples[start..start + 320]
+                .iter()
+                .map(|&x| f32::from(x) / 32768.0 * scale)
+                .collect();
+            let started = std::time::Instant::now();
+            let actual = optimized.encode(&input).unwrap();
+            let optimized_us = started.elapsed().as_micros();
+            let started = std::time::Instant::now();
+            let expected = reference.encode(&input).unwrap();
+            eprintln!(
+                "STEREO_SEARCH_PARITY scale={scale} frame={frame} optimized_us={optimized_us} reference_us={}",
+                started.elapsed().as_micros()
+            );
+            assert_eq!(actual, expected);
+            assert_eq!(optimized.history, reference.history);
+            assert_eq!(optimized.gain, reference.gain);
+            assert_eq!(optimized.previous_index, reference.previous_index);
+            assert_eq!(optimized.pcm_history, reference.pcm_history);
+            let mut a = [0; 320];
+            let mut b = a;
+            actual_decoder.decode(Some(&actual), &mut a, false).unwrap();
+            expected_decoder
+                .decode(Some(&expected), &mut b, false)
+                .unwrap();
+            assert_eq!(a, b);
         }
     }
 }
@@ -459,6 +509,10 @@ fn qualify_stream(
     let mut decoder = crate::Decoder::new(config.sample_rate, config.channels).unwrap();
     let mut output = Vec::new();
     for (frame, packet) in packets.iter().enumerate() {
+        assert_eq!(
+            crate::toc::Toc::parse(packet[0]).configuration().mode,
+            crate::OpusMode::SilkOnly
+        );
         assert!(packet.len() * rate * 8 <= config.bitrate as usize * config.frame_size);
         let mut pcm = vec![0_i16; config.frame_size * channels];
         assert_eq!(
@@ -638,4 +692,434 @@ fn standalone_reviewed_pulse_kernel_parity() {
             );
         }
     }
+}
+
+#[test]
+fn public_native_silk_floor_boundaries_and_packet_modes() {
+    for sample_rate in [
+        SampleRate::Hz8000,
+        SampleRate::Hz12000,
+        SampleRate::Hz16000,
+        SampleRate::Hz24000,
+        SampleRate::Hz48000,
+    ] {
+        for channels in [crate::Channels::Mono, crate::Channels::Stereo] {
+            let count = super::super::channel_count(channels);
+            let minimum = 16_000;
+            for milliseconds in [10, 20, 40, 60] {
+                let config = EncoderConfig {
+                    sample_rate,
+                    channels,
+                    frame_size: sample_rate as usize * milliseconds / 1000,
+                    bitrate: minimum,
+                };
+                assert!(
+                    super::super::Encoder::new_silk(EncoderConfig {
+                        bitrate: minimum - 1,
+                        ..config
+                    })
+                    .is_err()
+                );
+                assert!(
+                    super::super::Encoder::new_silk(EncoderConfig {
+                        bitrate: 128_001,
+                        ..config
+                    })
+                    .is_err()
+                );
+                let mut encoder = super::super::Encoder::new_silk(config).unwrap();
+                let mut packets = vec![
+                    encoder
+                        .encode(&vec![0.0; config.frame_size * count])
+                        .unwrap(),
+                ];
+                packets.extend(encoder.finish().unwrap());
+                for packet in packets {
+                    assert_eq!(
+                        crate::toc::Toc::parse(packet[0]).configuration().mode,
+                        crate::OpusMode::SilkOnly
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Preserve the reviewed full-band source before exercising the production
+/// input converter. `FFmpeg`'s swresample anti-aliases 48->24 kHz; no sample
+/// dropping or SILK 16 kHz prefilter is permitted in this fixture path.
+fn fullband_candidate_media(directory: &str, kind: &str, rate: u32, channels: usize) -> Vec<i16> {
+    let script = format!("{}/test_runner/src", env!("CARGO_MANIFEST_DIR"));
+    let output = std::process::Command::new("python3")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .args(["-c", "import sys,wave,subprocess;sys.path.insert(0,sys.argv[1]);from qualification_inputs import verify_inputs;_,p=verify_inputs(sys.argv[2]);w=wave.open(str(p[sys.argv[3]]),'rb');data=w.readframes(w.getnframes());r=subprocess.run(['ffmpeg','-nostdin','-v','error','-f','s16le','-ar',str(w.getframerate()),'-ac',str(w.getnchannels()),'-i','pipe:0','-ar',sys.argv[4],'-ac',sys.argv[5],'-f','s16le','pipe:1'],input=data,stdout=subprocess.PIPE,check=True);sys.stdout.buffer.write(r.stdout)", &script, directory, kind, &rate.to_string(), &channels.to_string()])
+        .output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output
+        .stdout
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&b| i16::from_le_bytes(b))
+        .collect()
+}
+
+#[test]
+#[ignore = "explicit fullband converted/native below-floor public qualification; frozen oracle and reviewed media"]
+fn public_extended_floor_media_matrix() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let filter = std::env::var("MOOSICBOX_OPUS_SILK_CASE").ok();
+    let mut executed = 0;
+    let mut failures = Vec::new();
+    for kind in ["speech", "music"] {
+        for rate in [8000_u32, 12000, 16000, 24000, 48000] {
+            for channels in [crate::Channels::Mono, crate::Channels::Stereo] {
+                if rate <= 16000 && channels == crate::Channels::Mono {
+                    continue;
+                }
+                for milliseconds in [10, 20, 40, 60] {
+                    for bitrate in [16_000, 24_000, 32_000, 48_000, 64_000] {
+                        if rate <= 16000 && bitrate > 24_000 {
+                            continue;
+                        }
+                        for scale in [1.0_f32, 0.01] {
+                            let case = format!(
+                                "{kind}/{rate}/{}/{milliseconds}/{bitrate}/{scale}",
+                                super::super::channel_count(channels)
+                            );
+                            if filter.as_ref().is_some_and(|f| f != &case) {
+                                continue;
+                            }
+                            executed += 1;
+                            eprintln!("public extended SILK CASE START {case}");
+                            if std::panic::catch_unwind(|| {
+                                let count = super::super::channel_count(channels);
+                                let source = if rate > 16000 {
+                                    fullband_candidate_media(&directory, kind, rate, count)
+                                } else {
+                                    candidate_media(
+                                        &reviewed_media(&directory, kind),
+                                        if kind == "speech" { 8000 } else { 48000 },
+                                        if kind == "speech" { 1 } else { 2 },
+                                        rate,
+                                        count,
+                                    )
+                                };
+                                let config = EncoderConfig {
+                                    sample_rate: match rate {
+                                        8000 => SampleRate::Hz8000,
+                                        12000 => SampleRate::Hz12000,
+                                        16000 => SampleRate::Hz16000,
+                                        24000 => SampleRate::Hz24000,
+                                        48000 => SampleRate::Hz48000,
+                                        _ => unreachable!(),
+                                    },
+                                    channels,
+                                    bitrate,
+                                    frame_size: rate as usize * milliseconds / 1000,
+                                };
+                                let input: Vec<_> = source
+                                    .iter()
+                                    .map(|&x| f32::from(x) / 32768.0 * scale)
+                                    .collect();
+                                let mut encoder = super::super::Encoder::new_silk(config).unwrap();
+                                qualify_stream(config, kind, &input, &mut encoder);
+                            })
+                            .is_err()
+                            {
+                                failures.push(case);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(executed, if filter.is_some() { 1 } else { 416 });
+    eprintln!(
+        "public extended SILK matrix executed={executed} failures={}",
+        failures.len()
+    );
+    assert!(
+        failures.is_empty(),
+        "public extended failures: {failures:?}"
+    );
+}
+
+#[test]
+#[ignore = "reviewed media and frozen C oracle; high-rate standalone root isolation"]
+fn standalone_high_rate_clipping_root() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let source = fullband_candidate_media(&directory, "speech", 24000, 1);
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz24000,
+        channels: crate::Channels::Mono,
+        bitrate: 48000,
+        frame_size: 240,
+    };
+    let native_config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        frame_size: 160,
+        ..config
+    };
+    let mut public = super::super::Encoder::new_silk(config).unwrap();
+    let mut native = super::super::Encoder::new_silk(native_config).unwrap();
+    let mut converter = super::super::resample::SilkInput::new(1, 24000).unwrap();
+    let mut decoder = crate::Decoder::new(SampleRate::Hz16000, crate::Channels::Mono).unwrap();
+    let mut packets = Vec::new();
+    let mut reconstruction = Vec::new();
+    for (frame, chunk) in source.as_chunks::<240>().0.iter().take(54).enumerate() {
+        let input: Vec<f32> = chunk.iter().map(|&x| f32::from(x) / 32768.0).collect();
+        let input = converter.process(&input).unwrap();
+        let incoming = native.silk.as_ref().unwrap().clone();
+        let packet = public
+            .encode(
+                &chunk
+                    .iter()
+                    .map(|&x| f32::from(x) / 32768.0)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        assert_eq!(
+            packet,
+            native.encode(&input).unwrap(),
+            "converter isolation frame={frame}"
+        );
+        if (51..=52).contains(&frame) {
+            let mut baseline = incoming.clone();
+            let raw = baseline
+                .encode_search(&input, None, false, 0, &mut QuantizerCache::default(), None)
+                .unwrap();
+            let mut ranked = incoming.clone();
+            let alternative = ranked.encode_standalone_ranked(&input).unwrap();
+            for (name, state, bytes) in
+                [("baseline", baseline, raw), ("ranked", ranked, alternative)]
+            {
+                let mut shadow = decoder.clone();
+                let mut output = vec![0; 160];
+                shadow.decode(Some(&bytes), &mut output, false).unwrap();
+                let history = &state.pcm_history[0];
+                let predicted = &history[history.len() - 160..];
+                let sse = |pcm: &[i16]| {
+                    input
+                        .iter()
+                        .zip(pcm)
+                        .map(|(&x, &y)| {
+                            let d = (f64::from(x) * 32768.0).round() as i128 - i128::from(y);
+                            d * d
+                        })
+                        .sum::<i128>()
+                };
+                assert!(
+                    predicted.iter().all(|&x| x != i16::MIN && x != i16::MAX),
+                    "high-rate reconstructed clipping frame={frame}"
+                );
+                let clips = output
+                    .iter()
+                    .filter(|&&x| x == i16::MIN || x == i16::MAX)
+                    .count();
+                eprintln!(
+                    "ROOT frame={frame} name={name} old_index={:?} index={:?} old_gain={:?} gain={:?} history={:?} proxy_sse={} native_sse={} clips={clips}",
+                    incoming.previous_index,
+                    state.previous_index,
+                    incoming.gain,
+                    state.gain,
+                    incoming.history[0],
+                    sse(predicted),
+                    sse(&output)
+                );
+                assert_eq!(
+                    &predicted[..147],
+                    &output[13..],
+                    "proxy versus incoming native decoder after 13-sample output delay"
+                );
+            }
+        }
+        let mut output = vec![0; 160];
+        decoder.decode(Some(&packet), &mut output, false).unwrap();
+        reconstruction.extend(output);
+        packets.push(packet);
+    }
+    qualification::compare_reference(native_config, &packets, &reconstruction);
+}
+
+#[test]
+#[allow(clippy::suboptimal_flops)] // Keep the generated diagnostic waveform explicit.
+fn generated_high_rate_legacy_clipping_fallback() {
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels: crate::Channels::Mono,
+        bitrate: 48000,
+        frame_size: 160,
+    };
+    let mut encoder = SilkEncoder::new(config).unwrap();
+    let mut decoder = crate::Decoder::new(config.sample_rate, config.channels).unwrap();
+    let mut repairs = 0;
+    let mut random = 0x1234_5678_u32;
+    for frame in 0..1200 {
+        let input: Vec<f32> = (0..160)
+            .map(|i| {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let t = (frame * 160 + i) as f32 / 16000.0;
+                let frequency = 100.0 + (frame / 40 % 8) as f32 * 37.0;
+                let envelope = if frame % 40 < 4 { 0.001 } else { 0.04 };
+                envelope
+                    * ((std::f32::consts::TAU * frequency * t).sin()
+                        + 0.5 * (std::f32::consts::TAU * frequency * 3.0 * t).sin()
+                        + 0.25 * (std::f32::consts::TAU * frequency * 7.0 * t).sin())
+                    + (random >> 24) as f32 / 255.0 * 0.0001
+            })
+            .collect();
+        let mut legacy = encoder.clone();
+        let legacy_packet = legacy
+            .encode_search_policy(
+                &input,
+                None,
+                false,
+                0,
+                &mut QuantizerCache::default(),
+                None,
+                false,
+            )
+            .unwrap();
+        let clipped = legacy.pcm_history[0]
+            .iter()
+            .rev()
+            .take(160)
+            .any(|&x| x == i16::MIN || x == i16::MAX);
+        if clipped {
+            let mut shadow = decoder.clone();
+            let mut raw = vec![0; 160];
+            shadow
+                .decode(Some(&legacy_packet), &mut raw, false)
+                .unwrap();
+            assert!(raw.iter().any(|&x| x == i16::MIN || x == i16::MAX));
+            let history = &legacy.pcm_history[0];
+            assert_eq!(
+                &history[history.len() - 160..history.len() - 13],
+                &raw[13..]
+            );
+        }
+        let packet = encoder.encode(&input).unwrap();
+        let mut output = vec![0; 160];
+        decoder.decode(Some(&packet), &mut output, false).unwrap();
+        assert!(
+            output.iter().all(|&x| x != i16::MIN && x != i16::MAX),
+            "decoded clip frame={frame}"
+        );
+        if clipped {
+            repairs += 1;
+        }
+    }
+    eprintln!("generated legacy clipped repairs={repairs}");
+    assert!(
+        repairs > 0,
+        "generated signal must exercise clipped legacy fallback"
+    );
+}
+
+#[test]
+fn high_rate_compatibility_has_no_protected_stream_divergence() {
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels: crate::Channels::Mono,
+        bitrate: 64000,
+        frame_size: 320,
+    };
+    let mut encoder = SilkEncoder::new(config).unwrap();
+    let mut legacy = encoder.clone();
+    let mut random = 0x1234_5678_u32;
+    for frame in 0..101 {
+        let input: Vec<f32> = (0..320)
+            .map(|i| {
+                if frame == 100 {
+                    return 0.0;
+                }
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let noise = (random >> 24) as i32 - 128;
+                let position = (frame * 320 + i) % 256;
+                let triangle = position.min(256 - position) - 64;
+                (triangle * 128 + noise * 8) as f32 / 32768.0
+            })
+            .collect();
+        let expected = legacy
+            .encode_search_policy(
+                &input,
+                None,
+                false,
+                0,
+                &mut QuantizerCache::default(),
+                None,
+                false,
+            )
+            .unwrap();
+        assert_eq!(
+            encoder.encode(&input).unwrap(),
+            expected,
+            "first packet divergence frame={frame}"
+        );
+        assert_eq!(
+            encoder.history, legacy.history,
+            "predictor divergence frame={frame}"
+        );
+        assert_eq!(encoder.gain, legacy.gain);
+        assert_eq!(encoder.pcm_history, legacy.pcm_history);
+    }
+}
+
+#[test]
+#[ignore = "reviewed fullband music and approved reference required; bounded budget root"]
+fn stereo_low_budget_first_infeasible_model() {
+    let directory = std::env::var("MOOSICBOX_OPUS_QUALIFICATION_MEDIA").unwrap();
+    let source = fullband_candidate_media(&directory, "music", 24000, 2);
+    let config = EncoderConfig {
+        sample_rate: SampleRate::Hz16000,
+        channels: crate::Channels::Stereo,
+        bitrate: 16000,
+        frame_size: 160,
+    };
+    let mut converter = super::super::resample::SilkInput::new(2, 24000).unwrap();
+    let mut encoder = SilkEncoder::new(config).unwrap();
+    let mut decoder = crate::Decoder::new(config.sample_rate, config.channels).unwrap();
+    let mut packets = Vec::new();
+    let mut reconstruction = Vec::new();
+    let mut repaired = false;
+    for (frame, chunk) in source.as_chunks::<480>().0.iter().take(600).enumerate() {
+        let input = converter
+            .process(
+                &chunk
+                    .iter()
+                    .map(|&x| f32::from(x) / 32768.0)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        let mut cache = QuantizerCache::default();
+        let original_failed = (0..4).all(|mask| {
+            encoder
+                .clone()
+                .encode_search(&input, None, false, mask, &mut cache, None)
+                .is_err()
+        });
+        let packet = encoder.encode(&input).unwrap();
+        assert!(packet.len() <= 20);
+        let mut output = vec![0; 320];
+        decoder.decode(Some(&packet), &mut output, false).unwrap();
+        assert!(output.iter().all(|&x| x != i16::MIN && x != i16::MAX));
+        packets.push(packet);
+        reconstruction.extend(output);
+        if original_failed {
+            eprintln!(
+                "BUDGET_FIRST_FAILED_FRAME={frame} fallback_packet_bytes={}",
+                packets.last().unwrap().len()
+            );
+            repaired = true;
+            break;
+        }
+    }
+    assert!(repaired, "must exercise original infeasible model family");
+    qualification::compare_reference(config, &packets, &reconstruction);
 }

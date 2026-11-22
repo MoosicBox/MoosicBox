@@ -266,8 +266,10 @@ fn native_replay_cache_is_exact() {
             .unwrap();
         let cached_us = started.elapsed().as_micros();
         let started = std::time::Instant::now();
+        REFERENCE_PAIRS.set(true);
         b.encode_prefix_scored(&input, &mut range_b, &mut original)
             .unwrap();
+        REFERENCE_PAIRS.set(false);
         let original_us = started.elapsed().as_micros();
         assert_eq!(range_a.finish().unwrap(), range_b.finish().unwrap());
         assert_eq!(a.history, b.history);

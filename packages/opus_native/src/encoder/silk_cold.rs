@@ -631,3 +631,58 @@ fn diagnostic_model_cost(
         range.tell()
     );
 }
+
+#[test]
+fn pair_row_heap_matches_reference_order() {
+    let frame = Rc::new((vec![0_i16; 16], [0_i32; 16], vec![0_i16; 16]));
+    for left_len in 1..=9 {
+        for right_len in 1..=9 {
+            for step in 0..=3 {
+                let candidates: Vec<Vec<_>> = [left_len, right_len]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(channel, len)| {
+                        (0..len)
+                            .map(|i| (i128::from(i / 2 * step), (channel, i, 0, false), &frame))
+                            .collect()
+                    })
+                    .collect();
+                REFERENCE_PAIRS.set(true);
+                let mut old = PairQueue::new(&candidates);
+                REFERENCE_PAIRS.set(false);
+                let mut new = PairQueue::new(&candidates);
+                while let Some(expected) = old.pop(&candidates) {
+                    assert_eq!(new.pop(&candidates), Some(expected));
+                }
+                assert_eq!(new.pop(&candidates), None);
+            }
+        }
+    }
+}
+
+#[test]
+fn pulse_program_matches_direct_range_states() {
+    for size in [80, 120, 160, 240, 320] {
+        for voiced in [false, true] {
+            for magnitude in [0_i16, 1, 8, 127] {
+                let pulses: Vec<_> = (0..size)
+                    .map(|i| if i % 3 == 0 { magnitude } else { -magnitude })
+                    .collect();
+                let mut program = SilkProgram::default();
+                encode_pulses(&mut program, &pulses, voiced).unwrap();
+                for capacity in [0, 1, 8, 128, 1275] {
+                    let mut direct = RangeEncoder::new(capacity).unwrap();
+                    let _ = direct.ec_enc_bit_logp(true, 3);
+                    let mut replay = direct.clone();
+                    assert_eq!(
+                        encode_pulses(&mut direct, &pulses, voiced).is_ok(),
+                        program.replay(&mut replay).is_ok()
+                    );
+                    assert_eq!(direct.tell(), replay.tell());
+                    assert_eq!(direct.range(), replay.range());
+                    assert_eq!(direct.finish(), replay.finish());
+                }
+            }
+        }
+    }
+}

@@ -167,6 +167,80 @@ impl LtpState {
     }
 }
 
+/// Canonical post-entropy inputs consumed by the existing synthesis path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct DecodedChannel {
+    bandwidth: Bandwidth,
+    frame_type: FrameType,
+    quant_offset: QuantizationOffsetType,
+    total_samples: usize,
+    samples_per_subframe: usize,
+    num_subframes: usize,
+    lpc_first: Vec<i32>,
+    lpc_second: Vec<i32>,
+    nlsf: Vec<i16>,
+    gains: Vec<u8>,
+    pitch_lags: Vec<i16>,
+    ltp_filters: Vec<[i8; 5]>,
+    ltp_scale: u16,
+    interpolation: u32,
+    excitation: Vec<i32>,
+}
+
+#[cfg(test)]
+type EncodedChannelSemantic = (u8, Vec<i8>, i32, Vec<i16>);
+
+#[cfg(test)]
+#[derive(Clone)]
+struct CapturedChannel {
+    input: DecodedChannel,
+    post_entropy: Box<SilkDecoder>,
+    channel: usize,
+    tell: u32,
+    expected: Vec<i16>,
+    post_synthesis: Option<Box<SilkDecoder>>,
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static EXPECTED_TYPED: std::cell::RefCell<std::collections::VecDeque<CapturedChannel>> = const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+    static CAPTURE_CHANNELS: std::cell::RefCell<Option<Vec<CapturedChannel>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static CHANNEL_REUSE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+type ChannelMemoEntries =
+    std::collections::BTreeMap<(usize, Vec<i32>), std::sync::Arc<(Vec<i16>, Box<SilkDecoder>)>>;
+#[cfg(test)]
+#[derive(Default)]
+struct ChannelMemo {
+    entries: ChannelMemoEntries,
+    calls: usize,
+    hits: usize,
+    syntheses: usize,
+}
+
+type LsfMemoKey = (bool, u8, Vec<i8>);
+type LpcMemoKey = (bool, Vec<i16>);
+
+/// Pure coefficients only: no entropy, interpolation or synthesis history.
+#[derive(Default)]
+struct CoefficientMemo {
+    lsf: std::collections::BTreeMap<LsfMemoKey, Vec<i16>>,
+    lpc: std::collections::BTreeMap<LpcMemoKey, Vec<i16>>,
+    pub(crate) hits: usize,
+    pub(crate) misses: usize,
+}
+
+impl CoefficientMemo {
+    pub(crate) fn retained(&self) -> usize {
+        self.lsf.len() + self.lpc.len()
+    }
+}
+
 /// SILK decoder for voice-optimized audio
 ///
 /// Decodes SILK frames according to RFC 6716 Section 4.2. Operates at internal sample rates
@@ -199,8 +273,11 @@ impl LtpState {
 /// Cloning at a completed call boundary copies predictor, PLC/CNG, stereo and
 /// recovery history. Subsequent decode/reset calls do not mutate the source.
 #[derive(Clone)]
-#[allow(clippy::struct_excessive_bools)] // Reference per-channel reset flags plus stereo coding state.
+#[allow(clippy::struct_excessive_bools)] // Reference reset/channel flags.
 pub struct SilkDecoder {
+    #[cfg(test)]
+    channel_memo: Option<std::sync::Arc<std::sync::Mutex<ChannelMemo>>>,
+    coefficient_memo: Option<std::sync::Arc<std::sync::Mutex<CoefficientMemo>>>,
     #[allow(dead_code)]
     sample_rate: SampleRate,
     #[allow(dead_code)]
@@ -252,6 +329,387 @@ pub struct SilkDecoder {
 }
 
 impl SilkDecoder {
+    pub(crate) fn restore_prediction_with_coefficients(&mut self, incoming: &Self) {
+        let memo = self.coefficient_memo.take().unwrap_or_default();
+        #[cfg(test)]
+        let channel_memo = if CHANNEL_REUSE.get() {
+            Some(self.channel_memo.take().unwrap_or_default())
+        } else {
+            None
+        };
+        self.clone_from(incoming);
+        #[cfg(test)]
+        {
+            self.channel_memo = channel_memo;
+        }
+        self.coefficient_memo = Some(memo);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn coefficient_memo_counts(&self) -> (usize, usize, usize) {
+        self.coefficient_memo.as_ref().map_or((0, 0, 0), |memo| {
+            let memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (memo.hits, memo.misses, memo.retained())
+        })
+    }
+
+    #[cfg(test)]
+    fn restore_channel_result(&mut self, saved: &Self, channel: usize) {
+        // Called inside the side-bank swap, so these are the selected bank.
+        self.previous_lsf_nb = saved.previous_lsf_nb;
+        self.previous_lsf_wb = saved.previous_lsf_wb;
+        self.decoder_reset = saved.decoder_reset;
+        self.lcg_seed = saved.lcg_seed;
+        self.previous_gain_indices[channel] = saved.previous_gain_indices[channel];
+        self.previous_pitch_lag[channel] = saved.previous_pitch_lag[channel];
+        self.previous_frame_voiced[channel] = saved.previous_frame_voiced[channel];
+        self.packet_frames[channel] = saved.packet_frames[channel];
+        self.prev_gain_q16[channel] = saved.prev_gain_q16[channel];
+        self.ltp_state[channel].clone_from(&saved.ltp_state[channel]);
+        self.voiced_history[channel].clone_from(&saved.voiced_history[channel]);
+        self.comfort_noise[channel].clone_from(&saved.comfort_noise[channel]);
+        self.recovery[channel].clone_from(&saved.recovery[channel]);
+        self.concealment[channel].clone_from(&saved.concealment[channel]);
+        self.saved_excitation[channel] = saved.saved_excitation[channel];
+    }
+
+    #[cfg(test)]
+    pub(crate) fn detach_channel_reuse(&mut self) {
+        self.channel_memo = None;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn channel_reuse_enabled(enabled: bool) -> bool {
+        CHANNEL_REUSE.replace(enabled)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn channel_reuse_counts(&self) -> (usize, usize, usize, usize) {
+        self.channel_memo.as_ref().map_or((0, 0, 0, 0), |memo| {
+            let memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (memo.calls, memo.hits, memo.syntheses, memo.entries.len())
+        })
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::too_many_lines)] // One fixed-origin typed/ordinary PCM and future-state differential proof.
+    pub(crate) fn prove_typed_boundary(
+        packets: &[Vec<u8>],
+        size: usize,
+        rate: SampleRate,
+        channels: Channels,
+        semantics: &[Vec<EncodedChannelSemantic>],
+    ) {
+        let decode_prefix = |decoder: &mut crate::Decoder, replay: &[u8], audio: &mut [i16]| {
+            let mut range = RangeDecoder::new(replay).unwrap();
+            let layout = crate::Configuration {
+                mode: crate::OpusMode::SilkOnly,
+                bandwidth: Bandwidth::Wideband,
+                frame_size: if size == 160 {
+                    crate::FrameSize::Ms10
+                } else {
+                    crate::FrameSize::Ms20
+                },
+            };
+            decoder
+                .decode_silk_payload(&mut range, layout, Channels::Stereo, audio)
+                .unwrap()
+        };
+        let mut origin = crate::Decoder::new(rate, channels).unwrap();
+        for warm in [false, true] {
+            for (packet_index, replay) in packets.iter().enumerate() {
+                let mut audio = vec![0; rate as usize / 50 * channels as usize];
+                if warm {
+                    decode_prefix(&mut origin, replay, &mut audio);
+                }
+                let mut ordinary = origin.clone();
+                CAPTURE_CHANNELS.with_borrow_mut(|capture| *capture = Some(Vec::new()));
+                decode_prefix(&mut ordinary, replay, &mut audio);
+                let captures = CAPTURE_CHANNELS.with_borrow_mut(Option::take).unwrap();
+                assert!(!captures.is_empty());
+                let mut typed_origin = origin.clone();
+                typed_origin
+                    .configure_silk(
+                        SampleRate::Hz16000,
+                        Channels::Stereo,
+                        if size == 160 { 10 } else { 20 },
+                    )
+                    .unwrap();
+                EXPECTED_TYPED.with_borrow_mut(|expected| *expected = captures.clone().into());
+                let raw = typed_origin
+                    .silk
+                    .typed_unvoiced_prefix(&semantics[packet_index], channels == Channels::Mono)
+                    .unwrap();
+                let converted = typed_origin
+                    .resample_silk(&raw, 16000, rate as u32, channels)
+                    .unwrap();
+                assert_eq!(
+                    &audio[..converted.len()],
+                    converted.as_slice(),
+                    "typed packet path differs size={size} rate={rate:?} channels={channels:?} warm={warm} packet={packet_index}"
+                );
+                let mut next = vec![0; audio.len()];
+                let mut other = next.clone();
+                typed_origin
+                    .decode_loss(&mut next, rate as usize / 100)
+                    .unwrap();
+                ordinary
+                    .decode_loss(&mut other, rate as usize / 100)
+                    .unwrap();
+                assert_eq!(next, other);
+                for captured in captures {
+                    assert!(captured.tell > 0);
+                    let (stage, residual, index, pulses) =
+                        &semantics[packet_index][captured.channel];
+                    let nlsf =
+                        Self::reconstruct_lsf(*stage, residual, Bandwidth::Wideband).unwrap();
+                    let lpc = Self::limit_lpc_coefficients(&nlsf, Bandwidth::Wideband)
+                        .unwrap()
+                        .into_iter()
+                        .map(i32::from)
+                        .collect::<Vec<_>>();
+                    let gain = u8::try_from(*index).unwrap();
+                    let mut seed_decoder = (*captured.post_entropy).clone();
+                    seed_decoder.lcg_seed = 0;
+                    let excitation = pulses
+                        .as_chunks::<16>()
+                        .0
+                        .iter()
+                        .flat_map(|block| {
+                            seed_decoder.reconstruct_excitation(
+                                block,
+                                FrameType::Unvoiced,
+                                QuantizationOffsetType::Low,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let constructed = DecodedChannel {
+                        bandwidth: Bandwidth::Wideband,
+                        frame_type: FrameType::Unvoiced,
+                        quant_offset: QuantizationOffsetType::Low,
+                        total_samples: size,
+                        samples_per_subframe: 80,
+                        num_subframes: size / 80,
+                        lpc_first: lpc.clone(),
+                        lpc_second: lpc,
+                        nlsf,
+                        gains: vec![gain; size / 80],
+                        pitch_lags: vec![0; size / 80],
+                        ltp_filters: vec![[0; 5]; size / 80],
+                        ltp_scale: 0,
+                        interpolation: 4,
+                        excitation,
+                    };
+                    assert_eq!(
+                        constructed, captured.input,
+                        "encoded semantic fields differ from entropy decode"
+                    );
+                    assert_eq!(seed_decoder.lcg_seed, captured.post_entropy.lcg_seed);
+                    let mut typed = *captured.post_entropy;
+                    let mut actual = vec![0; captured.input.total_samples];
+                    typed
+                        .synthesize_decoded_channel(
+                            captured.input.clone(),
+                            &mut actual,
+                            captured.channel,
+                        )
+                        .unwrap();
+                    assert_eq!(actual, captured.expected);
+                    let expected = captured.post_synthesis.unwrap();
+                    assert_eq!(typed.previous_gain_indices, expected.previous_gain_indices);
+                    assert_eq!(typed.previous_lsf_nb, expected.previous_lsf_nb);
+                    assert_eq!(typed.previous_lsf_wb, expected.previous_lsf_wb);
+                    assert_eq!(typed.saved_excitation, expected.saved_excitation);
+                    // Compare persistent synthesis/PLC/CNG state by future
+                    // channel concealment and a second typed continuation.
+                    let mut future = *expected;
+                    assert_eq!(
+                        typed
+                            .conceal_channel(captured.channel, if size == 160 { 10 } else { 20 })
+                            .unwrap(),
+                        future
+                            .conceal_channel(captured.channel, if size == 160 { 10 } else { 20 })
+                            .unwrap()
+                    );
+                    typed
+                        .synthesize_decoded_channel(
+                            captured.input.clone(),
+                            &mut actual,
+                            captured.channel,
+                        )
+                        .unwrap();
+                    let mut later = actual.clone();
+                    future
+                        .synthesize_decoded_channel(captured.input, &mut later, captured.channel)
+                        .unwrap();
+                    assert_eq!(actual, later);
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn typed_unvoiced_prefix(
+        &mut self,
+        semantics: &[EncodedChannelSemantic],
+        mono: bool,
+    ) -> Result<Vec<i16>> {
+        assert_eq!(semantics.len(), 2);
+        assert_eq!(self.sample_rate, SampleRate::Hz16000);
+        self.begin_packet();
+        let size = 16000 * usize::from(self.frame_size_ms) / 1000;
+        let mut planes = Vec::new();
+        for (channel, (stage, residual, index, pulses)) in semantics.iter().enumerate() {
+            if channel == 1 {
+                self.swap_side_lsf_state();
+            }
+            let result = (|| {
+                let nlsf = self.memo_lsf(*stage, residual, Bandwidth::Wideband)?;
+                let mut lpc = self
+                    .memo_lpc(&nlsf, Bandwidth::Wideband)?
+                    .into_iter()
+                    .map(i32::from)
+                    .collect::<Vec<_>>();
+                if self.concealment[channel].losses > 0 {
+                    let mut chirp = 63570_i32;
+                    for coefficient in &mut lpc {
+                        let product = chirp * *coefficient;
+                        *coefficient = ((product >> 15) + 1) >> 1;
+                        let product = chirp * (63570 - 65536);
+                        chirp += ((product >> 15) + 1) >> 1;
+                    }
+                }
+                let gain = u8::try_from(*index).expect("encoded gain").max(
+                    self.previous_gain_indices[channel]
+                        .unwrap_or(0)
+                        .saturating_sub(16),
+                );
+                self.previous_gain_indices[channel] = Some(gain);
+                let mut bank = [0; 16];
+                bank.copy_from_slice(&nlsf);
+                self.previous_lsf_wb = Some(bank);
+                self.lcg_seed = 0;
+                let excitation = pulses
+                    .as_chunks::<16>()
+                    .0
+                    .iter()
+                    .flat_map(|block| {
+                        self.reconstruct_excitation(
+                            block,
+                            FrameType::Unvoiced,
+                            QuantizationOffsetType::Low,
+                        )
+                    })
+                    .collect();
+                let input = DecodedChannel {
+                    bandwidth: Bandwidth::Wideband,
+                    frame_type: FrameType::Unvoiced,
+                    quant_offset: QuantizationOffsetType::Low,
+                    total_samples: size,
+                    samples_per_subframe: 80,
+                    num_subframes: size / 80,
+                    lpc_first: lpc.clone(),
+                    lpc_second: lpc,
+                    nlsf,
+                    gains: vec![gain; size / 80],
+                    pitch_lags: vec![0; size / 80],
+                    ltp_filters: vec![[0; 5]; size / 80],
+                    ltp_scale: 0,
+                    interpolation: 4,
+                    excitation,
+                };
+                if let Some(expected) =
+                    EXPECTED_TYPED.with_borrow_mut(std::collections::VecDeque::pop_front)
+                {
+                    assert_eq!(input, expected.input, "typed fields");
+                    assert_eq!(self.lcg_seed, expected.post_entropy.lcg_seed);
+                    assert_eq!(self.prev_gain_q16, expected.post_entropy.prev_gain_q16);
+                    assert_eq!(self.decoder_reset, expected.post_entropy.decoder_reset);
+                    assert_eq!(
+                        self.previous_gain_indices,
+                        expected.post_entropy.previous_gain_indices
+                    );
+                }
+                let mut output = vec![0; size + 2];
+                self.synthesize_decoded_channel(input, &mut output[2..], channel)?;
+                Ok(output)
+            })();
+            if channel == 1 {
+                self.swap_side_lsf_state();
+            }
+            planes.push(result?);
+        }
+        self.prev_decode_only_middle = false;
+        let mut output = vec![0; size * if mono { 1 } else { 2 }];
+        let (left, right) = planes.split_at_mut(1);
+        self.write_stereo_output(&mut left[0], &mut right[0], (0, 0), &mut output, mono)?;
+        Ok(output)
+    }
+
+    fn memo_lsf(&self, stage: u8, residual: &[i8], bandwidth: Bandwidth) -> Result<Vec<i16>> {
+        if self.coefficient_memo.is_none() {
+            return Self::reconstruct_lsf(stage, residual, bandwidth);
+        }
+        let key = (bandwidth == Bandwidth::Wideband, stage, residual.to_vec());
+        if let Some(memo) = &self.coefficient_memo {
+            let mut memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(value) = memo.lsf.get(&key).cloned() {
+                memo.hits += 1;
+                return Ok(value);
+            }
+            memo.misses += 1;
+        }
+        let value = Self::reconstruct_lsf(stage, residual, bandwidth)?;
+        if let Some(memo) = &self.coefficient_memo {
+            let mut memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if memo.retained() >= 256 {
+                memo.lsf.clear();
+                memo.lpc.clear();
+            }
+            memo.lsf.insert(key, value.clone());
+        }
+        Ok(value)
+    }
+
+    fn memo_lpc(&self, nlsf: &[i16], bandwidth: Bandwidth) -> Result<Vec<i16>> {
+        if self.coefficient_memo.is_none() {
+            return Self::limit_lpc_coefficients(nlsf, bandwidth);
+        }
+        // The exact post-interpolation vector includes previous NLSF, weight,
+        // order and rounding effects; no predictor state is memoized.
+        let key = (bandwidth == Bandwidth::Wideband, nlsf.to_vec());
+        if let Some(memo) = &self.coefficient_memo {
+            let mut memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(value) = memo.lpc.get(&key).cloned() {
+                memo.hits += 1;
+                return Ok(value);
+            }
+            memo.misses += 1;
+        }
+        let value = Self::limit_lpc_coefficients(nlsf, bandwidth)?;
+        if let Some(memo) = &self.coefficient_memo {
+            let mut memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if memo.retained() >= 256 {
+                memo.lsf.clear();
+                memo.lpc.clear();
+            }
+            memo.lpc.insert(key, value.clone());
+        }
+        Ok(value)
+    }
+
     /// Creates a new SILK decoder.
     ///
     /// # Errors
@@ -283,6 +741,9 @@ impl SilkDecoder {
         };
 
         Ok(Self {
+            #[cfg(test)]
+            channel_memo: None,
+            coefficient_memo: None,
             sample_rate,
             channels,
             frame_size_ms,
@@ -823,55 +1284,54 @@ impl SilkDecoder {
         };
 
         // Reconstruct normalized LSF coefficients for current frame
-        let nlsf_q15 = Self::reconstruct_lsf(lsf_stage1, &lsf_stage2, bandwidth)?;
+        let nlsf_q15 = self.memo_lsf(lsf_stage1, &lsf_stage2, bandwidth)?;
 
         // RFC lines 3593-3626: LSF Interpolation for 20ms frames
         // For 20ms frames with w_Q2 < 4, interpolate LSF for first half
-        let (mut lpc_coeffs_first_half, mut lpc_coeffs_second_half) = if self.frame_size_ms == 20
-            && lsf_interp_weight < 4
-        {
-            // Get previous LSF based on bandwidth
-            let prev_lsf_vec: Option<Vec<i16>> = match bandwidth {
-                Bandwidth::Narrowband | Bandwidth::Mediumband => {
-                    self.previous_lsf_nb.as_ref().map(|arr| arr.to_vec())
+        let (mut lpc_coeffs_first_half, mut lpc_coeffs_second_half) =
+            if self.frame_size_ms == 20 && lsf_interp_weight < 4 {
+                // Get previous LSF based on bandwidth
+                let prev_lsf_vec: Option<Vec<i16>> = match bandwidth {
+                    Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                        self.previous_lsf_nb.as_ref().map(|arr| arr.to_vec())
+                    }
+                    Bandwidth::Wideband => self.previous_lsf_wb.as_ref().map(|arr| arr.to_vec()),
+                    _ => None,
+                };
+                let prev_lsf = prev_lsf_vec.as_deref();
+
+                if let Some(prev_lsf) = prev_lsf {
+                    // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
+                    let mut nlsf_interpolated_q15 = vec![0_i16; nlsf_q15.len()];
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                    for k in 0..nlsf_q15.len() {
+                        let n0 = i32::from(prev_lsf[k]);
+                        let n2 = i32::from(nlsf_q15[k]);
+                        let w = lsf_interp_weight as i32;
+                        let product = w * (n2 - n0);
+                        nlsf_interpolated_q15[k] = (n0 + (product >> 2)) as i16;
+                    }
+
+                    // Convert both interpolated and current LSF to LPC with stability limiting
+                    let lpc_first = self.memo_lpc(&nlsf_interpolated_q15, bandwidth)?;
+                    let lpc_second = self.memo_lpc(&nlsf_q15, bandwidth)?;
+
+                    (
+                        lpc_first.iter().map(|&x| i32::from(x)).collect(),
+                        lpc_second.iter().map(|&x| i32::from(x)).collect(),
+                    )
+                } else {
+                    // No previous LSF available - use current for both halves
+                    let lpc = self.memo_lpc(&nlsf_q15, bandwidth)?;
+                    let lpc_i32: Vec<i32> = lpc.iter().map(|&x| i32::from(x)).collect();
+                    (lpc_i32.clone(), lpc_i32)
                 }
-                Bandwidth::Wideband => self.previous_lsf_wb.as_ref().map(|arr| arr.to_vec()),
-                _ => None,
-            };
-            let prev_lsf = prev_lsf_vec.as_deref();
-
-            if let Some(prev_lsf) = prev_lsf {
-                // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
-                let mut nlsf_interpolated_q15 = vec![0_i16; nlsf_q15.len()];
-                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
-                for k in 0..nlsf_q15.len() {
-                    let n0 = i32::from(prev_lsf[k]);
-                    let n2 = i32::from(nlsf_q15[k]);
-                    let w = lsf_interp_weight as i32;
-                    let product = w * (n2 - n0);
-                    nlsf_interpolated_q15[k] = (n0 + (product >> 2)) as i16;
-                }
-
-                // Convert both interpolated and current LSF to LPC with stability limiting
-                let lpc_first = Self::limit_lpc_coefficients(&nlsf_interpolated_q15, bandwidth)?;
-                let lpc_second = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
-
-                (
-                    lpc_first.iter().map(|&x| i32::from(x)).collect(),
-                    lpc_second.iter().map(|&x| i32::from(x)).collect(),
-                )
             } else {
-                // No previous LSF available - use current for both halves
-                let lpc = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
+                // 10ms frames or w_Q2 == 4: use current LSF for all subframes
+                let lpc = self.memo_lpc(&nlsf_q15, bandwidth)?;
                 let lpc_i32: Vec<i32> = lpc.iter().map(|&x| i32::from(x)).collect();
                 (lpc_i32.clone(), lpc_i32)
-            }
-        } else {
-            // 10ms frames or w_Q2 == 4: use current LSF for all subframes
-            let lpc = Self::limit_lpc_coefficients(&nlsf_q15, bandwidth)?;
-            let lpc_i32: Vec<i32> = lpc.iter().map(|&x| i32::from(x)).collect();
-            (lpc_i32.clone(), lpc_i32)
-        };
+            };
 
         if self.concealment[channel_idx].losses > 0 {
             for coefficients in [&mut lpc_coeffs_first_half, &mut lpc_coeffs_second_half] {
@@ -1046,6 +1506,147 @@ impl SilkDecoder {
             full_excitation.extend_from_slice(block);
         }
 
+        #[cfg(test)]
+        let channel_key = self.channel_memo.as_ref().map(|_| {
+            // The holder is scoped to one immutable scorer origin. Include all
+            // decoded synthesis inputs, not coder bytes or just gain indices.
+            let mut key = vec![
+                self.sample_rate as i32,
+                i32::from(self.frame_size_ms),
+                frame_type as i32,
+                quant_offset as i32,
+                i32::from(ltp_scale),
+                i32::try_from(lsf_interp_weight).expect("SILK interpolation weight"),
+                i32::from_ne_bytes(self.lcg_seed.to_ne_bytes()),
+            ];
+            for values in [&lpc_coeffs_first_half, &lpc_coeffs_second_half] {
+                key.push(i32::try_from(values.len()).expect("bounded LPC order"));
+                key.extend(values.iter().copied());
+            }
+            key.extend(nlsf_q15.iter().map(|&x| i32::from(x)));
+            key.extend(gain_indices.iter().map(|&x| i32::from(x)));
+            key.extend(pitch_lags.iter().map(|&x| i32::from(x)));
+            key.extend(ltp_filters.iter().flatten().map(|&x| i32::from(x)));
+            key.extend_from_slice(&full_excitation);
+            (channel_idx, key)
+        });
+        #[cfg(test)]
+        if let (Some(memo), Some(key)) = (self.channel_memo.clone(), channel_key.as_ref()) {
+            let hit = {
+                let mut memo = memo
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                memo.calls += 1;
+                let hit = memo.entries.get(key).cloned();
+                if hit.is_some() {
+                    memo.hits += 1;
+                } else {
+                    memo.syntheses += 1;
+                }
+                hit
+            };
+            if let Some(hit) = hit {
+                let (pcm, saved) = hit.as_ref();
+                self.restore_channel_result(saved, channel_idx);
+                output[..total_samples].copy_from_slice(pcm);
+                return Ok(total_samples);
+            }
+        }
+
+        let decoded = DecodedChannel {
+            bandwidth,
+            frame_type,
+            quant_offset,
+            total_samples,
+            samples_per_subframe,
+            num_subframes,
+            lpc_first: lpc_coeffs_first_half,
+            lpc_second: lpc_coeffs_second_half,
+            nlsf: nlsf_q15,
+            gains: gain_indices,
+            pitch_lags,
+            ltp_filters,
+            ltp_scale,
+            interpolation: lsf_interp_weight,
+            excitation: full_excitation,
+        };
+        #[cfg(test)]
+        CAPTURE_CHANNELS.with_borrow_mut(|capture| {
+            if let Some(capture) = capture {
+                let mut snapshot = self.clone();
+                snapshot.channel_memo = None;
+                snapshot.coefficient_memo = None;
+                capture.push(CapturedChannel {
+                    input: decoded.clone(),
+                    post_entropy: Box::new(snapshot),
+                    channel: channel_idx,
+                    tell: range_decoder.ec_tell(),
+                    expected: Vec::new(),
+                    post_synthesis: None,
+                });
+            }
+        });
+        self.synthesize_decoded_channel(decoded, output, channel_idx)?;
+        #[cfg(test)]
+        CAPTURE_CHANNELS.with_borrow_mut(|capture| {
+            if let Some(capture) = capture
+                && let Some(last) = capture.last_mut()
+            {
+                let mut snapshot = self.clone();
+                snapshot.channel_memo = None;
+                snapshot.coefficient_memo = None;
+                last.expected = output[..total_samples].to_vec();
+                last.post_synthesis = Some(Box::new(snapshot));
+            }
+        });
+
+        #[cfg(test)]
+        if let (Some(memo), Some(key)) = (self.channel_memo.clone(), channel_key) {
+            let mut saved = self.clone();
+            saved.channel_memo = None;
+            saved.coefficient_memo = None;
+            let mut memo = memo
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if memo.entries.len() >= 128 {
+                memo.entries.clear();
+            }
+            memo.entries.insert(
+                key,
+                std::sync::Arc::new((output[..total_samples].to_vec(), Box::new(saved))),
+            );
+        }
+        Ok(total_samples)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        clippy::similar_names,
+        clippy::cast_precision_loss
+    )]
+    fn synthesize_decoded_channel(
+        &mut self,
+        decoded: DecodedChannel,
+        output: &mut [i16],
+        channel_idx: usize,
+    ) -> Result<usize> {
+        let DecodedChannel {
+            bandwidth,
+            frame_type,
+            quant_offset: _,
+            total_samples,
+            samples_per_subframe,
+            num_subframes,
+            lpc_first: lpc_coeffs_first_half,
+            lpc_second: lpc_coeffs_second_half,
+            nlsf: nlsf_q15,
+            gains: gain_indices,
+            pitch_lags,
+            ltp_filters,
+            ltp_scale,
+            interpolation: lsf_interp_weight,
+            excitation: full_excitation,
+        } = decoded;
         // Clear LPC history on first subframe after decoder reset
         // This ensures the first LPC synthesis starts with zero history
         if self.decoder_reset && self.concealment[channel_idx].losses == 0 {
@@ -1383,6 +1984,21 @@ impl SilkDecoder {
         self.prev_decode_only_middle = mid_only;
 
         self.write_stereo_output(&mut x1, &mut x2, (w0_q13, w1_q13), output, mono_output)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn project_zero_weight_stereo(
+        &mut self,
+        mid: &[i16],
+        side: &[i16],
+    ) -> Result<Vec<i16>> {
+        let mut x1 = vec![0; mid.len() + 2];
+        let mut x2 = vec![0; side.len() + 2];
+        x1[2..].copy_from_slice(mid);
+        x2[2..].copy_from_slice(side);
+        let mut output = vec![0; mid.len() * 2];
+        self.write_stereo_output(&mut x1, &mut x2, (0, 0), &mut output, false)?;
+        Ok(output)
     }
 
     fn write_stereo_output(
@@ -4143,6 +4759,125 @@ impl SilkDecoder {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn coefficient_memo_packet_plc_fec_and_recovery_parity() {
+        use super::*;
+        for internal in [8000, 12000, 16000] {
+            for coded in [1, 2] {
+                for duration in [10, 20, 40, 60] {
+                    let path = format!(
+                        "{}/src/silk/reference/a10/{internal}-{coded}-{duration}.packets",
+                        env!("CARGO_MANIFEST_DIR")
+                    );
+                    let bytes = std::fs::read(path).unwrap();
+                    for rate in [
+                        SampleRate::Hz8000,
+                        SampleRate::Hz12000,
+                        SampleRate::Hz16000,
+                        SampleRate::Hz24000,
+                        SampleRate::Hz48000,
+                    ] {
+                        for channels in [Channels::Mono, Channels::Stereo] {
+                            let mut cached = crate::Decoder::new(rate, channels).unwrap();
+                            let mut full = cached.clone();
+                            cached.silk.coefficient_memo = Some(std::sync::Arc::default());
+                            let mut packets = bytes.as_slice();
+                            let mut count = 0;
+                            while !packets.is_empty() && count < 4 {
+                                let n = usize::try_from(u32::from_le_bytes(
+                                    packets[..4].try_into().unwrap(),
+                                ))
+                                .unwrap();
+                                let packet = &packets[4..4 + n];
+                                packets = &packets[4 + n..];
+                                let mut a = vec![0; 5760 * channels as usize];
+                                let mut b = a.clone();
+                                assert_eq!(
+                                    cached.decode(Some(packet), &mut a, false).unwrap(),
+                                    full.decode(Some(packet), &mut b, false).unwrap()
+                                );
+                                assert_eq!(a, b);
+                                let samples = rate as usize / 50;
+                                assert_eq!(
+                                    cached.decode_loss(&mut a, samples).unwrap(),
+                                    full.decode_loss(&mut b, samples).unwrap()
+                                );
+                                assert_eq!(a, b);
+                                let width = samples * channels as usize;
+                                assert_eq!(
+                                    cached.decode(Some(packet), &mut a[..width], true).unwrap(),
+                                    full.decode(Some(packet), &mut b[..width], true).unwrap()
+                                );
+                                assert_eq!(a, b);
+                                cached.decode(Some(packet), &mut a, false).unwrap();
+                                full.decode(Some(packet), &mut b, false).unwrap();
+                                assert_eq!(a, b);
+                                assert!(cached.silk.coefficient_memo_counts().2 <= 256);
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pure_coefficient_memo_matches_reference_and_is_bounded() {
+        use super::*;
+        for rate in [SampleRate::Hz8000, SampleRate::Hz12000, SampleRate::Hz16000] {
+            let mut decoder = SilkDecoder::new(rate, Channels::Stereo, 20).unwrap();
+            decoder.restore_prediction_with_coefficients(&decoder.clone());
+            let bandwidth = match rate {
+                SampleRate::Hz8000 => Bandwidth::Narrowband,
+                SampleRate::Hz12000 => Bandwidth::Mediumband,
+                _ => Bandwidth::Wideband,
+            };
+            let order = if bandwidth == Bandwidth::Wideband {
+                16
+            } else {
+                10
+            };
+            for stage in 0..32 {
+                for weight in 0..=4 {
+                    let residual: Vec<i8> = (0..order)
+                        .map(|i| i8::try_from((i + usize::from(stage)) % 7).unwrap() - 3)
+                        .collect();
+                    let expected =
+                        SilkDecoder::reconstruct_lsf(stage, &residual, bandwidth).unwrap();
+                    assert_eq!(
+                        decoder.memo_lsf(stage, &residual, bandwidth).unwrap(),
+                        expected
+                    );
+                    assert_eq!(
+                        decoder.memo_lsf(stage, &residual, bandwidth).unwrap(),
+                        expected
+                    );
+                    let interpolated: Vec<i16> = expected
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &n)| {
+                            let previous = (i32::try_from(i).unwrap() + 1) * 32767
+                                / (i32::try_from(order).unwrap() + 1);
+                            i16::try_from(previous + ((weight * (i32::from(n) - previous)) >> 2))
+                                .unwrap()
+                        })
+                        .collect();
+                    let lpc =
+                        SilkDecoder::limit_lpc_coefficients(&interpolated, bandwidth).unwrap();
+                    assert_eq!(decoder.memo_lpc(&interpolated, bandwidth).unwrap(), lpc);
+                    assert_eq!(decoder.memo_lpc(&interpolated, bandwidth).unwrap(), lpc);
+                    assert!(decoder.coefficient_memo_counts().2 <= 256);
+                }
+            }
+            let cloned = decoder.clone();
+            assert!(std::sync::Arc::ptr_eq(
+                decoder.coefficient_memo.as_ref().unwrap(),
+                cloned.coefficient_memo.as_ref().unwrap()
+            ));
+            assert!(decoder.coefficient_memo_counts().0 > 0);
+        }
+    }
     use super::*;
 
     #[test]
