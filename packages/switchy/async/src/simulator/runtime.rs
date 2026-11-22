@@ -7,7 +7,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        Arc, LazyLock, Mutex, PoisonError,
+        Arc, LazyLock, Mutex, PoisonError, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     task::{Context, Poll, Wake, Waker},
@@ -102,6 +102,9 @@ impl Drop for LocalFutureProxy {
 }
 
 type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
+
+/// Every unfinished task of a runtime, by id, queued or not.
+type Registry = Arc<Mutex<BTreeMap<u64, Weak<Task>>>>;
 
 static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
 static TASK_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
@@ -302,6 +305,12 @@ pub struct Runtime {
     spawner: Spawner,
     tasks: Arc<AtomicU64>,
     active: Arc<AtomicBool>,
+    /// Set by [`Runtime::shutdown_now`]: the runtime never runs again.
+    shut_down: Arc<AtomicBool>,
+    registry: Registry,
+    /// The `switchy_thread` group of the simulated threads its tasks start.
+    #[cfg(feature = "thread-simulator")]
+    thread_group: u64,
     handle: Option<Handle>,
 }
 
@@ -373,6 +382,10 @@ impl Runtime {
             queue,
             tasks: Arc::new(AtomicU64::new(0)),
             active: Arc::new(AtomicBool::new(false)),
+            shut_down: Arc::new(AtomicBool::new(false)),
+            registry: Arc::new(Mutex::new(BTreeMap::new())),
+            #[cfg(feature = "thread-simulator")]
+            thread_group: switchy_thread::simulator::new_key(),
             handle: None,
         };
 
@@ -395,7 +408,7 @@ impl Runtime {
     }
 
     fn start(&self) {
-        if self.active.fetch_or(true, Ordering::SeqCst) {
+        if self.shut_down.load(Ordering::SeqCst) || self.active.fetch_or(true, Ordering::SeqCst) {
             return;
         }
 
@@ -485,10 +498,84 @@ impl Runtime {
         };
 
         RUNTIME.set(self, || {
-            task.process();
+            self.in_thread_group(|| task.process());
         });
 
         true
+    }
+
+    /// Run `f` with the simulated threads it starts in this runtime's thread group, so
+    /// [`Self::shutdown_now`] kills them.
+    #[cfg_attr(not(feature = "thread-simulator"), allow(clippy::unused_self))]
+    fn in_thread_group<R>(&self, f: impl FnOnce() -> R) -> R {
+        #[cfg(feature = "thread-simulator")]
+        return switchy_thread::simulator::with_group(self.thread_group, f);
+        #[cfg(not(feature = "thread-simulator"))]
+        f()
+    }
+
+    /// Stop this runtime for good, at once, as when its process is killed: drop every task it
+    /// has not finished, queued or waiting to be woken, without polling any of them again.
+    ///
+    /// Tasks are dropped one at a time in the order they were spawned, on the calling thread,
+    /// with this runtime current, so their destructors run deterministically (and can see the
+    /// caller's scope, such as a simulated host). Their join handles (and `JoinSet`s) report
+    /// them cancelled. Tasks spawned while it runs (by a destructor, say) are dropped too, and
+    /// the runtime never runs a task again: a task spawned onto it afterwards is dropped at
+    /// once, and [`Self::tick`] does nothing.
+    ///
+    /// With `thread-simulator`, the simulated threads its tasks started (`spawn_blocking`, or
+    /// `switchy_thread` spawns from a task), and the threads they started, are killed too: see
+    /// `switchy_thread::simulator::Scheduler::kill_group`. A blocking closure is stopped at its
+    /// current switch point and unwound, so the values it holds are dropped and its locks
+    /// released; it runs none of its own code again, and its join handle reports it cancelled.
+    ///
+    /// # Panics
+    ///
+    /// * If called from within one of this runtime's own tasks
+    pub fn shutdown_now(&self) {
+        assert!(
+            !(RUNTIME.is_set() && RUNTIME.with(|current| current.id == self.id)),
+            "Cannot shut a Runtime down from within one of its tasks"
+        );
+        log::debug!("shutdown_now: runtime {}", self.id);
+        self.shut_down.store(true, Ordering::SeqCst);
+        self.active.store(false, Ordering::SeqCst);
+        RUNTIME.set(self, || {
+            loop {
+                let tasks = self.live_tasks();
+                if tasks.is_empty() {
+                    break;
+                }
+                for task in tasks {
+                    task.kill();
+                }
+                #[cfg(feature = "thread-simulator")]
+                if let Some(scheduler) = switchy_thread::simulator::try_scheduler() {
+                    scheduler.kill_group(self.thread_group);
+                }
+            }
+            #[cfg(feature = "thread-simulator")]
+            if let Some(scheduler) = switchy_thread::simulator::try_scheduler() {
+                scheduler.kill_group(self.thread_group);
+            }
+        });
+        let queued =
+            std::mem::take(&mut *self.queue.lock().unwrap_or_else(PoisonError::into_inner));
+        drop(queued);
+    }
+
+    /// Whether [`Self::shutdown_now`] stopped this runtime.
+    #[must_use]
+    pub fn is_shut_down(&self) -> bool {
+        self.shut_down.load(Ordering::SeqCst)
+    }
+
+    /// The unfinished tasks, in the order they were spawned.
+    fn live_tasks(&self) -> Vec<Arc<Task>> {
+        let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        registry.retain(|_, task| task.strong_count() > 0);
+        registry.values().filter_map(Weak::upgrade).collect()
     }
 
     /// Finish this runtime only if every admitted task has released its future.
@@ -934,14 +1021,34 @@ impl Task {
         future: impl Future<Output = ()> + Send + 'static,
     ) -> Arc<Self> {
         runtime.tasks.fetch_add(1, Ordering::SeqCst);
-        Arc::new(Self {
+        let registry = Arc::clone(&runtime.registry);
+        let task = Arc::new(Self {
             id: TASK_ID.fetch_add(1, Ordering::SeqCst),
             runtime,
             future: Mutex::new(Box::pin(future)),
             finished: AtomicBool::new(false),
             block,
             polling: AtomicBool::new(false),
-        })
+        });
+        registry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(task.id, Arc::downgrade(&task));
+        if task.runtime.is_shut_down() {
+            // A shut-down runtime never runs a task again.
+            task.kill();
+        }
+        task
+    }
+
+    /// Drop the task's future now, unpolled, and count it finished.
+    fn kill(&self) {
+        let future = {
+            let mut future = self.future.lock().unwrap_or_else(PoisonError::into_inner);
+            std::mem::replace(&mut *future, Box::pin(std::future::ready(())))
+        };
+        drop(future);
+        self.finish();
     }
 
     fn waker(self: &Arc<Self>) -> Waker {
@@ -998,6 +1105,11 @@ impl Task {
         // Active work, not retained Arc/Waker references, determines runtime drain.
         if !self.finished.swap(true, Ordering::SeqCst) {
             self.runtime.tasks.fetch_sub(1, Ordering::SeqCst);
+            self.runtime
+                .registry
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&self.id);
         }
     }
 
