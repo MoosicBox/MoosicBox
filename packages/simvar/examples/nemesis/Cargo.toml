@@ -1,0 +1,26 @@
+[package]
+authors = { workspace = true }
+categories = ["development-tools"]
+description = "Fault injection example using simvar: a nemesis partitions the network and bounces hosts"
+edition = { workspace = true }
+keywords = [
+    "deterministic",
+    "fault-injection",
+    "nemesis",
+    "simulation",
+    "simvar",
+]
+license = { workspace = true }
+name = "simvar_nemesis_example"
+publish = false
+readme = "README.md"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+simvar = { workspace = true, features = ["random", "time"] }
+
+[features]
+default = []
+
+fail-on-warnings = ["simvar/fail-on-warnings"]

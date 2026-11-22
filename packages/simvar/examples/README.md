@@ -84,6 +84,19 @@ Comprehensive performance monitoring system featuring:
 
 **Key Concepts**: Real-time monitoring, alerting systems, time-series data, performance analysis
 
+### 6. Nemesis (`nemesis/`)
+
+**Difficulty**: Advanced
+**Focus**: Fault injection with `simvar::fault`
+
+Three replicas of a counter exchange values over the simulated network while a
+nemesis client partitions the network (symmetrically and one way), isolates
+replicas, degrades links and bounces replicas; a crash hook drops each crashed
+replica's unsynced disk writes. After healing, the replicas must converge.
+
+**Key Concepts**: nemesis clients, host crashes and restarts, crash hooks,
+network partitions and link policies, deterministic replay
+
 ## Getting Started
 
 ### Prerequisites

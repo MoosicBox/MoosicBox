@@ -17262,6 +17262,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_nemesis_example"
+version = "0.5.0"
+dependencies = [
+ "simvar",
+]
+
+[[package]]
 name = "simvar_observer"
 version = "0.5.0"
 
