@@ -679,6 +679,33 @@ pub fn base_environment() -> Vec<(OsString, OsString)> {
     .collect()
 }
 
+/// Close the master side of every terminal at once, as the operating system does when the
+/// process holding them dies.
+///
+/// Each Unix terminal hangs up (its sessions get `SIGHUP`), each Windows console closes (its
+/// processes end). Master handles that still exist act as closed.
+pub fn close_all_masters() {
+    let kernel = kernel();
+    kernel.switch();
+    let mut state = lock(&kernel.state);
+    let terminals: Vec<u64> = state.terminals.keys().copied().collect();
+    for terminal in terminals {
+        let Some(t) = state.terminals.get_mut(&terminal) else {
+            continue;
+        };
+        if t.hung_up {
+            continue;
+        }
+        // The last handle of each kind closes now.
+        t.master_handles = 1;
+        t.console_handles = 1;
+        Kernel::close_master(&mut state, terminal);
+        Kernel::close_console(&mut state, terminal);
+    }
+    drop(state);
+    kernel.wake();
+}
+
 /// Signal process `pid`.
 ///
 /// # Errors
