@@ -1,0 +1,25 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools::testing", "simulation"]
+description = "Model checking for simvar: exhaustive and random-walk state space exploration"
+edition     = { workspace = true }
+keywords    = ["deterministic", "model-checking", "simulator", "test"]
+license     = { workspace = true }
+name        = "simvar_explore"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.5.0"
+
+[package.metadata]
+examples = true
+
+[package.metadata.workspaces]
+group = "simvar"
+
+[dependencies]
+switchy_simulation = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = ["switchy_simulation/fail-on-warnings"]

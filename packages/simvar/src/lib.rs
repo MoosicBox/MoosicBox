@@ -51,6 +51,7 @@
 //! * `all` (default) - Enable all features
 //! * `async` - Async runtime support
 //! * `database` - Database simulation
+//! * `explore` - Model checking (the `explore` module): exhaustive and random-walk exploration
 //! * `fs` - Filesystem simulation
 //! * `http` - HTTP client/server simulation
 //! * `mdns` - mDNS simulation
@@ -89,6 +90,14 @@
 /// Requires the `utils` feature flag.
 #[cfg(feature = "utils")]
 pub use simvar_utils as utils;
+
+/// Model checking: exhaustive (breadth- and depth-first) and seeded random-walk exploration
+/// of a [`explore::Model`]'s state space, checking its safety, reachability and bounded
+/// liveness properties.
+///
+/// Requires the `explore` feature flag.
+#[cfg(feature = "explore")]
+pub use simvar_explore as explore;
 
 /// Core simulation harness APIs.
 ///

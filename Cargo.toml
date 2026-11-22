@@ -118,6 +118,7 @@ default-members = [
     "packages/simvar/examples/api_testing",
     "packages/simvar/examples/basic_web_server",
     "packages/simvar/examples/threads",
+    "packages/simvar/explore",
     "packages/simvar/harness",
     "packages/simvar/observer",
     "packages/simvar/ratatui",
@@ -305,6 +306,7 @@ members = [
     "packages/simvar/examples/api_testing",
     "packages/simvar/examples/basic_web_server",
     "packages/simvar/examples/threads",
+    "packages/simvar/explore",
     "packages/simvar/harness",
     "packages/simvar/observer",
     "packages/simvar/ratatui",
@@ -562,6 +564,7 @@ clippier_test_utilities = { version = "0.5.0", default-features = false, path = 
 
 # Internal Simvar
 simvar          = { version = "0.5.0", default-features = false, path = "packages/simvar" }
+simvar_explore  = { version = "0.5.0", default-features = false, path = "packages/simvar/explore" }
 simvar_harness  = { version = "0.5.0", default-features = false, path = "packages/simvar/harness" }
 simvar_observer = { version = "0.5.0", default-features = false, path = "packages/simvar/observer" }
 simvar_ratatui  = { version = "0.5.0", default-features = false, path = "packages/simvar/ratatui" }

@@ -17198,6 +17198,7 @@ dependencies = [
 name = "simvar"
 version = "0.5.0"
 dependencies = [
+ "simvar_explore",
  "simvar_harness",
  "simvar_utils",
 ]
@@ -17231,6 +17232,13 @@ dependencies = [
  "switchy_http_models",
  "switchy_time",
  "switchy_web_server",
+]
+
+[[package]]
+name = "simvar_explore"
+version = "0.5.0"
+dependencies = [
+ "switchy_simulation",
 ]
 
 [[package]]

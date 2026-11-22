@@ -8,6 +8,7 @@ The MoosicBox Simvar package is a facade that re-exports functionality from:
 
 - **Simvar Harness**: Core simulation testing framework (`simvar_harness`)
 - **Simvar Utils**: Simulation utilities (`simvar_utils`, with `utils` feature)
+- **Simvar Explore**: Model checking (`simvar_explore`, with `explore` feature)
 - **Switchy**: Underlying simulation and switching framework
 
 This package provides a unified interface for simulation-based testing with deterministic async execution.
@@ -78,6 +79,7 @@ By default, the `all` feature is enabled. Individual features can be selected:
 - **`all`** (default): Enable the primary simulation feature set
 - **`async`**: Async runtime support
 - **`database`**: Database simulation
+- **`explore`**: Model checking (`simvar::explore`): exhaustive and random-walk exploration of a state machine model
 - **`fs`**: Filesystem simulation
 - **`fs-simulator-real-fs`**: Enable real filesystem seeding helpers for simulator filesystem setup
 - **`http`**: HTTP client/server simulation
@@ -135,6 +137,7 @@ to and which `ReplayControl` (if any) holds it.
 
 - **simvar_harness** (workspace): Core simulation testing framework
 - **simvar_utils** (workspace, optional): Simulation utilities
+- **simvar_explore** (workspace, optional): Model checking
 
 ## Integration
 

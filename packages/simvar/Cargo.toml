@@ -17,6 +17,7 @@ examples = true
 group = "simvar"
 
 [dependencies]
+simvar_explore = { workspace = true, optional = true }
 simvar_harness = { workspace = true }
 simvar_utils   = { workspace = true, optional = true }
 
@@ -24,6 +25,7 @@ simvar_utils   = { workspace = true, optional = true }
 default = ["all"]
 
 fail-on-warnings = [
+    "simvar_explore?/fail-on-warnings",
     "simvar_harness/fail-on-warnings",
     "simvar_utils?/fail-on-warnings",
 ]
@@ -31,6 +33,7 @@ fail-on-warnings = [
 all = [
     "async",
     "database",
+    "explore",
     "fs",
     "http",
     "mdns",
@@ -59,7 +62,8 @@ time                 = ["simvar_harness/time"]
 upnp                 = ["simvar_harness/upnp"]
 web-server           = ["simvar_harness/web-server"]
 
-utils = ["dep:simvar_utils"]
+explore = ["dep:simvar_explore"]
+utils   = ["dep:simvar_utils"]
 
 pretty_env_logger = ["simvar_harness/pretty_env_logger"]
 tui               = ["simvar_harness/tui"]
