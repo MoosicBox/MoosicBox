@@ -1632,6 +1632,47 @@ pub fn configure(config: Config) {
     );
 }
 
+/// The current run's probability that spawning a thread fails (see [`set_spawn_failures`]).
+#[derive(Default)]
+struct SpawnFailures(Mutex<Option<f64>>);
+
+/// Make spawning a simulated thread fail with probability `probability` (clamped to 0..=1) in
+/// the current run, instead of `SIMULATOR_THREAD_SPAWN_FAILURES` (default 0).
+///
+/// A failing [`thread::Builder::spawn`] returns an [`std::io::ErrorKind::WouldBlock`] error
+/// ("Resource temporarily unavailable", as `EAGAIN` from a system out of threads), and
+/// [`thread::spawn`] panics, as `std`'s do. Whether each spawn fails is drawn from the run's
+/// `switchy_thread::spawn` stream, and only while the probability is above 0, so other draws
+/// are the same either way.
+pub fn set_spawn_failures(probability: f64) {
+    let failures = switchy_simulation::state::<SpawnFailures>();
+    *lock(&failures.0) = Some(probability.clamp(0.0, 1.0));
+}
+
+/// The current run's probability that spawning a thread fails: the one set with
+/// [`set_spawn_failures`], or else `SIMULATOR_THREAD_SPAWN_FAILURES` (default 0).
+///
+/// # Panics
+///
+/// * If `SIMULATOR_THREAD_SPAWN_FAILURES` is not a number
+#[must_use]
+pub fn spawn_failures() -> f64 {
+    let failures = switchy_simulation::state::<SpawnFailures>();
+    let mut probability = lock(&failures.0);
+    *probability.get_or_insert_with(|| {
+        env_number::<f64>("SIMULATOR_THREAD_SPAWN_FAILURES")
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    })
+}
+
+/// Whether this spawn fails (see [`set_spawn_failures`]).
+fn spawn_fails() -> bool {
+    let probability = spawn_failures();
+    probability > 0.0
+        && lock(&switchy_simulation::stream("switchy_thread::spawn")).chance(probability)
+}
+
 /// The attempts [`shrink`] makes at most.
 pub const SHRINK_ATTEMPTS: usize = 1000;
 

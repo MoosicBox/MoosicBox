@@ -106,6 +106,8 @@ impl Builder {
     /// # Errors
     ///
     /// * If the OS thread cannot be created
+    /// * [`io::ErrorKind::WouldBlock`] when the run's spawn failure fault strikes (see
+    ///   [`super::set_spawn_failures`])
     pub fn spawn<F, T>(self, f: F) -> io::Result<JoinHandle<T>>
     where
         F: FnOnce() -> T + Send + 'static,
@@ -122,6 +124,12 @@ impl Builder {
         // Spawning numbers the new thread, so it depends on every other spawn (and on
         // anything reading the scheduler's threads).
         scheduler.touch_any();
+        if super::spawn_fails() {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "Resource temporarily unavailable",
+            ));
+        }
         let index = scheduler.add_thread(scheduler.me(), name.clone(), group);
         let result = Arc::new(Mutex::new(None));
         let mut builder = std::thread::Builder::new().name(name);
@@ -166,7 +174,8 @@ impl Builder {
 ///
 /// # Panics
 ///
-/// * If the OS thread cannot be created
+/// * If the OS thread cannot be created, or the run's spawn failure fault strikes (see
+///   [`super::set_spawn_failures`])
 pub fn spawn<F, T>(f: F) -> JoinHandle<T>
 where
     F: FnOnce() -> T + Send + 'static,

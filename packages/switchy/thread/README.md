@@ -30,6 +30,10 @@ The simulator also provides:
   must). `SIMULATOR_SCHEDULE` (or `Strategy::Replay`) replays one without the
   scheduling generator, and `shrink` reduces a failing one by delta debugging
   until dropping any remaining choice makes the run pass.
+- **Failed spawns**: `SIMULATOR_THREAD_SPAWN_FAILURES=<probability>` (or
+  `set_spawn_failures` for the current run) makes `thread::Builder::spawn`
+  fail with `WouldBlock` ("Resource temporarily unavailable") at that seeded
+  rate, and `thread::spawn` panic, as `std`'s do. Off by default.
 - **Exhaustive exploration**: `explore` runs a short scenario under every
   schedule that differs from the default by at most a given number of
   preemptions (switching away from a thread that could go on; switches forced

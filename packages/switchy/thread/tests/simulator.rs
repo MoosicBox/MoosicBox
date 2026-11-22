@@ -796,3 +796,61 @@ fn a_killed_thread_waiting_on_another_victims_lock_finishes_unwinding() {
         assert_eq!(outcome.result.unwrap(), 1, "seed {seed}");
     }
 }
+
+/// Which of twenty spawns fail, with failure probability `probability`.
+fn failed_spawns(probability: Option<f64>) -> Vec<bool> {
+    if let Some(probability) = probability {
+        simulator::set_spawn_failures(probability);
+    }
+    (0..20)
+        .map(|_| match thread::Builder::new().spawn(|| ()) {
+            Ok(handle) => {
+                handle.join().unwrap();
+                false
+            }
+            Err(error) => {
+                assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
+                assert_eq!(error.to_string(), "Resource temporarily unavailable");
+                true
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn spawns_fail_at_the_configured_rate_deterministically() {
+    let pattern = |seed| {
+        simulator::run_with(Config::random(), seed, || failed_spawns(Some(0.5)))
+            .result
+            .unwrap()
+    };
+    let first = pattern(1);
+    assert!(first.contains(&true) && first.contains(&false), "{first:?}");
+    assert_eq!(first, pattern(1));
+    assert!((2..10).any(|seed| pattern(seed) != first));
+    let all = simulator::run_with(Config::random(), 1, || {
+        let failed = failed_spawns(Some(1.0));
+        assert!((simulator::spawn_failures() - 1.0).abs() < f64::EPSILON);
+        failed
+    });
+    assert_eq!(all.result.unwrap(), vec![true; 20]);
+}
+
+#[test]
+fn no_spawn_fails_by_default_and_a_zero_rate_draws_nothing() {
+    let unset = simulator::run_with(Config::random(), 5, || failed_spawns(None));
+    let zero = simulator::run_with(Config::random(), 5, || failed_spawns(Some(0.0)));
+    assert_eq!(unset.result.unwrap(), vec![false; 20]);
+    assert_eq!(zero.result.unwrap(), vec![false; 20]);
+    assert_eq!(unset.report.trace_hash, zero.report.trace_hash);
+    assert_eq!(unset.report.schedule, zero.report.schedule);
+}
+
+#[test]
+fn a_failed_spawn_makes_thread_spawn_panic() {
+    let outcome = simulator::run_with(Config::random(), 0, || {
+        simulator::set_spawn_failures(1.0);
+        thread::spawn(|| ())
+    });
+    assert!(outcome.result.is_err());
+}
