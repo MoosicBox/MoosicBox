@@ -604,6 +604,23 @@ impl Encoder {
             ));
         }
         let mut next = self.clone();
+        #[cfg(feature = "hybrid")]
+        // At the native CELT clock, analyse the same signed PCM grid as practical synthesis.
+        // Lower-rate inputs retain their precision through interpolation.
+        let cleaned;
+        #[cfg(feature = "hybrid")]
+        let pcm = if self.practical.is_some()
+            && self.control().mode == EncoderMode::Celt
+            && self.config.sample_rate == SampleRate::Hz48000
+        {
+            cleaned = pcm
+                .iter()
+                .map(|&v| (v * 32768.0).round().clamp(-32768.0, 32767.0) / 32768.0)
+                .collect::<Vec<_>>();
+            &cleaned[..]
+        } else {
+            pcm
+        };
         let packet = next.encode_frame(pcm)?;
         next.started = true;
         *self = next;
