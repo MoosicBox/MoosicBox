@@ -679,17 +679,22 @@ pub fn base_environment() -> Vec<(OsString, OsString)> {
     .collect()
 }
 
-/// Close the master side of every terminal at once, as the operating system does when the
-/// process holding them dies.
+/// Close the master side of the terminals named `terminals` (as [`ProcessIo::terminal`] names
+/// them) at once, as the operating system does when the process holding them dies.
 ///
 /// Each Unix terminal hangs up (its sessions get `SIGHUP`), each Windows console closes (its
 /// processes end). Master handles that still exist act as closed.
-pub fn close_all_masters() {
+pub fn close_masters(terminals: &[String]) {
     let kernel = kernel();
     kernel.switch();
     let mut state = lock(&kernel.state);
-    let terminals: Vec<u64> = state.terminals.keys().copied().collect();
-    for terminal in terminals {
+    let ids: Vec<u64> = state
+        .terminals
+        .iter()
+        .filter(|(_, t)| terminals.contains(&t.name))
+        .map(|(&id, _)| id)
+        .collect();
+    for terminal in ids {
         let Some(t) = state.terminals.get_mut(&terminal) else {
             continue;
         };

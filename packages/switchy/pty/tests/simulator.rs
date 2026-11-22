@@ -589,7 +589,7 @@ fn unix_personalities_behave_as_unix() {
 }
 
 #[test]
-fn closing_every_master_hangs_up_unix_terminals_and_closes_windows_consoles() {
+fn closing_masters_hangs_up_unix_terminals_and_closes_windows_consoles() {
     for personality in [Personality::Linux, Personality::MacOs, Personality::Windows] {
         for seed in 0..5 {
             let (exit, survivor) = run(seed, personality, || {
@@ -598,16 +598,25 @@ fn closing_every_master_hangs_up_unix_terminals_and_closes_windows_consoles() {
                 let mut stubborn = slave.spawn(&SpawnCommand::new("ignore-hup")).unwrap();
                 let mut reader = master.try_clone_reader().unwrap();
                 if personality.is_windows() {
-                    master.take_writer().unwrap().write_all(b"\x1b[1;1R").unwrap();
+                    master
+                        .take_writer()
+                        .unwrap()
+                        .write_all(b"\x1b[1;1R")
+                        .unwrap();
                 }
                 // Once it says so, it ignores hang-ups.
                 read_until(&mut reader, b"ignoring hangups");
-                simulator::close_all_masters();
+                // Another terminal, whose master stays open.
+                let other = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let mut bystander = other.slave.spawn(&SpawnCommand::new("sleep")).unwrap();
+                let terminal = simulator::process_io(child.id()).unwrap().terminal.unwrap();
+                simulator::close_masters(&[terminal]);
                 let exit = child.wait().unwrap();
                 // The master side reads to its end, whatever still holds the terminal.
                 let _ = read_all(&mut reader);
-                let survivor = stubborn.try_wait().unwrap().is_none();
-                drop((slave, master));
+                let survivor = stubborn.try_wait().unwrap().is_none()
+                    && bystander.try_wait().unwrap().is_none();
+                drop((slave, master, other));
                 (exit, survivor)
             });
             if personality.is_windows() {
@@ -615,7 +624,7 @@ fn closing_every_master_hangs_up_unix_terminals_and_closes_windows_consoles() {
             } else {
                 assert_eq!(exit.signal(), Some("Hangup"), "{personality:?}");
             }
-            // Hang-ups are ignorable; the process holding a terminal dying ends nothing else.
+            // Hang-ups are ignorable, and other terminals stay open.
             assert!(survivor, "{personality:?}");
         }
     }
