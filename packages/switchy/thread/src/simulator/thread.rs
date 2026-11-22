@@ -32,12 +32,12 @@ impl<T> JoinHandle<T> {
     /// * If the run deadlocks while waiting
     pub fn join(self) -> std::thread::Result<T> {
         loop {
-            self.scheduler.yield_point(Op::Join);
+            self.scheduler.switch_point(Op::Join);
             if self.scheduler.finished(self.index) {
                 break;
             }
             self.scheduler
-                .block(Op::Join, WaitKey::Join(self.index), None);
+                .wait(Op::Join, WaitKey::Join(self.index), None);
         }
         self.result
             .lock()
@@ -49,7 +49,7 @@ impl<T> JoinHandle<T> {
     /// Whether the thread has finished. A switch point.
     #[must_use]
     pub fn is_finished(&self) -> bool {
-        self.scheduler.yield_point(Op::Join);
+        self.scheduler.switch_point(Op::Join);
         self.scheduler.finished(self.index)
     }
 
@@ -119,6 +119,9 @@ impl Builder {
             format!("sim-thread-{count}")
         });
         let group = self.group.or_else(super::current_group);
+        // Spawning numbers the new thread, so it depends on every other spawn (and on
+        // anything reading the scheduler's threads).
+        scheduler.touch_any();
         let index = scheduler.add_thread(scheduler.me(), name.clone(), group);
         let result = Arc::new(Mutex::new(None));
         let mut builder = std::thread::Builder::new().name(name);
@@ -149,7 +152,7 @@ impl Builder {
         })?;
         let thread = handle.thread().clone();
         scheduler.attach(index, handle);
-        scheduler.yield_point(Op::Spawn);
+        scheduler.switch_point(Op::Spawn);
         Ok(JoinHandle {
             scheduler,
             index,
@@ -176,7 +179,7 @@ where
 
 /// Let other simulated threads run. A switch point.
 pub fn yield_now() {
-    scheduler().yield_point(Op::Yield);
+    scheduler().switch_point(Op::Yield);
 }
 
 /// Block the calling simulated thread for `duration` of simulated time.
@@ -188,9 +191,9 @@ pub fn sleep(duration: Duration) {
         return;
     }
     if duration.is_zero() {
-        scheduler.yield_point(Op::Sleep);
+        scheduler.switch_point(Op::Sleep);
         return;
     }
     let deadline = deadline_after(duration);
-    while !scheduler.block(Op::Sleep, WaitKey::Sleep, deadline) {}
+    while !scheduler.wait(Op::Sleep, WaitKey::Sleep, deadline) {}
 }

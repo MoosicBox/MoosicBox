@@ -19,7 +19,11 @@
 //! schedule replays with [`Strategy::Replay`] (or `SIMULATOR_SCHEDULE`), without the
 //! scheduling generator, and [`shrink`] reduces a failing one to the fewest choices that still
 //! fail.
+//!
+//! [`explore`] runs a short scenario under every schedule that differs from the default at no
+//! more than a given number of preemptions, as CHESS does, and reports the first failing one.
 
+mod explore;
 mod memory;
 pub mod sync;
 pub mod thread;
@@ -33,6 +37,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub use explore::{
+    Exploration, ExploreFailure, ExploreOptions, ExploredRun, explore, explore_runs,
+};
 pub use switchy_simulation::Context;
 
 /// Index of a simulated thread within its run. The main thread is 0.
@@ -202,6 +209,8 @@ pub struct Config {
     /// Model weak memory: atomic loads may return any store the memory model allows (see
     /// `SIMULATOR_WEAK_MEMORY`). Slower; finds bugs in `Relaxed` and `Acquire`/`Release` use.
     pub weak_memory: bool,
+    /// Record the run's [`Trace`] (in [`ShutdownReport::trace`]), as [`explore`] needs.
+    pub record_trace: bool,
 }
 
 impl Config {
@@ -212,6 +221,7 @@ impl Config {
             strategy: Strategy::Random,
             recent_decisions: 256,
             weak_memory: false,
+            record_trace: false,
         }
     }
 
@@ -222,6 +232,7 @@ impl Config {
             strategy: Strategy::Pct { depth, steps },
             recent_decisions: 256,
             weak_memory: false,
+            record_trace: false,
         }
     }
 
@@ -232,6 +243,16 @@ impl Config {
             strategy: Strategy::Replay(Arc::new(schedule)),
             recent_decisions: 256,
             weak_memory: false,
+            record_trace: false,
+        }
+    }
+
+    /// Replay `schedule` and record the run's [`Trace`]: one run of an [`explore`]ation.
+    #[must_use]
+    pub fn explore(schedule: Schedule) -> Self {
+        Self {
+            record_trace: true,
+            ..Self::replay(schedule)
         }
     }
 
@@ -296,6 +317,7 @@ impl Config {
                 Ok("swarm") => draw(seed, 4, 4) == 0,
                 _ => false,
             },
+            record_trace: false,
         }
     }
 
@@ -381,6 +403,114 @@ pub struct Decision {
     pub step: u64,
 }
 
+/// A shared object an operation of a simulated thread touches, recorded in a [`Trace`] so
+/// [`explore`] can tell operations that commute from operations that do not.
+///
+/// Ids come from [`new_key`] (an atomic's on its first access in the run), so they are stable
+/// within a run but not across runs: an exploration only compares footprints of one run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Object {
+    /// A mutex or read-write lock: its owner, readers and waiters (and so the data it guards).
+    Lock(u64),
+    /// A condition variable's waiters.
+    Condvar(u64),
+    /// A channel: its queue, senders, receiver and waiters.
+    Channel(u64),
+    /// An atomic's value.
+    Atomic(u64),
+    /// Whether a thread has finished (and its result).
+    Thread(ThreadIndex),
+    /// The order of `wake_one`'s seeded picks, which every `notify_one` draws from.
+    WakeOrder,
+}
+
+/// What a thread's run between two switch points (a *transition*) touched.
+///
+/// `any` means it touched something outside what the scheduler tracks, or something every
+/// operation depends on (spawning, sleeping, reading the scheduler's state): such a transition
+/// is dependent on every other.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Footprint {
+    pub(crate) any: bool,
+    /// The objects touched, each with whether the transition wrote it.
+    pub(crate) accesses: Vec<(Object, bool)>,
+}
+
+impl Footprint {
+    fn add(&mut self, object: Object, write: bool) {
+        if self.any {
+            return;
+        }
+        if let Some(access) = self.accesses.iter_mut().find(|(o, _)| *o == object) {
+            access.1 |= write;
+        } else {
+            self.accesses.push((object, write));
+        }
+    }
+
+    fn set_any(&mut self) {
+        self.any = true;
+        self.accesses.clear();
+    }
+
+    /// Whether the two transitions may not commute: either touched something untracked, or
+    /// both touched an object and at least one wrote it.
+    pub(crate) fn conflicts(&self, other: &Self) -> bool {
+        self.any
+            || other.any
+            || self.accesses.iter().any(|&(object, write)| {
+                other
+                    .accesses
+                    .iter()
+                    .any(|&(o, w)| o == object && (write || w))
+            })
+    }
+}
+
+/// One decision of a traced run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Step {
+    /// The thread that reached the switch point.
+    pub(crate) from: ThreadIndex,
+    /// The threads that could run (in index order).
+    pub(crate) runnable: Vec<ThreadIndex>,
+    /// The thread picked.
+    pub(crate) to: ThreadIndex,
+    /// What `from` touched since it last reached a switch point.
+    pub(crate) footprint: Footprint,
+}
+
+/// Every decision of a run, with the threads that could run at each and what each transition
+/// touched; recorded when [`Config::record_trace`] is set, for [`explore`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Trace {
+    pub(crate) steps: Vec<Step>,
+    /// The run used something whose effects the scheduler does not track (switch points or
+    /// wakeups from outside this crate, killing, weak memory): no transition of it commutes.
+    pub(crate) untracked: bool,
+}
+
+impl Trace {
+    /// The number of decisions recorded.
+    #[must_use]
+    pub const fn decisions(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// The number of choice points (decisions with more than one runnable thread).
+    #[must_use]
+    pub fn choice_points(&self) -> usize {
+        self.steps.iter().filter(|s| s.runnable.len() > 1).count()
+    }
+
+    /// Whether the run used something the scheduler does not track, so that exploring it
+    /// cannot prune any schedule.
+    #[must_use]
+    pub const fn untracked(&self) -> bool {
+        self.untracked
+    }
+}
+
 /// A read-only view of a run's scheduler.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SchedulerSnapshot {
@@ -408,6 +538,8 @@ struct ThreadRecord {
     group: u64,
     /// Whether it was killed; see [`Scheduler::kill_group`].
     fate: Fate,
+    /// What it touched since its last switch point, when tracing.
+    footprint: Footprint,
 }
 
 /// Whether a thread was killed.
@@ -438,6 +570,8 @@ struct Inner {
     memory: memory::Memory,
     /// The thread waiting in [`Scheduler::kill_group`] for a killed thread to unwind.
     killer: Option<ThreadIndex>,
+    /// The run's trace, when [`Config::record_trace`] is set.
+    trace: Option<Trace>,
 }
 
 /// Called at every scheduling decision, before the chosen thread runs.
@@ -459,6 +593,8 @@ pub struct Scheduler {
     memory_rng: Arc<Mutex<switchy_simulation::Rng>>,
     inner: Mutex<Inner>,
     hook: Mutex<Option<DecisionHook>>,
+    /// Whether the run records a [`Trace`] (fixed for the run).
+    tracing: bool,
 }
 
 impl std::fmt::Debug for Scheduler {
@@ -561,6 +697,8 @@ impl Scheduler {
             lowest_priority = u64::from(depth) + 1;
             main_priority = lowest_priority + rng.below(u64::MAX / 2);
         }
+        let tracing = config.record_trace;
+        let weak_memory = config.weak_memory;
         Self {
             context_id: context.id(),
             rng,
@@ -578,6 +716,7 @@ impl Scheduler {
                     panicked: false,
                     group: 0,
                     fate: Fate::Alive,
+                    footprint: Footprint::default(),
                 }],
                 running: 0,
                 decisions: 0,
@@ -593,7 +732,12 @@ impl Scheduler {
                 os_handles: Vec::new(),
                 memory: memory::Memory::default(),
                 killer: None,
+                trace: tracing.then(|| Trace {
+                    steps: Vec::new(),
+                    untracked: weak_memory,
+                }),
             }),
+            tracing,
         }
     }
 
@@ -605,6 +749,7 @@ impl Scheduler {
     #[must_use]
     pub fn others_alive(&self) -> bool {
         let me = self.me();
+        self.touch_any();
         lock(&self.inner)
             .threads
             .iter()
@@ -628,7 +773,65 @@ impl Scheduler {
     /// A read-only view of the scheduler. Taking it never changes the run.
     #[must_use]
     pub fn snapshot(&self) -> SchedulerSnapshot {
+        self.touch_any();
         Self::snapshot_of(&lock(&self.inner))
+    }
+
+    /// The calling thread's index, if it is a simulated thread of this run.
+    fn caller(&self) -> Option<ThreadIndex> {
+        match IDENTITY.get() {
+            Some((context, index)) if context == self.context_id => Some(index),
+            _ => None,
+        }
+    }
+
+    /// Record, when tracing, that the calling thread's current transition touched `object`.
+    pub(crate) fn touch(&self, object: Object, write: bool) {
+        if !self.tracing {
+            return;
+        }
+        if let Some(me) = self.caller() {
+            lock(&self.inner).threads[me].footprint.add(object, write);
+        }
+    }
+
+    /// Record, when tracing, that the calling thread's current transition depends on every
+    /// other one.
+    pub(crate) fn touch_any(&self) {
+        if !self.tracing {
+            return;
+        }
+        if let Some(me) = self.caller() {
+            lock(&self.inner).threads[me].footprint.set_any();
+        }
+    }
+
+    /// Record, when tracing, that the run used something the scheduler does not track.
+    fn untracked(&self) {
+        if !self.tracing {
+            return;
+        }
+        if let Some(trace) = &mut lock(&self.inner).trace {
+            trace.untracked = true;
+        }
+    }
+
+    /// What waiting for, or waking, `key` touches; `None` for what is not tracked.
+    const fn wait_object(key: WaitKey) -> Option<(Object, bool)> {
+        match key {
+            WaitKey::Lock(key) => Some((Object::Lock(key), true)),
+            WaitKey::Condvar(key) => Some((Object::Condvar(key), true)),
+            WaitKey::Recv(key) | WaitKey::Send(key) => Some((Object::Channel(key), true)),
+            WaitKey::Join(thread) => Some((Object::Thread(thread), false)),
+            WaitKey::Sleep | WaitKey::Io(_) | WaitKey::Executor(_) => None,
+        }
+    }
+
+    fn touch_wait(&self, key: WaitKey) {
+        match Self::wait_object(key) {
+            Some((object, write)) => self.touch(object, write),
+            None => self.touch_any(),
+        }
     }
 
     /// Observe every decision of this run with `hook` (or stop, with `None`).
@@ -666,12 +869,14 @@ impl Scheduler {
     /// The running hash of every scheduling decision so far.
     #[must_use]
     pub fn trace_hash(&self) -> u64 {
+        self.touch_any();
         lock(&self.inner).trace_hash
     }
 
     /// The number of scheduling decisions so far.
     #[must_use]
     pub fn decisions(&self) -> u64 {
+        self.touch_any();
         lock(&self.inner).decisions
     }
 
@@ -705,6 +910,7 @@ impl Scheduler {
             panicked: false,
             group,
             fate: Fate::Alive,
+            footprint: Footprint::default(),
         });
         let child = inner.threads.len() - 1;
         if inner.config.weak_memory {
@@ -721,7 +927,17 @@ impl Scheduler {
     }
 
     /// A switch point: the calling thread stays runnable, but another may run first.
+    ///
+    /// For code outside this crate (another simulator's objects): the scheduler cannot tell
+    /// what the calling thread touches around it, so a traced run that uses it is untracked
+    /// (see [`Trace::untracked`]).
     pub fn yield_point(&self, op: Op) {
+        self.untracked();
+        self.switch_point(op);
+    }
+
+    /// A switch point of this crate's own primitives.
+    pub(crate) fn switch_point(&self, op: Op) {
         if std::thread::panicking() && self.is_shutting_down() {
             return;
         }
@@ -730,7 +946,16 @@ impl Scheduler {
 
     /// Block the calling thread on `key` until another thread wakes it, or until `deadline`.
     /// Returns whether the wait timed out.
+    ///
+    /// Like [`Self::yield_point`], it makes a traced run untracked.
     pub fn block(&self, op: Op, key: WaitKey, deadline: Option<Instant>) -> bool {
+        self.untracked();
+        self.wait(op, key, deadline)
+    }
+
+    /// A wait of this crate's own primitives; it touches what `key` names.
+    pub(crate) fn wait(&self, op: Op, key: WaitKey, deadline: Option<Instant>) -> bool {
+        self.touch_wait(key);
         self.switch(op, Some((key, deadline)))
     }
 
@@ -798,7 +1023,16 @@ impl Scheduler {
     }
 
     /// Make every thread blocked on `key` runnable. They run when picked.
+    ///
+    /// Like [`Self::yield_point`], it makes a traced run untracked.
     pub fn wake_all(&self, key: WaitKey) {
+        self.untracked();
+        self.wake_all_on(key);
+    }
+
+    /// [`Self::wake_all`] for this crate's own primitives; it touches what `key` names.
+    pub(crate) fn wake_all_on(&self, key: WaitKey) {
+        self.touch_wait(key);
         let mut inner = lock(&self.inner);
         for thread in &mut inner.threads {
             if matches!(thread.state, ThreadState::Blocked { key: k, .. } if k == key) {
@@ -809,7 +1043,18 @@ impl Scheduler {
 
     /// Make one thread blocked on `key` runnable, picked with the run's seed. Returns whether
     /// there was one.
+    ///
+    /// Like [`Self::yield_point`], it makes a traced run untracked.
     pub fn wake_one(&self, key: WaitKey) -> bool {
+        self.untracked();
+        self.wake_one_on(key)
+    }
+
+    /// [`Self::wake_one`] for this crate's own primitives; it touches what `key` names, and
+    /// the order of the seeded picks.
+    pub(crate) fn wake_one_on(&self, key: WaitKey) -> bool {
+        self.touch_wait(key);
+        self.touch(Object::WakeOrder, true);
         let mut inner = lock(&self.inner);
         let waiting: Vec<ThreadIndex> = inner
             .threads
@@ -899,6 +1144,7 @@ impl Scheduler {
         if group == 0 {
             return;
         }
+        self.untracked();
         let me = self.me();
         let victims: Vec<ThreadIndex> = {
             let inner = lock(&self.inner);
@@ -1002,7 +1248,7 @@ impl Scheduler {
     /// Pick the next thread after `from` reached a switch point at `op`, and hand it the
     /// baton.
     fn schedule(&self, inner: &mut Inner, from: ThreadIndex, op: Op) {
-        let next = loop {
+        let (next, runnable) = loop {
             Self::expire_timers(inner);
             let runnable: Vec<ThreadIndex> = inner
                 .threads
@@ -1012,7 +1258,7 @@ impl Scheduler {
                 .map(|(i, _)| i)
                 .collect();
             if !runnable.is_empty() {
-                break self.pick(inner, from, &runnable);
+                break (self.pick(inner, from, &runnable), runnable);
             }
             if let Some(idle) = inner
                 .threads
@@ -1020,7 +1266,7 @@ impl Scheduler {
                 .position(|t| t.state == ThreadState::Idle)
             {
                 inner.threads[idle].state = ThreadState::Runnable;
-                break idle;
+                break (idle, vec![idle]);
             }
             let earliest = inner
                 .threads
@@ -1035,8 +1281,16 @@ impl Scheduler {
                 continue;
             }
             inner.failure = Some(Self::deadlock_report(inner));
-            break 0;
+            break (0, Vec::new());
         };
+        if let Some(trace) = &mut inner.trace {
+            trace.steps.push(Step {
+                from,
+                runnable,
+                to: next,
+                footprint: std::mem::take(&mut inner.threads[from].footprint),
+            });
+        }
         let step = switchy_time::simulator::current_step();
         let number = inner.decisions;
         inner.decisions += 1;
@@ -1186,6 +1440,9 @@ impl Scheduler {
         inner.threads[me].state = ThreadState::Finished;
         inner.threads[me].panicked = panicked;
         inner.threads[me].op = Op::Exit;
+        if self.tracing {
+            inner.threads[me].footprint.add(Object::Thread(me), true);
+        }
         for thread in &mut inner.threads {
             if matches!(thread.state, ThreadState::Blocked { key: WaitKey::Join(j), .. } if j == me)
             {
@@ -1200,8 +1457,9 @@ impl Scheduler {
         drop(inner);
     }
 
-    /// Whether the thread finished, and whether it panicked.
+    /// Whether the thread finished.
     fn finished(&self, index: ThreadIndex) -> bool {
+        self.touch(Object::Thread(index), false);
         lock(&self.inner).threads[index].state == ThreadState::Finished
     }
 
@@ -1253,6 +1511,7 @@ impl Scheduler {
                 decisions: inner.decisions,
                 trace_hash: inner.trace_hash,
                 schedule: inner.schedule.clone(),
+                trace: inner.trace.take(),
             };
             let finished: Vec<std::thread::Thread> = inner
                 .threads
@@ -1300,6 +1559,8 @@ pub struct ShutdownReport {
     pub trace_hash: u64,
     /// The run's choices, to replay it with [`Strategy::Replay`].
     pub schedule: Schedule,
+    /// The run's trace, if [`Config::record_trace`] was set.
+    pub trace: Option<Trace>,
 }
 
 /// The current run's scheduler; see [`Scheduler::current`].
@@ -1468,6 +1729,13 @@ fn run_in<R>(context: Arc<Context>, f: impl FnOnce() -> R) -> Outcome<R> {
         let report = scheduler.shutdown();
         Outcome { result, report }
     })
+}
+
+/// Record, when the current run is traced, that the calling thread touched `object`.
+pub(crate) fn touch(object: Object, write: bool) {
+    if let Some(scheduler) = try_scheduler() {
+        scheduler.touch(object, write);
+    }
 }
 
 /// A unique key for a synchronization object's waits, such as [`WaitKey::Io`].

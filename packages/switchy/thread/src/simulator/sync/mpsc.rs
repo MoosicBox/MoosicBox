@@ -12,7 +12,7 @@ use std::{
 
 pub use std::sync::mpsc::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
-use super::super::{Op, WaitKey, deadline_after, new_key, scheduler};
+use super::super::{Object, Op, WaitKey, deadline_after, new_key, scheduler, touch};
 
 struct Channel<T> {
     queue: VecDeque<T>,
@@ -28,6 +28,7 @@ struct Shared<T> {
 
 impl<T> Shared<T> {
     fn channel(&self) -> std::sync::MutexGuard<'_, Channel<T>> {
+        touch(Object::Channel(self.key), true);
         self.channel.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
@@ -113,7 +114,7 @@ fn drop_sender<T>(shared: &Shared<T>) {
         channel.senders == 0
     };
     if last {
-        scheduler().wake_all(WaitKey::Recv(shared.key));
+        scheduler().wake_all_on(WaitKey::Recv(shared.key));
     }
 }
 
@@ -131,7 +132,7 @@ fn try_push<T>(shared: &Shared<T>, value: T) -> Result<(), (T, bool)> {
     }
     channel.queue.push_back(value);
     drop(channel);
-    scheduler().wake_all(WaitKey::Recv(shared.key));
+    scheduler().wake_all_on(WaitKey::Recv(shared.key));
     Ok(())
 }
 
@@ -156,7 +157,7 @@ impl<T> Sender<T> {
     ///
     /// * [`SendError`] with the value if the receiver is gone
     pub fn send(&self, value: T) -> Result<(), SendError<T>> {
-        scheduler().yield_point(Op::Send);
+        scheduler().switch_point(Op::Send);
         try_push(&self.shared, value).map_err(|(value, _)| SendError(value))
     }
 }
@@ -184,13 +185,13 @@ impl<T> SyncSender<T> {
     pub fn send(&self, mut value: T) -> Result<(), SendError<T>> {
         let scheduler = scheduler();
         loop {
-            scheduler.yield_point(Op::Send);
+            scheduler.switch_point(Op::Send);
             match try_push(&self.shared, value) {
                 Ok(()) => return Ok(()),
                 Err((returned, true)) => return Err(SendError(returned)),
                 Err((returned, false)) => value = returned,
             }
-            scheduler.block(Op::Send, WaitKey::Send(self.shared.key), None);
+            scheduler.wait(Op::Send, WaitKey::Send(self.shared.key), None);
         }
     }
 
@@ -201,7 +202,7 @@ impl<T> SyncSender<T> {
     /// * [`TrySendError::Full`] if the channel is full
     /// * [`TrySendError::Disconnected`] if the receiver is gone
     pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
-        scheduler().yield_point(Op::Send);
+        scheduler().switch_point(Op::Send);
         try_push(&self.shared, value).map_err(|(value, disconnected)| {
             if disconnected {
                 TrySendError::Disconnected(value)
@@ -221,7 +222,7 @@ impl<T> Drop for Receiver<T> {
         };
         // Dropped outside the channel's lock: a message may itself hold a sender.
         drop(queued);
-        scheduler().wake_all(WaitKey::Send(self.shared.key));
+        scheduler().wake_all_on(WaitKey::Send(self.shared.key));
     }
 }
 
@@ -238,7 +239,7 @@ impl<T> Receiver<T> {
             let bounded = channel.capacity.is_some();
             drop(channel);
             if bounded {
-                scheduler().wake_all(WaitKey::Send(self.shared.key));
+                scheduler().wake_all_on(WaitKey::Send(self.shared.key));
             }
             return Pop::Value(value);
         }
@@ -257,13 +258,13 @@ impl<T> Receiver<T> {
     pub fn recv(&self) -> Result<T, RecvError> {
         let scheduler = scheduler();
         loop {
-            scheduler.yield_point(Op::Recv);
+            scheduler.switch_point(Op::Recv);
             match self.pop() {
                 Pop::Value(value) => return Ok(value),
                 Pop::Disconnected => return Err(RecvError),
                 Pop::Empty => {}
             }
-            scheduler.block(Op::Recv, WaitKey::Recv(self.shared.key), None);
+            scheduler.wait(Op::Recv, WaitKey::Recv(self.shared.key), None);
         }
     }
 
@@ -274,7 +275,7 @@ impl<T> Receiver<T> {
     /// * [`TryRecvError::Empty`] if none is ready
     /// * [`TryRecvError::Disconnected`] once the channel is empty and every sender is gone
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
-        scheduler().yield_point(Op::Recv);
+        scheduler().switch_point(Op::Recv);
         match self.pop() {
             Pop::Value(value) => Ok(value),
             Pop::Empty => Err(TryRecvError::Empty),
@@ -295,13 +296,13 @@ impl<T> Receiver<T> {
     fn recv_deadline(&self, deadline: Option<Instant>) -> Result<T, RecvTimeoutError> {
         let scheduler = scheduler();
         loop {
-            scheduler.yield_point(Op::Recv);
+            scheduler.switch_point(Op::Recv);
             match self.pop() {
                 Pop::Value(value) => return Ok(value),
                 Pop::Disconnected => return Err(RecvTimeoutError::Disconnected),
                 Pop::Empty => {}
             }
-            if scheduler.block(Op::Recv, WaitKey::Recv(self.shared.key), deadline) {
+            if scheduler.wait(Op::Recv, WaitKey::Recv(self.shared.key), deadline) {
                 return match self.pop() {
                     Pop::Value(value) => Ok(value),
                     Pop::Disconnected => Err(RecvTimeoutError::Disconnected),

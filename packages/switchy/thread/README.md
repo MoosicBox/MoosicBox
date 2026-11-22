@@ -30,6 +30,14 @@ The simulator also provides:
   must). `SIMULATOR_SCHEDULE` (or `Strategy::Replay`) replays one without the
   scheduling generator, and `shrink` reduces a failing one by delta debugging
   until dropping any remaining choice makes the run pass.
+- **Exhaustive exploration**: `explore` runs a short scenario under every
+  schedule that differs from the default by at most a given number of
+  preemptions (switching away from a thread that could go on; switches forced
+  by blocking or finishing are free), depth first as CHESS does, and reports
+  the first failing schedule, which replays like any other. Sleep sets skip
+  schedules that only reorder independent operations (on different locks,
+  channels, atomics or threads). `explore_runs` does the same for harnesses
+  that create their runs themselves.
 
 It depends only on `switchy_simulation` and `switchy_time`, neither of which has
 external dependencies in simulator builds.

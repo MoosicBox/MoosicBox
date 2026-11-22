@@ -9,7 +9,7 @@ use std::fmt;
 
 pub use std::sync::atomic::{Ordering, compiler_fence};
 
-use super::super::{Op, Scheduler, new_key, scheduler};
+use super::super::{Object, Op, Scheduler, new_key, scheduler, touch};
 
 /// A location id for the weak memory model, assigned on first weak access so that moving an
 /// atomic keeps its history and a freed atomic's memory never aliases a new one.
@@ -37,7 +37,15 @@ fn switch(op: Op) {
     if std::thread::panicking() {
         return;
     }
-    scheduler().yield_point(op);
+    scheduler().switch_point(op);
+}
+
+/// Record, when tracing, that the calling thread read (or wrote) the atomic with `id`.
+fn touch_atomic(id: &std::sync::atomic::AtomicU64, write: bool) {
+    if std::thread::panicking() {
+        return;
+    }
+    touch(Object::Atomic(location(id)), write);
 }
 
 /// A memory fence; a switch point. With weak memory, a full fence whatever `order` says
@@ -98,6 +106,7 @@ macro_rules! atomic_common {
                 update: impl FnOnce($value) -> Option<$value>,
             ) -> Result<$value, $value> {
                 switch(Op::AtomicUpdate);
+                touch_atomic(&self.id, true);
                 if let Some(scheduler) = weak() {
                     let current = Self::bits(self.inner.load(Ordering::SeqCst));
                     let mut stored = None;
@@ -123,6 +132,7 @@ macro_rules! atomic_common {
             /// Load the value; a switch point.
             pub fn load(&self, order: Ordering) -> $value {
                 switch(Op::AtomicLoad);
+                touch_atomic(&self.id, false);
                 if let Some(scheduler) = weak() {
                     let current = Self::bits(self.inner.load(Ordering::SeqCst));
                     return Self::value(scheduler.atomic_load(location(&self.id), current, order));
@@ -133,6 +143,7 @@ macro_rules! atomic_common {
             /// Store `value`; a switch point.
             pub fn store(&self, value: $value, order: Ordering) {
                 switch(Op::AtomicStore);
+                touch_atomic(&self.id, true);
                 if let Some(scheduler) = weak() {
                     let current = Self::bits(self.inner.load(Ordering::SeqCst));
                     scheduler.atomic_store(location(&self.id), current, Self::bits(value), order);

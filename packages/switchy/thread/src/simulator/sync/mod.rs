@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use super::{Op, ThreadIndex, WaitKey, deadline_after, new_key, scheduler};
+use super::{Object, Op, ThreadIndex, WaitKey, deadline_after, new_key, scheduler, touch};
 
 fn std_lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -74,11 +74,11 @@ impl<T: ?Sized> Mutex<T> {
         let scheduler = scheduler();
         let me = scheduler.me();
         loop {
-            scheduler.yield_point(Op::Lock);
+            scheduler.switch_point(Op::Lock);
             if self.try_acquire(me) {
                 return self.guard();
             }
-            scheduler.block(Op::Lock, WaitKey::Lock(self.key), None);
+            scheduler.wait(Op::Lock, WaitKey::Lock(self.key), None);
         }
     }
 
@@ -90,7 +90,7 @@ impl<T: ?Sized> Mutex<T> {
     /// * [`TryLockError::Poisoned`] if a thread panicked while holding it
     pub fn try_lock(&self) -> TryLockResult<MutexGuard<'_, T>> {
         let scheduler = scheduler();
-        scheduler.yield_point(Op::Lock);
+        scheduler.switch_point(Op::Lock);
         if self.try_acquire(scheduler.me()) {
             self.guard().map_err(TryLockError::Poisoned)
         } else {
@@ -113,6 +113,7 @@ impl<T: ?Sized> Mutex<T> {
     }
 
     fn try_acquire(&self, me: ThreadIndex) -> bool {
+        touch(Object::Lock(self.key), true);
         let mut owner = std_lock(&self.owner);
         if owner.is_some() {
             return false;
@@ -138,7 +139,7 @@ impl<T: ?Sized> Mutex<T> {
     /// waiting before any other thread runs).
     fn release(&self) {
         *std_lock(&self.owner) = None;
-        scheduler().wake_all(WaitKey::Lock(self.key));
+        scheduler().wake_all_on(WaitKey::Lock(self.key));
     }
 }
 
@@ -173,7 +174,7 @@ impl<T: ?Sized> Drop for MutexGuard<'_, T> {
         drop(self.guard.take());
         self.mutex.release();
         if !std::thread::panicking() {
-            scheduler().yield_point(Op::Unlock);
+            scheduler().switch_point(Op::Unlock);
         }
     }
 }
@@ -312,22 +313,22 @@ impl Condvar {
     ) -> (LockResult<MutexGuard<'a, T>>, bool) {
         let scheduler = scheduler();
         let mutex = guard.unlock_quietly();
-        let timed_out = scheduler.block(Op::CondvarWait, WaitKey::Condvar(self.key), deadline);
+        let timed_out = scheduler.wait(Op::CondvarWait, WaitKey::Condvar(self.key), deadline);
         (mutex.lock(), timed_out)
     }
 
     /// Wake one waiting thread, chosen with the run's seed.
     pub fn notify_one(&self) {
         let scheduler = scheduler();
-        scheduler.wake_one(WaitKey::Condvar(self.key));
-        scheduler.yield_point(Op::CondvarNotify);
+        scheduler.wake_one_on(WaitKey::Condvar(self.key));
+        scheduler.switch_point(Op::CondvarNotify);
     }
 
     /// Wake every waiting thread.
     pub fn notify_all(&self) {
         let scheduler = scheduler();
-        scheduler.wake_all(WaitKey::Condvar(self.key));
-        scheduler.yield_point(Op::CondvarNotify);
+        scheduler.wake_all_on(WaitKey::Condvar(self.key));
+        scheduler.switch_point(Op::CondvarNotify);
     }
 }
 
@@ -383,7 +384,8 @@ impl<T: ?Sized> RwLock<T> {
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, T>> {
         let scheduler = scheduler();
         loop {
-            scheduler.yield_point(Op::Lock);
+            scheduler.switch_point(Op::Lock);
+            scheduler.touch(Object::Lock(self.key), true);
             {
                 let mut state = std_lock(&self.state);
                 if let Some(readers) = state.as_mut() {
@@ -391,7 +393,7 @@ impl<T: ?Sized> RwLock<T> {
                     break;
                 }
             }
-            scheduler.block(Op::Lock, WaitKey::Lock(self.key), None);
+            scheduler.wait(Op::Lock, WaitKey::Lock(self.key), None);
         }
         match self.data.read() {
             Ok(guard) => Ok(RwLockReadGuard {
@@ -413,7 +415,8 @@ impl<T: ?Sized> RwLock<T> {
     pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, T>> {
         let scheduler = scheduler();
         loop {
-            scheduler.yield_point(Op::Lock);
+            scheduler.switch_point(Op::Lock);
+            scheduler.touch(Object::Lock(self.key), true);
             {
                 let mut state = std_lock(&self.state);
                 if *state == Some(0) {
@@ -421,7 +424,7 @@ impl<T: ?Sized> RwLock<T> {
                     break;
                 }
             }
-            scheduler.block(Op::Lock, WaitKey::Lock(self.key), None);
+            scheduler.wait(Op::Lock, WaitKey::Lock(self.key), None);
         }
         match self.data.write() {
             Ok(guard) => Ok(RwLockWriteGuard {
@@ -465,9 +468,9 @@ impl<T: ?Sized> Drop for RwLockReadGuard<'_, T> {
             }
         }
         let scheduler = scheduler();
-        scheduler.wake_all(WaitKey::Lock(self.lock.key));
+        scheduler.wake_all_on(WaitKey::Lock(self.lock.key));
         if !std::thread::panicking() {
-            scheduler.yield_point(Op::Unlock);
+            scheduler.switch_point(Op::Unlock);
         }
     }
 }
@@ -497,9 +500,9 @@ impl<T: ?Sized> Drop for RwLockWriteGuard<'_, T> {
         drop(self.guard.take());
         *std_lock(&self.lock.state) = Some(0);
         let scheduler = scheduler();
-        scheduler.wake_all(WaitKey::Lock(self.lock.key));
+        scheduler.wake_all_on(WaitKey::Lock(self.lock.key));
         if !std::thread::panicking() {
-            scheduler.yield_point(Op::Unlock);
+            scheduler.switch_point(Op::Unlock);
         }
     }
 }
