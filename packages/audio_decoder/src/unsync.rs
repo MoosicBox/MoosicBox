@@ -105,7 +105,7 @@ fn decode_with_options_impl<T: Send + 'static>(
         .and_then(|t| reader.tracks().get(t))
         .or_else(|| first_supported_track(reader.tracks()));
 
-    let mut track_id = match track {
+    let track_id = match track {
         Some(track) => track.id,
         _ => return Err(DecodeError::AudioDecode(AudioDecodeError::OpenStream)),
     };
@@ -120,20 +120,9 @@ fn decode_with_options_impl<T: Send + 'static>(
             track_id: Some(track_id),
         };
 
-        // Attempt the seek. If the seek fails, ignore the error and return no seek target so
-        // that no samples are trimmed.
-        match reader.seek(SeekMode::Accurate, seek_to) {
-            Ok(seeked_to) => Some(seeked_to.required_ts),
-            Err(Error::ResetRequired) => {
-                track_id = first_supported_track(reader.tracks()).unwrap().id;
-                None
-            }
-            Err(err) => {
-                // Don't give-up on a seek error.
-                log::warn!("seek error: {err}");
-                None
-            }
-        }
+        // No successful target exists on failure, including ResetRequired.
+        // Propagate it rather than silently decoding from the old position.
+        Some(reader.seek(SeekMode::Accurate, seek_to)?.required_ts)
     } else {
         None
     };
@@ -164,7 +153,7 @@ fn decode_track<T: Send + 'static>(
     let (sender, receiver) = flume::unbounded::<T>();
 
     // Get the selected track using the track ID.
-    let track = reader
+    let mut track = reader
         .tracks()
         .iter()
         .find(|track| track.id == play_opts.track_id)
@@ -182,11 +171,25 @@ fn decode_track<T: Send + 'static>(
             let packet = match reader.next_packet() {
                 Ok(None) => break Ok(()),
                 Ok(Some(packet)) => packet,
+                Err(Error::ResetRequired) => {
+                    // Logical section boundaries replace predictive state even
+                    // when channel count and codec headers happen to match.
+                    let Some(next_track) = first_supported_track(reader.tracks()).cloned() else {
+                        break Err(DecodeError::AudioDecode(AudioDecodeError::OpenStream));
+                    };
+                    let next_decoder = match crate::options::make_decoder(&next_track, options) {
+                        Ok(decoder) => decoder,
+                        Err(error) => break Err(error),
+                    };
+                    track = next_track;
+                    decoder = next_decoder;
+                    continue;
+                }
                 Err(err) => break Err(DecodeError::Symphonia(err)),
             };
 
             // If the packet does not belong to the selected track, skip it.
-            if packet.track_id != play_opts.track_id {
+            if packet.track_id != track.id {
                 continue;
             }
 

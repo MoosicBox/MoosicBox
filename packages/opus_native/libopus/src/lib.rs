@@ -433,6 +433,19 @@ pub mod safe {
             })
         }
 
+        /// Set public decoder gain in signed Q8 dB.
+        ///
+        /// # Errors
+        /// * Returns `ControlFailed` if libopus rejects the request.
+        pub fn set_gain(&mut self, gain_q8: i16) -> Result<(), OpusError> {
+            // SAFETY: owned live decoder and the public integer-valued gain CTL.
+            let result = unsafe { super::opus_decoder_ctl(self.ptr, 4034, i32::from(gain_q8)) };
+            if result != OPUS_OK {
+                return Err(OpusError::ControlFailed(4034, result));
+            }
+            Ok(())
+        }
+
         /// Resets decoder state using the public reference API.
         ///
         /// # Errors

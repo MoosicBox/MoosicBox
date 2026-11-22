@@ -241,6 +241,7 @@ pub struct SilkDecoder {
     voiced_history: [super::voiced::VoicedHistory; 2],
     mono_history: i16,
     packet_frames: [usize; 2],
+    fec_previous: Option<[bool; 2]>,
     prev_gain_q16: [i32; 2], // Per-channel previous gain
     comfort_noise: [super::cng::ComfortNoise; 2],
     recovery: [super::recovery::Recovery; 2],
@@ -302,6 +303,7 @@ impl SilkDecoder {
             voiced_history: std::array::from_fn(|_| super::voiced::VoicedHistory::default()),
             mono_history: 0,
             packet_frames: [0; 2],
+            fec_previous: None,
             prev_gain_q16: [65536, 65536],
             comfort_noise: std::array::from_fn(|_| super::cng::ComfortNoise::default()),
             recovery: std::array::from_fn(|_| super::recovery::Recovery::default()),
@@ -330,6 +332,10 @@ impl SilkDecoder {
             self.comfort_noise[1] = super::cng::ComfortNoise::default();
             self.recovery[1] = super::recovery::Recovery::default();
             self.concealment[1] = super::plc::Concealment::default();
+            // silk_init_decoder clears exc_Q14 along with the entire new side
+            // decoder. Missing side LBRR can invoke PLC before any primary side
+            // frame, so stale excitation would seed inaudible-but-live history.
+            self.saved_excitation[1].fill(0);
             self.ltp_state[1].reset();
             self.voiced_history[1] = super::voiced::VoicedHistory::default();
             self.prev_decode_only_middle = false;
@@ -367,6 +373,7 @@ impl SilkDecoder {
             self.decoder_reset = true;
             self.side_decoder_reset = true;
             self.previous_pitch_lag = [Some(100); 2];
+            self.previous_frame_voiced = [false; 2];
             self.previous_gain_indices = [Some(10); 2];
             for state in &mut self.ltp_state {
                 state.reset();
@@ -402,6 +409,12 @@ impl SilkDecoder {
     }
 
     fn conceal_channel(&mut self, channel: usize, duration_ms: u8) -> Result<Vec<i16>> {
+        if self.concealment[channel].rate != self.sample_rate as usize {
+            self.concealment[channel].initialize(
+                self.sample_rate as usize,
+                self.sample_rate as usize * usize::from(duration_ms) / 1000,
+            );
+        }
         let subframe = self.sample_rate as usize / 200;
         let count = usize::from(duration_ms) / 5;
         self.ltp_state[channel].lpc_history_q14.resize(16, 0);
@@ -424,7 +437,9 @@ impl SilkDecoder {
             self.concealment[channel].gains_q16[1],
         )?;
         self.recovery[channel].process(&mut pcm, true);
-        self.previous_gain_indices[channel] = Some(10);
+        if self.fec_previous.is_none() {
+            self.previous_gain_indices[channel] = Some(10);
+        }
         Ok(pcm)
     }
 
@@ -538,10 +553,45 @@ impl SilkDecoder {
         Ok(())
     }
 
+    /// Decodes one redundant constituent, concealing channels absent from LBRR.
+    ///
+    /// # Errors
+    /// * Propagates entropy and synthesis errors. State may advance on error.
+    pub(crate) fn decode_fec_constituent(
+        &mut self,
+        range: &mut RangeDecoder,
+        present: [bool; 2],
+        previous: [bool; 2],
+        mono_output: bool,
+        output: &mut [i16],
+    ) -> Result<usize> {
+        self.fec_previous = Some(previous);
+        let result = if self.channels == Channels::Stereo {
+            self.decode_stereo_output(
+                range,
+                (true, present[1]),
+                output,
+                mono_output,
+                Some(present),
+            )
+        } else if present[0] {
+            self.decode_silk_frame(range, true, output)
+        } else {
+            self.packet_frames[0] += 1;
+            self.conceal(self.frame_size_ms, true).map(|pcm| {
+                output[..pcm.len()].copy_from_slice(&pcm);
+                pcm.len()
+            })
+        };
+        self.fec_previous = None;
+        result
+    }
+
     /// Begins independently coded packet data without resetting synthesis/filter history.
     /// Call exactly once before decoding the first SILK frame of each packet.
     pub const fn begin_packet(&mut self) {
         self.packet_frames = [0; 2];
+        self.fec_previous = None;
     }
 
     /// Decode complete SILK frame (public wrapper)
@@ -712,7 +762,10 @@ impl SilkDecoder {
         } else {
             self.packet_frames[0].saturating_sub(1)
         };
-        let independent = frame_index == 0 || (channel_idx == 1 && self.prev_decode_only_middle);
+        let independent = self.fec_previous.map_or(
+            frame_index == 0 || (channel_idx == 1 && self.prev_decode_only_middle),
+            |previous| !previous[channel_idx],
+        );
 
         // RFC Table 5 Entry 3: Frame Type (vad_flag passed in from Opus frame level)
         let (frame_type, quant_offset) = self.decode_frame_type(range_decoder, vad_flag)?;
@@ -1049,7 +1102,7 @@ impl SilkDecoder {
                     .collect()
             };
 
-            let params = SubframeParams {
+            let mut params = SubframeParams {
                 lpc_coeffs_q12: lpc_for_subframe,
                 gain_q16,
                 pitch_lag: if subframe_idx < pitch_lags.len() {
@@ -1066,8 +1119,22 @@ impl SilkDecoder {
                     .expect("LTP scale values (12288, 8192, 15565) fit in i16::MAX"),
             };
 
+            // decode_core.c retains a quarter-gain pitch predictor for the
+            // first 10 ms when voiced PLC is followed by unvoiced speech.
+            // This changes synthesis only, never the decoded entropy indices.
+            let voiced_recovery = self.concealment[channel_idx].losses > 0
+                && self.previous_frame_voiced[channel_idx]
+                && !matches!(frame_type, FrameType::Voiced)
+                && subframe_idx < 2;
+            if voiced_recovery {
+                params.pitch_lag =
+                    i16::try_from((self.concealment[channel_idx].pitch_q8 + 128) >> 8)
+                        .expect("bounded PLC pitch lag");
+                params.ltp_filter_q7 = [0, 0, 32, 0, 0];
+            }
+
             // Apply LTP synthesis (long-term prediction) - returns Q14 residual
-            let residual_q14 = if matches!(frame_type, FrameType::Voiced) {
+            let residual_q14 = if matches!(frame_type, FrameType::Voiced) || voiced_recovery {
                 self.voiced_history[channel_idx].residual(
                     &excitation_q23,
                     &params,
@@ -1177,7 +1244,7 @@ impl SilkDecoder {
         vad_flags: (bool, bool),
         output: &mut [i16],
     ) -> Result<usize> {
-        self.decode_stereo_output(range_decoder, vad_flags, output, false)
+        self.decode_stereo_output(range_decoder, vad_flags, output, false, None)
     }
 
     /// Decodes stereo-coded SILK to the reference mono mid-channel output window.
@@ -1193,7 +1260,7 @@ impl SilkDecoder {
         vad_flags: (bool, bool),
         output: &mut [i16],
     ) -> Result<usize> {
-        self.decode_stereo_output(range_decoder, vad_flags, output, true)
+        self.decode_stereo_output(range_decoder, vad_flags, output, true, None)
     }
 
     #[allow(clippy::similar_names)]
@@ -1203,6 +1270,7 @@ impl SilkDecoder {
         vad_flags: (bool, bool),
         output: &mut [i16],
         mono_output: bool,
+        fec_flags: Option<[bool; 2]>,
     ) -> Result<usize> {
         let bandwidth = match self.sample_rate {
             SampleRate::Hz8000 => Bandwidth::Narrowband,
@@ -1238,17 +1306,27 @@ impl SilkDecoder {
 
         // RFC Table 5 Entry 1: Stereo Prediction Weights
         log::debug!("[decode_silk_frame_stereo] Decoding stereo weights");
-        let (w0_q13, w1_q13) = self.decode_stereo_weights(range_decoder)?;
+        let (w0_q13, w1_q13) = if fec_flags.is_some_and(|flags| !flags[0]) {
+            let weights = self
+                .stereo_state
+                .as_ref()
+                .map_or([0; 2], |state| state.pred_prev_q13);
+            weights.into()
+        } else {
+            self.decode_stereo_weights(range_decoder)?
+        };
         log::debug!("[decode_silk_frame_stereo] Decoded weights: w0_q13={w0_q13}, w1_q13={w1_q13}");
 
         // RFC Table 5 Entry 2: Mid-only Flag
         // Per libopus dec_API.c line 367-372: only decode if side channel VAD is inactive
-        let mid_only = if vad_flags.1 {
+        let mid_only = if fec_flags.is_some_and(|flags| !flags[0]) || vad_flags.1 {
             false
         } else {
             self.decode_mid_only_flag(range_decoder)?
         };
 
+        let has_side =
+            fec_flags.map_or(!mid_only, |flags| flags[1] || !self.prev_decode_only_middle);
         if !mid_only && self.prev_decode_only_middle {
             // dec_API.c: only synthesis history and these entropy/reset fields
             // are reset. Keep NLSF, previous synthesis gain and stereo history.
@@ -1270,22 +1348,29 @@ impl SilkDecoder {
             "[decode_silk_frame_stereo] Decoding mid channel, vad={}",
             vad_flags.0
         );
-        self.decode_silk_frame_internal(range_decoder, vad_flags.0, &mut x1[2..], 0)?;
+        if fec_flags.is_some_and(|flags| !flags[0]) {
+            x1[2..].copy_from_slice(&self.conceal_channel(0, self.frame_size_ms)?);
+            self.packet_frames[0] += 1;
+        } else {
+            self.decode_silk_frame_internal(range_decoder, vad_flags.0, &mut x1[2..], 0)?;
+        }
         log::trace!(
             "[decode_silk_frame_stereo] Mid channel first 10: {:?}",
             &x1[2..12.min(x1.len())]
         );
         log::trace!("[MID_CH] First 20: {:?}", &x1[2..22.min(x1.len())]);
 
-        // Decode side channel (if not mid-only)
-        if mid_only {
-            log::debug!("[decode_silk_frame_stereo] mid_only=true, side channel is zero");
-        } else {
+        // Missing redundant side frames follow the previous mid-only state.
+        if has_side {
             log::debug!(
                 "[decode_silk_frame_stereo] Decoding side channel, vad={}",
                 vad_flags.1
             );
-            self.decode_silk_frame_internal(range_decoder, vad_flags.1, &mut x2[2..], 1)?;
+            if fec_flags.is_some_and(|flags| !flags[1]) {
+                x2[2..].copy_from_slice(&self.conceal_channel(1, self.frame_size_ms)?);
+            } else {
+                self.decode_silk_frame_internal(range_decoder, vad_flags.1, &mut x2[2..], 1)?;
+            }
             log::trace!(
                 "[decode_silk_frame_stereo] Side channel first 10: {:?}",
                 &x2[2..12.min(x2.len())]
@@ -1295,6 +1380,18 @@ impl SilkDecoder {
 
         self.prev_decode_only_middle = mid_only;
 
+        self.write_stereo_output(&mut x1, &mut x2, (w0_q13, w1_q13), output, mono_output)
+    }
+
+    fn write_stereo_output(
+        &mut self,
+        x1: &mut [i16],
+        x2: &mut [i16],
+        weights: (i16, i16),
+        output: &mut [i16],
+        mono_output: bool,
+    ) -> Result<usize> {
+        let total_samples = x1.len() - 2;
         if mono_output {
             // dec_API.c's non-MS->LR branch updates only sMid; side/predictor
             // conversion history remains untouched, exactly as in the reference.
@@ -1311,18 +1408,11 @@ impl SilkDecoder {
             return Ok(total_samples);
         }
 
-        // Get fs_kHz for interpolation calculation
-        let fs_khz = match bandwidth {
-            Bandwidth::Narrowband => 8,
-            Bandwidth::Mediumband => 12,
-            Bandwidth::Wideband => 16,
-            _ => return Err(Error::SilkDecoder("Invalid bandwidth".to_string())),
-        };
+        let fs_khz = i32::try_from(self.sample_rate as usize / 1000).expect("SILK rate");
 
         // Apply fixed-point stereo MS->LR conversion
         // This modifies x1 and x2 in-place: x1 becomes left, x2 becomes right
-        #[allow(clippy::tuple_array_conversions)]
-        self.stereo_ms_to_lr(&mut x1, &mut x2, [w0_q13, w1_q13], fs_khz, total_samples)?;
+        self.stereo_ms_to_lr(x1, x2, weights.into(), fs_khz, total_samples)?;
 
         // MS->LR writes indices 1..=frame_length; index frame_length+1 is
         // still the unconverted last decoded channel sample (next-frame history).

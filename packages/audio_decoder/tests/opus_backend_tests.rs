@@ -346,3 +346,41 @@ fn native_public_hybrid_ogg_is_stateful_exact_and_flushes() {
 fn libopus_public_hybrid_ogg_is_stateful_exact_and_flushes() {
     exercise_hybrid(OpusDecodeBackend::Libopus);
 }
+
+#[cfg(feature = "opus-native")]
+#[test]
+fn stock_ogg_probe_mono_label_survives_native_decode_and_reset() {
+    use moosicbox_opus::{OpusBackend, OpusDecoder};
+    use symphonia::core::{
+        audio::{GenericAudioBufferRef, Position},
+        codecs::audio::AudioDecoder,
+    };
+
+    let mut format = reader(stream(0, 0));
+    let params = format.tracks()[0]
+        .codec_params
+        .as_ref()
+        .unwrap()
+        .audio()
+        .unwrap()
+        .clone();
+    assert_eq!(params.channels, Some(Position::FRONT_LEFT.into()));
+    let packet = format.next_packet().unwrap().unwrap();
+    let mut decoder = OpusDecoder::try_new_with_backend(&params, OpusBackend::Native).unwrap();
+    let mut first = None;
+    for _ in 0..2 {
+        let GenericAudioBufferRef::F32(output) = decoder.decode(&packet).unwrap() else {
+            panic!("expected f32");
+        };
+        assert_eq!(output.spec().channels(), &Position::FRONT_LEFT.into());
+        assert_eq!(output.frames(), 960);
+        let samples = output.plane(0).unwrap().to_vec();
+        assert!(samples.iter().any(|sample| *sample != 0.0));
+        if let Some(expected) = &first {
+            assert_eq!(&samples, expected);
+        } else {
+            first = Some(samples);
+        }
+        decoder.reset();
+    }
+}

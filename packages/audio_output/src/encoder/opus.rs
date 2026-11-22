@@ -6,6 +6,10 @@ use super::AudioEncoder;
 use crate::{AudioOutputError, to_samples};
 use bytes::Bytes;
 use moosicbox_audio_encoder::opus_stream::OpusStreamEncoder;
+#[cfg(feature = "opus-native")]
+pub use moosicbox_audio_encoder::opus_stream::{
+    EncoderControl, EncoderMode, MultistreamLayout, OpusMultistreamEncodeConfig,
+};
 pub use moosicbox_audio_encoder::opus_stream::{
     OpusEncodeBackend, OpusEncodeConfig, OpusEncodeMode,
 };
@@ -28,16 +32,22 @@ impl std::io::Write for EncodedSink {
 }
 
 /// Fallible explicitly selected Opus encoder with accurate gapless Ogg finalization.
+///
+/// Finite PCM is saturated to [-1, 1] at this product boundary after
+/// resampling/channel ordering; in-range floats are not quantized. Raw native
+/// codec and direct stream encoder input contracts remain unchanged.
 /// Legacy [`OpusEncoder`] remains available under the `opus` compatibility feature.
 pub struct SelectedOpusEncoder {
     encoder: OpusStreamEncoder<EncodedSink>,
     sink: EncodedSink,
     spec: AudioSpec,
+    channel_order: Option<Vec<usize>>,
     resampler: Option<moosicbox_resampler::Resampler<f32>>,
     input_spec: Option<AudioSpec>,
     input_frames: u64,
     resampled_frames: u64,
     finished: bool,
+    failed: bool,
     writer: Option<Box<dyn std::io::Write + Send + Sync>>,
 }
 impl SelectedOpusEncoder {
@@ -60,11 +70,13 @@ impl SelectedOpusEncoder {
             encoder,
             sink,
             spec,
+            channel_order: None,
             resampler: None,
             input_spec: None,
             input_frames: 0,
             resampled_frames: 0,
             finished: false,
+            failed: false,
             writer: None,
         })
     }
@@ -80,15 +92,149 @@ impl SelectedOpusEncoder {
         encoder.writer = Some(Box::new(writer));
         Ok(encoder)
     }
+    /// Construct native multistream output. Positioned family 1 PCM is reordered
+    /// from Symphonia/WAVE to Vorbis order; family 255 uses discrete channel order.
+    ///
+    /// # Errors
+    /// * Propagates invalid layout/configuration, initialization and header errors.
+    #[cfg(feature = "opus-native")]
+    pub fn new_multistream(config: OpusMultistreamEncodeConfig) -> Result<Self, AudioOutputError> {
+        use symphonia::core::audio::{
+            ChannelLabel, Channels,
+            layouts::{
+                CHANNEL_LAYOUT_3P0, CHANNEL_LAYOUT_4P0_QUAD, CHANNEL_LAYOUT_5P0,
+                CHANNEL_LAYOUT_5P1, CHANNEL_LAYOUT_6P1, CHANNEL_LAYOUT_7P1, CHANNEL_LAYOUT_MONO,
+                CHANNEL_LAYOUT_STEREO,
+            },
+        };
+        let sink = EncodedSink::default();
+        let count = config.layout.channels();
+        let (channels, channel_order) = if config.mapping_family == 1 {
+            let channels = match count {
+                1 => CHANNEL_LAYOUT_MONO,
+                2 => CHANNEL_LAYOUT_STEREO,
+                3 => CHANNEL_LAYOUT_3P0,
+                4 => CHANNEL_LAYOUT_4P0_QUAD,
+                5 => CHANNEL_LAYOUT_5P0,
+                6 => CHANNEL_LAYOUT_5P1,
+                7 => CHANNEL_LAYOUT_6P1,
+                8 => CHANNEL_LAYOUT_7P1,
+                _ => {
+                    return Err(std::io::Error::other(
+                        "family 1 requires one through eight channels",
+                    )
+                    .into());
+                }
+            };
+            // Symphonia positioned PCM is WAVE order. Opus family 1 is Vorbis order.
+            let order: &[usize] = match count {
+                1 => &[0],
+                2 => &[0, 1],
+                3 => &[0, 2, 1],
+                4 => &[0, 1, 2, 3],
+                5 => &[0, 2, 1, 3, 4],
+                6 => &[0, 2, 1, 4, 5, 3],
+                7 => &[0, 2, 1, 5, 6, 4, 3],
+                8 => &[0, 2, 1, 6, 7, 4, 5, 3],
+                _ => unreachable!(),
+            };
+            (channels, Some(order.to_vec()))
+        } else {
+            (
+                Channels::from(
+                    (0..count)
+                        .map(|channel| u16::try_from(channel).map(ChannelLabel::Discrete))
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(std::io::Error::other)?,
+                ),
+                None,
+            )
+        };
+        let spec = AudioSpec::new(config.sample_rate, channels);
+        let encoder = OpusStreamEncoder::new_multistream(sink.clone(), config)?;
+        Ok(Self {
+            encoder,
+            sink,
+            spec,
+            channel_order,
+            resampler: None,
+            input_spec: None,
+            input_frames: 0,
+            resampled_frames: 0,
+            finished: false,
+            failed: false,
+            writer: None,
+        })
+    }
+
+    /// Construct multistream output writing encoded bytes to a sink.
+    ///
+    /// # Errors
+    /// * Propagates the errors from [`Self::new_multistream`].
+    #[cfg(feature = "opus-native")]
+    pub fn with_multistream_writer<W: std::io::Write + Send + Sync + 'static>(
+        writer: W,
+        config: OpusMultistreamEncodeConfig,
+    ) -> Result<Self, AudioOutputError> {
+        let mut encoder = Self::new_multistream(config)?;
+        encoder.writer = Some(Box::new(writer));
+        Ok(encoder)
+    }
+
     /// Return the implementation selected at construction.
     #[must_use]
     pub const fn backend(&self) -> OpusEncodeBackend {
         self.encoder.backend()
     }
-    /// Return the requested coding mode (no automatic native mode switching).
+    /// Return the requested coding mode; `Auto` explicitly opts in to adaptation.
     #[must_use]
     pub const fn mode(&self) -> OpusEncodeMode {
         self.encoder.config().mode
+    }
+
+    /// Apply qualified native controls at a complete input-frame boundary.
+    ///
+    /// # Errors
+    /// * Rejects failed/finished streams, resampled input, and partial PCM frames.
+    /// * Propagates native control validation errors without consuming input.
+    #[cfg(feature = "opus-native")]
+    pub fn set_control(
+        &mut self,
+        control: moosicbox_audio_encoder::opus_stream::EncoderControl,
+    ) -> Result<(), AudioOutputError> {
+        if self.failed || self.finished || self.resampler.is_some() {
+            return Err(
+                std::io::Error::other("Opus controls require an open, unresampled stream").into(),
+            );
+        }
+        self.encoder.set_control(control)?;
+        Ok(())
+    }
+
+    /// Return requested native controls, or `None` for libopus/multistream.
+    #[cfg(feature = "opus-native")]
+    #[cfg_attr(
+        not(feature = "opus"),
+        expect(
+            clippy::must_use_candidate,
+            reason = "Option is already must_use; repository policy forbids a redundant function attribute"
+        )
+    )]
+    pub fn control(&self) -> Option<EncoderControl> {
+        self.encoder.control()
+    }
+
+    /// Return the active native packet mode, or `None` for libopus.
+    #[cfg(feature = "opus-native")]
+    #[cfg_attr(
+        not(feature = "opus"),
+        expect(
+            clippy::must_use_candidate,
+            reason = "Option is already must_use; repository policy forbids a redundant function attribute"
+        )
+    )]
+    pub const fn active_mode(&self) -> Option<EncoderMode> {
+        self.encoder.active_mode()
     }
 
     fn take(&self) -> Result<Bytes, AudioOutputError> {
@@ -100,10 +246,40 @@ impl SelectedOpusEncoder {
         Ok(std::mem::take(&mut *bytes).into())
     }
 }
+fn ordered_pcm<'a>(pcm: &'a [f32], order: Option<&[usize]>) -> std::borrow::Cow<'a, [f32]> {
+    let mut pcm = order.map_or(std::borrow::Cow::Borrowed(pcm), |order| {
+        std::borrow::Cow::Owned(
+            pcm.chunks_exact(order.len())
+                .flat_map(|frame| order.iter().map(move |&channel| frame[channel]))
+                .collect(),
+        )
+    });
+    // Incoming nonfinite PCM is rejected before input state changes. Keep any
+    // nonfinite filter output unchanged so the stream rejects it, not masks it.
+    if pcm
+        .iter()
+        .any(|sample| sample.is_finite() && !(-1.0..=1.0).contains(sample))
+    {
+        for sample in pcm.to_mut() {
+            if sample.is_finite() {
+                *sample = sample.clamp(-1.0, 1.0);
+            }
+        }
+    }
+    pcm
+}
+
 impl AudioEncoder for SelectedOpusEncoder {
     fn encode(&mut self, decoded: AudioBuffer<f32>) -> Result<Bytes, AudioOutputError> {
+        if self.failed {
+            return Err(std::io::Error::other("Opus stream previously failed").into());
+        }
         if self.finished {
             return Err(AudioOutputError::StreamEnd);
+        }
+        // Empty buffers must not establish a zero-sized resampler block.
+        if decoded.frames() == 0 {
+            return self.take();
         }
         if decoded.spec().channels() != self.spec.channels() {
             return Err(AudioOutputError::UnsupportedChannels(
@@ -117,13 +293,26 @@ impl AudioEncoder for SelectedOpusEncoder {
         {
             return Err(std::io::Error::other("Opus input specification changed midstream").into());
         }
+        if decoded
+            .iter_planes()
+            .any(|plane| plane.iter().any(|sample| !sample.is_finite()))
+        {
+            return Err(std::io::Error::other("invalid nonfinite Opus PCM").into());
+        }
         if self.input_spec.is_none() {
             self.input_spec = Some(decoded.spec().clone());
             if decoded.spec().rate() != self.spec.rate() {
+                if decoded.spec().channels().count() > 32 {
+                    return Err(AudioOutputError::UnsupportedChannels(
+                        decoded.spec().channels().count(),
+                    ));
+                }
                 self.resampler = Some(moosicbox_resampler::Resampler::new(
                     decoded.spec().clone(),
                     self.spec.rate() as usize,
-                    decoded.capacity() as u64,
+                    // Fixed nonzero FFT block size: caller capacities may be one
+                    // frame or vary arbitrarily between writes.
+                    1024,
                 ));
             }
         }
@@ -144,19 +333,29 @@ impl AudioEncoder for SelectedOpusEncoder {
                     usize::try_from(target.saturating_sub(self.resampled_frames))
                         .unwrap_or(usize::MAX),
                 );
-                self.encoder.write(&pcm[..retain * channels])?;
+                self.encoder.write(&ordered_pcm(
+                    &pcm[..retain * channels],
+                    self.channel_order.as_deref(),
+                ))?;
                 self.resampled_frames += retain as u64;
             }
         } else {
-            self.encoder.write(&to_samples(&decoded))?;
+            self.encoder.write(&ordered_pcm(
+                &to_samples(&decoded),
+                self.channel_order.as_deref(),
+            ))?;
         }
         self.take()
     }
     fn finish(&mut self) -> Result<Bytes, AudioOutputError> {
+        if self.failed {
+            return Err(std::io::Error::other("Opus stream previously failed").into());
+        }
         if self.finished {
             return Ok(Bytes::new());
         }
-        self.finished = true;
+        // Partial drains cannot safely be retried.
+        self.failed = true;
         if let Some(resampler) = &mut self.resampler {
             let input_rate = self
                 .input_spec
@@ -174,8 +373,47 @@ impl AudioEncoder for SelectedOpusEncoder {
                     usize::try_from(target.saturating_sub(self.resampled_frames))
                         .unwrap_or(usize::MAX),
                 );
-                self.encoder.write(&pcm[..retain * channels])?;
+                self.encoder.write(&ordered_pcm(
+                    &pcm[..retain * channels],
+                    self.channel_order.as_deref(),
+                ))?;
                 self.resampled_frames += retain as u64;
+            }
+            // flush() empties the wrapper's input queue, but FftFixedIn can
+            // still retain a partial FFT internally. Advance that same filter
+            // with silence to release the real final samples; do not count or
+            // encode the padding beyond the exact rational input duration.
+            if self.resampled_frames < target {
+                let input_spec = self
+                    .input_spec
+                    .as_ref()
+                    .ok_or_else(|| std::io::Error::other("missing Opus input specification"))?;
+                let mut padding = AudioBuffer::<f32>::new(input_spec.clone(), 1024);
+                padding.render_silence(Some(1024));
+                // This bound is specific to Resampler::new above: FftFixedIn
+                // uses 1024 input frames and 2 subchunks. With
+                // m = input_rate / gcd(input_rate, output_rate), Rubato chooses
+                // fft_size_in = ceil(512 / m) * m. If m <= 512 this is < 1024;
+                // otherwise it equals m <= input_rate. Thus ceil(input_rate /
+                // 1024) + 2 zero blocks exceeds one internal FFT period, with
+                // an extra block for the retained filter overlap. It is not a
+                // universal bound for other resampler/block configurations.
+                let drain_blocks = u64::from(input_rate).div_ceil(1024) + 2;
+                for _ in 0..drain_blocks {
+                    if self.resampled_frames == target {
+                        break;
+                    }
+                    if let Some(pcm) = resampler.resample(&padding) {
+                        let retain = (pcm.len() / channels).min(
+                            usize::try_from(target - self.resampled_frames).unwrap_or(usize::MAX),
+                        );
+                        self.encoder.write(&ordered_pcm(
+                            &pcm[..retain * channels],
+                            self.channel_order.as_deref(),
+                        ))?;
+                        self.resampled_frames += retain as u64;
+                    }
+                }
             }
             if self.resampled_frames != target {
                 return Err(std::io::Error::other(
@@ -185,7 +423,10 @@ impl AudioEncoder for SelectedOpusEncoder {
             }
         }
         self.encoder.finish()?;
-        self.take()
+        let bytes = self.take()?;
+        self.finished = true;
+        self.failed = false;
+        Ok(bytes)
     }
     fn spec(&self) -> AudioSpec {
         self.spec.clone()
@@ -195,16 +436,21 @@ impl AudioEncoder for SelectedOpusEncoder {
 impl crate::AudioWrite for SelectedOpusEncoder {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
         let bytes = self.encode(decoded)?;
-        if let Some(writer) = &mut self.writer {
-            writer.write_all(&bytes)?;
+        if let Some(writer) = &mut self.writer
+            && let Err(error) = writer.write_all(&bytes)
+        {
+            self.failed = true;
+            return Err(error.into());
         }
         Ok(bytes.len())
     }
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         let bytes = self.finish()?;
-        if let Some(writer) = &mut self.writer {
-            writer.write_all(&bytes)?;
-            writer.flush()?;
+        if let Some(writer) = &mut self.writer
+            && let Err(error) = writer.write_all(&bytes).and_then(|()| writer.flush())
+        {
+            self.failed = true;
+            return Err(error.into());
         }
         Ok(())
     }

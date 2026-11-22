@@ -146,7 +146,7 @@ fn with_gain(mut bytes: Vec<u8>, gain: i16) -> Vec<u8> {
     bytes
 }
 
-fn pinned_reference(bytes: &[u8]) -> Vec<f32> {
+fn pinned_reference(bytes: &[u8], config: OpusEncodeConfig) -> Vec<f32> {
     let mut format = moosicbox_audio_decoder::create_format_probe()
         .probe(
             &Hint::new(),
@@ -160,11 +160,18 @@ fn pinned_reference(bytes: &[u8]) -> Vec<f32> {
     while let Some(packet) = format.next_packet().unwrap() {
         framed.extend(u32::try_from(packet.data.len()).unwrap().to_le_bytes());
         framed.extend(&packet.data);
-        trims.push((
-            packet.dur.get() as usize,
-            packet.trim_start.get() as usize,
-            packet.trim_end.get() as usize,
-        ));
+        // Packet::dur counts only valid frames, excluding pre-skip and EOS
+        // padding. Oracle decode returns the complete coded packet duration.
+        let duration =
+            usize::try_from(moosicbox_ogg_opus::packet_duration(&packet.data).unwrap()).unwrap();
+        let start = usize::try_from(packet.trim_start.get()).unwrap();
+        let end = usize::try_from(packet.trim_end.get()).unwrap();
+        assert_eq!(
+            u64::try_from(duration - start - end).unwrap(),
+            packet.dur.get(),
+            "valid/coded duration mismatch: {config:?}"
+        );
+        trims.push((duration, start, end));
     }
     let channels = format.tracks()[0]
         .codec_params
@@ -242,7 +249,11 @@ with module.Oracle(sys.argv[2]) as oracle:
         );
         offset += duration * channels;
     }
-    assert_eq!(offset, raw.len());
+    assert_eq!(
+        offset,
+        raw.len(),
+        "oracle complete-packet length: {config:?}"
+    );
     pcm
 }
 
@@ -308,7 +319,7 @@ fn selected_modes(live_reference: bool) {
                     OpusEncodeMode::Celt => assert!(toc >= 16, "CELT TOC {toc}"),
                     OpusEncodeMode::Silk => assert!(toc < 12, "SILK TOC {toc}"),
                     OpusEncodeMode::Hybrid => assert!((12..16).contains(&toc), "hybrid TOC {toc}"),
-                    OpusEncodeMode::Default => unreachable!(),
+                    OpusEncodeMode::Default | OpusEncodeMode::Auto => unreachable!(),
                 }
                 let external = ffmpeg(&bytes);
                 assert_eq!(
@@ -316,7 +327,7 @@ fn selected_modes(live_reference: bool) {
                     expected * usize::from(channels),
                     "{config:?}"
                 );
-                let reference = live_reference.then(|| pinned_reference(&bytes));
+                let reference = live_reference.then(|| pinned_reference(&bytes, config));
                 let decoded = play(bytes.clone(), None);
                 assert_eq!(decoded.len(), usize::from(channels));
                 for (channel, plane) in decoded.iter().enumerate() {
@@ -375,7 +386,10 @@ fn selected_modes(live_reference: bool) {
                     .process(Box::new(Cursor::new(bytes)))
                     .unwrap();
                 let mut reencoded = Vec::new();
-                processor.read_to_end(&mut reencoded).unwrap();
+                processor.read_to_end(&mut reencoded).unwrap_or_else(|error| {
+                    let maximum = decoded.iter().flatten().fold(0.0_f32, |maximum, sample| maximum.max(sample.abs()));
+                    panic!("signal-chain {config:?}, decoded_frames={}, decoded_peak={maximum}: {error}", decoded[0].len());
+                });
                 let replay = play(reencoded, None);
                 assert_eq!(replay[0].len(), expected, "signal-chain {config:?}");
             }
@@ -507,6 +521,92 @@ fn changing_mode_ogg_file_matches_public_c_and_player_seek() {
 }
 
 #[test]
+fn stereo_fullband_hybrid_low_bitrates_reenter_player_and_signal_chain() {
+    for bitrate in [32_000, 64_000] {
+        for frame_size in [480, 960] {
+            let frames = 2457;
+            let config = OpusEncodeConfig {
+                backend: OpusEncodeBackend::Native,
+                mode: OpusEncodeMode::Hybrid,
+                sample_rate: 48_000,
+                channels: 2,
+                frame_size,
+                bitrate,
+            };
+            let mut encoder = SelectedOpusEncoder::new(config)
+                .unwrap_or_else(|error| panic!("{config:?}: {error}"));
+            assert_eq!(encoder.mode(), OpusEncodeMode::Hybrid);
+            let mut bytes = encoder.encode(input(48_000, 2, frames)).unwrap().to_vec();
+            bytes.extend_from_slice(&encoder.finish().unwrap());
+            assert!(encoder.finish().unwrap().is_empty(), "{config:?}");
+            let mut probe = moosicbox_audio_decoder::create_format_probe()
+                .probe(
+                    &Hint::new(),
+                    MediaSourceStream::new(
+                        Box::new(Cursor::new(bytes.clone())),
+                        Default::default(),
+                    ),
+                    Default::default(),
+                    Default::default(),
+                )
+                .unwrap();
+            while let Some(packet) = probe.next_packet().unwrap() {
+                assert_eq!(
+                    packet.data[0] >> 3,
+                    if frame_size == 480 { 14 } else { 15 },
+                    "fullband Hybrid, not a fallback: {config:?}"
+                );
+            }
+            let decoded = play(bytes.clone(), None);
+            assert_eq!(decoded.len(), 2, "{config:?}");
+            for plane in &decoded {
+                assert_eq!(plane.len(), frames, "{config:?}");
+                assert!(plane.iter().all(|sample| sample.is_finite()), "{config:?}");
+                assert!(
+                    plane.iter().any(|sample| sample.abs() > 0.001),
+                    "{config:?}"
+                );
+            }
+            for gain in [-1536, 1536] {
+                let gained = play(with_gain(bytes.clone(), gain), None);
+                let factor = 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0));
+                for (actual, expected) in gained.iter().zip(&decoded) {
+                    assert_eq!(actual.len(), frames, "{config:?}");
+                    for (actual, expected) in actual.iter().zip(expected) {
+                        assert_eq!(*actual, *expected * factor, "gain exactly once: {config:?}");
+                    }
+                }
+            }
+            let sought = play(bytes.clone(), Some(0.05));
+            assert_eq!(sought.len(), 2, "{config:?}");
+            for (actual, expected) in sought.iter().zip(&decoded) {
+                assert_eq!(actual, &expected[2400..], "seek exact tail: {config:?}");
+            }
+            let mut processor = moosicbox_player::signal_chain::SignalChainStep::new()
+                .with_decode_options(options())
+                .with_opus_encoder(config)
+                .unwrap()
+                .process(Box::new(Cursor::new(bytes)))
+                .unwrap();
+            let mut reencoded = Vec::new();
+            processor
+                .read_to_end(&mut reencoded)
+                .unwrap_or_else(|error| panic!("signal-chain {config:?}: {error}"));
+            let replay = play(reencoded, None);
+            assert_eq!(replay.len(), 2, "{config:?}");
+            for plane in replay {
+                assert_eq!(plane.len(), frames, "signal-chain clock: {config:?}");
+                assert!(plane.iter().all(|sample| sample.is_finite()), "{config:?}");
+                assert!(
+                    plane.iter().any(|sample| sample.abs() > 0.001),
+                    "{config:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn stereo_silk_low_bitrate_product_regression() {
     for (rate, bitrate) in [(8000_u32, 32000), (16000, 64000)] {
         let config = OpusEncodeConfig {
@@ -525,6 +625,124 @@ fn stereo_silk_low_bitrate_product_regression() {
 }
 
 #[test]
+fn resampled_final_fft_chunk_preserves_exact_length_and_chunk_independence() {
+    for (input_rate, output_rate, mode) in [
+        (48000_u32, 16000_u32, OpusEncodeMode::Silk),
+        (44100, 48000, OpusEncodeMode::Celt),
+        (48000, 24000, OpusEncodeMode::Celt),
+    ] {
+        for frames in [1023_usize, 1024, 1025, 2457, 4097] {
+            let config = OpusEncodeConfig {
+                backend: OpusEncodeBackend::Native,
+                mode,
+                sample_rate: output_rate,
+                channels: 2,
+                frame_size: usize::try_from(output_rate / 50).unwrap(),
+                ..Default::default()
+            };
+            let original = input(input_rate, 2, frames);
+            let mut results = Vec::new();
+            for chunk_size in [frames, 13] {
+                let mut encoder = SelectedOpusEncoder::new(config).unwrap();
+                let mut bytes = Vec::new();
+                for start in (0..frames).step_by(chunk_size) {
+                    let count = chunk_size.min(frames - start);
+                    let mut chunk = AudioBuffer::<f32>::new(original.spec().clone(), count);
+                    chunk.render_silence(Some(count));
+                    for channel in 0..2 {
+                        chunk.plane_mut(channel).unwrap().copy_from_slice(
+                            &original.plane(channel).unwrap()[start..start + count],
+                        );
+                    }
+                    bytes.extend_from_slice(&encoder.encode(chunk).unwrap());
+                }
+                bytes.extend_from_slice(&encoder.finish().unwrap());
+                assert!(encoder.finish().unwrap().is_empty());
+                let eos = bytes
+                    .windows(4)
+                    .rposition(|window| window == b"OggS")
+                    .unwrap();
+                let granule = u64::from_le_bytes(bytes[eos + 6..eos + 14].try_into().unwrap());
+                let pre_skip = u16::from_le_bytes(bytes[38..40].try_into().unwrap());
+                let expected = u64::try_from(frames).unwrap() * u64::from(output_rate)
+                    / u64::from(input_rate)
+                    * u64::from(48000 / output_rate);
+                assert_eq!(
+                    granule - u64::from(pre_skip),
+                    expected,
+                    "{input_rate}->{output_rate} frames={frames} chunk={chunk_size}"
+                );
+                let decoded = play(bytes.clone(), None);
+                assert_eq!(decoded.len(), 2);
+                for plane in decoded {
+                    assert_eq!(u64::try_from(plane.len()).unwrap(), expected);
+                    assert!(plane.iter().any(|sample| sample.abs() > 0.001));
+                }
+                results.push(bytes);
+            }
+            assert_eq!(
+                results[0], results[1],
+                "PCM chunking changed encoded output: {input_rate}->{output_rate} frames={frames}"
+            );
+        }
+    }
+}
+
+#[test]
+fn product_pcm_saturation_matches_explicit_clamping_and_rejects_nonfinite() {
+    for mode in [
+        OpusEncodeMode::Celt,
+        OpusEncodeMode::Silk,
+        OpusEncodeMode::Hybrid,
+    ] {
+        let config = OpusEncodeConfig {
+            backend: OpusEncodeBackend::Native,
+            mode,
+            sample_rate: 48000,
+            channels: 2,
+            frame_size: 960,
+            ..Default::default()
+        };
+        let mut original = input(48000, 2, 2457);
+        for plane in original.iter_planes_mut() {
+            for (index, sample) in plane.iter_mut().enumerate() {
+                *sample = match index % 5 {
+                    0 => 1.0038608,
+                    1 => -1.0038608,
+                    2 => 1.0,
+                    3 => -1.0,
+                    _ => *sample,
+                };
+            }
+        }
+        let mut clamped = original.clone();
+        for plane in clamped.iter_planes_mut() {
+            for sample in plane {
+                *sample = sample.clamp(-1.0, 1.0);
+            }
+        }
+        let mut expected_encoder = SelectedOpusEncoder::new(config).unwrap();
+        let mut expected = expected_encoder.encode(clamped).unwrap().to_vec();
+        expected.extend_from_slice(&expected_encoder.finish().unwrap());
+        let mut encoder = SelectedOpusEncoder::new(config).unwrap();
+        // Rejected buffers must not establish input rate, consume samples, or
+        // change codec state. Different invalid rates expose accidental pinning.
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut invalid = input(44100, 2, 13);
+            invalid.plane_mut(0).unwrap()[0] = value;
+            assert!(
+                encoder.encode(invalid).is_err(),
+                "{mode:?} accepted {value}"
+            );
+        }
+        let mut actual = encoder.encode(original).unwrap().to_vec();
+        actual.extend_from_slice(&encoder.finish().unwrap());
+        assert!(encoder.finish().unwrap().is_empty());
+        assert_eq!(actual, expected, "product saturation policy {mode:?}");
+    }
+}
+
+#[test]
 fn unsupported_mode_combinations_are_errors_not_fallbacks() {
     for config in [
         OpusEncodeConfig {
@@ -535,6 +753,7 @@ fn unsupported_mode_combinations_are_errors_not_fallbacks() {
         OpusEncodeConfig {
             backend: OpusEncodeBackend::Native,
             mode: OpusEncodeMode::Silk,
+            frame_size: 120,
             ..Default::default()
         },
         OpusEncodeConfig {

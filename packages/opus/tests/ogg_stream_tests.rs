@@ -210,47 +210,26 @@ fn generic_ogg_vorbis_retains_builtin_reader() {
 }
 
 #[test]
-fn independent_ffmpeg_checks_generated_ogg_duration() {
-    use std::{
-        io::Write,
-        process::{Command, Stdio},
-    };
-    let mut child = Command::new("ffmpeg")
-        .args([
-            "-v",
-            "error",
-            "-i",
-            "pipe:0",
-            "-map",
-            "0:a:0",
-            "-f",
-            "s16le",
-            "-acodec",
-            "pcm_s16le",
-            "pipe:1",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("installed ffmpeg required for independent Ogg audit");
-    child
-        .stdin
-        .take()
+fn independently_audited_ogg_has_exact_duration() {
+    // These exact bytes were independently decoded with ffmpeg to 2457 mono
+    // i16 zero samples. Compare the runtime page builder byte-for-byte, then
+    // exercise the ordinary registered decoder against that frozen expectation.
+    let audited = include_bytes!("fixtures/opus_trimmed_silence.ogg").to_vec();
+    assert_eq!(stream(&vec![SILENCE.to_vec(); 3], 0), audited);
+    let mut format = open(audited);
+    let params = format.tracks()[0]
+        .codec_params
+        .as_ref()
         .unwrap()
-        .write_all(&stream(&vec![SILENCE.to_vec(); 3], 0))
+        .audio()
+        .unwrap()
+        .clone();
+    let mut decoder = create_opus_registry()
+        .make_audio_decoder(&params, &AudioDecoderOptions::default())
         .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        output.stdout.len() / 2,
-        2457,
-        "independent mono PCM frame count"
-    );
+    let (actual, _) = decode_remaining(&mut *format, &mut *decoder);
+    assert_eq!(actual.len(), 2457);
+    assert!(actual.iter().all(|sample| *sample == 0.0));
 }
 
 #[cfg(feature = "libopus")]
@@ -265,39 +244,46 @@ fn ogg_explicit_native_duration_and_seek() {
     exercise_stream(OpusBackend::Native);
 }
 
-#[cfg(feature = "libopus")]
+// Captured from the independently qualified fixed-point C reference oracle.
+// SHA-256: d8538065ee6f0f48bd65377c2a660b5158f9141f2ae43261d112771f4e163986
+// Encoder: 48 kHz mono, defaults; three 960-frame square-wave blocks (+/-4000,
+// period 100), continuous state. PCM independently replayed from these packets
+// through a fresh C decoder (48 kHz mono, gain zero). Kept exact, not a tolerance:
+// system libopus 1.6.1 differs by one LSB at frame 312.
+fn pinned_oracle_fixture() -> (Vec<Vec<u8>>, Vec<i16>) {
+    let packets = [
+        include_bytes!("fixtures/c_reference_0.packet").as_slice(),
+        include_bytes!("fixtures/c_reference_1.packet").as_slice(),
+        include_bytes!("fixtures/c_reference_2.packet").as_slice(),
+    ]
+    .into_iter()
+    .map(<[u8]>::to_vec)
+    .collect();
+    let expected = include_bytes!("fixtures/c_reference.pcm_s16le")
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|sample| i16::from_le_bytes(*sample))
+        .collect();
+    (packets, expected)
+}
+
 #[test]
-fn ogg_output_gain_matches_independent_reference() {
-    use audiopus::{
-        Application, Channels, SampleRate,
-        coder::{Decoder as Reference, Encoder},
-    };
-    let encoder = Encoder::new(SampleRate::Hz48000, Channels::Mono, Application::Audio).unwrap();
-    let mut packets = Vec::new();
-    for phase in 0..3 {
-        let input: Vec<i16> = (0..960)
-            .map(|i| {
-                if (i + phase * 960) % 100 < 50 {
-                    4000
-                } else {
-                    -4000
-                }
-            })
-            .collect();
-        let mut bytes = vec![0; 4000];
-        let count = encoder.encode(&input, &mut bytes).unwrap();
-        bytes.truncate(count);
-        packets.push(bytes);
-    }
-    let mut reference = Reference::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-    let mut expected = Vec::new();
-    for packet in &packets {
-        let mut pcm = vec![0; 5760];
-        let count = reference.decode(Some(packet), &mut pcm, false).unwrap();
-        assert_eq!(count, 960);
-        expected.extend_from_slice(&pcm[..count]);
-    }
-    assert!(expected.iter().any(|sample| *sample != 0));
+fn ogg_float_gain_matches_ungained_same_selected_backend() {
+    let (packets, _) = pinned_oracle_fixture();
+    let mut baseline_format = open(stream(&packets, 0));
+    let params = baseline_format.tracks()[0]
+        .codec_params
+        .as_ref()
+        .unwrap()
+        .audio()
+        .unwrap()
+        .clone();
+    let mut baseline_decoder =
+        OpusDecoder::try_new(&params, &AudioDecoderOptions::default()).unwrap();
+    let (baseline, _) = decode_remaining(&mut *baseline_format, &mut baseline_decoder);
+    assert_eq!(baseline.len(), 2457);
+    assert!(baseline.iter().any(|sample| *sample != 0.0));
     for gain in [-1536_i16, 0, 1536] {
         let mut format = open(stream(&packets, gain));
         let params = format
@@ -318,11 +304,34 @@ fn ogg_output_gain_matches_independent_reference() {
             trims,
             [(u64::from(PRE_SKIP), 0), (0, 0), (0, u64::from(END_TRIM))]
         );
-        let factor = 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0));
-        let expected: Vec<_> = expected[PRE_SKIP as usize..expected.len() - END_TRIM as usize]
+        assert_eq!(actual.len(), 2457);
+        let expected: Vec<_> = baseline
             .iter()
-            .map(|sample| (f32::from(*sample) / 32768.0) * factor)
+            .map(|sample| *sample * 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0)))
             .collect();
         assert_pcm(&actual, &expected);
     }
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn native_integer_pcm_matches_checked_in_c_reference() {
+    let (packets, expected) = pinned_oracle_fixture();
+    let mut decoder = moosicbox_opus_native::Decoder::new(
+        moosicbox_opus_native::SampleRate::Hz48000,
+        moosicbox_opus_native::Channels::Mono,
+    )
+    .unwrap();
+    let mut actual = Vec::new();
+    for packet in packets {
+        let mut pcm = vec![0; 5760];
+        let count = decoder.decode(Some(&packet), &mut pcm, false).unwrap();
+        assert_eq!(count, 960);
+        actual.extend_from_slice(&pcm[..count]);
+    }
+    assert_eq!(actual, expected);
+    assert_eq!(
+        actual[PRE_SKIP as usize..actual.len() - END_TRIM as usize].len(),
+        2457
+    );
 }

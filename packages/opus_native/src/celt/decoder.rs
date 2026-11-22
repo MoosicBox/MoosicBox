@@ -349,38 +349,12 @@ impl CeltDecoder {
         Ok(())
     }
 
-    /// Updates the encoded channel count without resetting energy predictors.
-    /// Mono uses the larger of the previous stereo energies, as in libopus;
-    /// mono history is duplicated when returning to stereo. Overlap/deemphasis
-    /// slots are duplicated for stereo and averaged when returning to mono.
-    pub fn set_channels(&mut self, channels: Channels) {
-        if self.channels == channels {
-            return;
-        }
-        if channels == Channels::Mono {
-            for band in 0..CELT_NUM_BANDS {
-                self.energy_q24.band[band] =
-                    self.energy_q24.band[band].max(self.energy_q24.band[CELT_NUM_BANDS + band]);
-            }
-            let half = self.state.overlap_buffers.len() / 2;
-            for index in 0..half {
-                for sample in 0..self.state.overlap_buffers[index].len() {
-                    let a = i64::from(self.state.overlap_buffers[index][sample]);
-                    let b = i64::from(self.state.overlap_buffers[half + index][sample]);
-                    self.state.overlap_buffers[index][sample] = a.midpoint(b) as i32;
-                }
-            }
-            self.state.overlap_buffers.truncate(half);
-            self.preemph_memd[0] = self.preemph_memd[0].midpoint(self.preemph_memd[1]);
-            self.preemph_memd.truncate(1);
-        } else {
-            self.energy_q24
-                .band
-                .copy_within(..CELT_NUM_BANDS, CELT_NUM_BANDS);
-            let buffers = self.state.overlap_buffers.clone();
-            self.state.overlap_buffers.extend(buffers);
-            self.preemph_memd.push(self.preemph_memd[0]);
-        }
+    /// Updates the encoded channel count without touching API-channel synthesis state.
+    ///
+    /// Energy histories always retain both channels. Mono energy folding occurs
+    /// before entropy decoding, and mono history is copied after decoding. TDAC,
+    /// postfilter and deemphasis belong to synthesis channels, not coded channels.
+    pub const fn set_channels(&mut self, channels: Channels) {
         self.channels = channels;
     }
 
@@ -2615,15 +2589,18 @@ impl CeltDecoder {
             }
         }
         // 1. silence (RFC Table 56 line 5946)
-        let silence = self.decode_silence(range_decoder)?;
+        let total_bits = u32::try_from(frame_bytes)
+            .unwrap_or(u32::MAX)
+            .saturating_mul(8);
+        // Shared hybrid SILK may already have consumed the entire budget.
+        // CELT then synthesizes silence with the original entropy RNG/history.
+        let silence =
+            range_decoder.ec_tell() >= total_bits || self.decode_silence(range_decoder)?;
         if silence {
             return Ok(self.synthesize_silence(range_decoder));
         }
 
         // 2. post-filter + params (RFC Table 56 lines 5948-5956)
-        let total_bits = u32::try_from(frame_bytes)
-            .unwrap_or(u32::MAX)
-            .saturating_mul(8);
         let post_filter = self.start_band == 0
             && range_decoder.ec_tell().saturating_add(16) <= total_bits
             && self.decode_post_filter(range_decoder)?;

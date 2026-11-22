@@ -468,41 +468,54 @@ fn celt_stereo_coded_output_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(feature = "silk")]
 #[test]
-fn unsupported_long_silk_fec_preserves_output_and_decoder_state() {
-    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+fn long_silk_fec_short_request_conceals_and_preserves_recovery() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let packet = include_bytes!("../src/silk/reference/nb_sine_mono.packet");
-    let mut decoder = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
-    let mut control = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
-    decoder.decode(Some(packet), &mut [0; 160], false).unwrap();
-    control.decode(Some(packet), &mut [0; 160], false).unwrap();
-    // Long (40/60-ms) SILK FEC remains unsupported; missing 20-ms LBRR
-    // now legitimately falls back to concealment.
     for configuration in [2_u8, 3] {
+        let mut decoder = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        let mut control = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        let mut floating = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        for state in [&mut decoder, &mut control, &mut floating] {
+            state.decode(Some(packet), &mut [0; 160], false).unwrap();
+        }
+        // Only the TOC duration is rewritten: this is not a valid long payload.
+        // A 20-ms FEC request is shorter than either advertised duration, so the
+        // reference must conceal without reading the fabricated SILK payload.
         let mut long_packet = packet.to_vec();
         long_packet[0] = (long_packet[0] & 7) | (configuration << 3);
-        let (input, fec) = (Some(long_packet.as_slice()), true);
-        let mut output = [123; 160];
-        assert!(matches!(
-            decoder.decode(input, &mut output, fec),
-            Err(Error::Unsupported(_))
-        ));
-        assert_eq!(output, [123; 160]);
+        let mut actual = [123; 160];
+        let mut expected = [0; 160];
+        assert_eq!(
+            decoder
+                .decode(Some(&long_packet), &mut actual, true)
+                .unwrap(),
+            160
+        );
+        assert_eq!(control.decode_loss(&mut expected, 160).unwrap(), 160);
+        assert_eq!(actual, expected);
         let mut float = [0.25; 160];
-        assert!(matches!(
-            decoder.decode_float(input, &mut float, fec),
-            Err(Error::Unsupported(_))
-        ));
-        assert!(
-            float
-                .iter()
-                .all(|value| value.to_bits() == 0.25_f32.to_bits())
+        assert_eq!(
+            floating
+                .decode_float(Some(&long_packet), &mut float, true)
+                .unwrap(),
+            160
+        );
+        for (value, sample) in float.iter().zip(actual) {
+            assert_eq!(value.to_bits(), (f32::from(sample) / 32768.0).to_bits());
+        }
+        decoder.decode(Some(packet), &mut actual, false).unwrap();
+        control.decode(Some(packet), &mut expected, false).unwrap();
+        floating
+            .decode_float(Some(packet), &mut float, false)
+            .unwrap();
+        for (value, sample) in float.iter().zip(actual) {
+            assert_eq!(value.to_bits(), (f32::from(sample) / 32768.0).to_bits());
+        }
+        assert_eq!(
+            actual, expected,
+            "FEC fallback must advance PLC recovery state"
         );
     }
-    let mut actual = [0; 160];
-    let mut expected = [0; 160];
-    decoder.decode(Some(packet), &mut actual, false).unwrap();
-    control.decode(Some(packet), &mut expected, false).unwrap();
-    assert_eq!(actual, expected);
 }
 
 #[cfg(feature = "celt")]
@@ -541,23 +554,43 @@ fn celt_plc_is_nonzero_and_invalid_requests_preserve_state() {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
-fn unsupported_hybrid_fec_preserves_output_and_decoder_state() {
-    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+fn hybrid_fec_and_loss_support_integer_float_and_recovery() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let packet = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin");
     let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-    let mut control = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
-    decoder.decode(Some(packet), &mut [0; 960], false).unwrap();
-    control.decode(Some(packet), &mut [0; 960], false).unwrap();
-    for (input, fec) in [(Some(packet.as_slice()), true), (None, true)] {
+    let mut floating = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    for state in [&mut decoder, &mut floating] {
+        state.decode(Some(packet), &mut [0; 960], false).unwrap();
+    }
+    for (input, fec) in [
+        (Some(packet.as_slice()), true),
+        (None, true),
+        (Some(packet.as_slice()), false),
+    ] {
+        let mut actual = [123; 960];
+        let mut float = [0.25; 960];
+        assert_eq!(decoder.decode(input, &mut actual, fec).unwrap(), 960);
+        assert_eq!(floating.decode_float(input, &mut float, fec).unwrap(), 960);
+        for (value, sample) in float.iter().zip(actual) {
+            assert_eq!(value.to_bits(), (f32::from(sample) / 32768.0).to_bits());
+        }
+    }
+}
+
+#[test]
+fn unknown_loss_duration_is_unsupported_and_output_atomic() {
+    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+    let mut decoder = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
+    for fec in [false, true] {
         let mut output = [123; 960];
         assert!(matches!(
-            decoder.decode(input, &mut output, fec),
+            decoder.decode(None, &mut output, fec),
             Err(Error::Unsupported(_))
         ));
         assert_eq!(output, [123; 960]);
         let mut float = [0.25; 960];
         assert!(matches!(
-            decoder.decode_float(input, &mut float, fec),
+            decoder.decode_float(None, &mut float, fec),
             Err(Error::Unsupported(_))
         ));
         assert!(
@@ -566,11 +599,9 @@ fn unsupported_hybrid_fec_preserves_output_and_decoder_state() {
                 .all(|value| value.to_bits() == 0.25_f32.to_bits())
         );
     }
-    let mut actual = [0; 960];
-    let mut expected = [0; 960];
-    decoder.decode(Some(packet), &mut actual, false).unwrap();
-    control.decode(Some(packet), &mut expected, false).unwrap();
-    assert_eq!(actual, expected);
+    let mut output = [123; 960];
+    assert_eq!(decoder.decode_loss(&mut output, 960).unwrap(), 960);
+    assert_eq!(output, [0; 960]);
 }
 
 #[test]
@@ -789,8 +820,8 @@ fn hybrid_stereo_nonzero_persistent_mapping_matches_pinned_api_all_rates() {
 
 #[cfg(all(feature = "silk", feature = "celt"))]
 #[test]
-fn hybrid_transitions_and_unsupported_channel_mapping_preserve_contracts() {
-    use moosicbox_opus_native::{Channels, Decoder, Error, SampleRate};
+fn hybrid_transitions_and_coded_channel_changes_preserve_contracts() {
+    use moosicbox_opus_native::{Channels, Decoder, SampleRate};
     let mono = include_bytes!("../test_vectors/frozen/hybrid_fb_mono/packet.bin");
     let stereo =
         include_bytes!("../test_vectors/frozen/corpus/sequences/hybrid_swb_stereo/packet.bin");
@@ -809,12 +840,38 @@ fn hybrid_transitions_and_unsupported_channel_mapping_preserve_contracts() {
         assert_eq!(output.as_slice(), frozen_pcm);
     }
     let mut output = [123; 960];
-    assert!(matches!(
-        decoder.decode(Some(stereo), &mut output, false),
-        Err(Error::Unsupported(_))
-    ));
-    assert_eq!(output, [123; 960]);
-    // The unsupported coded-channel request must not affect the next supported transition.
+    let mut too_small = [123; 959];
+    assert!(decoder.decode(Some(stereo), &mut too_small, false).is_err());
+    assert_eq!(too_small, [123; 959]);
+    let mut too_small_float = [0.25; 959];
+    assert!(
+        decoder
+            .decode_float(Some(stereo), &mut too_small_float, false)
+            .is_err()
+    );
+    assert!(
+        too_small_float
+            .iter()
+            .all(|value| value.to_bits() == 0.25_f32.to_bits())
+    );
+    // Failed capacity preflight must leave history aligned with the control.
+    assert_eq!(
+        decoder.decode(Some(stereo), &mut output, false).unwrap(),
+        960
+    );
+    let mut float = [0.0; 960];
+    assert_eq!(
+        control
+            .decode_float(Some(stereo), &mut float, false)
+            .unwrap(),
+        960
+    );
+    for (value, sample) in float.iter().zip(output) {
+        assert_eq!(value.to_bits(), (f32::from(sample) / 32768.0).to_bits());
+    }
+    // Both decoders must retain identical history across the supported channel
+    // change and subsequent hybrid/CELT transitions. Live reference parity for
+    // this precise fixture sequence is tested in decoder_completion.rs.
     let mut expected = [0; 960];
     for packet in [celt.as_slice(), mono.as_slice()] {
         assert_eq!(

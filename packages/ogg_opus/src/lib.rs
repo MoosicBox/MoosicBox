@@ -4,6 +4,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+mod chain;
+pub use chain::{ChainEvent, ChainSection, ChainSeekResult, OggOpusChainReader};
+
 use std::collections::VecDeque;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 
@@ -74,6 +77,45 @@ impl OpusHead {
             stream_count: 1,
             coupled_count: channels - 1,
             channel_mapping: Vec::new(),
+        })
+    }
+
+    /// Construct a canonical mapping-family-one header for one to eight channels.
+    ///
+    /// Application PCM uses Vorbis channel order: mono; FL/FR; FL/FC/FR;
+    /// FL/FR/RL/RR; FL/FC/FR/RL/RR; FL/FC/FR/RL/RR/LFE;
+    /// FL/FC/FR/SL/SR/RC/LFE; FL/FC/FR/SL/SR/RL/RR/LFE.
+    /// Coupled coded streams precede mono streams. The codec must use the returned
+    /// stream counts and mapping, not an independently inferred layout.
+    ///
+    /// # Errors
+    /// * Returns `InvalidInput` for a channel count outside one through eight.
+    pub fn new_family1(channels: u8, pre_skip: u16, input_sample_rate: u32) -> io::Result<Self> {
+        let (stream_count, coupled_count, channel_mapping): (u8, u8, &[u8]) = match channels {
+            1 => (1, 0, &[0]),
+            2 => (1, 1, &[0, 1]),
+            3 => (2, 1, &[0, 2, 1]),
+            4 => (2, 2, &[0, 1, 2, 3]),
+            5 => (3, 2, &[0, 4, 1, 2, 3]),
+            6 => (4, 2, &[0, 4, 1, 2, 3, 5]),
+            7 => (4, 3, &[0, 4, 1, 2, 3, 5, 6]),
+            8 => (5, 3, &[0, 6, 1, 2, 3, 4, 5, 7]),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "family one needs one through eight channels",
+                ));
+            }
+        };
+        Ok(Self {
+            channels,
+            pre_skip,
+            input_sample_rate,
+            output_gain: 0,
+            mapping_family: 1,
+            stream_count,
+            coupled_count,
+            channel_mapping: channel_mapping.to_vec(),
         })
     }
 
@@ -328,7 +370,8 @@ impl AudioPacket {
     }
 }
 
-/// Streaming, single-logical-stream reader. Multiplexing and chaining are rejected.
+/// Streaming, single-logical-stream reader. Multiplexing is rejected; stops at EOS.
+/// Use [`OggOpusChainReader`] to consume subsequent chained sections.
 pub struct OggOpusReader<R> {
     source: R,
     head: OpusHead,
@@ -587,9 +630,13 @@ impl<R: Read + Seek> OggOpusReader<R> {
     /// # Errors
     /// * Propagates seek, read, and stream validation errors, including sample overflow.
     pub fn seek_to(&mut self, sample: u64) -> io::Result<SeekResult> {
+        self.seek_to_offset(sample, 0)
+    }
+
+    fn seek_to_offset(&mut self, sample: u64, offset: u64) -> io::Result<SeekResult> {
         // First determine the actual EOS position, including end trimming. This
         // also validates the stream before exposing a seek result beyond its end.
-        self.source.seek(SeekFrom::Start(0))?;
+        self.source.seek(SeekFrom::Start(offset))?;
         self.reset();
         let mut end = 0;
         while let Some(packet) = self.next_packet()? {
@@ -606,7 +653,7 @@ impl<R: Read + Seek> OggOpusReader<R> {
             .and_then(|value| value.checked_add(u64::from(self.head.pre_skip)))
             .ok_or_else(|| invalid("seek overflow"))?;
         let preroll = target.saturating_sub(3840);
-        self.source.seek(SeekFrom::Start(0))?;
+        self.source.seek(SeekFrom::Start(offset))?;
         self.reset();
         while self.headers < 2 {
             self.read_page()?;

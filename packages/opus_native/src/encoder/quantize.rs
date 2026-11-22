@@ -7,6 +7,50 @@ use crate::range::RangeEncoder;
 
 const ONE: i32 = 1 << 16;
 
+/// Signal zero net TF change in every band. Transient packets need a leading
+/// toggle to one followed by zeros and a zero selector; omitting these symbols
+/// desynchronizes all later entropy stages, even for long-window packets.
+pub(super) fn tf_neutral(
+    enc: &mut RangeEncoder,
+    start: usize,
+    lm: usize,
+    transient: bool,
+    total_bits: usize,
+) -> Result<()> {
+    tf_neutral_end(enc, start, 21, lm, transient, total_bits)
+}
+
+/// Band-limited neutral TF signaling, including wideband redundancy.
+pub(super) fn tf_neutral_end(
+    enc: &mut RangeEncoder,
+    start: usize,
+    end: usize,
+    lm: usize,
+    transient: bool,
+    total_bits: usize,
+) -> Result<()> {
+    let mut logp = if transient { 2 } else { 4 };
+    let reserve = lm > 0 && enc.tell() as usize + logp < total_bits;
+    let budget = total_bits - usize::from(reserve);
+    let mut current = false;
+    let mut changed = false;
+    for _ in start..end {
+        if enc.tell() as usize + logp <= budget {
+            enc.ec_enc_bit_logp(current != transient, logp as u32)
+                .map_err(entropy)?;
+            current = transient;
+            changed |= current;
+        }
+        logp = if transient { 4 } else { 5 };
+    }
+    // For transient flag=1, table entries [5] and [7] differ at all LM>0.
+    // For long blocks with all flags zero they are identical: no selector.
+    if reserve && transient && changed {
+        enc.ec_enc_bit_logp(false, 1).map_err(entropy)?;
+    }
+    Ok(())
+}
+
 // Binary logarithm with a Q31 mantissa and repeated integer squaring.
 fn log2_q16(value: u64) -> i32 {
     if value == 0 {
@@ -51,6 +95,34 @@ pub(super) fn energies(spectrum: &[Vec<i32>], lm: usize) -> (Vec<i32>, Vec<i32>)
     }
     let energy = vec![0; target.len()];
     (target, energy)
+}
+
+/// Bound coarse-energy residuals when the packet cannot afford unconstrained
+/// Laplace symbols. This is the encoder-only safety policy from pinned
+/// `quant_coarse_energy_impl`; the decoder's entropy syntax is unchanged.
+/// `remaining_bits` is measured before coding this channel/band.
+pub(super) fn coarse_energy_budget(
+    residual: i32,
+    remaining_bits: usize,
+    channels: usize,
+    band: usize,
+    start: usize,
+    end: usize,
+) -> i32 {
+    let available = remaining_bits as i64 - (3 * channels * (end - band)) as i64;
+    if band == start || available >= 30 {
+        return residual;
+    }
+    let residual = if available < 24 {
+        residual.min(1)
+    } else {
+        residual
+    };
+    if available < 16 {
+        residual.max(-1)
+    } else {
+        residual
+    }
 }
 
 pub(super) fn laplace(
@@ -122,8 +194,26 @@ pub(super) fn final_energy(
     total: usize,
     start: usize,
 ) -> Result<()> {
+    final_energy_end(
+        enc, target, energy, fine, priority, channels, total, start, 21,
+    )
+}
+
+/// Band-limited final-energy refinement; excluded bands consume no raw bits.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn final_energy_end(
+    enc: &mut RangeEncoder,
+    target: &[i32],
+    energy: &mut [i32],
+    fine: &[u8; 21],
+    priority: &[u8; 21],
+    channels: usize,
+    total: usize,
+    start: usize,
+    end: usize,
+) -> Result<()> {
     for pass in 0..2 {
-        for band in start..21 {
+        for band in start..end {
             if fine[band] >= 8
                 || priority[band] != pass
                 || total.saturating_sub(enc.tell() as usize) < channels
@@ -158,16 +248,236 @@ const fn logtan(s: i32, c: i32) -> i32 {
     (ls as i32 - lc as i32) * 2048 + frac(s, frac(s, -2597) + 7932) - frac(c, frac(c, -2597) + 7932)
 }
 
+/// Joint mid/side stereo shape coding, matching `quant_band_stereo` in the
+/// pinned reference. Input channels are normalized independently before the
+/// orthogonal split; energy is carried separately by CELT energy quantization.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(super) fn stereo_band(
+    enc: &mut RangeEncoder,
+    left: &[i32],
+    right: &[i32],
+    mut bits: i32,
+    band_index: usize,
+    lm: i32,
+    remaining: &mut i32,
+    blocks: usize,
+) -> Result<()> {
+    let n = left.len();
+    if n == 1 {
+        partition(enc, left, bits, band_index, lm, remaining)?;
+        return partition(enc, right, bits, band_index, lm, remaining);
+    }
+    let normalize = |input: &[i32]| {
+        let power = input
+            .iter()
+            .map(|&x| (i128::from(x) * i128::from(x)) as u128)
+            .sum::<u128>();
+        let norm = power.isqrt().max(1) as i128;
+        input
+            .iter()
+            .map(|&x| (i128::from(x) * (1 << 20) / norm) as i32)
+            .collect::<Vec<_>>()
+    };
+    let left = normalize(left);
+    let right = normalize(right);
+    let mid: Vec<_> = left.iter().zip(&right).map(|(&l, &r)| l + r).collect();
+    let side: Vec<_> = left.iter().zip(&right).map(|(&l, &r)| r - l).collect();
+    let logn = [
+        0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 16, 16, 16, 21, 21, 24, 29, 34, 36,
+    ];
+    let pulse_cap = logn[band_index] + lm * 8;
+    let offset = (pulse_cap >> 1) - if n == 2 { 16 } else { 4 };
+    let dimension = 2 * n as i32 - 1 - i32::from(n == 2);
+    let qb = ((bits + dimension * offset) / dimension)
+        .min(bits - pulse_cap - 32)
+        .min(64);
+    let qn = if qb < 4 {
+        1
+    } else {
+        let exp = [16384, 17866, 19483, 21247, 23170, 25267, 27554, 30048];
+        ((exp[(qb & 7) as usize] >> (14 - (qb >> 3))) + 1) >> 1 << 1
+    };
+    let power = |x: &[i32]| {
+        x.iter()
+            .map(|&v| i128::from(v) * i128::from(v))
+            .sum::<i128>()
+    };
+    let mid_power = power(&mid);
+    let side_power = power(&side);
+    let before = enc.tell_frac() as i32;
+    let theta = if qn == 1 {
+        // The qn=1 stereo syntax is intensity plus optional inversion.
+        return intensity_band(enc, &left, &right, bits, band_index, lm, remaining, blocks);
+    } else {
+        let symbol = (0..=qn)
+            .min_by_key(|&q| {
+                let phase = q * 32768 / qn;
+                let c = i128::from(crate::celt::fixed_point::celt_cos_norm(phase));
+                let s = i128::from(crate::celt::fixed_point::celt_cos_norm(32768 - phase));
+                (side_power * c * c - mid_power * s * s).abs()
+            })
+            .unwrap_or(0);
+        if n > 2 {
+            let halfway = qn / 2;
+            let total = 3 * (halfway + 1) + halfway;
+            let low = if symbol <= halfway {
+                3 * symbol
+            } else {
+                symbol - 1 - halfway + 3 * (halfway + 1)
+            };
+            let width = if symbol <= halfway { 3 } else { 1 };
+            enc.ec_encode(low as u32, (low + width) as u32, total as u32)
+                .map_err(entropy)?;
+        } else {
+            enc.ec_enc_uint(symbol as u32, (qn + 1) as u32)
+                .map_err(entropy)?;
+        }
+        symbol * 16384 / qn
+    };
+    let cost = enc.tell_frac() as i32 - before;
+    bits -= cost;
+    *remaining -= cost;
+    if n == 2 {
+        let side_bits = i32::from(theta != 0 && theta != 16384) * 8;
+        if side_bits != 0 {
+            let primary = if theta > 8192 { &side } else { &mid };
+            let other = if theta > 8192 { &mid } else { &side };
+            let inverse = i64::from(primary[0]) * i64::from(other[1])
+                - i64::from(primary[1]) * i64::from(other[0])
+                < 0;
+            enc.ec_enc_bits(u32::from(inverse), 1).map_err(entropy)?;
+            *remaining -= 8;
+        }
+        return band(
+            enc,
+            if theta > 8192 { &side } else { &mid },
+            bits - side_bits,
+            band_index,
+            lm,
+            remaining,
+            blocks,
+        );
+    }
+    let delta = if theta == 0 {
+        -16384
+    } else if theta == 16384 {
+        16384
+    } else {
+        frac((n as i32 - 1) << 7, logtan(cos(16384 - theta), cos(theta)))
+    };
+    let mut mid_bits = ((bits - delta) / 2).clamp(0, bits);
+    let mut side_bits = bits - mid_bits;
+    let prior = *remaining;
+    if mid_bits >= side_bits {
+        band(enc, &mid, mid_bits, band_index, lm, remaining, blocks)?;
+        let rebalance = mid_bits - (prior - *remaining);
+        if rebalance > 24 && theta != 0 {
+            side_bits += rebalance - 24;
+        }
+        band(enc, &side, side_bits, band_index, lm, remaining, blocks)
+    } else {
+        band(enc, &side, side_bits, band_index, lm, remaining, blocks)?;
+        let rebalance = side_bits - (prior - *remaining);
+        if rebalance > 24 && theta != 16384 {
+            mid_bits += rebalance - 24;
+        }
+        band(enc, &mid, mid_bits, band_index, lm, remaining, blocks)
+    }
+}
+
+/// Encode a shared high-band stereo shape, retaining an inversion flag for
+/// anti-correlated stereo. Call only at/above the signaled intensity boundary.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn intensity_band(
+    enc: &mut RangeEncoder,
+    left: &[i32],
+    right: &[i32],
+    mut bits: i32,
+    band_index: usize,
+    lm: i32,
+    remaining: &mut i32,
+    blocks: usize,
+) -> Result<()> {
+    // The one-dimensional stereo case has two independent sign bits, even
+    // above the intensity boundary (quant_band_n1 in the pinned reference).
+    if left.len() == 1 {
+        partition(enc, left, bits, band_index, lm, remaining)?;
+        return partition(enc, right, bits, band_index, lm, remaining);
+    }
+    let dot: i128 = left
+        .iter()
+        .zip(right)
+        .map(|(&l, &r)| i128::from(l) * i128::from(r))
+        .sum();
+    let mut inverse = dot < 0;
+    if bits > 16 && *remaining > 16 {
+        let before = enc.tell_frac() as i32;
+        enc.ec_enc_bit_logp(inverse, 2).map_err(entropy)?;
+        let cost = enc.tell_frac() as i32 - before;
+        bits -= cost;
+        *remaining -= cost;
+    } else {
+        inverse = false;
+    }
+    let shape: Vec<_> = left
+        .iter()
+        .zip(right)
+        .map(|(&l, &r)| {
+            i64::from(l).midpoint(if inverse { -i64::from(r) } else { i64::from(r) }) as i32
+        })
+        .collect();
+    band(enc, &shape, bits, band_index, lm, remaining, blocks)
+}
+
 /// Recursively split overlarge pulse codebooks, quantize their angle, and emit
 /// a signed integer pyramid index for each leaf.
 #[allow(clippy::too_many_lines, clippy::many_single_char_names)] // Recursive RFC N/K/theta notation.
 pub(super) fn partition(
     enc: &mut RangeEncoder,
     x: &[i32],
+    bits: i32,
+    band: usize,
+    lm: i32,
+    remaining: &mut i32,
+) -> Result<()> {
+    partition_blocks(enc, x, bits, band, lm, remaining, 1)
+}
+
+/// Quantize a band in frequency-major short-block order. TF changes must be
+/// zero, spreading must be disabled, and `blocks` must match the transient LM.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn band(
+    enc: &mut RangeEncoder,
+    x: &[i32],
+    bits: i32,
+    band: usize,
+    lm: i32,
+    remaining: &mut i32,
+    blocks: usize,
+) -> Result<()> {
+    if blocks == 1 {
+        return partition(enc, x, bits, band, lm, remaining);
+    }
+    let width = x.len() / blocks;
+    let ordered: Vec<_> = (0..blocks)
+        .flat_map(|block| (0..width).map(move |bin| x[bin * blocks + block]))
+        .collect();
+    partition_blocks(enc, &ordered, bits, band, lm, remaining, blocks)
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::many_single_char_names
+)]
+fn partition_blocks(
+    enc: &mut RangeEncoder,
+    x: &[i32],
     mut bits: i32,
     band: usize,
     mut lm: i32,
     remaining: &mut i32,
+    blocks: usize,
 ) -> Result<()> {
     let n = x.len();
     if n == 1 {
@@ -205,7 +515,7 @@ pub(super) fn partition(
             .iter()
             .map(|&v| i128::from(v) * i128::from(v))
             .sum::<i128>();
-        let symbol = if qn == 1 {
+        let mut symbol = if qn == 1 {
             0
         } else {
             // Compare squared tan(theta) against the power ratio. All angle
@@ -219,8 +529,26 @@ pub(super) fn partition(
                 })
                 .unwrap_or(0)
         };
+        if blocks > 1 && symbol > 0 && symbol < qn {
+            // Pinned compute_theta's avoid_split_noise: a temporal half with
+            // less than one shape's worth of allocation must not receive
+            // nonzero theta energy only to be synthesized as folding noise.
+            let theta = symbol * 16384 / qn;
+            let delta = frac(
+                (half as i32 - 1) << 7,
+                logtan(cos(16384 - theta), cos(theta)),
+            );
+            if delta > bits {
+                symbol = qn;
+            } else if delta < -bits {
+                symbol = 0;
+            }
+        }
         let before = enc.tell_frac() as i32;
-        if qn > 1 {
+        if qn > 1 && blocks > 1 {
+            enc.ec_enc_uint(symbol as u32, (qn + 1) as u32)
+                .map_err(entropy)?;
+        } else if qn > 1 {
             let total = ((qn >> 1) + 1) * ((qn >> 1) + 1);
             let mut cumulative = 0;
             for candidate in 0..=qn {
@@ -244,7 +572,7 @@ pub(super) fn partition(
         let theta = symbol * 16384 / qn;
         let cost = enc.tell_frac() as i32 - before;
         bits -= cost;
-        let delta = if theta == 0 {
+        let mut delta = if theta == 0 {
             -16384
         } else if theta == 16384 {
             16384
@@ -254,25 +582,33 @@ pub(super) fn partition(
                 logtan(cos(16384 - theta), cos(theta)),
             )
         };
+        if blocks > 1 && theta != 0 && theta != 16384 {
+            if theta > 8192 {
+                delta -= delta >> (4 - lm);
+            } else {
+                delta = 0.min(delta + ((half as i32 * 8) >> (5 - lm)));
+            }
+        }
+        let next_blocks = blocks.div_ceil(2);
         let mut mbits = (bits - delta) / 2;
         mbits = mbits.clamp(0, bits);
         let mut sbits = bits - mbits;
         *remaining -= cost;
         let prior = *remaining;
         if mbits >= sbits {
-            partition(enc, &x[..half], mbits, band, lm, remaining)?;
+            partition_blocks(enc, &x[..half], mbits, band, lm, remaining, next_blocks)?;
             let rebalance = mbits - (prior - *remaining);
             if rebalance > 24 && theta != 0 {
                 sbits += rebalance - 24;
             }
-            partition(enc, &x[half..], sbits, band, lm, remaining)?;
+            partition_blocks(enc, &x[half..], sbits, band, lm, remaining, next_blocks)?;
         } else {
-            partition(enc, &x[half..], sbits, band, lm, remaining)?;
+            partition_blocks(enc, &x[half..], sbits, band, lm, remaining, next_blocks)?;
             let rebalance = sbits - (prior - *remaining);
             if rebalance > 24 && theta != 16384 {
                 mbits += rebalance - 24;
             }
-            partition(enc, &x[..half], mbits, band, lm, remaining)?;
+            partition_blocks(enc, &x[..half], mbits, band, lm, remaining, next_blocks)?;
         }
         return Ok(());
     }
@@ -380,4 +716,77 @@ fn rank(pulses: &[i32], k: usize) -> (u32, u32) {
         offsets.push(sign + if dims == 1 { 0 } else { p });
     }
     (offsets.iter().sum(), v[n][k])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{coarse_energy_budget, stereo_band, tf_neutral};
+    use crate::range::{RangeDecoder, RangeEncoder};
+
+    #[test]
+    fn joint_identical_and_antiphase_choose_theta_endpoints() {
+        for inverse in [false, true] {
+            let left = [10000, -5000, 8000, 3000, -9000, 7000, 4000, -1000];
+            let right = left.map(|x| if inverse { -x } else { x });
+            let mut encoder = RangeEncoder::new(128).unwrap();
+            let mut remaining = 8000;
+            stereo_band(&mut encoder, &left, &right, 1024, 0, 3, &mut remaining, 1).unwrap();
+            // qn=256 at this budget and dimension. Its stereo step PDF has
+            // mass 3 on symbols 0..128 and mass 1 on 129..256.
+            let packet = encoder.finish().unwrap();
+            let mut decoder = RangeDecoder::new(&packet).unwrap();
+            let total = 3 * 129 + 128;
+            let cumulative = decoder.ec_decode(total).unwrap();
+            if inverse {
+                assert_eq!(cumulative, total - 1);
+            } else {
+                assert!(cumulative < 3);
+            }
+        }
+    }
+
+    #[test]
+    fn coarse_energy_low_budget_policy_matches_pinned_thresholds() {
+        assert_eq!(coarse_energy_budget(8, 0, 1, 0, 0, 21), 8);
+        assert_eq!(coarse_energy_budget(8, 40, 1, 20, 0, 21), 8);
+        assert_eq!(coarse_energy_budget(8, 26, 1, 20, 0, 21), 1);
+        assert_eq!(coarse_energy_budget(-8, 26, 1, 20, 0, 21), -8);
+        assert_eq!(coarse_energy_budget(-8, 18, 1, 20, 0, 21), -1);
+        assert_eq!(coarse_energy_budget(8, 0, 2, 20, 0, 21), 1);
+        assert_eq!(coarse_energy_budget(-8, 0, 2, 20, 0, 21), -1);
+    }
+
+    #[test]
+    fn neutral_tf_symbols_match_reference_state_machine() {
+        for lm in 0..=3 {
+            for transient in [false, true] {
+                if lm == 0 && transient {
+                    continue;
+                }
+                for start in [0, 17] {
+                    let mut encoder = RangeEncoder::new(64).unwrap();
+                    tf_neutral(&mut encoder, start, lm, transient, 512).unwrap();
+                    encoder.ec_enc_uint(13, 19).unwrap();
+                    let packet = encoder.finish().unwrap();
+                    let mut decoder = RangeDecoder::new(&packet).unwrap();
+                    let mut current = false;
+                    for band in start..21 {
+                        let logp = if band == start {
+                            if transient { 2 } else { 4 }
+                        } else if transient {
+                            4
+                        } else {
+                            5
+                        };
+                        current ^= decoder.ec_dec_bit_logp(logp).unwrap();
+                        assert_eq!(current, transient);
+                    }
+                    if transient {
+                        assert!(!decoder.ec_dec_bit_logp(1).unwrap());
+                    }
+                    assert_eq!(decoder.ec_dec_uint(19).unwrap(), 13);
+                }
+            }
+        }
+    }
 }

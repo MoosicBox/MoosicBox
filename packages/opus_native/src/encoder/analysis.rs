@@ -28,6 +28,33 @@ impl Analysis {
         }
     }
 
+    /// Analyze attacks with independent 2.5 ms MDCTs, interleaved by frequency
+    /// exactly as `compute_mdcts` in the pinned CELT encoder. The ordinary
+    /// transform remains available for hybrid and long-window callers.
+    pub(super) fn transform_celt(
+        &mut self,
+        pcm: &[i32],
+        allow_transient: bool,
+    ) -> (Vec<Vec<i32>>, bool) {
+        let channels = self.overlap.len();
+        let frames = pcm.len() / channels;
+        let transient = allow_transient && frames > 120 && has_attack(pcm, channels);
+        if !transient {
+            return (self.transform(pcm), false);
+        }
+        let blocks = frames / 120;
+        let mut spectrum = vec![vec![0; frames]; channels];
+        for (block, input) in pcm.chunks_exact(120 * channels).enumerate() {
+            let short = self.transform(input);
+            for (output, short) in spectrum.iter_mut().zip(short) {
+                for (bin, value) in short.into_iter().enumerate() {
+                    output[bin * blocks + block] = value;
+                }
+            }
+        }
+        (spectrum, true)
+    }
+
     pub(super) fn transform(&mut self, pcm: &[i32]) -> Vec<Vec<i32>> {
         let channels = self.overlap.len();
         let n = pcm.len() / channels;
@@ -90,6 +117,30 @@ impl Analysis {
     }
 }
 
+// Integer high-pass energy avoids mistaking low-frequency/DC level changes
+// for attacks. Compare adjacent 1.25 ms windows on each channel independently,
+// so an attack in one side cannot be masked by a loud steady opposite side.
+fn has_attack(pcm: &[i32], channels: usize) -> bool {
+    (0..channels).any(|channel| {
+        let mut previous_sample = pcm[channel];
+        let mut previous_energy = 0_u64;
+        let mut attack = false;
+        for (index, window) in pcm.chunks_exact(60 * channels).enumerate() {
+            let mut energy = 0_u64;
+            for frame in window.chunks_exact(channels) {
+                let sample = frame[channel];
+                let difference = (i64::from(sample) - i64::from(previous_sample)) >> 12;
+                energy += (difference * difference) as u64;
+                previous_sample = sample;
+            }
+            // A 12 dB rise above the local floor, with a -60 dBFS floor.
+            attack |= index > 0 && energy > 16 * previous_energy.max(64);
+            previous_energy = energy;
+        }
+        attack
+    })
+}
+
 // CELT transform lengths have only factors 2, 3 and 5. Decimation in time
 // reduces the direct transform to O(N log N), with deterministic Q15 twiddles.
 fn fft(input: &[(i32, i32)]) -> Vec<(i32, i32)> {
@@ -127,8 +178,50 @@ fn fft(input: &[(i32, i32)]) -> Vec<(i32, i32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{cosine, fft, mul};
+    use super::{Analysis, cosine, fft, has_attack, mul};
     use crate::celt::fixed_point::celt_cos_norm;
+
+    #[test]
+    fn transient_short_mdcts_preserve_frequency_order_and_history() {
+        for channels in [1, 2] {
+            for blocks in [2, 4, 8] {
+                let mut pcm = vec![0; 120 * blocks * channels];
+                for frame in 90..120 * blocks {
+                    for channel in 0..channels {
+                        pcm[frame * channels + channel] =
+                            ((frame * 7919 + channel * 1237) % 10000) as i32 * 4096;
+                    }
+                }
+                let mut analysis = Analysis::new(channels);
+                let mut independent = analysis.clone();
+                let (actual, transient) = analysis.transform_celt(&pcm, true);
+                assert!(transient);
+                for (block, input) in pcm.chunks_exact(120 * channels).enumerate() {
+                    let expected = independent.transform(input);
+                    for channel in 0..channels {
+                        for bin in 0..120 {
+                            assert_eq!(
+                                actual[channel][bin * blocks + block],
+                                expected[channel][bin]
+                            );
+                        }
+                    }
+                }
+                let tail = vec![0; 120 * channels];
+                assert_eq!(analysis.transform(&tail), independent.transform(&tail));
+            }
+        }
+    }
+
+    #[test]
+    fn attack_detector_rejects_dc_and_detects_one_sided_attack() {
+        assert!(!has_attack(&vec![1 << 26; 960 * 2], 2));
+        let mut pcm = vec![1 << 26; 960 * 2];
+        for frame in 240..300 {
+            pcm[2 * frame + 1] = if frame % 2 == 0 { 1 << 26 } else { -(1 << 26) };
+        }
+        assert!(has_attack(&pcm, 2));
+    }
 
     #[test]
     fn mixed_radix_matches_independent_direct_dft() {

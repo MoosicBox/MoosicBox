@@ -152,14 +152,18 @@ fn parse_code3_vbr(
     let mut frames = Vec::with_capacity(count as usize);
     let packet_end = packet.len() - padding_data_bytes;
 
+    let mut lengths = Vec::with_capacity(count as usize);
     for _ in 0..(count - 1) {
-        let (len, len_bytes) = decode_frame_length(&packet[offset..])?;
+        let (len, len_bytes) = decode_frame_length(&packet[offset..packet_end])?;
         offset += len_bytes;
+        lengths.push(len);
+    }
 
-        if offset + len > packet_end {
+    // RFC 6716 places every VBR length before all frame payloads.
+    for len in lengths {
+        if len > packet_end - offset {
             return Err(Error::InvalidPacket("VBR frame exceeds packet".into()));
         }
-
         frames.push(&packet[offset..offset + len]);
         offset += len;
     }
@@ -297,9 +301,9 @@ mod tests {
             0b0000_0011,
             0b1000_0011,
             2,
+            3,
             0x01,
             0x02,
-            3,
             0x03,
             0x04,
             0x05,
@@ -311,6 +315,18 @@ mod tests {
         assert_eq!(frames[0], &[0x01, 0x02]);
         assert_eq!(frames[1], &[0x03, 0x04, 0x05]);
         assert_eq!(frames[2], &[0x06, 0x07]);
+    }
+
+    #[test_log::test]
+    fn code3_vbr_lengths_precede_payloads() {
+        let frames = parse_frames(&[0x83, 0x83, 1, 2, 10, 11, 12, 13, 14, 15]).unwrap();
+        assert_eq!(frames, vec![&[10][..], &[11, 12][..], &[13, 14, 15][..]]);
+    }
+
+    #[test_log::test]
+    fn code3_vbr_truncated_length_header_is_rejected() {
+        assert!(parse_frames(&[0x83, 0x83, 252]).is_err());
+        assert!(parse_frames(&[0x83, 0xc3, 1, 252, 0]).is_err());
     }
 
     #[test_log::test]
@@ -418,9 +434,9 @@ mod tests {
             0b1100_0011,
             2,
             2,
+            3,
             0xAA,
             0xBB,
-            3,
             0xCC,
             0xDD,
             0xEE,

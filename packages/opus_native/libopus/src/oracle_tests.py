@@ -68,6 +68,83 @@ class ReferenceProtocolTests(unittest.TestCase):
                             )
                             oracle.request("reset", state="encoder")
 
+    def test_decoder_gain_nonzero_pcm_and_reset(self):
+        with Oracle(EXECUTABLE) as oracle:
+            oracle.request("encoder", rate=48000, channels=1)
+            pcm = [
+                int(8000 * math.sin(2 * math.pi * 440 * i / 48000)) for i in range(960)
+            ]
+            packets = [
+                oracle.request("encode", frame_size=960, pcm=pcm)["packet"]
+                for _ in range(3)
+            ]
+            outputs = []
+            for gain in (0, -1536):
+                oracle.request("decoder", rate=48000, channels=1)
+                oracle.request("decoder_configure", controls=[[4034, gain]])
+                decoded = []
+                for packet in packets:
+                    decoded.extend(
+                        oracle.request("decode", frame_size=960, packet=packet)["pcm"]
+                    )
+                oracle.request("reset", state="decoder")
+                replay = []
+                for packet in packets:
+                    replay.extend(
+                        oracle.request("decode", frame_size=960, packet=packet)["pcm"]
+                    )
+                self.assertEqual(decoded, replay)
+                outputs.append(sum(x * x for x in decoded))
+            self.assertGreater(outputs[0], outputs[1])
+            self.assertGreater(outputs[1], 0)
+
+    def test_multistream_layouts_replay_loss_and_gain(self):
+        from qualification_matrix import multistream
+
+        rows = multistream(EXECUTABLE)
+        self.assertEqual(len(rows), 4)
+        self.assertTrue(
+            all(row["replay_exact"] and row["gain_checked"] for row in rows)
+        )
+
+    def test_multistream_rejects_invalid_layouts_and_gain(self):
+        valid = dict(
+            op="multistream_decoder",
+            rate=48000,
+            channels=2,
+            streams=1,
+            coupled_streams=1,
+            mapping=[0, 1],
+        )
+        for changes in (
+            dict(channels=0),
+            dict(mapping=[0]),
+            dict(streams=0),
+            dict(coupled_streams=2),
+            dict(mapping=[0, 2]),
+            dict(rate=44100),
+        ):
+            result = subprocess.run(
+                [EXECUTABLE],
+                input=json.dumps(dict(valid, **changes)) + "\n",
+                text=True,
+                capture_output=True,
+                timeout=15,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+        result = subprocess.run(
+            [EXECUTABLE],
+            input=json.dumps(valid)
+            + "\n"
+            + json.dumps(dict(op="multistream_gain", gain_q8=32768))
+            + "\n",
+            text=True,
+            capture_output=True,
+            timeout=15,
+        )
+        self.assertEqual(result.returncode, 1)
+
     def test_rejects_bad_requests(self):
         for request in (
             {"op": "unknown"},

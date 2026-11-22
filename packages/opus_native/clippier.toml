@@ -1,2 +1,11 @@
 # The range-encoder interoperability test builds its oracle from this pinned source.
 git-submodules = true
+
+[[config]]
+os = "ubuntu"
+
+[[config]]
+os = "macos"
+
+[[config]]
+os = "windows"

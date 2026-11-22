@@ -10,7 +10,7 @@ pub(super) struct Concealment {
     pub(super) ltp_scale_q14: i16,
     pub(super) subframe: usize,
     pub(super) subframes: usize,
-    rate: usize,
+    pub(super) rate: usize,
     seed: i32,
     pub(super) random_q14: i16,
     pub(super) losses: usize,

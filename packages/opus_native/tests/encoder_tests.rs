@@ -870,13 +870,49 @@ fn unsupported_bitrate_ranges_reject_at_construction() {
     }
     #[cfg(feature = "hybrid")]
     {
-        assert!(
-            Encoder::new_hybrid(EncoderConfig {
-                bitrate: 127_999,
-                ..EncoderConfig::default()
-            })
-            .is_err()
-        );
+        use moosicbox_opus_native::SampleRate;
+
+        for (sample_rate, channels, minimum) in [
+            (SampleRate::Hz48000, Channels::Stereo, 32_000),
+            (SampleRate::Hz48000, Channels::Mono, 128_000),
+            (SampleRate::Hz24000, Channels::Stereo, 128_000),
+            (SampleRate::Hz24000, Channels::Mono, 128_000),
+        ] {
+            for milliseconds in [10, 20] {
+                let config = EncoderConfig {
+                    sample_rate,
+                    channels,
+                    frame_size: if sample_rate == SampleRate::Hz48000 {
+                        48 * milliseconds
+                    } else {
+                        24 * milliseconds
+                    },
+                    bitrate: minimum,
+                };
+                assert!(
+                    Encoder::new_hybrid(EncoderConfig {
+                        bitrate: minimum - 1,
+                        ..config
+                    })
+                    .is_err()
+                );
+                assert!(Encoder::new_hybrid(config).is_ok());
+                assert!(
+                    Encoder::new_hybrid(EncoderConfig {
+                        bitrate: 256_000,
+                        ..config
+                    })
+                    .is_ok()
+                );
+                assert!(
+                    Encoder::new_hybrid(EncoderConfig {
+                        bitrate: 256_001,
+                        ..config
+                    })
+                    .is_err()
+                );
+            }
+        }
         assert!(Encoder::new_hybrid(EncoderConfig::default()).is_ok());
     }
 }

@@ -68,6 +68,8 @@ pub mod celt;
 pub mod error;
 /// Opus packet framing and parsing according to RFC 6716
 pub mod framing;
+/// Native multistream packet decoding and channel mapping.
+pub mod multistream;
 #[cfg(feature = "celt")]
 mod output;
 /// Range decoder for entropy decoding
@@ -85,7 +87,7 @@ pub use error::{Error, Result};
 #[cfg(feature = "celt")]
 pub mod encoder;
 #[cfg(feature = "celt")]
-pub use encoder::{Encoder, EncoderConfig};
+pub use encoder::{Encoder, EncoderConfig, EncoderControl, EncoderMode};
 pub use toc::{Bandwidth, Configuration, FrameSize, OpusMode, Toc};
 
 /// Audio channel configuration
@@ -153,6 +155,7 @@ pub struct Decoder {
     sample_rate: SampleRate,
     #[allow(dead_code)]
     channels: Channels,
+    gain_q8: i16,
 
     #[cfg(feature = "silk")]
     silk: silk::SilkDecoder,
@@ -211,6 +214,7 @@ impl Decoder {
         Ok(Self {
             sample_rate,
             channels,
+            gain_q8: 0,
 
             #[cfg(feature = "silk")]
             silk: silk::SilkDecoder::new(
@@ -277,17 +281,38 @@ impl Decoder {
     /// * `Error::InvalidPacket` - Packet violates RFC R1-R7
     /// * `Error::UnsupportedMode` - Mode not enabled via features
     /// * `Error::DecodeFailed` - Decoder error
-    /// * `Error::Unsupported` - Requested concealment or FEC configuration is not implemented
+    /// * `Error::Unsupported` - Requested codec feature is not enabled.
+    ///
+    /// Errors leave `output` unchanged. Packet framing, duration and capacity
+    /// validation precede synthesis; entropy/synthesis failures may advance
+    /// internal predictor state. Reset after a damaged packet if rollback is needed.
     #[allow(clippy::too_many_lines)]
     pub fn decode(&mut self, input: Option<&[u8]>, output: &mut [i16], fec: bool) -> Result<usize> {
-        if fec {
+        let mut pcm = vec![0; output.len()];
+        let samples = self.decode_inner(input, &mut pcm, fec)?;
+        let count = samples * self.channels as usize;
+        Self::apply_gain(self.gain_q8, &mut pcm[..count]);
+        output[..count].copy_from_slice(&pcm[..count]);
+        Ok(samples)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn decode_inner(
+        &mut self,
+        input: Option<&[u8]>,
+        output: &mut [i16],
+        fec: bool,
+    ) -> Result<usize> {
+        if fec && input.is_some() {
             #[cfg(feature = "silk")]
             if let Some(packet) = input {
                 return self.decode_fec_frame(packet, output);
             }
-            return Err(Error::Unsupported(
-                "Forward error correction requires a supported SILK LBRR packet".into(),
-            ));
+            #[cfg(not(feature = "silk"))]
+            {
+                let samples = output.len() / self.channels as usize;
+                return self.decode_loss_inner(output, samples);
+            }
         }
         let Some(packet) = input else {
             if self.last_packet_samples == 0 {
@@ -295,7 +320,7 @@ impl Decoder {
                     "loss duration is unknown before the first packet; use decode_loss".into(),
                 ));
             }
-            return self.decode_loss(output, self.last_packet_samples);
+            return self.decode_loss_inner(output, self.last_packet_samples);
         };
 
         if packet.is_empty() {
@@ -323,19 +348,10 @@ impl Decoder {
             );
 
             let frames = framing::parse_frames(packet)?;
-            #[cfg(feature = "celt")]
-            if config.mode == OpusMode::Hybrid
-                && self
-                    .celt_packet_channels
-                    .is_some_and(|previous| previous != toc.channels())
-            {
-                return Err(Error::Unsupported(
-                    "Hybrid coded channel transition requires reference state mapping".into(),
-                ));
-            }
             let samples_per_frame =
                 Self::calculate_samples(config.frame_size, self.sample_rate as u32);
             let total_samples = samples_per_frame * frames.len();
+            #[cfg(not(all(feature = "silk", feature = "celt")))]
             if frames.iter().any(|frame| frame.is_empty()) {
                 // Preflight every missing constituent before committing any good one.
                 let mut previous = self.prev_mode;
@@ -351,16 +367,6 @@ impl Decoder {
                         if previous == Some(OpusMode::SilkOnly) {
                             return Err(Error::UnsupportedMode(
                                 "SILK concealment requires silk feature".into(),
-                            ));
-                        }
-                        if previous == Some(OpusMode::Hybrid)
-                            || (previous == Some(OpusMode::SilkOnly)
-                                && !samples_per_frame
-                                    .is_multiple_of(self.sample_rate as usize / 100))
-                        {
-                            return Err(Error::Unsupported(
-                                "empty constituent requires unsupported mode/duration concealment"
-                                    .into(),
                             ));
                         }
                     } else {
@@ -386,7 +392,7 @@ impl Decoder {
                 let frame_output = &mut output[frame_output_start..frame_output_end];
 
                 if frame_data.is_empty() {
-                    self.decode_loss(frame_output, samples_per_frame)?;
+                    self.decode_loss_inner(frame_output, samples_per_frame)?;
                     current_output_offset += samples_per_frame;
                     continue;
                 }
@@ -409,7 +415,7 @@ impl Decoder {
                         } else {
                             self.sample_rate as usize / 100
                         };
-                        self.decode_loss(&mut old, duration)?;
+                        self.decode_loss_inner(&mut old, duration)?;
                     }
                     old.truncate(self.sample_rate as usize / 200 * self.channels as usize);
                     Some(old)
@@ -516,6 +522,40 @@ impl Decoder {
     ///   multiple of 2.5 ms, no longer than 120 ms, and fits in `output`.
     /// * Returns [`Error::Unsupported`] for unimplemented concealment modes.
     pub fn decode_loss(&mut self, output: &mut [i16], samples_per_channel: usize) -> Result<usize> {
+        let mut pcm = vec![0; output.len()];
+        let samples = self.decode_loss_inner(&mut pcm, samples_per_channel)?;
+        let count = samples * self.channels as usize;
+        Self::apply_gain(self.gain_q8, &mut pcm[..count]);
+        output[..count].copy_from_slice(&pcm[..count]);
+        Ok(samples)
+    }
+
+    /// Split a loss into synthesis durations without advancing decoder state.
+    #[cfg(feature = "silk")]
+    fn concealment_chunks(quantum: usize, samples: usize, hybrid: bool) -> Vec<usize> {
+        let mut chunks = Vec::new();
+        let mut remaining = samples;
+        while remaining > 0 {
+            let count = if remaining >= quantum * 8 {
+                quantum * 8
+            } else if remaining > quantum * 4 {
+                quantum * 4
+            } else if hybrid && remaining > quantum * 2 && remaining < quantum * 4 {
+                quantum * 2
+            } else {
+                remaining
+            };
+            chunks.push(count);
+            remaining -= count;
+        }
+        chunks
+    }
+
+    fn decode_loss_inner(
+        &mut self,
+        output: &mut [i16],
+        samples_per_channel: usize,
+    ) -> Result<usize> {
         let quantum = self.sample_rate as usize / 400;
         if samples_per_channel == 0
             || !samples_per_channel.is_multiple_of(quantum)
@@ -532,37 +572,41 @@ impl Decoder {
         }
         #[cfg(feature = "celt")]
         if self.prev_mode == Some(OpusMode::CeltOnly) || self.prev_redundancy {
+            self.prev_mode = Some(OpusMode::CeltOnly);
+            self.prev_redundancy = false;
             return self.conceal_celt(output, samples_per_channel);
         }
         #[cfg(feature = "silk")]
-        if (self.prev_mode == Some(OpusMode::SilkOnly)
-            || (cfg!(feature = "celt") && self.prev_mode == Some(OpusMode::Hybrid)))
-            && (samples_per_channel.is_multiple_of(self.sample_rate as usize / 100)
-                || (self.prev_mode == Some(OpusMode::Hybrid)
-                    && samples_per_channel == self.sample_rate as usize / 200))
+        if self.prev_mode == Some(OpusMode::SilkOnly)
+            || (cfg!(feature = "celt") && self.prev_mode == Some(OpusMode::Hybrid))
         {
             let synthesis = if self.channels == Channels::Mono {
                 Channels::Mono
             } else {
                 self.silk_configured_channels
             };
+            let chunks = Self::concealment_chunks(
+                self.sample_rate as usize / 400,
+                samples_per_channel,
+                self.prev_mode == Some(OpusMode::Hybrid),
+            );
             let mut pcm = Vec::new();
-            let mut remaining = samples_per_channel;
-            while remaining > 0 {
-                let ms = if remaining >= self.sample_rate as usize / 50 {
+            for &count in &chunks {
+                let ms = if count >= self.sample_rate as usize / 50 {
                     20
                 } else {
                     10
                 };
                 let raw = self.silk.conceal(ms, synthesis == Channels::Mono)?;
-                pcm.extend(self.resample_silk(
+                let converted = self.resample_silk(
                     &raw,
                     self.silk_configured_rate as u32,
                     self.sample_rate as u32,
                     synthesis,
-                )?);
-                remaining =
-                    remaining.saturating_sub(self.sample_rate as usize * usize::from(ms) / 1000);
+                )?;
+                // Short loss still advances a complete 10-ms SILK synthesis and
+                // resampler step, but only this call's prefix is audible.
+                pcm.extend_from_slice(&converted[..count * synthesis as usize]);
             }
             for frame in 0..samples_per_channel {
                 for channel in 0..self.channels as usize {
@@ -576,11 +620,10 @@ impl Decoder {
             }
             #[cfg(feature = "celt")]
             if self.prev_mode == Some(OpusMode::Hybrid) {
-                let mut remaining = samples_per_channel;
                 let mut offset = 0;
                 self.celt.configure_synthesis_channels(self.channels);
-                while remaining > 0 {
-                    let count = remaining.min(self.sample_rate as usize / 50);
+                self.celt.set_start_band(17);
+                for &count in &chunks {
                     let internal = count * 48000 / self.sample_rate as usize;
                     let decoded = self.celt.conceal(internal)?;
                     self.celt_output.process_accumulate(
@@ -590,10 +633,10 @@ impl Decoder {
                         self.sample_rate as u32,
                         &mut output[offset..],
                     )?;
-                    remaining -= count;
                     offset += count * self.channels as usize;
                 }
             }
+            self.prev_redundancy = false;
             return Ok(samples_per_channel);
         }
         Err(Error::Unsupported(
@@ -608,6 +651,7 @@ impl Decoder {
         let mut offset = 0;
         let synthesis = self.channels;
         self.celt.configure_synthesis_channels(synthesis);
+        self.celt.set_start_band(0);
         self.celt.set_output_rate(self.sample_rate)?;
         while remaining > 0 {
             let size = if remaining >= 960 {
@@ -653,74 +697,81 @@ impl Decoder {
         };
         let toc = Toc::parse(byte);
         let config = toc.configuration();
-        if config.mode != OpusMode::SilkOnly || config.frame_size != FrameSize::Ms20 {
-            return Err(Error::Unsupported(
-                "FEC currently requires a 20-ms SILK frame".into(),
-            ));
-        }
-        if self
-            .prev_mode
-            .is_some_and(|mode| mode != OpusMode::SilkOnly)
-        {
-            return Err(Error::Unsupported(
-                "FEC across codec modes requires transition concealment".into(),
-            ));
-        }
         let frames = framing::parse_frames(packet)?;
-        let samples = Self::calculate_samples(config.frame_size, self.sample_rate as u32);
         let requested = output.len() / self.channels as usize;
-        if requested < samples {
-            return self.decode_loss(output, requested);
+        let quantum = self.sample_rate as usize / 400;
+        if requested == 0
+            || !requested.is_multiple_of(quantum)
+            || requested > self.sample_rate as usize * 120 / 1000
+        {
+            return Err(Error::InvalidPacket("invalid FEC duration".into()));
         }
-        let mut range = range::RangeDecoder::new(frames[0])?;
-        let header = Self::decode_silk_header_flags(&mut range, config.frame_size, toc.channels())?;
-        if header.lbrr_flags.iter().any(|&flag| !flag) {
-            if header.lbrr_flags.iter().any(|&flag| flag) {
-                return Err(Error::Unsupported(
-                    "partial-channel LBRR recovery is not verified".into(),
-                ));
-            }
-            let requested = output.len() / self.channels as usize;
-            let quantum = self.sample_rate as usize / 100;
-            if requested == 0
-                || !requested.is_multiple_of(quantum)
-                || requested > self.sample_rate as usize * 120 / 1000
-            {
-                return Err(Error::InvalidPacket(
-                    "invalid missing-LBRR concealment duration".into(),
-                ));
-            }
-            let target = match config.bandwidth {
-                Bandwidth::Narrowband => SampleRate::Hz8000,
-                Bandwidth::Mediumband => SampleRate::Hz12000,
-                _ => SampleRate::Hz16000,
-            };
-            if !self.silk_resamplers.is_empty()
-                && self.silk_configured_channels != toc.channels()
-                && self.channels == Channels::Stereo
-                && toc.channels() == Channels::Mono
-            {
-                return Err(Error::Unsupported(
-                    "missing LBRR stereo-to-mono resampler migration is not verified".into(),
-                ));
-            }
-            let prefix = requested - samples;
-            if prefix > 0 {
-                self.decode_loss(output, prefix)?;
-            }
-            self.configure_silk(target, toc.channels(), 20)?;
-            self.prev_mode = Some(OpusMode::SilkOnly);
-            self.decode_loss(&mut output[prefix * self.channels as usize..], samples)?;
-            let count = requested;
-            self.last_packet_samples = count;
-            return Ok(count);
+        let samples = Self::calculate_samples(config.frame_size, self.sample_rate as u32);
+        // The reference conceals the whole request when either endpoint is CELT
+        // or the requested interval cannot contain this packet's FEC duration.
+        if config.mode == OpusMode::CeltOnly
+            || self.prev_mode == Some(OpusMode::CeltOnly)
+            || requested < samples
+        {
+            return self.decode_loss_inner(output, requested);
         }
-        let mut range = range::RangeDecoder::new(frames[0])?;
-        let count =
-            self.decode_silk_payload_inner(&mut range, config, toc.channels(), output, true)?;
-        self.prev_mode = Some(OpusMode::SilkOnly);
-        self.last_packet_samples = count;
-        Ok(count)
+        let prefix = requested - samples;
+        if prefix > 0 {
+            self.decode_loss_inner(output, prefix)?;
+        }
+        let offset = prefix * self.channels as usize;
+        self.decode_silk_payload_inner(
+            &mut range::RangeDecoder::new(frames[0])?,
+            if config.mode == OpusMode::Hybrid {
+                Configuration {
+                    bandwidth: Bandwidth::Wideband,
+                    ..config
+                }
+            } else {
+                config
+            },
+            toc.channels(),
+            &mut output[offset..offset + samples * self.channels as usize],
+            true,
+        )?;
+        #[cfg(feature = "celt")]
+        if config.mode == OpusMode::Hybrid {
+            if self.prev_mode.is_some_and(|mode| mode != OpusMode::Hybrid) && !self.prev_redundancy
+            {
+                self.celt.reset();
+                self.celt_output.reset();
+            }
+            self.celt.set_channels(toc.channels());
+            self.celt.configure_synthesis_channels(self.channels);
+            self.celt.set_output_rate(self.sample_rate)?;
+            self.celt.set_start_band(17);
+            self.celt.set_end_band(21);
+            let decoded = self
+                .celt
+                .conceal(samples * 48000 / self.sample_rate as usize)?;
+            self.celt_output.process_accumulate(
+                &decoded.samples,
+                samples * 48000 / self.sample_rate as usize,
+                self.channels as usize,
+                self.sample_rate as u32,
+                &mut output[offset..],
+            )?;
+        }
+        #[cfg(feature = "celt")]
+        if config.mode == OpusMode::SilkOnly && self.prev_mode == Some(OpusMode::Hybrid) {
+            let tail = self.celt.decode_transition_silence()?;
+            self.celt_output.process_accumulate(
+                &tail.samples,
+                120,
+                self.channels as usize,
+                self.sample_rate as u32,
+                &mut output[offset..],
+            )?;
+        }
+        self.prev_mode = Some(config.mode);
+        self.prev_redundancy = false;
+        self.last_packet_samples = requested;
+        Ok(requested)
     }
 
     /// Decodes an Opus packet to floating point PCM.
@@ -815,6 +866,50 @@ impl Decoder {
         }
     }
 
+    /// Sets output gain in signed Q8 dB, preserved by [`Self::reset_state`].
+    /// Matches pinned non-RES24 libopus: gain follows integer synthesis,
+    /// transition mixing and clipping. It never changes predictor history.
+    pub const fn set_gain(&mut self, gain_q8: i16) {
+        self.gain_q8 = gain_q8;
+    }
+
+    /// Returns the configured output gain in signed Q8 dB.
+    #[must_use]
+    pub const fn gain(&self) -> i16 {
+        self.gain_q8
+    }
+
+    fn apply_gain(gain_q8: i16, pcm: &mut [i16]) {
+        if gain_q8 == 0 {
+            return;
+        }
+        let gain = Self::gain_multiplier(gain_q8);
+        for sample in pcm {
+            let value = (i64::from(*sample) * i64::from(gain) + 32768) >> 16;
+            *sample = i16::try_from(value.clamp(-32767, 32767)).expect("clamped output gain");
+        }
+    }
+
+    fn gain_multiplier(gain_q8: i16) -> i32 {
+        // QCONST16(6.48814081e-4,25), MULT16_16_P15, celt_exp2.
+        let exponent = (21771 * i32::from(gain_q8) + 16384) >> 15;
+        let integer = exponent >> 10;
+        if integer > 14 {
+            0x7f00_0000
+        } else if integer < -15 {
+            0
+        } else {
+            let frac = (exponent - integer * 1024) << 4;
+            let mul = |a: i32, b: i32| (a * b) >> 15;
+            let value = 16383 + mul(frac, 22804 + mul(frac, 14819 + mul(10204, frac)));
+            if integer + 2 >= 0 {
+                value << (integer + 2)
+            } else {
+                value >> (-integer - 2)
+            }
+        }
+    }
+
     /// Resets the decoder state.
     ///
     /// # Errors
@@ -824,7 +919,9 @@ impl Decoder {
     /// The output sample rate and channel count are preserved. All prediction,
     /// overlap, mode-transition, and resampler state is discarded.
     pub fn reset_state(&mut self) -> Result<()> {
+        let gain = self.gain_q8;
         *self = Self::new(self.sample_rate, self.channels)?;
+        self.gain_q8 = gain;
         Ok(())
     }
 
@@ -1065,7 +1162,7 @@ impl Decoder {
         let mut header_flags = Self::decode_silk_header_flags(ec, config.frame_size, channels)?;
 
         if fec {
-            // Caller preflights complete one-frame LBRR before mutating state.
+            // Redundant VAD is active only on channels with coded LBRR.
             header_flags.vad_flags.fill(true);
         } else {
             self.decode_lbrr_frames(ec, &header_flags, config, channels)?;
@@ -1089,7 +1186,28 @@ impl Decoder {
         let total_samples = frame_samples * num_silk_frames;
         let mut silk_buffer = vec![0i16; total_samples * num_channels];
 
-        if channels == Channels::Stereo {
+        if fec {
+            let mut previous = [false; 2];
+            for frame in 0..num_silk_frames {
+                let present = std::array::from_fn(|channel| {
+                    header_flags
+                        .per_frame_lbrr
+                        .get(channel)
+                        .and_then(|flags| flags.get(frame))
+                        .copied()
+                        .unwrap_or(false)
+                });
+                let offset = frame * frame_samples * num_channels;
+                self.silk.decode_fec_constituent(
+                    ec,
+                    present,
+                    previous,
+                    synthesis_channels == Channels::Mono,
+                    &mut silk_buffer[offset..offset + frame_samples * num_channels],
+                )?;
+                previous = present;
+            }
+        } else if channels == Channels::Stereo {
             // Stereo: decode_silk_frame handles mid/side decoding and interleaving
             for frame_idx in 0..num_silk_frames {
                 // VAD flags: [mid_frame0, mid_frame1, ..., side_frame0, side_frame1, ...]
@@ -1221,18 +1339,8 @@ impl Decoder {
         channels: Channels,
         output: &mut [i16],
     ) -> Result<usize> {
-        if self
-            .celt_packet_channels
-            .is_some_and(|previous| previous != channels)
-        {
-            return Err(Error::Unsupported(
-                "CELT coded channel transition requires reference overlap-state mapping".into(),
-            ));
-        }
-        if self.celt_packet_channels.is_none() {
-            self.celt.set_channels(channels);
-            self.celt_packet_channels = Some(channels);
-        }
+        self.celt.set_channels(channels);
+        self.celt_packet_channels = Some(channels);
         let mut ec = range::RangeDecoder::new(frame_data)?;
         let internal_samples = Self::calculate_samples(config.frame_size, 48000);
         self.celt.set_output_rate(self.sample_rate)?;
@@ -1738,6 +1846,43 @@ mod channels_tests {
 #[cfg(test)]
 mod decoder_tests {
     use super::*;
+
+    #[cfg(all(feature = "silk", not(feature = "celt")))]
+    #[test_log::test]
+    fn silk_only_packet_and_empty_constituent_preserve_sample_count() {
+        let packet = include_bytes!("silk/reference/nb_sine_mono.packet");
+        let payload = framing::parse_frames(packet).unwrap()[0];
+        assert!(payload.len() < 252);
+        let mut combined = vec![(packet[0] & !3) | 2, u8::try_from(payload.len()).unwrap()];
+        combined.extend_from_slice(payload);
+        let mut decoder = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        let mut control = Decoder::new(SampleRate::Hz8000, Channels::Mono).unwrap();
+        let mut actual = [123; 320];
+        let mut expected = [0; 320];
+        assert_eq!(
+            decoder.decode(Some(&combined), &mut actual, false).unwrap(),
+            320
+        );
+        assert_eq!(
+            control
+                .decode(Some(packet), &mut expected[..160], false)
+                .unwrap(),
+            160
+        );
+        assert_eq!(control.decode_loss(&mut expected[160..], 160).unwrap(), 160);
+        assert_eq!(actual, expected);
+        let mut recovery = [0; 160];
+        let mut reference = [0; 160];
+        assert_eq!(
+            decoder.decode(Some(packet), &mut recovery, false).unwrap(),
+            160
+        );
+        assert_eq!(
+            control.decode(Some(packet), &mut reference, false).unwrap(),
+            160
+        );
+        assert_eq!(recovery, reference);
+    }
 
     #[test_log::test]
     fn test_calculate_samples_all_frame_sizes() {

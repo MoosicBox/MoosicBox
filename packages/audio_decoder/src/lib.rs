@@ -688,9 +688,7 @@ pub fn decode(
 ///
 /// # Errors
 /// * Returns the decoding, seeking, or unavailable-backend errors described by [`decode`].
-///
-/// # Panics
-/// * Panics if a reset reader no longer contains a supported track.
+/// * Returns an open-stream error if a reset reader has no supported track.
 pub fn decode_with_options(
     mut reader: Box<dyn FormatReader>,
     audio_output_handler: &mut AudioDecodeHandler,
@@ -704,7 +702,7 @@ pub fn decode_with_options(
         .and_then(|t| reader.tracks().get(t))
         .or_else(|| first_supported_track(reader.tracks()));
 
-    let mut track_id = match track {
+    let track_id = match track {
         Some(track) => track.id,
         _ => return Ok(0),
     };
@@ -719,20 +717,9 @@ pub fn decode_with_options(
             track_id: Some(track_id),
         };
 
-        // Attempt the seek. If the seek fails, ignore the error and return no seek target so
-        // that no samples are trimmed.
-        match reader.seek(SeekMode::Accurate, seek_to) {
-            Ok(seeked_to) => Some(seeked_to.required_ts),
-            Err(Error::ResetRequired) => {
-                track_id = first_supported_track(reader.tracks()).unwrap().id;
-                None
-            }
-            Err(err) => {
-                // Don't give-up on a seek error.
-                log::warn!("seek error: {err}");
-                None
-            }
-        }
+        // A failed seek must not silently become unseeked playback. In particular,
+        // ResetRequired here is terminal: no successful seek target was returned.
+        Some(reader.seek(SeekMode::Accurate, seek_to)?.required_ts)
     } else {
         None
     };
@@ -744,10 +731,12 @@ pub fn decode_with_options(
             Err(DecodeError::Symphonia(Error::ResetRequired)) => {
                 // Select the first supported track since the user's selected track number might no
                 // longer be valid or make sense.
-                let track_id = first_supported_track(reader.tracks()).unwrap().id;
+                let track_id = first_supported_track(reader.tracks())
+                    .ok_or(DecodeError::AudioDecode(AudioDecodeError::OpenStream))?
+                    .id;
                 track_info = PlayTrackOptions {
                     track_id,
-                    seek_ts: None,
+                    seek_ts: track_info.seek_ts,
                 };
             }
             res => break res,

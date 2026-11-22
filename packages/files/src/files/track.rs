@@ -572,7 +572,38 @@ pub async fn get_audio_bytes_with_opus_encoder(
         None,
         options,
         false,
-        Some(config),
+        Some(OpusEncoderSelection::Single(config)),
+    )
+    .await
+}
+
+#[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+#[derive(Clone)]
+enum OpusEncoderSelection {
+    Single(moosicbox_audio_output::encoder::opus::OpusEncodeConfig),
+    #[cfg(feature = "encoder-opus-native")]
+    Multistream(moosicbox_audio_output::encoder::opus::OpusMultistreamEncodeConfig),
+}
+
+/// Transcode to native multistream Ogg Opus without using the shared byte cache.
+///
+/// # Errors
+/// * Returns source errors; invalid configuration and codec failures are terminal stream errors.
+#[cfg(feature = "encoder-opus-native")]
+pub async fn get_audio_bytes_with_multistream_encoder(
+    source: TrackSource,
+    options: DecodeOptions,
+    config: moosicbox_audio_output::encoder::opus::OpusMultistreamEncodeConfig,
+) -> Result<TrackBytes, GetTrackBytesError> {
+    get_audio_bytes_impl(
+        source,
+        AudioFormat::Opus,
+        None,
+        None,
+        None,
+        options,
+        false,
+        Some(OpusEncoderSelection::Multistream(config)),
     )
     .await
 }
@@ -609,7 +640,7 @@ async fn get_audio_bytes_impl(
     options: DecodeOptions,
     cache: bool,
     #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))] opus_config: Option<
-        moosicbox_audio_output::encoder::opus::OpusEncodeConfig,
+        OpusEncoderSelection,
     >,
 ) -> Result<TrackBytes, GetTrackBytesError> {
     log::debug!("Getting audio bytes format={format:?} size={size:?} start={start:?} end={end:?}");
@@ -618,6 +649,8 @@ async fn get_audio_bytes_impl(
         let source = source.clone();
         move |start, end, size| {
             let source = source.clone();
+            #[cfg(any(feature = "encoder-opus", feature = "encoder-opus-native"))]
+            let opus_config = opus_config.clone();
             Box::pin(async move {
                 log::debug!("get_audio_bytes: cache miss; eagerly fetching audio bytes");
                 let writer = ByteWriter::default();
@@ -706,8 +739,11 @@ async fn get_audio_bytes_impl(
                                 ))]
                                 if let Some(config) = opus_config {
                                     return Ok(moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(Box::new(move |_, _| {
-                                        let encoder = moosicbox_audio_output::encoder::opus::SelectedOpusEncoder::with_writer(writer.clone(), config)
-                                            .map_err(|error| moosicbox_audio_decoder::AudioDecodeError::Other(Box::new(error)))?;
+                                        let encoder = match &config {
+                                            OpusEncoderSelection::Single(config) => moosicbox_audio_output::encoder::opus::SelectedOpusEncoder::with_writer(writer.clone(), *config),
+                                            #[cfg(feature = "encoder-opus-native")]
+                                            OpusEncoderSelection::Multistream(config) => moosicbox_audio_output::encoder::opus::SelectedOpusEncoder::with_multistream_writer(writer.clone(), config.clone()),
+                                        }.map_err(|error| moosicbox_audio_decoder::AudioDecodeError::Other(Box::new(error)))?;
                                         Ok(Box::new(encoder))
                                     })));
                                 }
@@ -841,6 +877,24 @@ async fn get_audio_bytes_impl(
     }
 }
 
+/// Validate an end-exclusive byte range and return its selected length.
+fn selected_byte_length(
+    start: Option<u64>,
+    end: Option<u64>,
+    original_size: Option<u64>,
+) -> std::io::Result<Option<u64>> {
+    let start = start.unwrap_or(0);
+    if end.is_some_and(|end| end < start)
+        || original_size.is_some_and(|size| start > size || end.is_some_and(|end| end > size))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "byte range must satisfy 0 <= start <= end <= source size",
+        ));
+    }
+    Ok(end.or(original_size).map(|end| end - start))
+}
+
 #[allow(clippy::too_many_lines)]
 async fn request_audio_bytes_from_file(
     path: String,
@@ -854,106 +908,60 @@ async fn request_audio_bytes_from_file(
     );
     let mut file = tokio::fs::File::open(&path).await?;
 
-    if let Some(start) = start {
-        file.seek(std::io::SeekFrom::Start(start)).await?;
-    }
-
     let original_size = if let Some(size) = size {
         size
     } else {
         file.metadata().await?.len()
     };
 
-    let size = if let (Some(start), Some(end)) = (start, end) {
-        end - start
-    } else if let Some(start) = start {
-        original_size - start
-    } else if let Some(end) = end {
-        end
-    } else if let Some(size) = size {
-        size
-    } else {
-        original_size
-    };
+    let size = selected_byte_length(start, end, Some(original_size))?
+        .ok_or_else(|| std::io::Error::other("missing local file size"))?;
+    if let Some(start) = start {
+        file.seek(std::io::SeekFrom::Start(start)).await?;
+    }
 
     log::debug!(
         "request_audio_bytes_from_file calculated size={size} original_size={original_size}"
     );
 
-    // Use manual chunk-based reading instead of ReaderStream to eliminate potential truncation issues
-    let (sender, receiver) = flume::unbounded();
-    let file_path = path.clone();
+    // A bounded queue applies backpressure and observes consumer cancellation.
+    let (sender, receiver) = flume::bounded(1);
 
     switchy_async::runtime::Handle::current().spawn_with_name(
         "files: Manual file reader",
         async move {
-            let mut file = match tokio::fs::File::open(&file_path).await {
-                Ok(file) => file,
-                Err(e) => {
-                    log::error!("Failed to open file for manual reading: {e}");
-                    return;
-                }
-            };
-
-            if let Some(start) = start
-                && let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await
-            {
-                log::error!("Failed to seek to start position: {e}");
-                return;
-            }
-
-            let mut bytes_read = 0u64;
-            let mut buffer = vec![0u8; 8192]; // 8KB chunks
-
-            log::debug!("Manual file reader starting for {file_path}, target size: {size}");
-
-            loop {
-                match file.read(&mut buffer).await {
+            // Move the already-opened, already-seeked file into the task. Reopening
+            // could race with replacement and previously hid open/seek failures.
+            let mut remaining = size;
+            let mut buffer = vec![0u8; 8192];
+            while remaining > 0 && !sender.is_disconnected() {
+                let limit = usize::try_from(remaining.min(buffer.len() as u64)).unwrap();
+                match file.read(&mut buffer[..limit]).await {
                     Ok(0) => {
-                        log::debug!(
-                            "Manual file reader: EOF reached after reading {bytes_read} bytes"
-                        );
+                        let _ = sender
+                            .send_async(Err(std::io::Error::new(
+                                std::io::ErrorKind::UnexpectedEof,
+                                "source ended before the selected byte range",
+                            )))
+                            .await;
                         break;
                     }
-                    Ok(n) => {
-                        bytes_read += n as u64;
-
-                        // Check if we should stop due to size limit
-                        if bytes_read > size {
-                            let excess = bytes_read - size;
-                            let send_bytes = n - usize::try_from(excess).unwrap();
-                            if send_bytes > 0
-                                && sender
-                                    .send_async(Ok(Bytes::copy_from_slice(&buffer[..send_bytes])))
-                                    .await
-                                    .is_err()
-                            {
-                                log::debug!("Manual file reader: receiver dropped (final chunk)");
-                            }
-                            log::debug!("Manual file reader: reached size limit {size} bytes");
-                            break;
-                        }
-
-                        log::trace!("Manual file reader: read {n} bytes (total: {bytes_read})");
-
+                    Ok(count) => {
+                        remaining -= count as u64;
                         if sender
-                            .send_async(Ok(Bytes::copy_from_slice(&buffer[..n])))
+                            .send_async(Ok(Bytes::copy_from_slice(&buffer[..count])))
                             .await
                             .is_err()
                         {
-                            log::debug!("Manual file reader: receiver dropped");
                             break;
                         }
                     }
-                    Err(e) => {
-                        log::error!("Manual file reader: read error after {bytes_read} bytes: {e}");
-                        let _ = sender.send_async(Err(e)).await;
+                    Err(error) => {
+                        let _ = sender.send_async(Err(error)).await;
                         break;
                     }
                 }
             }
-
-            log::debug!("Manual file reader finished: read {bytes_read} bytes total");
         },
     );
 
@@ -980,6 +988,7 @@ async fn request_track_bytes_from_url(
     format: AudioFormat,
     size: Option<u64>,
 ) -> Result<TrackBytes, GetTrackBytesError> {
+    let _ = selected_byte_length(start, end, size)?;
     let client = switchy_http::Client::new();
 
     log::debug!(
@@ -996,40 +1005,36 @@ async fn request_track_bytes_from_url(
         }
     }
 
+    // HEAD describes the entire object, never the selected Range response.
+    let original_size = if let Some(size) = size {
+        Some(size)
+    } else {
+        let mut head = head_request.send().await?;
+        head.headers()
+            .get(switchy_http::Header::ContentLength.as_ref())
+            .map(|value| value.parse::<u64>())
+            .transpose()?
+    };
+    let selected_size = selected_byte_length(start, end, original_size)?;
+    if selected_size == Some(0) {
+        return Ok(TrackBytes {
+            id: new_byte_writer_id(),
+            stream: StalledReadMonitor::new(futures::stream::empty().boxed()),
+            size: selected_size,
+            original_size,
+            format,
+            filename: None,
+        });
+    }
     if start.is_some() || end.is_some() {
-        let start = start.map_or_else(String::new, |start| start.to_string());
-        let end = end.map_or_else(String::new, |end| end.to_string());
-
-        log::debug!("request_track_bytes_from_url: Using byte range start={start} end={end}");
+        // Public byte ranges are end-exclusive; HTTP ranges are inclusive.
+        let start = start.unwrap_or(0);
+        let last = end.map_or_else(String::new, |end| (end - 1).to_string());
         request = request.header(
             switchy_http::Header::Range.as_ref(),
-            &format!("bytes={start}-{end}"),
-        );
-        head_request = head_request.header(
-            switchy_http::Header::Range.as_ref(),
-            &format!("bytes={start}-{end}"),
+            &format!("bytes={start}-{last}"),
         );
     }
-
-    let size = if size.is_none() {
-        log::debug!("request_track_bytes_from_url: Sending head request to url={url}");
-        let mut head = head_request.send().await?;
-
-        if let Some(header) = head
-            .headers()
-            .get(switchy_http::Header::ContentLength.as_ref())
-        {
-            let size = header.parse::<u64>()?;
-            log::debug!("Got size from Content-Length header: size={size}");
-            Some(size)
-        } else {
-            log::debug!("No Content-Length header");
-            None
-        }
-    } else {
-        log::debug!("Already has size={size:?}");
-        size
-    };
 
     log::debug!("request_track_bytes_from_url: Sending request to url={url}");
     let stream = request
@@ -1041,8 +1046,8 @@ async fn request_track_bytes_from_url(
     Ok(TrackBytes {
         id: new_byte_writer_id(),
         stream: StalledReadMonitor::new(stream.boxed()),
-        size,
-        original_size: size,
+        size: selected_size,
+        original_size,
         format,
         filename: None,
     })
@@ -1374,6 +1379,187 @@ pub async fn get_or_init_track_size(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn selected_byte_ranges_are_end_exclusive_checked_and_allow_empty() {
+        for (start, end, original, expected) in [
+            (None, None, Some(10), Some(10)),
+            (Some(3), Some(7), Some(10), Some(4)),
+            (None, Some(7), Some(10), Some(7)),
+            (Some(3), None, Some(10), Some(7)),
+            (Some(10), None, Some(10), Some(0)),
+            (Some(3), Some(3), None, Some(0)),
+            (Some(3), None, None, None),
+            (None, Some(0), None, Some(0)),
+        ] {
+            assert_eq!(
+                super::selected_byte_length(start, end, original).unwrap(),
+                expected
+            );
+        }
+        for (start, end, original) in [
+            (Some(8), Some(7), None),
+            (Some(11), None, Some(10)),
+            (None, Some(11), Some(10)),
+            (Some(u64::MAX), Some(0), Some(10)),
+        ] {
+            assert_eq!(
+                super::selected_byte_length(start, end, original)
+                    .unwrap_err()
+                    .kind(),
+                std::io::ErrorKind::InvalidInput
+            );
+        }
+    }
+
+    #[switchy_async::test]
+    async fn local_ranges_preserve_size_empty_and_terminal_eof_errors() {
+        use futures::StreamExt;
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/silk.ogg");
+        let expected = std::fs::read(path).unwrap();
+        for (start, end) in [
+            (Some(2), Some(9)),
+            (None, Some(0)),
+            (Some(expected.len() as u64), None),
+        ] {
+            let track = super::request_audio_bytes_from_file(
+                path.to_owned(),
+                super::AudioFormat::Source,
+                None,
+                start,
+                end,
+            )
+            .await
+            .unwrap();
+            assert_eq!(track.original_size, Some(expected.len() as u64));
+            let first = usize::try_from(start.unwrap_or(0)).unwrap();
+            let last = usize::try_from(end.unwrap_or(expected.len() as u64)).unwrap();
+            assert_eq!(track.size, Some((last - first) as u64));
+            let mut actual = Vec::new();
+            for item in track.stream.collect::<Vec<_>>().await {
+                actual.extend_from_slice(&item.unwrap().unwrap());
+            }
+            assert_eq!(actual, expected[first..last]);
+        }
+        assert!(
+            matches!(super::request_audio_bytes_from_file(path.to_owned(), super::AudioFormat::Source, None, Some(9), Some(2)).await, Err(error) if error.kind() == std::io::ErrorKind::InvalidInput)
+        );
+        // Simulate a source shorter than its supplied metadata without mutating fixtures.
+        let track = super::request_audio_bytes_from_file(
+            path.to_owned(),
+            super::AudioFormat::Source,
+            Some(expected.len() as u64 + 1),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let items: Vec<_> = track.stream.collect().await;
+        assert!(
+            matches!(items.last().unwrap(), Ok(Err(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof)
+        );
+    }
+
+    #[switchy_async::test]
+    async fn remote_empty_and_invalid_ranges_do_not_issue_get() {
+        // An unreachable URL proves validated known-size empty ranges need no request.
+        let empty = super::request_track_bytes_from_url(
+            "http://127.0.0.1:1/unreachable",
+            None,
+            Some(10),
+            Some(10),
+            super::AudioFormat::Source,
+            Some(10),
+        )
+        .await
+        .unwrap();
+        assert_eq!(empty.size, Some(0));
+        assert_eq!(empty.original_size, Some(10));
+        assert!(empty.stream.collect::<Vec<_>>().await.is_empty());
+        let error = super::request_track_bytes_from_url(
+            "http://127.0.0.1:1/unreachable",
+            None,
+            Some(11),
+            None,
+            super::AudioFormat::Source,
+            Some(10),
+        )
+        .await;
+        assert!(
+            matches!(error, Err(super::GetTrackBytesError::IO(error)) if error.kind() == std::io::ErrorKind::InvalidInput)
+        );
+    }
+
+    #[test]
+    fn remote_ranges_use_full_head_size_and_inclusive_http_end() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(remote_range_http_case());
+    }
+
+    async fn remote_range_http_case() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}/audio", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut requests = Vec::new();
+            while requests.len() < 2 && std::time::Instant::now() < deadline {
+                let (mut socket, _) = match listener.accept() {
+                    Ok(pair) => pair,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        continue;
+                    }
+                    Err(error) => panic!("{error}"),
+                };
+                socket
+                    .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                    .unwrap();
+                let mut request = Vec::new();
+                let mut byte = [0];
+                while !request.ends_with(b"\r\n\r\n") {
+                    socket.read_exact(&mut byte).unwrap();
+                    request.push(byte[0]);
+                }
+                let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
+                if request.starts_with("head ") {
+                    assert!(!request.contains("\r\nrange:"));
+                    socket
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n",
+                        )
+                        .unwrap();
+                } else {
+                    assert!(request.contains("\r\nrange: bytes=2-5\r\n"));
+                    socket.write_all(b"HTTP/1.1 206 Partial Content\r\nContent-Length: 4\r\nContent-Range: bytes 2-5/10\r\nConnection: close\r\n\r\n2345").unwrap();
+                }
+                requests.push(request);
+            }
+            assert_eq!(requests.len(), 2);
+        });
+        let track = super::request_track_bytes_from_url(
+            &url,
+            None,
+            Some(2),
+            Some(6),
+            super::AudioFormat::Source,
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(track.original_size, Some(10));
+        assert_eq!(track.size, Some(4));
+        let mut actual = Vec::new();
+        for item in track.stream.collect::<Vec<_>>().await {
+            actual.extend_from_slice(&item.unwrap().unwrap());
+        }
+        assert_eq!(actual, b"2345");
+        server.join().unwrap();
+    }
+
     #[cfg(feature = "encoder-opus-native")]
     #[switchy_async::test]
     #[allow(clippy::default_trait_access)]
@@ -1431,7 +1617,7 @@ mod tests {
                 OpusEncodeMode::Celt => assert!(toc >= 16),
                 OpusEncodeMode::Silk => assert!(toc < 12),
                 OpusEncodeMode::Hybrid => assert!((12..16).contains(&toc)),
-                OpusEncodeMode::Default => unreachable!(),
+                OpusEncodeMode::Default | OpusEncodeMode::Auto => unreachable!(),
             }
         }
     }

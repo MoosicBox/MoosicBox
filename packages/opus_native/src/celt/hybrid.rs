@@ -22,10 +22,13 @@ impl CeltDecoder {
     /// `opus_res` precision, then add the already-resampled SILK PCM. Do not add
     /// SILK to this Q12 signal before deemphasis.
     ///
+    /// If SILK has exhausted the shared entropy budget, CELT synthesizes spectral
+    /// silence as a good frame, retaining overlap/postfilter output and updating
+    /// energy and RNG history. This is not packet-loss concealment.
+    ///
     /// # Errors
     /// * Returns an error for non-hybrid durations (other than 480 or 960 samples),
-    ///   invalid highband end (other than 19 or 21), empty/oversized payloads, or an
-    ///   inconsistent consumed entropy budget.
+    ///   invalid highband end (other than 19 or 21), or empty/oversized payloads.
     /// * Propagates entropy, allocation, reconstruction and synthesis errors.
     pub fn decode_hybrid_highband(
         &mut self,
@@ -37,10 +40,9 @@ impl CeltDecoder {
         if !matches!(frame_samples, 480 | 960)
             || !matches!(end_band, 19 | 21)
             || !(1..=1275).contains(&frame_bytes)
-            || range_decoder.ec_tell() as usize > frame_bytes * 8
         {
             return Err(Error::CeltDecoder(
-                "invalid hybrid highband configuration or entropy budget".into(),
+                "invalid hybrid highband configuration".into(),
             ));
         }
         self.set_frame_size(frame_samples)?;

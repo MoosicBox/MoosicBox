@@ -2,7 +2,91 @@
 //! The SILK interpolation filter is dispersive near the band edge. A finite
 //! inverse-response analysis filter aligns its output with CELT, rather than
 //! treating frequency-dependent phase as a constant sample delay.
-use crate::Result;
+use crate::{Channels, Result};
+
+/// Candidate split reserving CELT header/shape space before SILK searches its
+/// excitation budget. This is not a public supported-bitrate declaration.
+#[cfg(test)]
+pub(super) fn candidate_lowband_bitrate(
+    bitrate: u32,
+    channels: Channels,
+    frame_size: usize,
+) -> u32 {
+    let packet_bytes = bitrate as usize * frame_size / 384_000;
+    let reserve = if channels == Channels::Stereo { 12 } else { 8 };
+    let silk_bytes =
+        (packet_bytes.saturating_sub(1) * 2 / 3).min(packet_bytes.saturating_sub(1 + reserve));
+    // SILK's budget includes its own nominal TOC byte, although its shared
+    // prefix has no TOC. Account for that subtraction exactly once.
+    (((silk_bytes + 1) * 384_000 / frame_size) as u32).clamp(8_000, 128_000)
+}
+
+/// Candidate low-band-first allocation for the four-band hybrid CELT suffix.
+/// Reserve CELT's minimum entropy/shape space, then give SILK the remaining
+/// budget: the measured 2/3 split starves low-band reconstruction at 32/64k.
+/// Test-only until independent content qualification establishes a floor.
+#[cfg(test)]
+pub(super) fn candidate_lowband_first_bitrate(bitrate: u32, frame_size: usize) -> u32 {
+    let payload = (bitrate as usize * frame_size / 384_000).saturating_sub(1);
+    let silk_bytes = (payload * 7 / 8).min(payload.saturating_sub(8));
+    (((silk_bytes + 1) * 384_000 / frame_size) as u32).clamp(8_000, 128_000)
+}
+
+/// Experimental short-packet split reclaiming two bytes from the previous
+/// eight-byte suffix reserve. The existing suffix encoder remains responsible
+/// for entropy fit; this is not a minimum legal CELT budget or supported policy.
+#[cfg(test)]
+pub(super) fn candidate_short_prefix_bitrate(bitrate: u32, frame_size: usize) -> u32 {
+    let payload = (bitrate as usize * frame_size / 384_000).saturating_sub(1);
+    let silk_bytes = payload.saturating_sub(6);
+    (((silk_bytes + 1) * 384_000 / frame_size) as u32).clamp(8_000, 128_000)
+}
+
+/// Frame-budget allocation for practical stereo hybrid packets. The low-rate
+/// endpoint preserves the qualified seven-eighths prefix with eight-byte suffix
+/// reserve; the extra prefix share tapers to the established split at 64 kbit/s.
+/// Mono and 128 kbit/s or higher retain their established allocation. This helper
+/// allocates bits only: constructor guards remain responsible for supported rates.
+pub(super) fn packet_lowband_bitrate(
+    bitrate: u32,
+    channels: Channels,
+    frame_size_48k: usize,
+) -> u32 {
+    let established = lowband_bitrate(bitrate, channels);
+    if channels == Channels::Mono || bitrate >= 64_000 {
+        return established;
+    }
+    let payload = (bitrate as usize * frame_size_48k / 384_000).saturating_sub(1);
+    let prefix = (payload * 7 / 8).min(payload.saturating_sub(8));
+    let low_first = (((prefix + 1) * 384_000 / frame_size_48k) as u32).clamp(8_000, 128_000);
+    established + low_first.saturating_sub(established) * (64_000 - bitrate).min(32_000) / 32_000
+}
+
+/// Append the low-band prefix without changing the established high-rate path.
+/// Practical-rate candidates rank fitting reconstructions before committing
+/// either predictive history or entropy operations to the shared packet.
+pub(super) fn encode_lowband_prefix(
+    silk: &mut super::silk::SilkEncoder,
+    pcm: &[f32],
+    encoder: &mut crate::range::RangeEncoder,
+    packet_bitrate: u32,
+) -> Result<()> {
+    if packet_bitrate < 128_000 {
+        silk.encode_prefix_ranked(pcm, encoder)
+    } else {
+        silk.encode_prefix(pcm, encoder)
+    }
+}
+
+pub(super) const fn lowband_bitrate(bitrate: u32, channels: Channels) -> u32 {
+    match channels {
+        Channels::Mono => bitrate / 2,
+        Channels::Stereo => {
+            let value = bitrate * 3 / 4;
+            if value > 128_000 { 128_000 } else { value }
+        }
+    }
+}
 use crate::celt::fixed_point::celt_cos_norm;
 use crate::silk::resampler::SilkResampler;
 

@@ -50,9 +50,17 @@ fn native_gain_is_applied_after_integer_decode_and_survives_reset() {
     let mut pcm = vec![0; 5760];
     let count = direct.decode(Some(bytes), &mut pcm, false).unwrap();
     assert_eq!(count, 960);
-    for gain in [-1536, 0, 1536] {
-        let mut adapter =
-            OpusDecoder::try_new_with_backend(&params(gain), OpusBackend::Native).unwrap();
+    for (gain, channels) in [-1536, 0, 1536].into_iter().flat_map(|gain| {
+        [
+            Position::FRONT_LEFT.into(),
+            symphonia::core::audio::layouts::CHANNEL_LAYOUT_MONO,
+        ]
+        .into_iter()
+        .map(move |channels| (gain, channels))
+    }) {
+        let mut params = params(gain);
+        params.with_channels(channels.clone());
+        let mut adapter = OpusDecoder::try_new_with_backend(&params, OpusBackend::Native).unwrap();
         let factor = 10.0_f32.powf(f32::from(gain) / (256.0 * 20.0));
         for _ in 0..2 {
             let packet = make_packet(0, 0, 960, bytes);
@@ -60,6 +68,7 @@ fn native_gain_is_applied_after_integer_decode_and_survives_reset() {
                 panic!("expected f32")
             };
             assert_eq!(output.frames(), count);
+            assert_eq!(output.spec().channels(), &channels);
             assert!(
                 output
                     .plane(0)

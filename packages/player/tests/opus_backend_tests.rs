@@ -424,6 +424,107 @@ fn signal_chain_native_selection_reaches_pcm_encoder_and_eof() {
     assert_eq!(processor.read(&mut [0; 1]).unwrap(), 0);
 }
 
+struct FailingOutput(Arc<Mutex<(usize, usize)>>);
+impl AudioDecode for FailingOutput {
+    fn decoded(
+        &mut self,
+        _: AudioBuffer<f32>,
+        _: &Packet,
+        _: &Track,
+    ) -> Result<(), AudioDecodeError> {
+        self.0.lock().unwrap().0 += 1;
+        Err(AudioDecodeError::Other(Box::new(std::io::Error::new(
+            std::io::ErrorKind::BrokenPipe,
+            "product sink failed",
+        ))))
+    }
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        self.0.lock().unwrap().1 += 1;
+        Ok(())
+    }
+}
+
+#[test_log::test]
+fn player_propagates_output_failure_without_success_flush() {
+    let state = Arc::new(Mutex::new((0, 0)));
+    let sink = state.clone();
+    let mut handler = AudioDecodeHandler::new().with_output(Box::new(move |_, _| {
+        Ok(Box::new(FailingOutput(sink.clone())))
+    }));
+    let result = moosicbox_player::symphonia::play_media_source_with_options(
+        source(0),
+        &Hint::new(),
+        &mut handler,
+        options(OpusDecodeBackend::Native),
+        None,
+        None,
+    );
+    assert!(result.is_err());
+    let state = state.lock().unwrap();
+    assert_eq!(state.0, 1, "must stop at first sink error");
+    assert_eq!(
+        state.1, 0,
+        "failed playback must not report a successful flush"
+    );
+}
+
+struct NoSeek(Cursor<Vec<u8>>);
+impl std::io::Read for NoSeek {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+impl std::io::Seek for NoSeek {
+    fn seek(&mut self, _: std::io::SeekFrom) -> std::io::Result<u64> {
+        Err(std::io::Error::other("product seek failed"))
+    }
+}
+impl symphonia::core::io::MediaSource for NoSeek {
+    fn is_seekable(&self) -> bool {
+        true
+    }
+    fn byte_len(&self) -> Option<u64> {
+        Some(self.0.get_ref().len() as u64)
+    }
+}
+
+#[test_log::test]
+fn seek_failure_is_not_silent_eof_in_player_or_unsync_path() {
+    let make_source = || {
+        MediaSourceStream::new(
+            Box::new(NoSeek(Cursor::new(stream(0, 0)))),
+            MediaSourceStreamOptions::default(),
+        )
+    };
+    let mut handler = AudioDecodeHandler::new();
+    assert!(
+        moosicbox_player::symphonia::play_media_source_with_options(
+            make_source(),
+            &Hint::new(),
+            &mut handler,
+            options(OpusDecodeBackend::Native),
+            None,
+            Some(0.025),
+        )
+        .is_err()
+    );
+    match moosicbox_player::symphonia_unsync::play_media_source_with_options_result(
+        make_source(),
+        &Hint::new(),
+        options(OpusDecodeBackend::Native),
+        None,
+        Some(0.025),
+    ) {
+        Err(_) => (),
+        Ok(receiver) => assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap()
+                .is_err()
+        ),
+    }
+}
+
 #[test_log::test(switchy_async::test(real_time))]
 async fn async_player_native_selection_reaches_pcm_sink() {
     let capture = Arc::new(Mutex::new(Capture::default()));

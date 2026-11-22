@@ -33,7 +33,10 @@ enum BackendDecoder {
     #[cfg(feature = "libopus")]
     Libopus(audiopus::coder::Decoder),
     #[cfg(feature = "native")]
-    Native(Box<moosicbox_opus_native::Decoder>),
+    Native(
+        Box<moosicbox_opus_native::multistream::MultistreamDecoder>,
+        usize,
+    ),
     Unavailable,
 }
 
@@ -42,10 +45,21 @@ enum BackendDecoder {
     allow(clippy::missing_const_for_fn, clippy::needless_pass_by_ref_mut)
 )]
 impl BackendDecoder {
-    fn new(backend: OpusBackend, sample_rate: u32, channels: usize) -> Result<Self> {
+    fn new(
+        backend: OpusBackend,
+        sample_rate: u32,
+        channels: usize,
+        head: Option<&moosicbox_ogg_opus::OpusHead>,
+    ) -> Result<Self> {
+        let _ = head;
         match backend {
             #[cfg(feature = "libopus")]
             OpusBackend::Libopus => {
+                if channels > 2 || head.is_some_and(|head| head.mapping_family != 0) {
+                    return Err(Error::Unsupported(
+                        "libopus multistream adapter unavailable",
+                    ));
+                }
                 let rate = match sample_rate {
                     8000 => audiopus::SampleRate::Hz8000,
                     12000 => audiopus::SampleRate::Hz12000,
@@ -65,16 +79,32 @@ impl BackendDecoder {
             }
             #[cfg(feature = "native")]
             OpusBackend::Native => {
+                use moosicbox_opus_native::multistream::{MultistreamDecoder, MultistreamLayout};
+
                 let rate = moosicbox_opus_native::SampleRate::from_hz(sample_rate)
                     .map_err(|_| Error::Unsupported("unsupported sample rate"))?;
-                let channels = if channels == 1 {
-                    moosicbox_opus_native::Channels::Mono
-                } else {
-                    moosicbox_opus_native::Channels::Stereo
-                };
-                moosicbox_opus_native::Decoder::new(rate, channels)
-                    .map(|decoder| Self::Native(Box::new(decoder)))
-                    .map_err(|_| Error::DecodeError("failed to create native opus decoder"))
+                let (streams, coupled, mapping) =
+                    head.filter(|head| head.mapping_family == 1).map_or_else(
+                        || {
+                            (
+                                1,
+                                u8::from(channels == 2),
+                                (0..u8::try_from(channels).unwrap_or(0)).collect(),
+                            )
+                        },
+                        |head| {
+                            (
+                                head.stream_count,
+                                head.coupled_count,
+                                head.channel_mapping.clone(),
+                            )
+                        },
+                    );
+                let layout = MultistreamLayout::new(streams, coupled, mapping)
+                    .map_err(|_| Error::Unsupported("invalid native Opus layout"))?;
+                let decoder = MultistreamDecoder::new(rate, layout)
+                    .map_err(|_| Error::DecodeError("failed to create native opus decoder"))?;
+                Ok(Self::Native(Box::new(decoder), channels))
             }
             #[allow(unreachable_patterns)]
             _ => {
@@ -94,7 +124,7 @@ impl BackendDecoder {
                     .map_err(|_| Error::DecodeError("libopus reset failed"))
             }
             #[cfg(feature = "native")]
-            Self::Native(decoder) => decoder
+            Self::Native(decoder, _) => decoder
                 .reset_state()
                 .map_err(|_| Error::DecodeError("native opus reset failed")),
             Self::Unavailable => Err(Error::DecodeError("opus decoder unavailable after reset")),
@@ -108,15 +138,18 @@ impl BackendDecoder {
                 .decode(Some(packet), output, false)
                 .map_err(|_| Error::DecodeError("libopus decode failed")),
             #[cfg(feature = "native")]
-            Self::Native(decoder) => decoder
-                .decode(Some(packet), output, false)
-                .map_err(|error| match error {
-                    moosicbox_opus_native::Error::Unsupported(_)
-                    | moosicbox_opus_native::Error::UnsupportedMode(_) => {
-                        Error::Unsupported("native opus configuration is not supported")
-                    }
-                    _ => Error::DecodeError("native opus decode failed"),
-                }),
+            Self::Native(decoder, channels) => {
+                let capacity = output.len() / *channels;
+                decoder
+                    .decode(Some(packet), output, capacity, false)
+                    .map_err(|error| match error {
+                        moosicbox_opus_native::Error::Unsupported(_)
+                        | moosicbox_opus_native::Error::UnsupportedMode(_) => {
+                            Error::Unsupported("native opus configuration is not supported")
+                        }
+                        _ => Error::DecodeError("native opus decode failed"),
+                    })
+            }
             Self::Unavailable => {
                 let _ = (packet, output);
                 Err(Error::DecodeError("opus decoder unavailable after reset"))
@@ -127,7 +160,8 @@ impl BackendDecoder {
 
 /// Opus decoder for Symphonia, with explicit reference/native backend selection.
 ///
-/// Supports mono and stereo at 8, 12, 16, 24, and 48 kHz. With `libopus`
+/// Supports native mapping-family-one surround (up to eight channels) and mono/
+/// stereo at 8, 12, 16, 24, and 48 kHz. With `libopus`
 /// enabled, [`Self::try_new`] uses libopus even when `native` is also enabled.
 /// A native-only build uses native. Use [`Self::try_new_with_backend`] for an
 /// explicit comparison route. Native codec accuracy is still under development.
@@ -138,26 +172,82 @@ pub struct OpusDecoder {
     output_buf: AudioBuffer<f32>,
     temp_decode_buf: Vec<i16>,
     channel_count: usize,
+    channel_order: Vec<usize>,
     output_gain: f32,
     gapless: bool,
 }
 
-// Ogg (and Matroska) may supply OpusHead as codec initialization data.
-// The demuxer owns pre-skip; this adapter owns mandatory Q7.8 dB output gain.
-fn opus_output_gain(extra_data: Option<&[u8]>, channels: usize) -> Result<f32> {
-    let Some(header) = extra_data.filter(|data| data.starts_with(b"OpusHead")) else {
-        return Ok(1.0);
-    };
-    if header.len() < 19 || header[8] > 15 || usize::from(header[9]) != channels {
-        return Err(Error::DecodeError("invalid opus identification header"));
+/// Return packet channel indices in Symphonia's canonical speaker order.
+fn opus_channel_order(
+    head: &moosicbox_ogg_opus::OpusHead,
+    channels: &symphonia::core::audio::Channels,
+) -> Result<Vec<usize>> {
+    use symphonia::core::audio::Position as P;
+
+    let expected = crate::format::opus_channels(head)?;
+    // Symphonia's stock Ogg reader labels mono as FRONT_LEFT for mapping
+    // families 0 and 1, while our reader uses the canonical FRONT_CENTER.
+    // Both describe the same single Opus channel; preserve the caller's label
+    // without accepting arbitrary single-speaker or multichannel layouts.
+    if head.channels == 1 && *channels == P::FRONT_LEFT.into() {
+        return Ok(vec![0]);
     }
-    if header[18] != 0 {
+    if *channels != expected {
         return Err(Error::Unsupported(
-            "opus multistream mapping is not supported",
+            "Opus channel positions do not match header",
         ));
     }
-    let gain = i16::from_le_bytes([header[16], header[17]]);
-    Ok(10.0_f32.powf(f32::from(gain) / (256.0 * 20.0)))
+    let speakers: &[P] = match head.channels {
+        1 => &[P::FRONT_CENTER],
+        2 => &[P::FRONT_LEFT, P::FRONT_RIGHT],
+        3 => &[P::FRONT_LEFT, P::FRONT_CENTER, P::FRONT_RIGHT],
+        4 => &[P::FRONT_LEFT, P::FRONT_RIGHT, P::REAR_LEFT, P::REAR_RIGHT],
+        5 => &[
+            P::FRONT_LEFT,
+            P::FRONT_CENTER,
+            P::FRONT_RIGHT,
+            P::REAR_LEFT,
+            P::REAR_RIGHT,
+        ],
+        6 => &[
+            P::FRONT_LEFT,
+            P::FRONT_CENTER,
+            P::FRONT_RIGHT,
+            P::REAR_LEFT,
+            P::REAR_RIGHT,
+            P::LFE1,
+        ],
+        7 => &[
+            P::FRONT_LEFT,
+            P::FRONT_CENTER,
+            P::FRONT_RIGHT,
+            P::SIDE_LEFT,
+            P::SIDE_RIGHT,
+            P::REAR_CENTER,
+            P::LFE1,
+        ],
+        8 => &[
+            P::FRONT_LEFT,
+            P::FRONT_CENTER,
+            P::FRONT_RIGHT,
+            P::SIDE_LEFT,
+            P::SIDE_RIGHT,
+            P::REAR_LEFT,
+            P::REAR_RIGHT,
+            P::LFE1,
+        ],
+        _ => return Err(Error::Unsupported("unsupported Opus speaker mapping")),
+    };
+    let mut order = vec![0; speakers.len()];
+    for (source, &speaker) in speakers.iter().enumerate() {
+        let target = channels
+            .get_canonical_index_for_positioned_channel(speaker)
+            .ok_or(Error::Unsupported(
+                "unsupported Opus channel representation",
+            ))?;
+        order[target] = source;
+    }
+    Ok(order)
 }
 
 impl OpusDecoder {
@@ -194,10 +284,12 @@ impl OpusDecoder {
     ///
     /// * The requested backend feature is disabled.
     /// * The sample rate or channel count is unsupported.
-    /// * Supplied `OpusHead` initialization data is malformed or uses an
-    ///   unsupported multistream mapping. Its mandatory output gain is applied
-    ///   to decoded float samples; the format reader remains responsible for
-    ///   supplying pre-skip as packet trimming.
+    /// * Supplied `OpusHead` initialization data is malformed, channel positions
+    ///   disagree, or mapping family is unsupported. Mandatory output gain is
+    ///   applied after normalized PCM conversion, exactly once, preserving the
+    ///   public float-output precision contract. Codec Q8 gain remains zero.
+    ///   The format reader supplies pre-skip as packet trimming.
+    /// * The libopus adapter is selected for a multistream configuration.
     /// * Backend initialization fails.
     pub fn try_new_with_backend(
         params: &AudioCodecParameters,
@@ -212,11 +304,32 @@ impl OpusDecoder {
             .clone()
             .unwrap_or_else(|| (Position::FRONT_LEFT | Position::FRONT_RIGHT).into());
         let channel_count = channels.count();
-        if !matches!(channel_count, 1 | 2) {
+        if !(1..=8).contains(&channel_count) {
             return Err(Error::Unsupported("unsupported channel count"));
         }
-        let output_gain = opus_output_gain(params.extra_data.as_deref(), channel_count)?;
-        let decoder = BackendDecoder::new(backend, sample_rate, channel_count)?;
+        let head = params
+            .extra_data
+            .as_deref()
+            .filter(|data| data.starts_with(b"OpusHead"))
+            .map(moosicbox_ogg_opus::OpusHead::parse)
+            .transpose()
+            .map_err(|_| Error::DecodeError("invalid opus identification header"))?;
+        let channel_order = if let Some(head) = &head {
+            if usize::from(head.channels) != channel_count {
+                return Err(Error::DecodeError("opus header channel count mismatch"));
+            }
+            opus_channel_order(head, &channels)?
+        } else {
+            if channel_count > 2 {
+                return Err(Error::Unsupported(
+                    "multichannel Opus requires identification header",
+                ));
+            }
+            (0..channel_count).collect()
+        };
+        let decoder = BackendDecoder::new(backend, sample_rate, channel_count, head.as_ref())?;
+        let output_gain = 10.0_f32
+            .powf(f32::from(head.as_ref().map_or(0, |head| head.output_gain)) / (256.0 * 20.0));
         // RFC 6716 permits up to 120 ms per packet, independent of frame duration.
         let max_samples = sample_rate as usize * 120 / 1000;
         Ok(Self {
@@ -226,6 +339,7 @@ impl OpusDecoder {
             output_buf: AudioBuffer::new(AudioSpec::new(sample_rate, channels), max_samples),
             temp_decode_buf: vec![0; max_samples * channel_count],
             channel_count,
+            channel_order,
             output_gain,
             gapless: true,
         })
@@ -287,7 +401,9 @@ impl AudioDecoder for OpusDecoder {
         for ch in 0..self.channel_count {
             let output = self.output_buf.plane_mut(ch).unwrap();
             for (i, sample) in output.iter_mut().enumerate() {
-                *sample = (f32::from(self.temp_decode_buf[i * self.channel_count + ch]) / 32768.0)
+                *sample = (f32::from(
+                    self.temp_decode_buf[i * self.channel_count + self.channel_order[ch]],
+                ) / 32768.0)
                     * self.output_gain;
             }
         }
@@ -321,5 +437,29 @@ impl AudioDecoder for OpusDecoder {
         }
         self.output_buf.clear();
         self.temp_decode_buf.fill(0);
+    }
+}
+
+#[cfg(test)]
+mod channel_tests {
+    use super::*;
+    #[test]
+    fn surround_plane_order_matches_canonical_speakers() {
+        for (channels, expected) in [
+            (3, vec![0, 2, 1]),
+            (4, vec![0, 1, 2, 3]),
+            (5, vec![0, 2, 1, 3, 4]),
+            (6, vec![0, 2, 1, 5, 3, 4]),
+            (7, vec![0, 2, 1, 6, 5, 3, 4]),
+            (8, vec![0, 2, 1, 7, 5, 6, 3, 4]),
+        ] {
+            let mut head = moosicbox_ogg_opus::OpusHead::new(1, 0, 48_000).unwrap();
+            head.mapping_family = 1;
+            head.channels = channels;
+            assert_eq!(
+                opus_channel_order(&head, &crate::format::opus_channels(&head).unwrap()).unwrap(),
+                expected
+            );
+        }
     }
 }

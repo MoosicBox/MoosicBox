@@ -1,4 +1,7 @@
 //! Persistent fixed-point CELT pitch postfilter from `celt.c`.
+// ADD32/SUB32 operate at the reference's 32-bit signal width before SIG_SAT.
+// In particular, hostile entropy can produce transform outputs outside SIG_SAT;
+// delayed-sample sums must wrap rather than panic in checked Rust builds.
 use super::{PostFilterParams, transform};
 #[derive(Clone, Copy, Default)]
 struct Params {
@@ -45,7 +48,9 @@ fn comb(x: &mut [i32], offset: usize, n: usize, old: Params, new: Params) {
         let pos = offset + i;
         let next = x[pos - p1 + 2];
         let contribution = |taps: [i32; 3], center: i32, near: i32, far: i32| {
-            mul(taps[0], center) + mul(taps[1], near) + mul(taps[2], far)
+            mul(taps[0], center)
+                .wrapping_add(mul(taps[1], near))
+                .wrapping_add(mul(taps[2], far))
         };
         if i < overlap {
             let f = mul(
@@ -54,31 +59,31 @@ fn comb(x: &mut [i32], offset: usize, n: usize, old: Params, new: Params) {
             );
             let old_taps = a.map(|v| mul(32767 - f, v));
             let new_taps = b.map(|v| mul(f, v));
-            let value = i64::from(x[pos])
-                + i64::from(contribution(
+            let value = x[pos]
+                .wrapping_add(contribution(
                     old_taps,
                     x[pos - p0],
-                    x[pos - p0 + 1] + x[pos - p0 - 1],
-                    x[pos - p0 + 2] + x[pos - p0 - 2],
+                    x[pos - p0 + 1].wrapping_add(x[pos - p0 - 1]),
+                    x[pos - p0 + 2].wrapping_add(x[pos - p0 - 2]),
                 ))
-                + i64::from(contribution(
+                .wrapping_add(contribution(
                     new_taps,
                     delayed[2],
-                    delayed[3] + delayed[1],
-                    next + delayed[0],
+                    delayed[3].wrapping_add(delayed[1]),
+                    next.wrapping_add(delayed[0]),
                 ))
-                - 3;
-            x[pos] = i32::try_from(value.clamp(-536_870_911, 536_870_911)).expect("clamped signal");
+                .wrapping_sub(3);
+            x[pos] = value.clamp(-536_870_911, 536_870_911);
         } else if new.gain != 0 {
-            let value = i64::from(x[pos])
-                + i64::from(contribution(
+            let value = x[pos]
+                .wrapping_add(contribution(
                     b,
                     delayed[2],
-                    delayed[3] + delayed[1],
-                    next + delayed[0],
+                    delayed[3].wrapping_add(delayed[1]),
+                    next.wrapping_add(delayed[0]),
                 ))
-                - 1;
-            x[pos] = i32::try_from(value.clamp(-536_870_911, 536_870_911)).expect("clamped signal");
+                .wrapping_sub(1);
+            x[pos] = value.clamp(-536_870_911, 536_870_911);
         }
         delayed = [delayed[1], delayed[2], delayed[3], next];
     }
@@ -93,20 +98,26 @@ impl Postfilter {
             .map(|i| {
                 let pos = 2048 + i;
                 let value = source[pos]
-                    + mul(t[0], source[pos - period])
-                    + mul(t[1], source[pos - period - 1] + source[pos - period + 1])
-                    + mul(t[2], source[pos - period - 2] + source[pos - period + 2]);
+                    .wrapping_add(mul(t[0], source[pos - period]))
+                    .wrapping_add(mul(
+                        t[1],
+                        source[pos - period - 1].wrapping_add(source[pos - period + 1]),
+                    ))
+                    .wrapping_add(mul(
+                        t[2],
+                        source[pos - period - 2].wrapping_add(source[pos - period + 2]),
+                    ));
                 if p.gain == 0 {
                     value
                 } else {
-                    (value - 1).clamp(-536_870_911, 536_870_911)
+                    value.wrapping_sub(1).clamp(-536_870_911, 536_870_911)
                 }
             })
             .collect();
         (0..60)
             .map(|i| {
                 mul(i32::from(transform::window(i)), work[119 - i])
-                    + mul(i32::from(transform::window(119 - i)), work[i])
+                    .wrapping_add(mul(i32::from(transform::window(119 - i)), work[i]))
             })
             .collect()
     }

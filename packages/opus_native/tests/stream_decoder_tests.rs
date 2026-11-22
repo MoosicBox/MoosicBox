@@ -422,8 +422,11 @@ fn legal_empty_second_constituent_matches_explicit_loss_and_recovery() {
     let mut untouched = Decoder::new(SampleRate::Hz48000, Channels::Mono).unwrap();
     let mut sentinel = vec![123; 1920];
     assert!(matches!(
-        rejected.decode(Some(&[0x7a, 2, 0xff, 0xfe]), &mut sentinel, false),
-        Err(moosicbox_opus_native::Error::Unsupported(_))
+        // Code 2 advertises three bytes for its first frame, but only two
+        // payload bytes follow. Unlike a legal empty second frame, this must
+        // fail framing preflight without touching output or decoder state.
+        rejected.decode(Some(&[0xfa, 3, 0xff, 0xfe]), &mut sentinel, false),
+        Err(moosicbox_opus_native::Error::InvalidPacket(_))
     ));
     assert!(sentinel.iter().all(|sample| *sample == 123));
     let mut after = vec![0; 960];
@@ -436,33 +439,37 @@ fn legal_empty_second_constituent_matches_explicit_loss_and_recovery() {
         .unwrap();
     assert_eq!(after, control);
     for channels in [Channels::Mono, Channels::Stereo] {
-        let packet = [0xf8, 0xff, 0xfe];
-        let combined = [0xfa, 2, 0xff, 0xfe];
-        let mut decoder = Decoder::new(SampleRate::Hz48000, channels).unwrap();
-        let mut control = Decoder::new(SampleRate::Hz48000, channels).unwrap();
-        let width = channels as usize;
-        let mut actual = vec![123; 1920 * width];
-        assert_eq!(
-            decoder.decode(Some(&combined), &mut actual, false).unwrap(),
-            1920
-        );
-        let mut expected = vec![0; 1920 * width];
-        control
-            .decode(Some(&packet), &mut expected[..960 * width], false)
-            .unwrap();
-        control
-            .decode_loss(&mut expected[960 * width..], 960)
-            .unwrap();
-        assert_eq!(actual, expected);
-        let mut recovered = vec![0; 960 * width];
-        let mut reference = vec![0; 960 * width];
-        decoder
-            .decode(Some(&packet), &mut recovered, false)
-            .unwrap();
-        control
-            .decode(Some(&packet), &mut reference, false)
-            .unwrap();
-        assert_eq!(recovered, reference);
+        // Both hybrid and CELT legal empty constituents must advance the
+        // same PLC state as an explicit loss, including the next good frame.
+        for toc in [0x78, 0xf8] {
+            let packet = [toc, 0xff, 0xfe];
+            let combined = [toc | 2, 2, 0xff, 0xfe];
+            let mut decoder = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+            let mut control = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+            let width = channels as usize;
+            let mut actual = vec![123; 1920 * width];
+            assert_eq!(
+                decoder.decode(Some(&combined), &mut actual, false).unwrap(),
+                1920
+            );
+            let mut expected = vec![0; 1920 * width];
+            control
+                .decode(Some(&packet), &mut expected[..960 * width], false)
+                .unwrap();
+            control
+                .decode_loss(&mut expected[960 * width..], 960)
+                .unwrap();
+            assert_eq!(actual, expected);
+            let mut recovered = vec![0; 960 * width];
+            let mut reference = vec![0; 960 * width];
+            decoder
+                .decode(Some(&packet), &mut recovered, false)
+                .unwrap();
+            control
+                .decode(Some(&packet), &mut reference, false)
+                .unwrap();
+            assert_eq!(recovered, reference);
+        }
     }
 }
 
@@ -760,4 +767,66 @@ fn missing_lbrr_fallback_has_real_state_and_invalid_duration_is_atomic() {
     decoder.decode(Some(packet), &mut actual, false).unwrap();
     control.decode(Some(packet), &mut expected, false).unwrap();
     assert_eq!(actual, expected);
+}
+
+#[cfg(feature = "celt")]
+#[test]
+#[ignore = "requires explicitly selected MOOSICBOX_OPUS_REFERENCE_ORACLE"]
+fn exhausted_hybrid_and_empty_constituent_match_public_c() {
+    let script = r"
+import os,struct,sys
+sys.path.insert(0,sys.argv[1]+'/libopus/src')
+from oracle import Oracle
+with Oracle(os.environ['MOOSICBOX_OPUS_REFERENCE_ORACLE']) as o:
+ def req(op,**kw):
+  r=o.request(op,**kw); assert 'error' not in r,r; return r
+ req('decoder',rate=48000,channels=int(sys.argv[2]))
+ # Exhausted shared entropy is highband silence, not whole-frame PLC.
+ # Include a real hybrid frame after loss to expose energy/RNG/overlap drift.
+ real=list(open(sys.argv[1]+'/test_vectors/frozen/hybrid_fb_mono/packet.bin','rb').read())
+ for packet,count in [([0x7a,2,255,254],1920),([0x78,255,254],960),(real,960),([0x7a,2,255,254],1920),(real,960)]:
+  r=req('decode',packet=packet,frame_size=count)
+  assert r['samples']==count,r
+  sys.stdout.buffer.write(struct.pack('<II',len(packet),len(r['pcm']))+bytes(packet))
+  sys.stdout.buffer.write(struct.pack('<'+'h'*len(r['pcm']),*r['pcm']))
+";
+    for channels in [Channels::Mono, Channels::Stereo] {
+        let oracle = Command::new("python3")
+            .args(["-B", "-c", script, env!("CARGO_MANIFEST_DIR")])
+            .arg((channels as usize).to_string())
+            .output()
+            .unwrap();
+        assert!(
+            oracle.status.success(),
+            "{}",
+            String::from_utf8_lossy(&oracle.stderr)
+        );
+        let mut decoder = Decoder::new(SampleRate::Hz48000, channels).unwrap();
+        let mut offset = 0;
+        for step in 0..5 {
+            let length = word(&oracle.stdout, &mut offset);
+            let count = word(&oracle.stdout, &mut offset);
+            let packet = &oracle.stdout[offset..offset + length];
+            offset += length;
+            let expected = oracle.stdout[offset..offset + count * 2]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|bytes| i16::from_le_bytes(*bytes))
+                .collect::<Vec<_>>();
+            offset += count * 2;
+            let mut actual = vec![123; count];
+            assert_eq!(
+                decoder.decode(Some(packet), &mut actual, false).unwrap(),
+                count / channels as usize
+            );
+            let first = actual.iter().zip(&expected).position(|(a, b)| a != b);
+            assert!(
+                first.is_none(),
+                "channels={channels:?} step={step} first={:?}",
+                first.map(|i| (i, actual[i], expected[i]))
+            );
+        }
+        assert_eq!(offset, oracle.stdout.len());
+    }
 }

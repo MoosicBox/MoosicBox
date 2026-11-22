@@ -9,6 +9,9 @@ use moosicbox_opus_native_libopus::{
 use serde_json::{Value, json};
 use std::io::{self, BufRead, Read, Write};
 
+#[path = "support/multistream.rs"]
+mod multistream;
+
 type Error = Box<dyn std::error::Error>;
 fn number<T: TryFrom<u64>>(v: &Value, key: &str) -> Result<T, Error> {
     v[key]
@@ -41,10 +44,12 @@ fn manifest_only() -> Result<bool, Error> {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Error> {
     if manifest_only()? {
         return Ok(());
     }
+    let mut multistream = multistream::Multistream::default();
     let mut encoder = None;
     let mut decoder = None;
     let mut channels = 1_usize;
@@ -65,6 +70,7 @@ fn main() -> Result<(), Error> {
         }
         let v: Value = serde_json::from_slice(&bytes)?;
         let reply = match v["op"].as_str().ok_or("missing op")? {
+            op if op.starts_with("multistream_") => multistream.request(&v)?,
             "encoder" => {
                 let application = v["application"].as_i64().unwrap_or(2049);
                 encoder = Some(Encoder::new(
@@ -78,6 +84,24 @@ fn main() -> Result<(), Error> {
                 let count: u8 = number(&v, "channels")?;
                 decoder = Some(Decoder::new(number(&v, "rate")?, count)?);
                 channels = usize::from(count);
+                json!({"ok":true})
+            }
+            "decoder_configure" => {
+                let controls = v["controls"]
+                    .as_array()
+                    .filter(|a| a.len() <= 32)
+                    .ok_or("controls array required")?;
+                let state = decoder.as_mut().ok_or("create decoder first")?;
+                for control in controls {
+                    let pair = control
+                        .as_array()
+                        .filter(|a| a.len() == 2)
+                        .ok_or("control must be pair")?;
+                    if pair[0].as_i64() != Some(4034) {
+                        return Err("unsupported decoder control".into());
+                    }
+                    state.set_gain(i16::try_from(pair[1].as_i64().ok_or("invalid gain")?)?)?;
+                }
                 json!({"ok":true})
             }
             "configure" => {

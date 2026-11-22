@@ -5,10 +5,7 @@ use moosicbox_audio_encoder::opus_stream::{
     OpusEncodeBackend, OpusEncodeConfig, OpusStreamEncoder,
 };
 use moosicbox_audio_output::encoder::{AudioEncoder, opus::SelectedOpusEncoder};
-use std::{
-    io::{Cursor, Write},
-    process::{Command, Stdio},
-};
+use std::io::{Cursor, Write};
 use symphonia::core::audio::{
     Audio, AudioBuffer, AudioMut, AudioSpec,
     layouts::{CHANNEL_LAYOUT_MONO, CHANNEL_LAYOUT_STEREO},
@@ -48,28 +45,120 @@ fn encode(channels: u8, rate: u32, frames: usize) -> Vec<u8> {
     assert!(encoder.finish().unwrap().is_empty());
     bytes
 }
-fn ffmpeg(bytes: &[u8]) -> Vec<u8> {
-    let mut child = Command::new("ffmpeg")
-        .args(["-v", "error", "-i", "pipe:0", "-f", "f32le", "pipe:1"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("independent FFmpeg required");
-    child.stdin.take().unwrap().write_all(bytes).unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    output.stdout
+// Ordinary native-only tests exercise the complete Rust pipeline. Enabling the
+// existing `opus` feature additionally cross-decodes every generated stream
+// through the in-process C decoder, with no executable or environment setup.
+fn pipeline_decode(bytes: &[u8]) -> Vec<u8> {
+    let mut format = moosicbox_audio_decoder::create_format_probe()
+        .probe(
+            &symphonia::core::formats::probe::Hint::new(),
+            symphonia::core::io::MediaSourceStream::new(
+                Box::new(Cursor::new(bytes.to_vec())),
+                Default::default(),
+            ),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+    let params = format.tracks()[0]
+        .codec_params
+        .as_ref()
+        .unwrap()
+        .audio()
+        .unwrap()
+        .clone();
+    let channels = params.channels.as_ref().unwrap().count();
+    let mut native = moosicbox_opus::OpusDecoder::try_new_with_backend(
+        &params,
+        moosicbox_opus::OpusBackend::Native,
+    )
+    .unwrap();
+    #[cfg(feature = "opus")]
+    let mut reference = opus::Decoder::new(
+        48_000,
+        if channels == 1 {
+            opus::Channels::Mono
+        } else {
+            opus::Channels::Stereo
+        },
+    )
+    .unwrap();
+    let mut result = Vec::new();
+    while let Some(packet) = format.next_packet().unwrap() {
+        let symphonia::core::audio::GenericAudioBufferRef::F32(decoded) =
+            native.decode(&packet).unwrap()
+        else {
+            panic!("expected f32 native output");
+        };
+        #[cfg(feature = "opus")]
+        {
+            let mut pcm = vec![0_i16; 5760 * channels];
+            let count = reference.decode(&packet.data, &mut pcm, false).unwrap();
+            let start = usize::try_from(packet.trim_start.get()).unwrap();
+            let end = count - usize::try_from(packet.trim_end.get()).unwrap();
+            assert_eq!(decoded.frames(), end - start);
+            for frame in start..end {
+                for channel in 0..channels {
+                    result.extend_from_slice(
+                        &(f32::from(pcm[frame * channels + channel]) / 32768.0).to_le_bytes(),
+                    );
+                }
+            }
+        }
+        #[cfg(not(feature = "opus"))]
+        for frame in 0..decoded.frames() {
+            for channel in 0..channels {
+                result.extend_from_slice(&decoded.plane(channel).unwrap()[frame].to_le_bytes());
+            }
+        }
+    }
+    result
 }
 #[test]
-fn native_partial_tail_crossdecodes_with_independent_ffmpeg() {
+#[ignore = "manual live C qualification requires MOOSICBOX_OPUS_REFERENCE_ORACLE and Python"]
+fn native_partial_tail_live_c_diagnostic() {
+    use std::process::{Command, Stdio};
+
+    let executable = std::env::var_os("MOOSICBOX_OPUS_REFERENCE_ORACLE")
+        .expect("explicit absolute qualified C oracle path is required");
+    assert!(std::path::Path::new(&executable).is_absolute());
     for channels in [1, 2] {
         let bytes = encode(channels, 48_000, 2457);
-        let decoded = ffmpeg(&bytes);
+        let mut child = Command::new("python3")
+            .arg(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/ogg_reference_oracle.py"
+            ))
+            .env("MOOSICBOX_OPUS_REFERENCE_ORACLE", &executable)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(&bytes).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(output.stdout.len(), 2457 * usize::from(channels) * 4);
+        assert!(
+            output
+                .stdout
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|sample| f32::from_le_bytes(*sample).abs() > 0.001)
+        );
+    }
+}
+
+#[test]
+fn native_partial_tail_decodes_with_exact_length() {
+    for channels in [1, 2] {
+        let bytes = encode(channels, 48_000, 2457);
+        let decoded = pipeline_decode(&bytes);
         assert_eq!(decoded.len(), 2457 * usize::from(channels) * 4);
         assert!(
             decoded
@@ -142,14 +231,14 @@ fn native_input_rate_short_frame_clock_matrix() {
                 assert!(encoder.finish().unwrap().is_none());
                 assert!(encoder.write(&pcm[..usize::from(channels)]).is_err());
                 let count = frames * (48000 / rate) as usize;
-                let independent = ffmpeg(&bytes);
+                let decoded = pipeline_decode(&bytes);
                 assert_eq!(
-                    independent.len(),
+                    decoded.len(),
                     count * usize::from(channels) * 4,
                     "rate={rate} frame={frame_size} channels={channels}"
                 );
                 assert!(
-                    independent
+                    decoded
                         .as_chunks::<4>()
                         .0
                         .iter()
@@ -246,7 +335,10 @@ fn libopus_short_frame_drain_uses_48k_clock() {
             encoder.write(&vec![0.2; frames]).unwrap();
             let bytes = encoder.finish().unwrap().unwrap();
             assert!(encoder.finish().unwrap().is_none());
-            assert_eq!(ffmpeg(&bytes).len(), frames * (48000 / rate) as usize * 4);
+            assert_eq!(
+                pipeline_decode(&bytes).len(),
+                frames * (48000 / rate) as usize * 4
+            );
         }
     }
 }
@@ -254,7 +346,7 @@ fn libopus_short_frame_drain_uses_48k_clock() {
 #[test]
 fn native_resampling_finishes_once() {
     let bytes = encode(2, 24_000, 1200);
-    assert_eq!(ffmpeg(&bytes).len(), 2400 * 2 * 4);
+    assert_eq!(pipeline_decode(&bytes).len(), 2400 * 2 * 4);
 }
 #[test]
 fn unavailable_backend_and_bad_pcm_are_errors() {
