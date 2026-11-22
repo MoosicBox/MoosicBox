@@ -790,10 +790,7 @@ impl Encoder {
                 }
                 let mut prepared_state = None;
                 let mut prepared_frame = None;
-                let reuse_prefix = eligible;
-                #[cfg(test)]
-                let reuse_prefix = reuse_prefix && !RD_UNFACTORED_REFERENCE.get();
-                if reuse_prefix {
+                if eligible {
                     let mut state = self.clone();
                     state.hybrid_energy_db = 0;
                     state.quick_prefix = quick;
@@ -812,6 +809,10 @@ impl Encoder {
                     // cloned candidate, as for failed suffix candidates below.
                     #[cfg(test)]
                     let phase = std::time::Instant::now();
+                    #[cfg(test)]
+                    if RD_UNFACTORED_REFERENCE.get() {
+                        state.native_prefix_score.as_mut().unwrap().cache.disabled = true;
+                    }
                     let prefix_result = state.encode_practical_boundary_prepared(
                         pcm,
                         EncoderControl {
@@ -924,7 +925,15 @@ impl Encoder {
                             }
                         }
                     }
-                    prepared_state = Some(state);
+                    // The unfactored control still needs the alternate near-floor
+                    // envelopes above, but must rebuild the prefix for ordinary trials.
+                    #[cfg(test)]
+                    if RD_UNFACTORED_REFERENCE.get() {
+                        prepared_frame = None;
+                    }
+                    if prepared_frame.is_some() {
+                        prepared_state = Some(state);
+                    }
                 }
                 let quiet = self.config.sample_rate == SampleRate::Hz48000
                     && control.bitrate >= 64_000
@@ -956,6 +965,11 @@ impl Encoder {
                     #[cfg(test)]
                     {
                         phases[1] += phase.elapsed().as_nanos();
+                    }
+                    #[cfg(test)]
+                    if eligible && RD_UNFACTORED_REFERENCE.get() {
+                        trial.native_prefix_score =
+                            Some(hybrid::NativePrefixScore::uncached(&prefix_origin, &target));
                     }
                     trial.hybrid_energy_db = db;
                     trial.hybrid_tilt_db = slope;
@@ -1011,6 +1025,10 @@ impl Encoder {
                     #[cfg(test)]
                     if prepared_frame.is_some() && RD_VERIFY_CANDIDATES.get() {
                         let mut reference = self.clone();
+                        // Rebuild from the same pre-frame synthesis state and target;
+                        // omitting the scorer selects a different SILK encoder.
+                        reference.native_prefix_score =
+                            Some(hybrid::NativePrefixScore::uncached(&prefix_origin, &target));
                         reference.hybrid_energy_db = db;
                         reference.hybrid_tilt_db = slope;
                         reference.quick_prefix = quick;
@@ -1583,7 +1601,7 @@ impl Encoder {
         #[cfg_attr(not(feature = "hybrid"), allow(unused_mut))]
         let (mut target_energy, energy) = quantize::energies(&spectrum, lm);
         #[cfg(feature = "hybrid")]
-        if hybrid && self.config.bitrate <= 64_000 {
+        if hybrid && (self.hybrid_energy_db != 0 || self.hybrid_tilt_db != 0) {
             let bias = self.hybrid_energy_db;
             for channel in 0..channels {
                 for band in start..end {

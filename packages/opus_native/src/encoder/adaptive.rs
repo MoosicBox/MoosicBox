@@ -1552,6 +1552,8 @@ mod tests {
                     },
                     bitrate: if (2..6).contains(&frame) {
                         32_000
+                    } else if (8..10).contains(&frame) {
+                        128_000
                     } else {
                         64_000
                     },

@@ -370,6 +370,19 @@ pub(super) struct NativePrefixScore {
 
 impl NativePrefixScore {
     #[cfg(test)]
+    pub(super) fn uncached(incoming: &crate::Decoder, target: &[i16]) -> Box<Self> {
+        Box::new(Self {
+            incoming: incoming.clone(),
+            target: target.to_vec(),
+            cache: NativeScoreCache {
+                disabled: true,
+                ..NativeScoreCache::default()
+            },
+            best: None,
+        })
+    }
+
+    #[cfg(test)]
     pub(super) fn decode(
         &self,
         decoder: &mut crate::Decoder,

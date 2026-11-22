@@ -367,16 +367,41 @@ fn public_silence_c_parity() {
 }
 
 #[test]
-#[ignore = "public floor candidate: requires guard release and pinned C oracle"]
+#[ignore = "public SILK bitrate boundary; requires pinned C oracle"]
 fn public_floor_synthetic_matrix() {
     qualify_public_matrix(None);
 }
 
 #[test]
-#[ignore = "public floor candidate: requires guard release, speech WAV and pinned C oracle"]
+#[ignore = "public SILK bitrate boundary; requires speech WAV and pinned C oracle"]
 fn public_floor_real_speech_matrix() {
     let speech = completion::completion_tests::read_speech_samples();
     qualify_public_matrix(Some(&speech));
+}
+
+#[test]
+fn public_silk_bitrate_range() {
+    for rate in [8000, 12000, 16000, 24000, 48000] {
+        for channels in [crate::Channels::Mono, crate::Channels::Stereo] {
+            for milliseconds in [10, 20, 40, 60] {
+                let config = EncoderConfig {
+                    sample_rate: SampleRate::from_hz(rate).unwrap(),
+                    channels,
+                    frame_size: rate as usize * milliseconds / 1000,
+                    bitrate: 16_000,
+                };
+                for bitrate in [12_000, 15_999, 128_001] {
+                    assert!(matches!(
+                        super::super::Encoder::new_silk(EncoderConfig { bitrate, ..config }),
+                        Err(crate::Error::Unsupported(_))
+                    ));
+                }
+                for bitrate in [16_000, 128_000] {
+                    super::super::Encoder::new_silk(EncoderConfig { bitrate, ..config }).unwrap();
+                }
+            }
+        }
+    }
 }
 
 fn qualify_public_matrix(speech: Option<&[i16]>) {
@@ -388,11 +413,7 @@ fn qualify_public_matrix(speech: Option<&[i16]>) {
                     sample_rate: SampleRate::from_hz(rate).unwrap(),
                     channels,
                     frame_size: rate as usize * milliseconds / 1000,
-                    bitrate: if channels == crate::Channels::Mono {
-                        12_000
-                    } else {
-                        24_000
-                    },
+                    bitrate: 16_000,
                 };
                 let kinds: &[&str] = if speech.is_some() {
                     &["speech", "quiet_speech"]
@@ -408,6 +429,17 @@ fn qualify_public_matrix(speech: Option<&[i16]>) {
                 };
                 for &kind in kinds {
                     qualify_public_case(config, kind, speech.as_deref());
+                    // Keep the previously exercised valid stereo operating point too.
+                    if channels == crate::Channels::Stereo {
+                        qualify_public_case(
+                            EncoderConfig {
+                                bitrate: 24_000,
+                                ..config
+                            },
+                            kind,
+                            speech.as_deref(),
+                        );
+                    }
                 }
             }
         }
@@ -458,7 +490,6 @@ fn qualify_public_case(config: EncoderConfig, kind: &str, speech: Option<&[i16]>
             input.push(sample);
         }
     }
-    // This must fail honestly until the coordinator releases this public floor.
     let mut encoder = super::super::Encoder::new_silk(config).unwrap();
     qualify_stream(config, kind, &input, &mut encoder);
 }
