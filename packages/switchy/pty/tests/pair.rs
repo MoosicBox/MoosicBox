@@ -443,3 +443,11 @@ fn terminals_open_concurrently() {
     }
     assert_eq!(failures.load(Ordering::Relaxed), 0);
 }
+
+#[test]
+fn behavior_is_the_operating_systems() {
+    assert_eq!(
+        switchy_pty::behavior(),
+        switchy_pty::Behavior::of(cfg!(windows))
+    );
+}

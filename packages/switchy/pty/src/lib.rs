@@ -90,6 +90,48 @@ pub enum Signal {
     WindowChange,
 }
 
+/// How the terminal backend behaves where operating systems differ, for code that must work
+/// on all of them (and be simulated as each).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)] // independent facts about the platform
+pub struct Behavior {
+    /// The terminal writes a cursor position request (`CSI 6 n`) when opened and holds its
+    /// programs' output until the master answers with a cursor report (Windows `ConPTY`,
+    /// which inherits the cursor).
+    pub startup_cursor_query: bool,
+    /// The master side's output ends only once the master and the slave are both dropped
+    /// (closing the console), not when the programs holding the terminal end; dropping the
+    /// last of them may wait for remaining output to be read (Windows).
+    pub output_ends_with_console: bool,
+    /// Processes have sessions, process groups and signals (Unix). Otherwise they can only be
+    /// terminated, and report exit codes, never signals (Windows).
+    pub process_groups: bool,
+    /// The master side has a device path ([`PtyMaster::tty_name`]) and a foreground process
+    /// group (Unix).
+    pub terminal_device: bool,
+}
+
+impl Behavior {
+    /// Unix's, or with `windows`, Windows'.
+    #[must_use]
+    pub const fn of(windows: bool) -> Self {
+        Self {
+            startup_cursor_query: windows,
+            output_ends_with_console: windows,
+            process_groups: !windows,
+            terminal_device: !windows,
+        }
+    }
+}
+
+/// How this build's terminal backend behaves: the operating system's natively, the run's
+/// personality's in simulation.
+#[must_use]
+#[allow(clippy::missing_const_for_fn)] // the simulator's reads the run's kernel
+pub fn behavior() -> Behavior {
+    native::behavior()
+}
+
 /// Send `signal` to every process in process group `group`. A group with no processes left
 /// counts as done.
 ///

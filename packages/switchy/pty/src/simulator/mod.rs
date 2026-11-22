@@ -18,7 +18,10 @@
 //!   character ends a partial line or the input; window size changes with `SIGWINCH`; hang-up
 //!   when the master closes; end of file on the master once nothing holds the slave side.
 //! * **Personalities** ([`Personality`]): on Linux a terminal stays open while anything that
-//!   inherited it is alive; on macOS it ends with its session.
+//!   inherited it is alive; on macOS it ends with its session. On Windows a terminal is a
+//!   pseudo-console: it asks for the cursor position before its programs' output can flow,
+//!   its output ends only when the console is closed, processes cannot be signalled from
+//!   outside (only terminated, with exit code 1), and nothing has process groups.
 //! * **Processes**: sessions, process groups, controlling terminals, zombies and reaping,
 //!   exit codes and signals with per-signal handling, children that outlive their parent, and
 //!   process ids reused as soon as nothing uses them any more.
@@ -59,7 +62,31 @@ pub enum Personality {
     Linux,
     /// A terminal ends with its session; buffers of 1 KiB.
     MacOs,
+    /// A pseudo-console (`ConPTY` with an inherited cursor): it writes `CSI 6 n` when opened
+    /// and holds its programs' output until the master answers with a cursor report, which
+    /// the programs never read. Its output ends when the master and the slave are both
+    /// dropped (closing the console, which waits for remaining output to be read and ends the
+    /// processes still attached), not when its programs end. Processes are terminated, never
+    /// signalled: [`signal_group`] is unsupported, and an ended process reports an exit code
+    /// (1 when killed), never a signal. Buffers of 4 KiB.
+    Windows,
 }
+
+impl Personality {
+    /// Whether this is [`Personality::Windows`].
+    #[must_use]
+    pub const fn is_windows(self) -> bool {
+        matches!(self, Self::Windows)
+    }
+}
+
+/// The exit code of a Windows console process ended by `ctrl+c` or by its console closing
+/// (`STATUS_CONTROL_C_EXIT`).
+const CONTROL_C_EXIT: u32 = 0xC000_013A;
+/// The exit code a terminated Windows process reports (as the native backend kills).
+const KILLED_EXIT_CODE: u32 = 1;
+/// What a pseudo-console writes first: a cursor position request.
+const CURSOR_QUERY: &[u8] = b"\x1b[6n";
 
 /// Rates (each from 0 to 1) at which operations on the master side fail.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -87,7 +114,7 @@ pub struct Config {
 impl Config {
     /// The configuration from the environment, with unset choices drawn from the run's seed:
     ///
-    /// * `SIMULATOR_PTY_PERSONALITY`: `linux` or `macos`.
+    /// * `SIMULATOR_PTY_PERSONALITY`: `linux`, `macos` or `windows`.
     /// * `SIMULATOR_PTY_PID_REUSE`: a probability (default 0.5).
     /// * `SIMULATOR_PTY_FAULTS`: a probability applied to every fault kind (default 0).
     ///
@@ -99,12 +126,16 @@ impl Config {
         let personality = match std::env::var("SIMULATOR_PTY_PERSONALITY").as_deref() {
             Ok("linux") => Personality::Linux,
             Ok("macos") => Personality::MacOs,
-            Ok(other) => panic!("SIMULATOR_PTY_PERSONALITY must be linux|macos, got '{other}'"),
+            Ok("windows") => Personality::Windows,
+            Ok(other) => {
+                panic!("SIMULATOR_PTY_PERSONALITY must be linux|macos|windows, got '{other}'")
+            }
             Err(_) => {
-                if lock(&switchy_simulation::stream("switchy_pty_personality")).chance(0.5) {
-                    Personality::Linux
-                } else {
-                    Personality::MacOs
+                let draw = lock(&switchy_simulation::stream("switchy_pty_personality")).below(3);
+                match draw {
+                    0 => Personality::Linux,
+                    1 => Personality::MacOs,
+                    _ => Personality::Windows,
                 }
             }
         };
@@ -251,10 +282,20 @@ struct Terminal {
     capacity: usize,
     master_handles: usize,
     slave_holders: usize,
+    /// Windows: the master and slave objects still open; the console closes with the last.
+    console_handles: usize,
+    /// Readers of the master side still open.
+    readers: usize,
+    /// Windows: the console's cursor query is not answered yet, so output is held.
+    awaiting_report: bool,
+    /// Windows: what the master wrote so far of a cursor report.
+    report: Vec<u8>,
+    windows: bool,
     nonblocking: bool,
     took_writer: bool,
     session: Option<u32>,
     foreground: Option<u32>,
+    /// Hung up; on Windows, the console was closed.
     hung_up: bool,
     echo: bool,
     isig: bool,
@@ -264,6 +305,26 @@ struct Terminal {
 }
 
 impl Terminal {
+    /// Whether reading the master side is at its end once its output is read: nothing holds
+    /// the slave side (or it hung up); on Windows, the console was closed.
+    const fn output_ended(&self) -> bool {
+        if self.windows {
+            self.hung_up
+        } else {
+            self.slave_holders == 0 || self.hung_up
+        }
+    }
+
+    /// Whether the slave side's programs lost the master side: it hung up or every master
+    /// handle closed; on Windows, the console was closed.
+    const fn master_gone(&self) -> bool {
+        if self.windows {
+            self.hung_up
+        } else {
+            self.hung_up || self.master_handles == 0
+        }
+    }
+
     /// Bytes typed and not yet read.
     fn typed(&self) -> usize {
         self.input.len() + self.line.len()
@@ -387,6 +448,36 @@ struct State {
     last_spawned: BTreeMap<usize, Spawned>,
 }
 
+/// Whether `bytes` are a cursor report (`ESC [ row ; column R`): `Some(true)` for a whole one,
+/// `Some(false)` for the start of one, `None` when they cannot be one.
+fn report_shape(bytes: &[u8]) -> Option<bool> {
+    match bytes {
+        [] | [0x1b] => Some(false),
+        [0x1b, b'[', rest @ ..] => {
+            let (body, complete) = match rest.split_last() {
+                Some((b'R', body)) => (body, true),
+                _ => (rest, false),
+            };
+            let mut fields = body.split(|byte| *byte == b';');
+            let row = fields.next().unwrap_or_default();
+            let column = fields.next();
+            let digits = |field: &[u8]| field.iter().all(u8::is_ascii_digit);
+            if fields.next().is_some()
+                || !digits(row)
+                || !column.is_none_or(digits)
+                || body.len() > 16
+            {
+                None
+            } else if complete {
+                column.map(|_| true)
+            } else {
+                Some(false)
+            }
+        }
+        _ => None,
+    }
+}
+
 /// A run's simulated kernel.
 pub struct Kernel {
     key: u64,
@@ -409,6 +500,12 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 #[must_use]
 pub fn kernel() -> Arc<Kernel> {
     switchy_simulation::state_with(|| Kernel::new(Config::from_env()))
+}
+
+/// The current run's personality.
+#[must_use]
+pub fn personality() -> Personality {
+    lock(&kernel().state).config.personality
 }
 
 /// Configure the current run's kernel. Must come before anything else uses it.
@@ -581,10 +678,17 @@ pub fn base_environment() -> Vec<(OsString, OsString)> {
 /// # Errors
 ///
 /// * [`io::ErrorKind::NotFound`] if no running process has that id (as `ESRCH`)
+/// * [`io::ErrorKind::Unsupported`] for any signal but [`Signal::Kill`] on Windows
 pub fn signal_process(pid: u32, signal: Signal) -> io::Result<()> {
     let kernel = kernel();
     kernel.switch();
     let mut state = lock(&kernel.state);
+    if state.config.personality.is_windows() && signal != Signal::Kill {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Windows processes can only be terminated",
+        ));
+    }
     if !state
         .processes
         .get(&pid)
@@ -605,11 +709,18 @@ pub fn signal_process(pid: u32, signal: Signal) -> io::Result<()> {
 ///
 /// # Errors
 ///
-/// * Never; a group with no processes counts as done.
+/// * [`io::ErrorKind::Unsupported`] on Windows, where processes have no groups; a group with
+///   no processes counts as done.
 pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
     let kernel = kernel();
     kernel.switch();
     let mut state = lock(&kernel.state);
+    if state.config.personality.is_windows() {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "signalling a process group is not supported on Windows",
+        ));
+    }
     let members: Vec<u32> = state
         .processes
         .iter()
@@ -750,7 +861,7 @@ impl Kernel {
 
     const fn capacity(state: &State) -> usize {
         match state.config.personality {
-            Personality::Linux => 4096,
+            Personality::Linux | Personality::Windows => 4096,
             Personality::MacOs => 1024,
         }
     }
@@ -898,7 +1009,11 @@ impl Kernel {
         for stream in streams {
             Self::release(&mut state, stream);
         }
-        if leader && let Some(terminal) = controlling {
+        // A console's processes outlive the first one (Windows has no controlling process).
+        if leader
+            && !state.config.personality.is_windows()
+            && let Some(terminal) = controlling
+        {
             // The controlling process exited: its terminal hangs up on the foreground group.
             Self::signal_foreground(&mut state, terminal, Signal::Hangup);
             if state.config.personality == Personality::MacOs
@@ -919,7 +1034,7 @@ impl Kernel {
             return;
         };
         t.master_handles = t.master_handles.saturating_sub(1);
-        if t.master_handles == 0 && !t.hung_up {
+        if t.master_handles == 0 && !t.hung_up && !t.windows {
             t.hung_up = true;
             let session = t.session;
             let targets: Vec<u32> = state
@@ -937,6 +1052,61 @@ impl Kernel {
         }
     }
 
+    /// The master or slave object of `terminal` closed. On Windows the console closes with the
+    /// last of them: the processes still attached to it end (`CTRL_CLOSE_EVENT`), and its
+    /// output ends once read. Returns whether this closed a console.
+    fn close_console(state: &mut State, terminal: u64) -> bool {
+        let Some(t) = state.terminals.get_mut(&terminal) else {
+            return false;
+        };
+        t.console_handles = t.console_handles.saturating_sub(1);
+        if !t.windows || t.console_handles > 0 || t.hung_up {
+            return false;
+        }
+        t.hung_up = true;
+        t.awaiting_report = false;
+        let targets: Vec<u32> = state
+            .processes
+            .iter()
+            .filter(|(_, p)| p.state == ProcessState::Running && p.controlling == Some(terminal))
+            .map(|(&pid, _)| pid)
+            .collect();
+        for pid in targets {
+            Self::deliver(state, pid, Signal::Hangup);
+        }
+        true
+    }
+
+    /// Closing a console waits until its remaining output is read (or nothing reads it).
+    fn wait_console_drained(&self, terminal: u64) {
+        if std::thread::panicking() {
+            return;
+        }
+        let _ = self.wait_for(None, |state| match state.terminals.get(&terminal) {
+            Some(t) if !t.output.is_empty() && t.readers > 0 => Wait::Again,
+            _ => Wait::Done(()),
+        });
+    }
+
+    /// Windows: take `byte`, typed while the console's cursor query is unanswered, as part of
+    /// a cursor report (`ESC [ row ; column R`). Returns the bytes to type normally instead:
+    /// none while a report may still be under way, every withheld byte once it cannot be one.
+    fn cursor_report(t: &mut Terminal, byte: u8) -> Vec<u8> {
+        if t.report.is_empty() && byte != 0x1b {
+            return vec![byte];
+        }
+        t.report.push(byte);
+        match report_shape(&t.report) {
+            Some(true) => {
+                t.report.clear();
+                t.awaiting_report = false;
+                Vec::new()
+            }
+            Some(false) => Vec::new(),
+            None => std::mem::take(&mut t.report),
+        }
+    }
+
     /// Process `bytes` typed at the master through the line discipline, as far as there is
     /// room. Returns how many were consumed.
     fn type_input(state: &mut State, terminal: u64, bytes: &[u8]) -> usize {
@@ -945,6 +1115,20 @@ impl Kernel {
             let Some(t) = state.terminals.get_mut(&terminal) else {
                 break;
             };
+            if t.awaiting_report {
+                let typed = Self::cursor_report(t, byte);
+                consumed += 1;
+                // Withheld bytes that were not a report are typed after all, room or not.
+                for byte in typed {
+                    if t.icanon {
+                        t.canonical(byte);
+                    } else {
+                        t.input.push_back(Typed::Byte(byte));
+                        t.echo_byte(byte);
+                    }
+                }
+                continue;
+            }
             if t.isig && (byte == 0x03 || byte == 0x1c) {
                 let signal = if byte == 0x03 {
                     Signal::Interrupt
@@ -984,18 +1168,29 @@ impl Kernel {
         let mut state = lock(&self.state);
         let id = Self::new_id(&mut state);
         let capacity = Self::capacity(&state);
+        let windows = state.config.personality.is_windows();
         state.terminals.insert(
             id,
             Terminal {
                 name: format!("/dev/simpts/{id}"),
                 size,
-                output: VecDeque::new(),
+                // A pseudo-console asks where its cursor is before anything else.
+                output: if windows {
+                    CURSOR_QUERY.iter().copied().collect()
+                } else {
+                    VecDeque::new()
+                },
                 input: VecDeque::new(),
                 line: Vec::new(),
                 capacity,
                 // The master and the slave handle.
                 master_handles: 1,
                 slave_holders: 1,
+                console_handles: 2,
+                readers: 0,
+                awaiting_report: windows,
+                report: Vec::new(),
+                windows,
                 nonblocking: false,
                 took_writer: false,
                 session: None,
@@ -1119,7 +1314,9 @@ impl Kernel {
                     if let Some(t) = controlling.and_then(|t| state.terminals.get_mut(&t)) {
                         t.session = Some(pid);
                         t.foreground = Some(pid);
-                        t.hung_up = false;
+                        if !t.windows {
+                            t.hung_up = false;
+                        }
                     }
                     (pid, pid, streams, controlling, BTreeMap::new())
                 }
@@ -1192,6 +1389,16 @@ impl Kernel {
                         Ok(ending) => match *ending {
                             Ending::Exit(code) => {
                                 ChildExit::with_exit_code(u32::from_ne_bytes(code.to_ne_bytes()))
+                            }
+                            Ending::Signal(signal)
+                                if lock(&kernel.state).config.personality.is_windows() =>
+                            {
+                                // Windows reports how a process ended as an exit code.
+                                ChildExit::with_exit_code(if signal == Signal::Kill {
+                                    KILLED_EXIT_CODE
+                                } else {
+                                    CONTROL_C_EXIT
+                                })
                             }
                             Ending::Signal(signal) => ChildExit::signaled(
                                 signal_number(signal),
@@ -1319,7 +1526,7 @@ impl Process {
                     }
                     if read > 0 {
                         Wait::Done(Ok(read))
-                    } else if t.hung_up || t.master_handles == 0 {
+                    } else if t.master_gone() {
                         Wait::Done(Ok(0))
                     } else {
                         Wait::Again
@@ -1374,8 +1581,12 @@ impl Process {
                         let Some(t) = state.terminals.get_mut(&t) else {
                             return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
                         };
-                        if t.hung_up || t.master_handles == 0 {
+                        if t.master_gone() {
                             return Wait::Done(Err(Err(io::ErrorKind::BrokenPipe)));
+                        }
+                        // A pseudo-console holds output until its cursor query is answered.
+                        if t.awaiting_report {
+                            return Wait::Again;
                         }
                         let mut written = 0;
                         for &byte in rest {
@@ -1576,6 +1787,11 @@ pub(crate) mod backend {
         SpawnCommand, State, Stream, Wait, kernel, lock,
     };
     pub use super::{base_environment, signal_group};
+
+    /// The current run's personality's behaviour.
+    pub fn behavior() -> crate::Behavior {
+        crate::Behavior::of(super::personality().is_windows())
+    }
     // Signals in std exit statuses exist only on Unix.
     #[cfg(unix)]
     pub use super::signal_name;
@@ -1583,7 +1799,8 @@ pub(crate) mod backend {
     pub fn open(size: PtySize) -> io::Result<(Master, Slave)> {
         let kernel = kernel();
         let terminal = kernel.open(size);
-        let name = PathBuf::from(format!("/dev/simpts/{terminal}"));
+        let name = (!lock(&kernel.state).config.personality.is_windows())
+            .then(|| PathBuf::from(format!("/dev/simpts/{terminal}")));
         Ok((
             Master {
                 kernel: Arc::clone(&kernel),
@@ -1598,15 +1815,19 @@ pub(crate) mod backend {
     pub struct Master {
         kernel: Arc<Kernel>,
         terminal: u64,
-        name: PathBuf,
+        name: Option<PathBuf>,
     }
 
     impl Drop for Master {
         fn drop(&mut self) {
             let mut state = lock(&self.kernel.state);
             Kernel::close_master(&mut state, self.terminal);
+            let closed = Kernel::close_console(&mut state, self.terminal);
             drop(state);
             self.kernel.wake();
+            if closed {
+                self.kernel.wait_console_drained(self.terminal);
+            }
         }
     }
 
@@ -1646,6 +1867,9 @@ pub(crate) mod backend {
 
         pub fn try_clone_reader(&self) -> io::Result<Reader> {
             self.open_handle()?;
+            if let Some(t) = lock(&self.kernel.state).terminals.get_mut(&self.terminal) {
+                t.readers += 1;
+            }
             Ok(Reader {
                 kernel: Arc::clone(&self.kernel),
                 terminal: self.terminal,
@@ -1698,17 +1922,19 @@ pub(crate) mod backend {
             lock(&self.kernel.state)
                 .terminals
                 .get(&self.terminal)
-                .is_some_and(|t| t.slave_holders > 0 && !t.hung_up)
+                .is_some_and(|t| t.windows || (t.slave_holders > 0 && !t.hung_up))
         }
 
         pub fn tty_name(&self) -> Option<&Path> {
-            Some(&self.name)
+            // A pseudo-console has no device path.
+            self.name.as_deref()
         }
 
         pub fn foreground_process_group(&self) -> Option<i32> {
             lock(&self.kernel.state)
                 .terminals
                 .get(&self.terminal)
+                .filter(|t| !t.windows)
                 .and_then(|t| t.foreground)
                 .and_then(|g| i32::try_from(g).ok())
         }
@@ -1723,6 +1949,9 @@ pub(crate) mod backend {
     impl Drop for Reader {
         fn drop(&mut self) {
             let mut state = lock(&self.kernel.state);
+            if let Some(t) = state.terminals.get_mut(&self.terminal) {
+                t.readers = t.readers.saturating_sub(1);
+            }
             Kernel::close_master(&mut state, self.terminal);
             drop(state);
             self.kernel.wake();
@@ -1732,7 +1961,9 @@ pub(crate) mod backend {
     /// Whether `terminal` has output to read or is at its end.
     fn readable(state: &State, terminal: u64) -> bool {
         state.terminals.get(&terminal).is_none_or(|t| {
-            !t.output.is_empty() || t.slave_holders == 0 || (t.hung_up && t.master_handles > 0)
+            !t.output.is_empty()
+                || t.output_ended()
+                || (!t.windows && t.hung_up && t.master_handles > 0)
         })
     }
 
@@ -1763,7 +1994,7 @@ pub(crate) mod backend {
                         }
                         return Wait::Done(Ok(count));
                     }
-                    if t.slave_holders == 0 || t.hung_up {
+                    if t.output_ended() {
                         // A terminal nothing holds open reads as end of file (EIO natively).
                         return Wait::Done(Ok(0));
                     }
@@ -1842,7 +2073,7 @@ pub(crate) mod backend {
                     let Some(t) = state.terminals.get(&terminal) else {
                         return Wait::Done(Err(io::Error::from(io::ErrorKind::BrokenPipe)));
                     };
-                    if t.slave_holders == 0 || t.hung_up {
+                    if t.output_ended() {
                         return Wait::Done(Err(io::Error::other("input/output error")));
                     }
                     let nonblocking = t.nonblocking;
@@ -1879,7 +2110,7 @@ pub(crate) mod backend {
                 .kernel
                 .wait_for(scheduler::deadline_after(timeout), |state| {
                     match state.terminals.get(&terminal) {
-                        Some(t) if t.typed() >= t.capacity && t.slave_holders > 0 => Wait::Again,
+                        Some(t) if t.typed() >= t.capacity && !t.output_ended() => Wait::Again,
                         _ => Wait::Done(()),
                     }
                 })
@@ -1897,8 +2128,12 @@ pub(crate) mod backend {
         fn drop(&mut self) {
             let mut state = lock(&self.kernel.state);
             Kernel::release(&mut state, Stream::Terminal(self.terminal));
+            let closed = Kernel::close_console(&mut state, self.terminal);
             drop(state);
             self.kernel.wake();
+            if closed {
+                self.kernel.wait_console_drained(self.terminal);
+            }
         }
     }
 
@@ -2010,6 +2245,11 @@ pub(crate) mod backend {
             if self.exited()? {
                 return Ok(());
             }
+            // Windows terminates at once.
+            if lock(&self.kernel.state).config.personality.is_windows() {
+                signal_pid(&self.kernel, self.pid, Signal::Kill);
+                return Ok(());
+            }
             signal_pid(&self.kernel, self.pid, Signal::Hangup);
             for check in 0..HANGUP_CHECKS {
                 if check > 0 {
@@ -2060,7 +2300,12 @@ pub(crate) mod backend {
         // Fallible on every platform: the native backends signal the operating system.
         #[allow(clippy::unnecessary_wraps)]
         pub fn kill(&self) -> io::Result<()> {
-            signal_pid(&self.kernel, self.pid, Signal::Hangup);
+            let signal = if lock(&self.kernel.state).config.personality.is_windows() {
+                Signal::Kill
+            } else {
+                Signal::Hangup
+            };
+            signal_pid(&self.kernel, self.pid, signal);
             Ok(())
         }
     }

@@ -558,6 +558,10 @@ impl Killer {
     }
 }
 
+pub const fn behavior() -> crate::Behavior {
+    crate::Behavior::of(false)
+}
+
 pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
     let group =
         libc::pid_t::try_from(group).map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;

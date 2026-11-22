@@ -434,3 +434,154 @@ fn a_single_process_can_be_signalled_and_reports_its_directory() {
         );
     });
 }
+
+/// Read from `reader` until `want` arrived (or it ended).
+fn read_until(reader: &mut impl std::io::Read, want: &[u8]) -> Vec<u8> {
+    let mut output = Vec::new();
+    let mut buffer = [0_u8; 256];
+    while !output.windows(want.len()).any(|w| w == want) {
+        match reader.read(&mut buffer).unwrap() {
+            0 => break,
+            read => output.extend_from_slice(&buffer[..read]),
+        }
+    }
+    output
+}
+
+#[test]
+fn a_windows_console_asks_for_the_cursor_and_holds_output_until_answered() {
+    for seed in 0..10 {
+        let (before, after, exit) = run(seed, Personality::Windows, || {
+            assert!(switchy_pty::behavior().startup_cursor_query);
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(SpawnCommand::new("exit").arg("3")).unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            let mut writer = master.take_writer().unwrap();
+            let mut buffer = [0_u8; 64];
+            let read = reader.read(&mut buffer).unwrap();
+            let before = buffer[..read].to_vec();
+            // Nothing else until the report: the program's output is held.
+            assert!(!reader.wait_readable(Duration::from_secs(1)).unwrap());
+            writer.write_all(b"\x1b[1;1R").unwrap();
+            let exit = child.wait().unwrap();
+            let after = read_until(&mut reader, b"bye\r\n");
+            drop(writer);
+            (before, after, exit)
+        });
+        assert_eq!(before, b"\x1b[6n");
+        assert_eq!(after, b"bye\r\n");
+        assert_eq!(exit.exit_code(), 3);
+        assert_eq!(exit.signal(), None);
+    }
+}
+
+#[test]
+fn a_windows_cursor_report_never_reaches_the_program_but_other_input_does() {
+    for seed in 0..10 {
+        let output = run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let _child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            let mut writer = master.take_writer().unwrap();
+            // Typed input around the report: an escape that is not a report is typed as is.
+            writer.write_all(b"a\x1b[2;").unwrap();
+            writer.write_all(b"7Rb\x1bxc\n").unwrap();
+            read_until(&mut reader, b"\r\n")
+        });
+        // The query, the echo of what was typed, then cat's copy of the line.
+        let text = String::from_utf8_lossy(&output).into_owned();
+        assert!(text.starts_with("\x1b[6n"), "{text:?}");
+        assert!(!text.contains("[2;7R"), "{text:?}");
+        assert!(text.contains("ab\x1bxc"), "{text:?}");
+    }
+}
+
+#[test]
+fn windows_output_ends_when_the_console_closes_not_when_programs_end() {
+    for seed in 0..10 {
+        run(seed, Personality::Windows, || {
+            assert!(switchy_pty::behavior().output_ends_with_console);
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(SpawnCommand::new("exit").arg("0")).unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            master
+                .clone_writer()
+                .unwrap()
+                .write_all(b"\x1b[1;1R")
+                .unwrap();
+            child.wait().unwrap();
+            drop(slave);
+            let output = read_until(&mut reader, b"bye\r\n");
+            assert!(output.ends_with(b"bye\r\n"));
+            // The program ended and the slave is gone, but the console is open.
+            assert!(!reader.wait_readable(Duration::from_secs(1)).unwrap());
+            drop(master);
+            assert_eq!(read_all(&mut reader), b"");
+        });
+    }
+}
+
+#[test]
+fn closing_a_windows_console_ends_its_processes_once_its_output_is_read() {
+    for seed in 0..10 {
+        let exit = run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(&SpawnCommand::new("sleep")).unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            // The unread query is drained by this reader while the console closes.
+            let drain = switchy_thread::thread::spawn(move || read_all(&mut reader));
+            drop(slave);
+            drop(master);
+            assert_eq!(drain.join().unwrap(), b"\x1b[6n");
+            child.wait().unwrap()
+        });
+        assert_eq!(exit.signal(), None);
+        assert_eq!(exit.exit_code(), 0xC000_013A);
+    }
+}
+
+#[test]
+fn windows_processes_are_terminated_never_signalled() {
+    for seed in 0..10 {
+        let exit = run(seed, Personality::Windows, || {
+            assert!(!switchy_pty::behavior().process_groups);
+            assert!(!switchy_pty::behavior().terminal_device);
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            assert_eq!(master.tty_name(), None);
+            assert_eq!(master.foreground_process_group(), None);
+            let mut child = slave.spawn(&SpawnCommand::new("ignore-hup")).unwrap();
+            let pid = child.id();
+            assert_eq!(
+                switchy_pty::signal_group(pid, Signal::Interrupt)
+                    .unwrap_err()
+                    .kind(),
+                std::io::ErrorKind::Unsupported
+            );
+            assert_eq!(
+                simulator::signal_process(pid, Signal::Terminate)
+                    .unwrap_err()
+                    .kind(),
+                std::io::ErrorKind::Unsupported
+            );
+            child.kill().unwrap();
+            child.wait().unwrap()
+        });
+        assert_eq!(exit.signal(), None);
+        assert_eq!(exit.exit_code(), 1);
+    }
+}
+
+#[test]
+fn unix_personalities_behave_as_unix() {
+    for personality in [Personality::Linux, Personality::MacOs] {
+        run(0, personality, || {
+            let behavior = switchy_pty::behavior();
+            assert_eq!(behavior, switchy_pty::Behavior::of(false));
+            let PtyPair {
+                slave: _slave,
+                master,
+            } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            assert!(master.tty_name().is_some());
+        });
+    }
+}

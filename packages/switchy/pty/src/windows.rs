@@ -368,6 +368,10 @@ fn unsupported(what: &str) -> io::Error {
     )
 }
 
+pub const fn behavior() -> crate::Behavior {
+    crate::Behavior::of(true)
+}
+
 pub fn signal_group(_group: u32, _signal: Signal) -> io::Result<()> {
     Err(unsupported("signalling a process group"))
 }
