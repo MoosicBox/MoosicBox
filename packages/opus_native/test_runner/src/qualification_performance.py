@@ -23,6 +23,8 @@ CASES = (
     "silk-mono",
     "hybrid-stereo",
     "auto-stereo",
+    "silk-mono-16k",
+    "silk-mono-32k",
     "silk-mono-48k",
     "silk-stereo-96k",
     "hybrid-stereo-32k",
@@ -32,9 +34,6 @@ CASES = (
     "auto-stereo-32k",
     "auto-stereo-64k",
 )
-
-# Below the current standalone SILK public floor; never silently count as covered.
-CANDIDATE_CASES = ("silk-mono-16k", "silk-mono-32k")
 
 
 def digest(path):
@@ -236,7 +235,7 @@ def main():
     parser.add_argument(
         "--candidate-cases",
         action="store_true",
-        help="also run below-public-floor candidates; rejection remains a failure",
+        help="compatibility option: public low-rate SILK is now always measured",
     )
     args = parser.parse_args()
     if (
@@ -260,16 +259,8 @@ def main():
         frames=args.frames,
         repetitions=args.repetitions,
         performance_accepted=False,
-        public_envelope_only=not args.candidate_cases,
-        required_qualification_blockers=[
-            dict(
-                case=case,
-                status="below_current_public_silk_floor",
-                qualified=False,
-                performance_measured=False,
-            )
-            for case in CANDIDATE_CASES
-        ],
+        public_envelope_only=True,
+        required_qualification_blockers=[],
         platform=dict(
             system=platform.system(),
             release=platform.release(),
@@ -281,7 +272,7 @@ def main():
         limitation="local measurement only; synthetic PCM is not quality evidence; no CI, other-OS or performance-budget acceptance",
     )
     try:
-        for case in CASES + (CANDIDATE_CASES if args.candidate_cases else ()):
+        for case in CASES:
             first = None
             for repetition in range(args.repetitions):
                 row = measure(executable, case, args.frames, args.timeout_seconds)

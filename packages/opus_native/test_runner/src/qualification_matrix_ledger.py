@@ -150,10 +150,7 @@ def build_ledger(media_directory):
             limitation="does not cover every rate/layout/duration/low-level combination",
         ),
         public_performance_cases=list(performance.CASES),
-        candidate_performance_cases=[
-            dict(case=case, interface="below_current_public_guard", accepted=False)
-            for case in performance.CANDIDATE_CASES
-        ],
+        candidate_performance_cases=[],
         silk_internal_cells=[
             dict(
                 case=case,

@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from qualification_performance import (
     CASES,
-    CANDIDATE_CASES,
     measure,
     verify_receipt,
     performance_verdict,
@@ -66,7 +65,7 @@ class PerformanceTests(unittest.TestCase):
         for mutation in (
             lambda r: r["cases"].pop(),
             lambda r: r["cases"].append(copy.deepcopy(r["cases"][0])),
-            lambda r: r["cases"][0].update(case=CANDIDATE_CASES[0]),
+            lambda r: r["cases"][0].update(case="unknown-case"),
             lambda r: r.update(source_after_sha256="changed"),
             lambda r: r.update(artifact_stable=False),
             lambda r: r.update(measurement_complete=False),
@@ -118,9 +117,9 @@ class PerformanceTests(unittest.TestCase):
         self.assertIn("auto-stereo", CASES)
         self.assertIn("silk-mono", CASES)
         self.assertIn("hybrid-stereo", CASES)
-        self.assertEqual(len(CASES), 14)
-        self.assertEqual(set(CANDIDATE_CASES), {"silk-mono-16k", "silk-mono-32k"})
-        self.assertFalse(set(CASES) & set(CANDIDATE_CASES))
+        self.assertEqual(len(CASES), 16)
+        self.assertIn("silk-mono-16k", CASES)
+        self.assertIn("silk-mono-32k", CASES)
         for case in (
             "silk-mono-48k",
             "silk-stereo-96k",
