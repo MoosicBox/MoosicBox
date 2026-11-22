@@ -18605,6 +18605,7 @@ dependencies = [
  "scoped-tls",
  "switchy_async",
  "switchy_simulation",
+ "switchy_time",
  "tempfile",
  "test-log",
  "tokio",

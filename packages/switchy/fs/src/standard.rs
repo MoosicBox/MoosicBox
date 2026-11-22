@@ -593,6 +593,7 @@ pub mod sync {
         use std::{
             ffi::OsStr,
             os::{fd::OwnedFd, unix::ffi::OsStrExt as _},
+            time::{Duration, SystemTime, UNIX_EPOCH},
         };
 
         use rustix::{
@@ -657,7 +658,7 @@ pub mod sync {
             clippy::useless_conversion,
             clippy::cast_lossless
         )]
-        pub(super) const fn metadata_from_stat(stat: &Stat) -> Metadata {
+        pub(super) fn metadata_from_stat(stat: &Stat) -> Metadata {
             let kind = match FileType::from_raw_mode(stat.st_mode as RawMode) {
                 FileType::RegularFile => FileKind::File,
                 FileType::Directory => FileKind::Dir,
@@ -675,7 +676,25 @@ pub mod sync {
                     dev: stat.st_dev as u64,
                     ino: stat.st_ino as u64,
                 }),
+                accessed: stat_time(stat.st_atime as i64, stat.st_atime_nsec as i64),
+                modified: stat_time(stat.st_mtime as i64, stat.st_mtime_nsec as i64),
+                #[cfg(target_vendor = "apple")]
+                created: stat_time(stat.st_birthtime as i64, stat.st_birthtime_nsec as i64),
+                #[cfg(not(target_vendor = "apple"))]
+                created: None,
             }
+        }
+
+        /// A `stat` timestamp (seconds and nanoseconds relative to the Unix epoch).
+        fn stat_time(seconds: i64, nanoseconds: i64) -> Option<SystemTime> {
+            let nanoseconds = u32::try_from(nanoseconds).ok()?;
+            let offset = Duration::new(seconds.unsigned_abs(), 0);
+            let whole = if seconds >= 0 {
+                UNIX_EPOCH.checked_add(offset)
+            } else {
+                UNIX_EPOCH.checked_sub(offset)
+            }?;
+            whole.checked_add(Duration::new(0, nanoseconds))
         }
 
         pub(super) const fn kind_of(file_type: FileType) -> FileKind {

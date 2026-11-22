@@ -23,6 +23,7 @@ switchy_async = { workspace = true, optional = true, features = [
     "sync",
 ] }
 switchy_simulation = { workspace = true, optional = true }
+switchy_time       = { workspace = true, optional = true }
 
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
@@ -47,6 +48,7 @@ windows-sys = { workspace = true, optional = true, features = [
 pretty_assertions  = { workspace = true }
 switchy_async      = { workspace = true, features = ["macros"] }
 switchy_simulation = { workspace = true }
+switchy_time       = { workspace = true, features = ["simulator"] }
 test-log           = { workspace = true }
 tokio              = { workspace = true, features = ["macros", "rt"] }
 
@@ -59,13 +61,16 @@ default = ["async", "simulator", "std", "sync", "tokio"]
 fail-on-warnings = [
     "switchy_async?/fail-on-warnings",
     "switchy_simulation?/fail-on-warnings",
+    "switchy_time?/fail-on-warnings",
 ]
 
 native-directories = ["dep:libc", "dep:windows-sys"]
 simulator = [
     "dep:rustix",
     "dep:switchy_simulation",
+    "dep:switchy_time",
     "switchy_async?/simulator",
+    "switchy_time/simulator",
     "sync",
 ]
 simulator-real-fs = [

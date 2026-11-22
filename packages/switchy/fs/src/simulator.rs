@@ -4468,6 +4468,9 @@ mod metadata_tests {
             gid: None,
             nlink: None,
             file_id: None,
+            accessed: None,
+            modified: None,
+            created: None,
         };
 
         assert_eq!(metadata.len(), 1024);
@@ -4486,6 +4489,9 @@ mod metadata_tests {
             gid: None,
             nlink: None,
             file_id: None,
+            accessed: None,
+            modified: None,
+            created: None,
         };
 
         assert!(dir_metadata.is_dir());
@@ -4503,6 +4509,9 @@ mod metadata_tests {
             gid: None,
             nlink: None,
             file_id: None,
+            accessed: None,
+            modified: None,
+            created: None,
         };
 
         assert!(symlink_metadata.is_symlink());

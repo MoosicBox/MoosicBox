@@ -3,7 +3,7 @@
 //! These types are shared by the simulator, `std` and `tokio` backends so code written
 //! against one backend compiles and behaves the same against another.
 
-use std::{ffi::OsString, path::Path};
+use std::{ffi::OsString, path::Path, time::SystemTime};
 
 /// The kind of a filesystem entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -135,6 +135,17 @@ pub struct Metadata {
     pub(crate) gid: Option<u32>,
     pub(crate) nlink: Option<u64>,
     pub(crate) file_id: Option<FileId>,
+    pub(crate) accessed: Option<SystemTime>,
+    pub(crate) modified: Option<SystemTime>,
+    pub(crate) created: Option<SystemTime>,
+}
+
+/// The error for a timestamp the backend or platform does not report, as `std` returns it.
+fn time_unsupported(what: &str) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        format!("{what} time is not available on this platform"),
+    )
 }
 
 impl Metadata {
@@ -210,6 +221,34 @@ impl Metadata {
         self.file_id
     }
 
+    /// The time of the last data access (POSIX `atime`).
+    ///
+    /// The simulator takes timestamps from the simulated clock (`switchy_time`).
+    ///
+    /// # Errors
+    /// * `Unsupported` when the platform does not report it.
+    pub fn accessed(&self) -> std::io::Result<SystemTime> {
+        self.accessed.ok_or_else(|| time_unsupported("access"))
+    }
+
+    /// The time of the last data modification (POSIX `mtime`). For a directory, the time
+    /// an entry was last created, removed or renamed.
+    ///
+    /// # Errors
+    /// * `Unsupported` when the platform does not report it.
+    pub fn modified(&self) -> std::io::Result<SystemTime> {
+        self.modified.ok_or_else(|| time_unsupported("modification"))
+    }
+
+    /// The creation (birth) time.
+    ///
+    /// # Errors
+    /// * `Unsupported` when the platform or call does not report it (for example
+    ///   `Dir`-relative metadata on Unix systems other than Apple platforms).
+    pub fn created(&self) -> std::io::Result<SystemTime> {
+        self.created.ok_or_else(|| time_unsupported("creation"))
+    }
+
     /// Whether `self` and `other` describe the same file (both identities known and equal).
     #[must_use]
     pub fn is_same_file(&self, other: &Self) -> bool {
@@ -240,6 +279,9 @@ impl From<&std::fs::Metadata> for Metadata {
                     dev: metadata.dev(),
                     ino: metadata.ino(),
                 }),
+                accessed: metadata.accessed().ok(),
+                modified: metadata.modified().ok(),
+                created: metadata.created().ok(),
             }
         }
         #[cfg(not(unix))]
@@ -252,6 +294,9 @@ impl From<&std::fs::Metadata> for Metadata {
                 gid: None,
                 nlink: None,
                 file_id: None,
+                accessed: metadata.accessed().ok(),
+                modified: metadata.modified().ok(),
+                created: metadata.created().ok(),
             }
         }
     }

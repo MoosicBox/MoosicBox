@@ -594,4 +594,22 @@ conformance! {
         assert_kind(fs::sync_directory(root.join("file")), std::io::ErrorKind::NotADirectory);
         assert_kind(fs::sync_directory(root.join("missing")), std::io::ErrorKind::NotFound);
     }
+
+    fn timestamps_are_reported(root) {
+        let path = root.join("file");
+        let mut file = fs::File::create(&path).unwrap();
+        file.write_all(b"data").unwrap();
+        for metadata in [
+            file.metadata().unwrap(),
+            fs::metadata(&path).unwrap(),
+            fs::Dir::open(root).unwrap().metadata_at("file").unwrap(),
+        ] {
+            let modified = metadata.modified().unwrap();
+            assert!(metadata.accessed().is_ok());
+            if let Ok(created) = metadata.created() {
+                assert!(created <= modified);
+            }
+        }
+        assert!(fs::metadata(root).unwrap().modified().is_ok());
+    }
 }

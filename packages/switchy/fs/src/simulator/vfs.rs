@@ -22,12 +22,22 @@
 //!
 //! A crash rebuilds the visible state from the durable state, invalidates every open
 //! handle, releases every lock and discards inodes that are no longer reachable.
+//!
+//! # Timestamps
+//!
+//! Timestamps come from the simulated clock ([`switchy_time::now`]) and are updated as
+//! POSIX specifies: creation sets every timestamp, writing or truncating a file updates
+//! its modification time, reading a file, directory or symbolic link updates its access
+//! time, and creating, removing or renaming an entry updates its directory's modification
+//! time. Timestamps are not part of the durability model: a crash keeps each surviving
+//! inode's current timestamps.
 
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
     sync::Arc,
+    time::SystemTime,
 };
 
 use super::{
@@ -97,10 +107,31 @@ enum Node {
     Symlink(PathBuf),
 }
 
+/// The timestamps of an inode.
+#[derive(Debug, Clone, Copy)]
+struct Times {
+    accessed: SystemTime,
+    modified: SystemTime,
+    created: SystemTime,
+}
+
+impl Times {
+    /// Every timestamp set to the current simulated time.
+    fn now() -> Self {
+        let now = switchy_time::now();
+        Self {
+            accessed: now,
+            modified: now,
+            created: now,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Inode {
     node: Node,
     meta: Meta,
+    times: Times,
     durable_meta: Meta,
     /// Current directory entries referring to this inode.
     nlink: u64,
@@ -268,6 +299,7 @@ impl Vfs {
                 parent: ROOT,
             }),
             meta,
+            times: Times::now(),
             durable_meta: meta,
             nlink: 1,
             open: 0,
@@ -441,6 +473,20 @@ impl Vfs {
         Ok(result)
     }
 
+    /// Set the modification time of `ino` to the current simulated time.
+    fn mark_modified(&mut self, ino: Ino) {
+        if let Some(inode) = self.inodes.get_mut(&ino) {
+            inode.times.modified = switchy_time::now();
+        }
+    }
+
+    /// Set the access time of `ino` to the current simulated time.
+    fn mark_accessed(&mut self, ino: Ino) {
+        if let Some(inode) = self.inodes.get_mut(&ino) {
+            inode.times.accessed = switchy_time::now();
+        }
+    }
+
     fn alloc(&mut self, node: Node, mode: u32) -> Ino {
         let ino = self.next_ino;
         self.next_ino += 1;
@@ -454,6 +500,7 @@ impl Vfs {
             Inode {
                 node,
                 meta,
+                times: Times::now(),
                 durable_meta: meta,
                 nlink: 0,
                 open: 0,
@@ -482,6 +529,7 @@ impl Vfs {
 
     fn link(&mut self, dir: Ino, name: OsString, ino: Ino) -> Result<()> {
         self.dir_mut(dir)?.entries.insert(name.clone(), ino);
+        self.mark_modified(dir);
         self.account(ino, |inode| {
             inode.nlink += 1;
             inode.journal_refs += 1;
@@ -502,6 +550,7 @@ impl Vfs {
             .entries
             .remove(name)
             .ok_or(Errno::NoEnt)?;
+        self.mark_modified(dir);
         self.account(ino, |inode| inode.nlink = inode.nlink.saturating_sub(1))?;
         self.journal.push(JournalOp {
             changes: vec![Change {
@@ -833,7 +882,7 @@ impl Vfs {
 
     pub fn read_at(&mut self, ino: Ino, position: u64, buf: &mut [u8]) -> Result<usize> {
         self.fault(OpClass::Read)?;
-        match &self.inode(ino)?.node {
+        let count = match &self.inode(ino)?.node {
             Node::File(file) => {
                 let Ok(start) = usize::try_from(position) else {
                     return Ok(0);
@@ -843,11 +892,13 @@ impl Vfs {
                 if count > 0 {
                     buf[..count].copy_from_slice(&file.data[start..start + count]);
                 }
-                Ok(count)
+                count
             }
-            Node::Dir(_) => Err(Errno::IsDir),
-            Node::Symlink(_) => Err(Errno::Inval),
-        }
+            Node::Dir(_) => return Err(Errno::IsDir),
+            Node::Symlink(_) => return Err(Errno::Inval),
+        };
+        self.mark_accessed(ino);
+        Ok(count)
     }
 
     pub fn len(&self, ino: Ino) -> Result<u64> {
@@ -897,6 +948,7 @@ impl Vfs {
                 file.pending.push(record);
             }
         })?;
+        self.mark_modified(ino);
         Ok((count, start + count as u64))
     }
 
@@ -907,7 +959,9 @@ impl Vfs {
                 apply_write(&mut file.data, &record);
                 file.pending.push(record);
             }
-        })
+        })?;
+        self.mark_modified(ino);
+        Ok(())
     }
 
     pub fn set_len(&mut self, ino: Ino, len: u64) -> Result<()> {
@@ -1164,6 +1218,9 @@ impl Vfs {
                 dev: DEVICE_ID,
                 ino,
             }),
+            accessed: Some(inode.times.accessed),
+            modified: Some(inode.times.modified),
+            created: Some(inode.times.created),
         })
     }
 
@@ -1214,8 +1271,15 @@ impl Vfs {
 
     pub fn list(&mut self, ino: Ino) -> Result<Vec<DirEntryInfo>> {
         self.fault(OpClass::DirOp)?;
-        let dir = self.dir(ino)?;
-        Ok(dir
+        let entries = self.entry_infos(ino)?;
+        self.mark_accessed(ino);
+        Ok(entries)
+    }
+
+    /// The entries of directory `ino`, sorted by name.
+    fn entry_infos(&self, ino: Ino) -> Result<Vec<DirEntryInfo>> {
+        Ok(self
+            .dir(ino)?
             .entries
             .iter()
             .map(|(name, child)| DirEntryInfo {
@@ -1230,15 +1294,9 @@ impl Vfs {
         let ino = self.resolve(start, path, true)?;
         self.dir(ino)?;
         self.check_access(ino, READ)?;
-        let dir = self.dir(ino)?;
-        Ok(dir
-            .entries
-            .iter()
-            .map(|(name, child)| DirEntryInfo {
-                name: name.clone(),
-                kind: self.inode(*child).map_or(FileKind::Other, Inode::kind),
-            })
-            .collect())
+        let entries = self.entry_infos(ino)?;
+        self.mark_accessed(ino);
+        Ok(entries)
     }
 
     pub fn create_dir(&mut self, start: Ino, path: &Path, mode: u32) -> Result<()> {
@@ -1447,6 +1505,8 @@ impl Vfs {
         self.dir_mut(to_dir)?
             .entries
             .insert(to_name.clone(), source);
+        self.mark_modified(from_dir);
+        self.mark_modified(to_dir);
         if let Node::Dir(dir) = &mut self.inode_mut(source)?.node {
             dir.parent = to_dir;
         }
@@ -1531,10 +1591,12 @@ impl Vfs {
     pub fn read_link(&mut self, start: Ino, path: &Path) -> Result<PathBuf> {
         self.fault(OpClass::Read)?;
         let ino = self.resolve(start, path, false)?;
-        match &self.inode(ino)?.node {
-            Node::Symlink(target) => Ok(target.clone()),
-            _ => Err(Errno::Inval),
-        }
+        let target = match &self.inode(ino)?.node {
+            Node::Symlink(target) => target.clone(),
+            _ => return Err(Errno::Inval),
+        };
+        self.mark_accessed(ino);
+        Ok(target)
     }
 
     /// Apply the open fault class (for anonymous files that resolve no path).
