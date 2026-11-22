@@ -847,6 +847,17 @@ pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
     Ok(())
 }
 
+/// Where a process a simulated process starts goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Placement {
+    /// Its parent's process group.
+    SameGroup,
+    /// A process group of its own, in its parent's session.
+    NewGroup,
+    /// A session of its own (Unix), detached from any terminal.
+    NewSession,
+}
+
 /// A wait's outcome.
 enum Wait<T> {
     Done(T),
@@ -1521,7 +1532,7 @@ impl Kernel {
         self: &Arc<Self>,
         spec: &SpawnCommand,
         terminal: Option<u64>,
-        parent: Option<(u32, [Stream; 3], bool)>,
+        parent: Option<(u32, [Stream; 3], Placement)>,
     ) -> io::Result<(u32, Option<u64>, Option<u64>)> {
         self.switch();
         let argv: Vec<String> = spec
@@ -1563,20 +1574,39 @@ impl Kernel {
         }
         let pid = self.allocate_pid(&mut state);
         let serial = Self::new_id(&mut state);
-        let session_serial = parent.map_or(serial, |(p, _, _)| state.processes[&p].session_serial);
+        let windows = state.config.personality.is_windows();
+        let session_serial = match parent {
+            // A new session (Unix) is its own; a Windows process stays in its parent's job.
+            Some((_, _, Placement::NewSession)) if !windows => serial,
+            Some((p, _, _)) => state.processes[&p].session_serial,
+            None => serial,
+        };
         let mut stdin_pipe = None;
         let mut stdout_pipe = None;
         let (group, session, streams, controlling, inherited) =
-            if let Some((parent_pid, parent_streams, new_group)) = parent {
+            if let Some((parent_pid, parent_streams, placement)) = parent {
                 let parent = &state.processes[&parent_pid];
-                let group = if new_group { pid } else { parent.group };
-                (
-                    group,
-                    parent.session,
-                    parent_streams,
-                    parent.controlling,
-                    parent.dispositions.clone(),
-                )
+                match placement {
+                    Placement::SameGroup | Placement::NewGroup => (
+                        if placement == Placement::NewGroup {
+                            pid
+                        } else {
+                            parent.group
+                        },
+                        parent.session,
+                        parent_streams,
+                        parent.controlling,
+                        parent.dispositions.clone(),
+                    ),
+                    // Detached, as a daemon is: no terminal, its streams on the null device.
+                    Placement::NewSession => (
+                        pid,
+                        if windows { parent.session } else { pid },
+                        [Stream::Null; 3],
+                        None,
+                        BTreeMap::new(),
+                    ),
+                }
             } else {
                 {
                     let terminal = terminal.expect("a top-level spawn has a terminal");
@@ -2040,10 +2070,44 @@ impl Process {
         }
         command.cwd(&self.cwd);
         let streams = self.streams();
-        let spawned = self
-            .kernel
-            .spawn(&command, None, Some((self.pid, streams, new_group)));
+        let spawned = self.kernel.spawn(
+            &command,
+            None,
+            Some((
+                self.pid,
+                streams,
+                if new_group {
+                    Placement::NewGroup
+                } else {
+                    Placement::SameGroup
+                },
+            )),
+        );
         // Refused because a signal ended this process: end it now.
+        self.check(&lock(&self.kernel.state));
+        Ok(spawned?.0)
+    }
+
+    /// Start a child running `argv` detached, as a daemon does (`setsid` with its standard
+    /// streams on the null device): it leads a new session with no controlling terminal, so
+    /// its parent's terminal and session ending do not touch it. On Windows it is a detached
+    /// process that stays in its parent's job (a console process cannot leave it).
+    ///
+    /// # Errors
+    ///
+    /// * [`io::ErrorKind::NotFound`] when no program has that name
+    pub fn spawn_session(&mut self, argv: &[&str]) -> io::Result<u32> {
+        let mut command = SpawnCommand::new(argv.first().copied().unwrap_or_default());
+        command.args(&argv[1..]).env_clear();
+        for (name, value) in &self.env {
+            command.env(name, value);
+        }
+        command.cwd(&self.cwd);
+        let spawned = self.kernel.spawn(
+            &command,
+            None,
+            Some((self.pid, [Stream::Null; 3], Placement::NewSession)),
+        );
         self.check(&lock(&self.kernel.state));
         Ok(spawned?.0)
     }

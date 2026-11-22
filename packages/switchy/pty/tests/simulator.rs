@@ -888,3 +888,50 @@ fn a_line_typed_before_a_console_handshake_still_ends_at_enter() {
         );
     }
 }
+
+#[test]
+fn a_detached_child_leaves_the_session_on_unix_and_stays_in_the_job_on_windows() {
+    for personality in [Personality::Linux, Personality::MacOs, Personality::Windows] {
+        let (parent, child) = run(2, personality, || {
+            simulator::register_program("detacher", |process| {
+                if process.spawn_session(&["sleep", "3600000"]).is_err() {
+                    return 1;
+                }
+                loop {
+                    process.sleep(Duration::from_secs(60));
+                }
+            });
+            let PtyPair {
+                slave,
+                master: _master,
+            } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let parent = slave.spawn(&SpawnCommand::new("detacher")).unwrap();
+            loop {
+                let snapshot = simulator::snapshot();
+                let find = |pid: u32| snapshot.processes.iter().find(|p| p.pid == pid).cloned();
+                if let Some(child) = snapshot
+                    .processes
+                    .iter()
+                    .find(|p| p.parent == Some(parent.id()))
+                {
+                    break (find(parent.id()).unwrap(), child.clone());
+                }
+                switchy_thread::thread::sleep(Duration::from_millis(1));
+            }
+        });
+        assert_eq!(child.state, ProcessState::Running, "{personality:?}");
+        assert!(child.terminal.is_none(), "{personality:?}: {child:?}");
+        if personality.is_windows() {
+            assert_eq!(
+                child.session_serial, parent.session_serial,
+                "{personality:?}"
+            );
+        } else {
+            assert_eq!(child.session, child.pid, "{personality:?}");
+            assert_ne!(
+                child.session_serial, parent.session_serial,
+                "{personality:?}"
+            );
+        }
+    }
+}
