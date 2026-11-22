@@ -280,6 +280,32 @@ Cache keys losslessly represent configuration, original payload length and bytes
 through the last nonzero byte; decoder input is not trimmed. The full40 run
 predates caching and is not current-source full-matrix acceptance.
 
+## Producing finish evidence
+
+Use a fixed checkout, a provisioned offline Cargo cache and a new bundle directory **outside** the source tree. Each producer builds in a fresh temporary Cargo target and refuses to reuse its output directory. Reserve space for the retained binaries and raw logs. From the workspace root:
+
+```sh
+runner=packages/opus_native/test_runner/src
+root=/absolute/path/to/new-bundle
+python3 -B "$runner/qualification_test_evidence.py" units "$root"
+python3 -B "$runner/qualification_test_evidence.py" pipeline "$root"
+```
+
+`units` uses the full-suite variant of the unit-shards contract. Each profile must finish every ordinary native library test; ignored tests are listed separately, not counted as passes. `pipeline` executes the required integration targets in both profiles. Both capture the Cargo build command/output, retained executable, named `--list` and `--ignored --list` output, unfiltered suite output, exit status, and source checks around build and execution. `--timeout` bounds each command in seconds. On failure, keep the directory for diagnosis; do not rename a candidate or substitute another run's logs. A final `report.json` is emitted only after the existing section verifier succeeds.
+
+Stage the real performance and public SILK reports under the same root, preserving their logs and paths. Download every hosted native/quality execution artifact for the matching source into a separate directory below `platform/`; a platform comparison summary alone is insufficient. All manifest inputs below are relative to the bundle root:
+
+```sh
+python3 -B "$runner/qualification_finish_bundle.py" --root "$root" \
+  --performance perf/report.json --public-silk public/report.json \
+  --unit-shards units/report.json --pipeline pipeline/report.json \
+  --platform-directory platform
+python3 -B "$runner/qualification_matrix_acceptance.py" \
+  --bundle "$root/finish-bundle.json" --output "$root/finish-verdict.json"
+```
+
+The indexer only records paths and hashes; only the final verifier can accept a bundle. Missing, stale, failed or partial evidence is not a pass.
+
 Acceptance remains incomplete: the production default unit run timed out at
 200 seconds, and comprehensive public RD, product, public SILK, current-source
 debug/release, platform and performance qualification remain pending. The
