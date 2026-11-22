@@ -378,7 +378,7 @@ fn faults_interrupt_and_shorten_master_reads() {
             faults: Faults {
                 interrupted: 0.3,
                 short: 0.5,
-                spawn: 0.0,
+                ..Faults::default()
             },
         });
         simulator::install_default_programs();
@@ -650,4 +650,187 @@ fn a_terminal_forgets_its_session_when_the_leader_exits() {
             });
         }
     }
+}
+
+/// Run `f` in a fresh simulation whose kernel has `faults`.
+fn run_with_faults<R>(
+    seed: u64,
+    personality: Personality,
+    faults: Faults,
+    f: impl FnOnce() -> R,
+) -> R {
+    let outcome = scheduler::run(seed, || {
+        simulator::configure(Config {
+            personality,
+            pid_reuse: 0.0,
+            faults,
+        });
+        simulator::install_default_programs();
+        let result = f();
+        simulator::kill_all();
+        scheduler::run_until_idle();
+        result
+    });
+    match outcome.result {
+        Ok(result) => result,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+/// The simulated time now.
+fn now() -> std::time::Instant {
+    scheduler::deadline_after(Duration::ZERO).unwrap()
+}
+
+#[test]
+fn an_outside_killer_kills_processes_and_says_so() {
+    for seed in 0..5 {
+        let exit = run_with_faults(
+            seed,
+            Personality::Linux,
+            Faults {
+                kill: 2.0,
+                ..Faults::default()
+            },
+            || {
+                let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let mut child = slave
+                    .spawn(SpawnCommand::new("sleep").arg("60000"))
+                    .unwrap();
+                drop(slave);
+                let mut reader = master.try_clone_reader().unwrap();
+                let mut buffer = [0_u8; 16];
+                // Kernel operations give the killer its chances.
+                let exit = loop {
+                    if let Some(exit) = child.try_wait().unwrap() {
+                        break exit;
+                    }
+                    let _ = reader.read(&mut buffer);
+                };
+                let killed = simulator::signal_log()
+                    .iter()
+                    .any(|record| record.by_fault && record.signal == Signal::Kill);
+                (exit, killed)
+            },
+        );
+        assert_eq!(exit.0.signal(), Some("Killed"), "seed {seed}");
+        assert!(exit.1, "seed {seed}: the kill is recorded as a fault's");
+    }
+}
+
+#[test]
+fn delayed_signals_arrive_later_but_arrive() {
+    for seed in 0..5 {
+        let (running_after_send, waited) = run_with_faults(
+            seed,
+            Personality::Linux,
+            Faults {
+                signal_delay: 1.0,
+                ..Faults::default()
+            },
+            || {
+                let PtyPair {
+                    slave,
+                    master: _master,
+                } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let mut child = slave
+                    .spawn(SpawnCommand::new("sleep").arg("60000"))
+                    .unwrap();
+                let pid = child.id();
+                let start = now();
+                simulator::signal_process(pid, Signal::Terminate).unwrap();
+                let running = simulator::snapshot()
+                    .processes
+                    .iter()
+                    .any(|p| p.pid == pid && p.state == ProcessState::Running);
+                child.wait().unwrap();
+                (running, now().duration_since(start))
+            },
+        );
+        assert!(running_after_send, "seed {seed}: not delivered at once");
+        assert!(waited > Duration::ZERO, "seed {seed}");
+    }
+}
+
+#[test]
+fn master_reads_can_fail_with_input_output_errors() {
+    let error = run_with_faults(
+        1,
+        Personality::Linux,
+        Faults {
+            read_error: 1.0,
+            ..Faults::default()
+        },
+        || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let _child = slave
+                .spawn(SpawnCommand::new("sleep").arg("60000"))
+                .unwrap();
+            let mut buffer = [0_u8; 16];
+            master
+                .try_clone_reader()
+                .unwrap()
+                .read(&mut buffer)
+                .unwrap_err()
+        },
+    );
+    assert_eq!(error.kind(), std::io::ErrorKind::Other);
+}
+
+#[test]
+fn master_writes_can_stall() {
+    for seed in 0..5 {
+        let stalled = run_with_faults(
+            seed,
+            Personality::Linux,
+            Faults {
+                write_stall: 1.0,
+                ..Faults::default()
+            },
+            || {
+                let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let _child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+                let mut writer = master.take_writer().unwrap();
+                let start = now();
+                writer.write_all(b"x").unwrap();
+                now().duration_since(start)
+            },
+        );
+        assert!(stalled > Duration::ZERO, "seed {seed}");
+    }
+}
+
+#[test]
+fn a_pseudo_console_may_ask_for_the_cursor_late_or_never() {
+    let mut never = 0;
+    let mut late = 0;
+    for seed in 0..20 {
+        let (first, waited) = run_with_faults(
+            seed,
+            Personality::Windows,
+            Faults {
+                startup_query: 1.0,
+                ..Faults::default()
+            },
+            || {
+                let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+                let _child = slave.spawn(SpawnCommand::new("echo").arg("hi")).unwrap();
+                let mut reader = master.try_clone_reader().unwrap();
+                let start = now();
+                let mut buffer = [0_u8; 4];
+                let read = reader.read(&mut buffer).unwrap();
+                (buffer[..read].to_vec(), now().duration_since(start))
+            },
+        );
+        if first.starts_with(b"\x1b[") {
+            assert!(
+                waited > Duration::ZERO,
+                "seed {seed}: a late query takes time"
+            );
+            late += 1;
+        } else {
+            never += 1;
+        }
+    }
+    assert!(never > 0 && late > 0, "never {never}, late {late}");
 }

@@ -25,8 +25,10 @@
 //! * **Processes**: sessions, process groups, controlling terminals, zombies and reaping,
 //!   exit codes and signals with per-signal handling, children that outlive their parent, and
 //!   process ids reused as soon as nothing uses them any more.
-//! * **Faults** ([`Faults`]): interrupted and short reads and writes on the master side and
-//!   failed spawns, at seeded rates.
+//! * **Faults** ([`Faults`]): interrupted and short reads and writes on the master side,
+//!   failed spawns, reads failing with an input/output error, writes stalling, processes
+//!   killed from outside (as by an out-of-memory killer), signals delivered late, and
+//!   pseudo-consoles whose startup cursor query never comes or comes late, at seeded rates.
 //!
 //! The kernel also keeps what really happened (every byte each terminal and pipe was written,
 //! every signal delivered), for checking what a program under test observed; see [`snapshot`]
@@ -98,7 +100,30 @@ pub struct Faults {
     pub short: f64,
     /// Spawning fails as if the system were out of processes.
     pub spawn: f64,
+    /// How many times per simulated second, on average, something outside (an
+    /// out-of-memory killer, an administrator) kills a random running process with
+    /// `SIGKILL`. Recorded with [`SignalRecord::by_fault`].
+    pub kill: f64,
+    /// A signal one process sends another ([`signal_process`], [`signal_group`], killing a
+    /// child) arrives after a random delay of up to [`SIGNAL_DELAY`] in simulated time.
+    pub signal_delay: f64,
+    /// A read from a terminal's master side fails with an input/output error.
+    pub read_error: f64,
+    /// A write to a terminal's master side stalls for a random time of up to [`WRITE_STALL`]
+    /// in simulated time first (a slow consumer).
+    pub write_stall: f64,
+    /// A pseudo-console (Windows) never asks for the cursor position (its output flows at
+    /// once), or asks only after a random delay of up to [`STARTUP_QUERY_DELAY`]: each half
+    /// the time.
+    pub startup_query: f64,
 }
+
+/// The longest a delayed signal ([`Faults::signal_delay`]) takes to arrive.
+pub const SIGNAL_DELAY: Duration = Duration::from_millis(100);
+/// The longest a stalled write ([`Faults::write_stall`]) stalls.
+pub const WRITE_STALL: Duration = Duration::from_millis(200);
+/// The longest a late startup cursor query ([`Faults::startup_query`]) waits.
+pub const STARTUP_QUERY_DELAY: Duration = Duration::from_millis(500);
 
 /// The simulated kernel's configuration for a run.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -116,7 +141,9 @@ impl Config {
     ///
     /// * `SIMULATOR_PTY_PERSONALITY`: `linux`, `macos` or `windows`.
     /// * `SIMULATOR_PTY_PID_REUSE`: a probability (default 0.5).
-    /// * `SIMULATOR_PTY_FAULTS`: a probability applied to every fault kind (default 0).
+    /// * `SIMULATOR_PTY_FAULTS`: a probability applied to interrupted and short transfers, and
+    ///   a quarter of it to failed spawns (default 0). The other fault kinds are off unless a
+    ///   simulation configures them.
     ///
     /// # Panics
     ///
@@ -155,6 +182,7 @@ impl Config {
                 interrupted: fault,
                 short: fault,
                 spawn: fault / 4.0,
+                ..Faults::default()
             },
         }
     }
@@ -412,6 +440,8 @@ pub struct SignalRecord {
     pub session_serial: u64,
     /// The signal.
     pub signal: Signal,
+    /// Whether the outside killer fault ([`Faults::kill`]) sent it.
+    pub by_fault: bool,
 }
 
 struct Proc {
@@ -446,6 +476,30 @@ struct State {
     signal_log: Vec<SignalRecord>,
     /// The last top-level spawn by each simulated thread.
     last_spawned: BTreeMap<usize, Spawned>,
+    /// What happens later ([`Faults::signal_delay`], [`Faults::startup_query`]), in order of
+    /// when.
+    pending: Vec<Pending>,
+}
+
+/// Something the kernel does later.
+#[derive(Debug, Clone, Copy)]
+struct Pending {
+    due: Instant,
+    what: Later,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Later {
+    /// Deliver `signal` to `pid`, if it is still the process of `serial`.
+    Signal {
+        pid: u32,
+        serial: u64,
+        signal: Signal,
+    },
+    /// The outside killer ([`Faults::kill`]) strikes.
+    Kill,
+    /// A pseudo-console asks for the cursor position.
+    CursorQuery { terminal: u64 },
 }
 
 /// Whether `bytes` are a cursor report (`ESC [ row ; column R`): `Some(true)` for a whole one,
@@ -737,7 +791,7 @@ pub fn signal_process(pid: u32, signal: Signal) -> io::Result<()> {
             format!("no running process {pid}"),
         ));
     }
-    Kernel::deliver(&mut state, pid, signal);
+    kernel.send(&mut state, pid, signal);
     drop(state);
     kernel.wake();
     Ok(())
@@ -766,7 +820,7 @@ pub fn signal_group(group: u32, signal: Signal) -> io::Result<()> {
         .map(|(&pid, _)| pid)
         .collect();
     for pid in members {
-        Kernel::deliver(&mut state, pid, signal);
+        kernel.send(&mut state, pid, signal);
     }
     drop(state);
     kernel.wake();
@@ -781,6 +835,14 @@ enum Wait<T> {
 
 impl Kernel {
     fn new(config: Config) -> Self {
+        let kernel = Self::bare(config);
+        let mut state = lock(&kernel.state);
+        kernel.schedule_kill(&mut state);
+        drop(state);
+        kernel
+    }
+
+    fn bare(config: Config) -> Self {
         let rng = switchy_simulation::stream("switchy_pty");
         let first = 100 + u32::try_from(lock(&rng).below(900)).unwrap_or(0);
         Self {
@@ -798,16 +860,130 @@ impl Kernel {
                 io: BTreeMap::new(),
                 signal_log: Vec::new(),
                 last_spawned: BTreeMap::new(),
+                pending: Vec::new(),
             }),
         }
     }
 
-    /// A switch point before any kernel operation.
+    /// A switch point before any kernel operation, after which what is due happens: faults
+    /// that strike from outside, and delayed deliveries.
     fn switch(&self) {
-        let _ = self;
         if !std::thread::panicking() {
             scheduler::scheduler().yield_point(Op::Io);
+            self.tick();
         }
+    }
+
+    /// Do what is due: maybe kill a random process ([`Faults::kill`]), and carry out pending
+    /// deliveries whose time came.
+    fn tick(&self) {
+        let mut state = lock(&self.state);
+        let mut changed = false;
+        if !state.pending.is_empty() {
+            let now = scheduler::deadline_after(Duration::ZERO);
+            while state
+                .pending
+                .first()
+                .is_some_and(|pending| now.is_some_and(|now| pending.due <= now))
+            {
+                let pending = state.pending.remove(0);
+                match pending.what {
+                    Later::Signal {
+                        pid,
+                        serial,
+                        signal,
+                    } => {
+                        if state
+                            .processes
+                            .get(&pid)
+                            .is_some_and(|p| p.serial == serial)
+                        {
+                            Self::deliver(&mut state, pid, signal);
+                        }
+                    }
+                    Later::Kill => {
+                        self.kill_one(&mut state);
+                        self.schedule_kill(&mut state);
+                    }
+                    Later::CursorQuery { terminal } => {
+                        // The console has held its programs' output since it opened.
+                        if let Some(t) = state.terminals.get_mut(&terminal) {
+                            t.output.extend(CURSOR_QUERY);
+                        }
+                    }
+                }
+                changed = true;
+            }
+        }
+        drop(state);
+        if changed {
+            self.wake();
+        }
+    }
+
+    /// The outside killer ([`Faults::kill`]): `SIGKILL` a random running process.
+    fn kill_one(&self, state: &mut State) {
+        let running: Vec<u32> = state
+            .processes
+            .iter()
+            .filter(|(_, p)| p.state == ProcessState::Running && p.fatal.is_none())
+            .map(|(&pid, _)| pid)
+            .collect();
+        if running.is_empty() {
+            return;
+        }
+        let index = usize::try_from(lock(&self.rng).below(running.len() as u64)).unwrap_or(0);
+        Self::deliver_from(state, running[index], Signal::Kill, true);
+    }
+
+    /// Schedule the outside killer's next strike, a random time (averaging `1 / kill`
+    /// seconds) from now.
+    fn schedule_kill(&self, state: &mut State) {
+        let rate = state.config.faults.kill;
+        if rate <= 0.0 {
+            return;
+        }
+        // Up to twice the mean interval, in whole milliseconds.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let bound = (2000.0 / rate).clamp(2.0, 1e12) as u64;
+        let delay = Duration::from_millis(1 + lock(&self.rng).below(bound));
+        Self::later(state, delay, Later::Kill);
+    }
+
+    /// When the next pending delivery is due.
+    fn next_due(&self) -> Option<Instant> {
+        lock(&self.state).pending.first().map(|pending| pending.due)
+    }
+
+    /// Schedule `what` for `delay` from now.
+    fn later(state: &mut State, delay: Duration, what: Later) {
+        let Some(due) = scheduler::deadline_after(delay) else {
+            return;
+        };
+        let at = state.pending.partition_point(|pending| pending.due <= due);
+        state.pending.insert(at, Pending { due, what });
+    }
+
+    /// Send `signal` from one process to `pid`: delivered now, or later under
+    /// [`Faults::signal_delay`].
+    fn send(&self, state: &mut State, pid: u32, signal: Signal) {
+        if self.chance(state.config.faults.signal_delay)
+            && let Some(serial) = state.processes.get(&pid).map(|p| p.serial)
+        {
+            let millis = SIGNAL_DELAY.as_millis().try_into().unwrap_or(u64::MAX);
+            let delay = Duration::from_millis(1 + lock(&self.rng).below(millis));
+            Self::later(
+                state,
+                delay,
+                Later::Signal {
+                    pid,
+                    serial,
+                    signal,
+                },
+            );
+            return;
+        }
+        Self::deliver(state, pid, signal);
     }
 
     /// Wake everything waiting on the kernel; each rechecks what it waits for.
@@ -840,7 +1016,20 @@ impl Kernel {
                     return Some(value);
                 }
             }
-            if self.block(deadline) {
+            // Wake for the next pending delivery too, so it happens while everything waits.
+            let due = self.next_due();
+            let wake_at = match (deadline, due) {
+                (Some(deadline), Some(due)) => Some(deadline.min(due)),
+                (deadline, due) => deadline.or(due),
+            };
+            if self.block(wake_at) {
+                self.tick();
+                let reached = deadline.is_some_and(|deadline| {
+                    scheduler::deadline_after(Duration::ZERO).is_some_and(|now| now >= deadline)
+                });
+                if !reached {
+                    continue;
+                }
                 let mut state = lock(&self.state);
                 return match attempt(&mut state) {
                     Wait::Done(value) => {
@@ -977,6 +1166,11 @@ impl Kernel {
 
     /// Deliver `signal` to `pid`, as its handling says.
     fn deliver(state: &mut State, pid: u32, signal: Signal) {
+        Self::deliver_from(state, pid, signal, false);
+    }
+
+    /// Deliver `signal` to `pid`, as its handling says, recording whether a fault sent it.
+    fn deliver_from(state: &mut State, pid: u32, signal: Signal, by_fault: bool) {
         let Some(process) = state.processes.get_mut(&pid) else {
             return;
         };
@@ -989,6 +1183,7 @@ impl Kernel {
             pid,
             session_serial: process.session_serial,
             signal,
+            by_fault,
         };
         state.signal_log.push(record);
         let Some(process) = state.processes.get_mut(&pid) else {
@@ -1222,13 +1417,31 @@ impl Kernel {
         let id = Self::new_id(&mut state);
         let capacity = Self::capacity(&state);
         let windows = state.config.personality.is_windows();
+        // A pseudo-console asks where its cursor is before anything else: at once, or (under
+        // the startup query fault) never or late.
+        let (query, held) = if !windows {
+            (false, false)
+        } else if self.chance(state.config.faults.startup_query) {
+            if lock(&self.rng).chance(0.5) {
+                (false, false)
+            } else {
+                let millis = STARTUP_QUERY_DELAY
+                    .as_millis()
+                    .try_into()
+                    .unwrap_or(u64::MAX);
+                let delay = Duration::from_millis(1 + lock(&self.rng).below(millis));
+                Self::later(&mut state, delay, Later::CursorQuery { terminal: id });
+                (false, true)
+            }
+        } else {
+            (true, true)
+        };
         state.terminals.insert(
             id,
             Terminal {
                 name: format!("/dev/simpts/{id}"),
                 size,
-                // A pseudo-console asks where its cursor is before anything else.
-                output: if windows {
+                output: if query {
                     CURSOR_QUERY.iter().copied().collect()
                 } else {
                     VecDeque::new()
@@ -1241,7 +1454,7 @@ impl Kernel {
                 slave_holders: 1,
                 console_handles: 2,
                 readers: 0,
-                awaiting_report: windows,
+                awaiting_report: held,
                 report: Vec::new(),
                 windows,
                 nonblocking: false,
@@ -2027,6 +2240,9 @@ pub(crate) mod backend {
             if self.kernel.chance(faults.interrupted) {
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
             }
+            if self.kernel.chance(faults.read_error) {
+                return Err(io::Error::other("input/output error"));
+            }
             let limit = if buffer.len() > 1 && self.kernel.chance(faults.short) {
                 1 + usize::try_from(lock(&self.kernel.rng).below(buffer.len() as u64 - 1))
                     .unwrap_or(0)
@@ -2112,6 +2328,16 @@ pub(crate) mod backend {
             let faults = lock(&self.kernel.state).config.faults;
             if self.kernel.chance(faults.interrupted) {
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            if self.kernel.chance(faults.write_stall) {
+                let millis = super::WRITE_STALL
+                    .as_millis()
+                    .try_into()
+                    .unwrap_or(u64::MAX);
+                let stall = Duration::from_millis(1 + lock(&self.kernel.rng).below(millis));
+                if let Some(until) = scheduler::deadline_after(stall) {
+                    while !self.kernel.block(Some(until)) {}
+                }
             }
             let limit = if bytes.len() > 1 && self.kernel.chance(faults.short) {
                 1 + usize::try_from(lock(&self.kernel.rng).below(bytes.len() as u64 - 1))
@@ -2338,7 +2564,7 @@ pub(crate) mod backend {
     fn signal_pid(kernel: &Kernel, pid: u32, signal: Signal) {
         kernel.switch();
         let mut state = lock(&kernel.state);
-        Kernel::deliver(&mut state, pid, signal);
+        kernel.send(&mut state, pid, signal);
         drop(state);
         kernel.wake();
     }

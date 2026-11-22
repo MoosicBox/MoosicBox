@@ -32,8 +32,10 @@ library of programs such as `cat`, `flood`, `daemonize`, `ignore-hup` and
 It models bounded terminal buffers (writers wait when nobody reads), a line
 discipline subset (echo, `ctrl+c`, end of file), window size changes, hang-ups,
 sessions and process groups, process ids reused once free, Linux and macOS
-terminal lifetimes (`simulator::Personality`), and seeded faults on the master
-side (`simulator::Faults`). `simulator::snapshot` and
+terminal lifetimes (`simulator::Personality`), and seeded faults
+(`simulator::Faults`): interrupted, short and failing master reads and writes,
+stalled writes, failed spawns, processes killed from outside, signals delivered
+late, and pseudo-consoles whose startup cursor query never comes or comes late. `simulator::snapshot` and
 `simulator::terminal_written` report what really happened, for checking what a
 program under test saw.
 
