@@ -95,7 +95,7 @@ fn late_run(seed: u64, probability: Option<f64>) -> (String, FaultCounts) {
         let runtime = Runtime::new();
         let log = Log::default();
         self_wakers(&runtime, &log, 8, 100);
-        runtime.clone().wait().unwrap();
+        runtime.wait().unwrap();
         let order = log.lock().unwrap().join(" ");
         (order, fault_counts())
     })
@@ -242,8 +242,8 @@ async fn workload(timed: bool) -> (u64, u64, usize) {
     }
     let last = *watch_tx.borrow();
     drop(watch_tx);
-    let watched = watcher.await.unwrap();
-    assert_eq!(watched, last);
+    let last_seen = watcher.await.unwrap();
+    assert_eq!(last_seen, last);
     (sum, count, leaders.load(Ordering::SeqCst))
 }
 
