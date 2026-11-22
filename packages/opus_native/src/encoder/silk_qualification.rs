@@ -105,91 +105,84 @@ fn noisy_frame(
     pcm
 }
 
-#[test]
-fn noisy_low_rate_mono_stereo_policy() {
+// Independent configurations can run concurrently under libtest.
+#[test_case::test_case(8000, 1)]
+#[test_case::test_case(8000, 2)]
+#[test_case::test_case(12000, 1)]
+#[test_case::test_case(12000, 2)]
+#[test_case::test_case(16000, 1)]
+#[test_case::test_case(16000, 2)]
+fn noisy_low_rate_mono_stereo_policy(rate: usize, channels: usize) {
     let mut failures = Vec::new();
-    for rate in [8000, 12000, 16000] {
-        for channels in [1, 2] {
-            for milliseconds in [10, 20, 40, 60] {
-                for per_channel in [12000, 16000, 24000] {
-                    for kind in 0..3 {
-                        let config = EncoderConfig {
-                            sample_rate: SampleRate::from_hz(rate as u32).unwrap(),
-                            channels: if channels == 1 {
-                                crate::Channels::Mono
-                            } else {
-                                crate::Channels::Stereo
-                            },
-                            frame_size: rate * milliseconds / 1000,
-                            bitrate: per_channel * channels as u32,
-                        };
-                        let mut encoder = SilkEncoder::new(config).unwrap();
-                        let mut decoder =
-                            crate::Decoder::new(config.sample_rate, config.channels).unwrap();
-                        let mut input = Vec::new();
-                        let mut reconstructed = Vec::new();
-                        let mut random = 19_u32;
-                        let mut bytes = 0;
-                        let mut errors = 0;
-                        for frame in 0..8 {
-                            let pcm = noisy_frame(
-                                config.frame_size,
-                                rate,
-                                channels,
-                                kind,
-                                frame,
-                                &mut random,
-                            );
-                            input.extend_from_slice(&pcm);
-                            if let Ok(packet) = encoder.encode(&pcm) {
-                                assert!(
-                                    packet.len() * 8000 <= config.bitrate as usize * milliseconds
-                                );
-                                bytes += packet.len();
-                                let mut output = vec![0; config.frame_size * channels];
-                                assert_eq!(
-                                    decoder.decode(Some(&packet), &mut output, false).unwrap(),
-                                    config.frame_size
-                                );
-                                reconstructed.extend(output);
-                            } else {
-                                errors += 1;
-                                break;
-                            }
-                        }
-                        let delay = (match rate {
-                            8000 => 5,
-                            12000 => 10,
-                            _ => 13,
-                        }) * channels;
-                        let signal = input
-                            .iter()
-                            .take(reconstructed.len().saturating_sub(delay))
-                            .map(|&x| f64::from(x).powi(2))
-                            .sum::<f64>();
-                        let error = reconstructed
-                            .iter()
-                            .skip(delay)
-                            .zip(&input)
-                            .map(|(&a, &b)| (f64::from(a) / 32768.0 - f64::from(b)).powi(2))
-                            .sum::<f64>();
-                        let snr = 10.0 * (signal / error).log10();
-                        let clips = reconstructed
-                            .iter()
-                            .filter(|&&x| x == i16::MIN || x == i16::MAX)
-                            .count();
-                        eprintln!(
-                            "noisy rate={rate} ch={channels} ms={milliseconds} bitrate={} kind={kind} bytes={bytes} snr={snr:.3} clips={clips} errors={errors}",
-                            config.bitrate
+    for milliseconds in [10, 20, 40, 60] {
+        for per_channel in [12000, 16000, 24000] {
+            for kind in 0..3 {
+                let config = EncoderConfig {
+                    sample_rate: SampleRate::from_hz(rate as u32).unwrap(),
+                    channels: if channels == 1 {
+                        crate::Channels::Mono
+                    } else {
+                        crate::Channels::Stereo
+                    },
+                    frame_size: rate * milliseconds / 1000,
+                    bitrate: per_channel * channels as u32,
+                };
+                let mut encoder = SilkEncoder::new(config).unwrap();
+                let mut decoder = crate::Decoder::new(config.sample_rate, config.channels).unwrap();
+                let mut input = Vec::new();
+                let mut reconstructed = Vec::new();
+                let mut random = 19_u32;
+                let mut bytes = 0;
+                let mut errors = 0;
+                for frame in 0..8 {
+                    let pcm =
+                        noisy_frame(config.frame_size, rate, channels, kind, frame, &mut random);
+                    input.extend_from_slice(&pcm);
+                    if let Ok(packet) = encoder.encode(&pcm) {
+                        assert!(packet.len() * 8000 <= config.bitrate as usize * milliseconds);
+                        bytes += packet.len();
+                        let mut output = vec![0; config.frame_size * channels];
+                        assert_eq!(
+                            decoder.decode(Some(&packet), &mut output, false).unwrap(),
+                            config.frame_size
                         );
-                        if errors != 0
-                            || !snr.is_finite()
-                            || snr < if kind == 1 { 5.0 } else { 0.0 }
-                            || clips != 0
-                        {
-                            failures.push((rate, channels, milliseconds, per_channel, kind));
-                        }
+                        reconstructed.extend(output);
+                    } else {
+                        errors += 1;
+                        break;
                     }
+                }
+                let delay = (match rate {
+                    8000 => 5,
+                    12000 => 10,
+                    _ => 13,
+                }) * channels;
+                let signal = input
+                    .iter()
+                    .take(reconstructed.len().saturating_sub(delay))
+                    .map(|&x| f64::from(x).powi(2))
+                    .sum::<f64>();
+                let error = reconstructed
+                    .iter()
+                    .skip(delay)
+                    .zip(&input)
+                    .map(|(&a, &b)| (f64::from(a) / 32768.0 - f64::from(b)).powi(2))
+                    .sum::<f64>();
+                let snr = 10.0 * (signal / error).log10();
+                let clips = reconstructed
+                    .iter()
+                    .filter(|&&x| x == i16::MIN || x == i16::MAX)
+                    .count();
+                eprintln!(
+                    "noisy rate={rate} ch={channels} ms={milliseconds} bitrate={} kind={kind} bytes={bytes} snr={snr:.3} clips={clips} errors={errors}",
+                    config.bitrate
+                );
+                if errors != 0
+                    || !snr.is_finite()
+                    || snr < if kind == 1 { 5.0 } else { 0.0 }
+                    || clips != 0
+                {
+                    failures.push((rate, channels, milliseconds, per_channel, kind));
                 }
             }
         }
