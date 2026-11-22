@@ -65,6 +65,18 @@ jobs:
                   git submodule update --init --depth 1 -- packages/opus_native/libopus/opus
                   test "$(git -C packages/opus_native/libopus/opus rev-parse HEAD)" = 34bba701ae97c913de719b1f7c10686f62cddb15
                   cargo fetch --locked
+            - name: Provision player test decoder
+              shell: bash
+              run: |
+                  if ! command -v ffmpeg >/dev/null; then
+                    case "$RUNNER_OS" in
+                      Linux) sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg ;;
+                      macOS) brew install ffmpeg ;;
+                      Windows) choco install ffmpeg -y --no-progress ;;
+                      *) exit 1 ;;
+                    esac
+                  fi
+                  ffmpeg -version
             - name: Offline native tests and repeated immutable fingerprint probe
               shell: bash
               run: |
