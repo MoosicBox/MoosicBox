@@ -5,9 +5,10 @@
 //! like servers, databases, or any component that should be able to recover from failures.
 //!
 //! A host can be [crashed](crate::fault::crash), [restarted](crate::fault::restart) and
-//! [bounced](crate::fault::bounce): a crash drops the host's async runtime with every task on
-//! it, without running any of them again, and a restart runs the host's factory again on a
-//! fresh runtime. Code running in a host can register a hook for its own crash with
+//! [bounced](crate::fault::bounce): a crash drops the host's action and every task it spawned
+//! (with `spawn`, `spawn_local` or a `JoinSet`), at once and without polling any of them again,
+//! and kills the simulated threads they started (`spawn_blocking` with the `thread` feature);
+//! a restart runs the host's factory again on a fresh runtime. Code running in a host can register a hook for its own crash with
 //! [`on_crash`].
 //!
 //! # Example
@@ -163,15 +164,18 @@ impl Host {
         });
     }
 
-    /// Kill the current incarnation: drop its action now and abandon its runtime, so none of
-    /// its tasks runs again.
+    /// Kill the current incarnation: drop its action and every task it spawned now, without
+    /// polling any of them again, and kill the simulated threads they started.
     pub(crate) fn crash(&mut self) {
         let Some(incarnation) = self.incarnation.take() else {
             return;
         };
         let future = incarnation.future.borrow_mut().take();
-        // Drop the action as the host, for anything its destructors do.
-        in_host_scope(&self.name, || drop(future));
+        // Everything is dropped as the host, for anything its destructors do.
+        in_host_scope(&self.name, || {
+            drop(future);
+            incarnation.runtime.shutdown_now();
+        });
         drop(incarnation);
     }
 

@@ -32,10 +32,20 @@
 //! applied, in order, at the start of the next simulation step, between actor ticks. Network
 //! faults ([`network`]) apply at once.
 //!
-//! A crash is abrupt: the host's simulated network node goes down (dropping its messages in
-//! flight and resetting its TCP connections), its runtime is dropped with every task on it
-//! without polling any of them again, and then its crash hooks run ([`on_crash`] hooks
-//! first, then those the crashed incarnation registered with [`host::on_crash`]). Hooks are
+//! A crash is abrupt, and happens in this order:
+//!
+//! 1. The host's simulated network node goes down, dropping its messages in flight and
+//!    resetting its TCP connections.
+//! 2. Its action and every task it spawned (`spawn`, `spawn_local`, `JoinSet`) are dropped, in
+//!    the order they were spawned, without being polled again. Their destructors run as the
+//!    host (in its TCP host and network node scope).
+//! 3. With the `thread` feature, the simulated threads its tasks started (`spawn_blocking`, or
+//!    `switchy_thread` spawns from a task) are killed in the order they were spawned: each is
+//!    stopped at its current switch point and unwound, so the values on its stack are dropped
+//!    (releasing its locks) and none of its own code runs again. A blocking closure that blocks
+//!    again in a destructor while it unwinds is parked for good, keeping what it still holds.
+//! 4. Its crash hooks run ([`on_crash`] hooks first, then those the crashed incarnation
+//!    registered with [`host::on_crash`]). Hooks are
 //! where a simulation crashes whatever else a host owns, such as its simulated filesystem.
 //! A restart runs the host's factory again on a fresh runtime.
 //!

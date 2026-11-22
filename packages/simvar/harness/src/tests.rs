@@ -309,3 +309,186 @@ fn the_same_seed_replays_the_same_faults_and_deliveries() {
     assert_eq!(traces[0], traces[1]);
     assert_ne!(traces[0], traces[2]);
 }
+
+/// Counts its drops.
+struct DropFlag(Arc<AtomicUsize>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// What the crash test observed.
+#[derive(Default)]
+struct CrashLog {
+    /// Each incarnation's progress: its spawned tasks' (and threads') loop iterations.
+    ticks: Vec<u64>,
+    /// Drops of the first incarnation's spawned tasks and threads.
+    dropped: usize,
+    /// `dropped` when the crash hook ran.
+    dropped_at_hook: Option<usize>,
+}
+
+type SharedLog = Arc<Mutex<CrashLog>>;
+
+/// How many tasks (and threads) the first incarnation of the crash test's worker spawns.
+const SPAWNED: usize = if cfg!(feature = "thread") { 4 } else { 3 };
+
+/// Count a tick of incarnation `incarnation`.
+fn tick(log: &SharedLog, incarnation: usize) {
+    log.lock().unwrap().ticks[incarnation] += 1;
+}
+
+/// A worker whose every incarnation spawns a local task, two `JoinSet` tasks and (with
+/// `thread`) a blocking closure, all counting ticks forever and holding drop flags.
+fn crash_worker(
+    log: SharedLog,
+    drops: Arc<AtomicUsize>,
+) -> impl Fn() -> std::pin::Pin<Box<dyn Future<Output = HostResult>>> {
+    move || {
+        let log = Arc::clone(&log);
+        let drops = Arc::clone(&drops);
+        Box::pin(async move {
+            let incarnation = {
+                let mut log = log.lock().unwrap();
+                log.ticks.push(0);
+                log.ticks.len() - 1
+            };
+            let flag = || DropFlag(Arc::clone(&drops));
+            let local_log = Arc::clone(&log);
+            let local_flag = std::rc::Rc::new(flag());
+            task::spawn_local(async move {
+                let _flag = local_flag;
+                loop {
+                    time::sleep(Duration::from_millis(5)).await;
+                    tick(&local_log, incarnation);
+                }
+            });
+            let mut set = task::JoinSet::new();
+            for _ in 0..2 {
+                let log = Arc::clone(&log);
+                let flag = flag();
+                set.spawn(async move {
+                    let _flag = flag;
+                    loop {
+                        time::sleep(Duration::from_millis(5)).await;
+                        tick(&log, incarnation);
+                    }
+                });
+            }
+            // A blocking closure on a simulated thread: forever in the first incarnation (the
+            // crash kills it), once after (so the run ends with no thread left).
+            #[cfg(feature = "thread")]
+            {
+                let log = Arc::clone(&log);
+                let flag = flag();
+                drop(task::spawn_blocking(move || {
+                    let _flag = flag;
+                    if incarnation == 0 {
+                        loop {
+                            switchy::thread::thread::sleep(Duration::from_millis(5));
+                            tick(&log, incarnation);
+                        }
+                    }
+                    tick(&log, incarnation);
+                }));
+            }
+            loop {
+                time::sleep(Duration::from_millis(5)).await;
+                let _ = &set;
+            }
+        })
+    }
+}
+
+struct CrashBootstrap {
+    log: SharedLog,
+}
+
+impl SimBootstrap for CrashBootstrap {
+    fn on_start(&self, sim: &mut impl Sim) {
+        let drops = Arc::new(AtomicUsize::new(0));
+        sim.host(
+            "worker",
+            crash_worker(Arc::clone(&self.log), Arc::clone(&drops)),
+        );
+        let log = Arc::clone(&self.log);
+        let hook_drops = Arc::clone(&drops);
+        sim.on_crash("worker", move |_| {
+            log.lock().unwrap().dropped_at_hook = Some(hook_drops.load(Ordering::SeqCst));
+        });
+        let log = Arc::clone(&self.log);
+        sim.client("nemesis", async move {
+            // Every sleep takes at least one step, however coarse the run's steps are.
+            let wait_for = |what: &'static str, done: Box<dyn Fn(&CrashLog) -> bool>| {
+                let log = Arc::clone(&log);
+                async move {
+                    for _ in 0..10_000 {
+                        if done(&log.lock().unwrap()) {
+                            return Ok(());
+                        }
+                        time::sleep(Duration::from_millis(1)).await;
+                    }
+                    ensure(false, what)
+                }
+            };
+            wait_for(
+                "the worker never ran",
+                Box::new(|log| {
+                    log.ticks
+                        .first()
+                        .is_some_and(|x| *x >= u64::try_from(SPAWNED).unwrap() * 2)
+                }),
+            )
+            .await?;
+            fault::crash("worker");
+            time::sleep(Duration::from_millis(1)).await;
+            let frozen = log.lock().unwrap().ticks[0];
+            for _ in 0..100 {
+                time::sleep(Duration::from_millis(1)).await;
+            }
+            ensure(
+                log.lock().unwrap().ticks[0] == frozen,
+                "a crashed task or thread ran",
+            )?;
+            log.lock().unwrap().dropped = drops.load(Ordering::SeqCst);
+
+            fault::restart("worker");
+            wait_for(
+                "the restarted worker does not run",
+                Box::new(|log| log.ticks.len() == 2 && log.ticks[1] > 0),
+            )
+            .await?;
+            let log = log.lock().unwrap();
+            crate::record(log.ticks[0]);
+            crate::record(log.ticks[1]);
+            drop(log);
+            simvar_utils::cancel_simulation();
+            Ok(())
+        });
+    }
+}
+
+fn crash_run(seed: u64) -> (CrashLog, u64) {
+    let bootstrap = CrashBootstrap {
+        log: SharedLog::default(),
+    };
+    let (result, trace) = run(&bootstrap, seed);
+    assert_success(&result);
+    let log = std::mem::take(&mut *bootstrap.log.lock().unwrap());
+    (log, trace)
+}
+
+#[test_log::test]
+fn a_crash_drops_every_spawned_task_and_thread_before_the_hooks_run() {
+    for seed in [3, 4, 5] {
+        let (log, trace) = crash_run(seed);
+        assert_eq!(log.dropped, SPAWNED, "seed {seed}");
+        assert_eq!(log.dropped_at_hook, Some(SPAWNED), "seed {seed}");
+        // The same seed replays the same crash.
+        let (again, replayed) = crash_run(seed);
+        assert_eq!(trace, replayed, "seed {seed}");
+        assert_eq!(log.ticks, again.ticks, "seed {seed}");
+    }
+}

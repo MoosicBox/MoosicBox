@@ -195,9 +195,12 @@ sim.client("nemesis", async {
 });
 ```
 
-- `fault::crash(host)` drops the host's runtime and every task on it at once,
-  without polling them again, takes its network node down (dropping its
-  messages in flight and resetting its TCP connections), then runs its crash
+- `fault::crash(host)` takes the host's network node down (dropping its
+  messages in flight and resetting its TCP connections), drops its action and
+  every task it spawned (including `JoinSet` tasks) at once, in spawn order and
+  without polling them again, kills the simulated threads they started (with
+  the `thread` feature: each is unwound from its current switch point, dropping
+  what it holds, and runs none of its own code again), then runs its crash
   hooks. The host stays down until `fault::restart(host)`.
 - `fault::bounce(host)` / `fault::bounce_after(host, delay)` crash and restart
   it from its factory on a fresh runtime, at once or after `delay` of simulated
