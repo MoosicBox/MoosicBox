@@ -336,7 +336,7 @@ impl GenericRuntime for Runtime {
         self.start();
         RUNTIME.set(self, || {
             let mut future = Box::pin(future);
-            let waker = futures::task::noop_waker();
+            let waker = self.blocking_waker();
             let mut ctx = Context::from_waker(&waker);
             loop {
                 #[allow(clippy::significant_drop_in_scrutinee)]
@@ -445,7 +445,7 @@ impl Runtime {
     /// tasks on the calling thread until it completes.
     fn block_on_nested<F: Future>(&self, future: F) -> F::Output {
         let mut future = std::pin::pin!(future);
-        let waker = futures::task::noop_waker();
+        let waker = self.blocking_waker();
         let mut ctx = Context::from_waker(&waker);
         loop {
             if let Poll::Ready(output) = future.as_mut().poll(&mut ctx) {
@@ -455,6 +455,25 @@ impl Runtime {
                 self.idle();
             }
         }
+    }
+
+    /// The waker of a future [`Self::block_on`] drives itself: waking it wakes this executor if
+    /// it waits for something to do, so a future completed from another thread (a channel's
+    /// sender, say) is polled again even when no task of this runtime runs.
+    fn blocking_waker(&self) -> Waker {
+        struct Blocking(Runtime);
+        impl Wake for Blocking {
+            fn wake(self: Arc<Self>) {
+                self.0.notify();
+            }
+            fn wake_by_ref(self: &Arc<Self>) {
+                self.0.notify();
+            }
+        }
+        Waker::from(Arc::new(Blocking(Self {
+            handle: None,
+            ..self.clone()
+        })))
     }
 
     /// Wait for something to do, having nothing to run.

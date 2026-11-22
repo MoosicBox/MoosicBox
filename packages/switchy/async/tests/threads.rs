@@ -159,3 +159,26 @@ fn aborting_queued_blocking_work_drops_it_unrun() {
     });
     assert!(!ran);
 }
+
+#[test]
+fn block_on_wakes_for_a_future_completed_by_another_thread() {
+    for seed in 0..10 {
+        let (elapsed, _) = run(seed, |runtime| {
+            let (tx, rx) = futures::channel::oneshot::channel::<u32>();
+            // The sender lives on long after sending: only the waker can end the wait early.
+            let sender = thread::spawn(move || {
+                tx.send(5).unwrap();
+                thread::sleep(Duration::from_secs(3600));
+            });
+            let start = switchy_time::instant_now();
+            assert_eq!(runtime.block_on(rx).unwrap(), 5);
+            let elapsed = switchy_time::instant_now().duration_since(start);
+            sender.join().unwrap();
+            elapsed
+        });
+        assert!(
+            elapsed < Duration::from_secs(3600),
+            "seed {seed}: {elapsed:?}"
+        );
+    }
+}
