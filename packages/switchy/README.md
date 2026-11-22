@@ -23,6 +23,7 @@ The Switchy package provides:
 - **`mdns`**: mDNS service discovery (via `switchy_mdns`)
 - **`random`**: Random number generation (via `switchy_random`)
 - **`tcp`**: TCP networking (via `switchy_tcp`)
+- **`network`**: Deterministic simulated network with partitions, link faults and node crashes (via `switchy_network`)
 - **`telemetry`**: Telemetry and monitoring (via `switchy_telemetry`)
 - **`time`**: Time utilities (via `switchy_time`)
 - **`upnp`**: UPnP device discovery (via `switchy_upnp`)
@@ -168,6 +169,7 @@ use switchy::random;
 - **`database-connection`**: Enable database connection management
 - **`fs`**: Enable filesystem operations
 - **`mdns`**: Enable mDNS service discovery
+- **`network`**: Enable the simulated network
 - **`random`**: Enable random number generation
 - **`tcp`**: Enable TCP networking
 - **`telemetry`**: Enable telemetry and monitoring
@@ -241,6 +243,7 @@ This package re-exports functionality from:
 - `switchy_database_connection` - Database connections
 - `switchy_fs` - Filesystem operations
 - `switchy_mdns` - mDNS service discovery
+- `switchy_network` - Simulated network faults
 - `switchy_random` - Random number generation
 - `switchy_tcp` - TCP networking
 - `switchy_telemetry` - Telemetry and monitoring
