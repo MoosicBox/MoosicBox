@@ -457,6 +457,9 @@ mod test {
         // Advance only one simulated step so exactly one branch is ready,
         // independently of branch polling order or machine load.
         let step = Duration::from_millis(switchy_time::simulator::step_multiplier());
+        // Polled by hand: the select must complete on the poll after the step, without the
+        // yield `select!` may take once a branch completes.
+        super::set_yield_probability(0.0);
         for periods in [[1, 2, 3], [1, 3, 2], [3, 1, 2], [3, 2, 1]] {
             let sleeps = periods.map(|period| super::time::sleep(step * period));
             let mut selected = std::pin::pin!(async move {
