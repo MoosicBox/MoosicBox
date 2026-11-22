@@ -54,6 +54,30 @@ def verify_full_suite(root, suite, names, ignored):
     return set(passed)
 
 
+def discovered_inventory(root, entry):
+    _, inventory = read_artifact(root, entry)
+    names = inventory.get("ordinary_tests", [])
+    if not names or len(names) != len(set(names)):
+        raise ValueError("empty/duplicate ordinary test inventory")
+    # Discovery bytes are required, not just a hand-asserted number of tests.
+    listing = local_path(root, inventory["list_log"])
+    if digest(listing) != inventory["list_sha256"]:
+        raise ValueError("discovery log changed")
+    discovered = re.findall(r"^(.+): test$", listing.read_text(encoding="utf-8"), re.MULTILINE)
+    ignored = inventory.get("ignored_tests", [])
+    ignored_log = local_path(root, inventory["ignored_list_log"])
+    if digest(ignored_log) != inventory["ignored_list_sha256"]:
+        raise ValueError("ignored discovery log changed")
+    actual_ignored = re.findall(r"^(.+): test$", ignored_log.read_text(encoding="utf-8"), re.MULTILINE)
+    if (len(ignored) != len(set(ignored)) or len(actual_ignored) != len(set(actual_ignored))
+            or set(actual_ignored) != set(ignored)):
+        raise ValueError("ignored inventory is not backed by discovery")
+    if (len(discovered) != len(set(discovered)) or set(discovered) != set(names) | set(ignored)
+            or set(names) & set(ignored)):
+        raise ValueError("ordinary inventory differs from discovery")
+    return names, ignored
+
+
 def verify_unit_shards(root, entry, source):
     """All discovered ordinary tests in both profiles: full suite or bounded shards.
 
@@ -72,25 +96,7 @@ def verify_unit_shards(root, entry, source):
         raise ValueError("both debug/release unit evidence required")
     discovered_sets = []
     for profile, evidence in profiles.items():
-        listing_path, _ = read_artifact(root, evidence["inventory"])
-        inventory = json.loads(listing_path.read_text(encoding="utf-8"))
-        names = inventory.get("ordinary_tests", [])
-        if not names or len(names) != len(set(names)):
-            raise ValueError("empty/duplicate ordinary test inventory")
-        # Discovery bytes are required, not just a hand-asserted number of tests.
-        listing = local_path(root, inventory["list_log"])
-        if digest(listing) != inventory["list_sha256"]:
-            raise ValueError("unit discovery log changed")
-        discovered = re.findall(r"^(.+): test$", listing.read_text(encoding="utf-8"), re.MULTILINE)
-        ignored = inventory.get("ignored_tests", [])
-        ignored_log = local_path(root, inventory["ignored_list_log"])
-        if digest(ignored_log) != inventory["ignored_list_sha256"]:
-            raise ValueError("ignored unit discovery log changed")
-        actual_ignored = re.findall(r"^(.+): test$", ignored_log.read_text(encoding="utf-8"), re.MULTILINE)
-        if set(actual_ignored) != set(ignored):
-            raise ValueError("ignored unit inventory is not backed by discovery")
-        if set(discovered) != set(names) | set(ignored) or set(names) & set(ignored):
-            raise ValueError("ordinary inventory differs from discovery")
+        names, ignored = discovered_inventory(root, evidence["inventory"])
         executable = local_path(root, evidence["executable_file"])
         if digest(executable) != evidence["executable_sha256"]:
             raise ValueError("unit executable bytes changed")
@@ -192,8 +198,8 @@ def verify_pipeline(root, entry):
         text = log.read_text(encoding="utf-8")
         if "PARTIAL_DIAGNOSTIC" in text:
             raise ValueError("pipeline PARTIAL_DIAGNOSTIC cannot establish full acceptance")
-        if not re.search(r"test result: ok\. [1-9][0-9]* passed; 0 failed;", text):
-            raise ValueError("pipeline suite did not execute")
+        names, ignored = discovered_inventory(root, row["inventory"])
+        verify_full_suite(root, row, names, ignored)
         seen.add(key)
     if seen != expected:
         raise ValueError("missing debug/release pipeline suites")

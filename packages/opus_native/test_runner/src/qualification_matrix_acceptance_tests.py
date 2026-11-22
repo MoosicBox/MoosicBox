@@ -28,6 +28,34 @@ class AcceptanceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "PARTIAL_DIAGNOSTIC"):
                     acceptance.verify_pipeline(root, dict(path="pipeline.json", sha256=acceptance.digest(root / "pipeline.json")))
 
+    def test_pipeline_rejects_filtered_pass_against_discovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def artifact(name, text):
+                path = root / name
+                path.write_text(text)
+                return dict(path=name, sha256=acceptance.digest(path))
+
+            listing = artifact("list.log", "first: test\ntail: test\n\n2 tests, 0 benchmarks\n")
+            ignored = artifact("ignored.log", "0 tests, 0 benchmarks\n")
+            inventory = artifact("inventory.json", json.dumps(dict(
+                ordinary_tests=["first", "tail"], ignored_tests=[],
+                list_log=listing["path"], list_sha256=listing["sha256"],
+                ignored_list_log=ignored["path"], ignored_list_sha256=ignored["sha256"])))
+            log = artifact("suite.log", "test first ... ok\n\ntest result: ok. 1 passed; "
+                           "0 failed; 0 ignored; 0 measured; 1 filtered out;\n")
+            package, features, target = acceptance.ci.PRODUCT_TESTS[0]
+            entry = artifact("report.json", json.dumps(dict(
+                schema="moosicbox.opus.pipeline-evidence.v1", source_sha256="source",
+                files_test_sources={}, suites=[dict(profile="release", package=package,
+                    features=features, target=target, exit_code=0, timed_out=False,
+                    log=log["path"], log_sha256=log["sha256"], inventory=inventory)])))
+            with patch.object(acceptance.ci, "sources", return_value="source"), \
+                 patch.object(acceptance.ci, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, "discovered inventory exactly once"):
+                    acceptance.verify_pipeline(root, entry)
+
     @staticmethod
     def core_report():
         rows = []
