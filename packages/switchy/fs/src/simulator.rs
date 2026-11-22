@@ -201,6 +201,8 @@ fn detached_handle(content: Vec<u8>, read: bool, write: bool) -> std::io::Result
 pub struct Filesystem {
     directory_locations: crate::directories::DirectoryLocations,
     vfs: Mutex<Vfs>,
+    /// Temporary directories created in this namespace (see [`temp_dir`]).
+    temp_dirs: Mutex<temp_dir::TempDirs>,
 }
 
 impl std::fmt::Debug for Filesystem {
@@ -236,8 +238,8 @@ impl Filesystem {
     #[must_use]
     pub fn with_credentials(uid: u32, gid: u32) -> Self {
         Self {
-            directory_locations: crate::directories::DirectoryLocations::default(),
             vfs: Mutex::new(Vfs::new(uid, gid)),
+            ..Self::default()
         }
     }
 
@@ -264,6 +266,10 @@ impl Filesystem {
     /// umask, quota and fault configuration.
     pub fn reset(&self) {
         self.vfs().reset();
+        self.temp_dirs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
     }
 
     /// Replace the namespace's fault plan. Draws come from the current simulation run's
@@ -3509,38 +3515,63 @@ mod async_file_io_tests {
 }
 
 /// Temporary directory functionality for the simulator
+///
+/// Names are drawn from the current simulation run's `switchy_fs::temp` stream, so a seed
+/// reproduces them, and creation retries with a fresh name when one already exists (as
+/// `tempfile` does). A [`TempDir`] remembers the [`Filesystem`](super::Filesystem) it was
+/// created in and is removed from that namespace when dropped, whichever thread drops it.
 pub mod temp_dir {
     use std::{
-        cell::RefCell,
         collections::BTreeMap,
         ffi::{OsStr, OsString},
         path::{Path, PathBuf},
-        sync::RwLock,
+        sync::{Arc, PoisonError},
     };
 
-    /// Tracking state for temp directories in simulator
-    struct TempDirState {
+    use super::{Filesystem, vfs::ROOT};
+
+    /// Characters of the random part of a name (the set `tempfile` uses).
+    const NAME_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    /// Names tried before giving up when every candidate already exists.
+    const MAX_ATTEMPTS: u32 = 1 << 16;
+
+    /// Permission bits of a new temporary directory (owner only, as `tempfile` creates).
+    const DIR_MODE: u32 = 0o700;
+
+    /// Tracking state for one temporary directory of a namespace.
+    #[derive(Debug)]
+    pub(crate) struct TempDirState {
         cleanup_enabled: bool,
     }
 
-    thread_local! {
-        static TEMP_DIRS: RefCell<RwLock<BTreeMap<PathBuf, TempDirState>>> =
-            const { RefCell::new(RwLock::new(BTreeMap::new())) };
+    /// The temporary directories registered in one namespace, keyed by path.
+    pub(crate) type TempDirs = BTreeMap<PathBuf, TempDirState>;
+
+    fn with_registry<T>(filesystem: &Filesystem, work: impl FnOnce(&mut TempDirs) -> T) -> T {
+        work(
+            &mut filesystem
+                .temp_dirs
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+        )
     }
 
-    /// Reset temp directory state (useful for testing)
+    /// Forget every temporary directory registered in the current namespace.
     ///
-    /// # Panics
-    ///
-    /// * If the `TEMP_DIRS` `RwLock` fails to write to
+    /// The directories themselves are kept; each [`TempDir`] still removes its directory
+    /// when dropped.
     pub fn reset_temp_dirs() {
-        TEMP_DIRS.with_borrow_mut(|x| x.write().unwrap().clear());
+        with_registry(&super::current_filesystem(), TempDirs::clear);
     }
 
     /// A directory in the filesystem that is automatically deleted when it goes out of scope
     pub struct TempDir {
         path: PathBuf,
         cleanup_enabled: bool,
+        /// The namespace holding the directory; `None` for a native directory created in
+        /// explicit real-filesystem mode.
+        filesystem: Option<Arc<Filesystem>>,
     }
 
     impl TempDir {
@@ -3549,42 +3580,8 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn new() -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::new()?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp); // Let our Drop handle cleanup
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(None, None, 6);
-            let path = PathBuf::from("/tmp").join(dir_name);
-
-            // Create in simulated filesystem
-            super::sync::create_dir_all(&path)?;
-
-            // Register in temp directory tracking
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().tempdir()
         }
 
         /// Attempts to make a temporary directory inside the specified directory
@@ -3592,40 +3589,8 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn new_in<P: AsRef<Path>>(dir: P) -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::new_in(dir)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(None, None, 6);
-            let path = dir.as_ref().join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().tempdir_in(dir)
         }
 
         /// Attempts to make a temporary directory with the specified prefix
@@ -3633,40 +3598,8 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn with_prefix<S: AsRef<OsStr>>(prefix: S) -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::with_prefix(prefix)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(Some(prefix.as_ref()), None, 6);
-            let path = PathBuf::from("/tmp").join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().prefix(prefix).tempdir()
         }
 
         /// Attempts to make a temporary directory with the specified suffix
@@ -3674,40 +3607,8 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn with_suffix<S: AsRef<OsStr>>(suffix: S) -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::with_suffix(suffix)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(None, Some(suffix.as_ref()), 6);
-            let path = PathBuf::from("/tmp").join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().suffix(suffix).tempdir()
         }
 
         /// Attempts to make a temporary directory with the specified prefix in the specified directory
@@ -3715,43 +3616,11 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn with_prefix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
             prefix: S,
             dir: P,
         ) -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::with_prefix_in(prefix, dir)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(Some(prefix.as_ref()), None, 6);
-            let path = dir.as_ref().join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().prefix(prefix).tempdir_in(dir)
         }
 
         /// Attempts to make a temporary directory with the specified suffix in the specified directory
@@ -3759,43 +3628,11 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn with_suffix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
             suffix: S,
             dir: P,
         ) -> std::io::Result<Self> {
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                let real_temp = tempfile::TempDir::with_suffix_in(suffix, dir)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(Self {
-                    path,
-                    cleanup_enabled: true,
-                });
-            }
-
-            let dir_name = generate_temp_name(None, Some(suffix.as_ref()), 6);
-            let path = dir.as_ref().join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(Self {
-                path,
-                cleanup_enabled: true,
-            })
+            Builder::new().suffix(suffix).tempdir_in(dir)
         }
 
         /// Accesses the Path to the temporary directory
@@ -3805,26 +3642,13 @@ pub mod temp_dir {
         }
 
         /// Persist the temporary directory to disk, returning the `PathBuf` where it is located
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         #[must_use]
         pub fn keep(mut self) -> PathBuf {
-            self.cleanup_enabled = false;
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                if let Some(state) = dirs.write().unwrap().get_mut(&self.path) {
-                    state.cleanup_enabled = false;
-                }
-            });
+            self.disable_cleanup(true);
             self.path.clone()
         }
 
         /// Deprecated alias for `keep()`
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         #[deprecated = "use TempDir::keep()"]
         #[must_use]
         pub fn into_path(self) -> PathBuf {
@@ -3832,50 +3656,55 @@ pub mod temp_dir {
         }
 
         /// Disable cleanup of the temporary directory
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
         pub fn disable_cleanup(&mut self, disable_cleanup: bool) {
             self.cleanup_enabled = !disable_cleanup;
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                if let Some(state) = dirs.write().unwrap().get_mut(&self.path) {
-                    state.cleanup_enabled = !disable_cleanup;
-                }
-            });
+            if let Some(filesystem) = &self.filesystem {
+                with_registry(filesystem, |dirs| {
+                    if let Some(state) = dirs.get_mut(&self.path) {
+                        state.cleanup_enabled = !disable_cleanup;
+                    }
+                });
+            }
         }
 
         /// Closes and removes the temporary directory
         ///
         /// # Errors
         ///
-        /// * If the directory cannot be removed from the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        /// * If the directory cannot be removed
         pub fn close(mut self) -> std::io::Result<()> {
             if !self.cleanup_enabled {
                 return Ok(());
             }
-
-            #[cfg(feature = "simulator-real-fs")]
-            if super::real_fs_support::is_real_fs() {
-                return std::fs::remove_dir_all(&self.path);
-            }
-
-            // Remove from tracking
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().remove(&self.path);
-            });
-
-            // Remove from simulated filesystem
-            super::sync::remove_dir_all(&self.path)?;
-
-            // Prevent double cleanup in Drop
+            // Prevent a second removal in Drop.
             self.cleanup_enabled = false;
-            Ok(())
+            self.remove()
         }
+
+        /// Remove the directory tree from the namespace it was created in.
+        fn remove(&self) -> std::io::Result<()> {
+            let Some(filesystem) = &self.filesystem else {
+                return remove_native(&self.path);
+            };
+            with_registry(filesystem, |dirs| dirs.remove(&self.path));
+            filesystem
+                .vfs()
+                .remove_dir_all(ROOT, &self.path)
+                .map_err(Into::into)
+        }
+    }
+
+    /// Remove a native temporary directory (created in explicit real-filesystem mode).
+    #[cfg(feature = "simulator-real-fs")]
+    fn remove_native(path: &Path) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    /// Without native support every temporary directory is simulated.
+    #[cfg(not(feature = "simulator-real-fs"))]
+    #[allow(clippy::unnecessary_wraps)]
+    const fn remove_native(_path: &Path) -> std::io::Result<()> {
+        Ok(())
     }
 
     impl AsRef<Path> for TempDir {
@@ -3889,24 +3718,14 @@ pub mod temp_dir {
             f.debug_struct("TempDir")
                 .field("path", &self.path)
                 .field("cleanup_enabled", &self.cleanup_enabled)
-                .finish()
+                .finish_non_exhaustive()
         }
     }
 
     impl Drop for TempDir {
         fn drop(&mut self) {
             if self.cleanup_enabled {
-                #[cfg(feature = "simulator-real-fs")]
-                if super::real_fs_support::is_real_fs() {
-                    let _ = std::fs::remove_dir_all(&self.path);
-                    return;
-                }
-
-                TEMP_DIRS.with_borrow_mut(|dirs| {
-                    dirs.write().unwrap().remove(&self.path);
-                });
-
-                let _ = super::sync::remove_dir_all(&self.path);
+                let _ = self.remove();
             }
         }
     }
@@ -3947,63 +3766,24 @@ pub mod temp_dir {
             self
         }
 
-        /// Set the number of random bytes to use for the directory name
+        /// Set the number of random characters to use for the directory name
         pub const fn rand_bytes(&mut self, rand: usize) -> &mut Self {
             self.rand_bytes = rand;
             self
         }
 
-        /// Create a temporary directory in the default location
+        /// Create a temporary directory in the default location (`/tmp`)
         ///
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        /// * `AlreadyExists` if every name tried already exists
         pub fn tempdir(&self) -> std::io::Result<TempDir> {
             #[cfg(feature = "simulator-real-fs")]
             if super::real_fs_support::is_real_fs() {
-                let mut builder = tempfile::Builder::new();
-                if let Some(ref prefix) = self.prefix {
-                    builder.prefix(prefix);
-                }
-                if let Some(ref suffix) = self.suffix {
-                    builder.suffix(suffix);
-                }
-                builder.rand_bytes(self.rand_bytes);
-                let real_temp = builder.tempdir()?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(TempDir {
-                    path,
-                    cleanup_enabled: true,
-                });
+                return self.real_tempdir(None);
             }
-
-            let dir_name = generate_temp_name(
-                self.prefix.as_deref(),
-                self.suffix.as_deref(),
-                self.rand_bytes,
-            );
-            let path = PathBuf::from("/tmp").join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
-            Ok(TempDir {
-                path,
-                cleanup_enabled: true,
-            })
+            self.create_in(Path::new("/tmp"))
         }
 
         /// Create a temporary directory in the specified location
@@ -4011,52 +3791,76 @@ pub mod temp_dir {
         /// # Errors
         ///
         /// * If the directory cannot be created in the simulated filesystem
-        ///
-        /// # Panics
-        ///
-        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        /// * `AlreadyExists` if every name tried already exists
         pub fn tempdir_in<P: AsRef<Path>>(&self, dir: P) -> std::io::Result<TempDir> {
             #[cfg(feature = "simulator-real-fs")]
             if super::real_fs_support::is_real_fs() {
-                let mut builder = tempfile::Builder::new();
-                if let Some(ref prefix) = self.prefix {
-                    builder.prefix(prefix);
-                }
-                if let Some(ref suffix) = self.suffix {
-                    builder.suffix(suffix);
-                }
-                builder.rand_bytes(self.rand_bytes);
-                let real_temp = builder.tempdir_in(dir)?;
-                let path = real_temp.path().to_path_buf();
-                std::mem::forget(real_temp);
-                return Ok(TempDir {
-                    path,
-                    cleanup_enabled: true,
-                });
+                return self.real_tempdir(Some(dir.as_ref()));
             }
+            self.create_in(dir.as_ref())
+        }
 
-            let dir_name = generate_temp_name(
-                self.prefix.as_deref(),
-                self.suffix.as_deref(),
-                self.rand_bytes,
-            );
-            let path = dir.as_ref().join(dir_name);
-
-            super::sync::create_dir_all(&path)?;
-
-            TEMP_DIRS.with_borrow_mut(|dirs| {
-                dirs.write().unwrap().insert(
-                    path.clone(),
-                    TempDirState {
-                        cleanup_enabled: true,
-                    },
-                );
-            });
-
+        /// Create a native temporary directory (explicit real-filesystem mode).
+        #[cfg(feature = "simulator-real-fs")]
+        fn real_tempdir(&self, dir: Option<&Path>) -> std::io::Result<TempDir> {
+            let mut builder = tempfile::Builder::new();
+            if let Some(prefix) = &self.prefix {
+                builder.prefix(prefix);
+            }
+            if let Some(suffix) = &self.suffix {
+                builder.suffix(suffix);
+            }
+            builder.rand_bytes(self.rand_bytes);
+            let real_temp = match dir {
+                Some(dir) => builder.tempdir_in(dir)?,
+                None => builder.tempdir()?,
+            };
+            // Cleanup is ours: the path is removed by `TempDir::remove`.
+            let path = real_temp.keep();
             Ok(TempDir {
                 path,
                 cleanup_enabled: true,
+                filesystem: None,
             })
+        }
+
+        /// Create a uniquely named directory in `dir` (created if missing) of the current
+        /// namespace, retrying with a fresh name while the name already exists.
+        fn create_in(&self, dir: &Path) -> std::io::Result<TempDir> {
+            let filesystem = super::current_filesystem();
+            super::sync::create_dir_all(dir)?;
+            let attempts = if self.rand_bytes == 0 { 1 } else { MAX_ATTEMPTS };
+            for _ in 0..attempts {
+                let path = dir.join(generate_temp_name(
+                    self.prefix.as_deref(),
+                    self.suffix.as_deref(),
+                    self.rand_bytes,
+                ));
+                let created = filesystem.vfs().create_dir(ROOT, &path, DIR_MODE);
+                match created {
+                    Ok(()) => {
+                        with_registry(&filesystem, |dirs| {
+                            dirs.insert(
+                                path.clone(),
+                                TempDirState {
+                                    cleanup_enabled: true,
+                                },
+                            );
+                        });
+                        return Ok(TempDir {
+                            path,
+                            cleanup_enabled: true,
+                            filesystem: Some(filesystem),
+                        });
+                    }
+                    Err(crate::errno::Errno::Exist) => {}
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "too many temporary directories already exist",
+            ))
         }
     }
 
@@ -4078,29 +3882,29 @@ pub mod temp_dir {
         TempDir::new_in(dir)
     }
 
-    /// Generate deterministic temp directory name
+    /// A temporary name: `prefix`, `rand_bytes` random alphanumeric characters drawn from
+    /// the current simulation run's `switchy_fs::temp` stream, then `suffix`.
     fn generate_temp_name(
         prefix: Option<&OsStr>,
         suffix: Option<&OsStr>,
         rand_bytes: usize,
     ) -> OsString {
+        let random: String = {
+            let stream = switchy_simulation::stream("switchy_fs::temp");
+            let mut rng = stream.lock().unwrap_or_else(PoisonError::into_inner);
+            (0..rand_bytes)
+                .map(|_| char::from(NAME_CHARS[rng.index(NAME_CHARS.len())]))
+                .collect()
+        };
+
         let mut name = OsString::new();
-
-        if let Some(p) = prefix {
-            name.push(p);
+        if let Some(prefix) = prefix {
+            name.push(prefix);
         }
-
-        // Generate deterministic random part
-        for i in 0..rand_bytes {
-            #[allow(clippy::cast_possible_truncation)]
-            let c = char::from(b'a' + (i % 26) as u8);
-            name.push(c.to_string());
+        name.push(random);
+        if let Some(suffix) = suffix {
+            name.push(suffix);
         }
-
-        if let Some(s) = suffix {
-            name.push(s);
-        }
-
         name
     }
 
@@ -4110,22 +3914,34 @@ pub mod temp_dir {
         use crate::simulator::{exists, reset_fs};
         use pretty_assertions::assert_eq;
 
+        fn random_part(name: &OsStr, prefix: &str, suffix: &str) -> String {
+            let name = name.to_str().unwrap();
+            assert!(name.starts_with(prefix), "{name} lacks prefix {prefix}");
+            assert!(name.ends_with(suffix), "{name} lacks suffix {suffix}");
+            name[prefix.len()..name.len() - suffix.len()].to_string()
+        }
+
+        fn assert_alphanumeric(random: &str, len: usize) {
+            assert_eq!(random.len(), len);
+            assert!(random.bytes().all(|byte| byte.is_ascii_alphanumeric()));
+        }
+
         #[test_log::test]
         fn test_generate_temp_name_without_prefix_or_suffix() {
             let name = generate_temp_name(None, None, 6);
-            assert_eq!(name.to_str().unwrap(), "abcdef");
+            assert_alphanumeric(&random_part(&name, "", ""), 6);
         }
 
         #[test_log::test]
         fn test_generate_temp_name_with_prefix() {
             let name = generate_temp_name(Some(std::ffi::OsStr::new("test-")), None, 4);
-            assert_eq!(name.to_str().unwrap(), "test-abcd");
+            assert_alphanumeric(&random_part(&name, "test-", ""), 4);
         }
 
         #[test_log::test]
         fn test_generate_temp_name_with_suffix() {
             let name = generate_temp_name(None, Some(std::ffi::OsStr::new("-end")), 4);
-            assert_eq!(name.to_str().unwrap(), "abcd-end");
+            assert_alphanumeric(&random_part(&name, "", "-end"), 4);
         }
 
         #[test_log::test]
@@ -4135,16 +3951,96 @@ pub mod temp_dir {
                 Some(std::ffi::OsStr::new("-suf")),
                 3,
             );
-            assert_eq!(name.to_str().unwrap(), "pre-abc-suf");
+            assert_alphanumeric(&random_part(&name, "pre-", "-suf"), 3);
         }
 
         #[test_log::test]
-        fn test_generate_temp_name_wraps_alphabet() {
-            // With 30 rand_bytes, it should wrap around the alphabet
-            let name = generate_temp_name(None, None, 30);
-            let s = name.to_str().unwrap();
-            // First 26 chars are a-z, then wraps: 0%26=a, 1%26=b, etc.
-            assert!(s.starts_with("abcdefghijklmnopqrstuvwxyzabcd"));
+        fn test_generate_temp_name_differs_between_calls() {
+            let names: std::collections::BTreeSet<OsString> =
+                (0..16).map(|_| generate_temp_name(None, None, 6)).collect();
+            assert_eq!(names.len(), 16);
+        }
+
+        #[test_log::test]
+        fn test_generate_temp_name_is_reproducible_per_seed() {
+            let names = |seed| {
+                switchy_simulation::with_context(switchy_simulation::Context::new(seed), || {
+                    (0..4)
+                        .map(|_| generate_temp_name(None, None, 8))
+                        .collect::<Vec<_>>()
+                })
+            };
+            assert_eq!(names(7), names(7));
+            assert_ne!(names(7), names(8));
+        }
+
+        #[test_log::test]
+        fn test_tempdirs_get_distinct_names() {
+            reset_fs();
+
+            let first = TempDir::new().unwrap();
+            let second = TempDir::new().unwrap();
+            assert_ne!(first.path(), second.path());
+            assert!(exists(first.path()));
+            assert!(exists(second.path()));
+
+            drop(first);
+            assert!(exists(second.path()), "dropping one must not remove another");
+        }
+
+        #[test_log::test]
+        fn test_tempdir_retries_when_name_exists() {
+            let seed = 42;
+            // The first name this seed draws.
+            let taken = switchy_simulation::with_context(
+                switchy_simulation::Context::new(seed),
+                || generate_temp_name(None, None, 6),
+            );
+            switchy_simulation::with_context(switchy_simulation::Context::new(seed), || {
+                crate::simulator::sync::create_dir_all(Path::new("/tmp").join(&taken)).unwrap();
+                let temp = TempDir::new().unwrap();
+                assert_ne!(temp.path().file_name().unwrap(), taken.as_os_str());
+                assert!(exists(Path::new("/tmp").join(&taken)));
+            });
+        }
+
+        #[test_log::test]
+        fn test_tempdir_without_random_part_fails_when_taken() {
+            reset_fs();
+
+            let mut builder = Builder::new();
+            builder.prefix("fixed").rand_bytes(0);
+            let first = builder.tempdir().unwrap();
+            assert_eq!(first.path(), Path::new("/tmp/fixed"));
+            let error = builder.tempdir().unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        }
+
+        #[test_log::test]
+        fn test_tempdir_dropped_on_another_thread_is_removed_from_its_namespace() {
+            let filesystem = std::sync::Arc::new(crate::simulator::Filesystem::new());
+            let temp =
+                crate::simulator::with_filesystem(&filesystem, || TempDir::new().unwrap());
+            let path = temp.path().to_path_buf();
+            std::thread::spawn(move || drop(temp)).join().unwrap();
+            crate::simulator::with_filesystem(&filesystem, || {
+                assert!(!exists(&path), "directory should be removed from its namespace");
+                assert!(exists("/tmp"));
+            });
+            assert!(filesystem.temp_dirs.lock().unwrap().is_empty());
+        }
+
+        #[test_log::test]
+        fn test_tempdir_registry_is_per_namespace() {
+            let first = std::sync::Arc::new(crate::simulator::Filesystem::new());
+            let second = std::sync::Arc::new(crate::simulator::Filesystem::new());
+            let temp = crate::simulator::with_filesystem(&first, || TempDir::new().unwrap());
+            assert_eq!(first.temp_dirs.lock().unwrap().len(), 1);
+            assert!(second.temp_dirs.lock().unwrap().is_empty());
+            crate::simulator::with_filesystem(&second, reset_temp_dirs);
+            assert_eq!(first.temp_dirs.lock().unwrap().len(), 1);
+            drop(temp);
+            assert!(first.temp_dirs.lock().unwrap().is_empty());
         }
 
         #[test_log::test]
@@ -4154,7 +4050,7 @@ pub mod temp_dir {
             let builder = Builder::new();
             let temp = builder.tempdir().unwrap();
 
-            // Should be created in /tmp with deterministic name
+            // Should be created in /tmp
             assert!(temp.path().starts_with("/tmp"));
             assert!(exists(temp.path()));
         }
@@ -4191,9 +4087,7 @@ pub mod temp_dir {
             builder.rand_bytes(10);
             let temp = builder.tempdir().unwrap();
 
-            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
-            // 10 rand bytes = "abcdefghij"
-            assert!(file_name.contains("abcdefghij"));
+            assert_alphanumeric(&random_part(temp.path().file_name().unwrap(), "", ""), 10);
         }
 
         #[test_log::test]
@@ -4227,8 +4121,8 @@ pub mod temp_dir {
                 .tempdir()
                 .unwrap();
 
-            let file_name = temp.path().file_name().unwrap().to_str().unwrap();
-            assert_eq!(file_name, "start-abc-end");
+            let random = random_part(temp.path().file_name().unwrap(), "start-", "-end");
+            assert_alphanumeric(&random, 3);
         }
 
         #[test_log::test]
