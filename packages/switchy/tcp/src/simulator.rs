@@ -7,12 +7,30 @@
 //! * DNS simulation for hostname resolution
 //! * Ephemeral port management
 //! * Connection queue management
+//! * The faults of the run's simulated network ([`switchy_network`]): partitions, link latency
+//!   and node crashes
 //!
 //! This is useful for deterministic testing, avoiding port conflicts, and testing
 //! network code without requiring actual network access.
+//!
+//! # Simulated network faults
+//!
+//! A listener belongs to the network node it was bound by, and a connection to the nodes at
+//! both ends: the [current network node](switchy_network::current_node), or else the
+//! [current host](current_host). (A `simvar` simulation runs each host and client as the node
+//! of its name.) Between two known nodes:
+//!
+//! * Connecting to a listener whose node is down, or crashed since it bound, is refused.
+//! * Connecting across a partition (either direction) stalls until the partition heals, or
+//!   fails with [`io::ErrorKind::TimedOut`] after the [connect timeout](set_connect_timeout).
+//!   A successful connect takes a round trip of the links' latency.
+//! * Data takes the link's latency to arrive (in order), and stalls while a partition blocks
+//!   the link.
+//! * Once the peer's node goes down (or restarts), reads and writes fail with
+//!   [`io::ErrorKind::ConnectionReset`].
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::BTreeMap,
     io::{self},
     marker::PhantomData,
@@ -36,16 +54,44 @@ use switchy_async::{
     time,
     util::CancellationToken,
 };
+use switchy_network::Instant;
 
 use crate::{
     Error, GenericTcpListener, GenericTcpStream, GenericTcpStreamReadHalf,
     GenericTcpStreamWriteHalf,
 };
 
+/// The default size of a listener's queue of connections not yet accepted.
+pub const DEFAULT_LISTENER_BACKLOG: usize = 64;
+
+/// The default time a connect waits for a partition to heal before it times out.
+pub const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// A bound listener, as connecting clients see it.
+#[derive(Clone)]
+struct ListenerEntry {
+    id: u64,
+    tx: flume::Sender<(TcpStream, SocketAddr)>,
+    /// The network node that bound it, and that node's incarnation then.
+    node: Option<String>,
+    incarnation: u64,
+}
+
+impl ListenerEntry {
+    /// Whether the node that bound it is still up and has not crashed since.
+    fn is_live(&self) -> bool {
+        self.node.as_deref().is_none_or(|node| {
+            switchy_network::is_up(node) && switchy_network::incarnation(node) == self.incarnation
+        })
+    }
+}
+
 thread_local! {
-    #[allow(clippy::type_complexity)]
-    static TCP_LISTENERS: RefCell<RwLock<BTreeMap<SocketAddr, flume::Sender<(TcpStream, SocketAddr)>>>> =
+    static TCP_LISTENERS: RefCell<RwLock<BTreeMap<SocketAddr, ListenerEntry>>> =
         const { RefCell::new(RwLock::new(BTreeMap::new())) };
+    static NEXT_LISTENER_ID: Cell<u64> = const { Cell::new(1) };
+    static LISTENER_BACKLOG: Cell<usize> = const { Cell::new(DEFAULT_LISTENER_BACKLOG) };
+    static CONNECT_TIMEOUT: Cell<Duration> = const { Cell::new(DEFAULT_CONNECT_TIMEOUT) };
 
     static EPHEMERAL_PORT_START: RefCell<AtomicU16> =
         const { RefCell::new(AtomicU16::new(40000)) };
@@ -149,14 +195,45 @@ pub fn reset_dns() {
     DNS.with_borrow_mut(BTreeMap::clear);
 }
 
+/// The size of the queue of connections not yet accepted of listeners bound from now on.
+#[must_use]
+pub fn listener_backlog() -> usize {
+    LISTENER_BACKLOG.get()
+}
+
+/// Set the size (at least 1) of the queue of connections not yet accepted of listeners bound
+/// from now on. Connecting to a listener whose queue is full is refused.
+pub fn set_listener_backlog(backlog: usize) {
+    LISTENER_BACKLOG.set(backlog.max(1));
+}
+
+/// How long a connect waits for a partition between its nodes to heal.
+#[must_use]
+pub fn connect_timeout() -> Duration {
+    CONNECT_TIMEOUT.get()
+}
+
+/// Set how long a connect waits for a partition between its nodes to heal before it fails with
+/// [`io::ErrorKind::TimedOut`].
+pub fn set_connect_timeout(timeout: Duration) {
+    CONNECT_TIMEOUT.set(timeout);
+}
+
 /// Resets all simulator state.
 ///
-/// This includes ephemeral ports, IP addresses, and DNS mappings. Useful for ensuring
-/// a clean state between tests.
+/// This includes ephemeral ports, IP addresses, DNS mappings, bound listeners, the listener
+/// backlog and the connect timeout. Useful for ensuring a clean state between tests.
 pub fn reset() {
     reset_next_port();
     reset_next_ip();
     reset_dns();
+    TCP_LISTENERS.with_borrow(|x| {
+        x.write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    });
+    LISTENER_BACKLOG.set(DEFAULT_LISTENER_BACKLOG);
+    CONNECT_TIMEOUT.set(DEFAULT_CONNECT_TIMEOUT);
 }
 
 struct Host {
@@ -202,6 +279,12 @@ pub fn with_host<T>(addr: String, f: impl FnOnce(&str) -> T) -> T {
     HOST.set(&host, || f(&host.addr))
 }
 
+/// The network node the current code acts for: the current network node, or else the current
+/// host.
+fn local_node() -> Option<String> {
+    switchy_network::current_node().or_else(current_host)
+}
+
 fn is_local_host_name(addr: &str) -> bool {
     matches!(addr, "0.0.0.0" | "127.0.0.1")
 }
@@ -212,32 +295,21 @@ fn parse_addr(mut addr: String, host: bool) -> Result<(SocketAddr, Option<String
         let mut host_name = addr;
 
         if host {
-            if HOST.is_set() {
-                if is_local_host_name(&host_name) {
-                    host_name = HOST.with(|x| x.addr.clone());
-                } else {
-                    unimplemented!("host-local networking not implemented yet")
-                }
+            // Within a host, binding a local address binds the host's own name. Any other name
+            // is bound as given.
+            if HOST.is_set() && is_local_host_name(&host_name) {
+                host_name = HOST.with(|x| x.addr.clone());
             }
 
+            // A name keeps its address, so one host can bind several ports, and bind them again
+            // after a restart.
             let ip = DNS.with_borrow_mut(|x| {
-                if x.contains_key(&host_name) {
-                    return Err(io::Error::new(
-                        io::ErrorKind::AddrInUse,
-                        format!(
-                            "Address in use: {host_name} {}",
-                            std::backtrace::Backtrace::force_capture()
-                        ),
-                    ));
-                }
-
-                let ip = Ipv4Addr::from_str(&host_name).ok().unwrap_or_else(next_ip);
-
-                log::debug!("inserting ip={ip} for host_name={host_name}");
-                x.insert(host_name.clone(), ip);
-
-                Ok(ip)
-            })?;
+                *x.entry(host_name.clone()).or_insert_with(|| {
+                    let ip = Ipv4Addr::from_str(&host_name).ok().unwrap_or_else(next_ip);
+                    log::debug!("inserting ip={ip} for host_name={host_name}");
+                    ip
+                })
+            });
 
             return Ok((SocketAddr::new(ip.into(), port), Some(host_name)));
         }
@@ -264,6 +336,7 @@ fn parse_addr(mut addr: String, host: bool) -> Result<(SocketAddr, Option<String
 /// lifecycle through a cancellation token.
 pub struct TcpListener {
     token: CancellationToken,
+    id: u64,
     addr: SocketAddr,
     // Handles listening for incoming connections
     rx: flume::Receiver<(TcpStream, SocketAddr)>,
@@ -275,6 +348,7 @@ impl TcpListener {
     /// # Errors
     ///
     /// * If the `TcpListener` fails to bind the address
+    /// * If a listener is already bound to the address (by a node that has not crashed since)
     ///
     /// # Panics
     ///
@@ -293,16 +367,45 @@ impl TcpListener {
     /// ```
     pub async fn bind(addr: impl Into<String>) -> Result<Self, crate::Error> {
         async {
-            let (tx, rx) = flume::bounded(64);
+            let (tx, rx) = flume::bounded(listener_backlog());
             let token = CancellationToken::new();
             let addr = addr.into();
             log::debug!("Binding TCP listener to addr={addr}");
 
             let (addr, _host_name) = parse_addr(addr, true)?;
 
-            TCP_LISTENERS.with_borrow_mut(|x| x.write().unwrap().insert(addr, tx));
+            let node = local_node();
+            let incarnation = node.as_deref().map_or(0, switchy_network::incarnation);
+            let id = NEXT_LISTENER_ID.replace(NEXT_LISTENER_ID.get() + 1);
 
-            let listener = Self { token, addr, rx };
+            TCP_LISTENERS.with_borrow_mut(|x| {
+                let mut listeners = x.write().unwrap();
+                // A listener of a crashed node no longer holds its address.
+                if listeners.get(&addr).is_some_and(ListenerEntry::is_live) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AddrInUse,
+                        format!("Address in use: {addr}"),
+                    ));
+                }
+                listeners.insert(
+                    addr,
+                    ListenerEntry {
+                        id,
+                        tx,
+                        node,
+                        incarnation,
+                    },
+                );
+                drop(listeners);
+                Ok(())
+            })?;
+
+            let listener = Self {
+                token,
+                id,
+                addr,
+                rx,
+            };
 
             assert!(listener.rx.is_empty());
             assert!(TCP_LISTENERS.with_borrow(|x| x.read().unwrap().contains_key(&listener.addr)));
@@ -349,8 +452,13 @@ impl TcpListener {
         self.token.cancel();
         assert!(self.token.is_cancelled());
 
-        TCP_LISTENERS.with_borrow_mut(|x| x.write().unwrap().remove(&self.addr));
-        assert!(TCP_LISTENERS.with_borrow(|x| !x.read().unwrap().contains_key(&self.addr)));
+        // The address may have been bound again since (after this listener's node crashed).
+        TCP_LISTENERS.with_borrow_mut(|x| {
+            let mut listeners = x.write().unwrap();
+            if listeners.get(&self.addr).is_some_and(|x| x.id == self.id) {
+                listeners.remove(&self.addr);
+            }
+        });
     }
 }
 
@@ -417,6 +525,93 @@ impl GenericTcpListener<crate::SimulatorTcpStream> for TcpListener {
     }
 }
 
+/// The network nodes at the two ends of one side of a connection.
+#[derive(Debug, Clone, Default)]
+struct Link {
+    local: Option<String>,
+    peer: Option<String>,
+    /// The peer's incarnation when the connection was made.
+    peer_incarnation: u64,
+}
+
+impl Link {
+    fn new(local: Option<String>, peer: Option<String>) -> Self {
+        let peer_incarnation = peer.as_deref().map_or(0, switchy_network::incarnation);
+        Self {
+            local,
+            peer,
+            peer_incarnation,
+        }
+    }
+
+    /// Both ends, when both are known and distinct (a connection within a node has no link).
+    fn nodes(&self) -> Option<(&str, &str)> {
+        match (self.local.as_deref(), self.peer.as_deref()) {
+            (Some(local), Some(peer)) if local != peer => Some((local, peer)),
+            _ => None,
+        }
+    }
+
+    /// Fail once the peer's node has gone down or restarted since the connection was made.
+    fn check(&self) -> io::Result<()> {
+        if let Some(peer) = self.peer.as_deref()
+            && (!switchy_network::is_up(peer)
+                || switchy_network::incarnation(peer) != self.peer_incarnation)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionReset,
+                format!("Connection reset: {peer} went down"),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Whether a partition blocks data from the peer to us.
+    fn inbound_blocked(&self) -> bool {
+        self.nodes()
+            .is_some_and(|(local, peer)| switchy_network::is_blocked(peer, local))
+    }
+
+    /// When data sent to the peer now arrives, if the link has a latency.
+    fn arrival(&self) -> Option<Instant> {
+        let (local, peer) = self.nodes()?;
+        let now = Instant::now();
+        now.checked_add(switchy_network::sample_latency(local, peer))
+    }
+
+    /// Wake `cx` when the network's faults change, so a stall or a peer's crash is noticed.
+    fn watch(&self, cx: &Context<'_>) {
+        if self.peer.is_some() {
+            switchy_network::wake_on_change(cx.waker());
+        }
+    }
+}
+
+/// Bytes on their way to the reader, arriving at `at` (immediately without).
+struct Segment {
+    at: Option<Instant>,
+    bytes: Bytes,
+}
+
+/// Resolves once the network's faults change or `deadline` passes.
+struct Change {
+    version: u64,
+    deadline: Instant,
+}
+
+impl Future for Change {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if switchy_network::version() != self.version || Instant::now() >= self.deadline {
+            return Poll::Ready(());
+        }
+        // Like the simulator's sleep: poll again as the clock moves.
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
+}
+
 /// In-memory TCP stream for the simulator.
 ///
 /// Represents a bidirectional TCP connection in the simulator. Data is transferred
@@ -434,6 +629,9 @@ impl TcpStream {
     /// # Errors
     ///
     /// * If the underlying `TcpStream` fails to connect
+    /// * If the listener's node is down or crashed since it bound ([`io::ErrorKind::ConnectionRefused`])
+    /// * If a partition between the nodes does not heal within the
+    ///   [connect timeout](set_connect_timeout) ([`io::ErrorKind::TimedOut`])
     ///
     /// # Panics
     ///
@@ -464,6 +662,62 @@ impl TcpStream {
             ),
         })?;
 
+        let lookup = || {
+            TCP_LISTENERS
+                .with_borrow(|x| x.read().unwrap().get(&peer_addr).cloned())
+                .filter(ListenerEntry::is_live)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::ConnectionRefused,
+                        format!("Failed to connect to {peer_addr}"),
+                    )
+                })
+        };
+        let mut listener = lookup()?;
+
+        let client_node = local_node();
+        if let (Some(client), Some(server)) = (client_node.clone(), listener.node.clone())
+            && client != server
+        {
+            let deadline = Instant::now()
+                .checked_add(connect_timeout())
+                .unwrap_or_else(Instant::now);
+            loop {
+                // The handshake needs both directions.
+                if switchy_network::is_blocked(&client, &server)
+                    || switchy_network::is_blocked(&server, &client)
+                {
+                    if Instant::now() >= deadline {
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            format!(
+                                "Connecting to {peer_addr} timed out: {client} and {server} are partitioned"
+                            ),
+                        ));
+                    }
+                    Change {
+                        version: switchy_network::version(),
+                        deadline,
+                    }
+                    .await;
+                    // The listener's node may crash meanwhile.
+                    lookup()?;
+                    continue;
+                }
+                let round_trip = switchy_network::sample_latency(&client, &server)
+                    + switchy_network::sample_latency(&server, &client);
+                if round_trip > Duration::ZERO {
+                    time::sleep(round_trip).await;
+                }
+                listener = lookup()?;
+                if !switchy_network::is_blocked(&client, &server)
+                    && !switchy_network::is_blocked(&server, &client)
+                {
+                    break;
+                }
+            }
+        }
+
         // FIXME: use mpmc::bounded when it's implemented
         // let (tx1, rx1) = switchy_async::sync::mpsc::bounded(16);
         // let (tx2, rx2) = switchy_async::sync::mpsc::bounded(16);
@@ -471,39 +725,28 @@ impl TcpStream {
         let (tx1, rx1) = switchy_async::sync::mpsc::unbounded();
         let (tx2, rx2) = switchy_async::sync::mpsc::unbounded();
 
+        let client_link = Link::new(client_node.clone(), listener.node.clone());
+        let server_link = Link::new(listener.node.clone(), client_node);
+
         let stream_for_client = Self {
             local_addr: client_addr,
             peer_addr,
-            read_half: TcpStreamReadHalf {
-                rx: rx2,
-                read_buf: BytesMut::new(),
-            },
-            write_half: TcpStreamWriteHalf { tx: tx1 },
+            read_half: TcpStreamReadHalf::new(rx2, client_link.clone()),
+            write_half: TcpStreamWriteHalf::new(tx1, client_link),
         };
 
         let stream_for_server = Self {
             local_addr: peer_addr,
             peer_addr: client_addr,
-            read_half: TcpStreamReadHalf {
-                rx: rx1,
-                read_buf: BytesMut::new(),
-            },
-            write_half: TcpStreamWriteHalf { tx: tx2 },
+            read_half: TcpStreamReadHalf::new(rx1, server_link.clone()),
+            write_half: TcpStreamWriteHalf::new(tx2, server_link),
         };
-
-        let connect_tx = TCP_LISTENERS
-            .with_borrow(|x| x.read().unwrap().get(&peer_addr).cloned())
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::ConnectionRefused,
-                    format!("Failed to connect to {peer_addr}"),
-                )
-            })?;
 
         // Allow the async runtime to switch to a different Task before sending the connection
         time::sleep(Duration::from_nanos(0)).await;
 
-        connect_tx
+        listener
+            .tx
             .try_send((stream_for_server, client_addr))
             .map_err(|e| match e {
                 flume::TrySendError::Full(..) => {
@@ -538,19 +781,46 @@ impl GenericTcpStream<TcpStreamReadHalf, TcpStreamWriteHalf> for TcpStream {
 /// to handle partial reads efficiently.
 pub struct TcpStreamReadHalf {
     /// Receiver for receiving data from the peer
-    rx: Receiver<Bytes>,
+    rx: Receiver<Segment>,
     read_buf: BytesMut,
+    /// The next segment, received but not arrived yet.
+    pending: Option<Segment>,
+    link: Link,
 }
 impl GenericTcpStreamReadHalf for TcpStreamReadHalf {}
+
+impl TcpStreamReadHalf {
+    fn new(rx: Receiver<Segment>, link: Link) -> Self {
+        Self {
+            rx,
+            read_buf: BytesMut::new(),
+            pending: None,
+            link,
+        }
+    }
+}
 
 /// Write half of an in-memory TCP stream.
 ///
 /// Sends data to the peer through an in-memory channel.
 pub struct TcpStreamWriteHalf {
     /// Sender for sending data to the peer
-    tx: Sender<Bytes>,
+    tx: Sender<Segment>,
+    link: Link,
+    /// When the last segment sent arrives: later ones never overtake it.
+    last_arrival: Option<Instant>,
 }
 impl GenericTcpStreamWriteHalf for TcpStreamWriteHalf {}
+
+impl TcpStreamWriteHalf {
+    const fn new(tx: Sender<Segment>, link: Link) -> Self {
+        Self {
+            tx,
+            link,
+            last_arrival: None,
+        }
+    }
+}
 
 impl AsyncRead for TcpStream {
     fn poll_read(
@@ -594,28 +864,55 @@ impl AsyncRead for TcpStreamReadHalf {
             return Poll::Ready(Ok(()));
         }
 
-        match Pin::new(&mut this.rx).poll_recv(cx) {
-            Poll::Ready(Some(bytes)) => {
-                if bytes.len() < 100 {
-                    log::trace!("Received {} bytes ({bytes:?})", bytes.len());
-                } else {
-                    log::trace!("Received {} bytes", bytes.len());
-                }
-                this.read_buf.extend_from_slice(&bytes);
-                let to_copy = std::cmp::min(buf.remaining(), this.read_buf.len());
-                let data = this.read_buf.split_to(to_copy);
-                if data.len() < 100 {
-                    log::trace!("put_slice ({data:?})");
-                }
-                buf.put_slice(&data);
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(None) => {
-                log::trace!("Received empty response");
-                Poll::Ready(Ok(()))
-            }
-            Poll::Pending => Poll::Pending,
+        if let Err(e) = this.link.check() {
+            return Poll::Ready(Err(e));
         }
+
+        if this.pending.is_none() {
+            match Pin::new(&mut this.rx).poll_recv(cx) {
+                Poll::Ready(Some(segment)) => this.pending = Some(segment),
+                Poll::Ready(None) => {
+                    log::trace!("Received empty response");
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Pending => {
+                    this.link.watch(cx);
+                    return Poll::Pending;
+                }
+            }
+        }
+
+        // Data stalls while a partition blocks it, and arrives after the link's latency.
+        if this.link.inbound_blocked() {
+            this.link.watch(cx);
+            return Poll::Pending;
+        }
+        if this
+            .pending
+            .as_ref()
+            .and_then(|x| x.at)
+            .is_some_and(|at| Instant::now() < at)
+        {
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+        let Some(Segment { bytes, .. }) = this.pending.take() else {
+            unreachable!("a segment is pending");
+        };
+
+        if bytes.len() < 100 {
+            log::trace!("Received {} bytes ({bytes:?})", bytes.len());
+        } else {
+            log::trace!("Received {} bytes", bytes.len());
+        }
+        this.read_buf.extend_from_slice(&bytes);
+        let to_copy = std::cmp::min(buf.remaining(), this.read_buf.len());
+        let data = this.read_buf.split_to(to_copy);
+        if data.len() < 100 {
+            log::trace!("put_slice ({data:?})");
+        }
+        buf.put_slice(&data);
+        Poll::Ready(Ok(()))
     }
 }
 
@@ -625,12 +922,23 @@ impl AsyncWrite for TcpStreamWriteHalf {
         _cx: &mut Context<'_>,
         data: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        let tx = &self.tx;
+        let this = self.get_mut();
+        if let Err(e) = this.link.check() {
+            return Poll::Ready(Err(e));
+        }
+
         let bytes = Bytes::copy_from_slice(data);
         let len = bytes.len();
+        let at = this
+            .link
+            .arrival()
+            .map(|at| this.last_arrival.map_or(at, |last| at.max(last)));
+        if at.is_some() {
+            this.last_arrival = at;
+        }
 
         log::trace!("Sending bytes={bytes:?}");
-        match tx.try_send(bytes) {
+        match this.tx.try_send(Segment { at, bytes }) {
             Ok(()) => {
                 log::trace!("Sent {len} bytes");
                 Poll::Ready(Ok(data.len()))
@@ -1196,23 +1504,27 @@ mod test {
 
     #[test_log::test]
     #[serial]
-    fn parse_addr_fails_on_duplicate_hostname_bind() {
+    fn parse_addr_reuses_the_address_of_a_bound_hostname() {
         reset_dns();
 
-        // First bind should succeed
-        let result1 = parse_addr("duplicate.host:8080".to_string(), true);
-        assert!(result1.is_ok());
+        // A host can bind several ports (and bind them again after a restart).
+        let (first, _) = parse_addr("duplicate.host:8080".to_string(), true).unwrap();
+        let (second, _) = parse_addr("duplicate.host:9090".to_string(), true).unwrap();
+        assert_eq!(first.ip(), second.ip());
+        assert_eq!(second.port(), 9090);
+    }
 
-        // Second bind to same hostname should fail with AddrInUse
-        let result2 = parse_addr("duplicate.host:9090".to_string(), true);
-        assert!(result2.is_err());
-        let err = result2.unwrap_err();
-        match err {
-            Error::IO(io_err) => {
-                assert_eq!(io_err.kind(), io::ErrorKind::AddrInUse);
-            }
-            _ => panic!("Expected IO error with AddrInUse"),
-        }
+    #[switchy_async::test]
+    #[test_log::test]
+    #[serial]
+    async fn binding_an_address_in_use_fails() {
+        reset();
+        let _listener = TcpListener::bind("in.use:8080").await.unwrap();
+        let Err(Error::IO(e)) = TcpListener::bind("in.use:8080").await else {
+            panic!("binding twice succeeded");
+        };
+        assert_eq!(e.kind(), io::ErrorKind::AddrInUse);
+        let _other_port = TcpListener::bind("in.use:8081").await.unwrap();
     }
 
     #[test_log::test]
@@ -1446,13 +1758,13 @@ mod test {
         // dropped will eventually return a BrokenPipe error.
 
         // Create the channels directly to test the write half behavior
-        let (tx, rx) = switchy_async::sync::mpsc::unbounded::<Bytes>();
+        let (tx, rx) = switchy_async::sync::mpsc::unbounded::<Segment>();
 
         // Drop the receiver
         drop(rx);
 
         // Create a write half with the orphaned sender
-        let mut write_half = TcpStreamWriteHalf { tx };
+        let mut write_half = TcpStreamWriteHalf::new(tx, Link::default());
 
         // Use the low-level poll_write to verify error behavior
         let waker = futures::task::noop_waker();
@@ -1555,5 +1867,171 @@ mod test {
 
         // Second call should panic because we're out of IPs
         let _ip2 = next_ip();
+    }
+
+    /// TCP under the faults of the run's simulated network.
+    mod network_faults {
+        use std::{
+            future::Future,
+            pin::Pin,
+            task::{Context, Poll},
+        };
+
+        use pretty_assertions::assert_eq;
+        use switchy_network::{LinkPolicy, in_node};
+        use switchy_time::simulator::{next_step, set_step_multiplier};
+
+        use super::*;
+
+        /// Advances the simulated clock one step each time it is polled.
+        struct Clock;
+
+        impl Future for Clock {
+            type Output = ();
+
+            fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+                let _ = next_step();
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+        }
+
+        /// Run `f` in a fresh simulation context on a runtime whose clock moves.
+        fn simulate<F: Future<Output = ()> + 'static>(f: impl FnOnce() -> F) {
+            switchy_simulation::with_context(switchy_simulation::Context::new(1), || {
+                set_step_multiplier(1);
+                reset();
+                let runtime = runtime::Runtime::new();
+                runtime.block_on(async move {
+                    let clock = task::spawn(Clock);
+                    f().await;
+                    clock.abort();
+                });
+            });
+        }
+
+        async fn serve_echo(addr: &'static str) {
+            let listener = TcpListener::bind(addr).await.unwrap();
+            task::spawn_local(in_node("server", async move {
+                while let Ok((stream, _)) = listener.accept().await {
+                    task::spawn_local(in_node("server", async move {
+                        let (mut read, mut write) = stream.into_split();
+                        let mut buf = [0_u8; 64];
+                        while let Ok(count) = read.read(&mut buf).await {
+                            if count == 0 || write.write_all(&buf[..count]).await.is_err() {
+                                break;
+                            }
+                        }
+                    }));
+                }
+            }));
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn connecting_across_a_partition_stalls_until_it_heals() {
+            simulate(|| {
+                in_node("client", async {
+                    in_node("server", serve_echo("server:80")).await;
+                    switchy_network::partition(["client"], ["server"]);
+                    let connect = task::spawn_local(in_node("client", async {
+                        TcpStream::connect("server:80").await
+                    }));
+                    time::sleep(Duration::from_secs(1)).await;
+                    assert!(!connect.is_finished(), "connected across a partition");
+                    switchy_network::heal();
+                    let mut stream = connect.await.unwrap().unwrap();
+                    stream.write_all(b"ping").await.unwrap();
+                    let mut buf = [0_u8; 4];
+                    stream.read_exact(&mut buf).await.unwrap();
+                    assert_eq!(&buf, b"ping");
+                })
+            });
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn a_one_way_partition_times_the_connect_out() {
+            simulate(|| {
+                in_node("client", async {
+                    in_node("server", serve_echo("server:80")).await;
+                    set_connect_timeout(Duration::from_millis(500));
+                    switchy_network::partition_one_way(["server"], ["client"]);
+                    let start = Instant::now();
+                    let error = TcpStream::connect("server:80").await.err().unwrap();
+                    assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+                    assert!(start.elapsed() >= Duration::from_millis(500));
+                })
+            });
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn data_takes_the_link_latency_and_stalls_during_a_partition() {
+            simulate(|| {
+                in_node("client", async {
+                    switchy_network::set_default_policy(
+                        LinkPolicy::reliable()
+                            .with_latency(Duration::from_millis(20), Duration::from_millis(20)),
+                    );
+                    in_node("server", serve_echo("server:80")).await;
+                    let start = Instant::now();
+                    let mut stream = TcpStream::connect("server:80").await.unwrap();
+                    assert!(
+                        start.elapsed() >= Duration::from_millis(40),
+                        "no round trip"
+                    );
+
+                    let start = Instant::now();
+                    stream.write_all(b"ping").await.unwrap();
+                    let mut buf = [0_u8; 4];
+                    stream.read_exact(&mut buf).await.unwrap();
+                    assert!(start.elapsed() >= Duration::from_millis(40), "no latency");
+
+                    switchy_network::partition(["client"], ["server"]);
+                    stream.write_all(b"pong").await.unwrap();
+                    let read = task::spawn_local(in_node("client", async move {
+                        let mut buf = [0_u8; 4];
+                        stream.read_exact(&mut buf).await.map(|_| buf)
+                    }));
+                    time::sleep(Duration::from_secs(1)).await;
+                    assert!(!read.is_finished(), "data crossed a partition");
+                    switchy_network::heal();
+                    assert_eq!(&read.await.unwrap().unwrap(), b"pong");
+                })
+            });
+        }
+
+        #[test_log::test]
+        #[serial]
+        fn a_crashed_peer_resets_connections_and_refuses_new_ones_until_it_rebinds() {
+            simulate(|| {
+                in_node("client", async {
+                    in_node("server", serve_echo("server:80")).await;
+                    let mut stream = TcpStream::connect("server:80").await.unwrap();
+                    let read = task::spawn_local(in_node("client", async move {
+                        let mut buf = [0_u8; 4];
+                        stream.read_exact(&mut buf).await.map(|_| ())
+                    }));
+                    time::sleep(Duration::from_millis(10)).await;
+
+                    switchy_network::node_down("server");
+                    let error = read.await.unwrap().unwrap_err();
+                    assert_eq!(error.kind(), io::ErrorKind::ConnectionReset);
+                    let error = TcpStream::connect("server:80").await.err().unwrap();
+                    assert_eq!(error.kind(), io::ErrorKind::ConnectionRefused);
+
+                    // Restarted, the server binds its address again: the crashed
+                    // incarnation's listener no longer holds it.
+                    switchy_network::node_up("server");
+                    in_node("server", serve_echo("server:80")).await;
+                    let mut stream = TcpStream::connect("server:80").await.unwrap();
+                    stream.write_all(b"back").await.unwrap();
+                    let mut buf = [0_u8; 4];
+                    stream.read_exact(&mut buf).await.unwrap();
+                    assert_eq!(&buf, b"back");
+                })
+            });
+        }
     }
 }

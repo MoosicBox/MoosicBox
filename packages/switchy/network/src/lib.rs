@@ -61,7 +61,12 @@
 mod endpoint;
 mod state;
 
-use std::{cell::RefCell, task::Waker, time::Duration};
+use std::{
+    cell::RefCell,
+    pin::Pin,
+    task::{Context, Poll, Waker},
+    time::Duration,
+};
 
 pub use endpoint::{Endpoint, Recv};
 pub use switchy_time::Instant;
@@ -433,6 +438,32 @@ pub fn with_node<T>(node: impl Into<String>, f: impl FnOnce() -> T) -> T {
     let previous = CURRENT_NODE.with_borrow_mut(|current| current.replace(node.into()));
     let _restore = Restore(previous);
     f()
+}
+
+/// Run every poll of `future` as `node` (see [`with_node`]).
+pub fn in_node<F: Future>(node: impl Into<String>, future: F) -> InNode<F> {
+    InNode {
+        node: node.into(),
+        future: Box::pin(future),
+    }
+}
+
+/// The future of [`in_node`].
+#[derive(Debug)]
+#[must_use = "futures do nothing unless polled"]
+pub struct InNode<F> {
+    node: String,
+    future: Pin<Box<F>>,
+}
+
+impl<F: Future> Future for InNode<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<F::Output> {
+        let this = self.get_mut();
+        let future = this.future.as_mut();
+        with_node(this.node.clone(), || future.poll(cx))
+    }
 }
 
 fn names<S: AsRef<str>>(nodes: impl IntoIterator<Item = S>) -> Vec<String> {

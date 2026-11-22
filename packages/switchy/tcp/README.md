@@ -216,6 +216,25 @@ async fn test_tcp_communication() {
 }
 ```
 
+### Simulated Network Faults
+
+The simulator applies the faults of the run's simulated network
+(`switchy_network`) between the network nodes at the two ends of a connection
+(the current `switchy_network` node, or else the current simulator host):
+
+- Connecting to a listener whose node is down, or crashed since it bound, is
+  refused.
+- Connecting across a partition stalls until it heals, or times out after
+  `simulator::set_connect_timeout` (30 seconds by default). A connect takes a
+  round trip of the links' latency.
+- Data arrives after the link's latency, in order, and stalls while a partition
+  blocks the link.
+- Once the peer's node goes down or restarts, reads and writes fail with
+  `ConnectionReset`.
+
+`simulator::set_listener_backlog` sets the size of a listener's queue of
+connections not yet accepted.
+
 ## Generic Traits
 
 ### GenericTcpListener

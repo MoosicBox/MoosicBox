@@ -410,7 +410,7 @@ fn with_node_scopes_the_current_node() {
     with_node("outer", || {
         assert_eq!(current_node().as_deref(), Some("outer"));
         with_node("inner", || {
-            assert_eq!(current_node().as_deref(), Some("inner"))
+            assert_eq!(current_node().as_deref(), Some("inner"));
         });
         assert_eq!(current_node().as_deref(), Some("outer"));
     });
