@@ -832,7 +832,10 @@ impl Spawner {
             .await;
         };
 
-        self.inner_spawn(&Task::new(runtime, false, wrapped));
+        let task = Task::new(runtime, false, wrapped);
+        self.inner_spawn(&task);
+        // Wake the executor if it waits for work: the spawn may come from another thread.
+        task.runtime.notify();
 
         JoinHandle {
             rx,
@@ -902,7 +905,10 @@ impl Spawner {
             let _ = futures::future::Abortable::new(proxy, registration).await;
         };
 
-        self.inner_spawn(&Task::new(runtime, false, wrapped));
+        let task = Task::new(runtime, false, wrapped);
+        self.inner_spawn(&task);
+        // Wake the executor if it waits for work: the spawn may come from another thread.
+        task.runtime.notify();
 
         JoinHandle {
             rx,

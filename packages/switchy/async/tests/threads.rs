@@ -182,3 +182,24 @@ fn block_on_wakes_for_a_future_completed_by_another_thread() {
         );
     }
 }
+
+#[test]
+fn a_task_spawned_from_another_thread_wakes_the_executor() {
+    for seed in 0..10 {
+        let (value, _) = run(seed, |runtime| {
+            let (tx, rx) = futures::channel::oneshot::channel::<u32>();
+            let handle = runtime.handle();
+            // Another thread hands the executor work, then lives on.
+            let spawner = thread::spawn(move || {
+                drop(handle.spawn(async move {
+                    let _ = tx.send(9);
+                }));
+                thread::sleep(Duration::from_secs(3600));
+            });
+            let value = runtime.block_on(rx).unwrap();
+            spawner.join().unwrap();
+            value
+        });
+        assert_eq!(value, 9, "seed {seed}");
+    }
+}
