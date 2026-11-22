@@ -10,6 +10,13 @@ import wave
 import qualification_ci as ci
 
 
+def named_pass(execution):
+    def run(argv, **kwargs):
+        name = argv[argv.index("--") - 1]
+        return f"test {name} ... ok\n" + execution.run.return_value
+    execution.run.side_effect = run
+
+
 class SelectionTests(unittest.TestCase):
     def test_shards_cover_required_inventory_once(self):
         shards = [ci.selected_live_tests(shard) for shard in ci.LIVE_SHARDS]
@@ -122,6 +129,7 @@ class SelectionTests(unittest.TestCase):
     def test_public_shard_exact_filters_and_environment_mask(self):
         with tempfile.TemporaryDirectory() as directory:
             execution = Mock(output=Path(directory))
+            named_pass(execution)
             execution.run.return_value = (
                 "test result: ok. 1 passed; 0 failed; 0 ignored;\n"
             )
@@ -161,6 +169,7 @@ class SelectionTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             execution = Mock(output=Path(directory))
+            named_pass(execution)
             execution.run.return_value = (
                 "test result: ok. 1 passed; 0 failed; 0 ignored;\n"
                 "layout qualification executed=1 filtered=true\n"
@@ -201,6 +210,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_required_product_oracle_tests_are_exact_and_fail_closed(self):
         execution = Mock(env={})
+        named_pass(execution)
         execution.run.return_value = "test result: ok. 1 passed; 0 failed; 0 ignored;"
         ci.product_live_tests(execution, Path("frozen-reference"))
         self.assertEqual(execution.run.call_count, 2)
@@ -247,6 +257,7 @@ class SelectionTests(unittest.TestCase):
         self.assertLessEqual(len(ci.HYBRID_SHARDS)*len(ci.PLATFORMS),256)
         with tempfile.TemporaryDirectory() as directory:
             execution=Mock(output=Path(directory))
+            named_pass(execution)
             execution.run.return_value=('test result: ok. 1 passed; 0 failed; 0 ignored;\n'
                                         'public coverage executed=1 failed=0 filtered=true\n')
             ci.live_acceptance(execution,'release',{'MOOSICBOX_OPUS_PUBLIC_CELL':'wrong'},'hybrid-0')
@@ -296,6 +307,7 @@ class SelectionTests(unittest.TestCase):
     def test_required_exact_tests_execute_with_oracle_and_media(self):
         with tempfile.TemporaryDirectory() as directory:
             execution = Mock(output=Path(directory))
+            named_pass(execution)
             execution.run.return_value = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n"
             env = {
                 "MOOSICBOX_OPUS_REFERENCE_ORACLE": "explicit-oracle",
@@ -318,6 +330,26 @@ class SelectionTests(unittest.TestCase):
                 self.assertNotIn("internal_practical_floor_media_matrix", argv)
             self.assertTrue((Path(directory) / "acceptance-inventory.json").exists())
 
+    def test_generated_decoder_families_require_complete_unique_list(self):
+        family = "supported_output_fixtures_match_reference"
+        row = ("--test", "decoder_completion", family)
+        names = [family + "::case_" + str(i) for i in range(4)]
+        execution = Mock()
+        for listing in ([], names[:-1], names[:-1] + names[:1], names + [family + "::extra"]):
+            execution.run.return_value = "\n".join(n + ": test" for n in listing)
+            with self.assertRaisesRegex(RuntimeError, "decoder fixtures"):
+                ci.expand_live_inventory(execution, [row], "release", {})
+        execution.run.return_value = "\n".join(n + ": test" for n in reversed(names))
+        self.assertEqual(ci.expand_live_inventory(execution, [row], "release", {}),
+                         [(row[0], row[1], n) for n in names])
+
+    def test_summary_cannot_substitute_for_named_pass(self):
+        summary = "test result: ok. 1 passed; 0 failed; 0 ignored;"
+        for output in (summary, "test wrong ... ok\n" + summary,
+                       "test right ... ok\n" + summary + "\ntest result: ok. 0 passed;"):
+            with self.assertRaisesRegex(RuntimeError, "did not execute once"):
+                ci.require_exact_pass(output, "right")
+
     def test_zero_selected_test_is_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             execution = Mock(output=Path(directory))
@@ -325,7 +357,7 @@ class SelectionTests(unittest.TestCase):
                 "test result: ok. 0 passed; 0 failed; 0 ignored;\n"
             )
             with self.assertRaisesRegex(RuntimeError, "did not execute once"):
-                ci.live_acceptance(execution, "release", {})
+                ci.live_acceptance(execution, "release", {}, "live-0")
             self.assertEqual(execution.run.call_count, 1)
 
     def test_required_failure_stops_instead_of_skipping(self):
@@ -333,7 +365,7 @@ class SelectionTests(unittest.TestCase):
             execution = Mock(output=Path(directory))
             execution.run.side_effect = RuntimeError("required test failed")
             with self.assertRaisesRegex(RuntimeError, "required test failed"):
-                ci.live_acceptance(execution, "release", {})
+                ci.live_acceptance(execution, "release", {}, "live-0")
             self.assertEqual(execution.run.call_count, 1)
 
     def test_native_regression_remains_unfiltered(self):

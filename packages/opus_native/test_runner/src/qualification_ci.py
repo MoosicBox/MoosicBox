@@ -332,9 +332,7 @@ def product_live_tests(execution, reference):
             "--no-default-features", "--features", "encoder-opus-native", "--release",
             "--test", "opus_encode_modes", name, "--", "--ignored", "--exact", "--test-threads=1", "--show-output",
         ], timeout=1800, env=env)
-        reject_partial(output)
-        if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
-            raise RuntimeError(f"required product oracle test did not execute once: {name}")
+        require_exact_pass(output, name)
 
 
 def public_cases(shard):
@@ -391,8 +389,49 @@ def selected_live_tests(shard=None):
     return required[index::LIVE_SHARD_COUNT]
 
 
+# These logical inventory entries are Rust test_case families, not runnable names.
+# Pin their cardinality and discover the exact generated names from this build.
+DECODER_FAMILIES = {
+    "supported_output_fixtures_match_reference": 4,
+    "legal_channel_fec_and_short_loss_match_reference": 6,
+    "nonzero_gain_matches_reference": 24,
+}
+
+
+def expand_live_inventory(execution, required, profile, env):
+    if not any(target == "decoder_completion" and name in DECODER_FAMILIES
+               for _, target, name in required):
+        return required
+    argv = ["cargo", "test", "--locked", "--offline", "-j", "2", "-p",
+            "moosicbox_opus_native", "--no-default-features", "--features", FEATURES,
+            "--test", "decoder_completion"]
+    if profile == "release":
+        argv.append("--release")
+    listing = execution.run(argv + ["--", "--ignored", "--list"], env=env)
+    names = re.findall(r"^(\S+): test$", listing, re.MULTILINE)
+    expanded = []
+    for kind, target, name in required:
+        if target == "decoder_completion" and name in DECODER_FAMILIES:
+            children = sorted(n for n in names if n.startswith(name + "::"))
+            if len(children) != DECODER_FAMILIES[name] or len(set(children)) != len(children):
+                raise RuntimeError(f"missing, additional or duplicate decoder fixtures: {name}: {children}")
+            expanded.extend((kind, target, child) for child in children)
+        else:
+            expanded.append((kind, target, name))
+    return expanded
+
+
+def require_exact_pass(output, name):
+    reject_partial(output)
+    passed = re.findall(r"^test (\S+) \.\.\. ok$", output, re.MULTILINE)
+    summaries = re.findall(r"^test result: .*", output, re.MULTILINE)
+    if (passed != [name] or len(summaries) != 1
+            or not summaries[0].startswith("test result: ok. 1 passed; 0 failed; 0 ignored;")):
+        raise RuntimeError(f"required exact test did not execute once: {name}")
+
+
 def live_acceptance(execution, profile, env, shard=None):
-    required = selected_live_tests(shard)
+    required = expand_live_inventory(execution, selected_live_tests(shard), profile, env)
     write_json(
         execution.output / "acceptance-inventory.json",
         {
@@ -456,10 +495,7 @@ def live_acceptance(execution, profile, env, shard=None):
             "--show-output",
         ]
         output = execution.run(args, timeout=600, env=selected_env)
-        reject_partial(output)
-        # Cargo exits zero for a misspelled/filtered test: fail closed on zero runs.
-        if not re.search(r"test result: ok\. 1 passed; 0 failed; 0 ignored;", output):
-            raise RuntimeError(f"required exact live test did not execute once: {name}")
+        require_exact_pass(output, name)
         if name == HYBRID_TEST and shard in HYBRID_SHARDS:
             if "public coverage executed=1 failed=0 filtered=true" not in output:
                 raise RuntimeError("hybrid cell did not prove exactly one successful execution")
