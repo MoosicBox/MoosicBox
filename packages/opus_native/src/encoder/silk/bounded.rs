@@ -830,7 +830,17 @@ impl SilkEncoder {
                 })
                 .map(Some);
         }
-        if self.prefix_search == super::PrefixSearch::Rate || self.config.frame_size == 320 {
+        if self.prefix_search == super::PrefixSearch::History {
+            // The incoming gain indices follow the committed quantized predictor.
+            // Test a few correlated steps, not an independent mid/side grid.
+            for (delta, pressure) in [(0, 4), (-4, 8), (4, 4), (8, 2), (-8, 10)] {
+                search.evaluate(
+                    self.previous_index
+                        .map(|g| ((g + delta).clamp(0, 63), pressure, true)),
+                )?;
+            }
+            search.rate_control()?;
+        } else if self.prefix_search == super::PrefixSearch::Rate || self.config.frame_size == 320 {
             search.rate_control()?;
             if search.best.is_none() {
                 return Err(crate::Error::Unsupported(

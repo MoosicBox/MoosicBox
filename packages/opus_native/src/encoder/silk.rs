@@ -72,6 +72,7 @@ pub(super) enum PrefixSearch {
     Full,
     Rate,
     QuietRefine,
+    History,
 }
 
 #[derive(Clone)]
@@ -1121,7 +1122,10 @@ impl SilkEncoder {
             &[0, 1, 4, 5]
         } else if self.compact_prefix() {
             &[16, 19, 0, 3]
-        } else if self.prefix_search == PrefixSearch::Rate {
+        } else if matches!(
+            self.prefix_search,
+            PrefixSearch::Rate | PrefixSearch::History
+        ) {
             &[0]
         } else if self.config.frame_size == 320 {
             &[0, 3]

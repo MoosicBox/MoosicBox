@@ -786,7 +786,13 @@ impl Encoder {
         // Try the nominal allocation first. Stop expanding the search when the actual
         // decoded packet has zero error or consumes less than a third of signal power in error.
         let energy: i128 = target.iter().map(|&v| i128::from(v).pow(2)).sum();
-        for &quick in if quiet_fast {
+        let shortlist = eligible
+            && internal_size == 480
+            && control.bitrate == 32_000
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.channels == Channels::Stereo
+            && target.iter().any(|v| v.unsigned_abs() >= 128);
+        for &quick in if quiet_fast || shortlist {
             &[true, false][..]
         } else {
             &[false][..]
@@ -804,10 +810,10 @@ impl Encoder {
                 if release && amp == 0.0 && budget != nominal {
                     continue;
                 }
-                if best
-                    .as_ref()
-                    .is_some_and(|b| quiet_fast && (b.error == 0 || b.error * 3 < energy))
-                {
+                if best.as_ref().is_some_and(|b| {
+                    (quiet_fast && (b.error == 0 || b.error * 3 < energy))
+                        || (shortlist && b.error * 2 < energy)
+                }) {
                     break;
                 }
                 if quick && budget != nominal {
