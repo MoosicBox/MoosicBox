@@ -214,6 +214,16 @@ pub fn reset_epoch_offset() {
     with_clock(|clock| clock.epoch_offset = Some(value));
 }
 
+/// Sets the epoch offset (in milliseconds) of the current run's clock.
+///
+/// Unlike setting `SIMULATOR_EPOCH_OFFSET`, this draws nothing from the run's generator, so a
+/// harness can pin a recorded run's offset after [`reset_epoch_offset`] without shifting any
+/// later draw.
+pub fn set_epoch_offset(millis: u64) {
+    crate::trace!("set_epoch_offset to {millis}");
+    with_clock(|clock| clock.epoch_offset = Some(millis));
+}
+
 /// Returns the current epoch offset in milliseconds.
 ///
 /// The epoch offset is the base Unix timestamp used for time simulation.
@@ -701,6 +711,14 @@ mod tests {
 
         // Multiple calls should return the same value
         assert_eq!(offset, epoch_offset());
+    }
+
+    #[test_log::test]
+    #[serial]
+    fn test_set_epoch_offset_pins_the_offset() {
+        reset_epoch_offset();
+        set_epoch_offset(1_234_567);
+        assert_eq!(epoch_offset(), 1_234_567);
     }
 
     #[test_log::test]
