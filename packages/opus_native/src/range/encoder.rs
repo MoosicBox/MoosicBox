@@ -189,12 +189,11 @@ impl RangeEncoder {
         self.status()
     }
 
-    fn icdf(
-        &mut self,
+    fn icdf_interval(
         symbol: usize,
         table: impl Iterator<Item = u32> + Clone,
         bits: u32,
-    ) -> Result<()> {
+    ) -> Result<(u32, u32)> {
         if !(1..=15).contains(&bits) {
             return Err(RangeEncoderError::InvalidArgument);
         }
@@ -216,7 +215,14 @@ impl RangeEncoder {
         if previous != 0 || !found {
             return Err(RangeEncoderError::InvalidArgument);
         }
-        self.ec_encode_bin(low, high, bits)
+        Ok((low, high))
+    }
+
+    pub(crate) fn icdf_interval_u8(symbol: usize, table: &[u8], bits: u32) -> Result<(u32, u32)> {
+        if bits > 8 {
+            return Err(RangeEncoderError::InvalidArgument);
+        }
+        Self::icdf_interval(symbol, table.iter().copied().map(u32::from), bits)
     }
 
     /// Encode an 8-bit inverse cumulative distribution symbol.
@@ -226,10 +232,8 @@ impl RangeEncoder {
     ///   zero with all entries below `2^bits`, and the symbol is in bounds.
     /// * `BufferTooSmall` if the packet budget has been exhausted.
     pub fn ec_enc_icdf(&mut self, symbol: usize, table: &[u8], bits: u32) -> Result<()> {
-        if bits > 8 {
-            return Err(RangeEncoderError::InvalidArgument);
-        }
-        self.icdf(symbol, table.iter().copied().map(u32::from), bits)
+        let (low, high) = Self::icdf_interval_u8(symbol, table, bits)?;
+        self.ec_encode_bin(low, high, bits)
     }
 
     /// Encode a 16-bit inverse cumulative distribution symbol.
@@ -239,7 +243,8 @@ impl RangeEncoder {
     ///   same strictly decreasing, zero-terminated constraints as 8-bit ICDF.
     /// * `BufferTooSmall` if the packet budget has been exhausted.
     pub fn ec_enc_icdf_u16(&mut self, symbol: usize, table: &[u16], bits: u32) -> Result<()> {
-        self.icdf(symbol, table.iter().copied().map(u32::from), bits)
+        let (low, high) = Self::icdf_interval(symbol, table.iter().copied().map(u32::from), bits)?;
+        self.ec_encode_bin(low, high, bits)
     }
 
     /// Encode `value` uniformly in `0..total`, splitting large totals into range

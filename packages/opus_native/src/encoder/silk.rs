@@ -14,7 +14,9 @@ use crate::silk::{self, SilkDecoder};
 use crate::{Bandwidth, Error, Result, SampleRate};
 use prediction::Pitch;
 use std::collections::{BTreeMap, BTreeSet};
-use std::rc::Rc;
+use std::sync::Arc;
+#[cfg(test)]
+use std::sync::Arc as Rc;
 #[path = "silk/bounded.rs"]
 mod bounded;
 #[cfg(test)]
@@ -93,7 +95,7 @@ pub(super) struct SilkEncoder {
 }
 
 type QuantizedFrame = (Vec<i16>, [i32; 16], Vec<i16>);
-type SharedQuantizedFrame = Rc<QuantizedFrame>;
+type SharedQuantizedFrame = Arc<QuantizedFrame>;
 
 // One frame's committed input/state is fixed. Intern exact channel/LPC
 // identities once per search, rather than copying LPC vectors on every trial.
@@ -178,7 +180,7 @@ impl TrialCache {
 }
 
 #[derive(Default)]
-struct QuantizerCache {
+pub(super) struct QuantizerCache {
     models: Vec<QuantizerModelIdentity>,
     // Frame-local: all model masks start from identical PCM, predictive
     // history, gain and configuration. Only the per-channel analysis-rate
@@ -190,6 +192,10 @@ struct QuantizerCache {
 }
 
 impl QuantizerCache {
+    pub(super) fn clear_fallback(&mut self) {
+        self.frames = TrialCache::default();
+    }
+
     fn model_id(&mut self, channel: usize, lpc: &[i16], pitch: Option<&Pitch>) -> usize {
         let pitch = pitch.map(|pitch| (pitch.lag, pitch.periodicity, pitch.filters.clone()));
         if let Some(index) =
@@ -303,17 +309,9 @@ impl SilkEntropy for SilkProgram {
         table: &[u8],
         bits: u32,
     ) -> std::result::Result<(), crate::range::RangeEncoderError> {
-        // Validate using the canonical API once at program construction, then
-        // retain precisely the interval that API passes to ec_encode_bin.
-        RangeEncoder::new(16)?.ec_enc_icdf(symbol, table, bits)?;
-        let total = 1_u32 << bits;
-        let previous = if symbol == 0 {
-            total
-        } else {
-            u32::from(table[symbol - 1])
-        };
-        self.0
-            .push((total - previous, total - u32::from(table[symbol]), bits));
+        // Record the validated interval; do not allocate and normalize a throwaway coder.
+        let (low, high) = RangeEncoder::icdf_interval_u8(symbol, table, bits)?;
+        self.0.push((low, high, bits));
         Ok(())
     }
 }
@@ -564,7 +562,6 @@ impl SilkEncoder {
         }
     }
 
-    #[cfg(test)]
     pub(super) const fn bitrate(&self) -> u32 {
         self.config.bitrate
     }
@@ -1101,6 +1098,16 @@ impl SilkEncoder {
         shared: &mut RangeEncoder,
         scorer: &mut dyn PrefixCandidateScorer,
     ) -> Result<()> {
+        self.encode_prefix_cached(pcm, shared, scorer, &mut QuantizerCache::default())
+    }
+
+    pub(super) fn encode_prefix_cached(
+        &mut self,
+        pcm: &[f32],
+        shared: &mut RangeEncoder,
+        scorer: &mut dyn PrefixCandidateScorer,
+        cache: &mut QuantizerCache,
+    ) -> Result<()> {
         if self.config.sample_rate != SampleRate::Hz16000
             || ![160, 320].contains(&self.config.frame_size)
             || pcm.len() != self.config.frame_size * super::channel_count(self.config.channels)
@@ -1109,7 +1116,6 @@ impl SilkEncoder {
                 "scored SILK prefix requires 16 kHz 10/20 ms".into(),
             ));
         }
-        let mut cache = QuantizerCache::default();
         let mut best = None;
         let masks: &[u8] = if self.config.channels == crate::Channels::Mono {
             &[0, 1, 4, 5]
@@ -1134,7 +1140,7 @@ impl SilkEncoder {
                 Some(&mut range),
                 true,
                 mask,
-                &mut cache,
+                cache,
                 Some(&mut scoring),
             )?;
             if best
@@ -1634,7 +1640,7 @@ impl SilkEncoder {
                     }
                     #[cfg(test)]
                     let quantizer_started = std::time::Instant::now();
-                    let quantized = Rc::new(quantize(QuantizerInput {
+                    let quantized = Arc::new(quantize(QuantizerInput {
                         input: &inputs[c],
                         lpc: &models[c].lpc,
                         history: &self.history[c],
@@ -2695,7 +2701,7 @@ fn indexed_trial_cache_order_and_domain() {
             for pressure in (0..13).rev() {
                 for shaping in [true, false] {
                     let key = (model, gain, pressure, shaping);
-                    let frame = Rc::new((vec![i16::try_from(gain).unwrap()], [0; 16], vec![1]));
+                    let frame = Arc::new((vec![i16::try_from(gain).unwrap()], [0; 16], vec![1]));
                     let error = i128::from(gain) * 13 + i128::from(pressure);
                     indexed.insert(key, frame.clone(), error);
                     expected.insert(key, (frame, error));

@@ -1,11 +1,13 @@
 //! Bounded stereo native-RD search with transactional scoring.
 use super::{
     BTreeMap, BTreeSet, Bandwidth, FrameParameters, Model, PacketCandidate, PrefixCandidateScorer,
-    QuantizerInput, RangeEncoder, Rc, Result, SharedQuantizedFrame, SilkDecoder, SilkEncoder,
+    QuantizerInput, RangeEncoder, Result, SharedQuantizedFrame, SilkDecoder, SilkEncoder,
     encode_header, encode_parameters, encode_pulses, quantize_levels,
 };
 #[cfg(test)]
 use super::{EncoderConfig, Error, SampleRate};
+
+use std::rc::Rc;
 
 type ProgramVariants = Vec<(SharedQuantizedFrame, Rc<super::SilkProgram>)>;
 type Choice = [(i32, u32, bool); 2];
@@ -318,7 +320,7 @@ impl Search<'_> {
                 if reuse && let Some(frame) = self.shared_cache.bounded_frames.get(&shared_key) {
                     return frame.clone();
                 }
-                let frame = Rc::new(quantize_levels(
+                let frame = std::sync::Arc::new(quantize_levels(
                     QuantizerInput {
                         input: &self.inputs[channel],
                         lpc: &self.models[channel].lpc,

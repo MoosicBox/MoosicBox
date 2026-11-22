@@ -719,6 +719,20 @@ impl Encoder {
             && control.bitrate <= 64_000;
         let nominal =
             hybrid::packet_lowband_bitrate(control.bitrate, self.config.channels, internal_size);
+        // Share the delayed target boundary across all suffixes. Only the zero-input
+        // SILK proposal needs an extra prefix; it uses the nominal packet split.
+        let split = if eligible
+            && internal_size == 480
+            && (64_000..128_000).contains(&control.bitrate)
+            && matches!(
+                (self.config.sample_rate, self.config.channels),
+                (SampleRate::Hz48000, Channels::Mono) | (SampleRate::Hz24000, Channels::Stereo)
+            ) {
+            hybrid::release_start(&target)
+        } else {
+            target.len()
+        };
+        let release = split < target.len();
         let budgets = [
             nominal,
             nominal * 3 / 4,
@@ -777,7 +791,9 @@ impl Encoder {
         } else {
             &[false][..]
         } {
-            for (amp, budget) in (if near && !quick {
+            for (amp, budget) in (if release {
+                &[1., 0.][..]
+            } else if near && !quick {
                 &[1., 0.66, 1.33][..]
             } else {
                 &[1.][..]
@@ -785,6 +801,9 @@ impl Encoder {
             .iter()
             .flat_map(|&a| budgets[..budget_count].iter().map(move |&b| (a, b)))
             {
+                if release && amp == 0.0 && budget != nominal {
+                    continue;
+                }
                 if best
                     .as_ref()
                     .is_some_and(|b| quiet_fast && (b.error == 0 || b.error * 3 < energy))
@@ -1072,11 +1091,7 @@ impl Encoder {
                     if samples * channel_count(self.config.channels) != target.len() {
                         continue;
                     }
-                    let error = output
-                        .iter()
-                        .zip(&target)
-                        .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
-                        .sum();
+                    let error = hybrid::release_error(&output, &target, split);
                     #[cfg(test)]
                     {
                         phases[3] += phase.elapsed().as_nanos();
@@ -1687,7 +1702,7 @@ impl Encoder {
                 let rate_control = self.config.sample_rate == SampleRate::Hz48000
                     && ((64_000..128_000).contains(&self.config.bitrate) || self.quick_prefix)
                     && self.config.frame_size == 480;
-                silk.prefix_search = if rate_control {
+                silk.prefix_search = if rate_control || self.proposal_amp == 0.0 {
                     silk::PrefixSearch::Rate
                 } else if refine {
                     silk::PrefixSearch::QuietRefine
@@ -1714,7 +1729,24 @@ impl Encoder {
                                 || adjacent < -0.7 * power)
                     };
                 silk.set_compact_prefix(compact);
-                silk.encode_prefix_scored(&low, &mut enc, scorer.as_mut())?;
+                if self.config.channels == Channels::Stereo
+                    && internal_size == 480
+                    && self.config.bitrate == 32_000
+                    && self.proposal_amp.to_bits() == 1f32.to_bits()
+                {
+                    // Bounded stereo uses the rate only for analysis (24/32k
+                    // per channel) and pulse cost/shaping (24k). The actual
+                    // budget, feasibility checks and ranking remain per trial.
+                    let rate = silk.bitrate() / 2;
+                    let class = u32::from(rate >= 24000) + u32::from(rate >= 32000);
+                    let mut workspace = scorer.cache.quantizers.remove(&class).unwrap_or_default();
+                    // The fallback search has its own rate-dependent trial costs.
+                    workspace.clear_fallback();
+                    silk.encode_prefix_cached(&low, &mut enc, scorer.as_mut(), &mut workspace)?;
+                    scorer.cache.quantizers.insert(class, workspace);
+                } else {
+                    silk.encode_prefix_scored(&low, &mut enc, scorer.as_mut())?;
+                }
                 #[cfg(test)]
                 scorer.verify(&enc.clone().finish().map_err(entropy)?)?;
             } else if redundant.is_some() {

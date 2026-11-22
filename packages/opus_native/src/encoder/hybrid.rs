@@ -251,6 +251,8 @@ struct NativeScoreCosts {
 
 #[cfg_attr(not(test), derive(Default))]
 pub(super) struct NativeScoreCache {
+    // Frame-local: allocation trials share immutable input and incoming prediction.
+    pub quantizers: std::collections::BTreeMap<u32, super::silk::QuantizerCache>,
     scores: ReplayScores,
     // Workspace is never semantic cache state. Clone deliberately drops it:
     // encoder speculation must not copy the inactive CELT decoder or PCM buffer.
@@ -269,6 +271,7 @@ pub(super) struct NativeScoreCache {
 impl Clone for NativeScoreCache {
     fn clone(&self) -> Self {
         Self {
+            quantizers: std::collections::BTreeMap::new(),
             scores: self.scores.clone(),
             scratch: None,
             pcm: Vec::new(),
@@ -288,6 +291,7 @@ impl Clone for NativeScoreCache {
 impl Default for NativeScoreCache {
     fn default() -> Self {
         Self {
+            quantizers: std::collections::BTreeMap::new(),
             scores: ReplayScores::new(),
             scratch: None,
             pcm: Vec::new(),
@@ -352,6 +356,33 @@ pub(super) struct NativePrefixScore {
     pub target: Vec<i16>,
     pub cache: NativeScoreCache,
     pub best: Option<(i128, Vec<u8>, super::EncoderConfig)>,
+}
+
+// In a mixed attack/release frame plain SSE is dominated by the loud attack.
+// Preserve digital rests when the analysis target has a sustained zero tail.
+pub(super) fn release_start(target: &[i16]) -> usize {
+    let end = target.iter().rposition(|&v| v != 0).map_or(0, |i| i + 1);
+    if end != 0
+        && target.len() - end >= target.len() / 4
+        && target[..end].iter().any(|v| v.unsigned_abs() > 128)
+    {
+        end
+    } else {
+        target.len()
+    }
+}
+
+pub(super) fn release_error(pcm: &[i16], target: &[i16], split: usize) -> i128 {
+    let sse = |a: &[i16], b: &[i16]| {
+        a.iter()
+            .zip(b)
+            .map(|(&x, &y)| {
+                let e = i64::from(x) - i64::from(y);
+                e * e
+            })
+            .sum::<i64>()
+    };
+    i128::from(sse(&pcm[..split], &target[..split]) + 1024 * sse(&pcm[split..], &target[split..]))
 }
 
 impl NativePrefixScore {
