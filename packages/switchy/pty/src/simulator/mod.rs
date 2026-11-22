@@ -1388,47 +1388,50 @@ impl Kernel {
                 consumed += 1;
                 // Withheld bytes that were not a report are typed after all, room or not.
                 for byte in typed {
-                    if t.icanon {
-                        t.canonical(byte);
-                    } else {
-                        t.input.push_back(Typed::Byte(byte));
-                        t.echo_byte(byte);
-                    }
+                    Self::type_byte(state, terminal, byte);
                 }
                 continue;
             }
-            if t.isig && (byte == 0x03 || byte == 0x1c) {
-                let signal = if byte == 0x03 {
-                    Signal::Interrupt
-                } else {
-                    Signal::Quit
-                };
-                t.input.clear();
-                t.line.clear();
-                if t.echo {
-                    t.echo_out(if byte == 0x03 { b"^C" } else { b"^\\" });
-                }
-                Self::signal_foreground(state, terminal, signal);
-                consumed += 1;
-                continue;
-            }
-            if t.typed() >= t.capacity {
+            if !(t.isig && (byte == 0x03 || byte == 0x1c)) && t.typed() >= t.capacity {
                 break;
             }
-            let byte = if t.icrnl && byte == b'\r' {
-                b'\n'
-            } else {
-                byte
-            };
-            if t.icanon {
-                t.canonical(byte);
-            } else {
-                t.input.push_back(Typed::Byte(byte));
-                t.echo_byte(byte);
-            }
+            Self::type_byte(state, terminal, byte);
             consumed += 1;
         }
         consumed
+    }
+
+    /// Take one typed byte through the line discipline: signal characters, `\r` to `\n`, and
+    /// canonical editing or raw input.
+    fn type_byte(state: &mut State, terminal: u64, byte: u8) {
+        let Some(t) = state.terminals.get_mut(&terminal) else {
+            return;
+        };
+        if t.isig && (byte == 0x03 || byte == 0x1c) {
+            let signal = if byte == 0x03 {
+                Signal::Interrupt
+            } else {
+                Signal::Quit
+            };
+            t.input.clear();
+            t.line.clear();
+            if t.echo {
+                t.echo_out(if byte == 0x03 { b"^C" } else { b"^\\" });
+            }
+            Self::signal_foreground(state, terminal, signal);
+            return;
+        }
+        let byte = if t.icrnl && byte == b'\r' {
+            b'\n'
+        } else {
+            byte
+        };
+        if t.icanon {
+            t.canonical(byte);
+        } else {
+            t.input.push_back(Typed::Byte(byte));
+            t.echo_byte(byte);
+        }
     }
 
     fn open(&self, size: PtySize) -> u64 {

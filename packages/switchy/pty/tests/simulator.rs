@@ -858,3 +858,33 @@ fn a_console_holds_the_echo_of_typing_until_its_cursor_query_is_answered() {
         assert!(after.starts_with(b"hi"), "seed {seed}: {after:?}");
     }
 }
+
+#[test]
+fn a_line_typed_before_a_console_handshake_still_ends_at_enter() {
+    for seed in 0..10 {
+        let output = run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(&SpawnCommand::new("cat")).unwrap();
+            drop(slave);
+            let mut writer = master.take_writer().unwrap();
+            let mut reader = master.try_clone_reader().unwrap();
+            // Typed before the cursor report: Enter still ends the line for the program.
+            writer.write_all(b"hi\r").unwrap();
+            let mut buffer = [0_u8; 64];
+            let _query = reader.read(&mut buffer).unwrap();
+            writer.write_all(b"\x1b[1;1R").unwrap();
+            let mut output = Vec::new();
+            while !String::from_utf8_lossy(&output).contains("hi\r\nhi\r\n") {
+                let read = reader.read(&mut buffer).unwrap();
+                assert!(read > 0, "seed {seed}: output ended at {output:?}");
+                output.extend_from_slice(&buffer[..read]);
+            }
+            let _ = child.kill();
+            output
+        });
+        assert!(
+            String::from_utf8_lossy(&output).contains("hi\r\nhi\r\n"),
+            "seed {seed}"
+        );
+    }
+}
