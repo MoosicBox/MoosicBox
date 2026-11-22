@@ -304,6 +304,8 @@ fn an_unreaped_exit_keeps_the_id_from_reuse() {
 #[test]
 fn missing_programs_are_not_found() {
     let error = run(6, Personality::Linux, || {
+        assert!(simulator::program_registered("cat"));
+        assert!(!simulator::program_registered("no-such-program"));
         let PtyPair { slave, .. } = PtyPair::open(PtySize::new(80, 24)).unwrap();
         slave
             .spawn(&SpawnCommand::new("no-such-program"))

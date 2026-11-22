@@ -525,6 +525,12 @@ pub fn configure(config: Config) {
     );
 }
 
+/// Whether this run has a program registered under `name` (see [`register_program`]).
+#[must_use]
+pub fn program_registered(name: &str) -> bool {
+    lock(&kernel().state).programs.contains_key(name)
+}
+
 /// Register `program` for this run under `name`: spawning a command whose first argument is
 /// `name` (or a path ending in `/name`) runs it.
 pub fn register_program(name: &str, program: impl Fn(&mut Process) -> i32 + Send + Sync + 'static) {
