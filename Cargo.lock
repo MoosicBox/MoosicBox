@@ -18598,12 +18598,13 @@ dependencies = [
 name = "switchy_fs"
 version = "0.5.0"
 dependencies = [
- "bytes",
  "libc",
  "log 0.4.34",
  "pretty_assertions",
+ "rustix 1.1.5",
  "scoped-tls",
  "switchy_async",
+ "switchy_simulation",
  "tempfile",
  "test-log",
  "tokio",

@@ -22,8 +22,8 @@ switchy_async = { workspace = true, optional = true, features = [
     "rt-multi-thread",
     "sync",
 ] }
+switchy_simulation = { workspace = true, optional = true }
 
-bytes      = { workspace = true, optional = true }
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
 tempfile   = { workspace = true, optional = true }
@@ -31,6 +31,11 @@ tokio      = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, optional = true }
+rustix = { workspace = true, optional = true, features = [
+    "fs",
+    "process",
+    "std",
+] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, optional = true, features = [
@@ -39,18 +44,30 @@ windows-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-pretty_assertions = { workspace = true }
-switchy_async     = { workspace = true, features = ["macros"] }
-test-log          = { workspace = true }
-tokio             = { workspace = true, features = ["macros", "rt"] }
+pretty_assertions  = { workspace = true }
+switchy_async      = { workspace = true, features = ["macros"] }
+switchy_simulation = { workspace = true }
+test-log           = { workspace = true }
+tokio              = { workspace = true, features = ["macros", "rt"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { workspace = true, features = ["fs", "process", "std"] }
 
 [features]
 default = ["async", "simulator", "std", "sync", "tokio"]
 
-fail-on-warnings = ["switchy_async?/fail-on-warnings"]
+fail-on-warnings = [
+    "switchy_async?/fail-on-warnings",
+    "switchy_simulation?/fail-on-warnings",
+]
 
 native-directories = ["dep:libc", "dep:windows-sys"]
-simulator = ["dep:bytes", "switchy_async?/simulator", "sync"]
+simulator = [
+    "dep:rustix",
+    "dep:switchy_simulation",
+    "switchy_async?/simulator",
+    "sync",
+]
 simulator-real-fs = [
     "dep:scoped-tls",
     "dep:switchy_async",
@@ -58,9 +75,10 @@ simulator-real-fs = [
     "switchy_async/rt-multi-thread",
     "tokio",
 ]
-std = ["dep:tempfile", "native-directories", "sync"]
+std = ["dep:rustix", "dep:tempfile", "native-directories", "sync"]
 tokio = [
     "async",
+    "dep:rustix",
     "dep:tokio",
     "native-directories",
     "switchy_async?/fs",

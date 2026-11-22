@@ -27,8 +27,7 @@ fn exclusive_creation_preserves_existing_bytes() {
         .write(true)
         .create_new(true)
         .open(&child)
-        .err()
-        .expect("creating a child of a file must fail");
+        .expect_err("creating a child of a file must fail");
     // Native Windows reports ERROR_PATH_NOT_FOUND for a non-directory parent;
     // Unix and the simulator report NotADirectory. Both must reject creation.
     if cfg!(all(windows, not(feature = "simulator"))) {

@@ -3,6 +3,10 @@
 //! This module provides thin wrappers around `std::fs` operations for consistency
 //! with the simulator API. It allows you to use the same API whether you're working
 //! with the real filesystem or the simulator.
+//!
+//! On Unix, directory-relative operations ([`sync::Dir`]) use `openat`-family system
+//! calls (via `rustix`) with `O_NOFOLLOW`, so they are immune to symbolic-link races in
+//! the paths leading to the opened directory.
 
 /// Synchronous filesystem operations using standard library
 ///
@@ -10,72 +14,116 @@
 /// disk operations. Operations are simple wrappers around standard library functions.
 #[cfg(feature = "sync")]
 pub mod sync {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use crate::sync::OpenOptions;
 
-    /// File handle wrapping `std::fs::File`
+    pub use crate::types::{DirEntryInfo, FileId, FileKind, Metadata, Permissions};
+
+    /// File handle for synchronous operations on the real filesystem
     ///
-    /// Provides convenience methods for opening files that match the simulator API.
+    /// Wraps `std::fs::File` and provides the same interface as the simulator file handle.
+    #[derive(Debug)]
     pub struct File(std::fs::File);
 
-    /// Exclusive advisory lock retaining its opened file until dropped.
-    ///
-    /// Does not prevent nonparticipating writers or pathname replacement.
+    /// Exclusive OS advisory lock retaining a native file handle until dropped.
     pub struct ExclusiveFileLock {
         _file: File,
     }
 
+    fn map_try_lock(result: Result<(), std::fs::TryLockError>) -> std::io::Result<()> {
+        result.map_err(|error| match error {
+            std::fs::TryLockError::WouldBlock => {
+                std::io::Error::from(std::io::ErrorKind::WouldBlock)
+            }
+            std::fs::TryLockError::Error(error) => error,
+        })
+    }
+
     impl File {
-        /// Synchronize this file's contents and metadata with the underlying storage.
-        ///
-        /// This does not synchronize the parent directory after creation or rename.
-        /// Guarantees are those of the operating system and backing filesystem.
+        /// Make the file's data, length and metadata durable (`fsync`).
         ///
         /// # Errors
-        /// * Returns an underlying OS synchronization error.
+        /// * Native synchronization failures.
         pub fn sync_all(&self) -> std::io::Result<()> {
             self.0.sync_all()
         }
 
-        /// Consume this handle and acquire an exclusive advisory lock without waiting.
-        ///
-        /// Ownership is released when the returned guard is dropped. Do not replace
-        /// the lock file: a replacement is a different lock identity.
+        /// Make the file's data and length durable (`fdatasync`).
         ///
         /// # Errors
-        /// * Returns `WouldBlock` on contention, or an underlying OS locking error.
+        /// * Native synchronization failures.
+        pub fn sync_data(&self) -> std::io::Result<()> {
+            self.0.sync_data()
+        }
+
+        /// Truncate or extend the file to `len` bytes.
+        ///
+        /// # Errors
+        /// * The handle is not writable, or native failures.
+        pub fn set_len(&self, len: u64) -> std::io::Result<()> {
+            self.0.set_len(len)
+        }
+
+        /// Change the file's permission bits (`fchmod`).
+        ///
+        /// On Windows only the read-only attribute is applied.
+        ///
+        /// # Errors
+        /// * Native failures (for example `EPERM` when not the owner).
+        pub fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            let current = self.0.metadata()?.permissions();
+            self.0.set_permissions(permissions.to_std(current))
+        }
+
+        /// Try to take an exclusive OS advisory lock (`flock`) without waiting.
+        ///
+        /// # Errors
+        /// * Returns `WouldBlock` when another handle holds a conflicting lock.
+        pub fn try_lock(&self) -> std::io::Result<()> {
+            map_try_lock(self.0.try_lock())
+        }
+
+        /// Try to take a shared OS advisory lock without waiting.
+        ///
+        /// # Errors
+        /// * Returns `WouldBlock` when another handle holds an exclusive lock.
+        pub fn try_lock_shared(&self) -> std::io::Result<()> {
+            map_try_lock(self.0.try_lock_shared())
+        }
+
+        /// Release any lock held by this handle.
+        ///
+        /// # Errors
+        /// * Native failures.
+        pub fn unlock(&self) -> std::io::Result<()> {
+            self.0.unlock()
+        }
+
+        /// Consume this handle and acquire an exclusive OS advisory lock without waiting.
+        ///
+        /// # Errors
+        /// * Returns `WouldBlock` when another handle holds the lock.
+        /// * Returns native I/O errors.
         pub fn try_lock_exclusive(self) -> std::io::Result<ExclusiveFileLock> {
-            self.0.try_lock().map_err(|error| match error {
-                std::fs::TryLockError::WouldBlock => {
-                    std::io::Error::from(std::io::ErrorKind::WouldBlock)
-                }
-                std::fs::TryLockError::Error(error) => error,
-            })?;
+            self.try_lock()?;
             Ok(ExclusiveFileLock { _file: self })
         }
 
         /// Opens a file in read-only mode
         ///
-        /// This is a convenience method equivalent to `OpenOptions::new().read(true).open(path)`.
-        ///
         /// # Errors
         ///
-        /// * If the file does not exist
-        /// * If permission is denied
+        /// * If the file does not exist or cannot be opened
         pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
             Ok(Self(std::fs::File::open(path)?))
         }
 
         /// Creates a new file for writing, truncating any existing file
         ///
-        /// This is a convenience method equivalent to
-        /// `OpenOptions::new().create(true).write(true).truncate(true).open(path)`.
-        ///
         /// # Errors
         ///
-        /// * If the parent directory does not exist
-        /// * If permission is denied
+        /// * If the file cannot be created
         pub fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
             Ok(Self(std::fs::File::create(path)?))
         }
@@ -86,13 +134,23 @@ pub mod sync {
             OpenOptions::new()
         }
 
+        /// Open `path` with `options`, including `nofollow`, `directory` and `mode`.
+        ///
+        /// # Errors
+        /// * Native open failures; `Unsupported` for `nofollow`/`directory` on Windows.
+        pub fn open_with(path: impl AsRef<Path>, options: &OpenOptions) -> std::io::Result<Self> {
+            check_platform_flags(options)?;
+            let options: std::fs::OpenOptions = options.clone().into();
+            Ok(Self(options.open(path)?))
+        }
+
         /// Retrieves metadata about the file
         ///
         /// # Errors
         ///
         /// * If the file metadata cannot be retrieved
         pub fn metadata(&self) -> std::io::Result<Metadata> {
-            Ok(Metadata(self.0.metadata()?))
+            Ok(self.0.metadata()?.into())
         }
 
         /// Returns a reference to the inner `std::fs::File`
@@ -101,7 +159,7 @@ pub mod sync {
             &self.0
         }
 
-        /// Returns the inner `std::fs::File`, consuming this wrapper
+        /// Consumes this wrapper and returns the inner `std::fs::File`
         #[must_use]
         pub fn into_inner(self) -> std::fs::File {
             self.0
@@ -142,11 +200,32 @@ pub mod sync {
         }
     }
 
-    /// Exclusively create a writable file with owner-only Unix permissions.
+    /// Reject flags the platform cannot honor.
+    // Not `const`: the non-Unix branch constructs an `std::io::Error`.
+    #[allow(clippy::unnecessary_wraps, clippy::missing_const_for_fn)]
+    fn check_platform_flags(options: &OpenOptions) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            let _ = options;
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            if options.nofollow || options.directory {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "nofollow and directory open flags require a Unix platform",
+                ))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    /// Exclusively create a writable native file with owner-only Unix permissions.
     ///
     /// # Errors
-    /// * Returns creation errors without replacing existing entries.
-    /// * Non-Unix platforms return `Unsupported` before creating anything.
+    /// * Returns native creation errors, or `Unsupported` on non-Unix platforms.
     pub fn create_private_file(path: impl AsRef<Path>) -> std::io::Result<File> {
         #[cfg(unix)]
         {
@@ -165,64 +244,20 @@ pub mod sync {
         }
     }
 
-    /// Inspect an entry without following its final symbolic link.
-    ///
-    /// This is a point-in-time observation, not protection against path replacement.
+    /// Inspect a native entry without following its final symbolic link.
     ///
     /// # Errors
-    /// * Returns underlying metadata errors, including missing paths and denied access.
+    /// * Returns native metadata errors.
     pub fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
-        std::fs::symlink_metadata(path).map(Metadata)
+        std::fs::symlink_metadata(path).map(Metadata::from)
     }
 
-    /// Metadata information about a file
+    /// Inspect a native entry, following symbolic links.
     ///
-    /// Wrapper around `std::fs::Metadata` providing information about file size and type.
-    #[derive(Debug, Clone)]
-    pub struct Metadata(std::fs::Metadata);
-
-    impl Metadata {
-        /// Returns the size of the file in bytes
-        #[must_use]
-        pub fn len(&self) -> u64 {
-            self.0.len()
-        }
-
-        /// Returns `true` if the file has zero length
-        #[must_use]
-        pub fn is_empty(&self) -> bool {
-            self.len() == 0
-        }
-
-        /// Returns `true` if this metadata is for a regular file
-        #[must_use]
-        pub fn is_file(&self) -> bool {
-            self.0.is_file()
-        }
-
-        /// Returns `true` if this metadata is for a directory
-        #[must_use]
-        pub fn is_dir(&self) -> bool {
-            self.0.is_dir()
-        }
-
-        /// Returns `true` if this metadata is for a symbolic link
-        #[must_use]
-        pub fn is_symlink(&self) -> bool {
-            self.0.is_symlink()
-        }
-
-        /// Returns a reference to the inner `std::fs::Metadata`
-        #[must_use]
-        pub const fn inner(&self) -> &std::fs::Metadata {
-            &self.0
-        }
-    }
-
-    impl From<std::fs::Metadata> for Metadata {
-        fn from(metadata: std::fs::Metadata) -> Self {
-            Self(metadata)
-        }
+    /// # Errors
+    /// * Returns native metadata errors.
+    pub fn metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        std::fs::metadata(path).map(Metadata::from)
     }
 
     /// Reads the entire contents of a file into a byte vector
@@ -252,7 +287,7 @@ pub mod sync {
         ::std::fs::write(path, contents)
     }
 
-    /// Creates a directory
+    /// Creates a new directory at the specified path
     ///
     /// # Errors
     ///
@@ -279,13 +314,27 @@ pub mod sync {
         ::std::fs::remove_dir_all(path)
     }
 
-    /// Synchronize an existing directory after publishing or removing entries.
-    ///
-    /// Callers must control the path and its ancestors for the operation's duration.
+    /// Remove a file or symbolic link.
     ///
     /// # Errors
-    /// * Returns an I/O error for missing paths, non-directories, or failed synchronization.
-    /// * Returns `Unsupported` on platforms without directory synchronization support.
+    /// * If underlying `std::fs::remove_file` fails
+    pub fn remove_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+        ::std::fs::remove_file(path)
+    }
+
+    /// Remove an empty directory.
+    ///
+    /// # Errors
+    /// * If underlying `std::fs::remove_dir` fails
+    pub fn remove_dir(path: impl AsRef<Path>) -> std::io::Result<()> {
+        ::std::fs::remove_dir(path)
+    }
+
+    /// Synchronize a native directory after entry changes.
+    ///
+    /// # Errors
+    /// * The path cannot be opened, is not a directory, or synchronization fails.
+    /// * Returns `Unsupported` on platforms without directory synchronization.
     pub fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
         #[cfg(unix)]
         {
@@ -304,12 +353,12 @@ pub mod sync {
 
     /// Move a regular file, replacing an existing destination file.
     ///
-    /// This operation does not sync file contents or directory metadata. Callers
-    /// must exclusively control the paths: metadata checks do not prevent path races.
+    /// Callers must exclusively control both paths, including their parent directories.
     ///
     /// # Errors
-    /// * Source or destination is not a regular file (symlinks are rejected).
-    /// * The underlying rename fails, including missing parents or cross-device moves.
+    /// * Source is missing or not a regular file.
+    /// * Destination exists but is not a regular file.
+    /// * Native rename fails.
     pub fn rename_file(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
         let from = from.as_ref();
         let to = to.as_ref();
@@ -332,7 +381,121 @@ pub mod sync {
         std::fs::rename(from, to)
     }
 
-    /// Canonicalizes a path
+    /// Rename a file or directory (`std::fs::rename`).
+    ///
+    /// # Errors
+    /// * If underlying `std::fs::rename` fails
+    pub fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        std::fs::rename(from, to)
+    }
+
+    /// Rename without replacing: fails with `EEXIST` if `to` exists.
+    ///
+    /// Uses `renameat2(RENAME_NOREPLACE)` on Linux/Android and `renameatx_np(RENAME_EXCL)`
+    /// on Apple platforms. Elsewhere, or when the filesystem does not support the flag, it
+    /// falls back to hard-linking `to` and unlinking `from`, which is atomic with respect
+    /// to `to` but does not work for directories.
+    ///
+    /// # Errors
+    /// * `EEXIST`, or native rename/link failures.
+    pub fn rename_noreplace(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            crate::native::rename_noreplace(
+                rustix::fs::CWD,
+                from.as_ref(),
+                rustix::fs::CWD,
+                to.as_ref(),
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::hard_link(from.as_ref(), to.as_ref())?;
+            std::fs::remove_file(from)
+        }
+    }
+
+    /// Create a hard link `link` to `original`.
+    ///
+    /// # Errors
+    /// * If underlying `std::fs::hard_link` fails
+    pub fn hard_link(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
+        std::fs::hard_link(original, link)
+    }
+
+    /// Create a symbolic link at `link` pointing to `original`.
+    ///
+    /// # Errors
+    /// * Native failures; `Unsupported` on non-Unix platforms.
+    pub fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(original, link)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (original, link);
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
+    /// Read the target of a symbolic link.
+    ///
+    /// # Errors
+    /// * If underlying `std::fs::read_link` fails
+    pub fn read_link(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+        std::fs::read_link(path)
+    }
+
+    /// Change permission bits, following symbolic links.
+    ///
+    /// On Windows only the read-only attribute is applied.
+    ///
+    /// # Errors
+    /// * Native failures.
+    pub fn set_permissions(
+        path: impl AsRef<Path>,
+        permissions: Permissions,
+    ) -> std::io::Result<()> {
+        let path = path.as_ref();
+        let current = std::fs::metadata(path)?.permissions();
+        std::fs::set_permissions(path, permissions.to_std(current))
+    }
+
+    /// The effective user id of the process.
+    ///
+    /// # Errors
+    /// * Returns `Unsupported` on non-Unix platforms.
+    #[cfg_attr(unix, allow(clippy::unnecessary_wraps))]
+    pub fn current_uid() -> std::io::Result<u32> {
+        #[cfg(unix)]
+        {
+            Ok(rustix::process::geteuid().as_raw())
+        }
+        #[cfg(not(unix))]
+        {
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
+    /// Create an anonymous temporary file in the system temporary directory, removed when
+    /// its last handle closes.
+    ///
+    /// # Errors
+    /// * Native creation failures.
+    pub fn tempfile() -> std::io::Result<File> {
+        tempfile::tempfile().map(File)
+    }
+
+    /// Create an anonymous temporary file in `dir`.
+    ///
+    /// # Errors
+    /// * Native creation failures.
+    pub fn tempfile_in(dir: impl AsRef<Path>) -> std::io::Result<File> {
+        tempfile::tempfile_in(dir).map(File)
+    }
+
+    /// Canonicalizes a path to its absolute form with all intermediate components normalized
     ///
     /// # Errors
     ///
@@ -399,6 +562,16 @@ pub mod sync {
                 .create_new(value.create_new)
                 .truncate(value.truncate);
 
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(value.mode);
+                let flags = unix::extra_flags(value.nofollow, value.directory);
+                if flags != 0 {
+                    options.custom_flags(flags);
+                }
+            }
+
             options
         }
     }
@@ -411,9 +584,541 @@ pub mod sync {
         ///
         /// * If an I/O error occurs
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
-            let options: std::fs::OpenOptions = self.into();
+            File::open_with(path, &self)
+        }
+    }
 
-            Ok(File(options.open(path)?))
+    #[cfg(unix)]
+    mod unix {
+        use std::{
+            ffi::OsStr,
+            os::{fd::OwnedFd, unix::ffi::OsStrExt as _},
+        };
+
+        use rustix::{
+            fs::{AtFlags, FileType, Mode, OFlags, RawMode, Stat},
+            io::Errno,
+        };
+
+        use crate::types::{DirEntryInfo, FileId, FileKind, Metadata, OpenSpec};
+
+        /// Extra `open(2)` flags for `std::fs::OpenOptionsExt::custom_flags`.
+        #[allow(clippy::cast_possible_wrap)] // flag bits fit in a C int on every Unix
+        pub(super) fn extra_flags(nofollow: bool, directory: bool) -> i32 {
+            let mut flags = OFlags::empty();
+            if nofollow {
+                flags |= OFlags::NOFOLLOW;
+            }
+            if directory {
+                flags |= OFlags::DIRECTORY;
+            }
+            flags.bits() as i32
+        }
+
+        /// `open(2)` flags equivalent to `std::fs::OpenOptions` on Unix, plus `O_CLOEXEC`.
+        pub(super) fn open_flags(spec: &OpenSpec) -> std::io::Result<OFlags> {
+            spec.validate()?;
+            let mut flags = match (spec.read, spec.write, spec.append) {
+                (true, false, false) => OFlags::RDONLY,
+                (false, true, false) => OFlags::WRONLY,
+                (true, true, false) => OFlags::RDWR,
+                (false, _, true) => OFlags::WRONLY | OFlags::APPEND,
+                (true, _, true) => OFlags::RDWR | OFlags::APPEND,
+                (false, false, false) => return Err(Errno::INVAL.into()),
+            };
+            flags |= match (spec.create, spec.truncate, spec.create_new) {
+                (_, _, true) => OFlags::CREATE | OFlags::EXCL,
+                (true, true, false) => OFlags::CREATE | OFlags::TRUNC,
+                (true, false, false) => OFlags::CREATE,
+                (false, true, false) => OFlags::TRUNC,
+                (false, false, false) => OFlags::empty(),
+            };
+            if spec.nofollow {
+                flags |= OFlags::NOFOLLOW;
+            }
+            if spec.directory {
+                flags |= OFlags::DIRECTORY;
+            }
+            Ok(flags | OFlags::CLOEXEC)
+        }
+
+        /// A permission mode in the platform's `mode_t` width.
+        // `mode_t` is 16 bits on Apple platforms and 32 bits elsewhere.
+        #[allow(clippy::cast_possible_truncation, clippy::unnecessary_cast)]
+        pub(super) const fn mode(mode: u32) -> Mode {
+            Mode::from_raw_mode((mode & 0o7777) as RawMode)
+        }
+
+        /// Metadata from a raw `stat` structure.
+        // Field widths and signedness differ between Unix platforms.
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::unnecessary_cast,
+            clippy::useless_conversion,
+            clippy::cast_lossless
+        )]
+        pub(super) const fn metadata_from_stat(stat: &Stat) -> Metadata {
+            let kind = match FileType::from_raw_mode(stat.st_mode as RawMode) {
+                FileType::RegularFile => FileKind::File,
+                FileType::Directory => FileKind::Dir,
+                FileType::Symlink => FileKind::Symlink,
+                _ => FileKind::Other,
+            };
+            Metadata {
+                len: stat.st_size as u64,
+                kind,
+                mode: (stat.st_mode as u32) & 0o7777,
+                uid: Some(stat.st_uid),
+                gid: Some(stat.st_gid),
+                nlink: Some(stat.st_nlink as u64),
+                file_id: Some(FileId {
+                    dev: stat.st_dev as u64,
+                    ino: stat.st_ino as u64,
+                }),
+            }
+        }
+
+        pub(super) const fn kind_of(file_type: FileType) -> FileKind {
+            match file_type {
+                FileType::RegularFile => FileKind::File,
+                FileType::Directory => FileKind::Dir,
+                FileType::Symlink => FileKind::Symlink,
+                _ => FileKind::Other,
+            }
+        }
+
+        /// List a directory's entries (excluding `.` and `..`), sorted by name.
+        pub(super) fn entries(fd: &OwnedFd) -> std::io::Result<Vec<DirEntryInfo>> {
+            let dir = rustix::fs::Dir::read_from(fd)?;
+            let mut entries = Vec::new();
+            for entry in dir {
+                let entry = entry?;
+                let name = entry.file_name().to_bytes();
+                if name == b"." || name == b".." {
+                    continue;
+                }
+                let name = OsStr::from_bytes(name).to_os_string();
+                let kind = match entry.file_type() {
+                    FileType::Unknown => {
+                        let stat = rustix::fs::statat(fd, &*name, AtFlags::SYMLINK_NOFOLLOW)?;
+                        metadata_from_stat(&stat).kind()
+                    }
+                    other => kind_of(other),
+                };
+                entries.push(DirEntryInfo { name, kind });
+            }
+            entries.sort();
+            Ok(entries)
+        }
+    }
+
+    /// A capability-style handle on a native directory.
+    ///
+    /// On Unix the handle is a directory file descriptor opened with
+    /// `O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC`, and every operation is an
+    /// `*at` system call relative to it taking a single entry name, never following a
+    /// final symbolic link. On other platforms every operation returns `Unsupported`.
+    #[derive(Debug)]
+    pub struct Dir {
+        #[cfg(unix)]
+        fd: std::os::fd::OwnedFd,
+        path: PathBuf,
+    }
+
+    #[cfg(not(unix))]
+    fn dir_unsupported() -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "directory handles require a Unix platform",
+        )
+    }
+
+    #[cfg(unix)]
+    impl Dir {
+        fn directory_flags() -> rustix::fs::OFlags {
+            use rustix::fs::OFlags;
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
+        }
+
+        /// Open the directory at `path` without following a final symbolic link.
+        ///
+        /// # Errors
+        /// * Native `open` failures (`ENOENT`, `ENOTDIR`, `ELOOP`, `EACCES`, ...).
+        pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            let fd = rustix::fs::open(
+                path.as_ref(),
+                Self::directory_flags(),
+                rustix::fs::Mode::empty(),
+            )?;
+            Ok(Self {
+                fd,
+                path: path.as_ref().to_path_buf(),
+            })
+        }
+
+        /// The path this directory was opened with (diagnostic only; it may be stale).
+        #[must_use]
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        /// Open the subdirectory `name` without following symbolic links.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `openat` failures.
+        pub fn open_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<Self> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            let fd = rustix::fs::openat(
+                &self.fd,
+                name,
+                Self::directory_flags(),
+                rustix::fs::Mode::empty(),
+            )?;
+            Ok(Self {
+                fd,
+                path: self.path.join(name),
+            })
+        }
+
+        /// Open or create the file `name` in this directory with `options`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, `EINVAL` for invalid flag combinations, or
+        ///   native `openat` failures.
+        pub fn open_file_at(
+            &self,
+            name: impl AsRef<Path>,
+            options: &OpenOptions,
+        ) -> std::io::Result<File> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            let spec = options.spec();
+            let flags = unix::open_flags(&spec)?;
+            let fd = rustix::fs::openat(&self.fd, name, flags, unix::mode(spec.mode))?;
+            Ok(File(std::fs::File::from(fd)))
+        }
+
+        /// Create the subdirectory `name` with `mode` (before the umask).
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `mkdirat` failures.
+        pub fn create_dir_at(&self, name: impl AsRef<Path>, mode: u32) -> std::io::Result<()> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            rustix::fs::mkdirat(&self.fd, name, unix::mode(mode))?;
+            Ok(())
+        }
+
+        /// Metadata of this directory (`fstat`).
+        ///
+        /// # Errors
+        /// * Native failures.
+        pub fn metadata(&self) -> std::io::Result<Metadata> {
+            Ok(unix::metadata_from_stat(&rustix::fs::fstat(&self.fd)?))
+        }
+
+        /// Metadata of entry `name`, without following a symbolic link.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `fstatat` failures.
+        pub fn metadata_at(&self, name: impl AsRef<Path>) -> std::io::Result<Metadata> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            let stat = rustix::fs::statat(&self.fd, name, rustix::fs::AtFlags::SYMLINK_NOFOLLOW)?;
+            Ok(unix::metadata_from_stat(&stat))
+        }
+
+        /// Remove the file or symbolic link `name`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `unlinkat` failures.
+        pub fn remove_file_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            rustix::fs::unlinkat(&self.fd, name, rustix::fs::AtFlags::empty())?;
+            Ok(())
+        }
+
+        /// Remove the empty subdirectory `name`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `unlinkat(AT_REMOVEDIR)` failures.
+        pub fn remove_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            rustix::fs::unlinkat(&self.fd, name, rustix::fs::AtFlags::REMOVEDIR)?;
+            Ok(())
+        }
+
+        /// Rename entry `from` of this directory to `to` in `to_dir`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for non-names, or native `renameat` failures.
+        pub fn rename_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let from = crate::types::entry_name(from.as_ref())?;
+            let to = crate::types::entry_name(to.as_ref())?;
+            rustix::fs::renameat(&self.fd, from, &to_dir.fd, to)?;
+            Ok(())
+        }
+
+        /// Rename entry `from` to `to` in `to_dir` only if `to` does not exist.
+        ///
+        /// See [`rename_noreplace`] for the system calls used and the fallback.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for non-names, `EEXIST`, or native failures.
+        pub fn rename_noreplace_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let from = crate::types::entry_name(from.as_ref())?;
+            let to = crate::types::entry_name(to.as_ref())?;
+            crate::native::rename_noreplace(&self.fd, Path::new(from), &to_dir.fd, Path::new(to))
+        }
+
+        /// Create hard link `to` in `to_dir` to entry `from` of this directory.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for non-names, or native `linkat` failures.
+        pub fn hard_link_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let from = crate::types::entry_name(from.as_ref())?;
+            let to = crate::types::entry_name(to.as_ref())?;
+            rustix::fs::linkat(&self.fd, from, &to_dir.fd, to, rustix::fs::AtFlags::empty())?;
+            Ok(())
+        }
+
+        /// Create symbolic link `name` pointing to `target`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `symlinkat` failures.
+        pub fn symlink_at(
+            &self,
+            target: impl AsRef<Path>,
+            name: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let name = crate::types::entry_name(name.as_ref())?;
+            rustix::fs::symlinkat(target.as_ref(), &self.fd, name)?;
+            Ok(())
+        }
+
+        /// Read the target of symbolic link `name`.
+        ///
+        /// # Errors
+        /// * `InvalidInput` for a non-name, or native `readlinkat` failures.
+        pub fn read_link_at(&self, name: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+            use std::os::unix::ffi::OsStringExt as _;
+            let name = crate::types::entry_name(name.as_ref())?;
+            let target = rustix::fs::readlinkat(&self.fd, name, Vec::new())?;
+            Ok(PathBuf::from(std::ffi::OsString::from_vec(
+                target.into_bytes(),
+            )))
+        }
+
+        /// Change this directory's permission bits (`fchmod`).
+        ///
+        /// # Errors
+        /// * Native failures.
+        pub fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            rustix::fs::fchmod(&self.fd, unix::mode(permissions.mode()))?;
+            Ok(())
+        }
+
+        /// The entries of this directory (excluding `.` and `..`), sorted by name.
+        ///
+        /// # Errors
+        /// * Native directory reading failures.
+        pub fn entries(&self) -> std::io::Result<Vec<DirEntryInfo>> {
+            unix::entries(&self.fd)
+        }
+
+        /// Make changes to this directory's entries durable (`fsync`).
+        ///
+        /// # Errors
+        /// * Native synchronization failures.
+        pub fn sync(&self) -> std::io::Result<()> {
+            rustix::fs::fsync(&self.fd)?;
+            Ok(())
+        }
+    }
+
+    #[cfg(not(unix))]
+    #[allow(clippy::unused_self, clippy::needless_pass_by_value)]
+    impl Dir {
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            let _ = path;
+            Err(dir_unsupported())
+        }
+
+        /// The path this directory was opened with.
+        #[must_use]
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn open_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<Self> {
+            let _ = name;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn open_file_at(
+            &self,
+            name: impl AsRef<Path>,
+            options: &OpenOptions,
+        ) -> std::io::Result<File> {
+            let _ = (name, options);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn create_dir_at(&self, name: impl AsRef<Path>, mode: u32) -> std::io::Result<()> {
+            let _ = (name, mode);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn metadata(&self) -> std::io::Result<Metadata> {
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn metadata_at(&self, name: impl AsRef<Path>) -> std::io::Result<Metadata> {
+            let _ = name;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn remove_file_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            let _ = name;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn remove_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            let _ = name;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn rename_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let _ = (from, to_dir, to);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn rename_noreplace_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let _ = (from, to_dir, to);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn hard_link_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let _ = (from, to_dir, to);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn symlink_at(
+            &self,
+            target: impl AsRef<Path>,
+            name: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let _ = (target, name);
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn read_link_at(&self, name: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+            let _ = name;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            let _ = permissions;
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn entries(&self) -> std::io::Result<Vec<DirEntryInfo>> {
+            Err(dir_unsupported())
+        }
+
+        /// Unsupported on this platform.
+        ///
+        /// # Errors
+        /// * Always returns `Unsupported`.
+        pub fn sync(&self) -> std::io::Result<()> {
+            Err(dir_unsupported())
         }
     }
 }

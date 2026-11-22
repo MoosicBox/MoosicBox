@@ -68,6 +68,19 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+/// POSIX error numbers used by the simulator.
+#[cfg(feature = "simulator")]
+pub(crate) mod errno;
+
+/// Native helpers shared by the `std` and `tokio` backends.
+#[cfg(all(unix, any(feature = "std", feature = "tokio")))]
+mod native;
+
+/// Backend-neutral value types (metadata, permissions, identities).
+pub mod types;
+
+pub use types::{DirEntryInfo, FileId, FileKind, Metadata, Permissions};
+
 /// User directory locations selected by the compiled filesystem backend.
 #[cfg(any(feature = "simulator", feature = "native-directories"))]
 pub mod directories;
@@ -119,7 +132,8 @@ macro_rules! impl_open_options {
         /// Options for configuring how a file is opened
         ///
         /// This builder exposes the ability to configure how a file is opened and what operations are permitted on the resulting file.
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
+        #[allow(clippy::struct_excessive_bools)] // mirrors independent POSIX open flags
         pub struct OpenOptions {
             pub(crate) create: bool,
             pub(crate) append: bool,
@@ -127,6 +141,9 @@ macro_rules! impl_open_options {
             pub(crate) write: bool,
             pub(crate) truncate: bool,
             pub(crate) create_new: bool,
+            pub(crate) nofollow: bool,
+            pub(crate) directory: bool,
+            pub(crate) mode: u32,
         }
 
         impl Default for OpenOptions {
@@ -148,6 +165,9 @@ macro_rules! impl_open_options {
                     write: false,
                     truncate: false,
                     create_new: false,
+                    nofollow: false,
+                    directory: false,
+                    mode: 0o666,
                 }
             }
 
@@ -195,6 +215,50 @@ macro_rules! impl_open_options {
                 self.truncate = truncate;
                 self
             }
+
+            /// Refuse to open a final symbolic link (`O_NOFOLLOW`): opening one fails with
+            /// `ELOOP`. Earlier path components still follow symbolic links.
+            ///
+            /// Native Windows backends reject this flag with `Unsupported`.
+            #[must_use]
+            pub const fn nofollow(mut self, nofollow: bool) -> Self {
+                self.nofollow = nofollow;
+                self
+            }
+
+            /// Require the opened entry to be a directory (`O_DIRECTORY`): anything else
+            /// fails with `ENOTDIR`.
+            ///
+            /// Native Windows backends reject this flag with `Unsupported`.
+            #[must_use]
+            pub const fn directory(mut self, directory: bool) -> Self {
+                self.directory = directory;
+                self
+            }
+
+            /// Permission bits for a newly created file (default `0o666`), reduced by the
+            /// process umask. Ignored when opening an existing file and on Windows.
+            #[must_use]
+            pub const fn mode(mut self, mode: u32) -> Self {
+                self.mode = mode;
+                self
+            }
+
+            /// The flags as one backend-neutral value.
+            #[allow(dead_code)]
+            pub(crate) const fn spec(&self) -> $crate::types::OpenSpec {
+                $crate::types::OpenSpec {
+                    read: self.read,
+                    write: self.write,
+                    append: self.append,
+                    truncate: self.truncate,
+                    create: self.create,
+                    create_new: self.create_new,
+                    nofollow: self.nofollow,
+                    directory: self.directory,
+                    mode: self.mode,
+                }
+            }
         }
     };
 }
@@ -207,10 +271,13 @@ macro_rules! impl_sync_fs {
         /// This module provides blocking filesystem operations that can be used in synchronous contexts.
         #[cfg(feature = "sync")]
         pub mod sync {
+            pub use $crate::types::{DirEntryInfo, FileId, FileKind, Metadata, Permissions};
             pub use $crate::$module::sync::{
-                ExclusiveFileLock, File, canonicalize, create_dir, create_dir_all,
-                create_private_file, read, read_dir_sorted, read_to_string, remove_dir_all,
-                rename_file, symlink_metadata, sync_directory, walk_dir_sorted, write,
+                Dir, ExclusiveFileLock, File, canonicalize, create_dir, create_dir_all,
+                create_private_file, current_uid, hard_link, metadata, read, read_dir_sorted,
+                read_link, read_to_string, remove_dir, remove_dir_all, remove_file, rename,
+                rename_file, rename_noreplace, set_permissions, symlink, symlink_metadata,
+                sync_directory, tempfile, tempfile_in, walk_dir_sorted, write,
             };
 
             impl_open_options!();
@@ -225,8 +292,8 @@ macro_rules! impl_sync_fs {
             /// owner-only Unix permissions from creation; unsupported platforms fail closed.
             /// This API does not establish a private directory or model simulator permissions.
             ///
-            /// Native synchronization follows the backend's durability guarantees; simulation
-            /// acknowledges only its documented no-crash model.
+            /// Native synchronization follows the backend's durability guarantees; the
+            /// simulator makes the file data and the rename durable in its crash model.
             ///
             /// # Errors
             /// * Invalid paths, exclusive creation failure, write, sync, or rename failure.
@@ -256,6 +323,44 @@ macro_rules! impl_sync_fs {
                 rename_file(staging, destination)?;
                 sync_directory(parent)
             }
+
+            /// Publish bytes to `destination` only if it does not exist yet.
+            ///
+            /// Like [`publish_file`], but the final step is [`rename_noreplace`]: an existing
+            /// destination (including a dangling symbolic link) is never replaced and the
+            /// call fails with `AlreadyExists`, leaving the synchronized staging file in
+            /// place for caller-owned cleanup. The staging file is owner-only from creation.
+            ///
+            /// # Errors
+            /// * Invalid paths, exclusive creation failure, write, sync, `AlreadyExists`, or
+            ///   rename failure. Errors from the final directory sync can mean publication
+            ///   succeeded: inspect the destination before retrying.
+            pub fn publish_file_noclobber(
+                staging: impl AsRef<std::path::Path>,
+                destination: impl AsRef<std::path::Path>,
+                bytes: &[u8],
+            ) -> std::io::Result<()> {
+                use std::io::Write as _;
+                let staging = staging.as_ref();
+                let destination = destination.as_ref();
+                let parent = destination
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+                if staging == destination
+                    || staging.parent() != Some(parent)
+                    || staging.file_name().is_none()
+                    || destination.file_name().is_none()
+                {
+                    return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+                }
+                let mut file = create_private_file(staging)?;
+                file.write_all(bytes)?;
+                file.sync_all()?;
+                drop(file);
+                rename_noreplace(staging, destination)?;
+                sync_directory(parent)
+            }
         }
 
         pub use $crate::$module::exists;
@@ -270,10 +375,13 @@ macro_rules! impl_async_fs {
         /// This module provides non-blocking async filesystem operations for use in async contexts.
         #[cfg(feature = "async")]
         pub mod unsync {
+            pub use $crate::types::Permissions;
             pub use $crate::$module::unsync::{
                 DirEntry, File, Metadata, ReadDir, canonicalize, create_dir, create_dir_all,
-                exists, is_dir, is_file, read, read_dir, read_dir_sorted, read_to_string,
-                remove_dir_all, walk_dir_sorted, write,
+                exists, hard_link, is_dir, is_file, metadata, read, read_dir, read_dir_sorted,
+                read_link, read_to_string, remove_dir, remove_dir_all, remove_file, rename,
+                rename_noreplace, set_permissions, symlink, symlink_metadata, sync_directory,
+                walk_dir_sorted, write,
             };
 
             impl_open_options!();
@@ -290,6 +398,9 @@ macro_rules! impl_async_fs {
                         write: self.write,
                         truncate: self.truncate,
                         create_new: self.create_new,
+                        nofollow: self.nofollow,
+                        directory: self.directory,
+                        mode: self.mode,
                     }
                 }
             }

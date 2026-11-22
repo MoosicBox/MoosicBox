@@ -1,26 +1,88 @@
-//! In-memory filesystem simulator for testing.
+//! In-memory POSIX filesystem simulator with durability, crash and fault modeling.
 //!
-//! This module provides a complete filesystem simulation that runs entirely in memory,
-//! allowing you to test filesystem operations without touching the actual disk. This is
-//! particularly useful for unit tests, integration tests, and development environments.
+//! The simulator runs entirely in memory and models the parts of POSIX filesystem
+//! semantics that storage code depends on:
 //!
-//! The simulator supports both synchronous and asynchronous operations, directory hierarchies,
-//! and temporary directory management.
+//! * **Inodes.** Directories map names to inodes; paths are resolved one component at a
+//!   time, following symbolic links (at most 40 per resolution, then `ELOOP`). Open
+//!   handles refer to inodes, so renaming or unlinking an open file behaves as on POSIX.
+//!   Hard links, symbolic links, permission bits, ownership and a simulated effective
+//!   user (see [`Filesystem::with_credentials`]) are modeled, and failures are reported
+//!   with the host's `errno` values (`ENOENT`, `EEXIST`, `ENOTDIR`, `EISDIR`, `ENOTEMPTY`,
+//!   `ELOOP`, `EACCES`, `ENOSPC`, ...).
+//! * **Durability.** File data becomes durable on `sync_data`/`sync_all`; directory
+//!   changes (create, link, unlink, rename) become durable only when their directory is
+//!   synchronized ([`sync::Dir::sync`] or [`sync::sync_directory`]).
+//! * **Crashes.** [`Filesystem::crash`] reverts to durable state according to a
+//!   [`CrashPolicy`] (by default the weakest guarantees POSIX allows, explored randomly per
+//!   seed), invalidates every open handle and releases every lock.
+//! * **Faults.** A seeded [`FaultPlan`] (or one-shot [`Filesystem::inject_fault`]) injects
+//!   `EIO`, `ENOSPC` and short writes per [`OpClass`]; [`Filesystem::set_quota`] limits
+//!   the bytes a namespace may hold. A failed file synchronization forgets the file's
+//!   pending data ("fsyncgate").
+//!
+//! All randomness comes from named streams of the current [`switchy_simulation`] run, so
+//! a simulation seed reproduces crash outcomes and faults exactly.
+//!
+//! Each simulation run (each `switchy_simulation` context) has its own default
+//! [`Filesystem`]; explicit namespaces are selected with [`with_filesystem`] and
+//! [`scope_filesystem`]. Relative paths resolve against the root directory.
+//!
+//! # Crash testing
+//!
+//! ```rust
+//! # #[cfg(feature = "sync")]
+//! # {
+//! use std::{io::Write as _, sync::Arc};
+//! use switchy_fs::simulator::{CrashPolicy, Filesystem, with_filesystem};
+//! use switchy_fs::sync::{Dir, OpenOptions, read};
+//!
+//! let fs = Arc::new(Filesystem::new());
+//! with_filesystem(&fs, || {
+//!     let dir = Dir::open("/").unwrap();
+//!     let options = OpenOptions::new().write(true).create_new(true);
+//!
+//!     // Durable: data synchronized, then the directory entry synchronized.
+//!     let mut durable = dir.open_file_at("durable", &options).unwrap();
+//!     durable.write_all(b"kept").unwrap();
+//!     durable.sync_all().unwrap();
+//!     dir.sync().unwrap();
+//!
+//!     // Not durable: the directory entry was never synchronized.
+//!     let mut lost = dir.open_file_at("lost", &options).unwrap();
+//!     lost.write_all(b"gone").unwrap();
+//!     lost.sync_all().unwrap();
+//! });
+//!
+//! fs.crash(&CrashPolicy::drop_all_pending());
+//!
+//! with_filesystem(&fs, || {
+//!     assert_eq!(read("/durable").unwrap(), b"kept");
+//!     assert!(read("/lost").is_err());
+//! });
+//! # }
+//! ```
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 
-use bytes::BytesMut;
+mod fault;
+mod vfs;
+
+pub use fault::{
+    CrashPolicy, DirectoryOpLoss, Fault, FaultPlan, FileDataLoss, OpClass, Probability,
+};
+
+pub use crate::types::{DirEntryInfo, FileId, FileKind, Metadata, Permissions};
+
+use vfs::{Handle, ROOT, Vfs};
 
 // Module that contains all real_fs functionality
 #[cfg(feature = "simulator-real-fs")]
 mod real_fs_support {
-    use bytes::BytesMut;
     use scoped_tls::scoped_thread_local;
-    use std::sync::{Arc, Mutex};
 
     pub struct RealFs;
 
@@ -42,7 +104,7 @@ mod real_fs_support {
         REAL_FS.is_set()
     }
 
-    // Simple conversion for std::fs::File to simulator File
+    // Copy a native file into a detached simulated file. Writes affect only the copy.
     pub fn convert_std_file_to_simulator(
         std_file: std::fs::File,
         path: impl AsRef<std::path::Path>,
@@ -61,10 +123,7 @@ mod real_fs_support {
 
         Ok(super::sync::File {
             path: path.as_ref().to_path_buf(),
-            data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
-            position: 0,
-            append: false,
-            write,
+            handle: super::detached_handle(content, read, write)?,
         })
     }
 
@@ -93,10 +152,7 @@ mod real_fs_support {
 
         Ok(super::unsync::File {
             path: path_buf,
-            data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
-            position: 0,
-            append: false,
-            write,
+            handle: super::detached_handle(content, read, write)?,
         })
     }
 }
@@ -121,15 +177,40 @@ mod real_fs_support {
 // Re-export at module level for clean access
 pub use real_fs_support::with_real_fs;
 
-/// An independently owned in-memory filesystem namespace.
+/// A handle on a private, unlinked copy of `content` (used for copies of native files).
+#[cfg_attr(not(feature = "simulator-real-fs"), allow(dead_code))]
+fn detached_handle(content: Vec<u8>, read: bool, write: bool) -> std::io::Result<Handle> {
+    let fs = Arc::new(Filesystem::new());
+    let mut vfs = fs.vfs();
+    let ino = vfs.create_anonymous(0o600);
+    vfs.set_detached_data(ino, content)?;
+    let handle = Handle::from_ino(&fs, &mut vfs, ino, read, write);
+    drop(vfs);
+    handle
+}
+
+/// An independently owned simulated filesystem namespace.
 ///
-/// Select it with `with_filesystem` for synchronous work. Open files retain their
-/// data after the selection ends. This is namespace isolation, not crash recovery.
+/// Select it with [`with_filesystem`] for synchronous work or [`scope_filesystem`] for a
+/// future. Open handles keep working after the selection ends; they become stale (every
+/// operation fails with `ESTALE`) after [`Filesystem::crash`] or [`Filesystem::reset`].
+///
+/// A new namespace contains only a root directory (mode `0o755`) owned by the simulated
+/// effective user, which defaults to uid/gid 1000 with umask `0o022`.
 #[derive(Default)]
 pub struct Filesystem {
     directory_locations: crate::directories::DirectoryLocations,
-    files: RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>,
-    directories: RwLock<BTreeSet<String>>,
+    vfs: Mutex<Vfs>,
+}
+
+impl std::fmt::Debug for Filesystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let vfs = self.vfs();
+        f.debug_struct("Filesystem")
+            .field("credentials", &vfs.credentials())
+            .field("used_bytes", &vfs.used())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Filesystem {
@@ -149,14 +230,125 @@ impl Filesystem {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Create an empty filesystem whose simulated effective user is `uid`/`gid`; the root
+    /// directory is owned by that user. Uid 0 bypasses permission checks, as root does.
+    #[must_use]
+    pub fn with_credentials(uid: u32, gid: u32) -> Self {
+        Self {
+            directory_locations: crate::directories::DirectoryLocations::default(),
+            vfs: Mutex::new(Vfs::new(uid, gid)),
+        }
+    }
+
+    pub(crate) fn vfs(&self) -> MutexGuard<'_, Vfs> {
+        self.vfs.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Simulate a crash (power loss or process death, per `policy`).
+    ///
+    /// State that was not made durable is lost or partially kept as `policy` describes,
+    /// drawing every random choice from the current simulation run's `switchy_fs::crash`
+    /// stream. Afterwards every handle opened before the crash fails with `ESTALE`, every
+    /// lock is released, and inodes no longer reachable from the root are discarded. Fault
+    /// plans, quotas and credentials are kept.
+    pub fn crash(&self, policy: &CrashPolicy) {
+        let stream = switchy_simulation::stream("switchy_fs::crash");
+        let mut rng = stream.lock().unwrap_or_else(PoisonError::into_inner);
+        self.vfs().crash(policy, &mut |bound| {
+            if bound <= 1 { 0 } else { rng.below(bound) }
+        });
+    }
+
+    /// Discard every file and directory and invalidate every handle, keeping credentials,
+    /// umask, quota and fault configuration.
+    pub fn reset(&self) {
+        self.vfs().reset();
+    }
+
+    /// Replace the namespace's fault plan. Draws come from the current simulation run's
+    /// `switchy_fs::faults` stream.
+    pub fn set_fault_plan(&self, plan: FaultPlan) {
+        self.vfs().set_fault_plan(plan);
+    }
+
+    /// Fail the next operation of `class` with `fault`, ahead of the fault plan. Queued
+    /// faults are consumed in order, one per matching operation.
+    pub fn inject_fault(&self, class: OpClass, fault: Fault) {
+        self.vfs().inject(class, fault);
+    }
+
+    /// Drop every queued one-shot fault.
+    pub fn clear_injected_faults(&self) {
+        self.vfs().clear_injected();
+    }
+
+    /// Limit the bytes of file data the namespace may hold (`None` removes the limit).
+    ///
+    /// Writes that would exceed the quota are shortened, then fail with `ENOSPC`. Data of
+    /// unlinked files stops counting once their last handle closes.
+    pub fn set_quota(&self, bytes: Option<u64>) {
+        self.vfs().set_quota(bytes);
+    }
+
+    /// Bytes of file data currently charged against the quota.
+    #[must_use]
+    pub fn used_bytes(&self) -> u64 {
+        self.vfs().used()
+    }
+
+    /// Change the simulated effective user and group. Existing inodes keep their owners.
+    pub fn set_credentials(&self, uid: u32, gid: u32) {
+        self.vfs().set_credentials(uid, gid);
+    }
+
+    /// The simulated effective user and group ids.
+    #[must_use]
+    pub fn credentials(&self) -> (u32, u32) {
+        self.vfs().credentials()
+    }
+
+    /// Set the simulated process umask (masked to `0o777`).
+    pub fn set_umask(&self, umask: u32) {
+        self.vfs().set_umask(umask);
+    }
+
+    /// The simulated process umask.
+    #[must_use]
+    pub fn umask(&self) -> u32 {
+        self.vfs().umask()
+    }
+}
+
+/// Simulate a crash of `filesystem`; see [`Filesystem::crash`].
+pub fn crash(filesystem: &Filesystem, policy: &CrashPolicy) {
+    filesystem.crash(policy);
+}
+
+/// The default namespace of one simulation run.
+struct RunFilesystem(Arc<Filesystem>);
+
+impl Default for RunFilesystem {
+    fn default() -> Self {
+        Self(Arc::new(Filesystem::new()))
+    }
 }
 
 thread_local! {
-    static CURRENT_FILESYSTEM: RefCell<Arc<Filesystem>> = RefCell::new(Arc::new(Filesystem::new()));
+    static SELECTED: RefCell<Option<Arc<Filesystem>>> = const { RefCell::new(None) };
+}
+
+/// The namespace filesystem operations on this thread currently use: the one selected by
+/// [`with_filesystem`]/[`scope_filesystem`], or else the current simulation run's default.
+#[must_use]
+pub fn current_filesystem() -> Arc<Filesystem> {
+    SELECTED
+        .with_borrow(Clone::clone)
+        .unwrap_or_else(|| switchy_simulation::state::<RunFilesystem>().0.clone())
 }
 
 pub(crate) fn directory_locations() -> crate::directories::DirectoryLocations {
-    CURRENT_FILESYSTEM.with_borrow(|fs| fs.directory_locations.clone())
+    current_filesystem().directory_locations.clone()
 }
 
 /// Execute synchronous work in an explicit simulated filesystem.
@@ -168,14 +360,14 @@ pub(crate) fn directory_locations() -> crate::directories::DirectoryLocations {
 /// # Panics
 /// * Propagates a panic from the callback after restoring the previous selection.
 pub fn with_filesystem<T>(filesystem: &Arc<Filesystem>, work: impl FnOnce() -> T) -> T {
-    struct Restore(Arc<Filesystem>);
+    struct Restore(Option<Arc<Filesystem>>);
     impl Drop for Restore {
         fn drop(&mut self) {
-            CURRENT_FILESYSTEM.with_borrow_mut(|current| *current = self.0.clone());
+            let previous = self.0.take();
+            SELECTED.with_borrow_mut(|current| *current = previous);
         }
     }
-    let previous = CURRENT_FILESYSTEM
-        .with_borrow_mut(|current| std::mem::replace(current, filesystem.clone()));
+    let previous = SELECTED.with_borrow_mut(|current| current.replace(filesystem.clone()));
     let _restore = Restore(previous);
     work()
 }
@@ -244,201 +436,39 @@ impl<F: std::future::Future> Drop for FilesystemFuture<F> {
     }
 }
 
-struct Files {
-    owner: fn() -> Arc<Filesystem>,
-}
-struct Directories {
-    owner: fn() -> Arc<Filesystem>,
-}
-fn current_filesystem() -> Arc<Filesystem> {
-    CURRENT_FILESYSTEM.with_borrow(Arc::clone)
-}
-const FILES: Files = Files {
-    owner: current_filesystem,
-};
-const DIRECTORIES: Directories = Directories {
-    owner: current_filesystem,
-};
-
-impl Files {
-    fn with_borrow<T>(
-        &self,
-        work: impl FnOnce(&RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>) -> T,
-    ) -> T {
-        let owner = (self.owner)();
-        work(&owner.files)
-    }
-
-    fn with_borrow_mut<T>(
-        &self,
-        work: impl FnOnce(&RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>) -> T,
-    ) -> T {
-        self.with_borrow(work)
-    }
+/// Run `work` against the current namespace's state.
+fn with_vfs<T>(work: impl FnOnce(&mut Vfs) -> vfs::Result<T>) -> std::io::Result<T> {
+    let filesystem = current_filesystem();
+    let mut vfs = filesystem.vfs();
+    work(&mut vfs).map_err(Into::into)
 }
 
-impl Directories {
-    fn with_borrow<T>(&self, work: impl FnOnce(&RwLock<BTreeSet<String>>) -> T) -> T {
-        let owner = (self.owner)();
-        work(&owner.directories)
-    }
-
-    fn with_borrow_mut<T>(&self, work: impl FnOnce(&RwLock<BTreeSet<String>>) -> T) -> T {
-        self.with_borrow(work)
-    }
-}
-
-/// Resets the simulated filesystem to an empty state
+/// Resets the current simulated filesystem to an empty state.
 ///
-/// Clears all files and directories from the in-memory filesystem simulator.
-///
-/// # Panics
-///
-/// * If the `FILES` `RwLock` fails to write to
+/// Every handle opened before the reset becomes stale. Credentials, umask, quota, fault
+/// configuration and directory locations are kept.
 pub fn reset_fs() {
-    FILES.with_borrow_mut(|x| x.write().unwrap().clear());
-    reset_directories();
+    current_filesystem().reset();
 }
 
-/// Resets all directories in the simulated filesystem
+/// Resets the current simulated filesystem; equivalent to [`reset_fs`].
 ///
-/// Clears the directory registry, removing all tracked directories from the in-memory filesystem.
-///
-/// # Panics
-///
-/// * If the `DIRECTORIES` `RwLock` fails to write to
+/// Directories and files share one inode table, so directories cannot be cleared
+/// independently of the files they contain.
 pub fn reset_directories() {
-    DIRECTORIES.with_borrow_mut(|x| x.write().unwrap().clear());
+    reset_fs();
 }
 
-/// Get all parent directories of a path
-fn get_parent_directories(path: &str) -> Vec<String> {
-    let mut parents = Vec::new();
-    let path_buf = std::path::Path::new(path);
-
-    let mut current = path_buf.parent();
-    while let Some(parent) = current {
-        if let Some(parent_str) = parent.to_str()
-            && !parent_str.is_empty()
-            && parent_str != "/"
-        {
-            parents.push(parent_str.to_string());
-        }
-        current = parent.parent();
-    }
-
-    // Always include root
-    if path != "/" {
-        parents.push("/".to_string());
-    }
-
-    parents.reverse();
-    parents
-}
-
-/// Normalize a path by resolving `.` and `..` components
+/// Check if a path exists (following symbolic links).
 ///
-/// This function handles path normalization without requiring filesystem access,
-/// making it suitable for the simulator.
-fn normalize_path(path: &str) -> String {
-    let mut components: Vec<&str> = Vec::new();
-    let is_absolute = path.starts_with('/');
-
-    for component in path.split('/') {
-        match component {
-            "" | "." => {
-                // Skip empty components and current directory references
-            }
-            ".." => {
-                // Go up one directory (if possible)
-                if !components.is_empty() && components.last() != Some(&"..") {
-                    components.pop();
-                } else if !is_absolute {
-                    // For relative paths, keep the .. if we can't go up
-                    components.push("..");
-                }
-                // For absolute paths, ignore .. at root
-            }
-            other => {
-                components.push(other);
-            }
-        }
-    }
-
-    if is_absolute {
-        if components.is_empty() {
-            "/".to_string()
-        } else {
-            format!("/{}", components.join("/"))
-        }
-    } else if components.is_empty() {
-        ".".to_string()
-    } else {
-        components.join("/")
-    }
-}
-
-/// Check if a path exists
-///
-/// # Panics
-///
-/// * If the `DIRECTORIES` `RwLock` is poisoned
-/// * If the `FILES` `RwLock` is poisoned
+/// In explicit real-filesystem mode this checks the native filesystem.
 #[must_use]
 pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
-    let Some(path) = path.as_ref().to_str() else {
-        return false;
-    };
-    DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path))
-        || FILES.with_borrow(|files| files.read().unwrap().contains_key(path))
-}
-
-/// Get immediate children (files and directories) of a directory
-fn get_directory_children(dir_path: &str) -> (Vec<String>, Vec<String>) {
-    let normalized_dir = if dir_path == "/" {
-        "/"
-    } else {
-        &format!("{dir_path}/")
-    };
-
-    // Get files in this directory
-    let files = FILES.with_borrow(|files| {
-        files
-            .read()
-            .unwrap()
-            .keys()
-            .filter_map(|file_path| {
-                file_path.strip_prefix(normalized_dir).and_then(|stripped| {
-                    if !stripped.contains('/') && !stripped.is_empty() {
-                        Some(stripped.to_string())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect::<Vec<_>>()
-    });
-
-    // Get subdirectories in this directory
-    let subdirs = DIRECTORIES.with_borrow(|dirs| {
-        dirs.read()
-            .unwrap()
-            .iter()
-            .filter_map(|subdir_path| {
-                subdir_path
-                    .strip_prefix(normalized_dir)
-                    .and_then(|stripped| {
-                        if !stripped.contains('/') && !stripped.is_empty() {
-                            Some(stripped.to_string())
-                        } else {
-                            None
-                        }
-                    })
-            })
-            .collect::<Vec<_>>()
-    });
-
-    (files, subdirs)
+    #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+    if real_fs_support::is_real_fs() {
+        return path.as_ref().exists();
+    }
+    current_filesystem().vfs().exists(ROOT, path.as_ref())
 }
 
 /// Initialize minimal filesystem structure (just essentials)
@@ -569,73 +599,26 @@ fn seed_recursive(real_path: &std::path::Path, sim_path: &std::path::Path) -> st
     Ok(())
 }
 
-macro_rules! path_to_str {
-    ($path:expr) => {{
-        $path.as_ref().to_str().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "path is invalid str")
-        })
-    }};
+/// The error returned by simulator operations unavailable in explicit real-filesystem mode.
+#[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+fn real_fs_unsupported(what: &str) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        format!("{what} requires native handles"),
+    )
 }
 
 macro_rules! impl_file_sync {
     ($file:ident $(,)?) => {
         impl std::io::Read for $file {
             fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-                if buf.is_empty() {
-                    return Ok(0);
-                }
-
-                let binding = self.data.lock().unwrap();
-
-                let len = binding.len();
-                let pos = usize::try_from(self.position).unwrap();
-
-                let remaining = len.saturating_sub(pos);
-                let read_count = std::cmp::min(remaining, buf.len());
-
-                if read_count == 0 {
-                    return Ok(0);
-                }
-
-                let data = &binding[pos..(pos + read_count)];
-                buf[..read_count].copy_from_slice(data);
-
-                self.position += read_count as u64;
-
-                drop(binding);
-
-                Ok(read_count)
+                self.handle.read(buf)
             }
         }
 
         impl std::io::Write for $file {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-                if !self.write {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::PermissionDenied,
-                        "File not opened in write mode",
-                    ));
-                }
-                if buf.is_empty() {
-                    return Ok(0);
-                }
-                let mut data = self.data.lock().unwrap();
-                let start = if self.append {
-                    data.len()
-                } else {
-                    usize::try_from(self.position)
-                        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?
-                };
-                let end = start
-                    .checked_add(buf.len())
-                    .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-                if end > data.len() {
-                    data.resize(end, 0);
-                }
-                data[start..end].copy_from_slice(buf);
-                drop(data);
-                self.position = end as u64;
-                Ok(buf.len())
+                self.handle.write(buf)
             }
 
             fn flush(&mut self) -> std::io::Result<()> {
@@ -645,19 +628,7 @@ macro_rules! impl_file_sync {
 
         impl std::io::Seek for $file {
             fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-                let next = match pos {
-                    std::io::SeekFrom::Start(offset) => Some(offset),
-                    std::io::SeekFrom::End(offset) => {
-                        u64::try_from(self.data.lock().unwrap().len())
-                            .ok()
-                            .and_then(|len| len.checked_add_signed(offset))
-                    }
-                    std::io::SeekFrom::Current(offset) => self.position.checked_add_signed(offset),
-                }
-                .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-                self.position = next;
-
-                Ok(self.position)
+                self.handle.seek(pos)
             }
         }
     };
@@ -691,58 +662,12 @@ impl FileType {
     pub const fn is_symlink(&self) -> bool {
         self.is_symlink
     }
-}
 
-/// Metadata information about a file in the simulated filesystem
-///
-/// Provides information about file size and type (file, directory, symlink).
-#[derive(Debug, Clone)]
-pub struct Metadata {
-    pub(crate) len: u64,
-    pub(crate) is_file: bool,
-    pub(crate) is_dir: bool,
-    pub(crate) is_symlink: bool,
-}
-
-impl Metadata {
-    /// Returns the size of the file in bytes
-    #[must_use]
-    pub const fn len(&self) -> u64 {
-        self.len
-    }
-
-    /// Returns `true` if the file has zero length
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// Returns `true` if this metadata is for a regular file
-    #[must_use]
-    pub const fn is_file(&self) -> bool {
-        self.is_file
-    }
-
-    /// Returns `true` if this metadata is for a directory
-    #[must_use]
-    pub const fn is_dir(&self) -> bool {
-        self.is_dir
-    }
-
-    /// Returns `true` if this metadata is for a symbolic link
-    #[must_use]
-    pub const fn is_symlink(&self) -> bool {
-        self.is_symlink
-    }
-}
-
-impl From<std::fs::Metadata> for Metadata {
-    fn from(meta: std::fs::Metadata) -> Self {
+    const fn from_kind(kind: FileKind) -> Self {
         Self {
-            len: meta.len(),
-            is_file: meta.is_file(),
-            is_dir: meta.is_dir(),
-            is_symlink: meta.is_symlink(),
+            is_dir: matches!(kind, FileKind::Dir),
+            is_file: matches!(kind, FileKind::File),
+            is_symlink: matches!(kind, FileKind::Symlink),
         }
     }
 }
@@ -804,31 +729,42 @@ mod file_type_tests {
 
 /// Synchronous filesystem operations for the simulator
 ///
-/// This module provides blocking filesystem operations that work with the in-memory
-/// simulated filesystem. All operations are immediate and do not touch the actual disk.
+/// Blocking operations on the current simulated namespace. All operations are immediate
+/// and never touch the actual disk (except in explicit real-filesystem mode).
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::{
+        ffi::OsStr,
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
+        sync::Arc,
     };
 
-    use bytes::BytesMut;
+    use super::{
+        FileKind,
+        vfs::{Handle, ROOT},
+        with_vfs,
+    };
+    use crate::{errno::Errno, sync::OpenOptions, types::entry_name};
 
-    use crate::sync::OpenOptions;
-
-    use super::{DIRECTORIES, FILES};
+    pub use super::{DirEntryInfo, FileId, Metadata, Permissions};
 
     /// File handle for synchronous operations in the simulated filesystem
     ///
-    /// Provides read, write, and seek operations on files stored in the in-memory filesystem.
+    /// Provides read, write, and seek operations on an inode of the simulated filesystem.
+    /// The handle keeps the inode alive after it is renamed or unlinked.
     pub struct File {
         #[cfg_attr(not(feature = "simulator-real-fs"), allow(dead_code))]
         pub(crate) path: PathBuf,
-        pub(crate) data: Arc<Mutex<BytesMut>>,
-        pub(crate) position: u64,
-        pub(crate) append: bool,
-        pub(crate) write: bool,
+        pub(crate) handle: Handle,
+    }
+
+    impl std::fmt::Debug for File {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("File")
+                .field("path", &self.path)
+                .field("handle", &self.handle)
+                .finish()
+        }
     }
 
     impl File {
@@ -838,8 +774,7 @@ pub mod sync {
         ///
         /// # Errors
         ///
-        /// * If the file does not exist
-        /// * If the path cannot be converted to a string
+        /// * If the file does not exist or cannot be read
         pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
             OpenOptions::new().read(true).open(path)
         }
@@ -851,8 +786,7 @@ pub mod sync {
         ///
         /// # Errors
         ///
-        /// * If the parent directory does not exist
-        /// * If the path cannot be converted to a string
+        /// * If the parent directory does not exist or is not writable
         pub fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
             OpenOptions::new()
                 .create(true)
@@ -867,27 +801,35 @@ pub mod sync {
             OpenOptions::new()
         }
 
+        /// Open `path` with `options` in the current simulated namespace.
+        ///
+        /// Unlike [`OpenOptions::open`], this never consults explicit real-filesystem mode.
+        ///
+        /// # Errors
+        /// * `EINVAL` for flag combinations `std::fs::OpenOptions` rejects.
+        /// * `ENOENT`, `EEXIST`, `ENOTDIR`, `EISDIR`, `ELOOP` (`nofollow` on a symbolic
+        ///   link), `EACCES` and injected faults, as the equivalent POSIX `open` reports.
+        pub fn open_with(path: impl AsRef<Path>, options: &OpenOptions) -> std::io::Result<Self> {
+            let filesystem = super::current_filesystem();
+            Ok(Self {
+                path: path.as_ref().to_path_buf(),
+                handle: Handle::open(&filesystem, None, path.as_ref(), &options.spec())?,
+            })
+        }
+
         /// Retrieves metadata about the file
         ///
         /// # Errors
         ///
         /// * If the file metadata cannot be retrieved (when using real filesystem)
-        ///
-        /// # Panics
-        ///
-        /// * If the internal data mutex is poisoned (when using simulator)
+        /// * `ESTALE` after a crash or reset, or an injected fault
         pub fn metadata(&self) -> std::io::Result<Metadata> {
             #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
             if super::real_fs_support::is_real_fs() {
                 return Ok(std::fs::metadata(&self.path)?.into());
             }
 
-            Ok(Metadata {
-                len: u64::try_from(self.data.lock().unwrap().len()).unwrap_or(0),
-                is_file: true,
-                is_dir: false,
-                is_symlink: false,
-            })
+            self.handle.metadata()
         }
 
         /// Converts this synchronous file handle into an asynchronous file handle
@@ -896,61 +838,97 @@ pub mod sync {
         pub fn into_async(self) -> crate::unsync::File {
             crate::unsync::File {
                 path: self.path,
-                data: self.data,
-                position: self.position,
-                append: self.append,
-                write: self.write,
+                handle: self.handle,
             }
         }
-    }
 
-    pub use super::Metadata;
-
-    impl_file_sync!(File);
-
-    // Allocation identity is internal only: it never affects iteration, traces, or
-    // persisted state. The guard retains the allocation until its entry is removed.
-    static FILE_LOCKS: Mutex<std::collections::BTreeSet<usize>> =
-        Mutex::new(std::collections::BTreeSet::new());
-
-    /// Exclusive advisory lock retaining simulated file identity until dropped.
-    /// Ownership follows handles across threads and does not prevent ordinary writes.
-    pub struct ExclusiveFileLock {
-        file: File,
-    }
-
-    impl Drop for ExclusiveFileLock {
-        fn drop(&mut self) {
-            let identity = Arc::as_ptr(&self.file.data) as usize;
-            // Release even after poisoning; acquisition still fails closed.
-            FILE_LOCKS
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&identity);
-        }
-    }
-
-    impl File {
-        /// Acknowledge synchronization in the in-memory, no-crash simulation model.
+        /// Make the file's data, length and permissions durable.
         ///
-        /// Writes are immediately visible to handles sharing this file's data. No
-        /// native I/O occurs and success does not imply persistence across process
-        /// exit, reset, or power loss. Fault and crash simulation are not modeled.
+        /// For a directory handle this makes pending changes to its entries durable.
         ///
         /// # Errors
+        /// * `ESTALE` after a crash or reset.
+        /// * Injected `EIO`/`ENOSPC`; the file's pending data is then forgotten: it stays
+        ///   readable until a crash but never becomes durable.
         /// * Explicit real-filesystem mode returns `Unsupported`, because its copied
         ///   handles cannot synchronize the original native file.
-        // This I/O contract must remain callable with runtime-only native backends.
-        #[allow(clippy::missing_const_for_fn)]
         pub fn sync_all(&self) -> std::io::Result<()> {
             #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
             if super::real_fs_support::is_real_fs() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Unsupported,
-                    "native synchronization requires native handles",
-                ));
+                return Err(super::real_fs_unsupported("native synchronization"));
             }
-            Ok(())
+            self.handle.sync(false)
+        }
+
+        /// Make the file's data and length durable (permissions may stay pending).
+        ///
+        /// # Errors
+        /// * As for [`File::sync_all`].
+        pub fn sync_data(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native synchronization"));
+            }
+            self.handle.sync(true)
+        }
+
+        /// Truncate or extend the file to `len` bytes (extension fills with zeros).
+        ///
+        /// # Errors
+        /// * `EINVAL` when the handle is not writable.
+        /// * `ENOSPC` when extension exceeds the namespace quota, `ESTALE`, injected faults.
+        pub fn set_len(&self, len: u64) -> std::io::Result<()> {
+            self.handle.set_len(len)
+        }
+
+        /// Change the file's permission bits.
+        ///
+        /// # Errors
+        /// * `EPERM` unless the simulated user owns the file (or is root).
+        /// * `ESTALE`, injected faults; `Unsupported` in explicit real-filesystem mode.
+        pub fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native permissions"));
+            }
+            self.handle.set_mode(permissions.mode())
+        }
+
+        /// Try to take an exclusive flock-style advisory lock without waiting.
+        ///
+        /// Locks belong to this handle (not the process): another handle on the same
+        /// inode conflicts even within one thread. A held shared lock is converted. The
+        /// simulator offers no blocking variant; poll and yield instead.
+        ///
+        /// # Errors
+        /// * `WouldBlock` when another handle holds a conflicting lock.
+        /// * `ESTALE`; `Unsupported` in explicit real-filesystem mode.
+        pub fn try_lock(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native locks"));
+            }
+            self.handle.try_lock(true)
+        }
+
+        /// Try to take a shared flock-style advisory lock without waiting.
+        ///
+        /// # Errors
+        /// * As for [`File::try_lock`].
+        pub fn try_lock_shared(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native locks"));
+            }
+            self.handle.try_lock(false)
+        }
+
+        /// Release any lock held by this handle. Dropping the handle also releases it.
+        ///
+        /// # Errors
+        /// * `ESTALE` after a crash or reset (the lock is already gone).
+        pub fn unlock(&self) -> std::io::Result<()> {
+            self.handle.unlock()
         }
 
         /// Consume this handle and acquire an exclusive advisory lock without waiting.
@@ -958,52 +936,20 @@ pub mod sync {
         ///
         /// # Errors
         /// * Returns `WouldBlock` when this simulated file is already locked.
-        /// * Returns an I/O error if the ownership registry is poisoned.
         /// * Explicit real-filesystem mode returns `Unsupported`: copied simulated
         ///   handles cannot retain a native OS lock.
         pub fn try_lock_exclusive(self) -> std::io::Result<ExclusiveFileLock> {
-            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
-            if super::real_fs_support::is_real_fs() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Unsupported,
-                    "native locks require native handles",
-                ));
-            }
-            let mut locks = FILE_LOCKS
-                .lock()
-                .map_err(|_| std::io::Error::other("file lock registry poisoned"))?;
-            let identity = Arc::as_ptr(&self.data) as usize;
-            if !locks.insert(identity) {
-                return Err(std::io::Error::from(std::io::ErrorKind::WouldBlock));
-            }
-            drop(locks);
-            Ok(ExclusiveFileLock { file: self })
+            self.try_lock()?;
+            Ok(ExclusiveFileLock { _file: self })
         }
     }
 
-    fn validate_creation_parent(location: &str) -> std::io::Result<()> {
-        if let Some(parent) = Path::new(location).parent()
-            && !parent.as_os_str().is_empty()
-            && parent != Path::new(".")
-        {
-            let parent = parent.to_str().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, "parent path is not UTF-8")
-            })?;
-            if FILES.with_borrow(|files| files.read().unwrap().contains_key(parent)) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::NotADirectory,
-                    "parent is a file",
-                ));
-            }
-            if !DIRECTORIES.with_borrow(|directories| directories.read().unwrap().contains(parent))
-            {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "parent directory not found",
-                ));
-            }
-        }
-        Ok(())
+    impl_file_sync!(File);
+
+    /// Exclusive advisory lock retaining simulated file identity until dropped.
+    /// Ownership follows handles across threads and does not prevent ordinary writes.
+    pub struct ExclusiveFileLock {
+        _file: File,
     }
 
     impl OpenOptions {
@@ -1011,11 +957,7 @@ pub mod sync {
         ///
         /// # Errors
         ///
-        /// * If an I/O error occurs
-        ///
-        /// # Panics
-        ///
-        /// * If the `FILES` `RwLock` fails to read.
+        /// * As for [`File::open_with`], or native errors in explicit real-filesystem mode.
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             // Only try to use real fs if both simulator-real-fs AND std features are enabled
             #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
@@ -1027,89 +969,7 @@ pub mod sync {
                 );
             }
 
-            // Original simulator implementation (fallback)
-            let location = path_to_str!(path)?;
-            let data = if self.create_new {
-                if !self.write && !self.append {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "exclusive creation requires write access",
-                    ));
-                }
-                if super::exists(location) {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::AlreadyExists,
-                        "path already exists",
-                    ));
-                }
-                validate_creation_parent(location)?;
-                FILES.with_borrow_mut(|files| {
-                    let mut files = files.write().unwrap();
-                    match files.entry(location.to_owned()) {
-                        std::collections::btree_map::Entry::Occupied(_) => {
-                            Err(std::io::Error::new(
-                                std::io::ErrorKind::AlreadyExists,
-                                "file already exists",
-                            ))
-                        }
-                        std::collections::btree_map::Entry::Vacant(entry) => {
-                            let data = Arc::new(Mutex::new(BytesMut::new()));
-                            entry.insert(data.clone());
-                            Ok(data)
-                        }
-                    }
-                })?
-            } else if let Some(data) =
-                FILES.with_borrow(|x| x.read().unwrap().get(location).cloned())
-            {
-                data
-            } else if self.create {
-                // Check if parent directory exists when creating a file
-                if let Some(parent) = std::path::Path::new(location).parent()
-                    && let Some(parent_str) = parent.to_str()
-                {
-                    let parent_normalized = if parent_str.is_empty() || parent_str == "." {
-                        ".".to_string()
-                    } else if parent_str == "/" {
-                        "/".to_string()
-                    } else {
-                        parent_str.trim_end_matches('/').to_string()
-                    };
-
-                    // Allow current directory "." to exist by default, otherwise check DIRECTORIES
-                    if parent_normalized != "." && !super::exists(&parent_normalized) {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::NotFound,
-                            format!("Parent directory not found: {parent_normalized}"),
-                        ));
-                    }
-                }
-
-                let data = Arc::new(Mutex::new(BytesMut::new()));
-                FILES.with_borrow_mut(|x| {
-                    x.write()
-                        .unwrap()
-                        .insert(location.to_string(), data.clone())
-                });
-                data
-            } else {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("File not found at path={location}"),
-                ));
-            };
-
-            if self.truncate {
-                data.lock().unwrap().clear();
-            }
-
-            Ok(File {
-                path: path.as_ref().to_path_buf(),
-                data,
-                position: 0,
-                append: self.append,
-                write: self.write || self.append,
-            })
+            File::open_with(path, &self)
         }
     }
 
@@ -1117,28 +977,19 @@ pub mod sync {
     ///
     /// # Errors
     ///
-    /// * If the file doesn't exist
-    /// * If the file `Path` cannot be converted to a `str`
-    ///
-    /// # Panics
-    ///
-    /// * If the `FILES` `RwLock` fails to read.
+    /// * If the file doesn't exist, is a directory, or cannot be read
     pub fn read<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+        use std::io::Read as _;
+
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return std::fs::read(path);
         }
 
-        // Original simulator implementation (fallback)
-        let location = path_to_str!(path)?;
-        let Some(existing) = FILES.with_borrow(|x| x.read().unwrap().get(location).cloned()) else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("File not found at path={location}"),
-            ));
-        };
-
-        Ok(existing.lock().unwrap().to_vec())
+        let mut file = File::open_with(path, &OpenOptions::new().read(true))?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        Ok(data)
     }
 
     /// Reads the entire contents of a file into a string
@@ -1147,26 +998,13 @@ pub mod sync {
     ///
     /// * Returns `std::io::ErrorKind::NotFound` if the file does not exist.
     /// * Returns `std::io::ErrorKind::InvalidData` if the file contains invalid UTF-8.
-    ///
-    /// # Panics
-    ///
-    /// * If the `FILES` `RwLock` fails to read.
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::read_to_string(path);
         }
 
-        // Original simulator implementation (fallback)
-        let location = path_to_str!(path)?;
-        let Some(existing) = FILES.with_borrow(|x| x.read().unwrap().get(location).cloned()) else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("File not found at path={location}"),
-            ));
-        };
-
-        String::from_utf8(existing.lock().unwrap().to_vec())
+        String::from_utf8(read(path)?)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
@@ -1174,9 +1012,7 @@ pub mod sync {
     ///
     /// # Errors
     ///
-    /// * If the file cannot be created
-    /// * If the file cannot be written to
-    /// * If the `FILES` `RwLock` fails to write to
+    /// * If the file cannot be created or written to
     pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> std::io::Result<()> {
         use std::io::Write;
 
@@ -1185,166 +1021,67 @@ pub mod sync {
             return crate::standard::sync::write(path, contents);
         }
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(path)?;
+        let mut file = File::open_with(
+            path,
+            &OpenOptions::new().create(true).write(true).truncate(true),
+        )?;
 
         file.write_all(contents.as_ref())?;
         Ok(())
     }
 
-    /// Creates a directory and all missing parent directories
+    /// Creates a directory (mode `0o777` before the umask).
     ///
     /// # Errors
     ///
+    /// * `EEXIST` if the entry exists, `ENOENT` if the parent does not exist
+    /// * `EACCES` if the parent is not writable, injected faults
     /// * If underlying `std::fs::create_dir` fails (when using real filesystem)
-    /// * If the path cannot be converted to a string
-    /// * If the parent directory does not exist
-    ///
-    /// # Panics
-    ///
-    /// * If the `DIRECTORIES` `RwLock` fails to write to
     pub fn create_dir<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::create_dir(path);
         }
 
-        let path_str = path_to_str!(path)?;
-
-        // Normalize path - remove trailing slashes except for root
-        let normalized = if path_str == "/" {
-            "/".to_string()
-        } else {
-            path_str.trim_end_matches('/').to_string()
-        };
-
-        // Check that parent directory exists
-        if let Some(parent) = std::path::Path::new(&normalized).parent() {
-            let parent_str = parent.to_string_lossy().to_string();
-            if !parent_str.is_empty() && parent_str != "/" {
-                let parent_exists =
-                    DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(&parent_str));
-                if !parent_exists {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        format!("Parent directory does not exist: {parent_str}"),
-                    ));
-                }
-            }
-        }
-
-        // Create the directory
-        DIRECTORIES.with_borrow_mut(|dirs| {
-            dirs.write().unwrap().insert(normalized);
-        });
-
-        Ok(())
+        with_vfs(|vfs| vfs.create_dir(ROOT, path.as_ref(), 0o777))
     }
 
     /// Creates a directory and all missing parent directories
     ///
     /// # Errors
     ///
+    /// * If a component exists but is not a directory, or cannot be created
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
-    /// * If the path cannot be converted to a string
-    ///
-    /// # Panics
-    ///
-    /// * If the `DIRECTORIES` `RwLock` fails to write to
     pub fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::create_dir_all(path);
         }
 
-        let path_str = path_to_str!(path)?;
-
-        // Normalize path - remove trailing slashes except for root
-        let normalized = if path_str == "/" {
-            "/".to_string()
-        } else {
-            path_str.trim_end_matches('/').to_string()
-        };
-
-        // Get all directories that need to be created (including parents)
-        let mut dirs_to_create = super::get_parent_directories(&normalized);
-        dirs_to_create.push(normalized);
-
-        // Create all directories
-        DIRECTORIES.with_borrow_mut(|dirs| {
-            let mut dirs_write = dirs.write().unwrap();
-            for dir in dirs_to_create {
-                dirs_write.insert(dir);
-            }
-        });
-
-        Ok(())
+        with_vfs(|vfs| vfs.create_dir_all(ROOT, path.as_ref(), 0o777))
     }
 
     /// Removes a directory and all its contents recursively
     ///
+    /// A symbolic link is removed itself; its target is never followed.
+    ///
     /// # Errors
     ///
+    /// * If the path doesn't exist or is not a directory
     /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)
-    /// * If the path cannot be converted to a string
-    /// * If the directory doesn't exist
-    ///
-    /// # Panics
-    ///
-    /// * If the `DIRECTORIES` or `FILES` `RwLock` fails to write to
     pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::remove_dir_all(path);
         }
 
-        let path_str = path_to_str!(path)?;
-
-        // Normalize path - remove trailing slashes except for root
-        let normalized = if path_str == "/" {
-            "/".to_string()
-        } else {
-            path_str.trim_end_matches('/').to_string()
-        };
-
-        // Check if directory exists
-        if !super::exists(&normalized) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Directory not found: {normalized}"),
-            ));
-        }
-
-        // Find all subdirectories and files to remove
-        let prefix = if normalized == "/" {
-            "/"
-        } else {
-            &format!("{normalized}/")
-        };
-
-        // Remove all files in this directory and subdirectories
-        FILES.with_borrow_mut(|files| {
-            let mut files_write = files.write().unwrap();
-            files_write
-                .retain(|file_path, _| !file_path.starts_with(prefix) && file_path != &normalized);
-        });
-
-        // Remove all subdirectories
-        DIRECTORIES.with_borrow_mut(|dirs| {
-            let mut dirs_write = dirs.write().unwrap();
-            dirs_write.retain(|dir_path| !dir_path.starts_with(prefix) && dir_path != &normalized);
-        });
-
-        Ok(())
+        with_vfs(|vfs| vfs.remove_dir_all(ROOT, path.as_ref()))
     }
 
-    /// Exclusively create a writable file within the simulated namespace.
+    /// Exclusively create a writable file with owner-only (`0o600`) permissions.
     ///
-    /// The simulator has no OS users or permission enforcement. Explicit real-fs
-    /// mode rejects this operation rather than returning a copied native handle.
+    /// Explicit real-fs mode rejects this operation rather than returning a copied
+    /// native handle.
     ///
     /// # Errors
     /// * Returns creation errors or `Unsupported` in explicit real-fs mode.
@@ -1353,158 +1090,288 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return Err(std::io::Error::from(std::io::ErrorKind::Unsupported));
         }
-        OpenOptions::new().write(true).create_new(true).open(path)
+        File::open_with(
+            path,
+            &OpenOptions::new().write(true).create_new(true).mode(0o600),
+        )
     }
 
     /// Inspect an entry without following its final symbolic link.
     ///
-    /// The in-memory backend models regular files and directories, not symlinks.
-    /// Native mode preserves native no-follow semantics. This observation does not
-    /// prevent subsequent path replacement.
+    /// This observation does not prevent subsequent path replacement.
     ///
     /// # Errors
-    /// * Returns an error for missing or non-UTF-8 paths, or native metadata failure.
-    ///
-    /// # Panics
-    /// * An internal filesystem lock is poisoned.
+    /// * Returns an error for missing paths, or native metadata failure.
     pub fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
-            let metadata = std::fs::symlink_metadata(path)?;
-            return Ok(Metadata {
-                len: metadata.len(),
-                is_file: metadata.is_file(),
-                is_dir: metadata.is_dir(),
-                is_symlink: metadata.is_symlink(),
-            });
+            return crate::standard::sync::symlink_metadata(path);
         }
-        let path = path_to_str!(path)?;
-        if let Some(data) = FILES.with_borrow(|files| files.read().unwrap().get(path).cloned()) {
-            return Ok(Metadata {
-                len: data.lock().unwrap().len() as u64,
-                is_file: true,
-                is_dir: false,
-                is_symlink: false,
-            });
-        }
-        if DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path)) {
-            return Ok(Metadata {
-                len: 0,
-                is_file: false,
-                is_dir: true,
-                is_symlink: false,
-            });
-        }
-        Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+        with_vfs(|vfs| vfs.stat(ROOT, path.as_ref(), false))
     }
 
-    /// Acknowledge directory synchronization in the in-memory no-crash model.
-    ///
-    /// Success does not imply persistence across reset or process exit. Explicit
-    /// real-filesystem mode delegates to native directory synchronization.
+    /// Inspect an entry, following symbolic links.
     ///
     /// # Errors
-    /// * The path is missing, not a directory, or not UTF-8.
-    /// * Native synchronization fails or is unsupported in real-filesystem mode.
+    /// * `ENOENT`, `ENOTDIR`, `ELOOP`, `EACCES`, injected faults.
+    pub fn metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::metadata(path);
+        }
+        with_vfs(|vfs| vfs.stat(ROOT, path.as_ref(), true))
+    }
+
+    /// Make pending changes to a directory's entries durable.
     ///
-    /// # Panics
-    /// * An internal filesystem lock is poisoned.
+    /// # Errors
+    /// * The path is missing or not a directory.
+    /// * Injected faults; native failure in real-filesystem mode.
     pub fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::sync_directory(path);
         }
-        let path = path_to_str!(path)?;
-        if FILES.with_borrow(|files| files.read().unwrap().contains_key(path)) {
-            return Err(std::io::Error::from(std::io::ErrorKind::NotADirectory));
-        }
-        if !DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path)) {
-            return Err(std::io::Error::from(std::io::ErrorKind::NotFound));
-        }
-        Ok(())
+        with_vfs(|vfs| {
+            let ino = vfs.resolve(ROOT, path.as_ref(), true)?;
+            if vfs.kind_of(ROOT, path.as_ref(), true) != Some(FileKind::Dir) {
+                return Err(Errno::NotDir);
+            }
+            vfs.sync(ino, false)
+        })
     }
 
     /// Move a regular file, replacing an existing destination file.
     ///
-    /// Open handles retain the original file data. The simulated file-map change
-    /// is indivisible, but does not model durability or crash recovery. Callers
-    /// must exclusively control the paths, including their parent directories.
+    /// Open handles keep referring to the moved inode. The change becomes durable when
+    /// the directories involved are synchronized.
     ///
     /// # Errors
-    /// * Source is missing, or either path names a directory.
-    /// * Destination parent is missing or is a file, or a path is not UTF-8.
-    /// * A native operation fails when explicit real-filesystem mode is enabled.
-    ///
-    /// # Panics
-    /// * An internal filesystem lock is poisoned.
+    /// * Source is missing (`NotFound`), or either path names a non-regular file
+    ///   (`InvalidInput`).
+    /// * Rename errors, or a native failure in explicit real-filesystem mode.
     pub fn rename_file(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::rename_file(from, to);
         }
-        let from = path_to_str!(from)?;
-        let to = path_to_str!(to)?;
-        if DIRECTORIES.with_borrow(|dirs| {
-            let dirs = dirs.read().unwrap();
-            dirs.contains(from) || dirs.contains(to)
-        }) {
+        let (from, to) = (from.as_ref(), to.as_ref());
+        if !symlink_metadata(from)?.is_file() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "path is a directory",
+                "source is not a regular file",
             ));
         }
-        validate_creation_parent(to)?;
-        FILES.with_borrow_mut(|files| {
-            let mut files = files.write().unwrap();
-            let data = files.remove(from).ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::NotFound, "source file not found")
-            })?;
-            files.insert(to.to_owned(), data);
-            drop(files);
-            Ok(())
+        match symlink_metadata(to) {
+            Ok(metadata) if !metadata.is_file() => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "destination is not a regular file",
+                ));
+            }
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+        rename(from, to)
+    }
+
+    /// Rename a file or directory with POSIX `rename` semantics.
+    ///
+    /// An existing destination file is replaced; a directory may replace an empty
+    /// directory. Renaming an entry onto another link to the same inode does nothing.
+    ///
+    /// # Errors
+    /// * `ENOENT`, `EISDIR`, `ENOTDIR`, `ENOTEMPTY`, `EINVAL` (into its own subtree),
+    ///   `EBUSY` (root), `EACCES`, injected faults; native errors in real-fs mode.
+    pub fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::rename(from, to);
+        }
+        with_vfs(|vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), false))
+    }
+
+    /// Rename without replacing: fails with `EEXIST` if `to` exists (also a dangling
+    /// symbolic link). The check and the rename are one atomic step.
+    ///
+    /// # Errors
+    /// * `EEXIST`, plus every error of [`rename`].
+    pub fn rename_noreplace(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::rename_noreplace(from, to);
+        }
+        with_vfs(|vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), true))
+    }
+
+    /// Remove a file or symbolic link (never a directory).
+    ///
+    /// # Errors
+    /// * `ENOENT`; `EISDIR` (Linux) or `EPERM` (elsewhere) for directories; `EACCES`;
+    ///   injected faults.
+    pub fn remove_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::remove_file(path);
+        }
+        with_vfs(|vfs| vfs.remove_file(ROOT, path.as_ref()))
+    }
+
+    /// Remove an empty directory.
+    ///
+    /// # Errors
+    /// * `ENOENT`, `ENOTDIR`, `ENOTEMPTY`, `EBUSY` (root), `EACCES`, injected faults.
+    pub fn remove_dir(path: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::remove_dir(path);
+        }
+        with_vfs(|vfs| vfs.remove_dir(ROOT, path.as_ref()))
+    }
+
+    /// Create a hard link `link` to `original` (which is not followed if it is a
+    /// symbolic link).
+    ///
+    /// # Errors
+    /// * `ENOENT`, `EEXIST`, `EPERM` (directories), `EACCES`, injected faults.
+    pub fn hard_link(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::hard_link(original, link);
+        }
+        with_vfs(|vfs| vfs.hard_link(ROOT, original.as_ref(), ROOT, link.as_ref()))
+    }
+
+    /// Create a symbolic link at `link` pointing to `original` (which need not exist).
+    ///
+    /// # Errors
+    /// * `EEXIST`, `ENOENT` (missing parent or empty target), `EACCES`, injected faults.
+    pub fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::symlink(original, link);
+        }
+        with_vfs(|vfs| vfs.symlink(original.as_ref(), ROOT, link.as_ref()))
+    }
+
+    /// Read the target of a symbolic link.
+    ///
+    /// # Errors
+    /// * `EINVAL` if the entry is not a symbolic link, `ENOENT`, injected faults.
+    pub fn read_link(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::read_link(path);
+        }
+        with_vfs(|vfs| vfs.read_link(ROOT, path.as_ref()))
+    }
+
+    /// Change permission bits, following symbolic links.
+    ///
+    /// # Errors
+    /// * `EPERM` unless the simulated user owns the entry (or is root), `ENOENT`,
+    ///   injected faults.
+    pub fn set_permissions(
+        path: impl AsRef<Path>,
+        permissions: Permissions,
+    ) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::set_permissions(path, permissions);
+        }
+        with_vfs(|vfs| vfs.set_mode(ROOT, path.as_ref(), permissions.mode()))
+    }
+
+    /// The simulated effective user id of the current namespace.
+    ///
+    /// # Errors
+    /// * Native errors in explicit real-filesystem mode; otherwise infallible.
+    pub fn current_uid() -> std::io::Result<u32> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::current_uid();
+        }
+        Ok(super::current_filesystem().credentials().0)
+    }
+
+    /// Create an anonymous temporary file: readable, writable, owner-only, and never
+    /// linked into any directory. Its data disappears when the last handle closes.
+    ///
+    /// # Errors
+    /// * Injected faults; `Unsupported` in explicit real-filesystem mode.
+    pub fn tempfile() -> std::io::Result<File> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return Err(super::real_fs_unsupported("anonymous temporary files"));
+        }
+        let filesystem = super::current_filesystem();
+        let mut vfs = filesystem.vfs();
+        vfs.check_open_fault()?;
+        let ino = vfs.create_anonymous(0o600);
+        let handle = Handle::from_ino(&filesystem, &mut vfs, ino, true, true)?;
+        drop(vfs);
+        Ok(File {
+            path: PathBuf::new(),
+            handle,
         })
     }
 
-    /// Canonicalizes a path by resolving `.` and `..` components and normalizing it
+    /// Create an anonymous temporary file on the filesystem of directory `dir`.
     ///
-    /// Unlike `std::fs::canonicalize`, this does not require the path to exist,
-    /// but it will verify the path exists in the simulator filesystem.
+    /// # Errors
+    /// * `ENOENT`, `ENOTDIR`, `EACCES` (directory not writable), injected faults;
+    ///   `Unsupported` in explicit real-filesystem mode.
+    pub fn tempfile_in(dir: impl AsRef<Path>) -> std::io::Result<File> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return Err(super::real_fs_unsupported("anonymous temporary files"));
+        }
+        let filesystem = super::current_filesystem();
+        let mut vfs = filesystem.vfs();
+        vfs.check_temp_dir(ROOT, dir.as_ref())?;
+        let ino = vfs.create_anonymous(0o600);
+        let handle = Handle::from_ino(&filesystem, &mut vfs, ino, true, true)?;
+        drop(vfs);
+        Ok(File {
+            path: PathBuf::new(),
+            handle,
+        })
+    }
+
+    /// Canonicalizes a path: an absolute path with every symbolic link, `.` and `..`
+    /// resolved. Relative paths resolve against the root directory.
     ///
     /// # Errors
     ///
+    /// * If the path does not exist (or a component is not a directory)
     /// * If underlying `std::fs::canonicalize` fails (when using real filesystem)
-    /// * If the path cannot be converted to a string
-    /// * If the path does not exist in the simulator
     pub fn canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<std::path::PathBuf> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::canonicalize(path);
         }
 
-        let path_str = path_to_str!(path)?;
+        with_vfs(|vfs| vfs.canonicalize(ROOT, path.as_ref()))
+    }
 
-        // Normalize the path by resolving . and .. components
-        let normalized = super::normalize_path(path_str);
-
-        // Check if the path exists (either as file or directory)
-        if !super::exists(&normalized) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Path not found: {normalized}"),
-            ));
-        }
-
-        Ok(std::path::PathBuf::from(normalized))
+    fn list_dir(path: &Path) -> std::io::Result<Vec<DirEntry>> {
+        let entries = with_vfs(|vfs| vfs.read_dir(ROOT, path))?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| DirEntry {
+                path: path.join(&entry.name),
+                file_name: entry.name,
+                file_type_info: super::FileType::from_kind(entry.kind),
+            })
+            .collect())
     }
 
     /// Read directory entries and return them sorted by filename for deterministic iteration
     ///
     /// # Errors
     ///
+    /// * If the directory doesn't exist or cannot be read
     /// * If underlying `std::fs::read_dir` fails (when using real filesystem)
-    /// * If any directory entry cannot be read (when using real filesystem)
-    /// * If the path cannot be converted to a string
-    /// * If the directory doesn't exist
     pub fn read_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
@@ -1515,96 +1382,28 @@ pub mod sync {
                 .collect::<std::io::Result<Vec<_>>>();
         }
 
-        let path_str = path_to_str!(path)?;
-
-        // Normalize path
-        let normalized = if path_str == "/" {
-            "/".to_string()
-        } else {
-            path_str.trim_end_matches('/').to_string()
-        };
-
-        // Check if directory exists
-        if !super::exists(&normalized) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Directory not found: {normalized}"),
-            ));
-        }
-
-        // Get children
-        let (files, subdirs) = super::get_directory_children(&normalized);
-
-        let mut entries = Vec::new();
-
-        // Add file entries
-        for filename in files {
-            let full_path = if normalized == "/" {
-                format!("/{filename}")
-            } else {
-                format!("{normalized}/{filename}")
-            };
-            entries.push(DirEntry::new_file(full_path, filename)?);
-        }
-
-        // Add directory entries
-        for dirname in subdirs {
-            let full_path = if normalized == "/" {
-                format!("/{dirname}")
-            } else {
-                format!("{normalized}/{dirname}")
-            };
-            entries.push(DirEntry::new_dir(full_path, dirname)?);
-        }
-
-        // Sort by filename for deterministic ordering
-        entries.sort_by_key(DirEntry::file_name);
-
-        Ok(entries)
+        list_dir(path.as_ref())
     }
 
     /// Recursively walk directory tree and return all entries sorted by path for deterministic iteration
     ///
+    /// Symbolic links are reported but not descended into.
+    ///
     /// # Errors
     ///
-    /// * If any directory cannot be read (when using real filesystem)
-    /// * If any directory entry cannot be accessed (when using real filesystem)
-    /// * If the path cannot be converted to a string
+    /// * If any directory cannot be read
     /// * If the directory doesn't exist
     pub fn walk_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
-        fn walk_recursive(dir_path: &str) -> std::io::Result<Vec<DirEntry>> {
-            let mut all_entries = Vec::new();
-
-            // Get immediate children
-            let (files, subdirs) = super::get_directory_children(dir_path);
-
-            // Add all files in current directory
-            for filename in files {
-                let full_path = if dir_path == "/" {
-                    format!("/{filename}")
-                } else {
-                    format!("{dir_path}/{filename}")
-                };
-                all_entries.push(DirEntry::new_file(full_path, filename)?);
+        fn walk_recursive(dir_path: &Path, all: &mut Vec<DirEntry>) -> std::io::Result<()> {
+            for entry in list_dir(dir_path)? {
+                let descend = entry.file_type_info.is_dir();
+                let child = entry.path.clone();
+                all.push(entry);
+                if descend {
+                    walk_recursive(&child, all)?;
+                }
             }
-
-            // Add all subdirectories and recursively walk them
-            for dirname in subdirs {
-                let full_path = if dir_path == "/" {
-                    format!("/{dirname}")
-                } else {
-                    format!("{dir_path}/{dirname}")
-                };
-
-                // Add the directory itself
-                all_entries.push(DirEntry::new_dir(full_path.clone(), dirname)?);
-
-                // Recursively walk the subdirectory
-                let sub_entries = walk_recursive(&full_path)?;
-                all_entries.extend(sub_entries);
-            }
-
-            Ok(all_entries)
+            Ok(())
         }
 
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
@@ -1616,24 +1415,8 @@ pub mod sync {
                 .collect::<std::io::Result<Vec<_>>>();
         }
 
-        let path_str = path_to_str!(path)?;
-
-        // Normalize path
-        let normalized = if path_str == "/" {
-            "/".to_string()
-        } else {
-            path_str.trim_end_matches('/').to_string()
-        };
-
-        // Check if directory exists
-        if !super::exists(&normalized) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Directory not found: {normalized}"),
-            ));
-        }
-
-        let mut all_entries = walk_recursive(&normalized)?;
+        let mut all_entries = Vec::new();
+        walk_recursive(path.as_ref(), &mut all_entries)?;
 
         // Sort by full path for deterministic ordering
         all_entries.sort_by_key(DirEntry::path);
@@ -1679,11 +1462,7 @@ pub mod sync {
             Ok(Self {
                 path: PathBuf::from(full_path),
                 file_name: std::ffi::OsString::from(file_name),
-                file_type_info: super::FileType {
-                    is_dir: false,
-                    is_file: true,
-                    is_symlink: false,
-                },
+                file_type_info: super::FileType::from_kind(FileKind::File),
             })
         }
 
@@ -1696,11 +1475,7 @@ pub mod sync {
             Ok(Self {
                 path: PathBuf::from(full_path),
                 file_name: std::ffi::OsString::from(dir_name),
-                file_type_info: super::FileType {
-                    is_dir: true,
-                    is_file: false,
-                    is_symlink: false,
-                },
+                file_type_info: super::FileType::from_kind(FileKind::Dir),
             })
         }
 
@@ -1727,17 +1502,285 @@ pub mod sync {
         }
     }
 
+    /// A capability-style handle on a directory.
+    ///
+    /// Operations take single entry names (never paths, never `.` or `..`) and act on
+    /// the opened directory inode, even after it is renamed. Final symbolic links are
+    /// never followed: opening one fails with `ELOOP`. This mirrors `openat`-family calls
+    /// with `O_NOFOLLOW` on the real Unix backend.
+    pub struct Dir {
+        handle: Handle,
+        path: PathBuf,
+    }
+
+    impl std::fmt::Debug for Dir {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Dir")
+                .field("path", &self.path)
+                .field("handle", &self.handle)
+                .finish()
+        }
+    }
+
+    impl Dir {
+        const fn directory_options() -> OpenOptions {
+            OpenOptions::new().read(true).directory(true).nofollow(true)
+        }
+
+        /// Open the directory at `path` without following a final symbolic link.
+        ///
+        /// # Errors
+        /// * `ENOENT`, `ENOTDIR`, `ELOOP` (final component is a symbolic link), `EACCES`
+        ///   (no read permission), injected faults; `Unsupported` in real-fs mode.
+        pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("directory handles"));
+            }
+            let filesystem = super::current_filesystem();
+            Ok(Self {
+                handle: Handle::open(
+                    &filesystem,
+                    None,
+                    path.as_ref(),
+                    &Self::directory_options().spec(),
+                )?,
+                path: path.as_ref().to_path_buf(),
+            })
+        }
+
+        /// The path this directory was opened with (diagnostic only; it may be stale).
+        #[must_use]
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        fn at<T>(
+            &self,
+            name: &Path,
+            work: impl FnOnce(&mut super::Vfs, super::vfs::Ino, &OsStr) -> super::vfs::Result<T>,
+        ) -> std::io::Result<T> {
+            let name = entry_name(name)?;
+            self.handle.with(|vfs, ino| work(vfs, ino, name))
+        }
+
+        /// Open the subdirectory `name` without following symbolic links.
+        ///
+        /// # Errors
+        /// * As for [`Dir::open`], plus `InvalidInput` for a non-name.
+        pub fn open_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<Self> {
+            let name = entry_name(name.as_ref())?;
+            Ok(Self {
+                handle: Handle::open(
+                    self.handle.filesystem(),
+                    Some(&self.handle),
+                    Path::new(name),
+                    &Self::directory_options().spec(),
+                )?,
+                path: self.path.join(name),
+            })
+        }
+
+        /// Open or create the file `name` in this directory with `options` (including
+        /// `nofollow`, `create_new` and `mode`).
+        ///
+        /// # Errors
+        /// * As for [`File::open_with`], plus `InvalidInput` for a non-name.
+        pub fn open_file_at(
+            &self,
+            name: impl AsRef<Path>,
+            options: &OpenOptions,
+        ) -> std::io::Result<File> {
+            let name = entry_name(name.as_ref())?;
+            Ok(File {
+                path: self.path.join(name),
+                handle: Handle::open(
+                    self.handle.filesystem(),
+                    Some(&self.handle),
+                    Path::new(name),
+                    &options.spec(),
+                )?,
+            })
+        }
+
+        /// Create the subdirectory `name` with `mode` (before the umask).
+        ///
+        /// # Errors
+        /// * `EEXIST`, `EACCES`, `ENOENT` (this directory was removed), injected faults.
+        pub fn create_dir_at(&self, name: impl AsRef<Path>, mode: u32) -> std::io::Result<()> {
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.create_dir(ino, Path::new(name), mode)
+            })
+        }
+
+        /// Metadata of this directory.
+        ///
+        /// # Errors
+        /// * `ESTALE`, injected faults.
+        pub fn metadata(&self) -> std::io::Result<Metadata> {
+            self.handle.metadata()
+        }
+
+        /// Metadata of entry `name`, without following a symbolic link.
+        ///
+        /// # Errors
+        /// * `ENOENT`, `InvalidInput` for a non-name, injected faults.
+        pub fn metadata_at(&self, name: impl AsRef<Path>) -> std::io::Result<Metadata> {
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.stat(ino, Path::new(name), false)
+            })
+        }
+
+        /// Remove the file or symbolic link `name`.
+        ///
+        /// # Errors
+        /// * As for [`remove_file`], plus `InvalidInput` for a non-name.
+        pub fn remove_file_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.remove_file(ino, Path::new(name))
+            })
+        }
+
+        /// Remove the empty subdirectory `name`.
+        ///
+        /// # Errors
+        /// * As for [`remove_dir`], plus `InvalidInput` for a non-name.
+        pub fn remove_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.remove_dir(ino, Path::new(name))
+            })
+        }
+
+        fn rename_between(
+            &self,
+            from: &Path,
+            to_dir: &Self,
+            to: &Path,
+            noreplace: bool,
+        ) -> std::io::Result<()> {
+            let from = entry_name(from)?;
+            let to = entry_name(to)?;
+            if !Arc::ptr_eq(self.handle.filesystem(), to_dir.handle.filesystem()) {
+                return Err(Errno::XDev.into());
+            }
+            let mut vfs = self.handle.filesystem().vfs();
+            let from_start = self.handle.start_in(&vfs)?;
+            let to_start = to_dir.handle.start_in(&vfs)?;
+            vfs.rename(
+                from_start,
+                Path::new(from),
+                to_start,
+                Path::new(to),
+                noreplace,
+            )
+            .map_err(Into::into)
+        }
+
+        /// Rename entry `from` of this directory to `to` in `to_dir` (which may be this
+        /// directory), replacing an existing destination as [`rename`] does.
+        ///
+        /// # Errors
+        /// * As for [`rename`], plus `InvalidInput` for non-names and `EXDEV` across
+        ///   namespaces.
+        pub fn rename_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            self.rename_between(from.as_ref(), to_dir, to.as_ref(), false)
+        }
+
+        /// Rename entry `from` to `to` in `to_dir` only if `to` does not exist.
+        ///
+        /// # Errors
+        /// * `EEXIST`, plus every error of [`Dir::rename_at`].
+        pub fn rename_noreplace_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            self.rename_between(from.as_ref(), to_dir, to.as_ref(), true)
+        }
+
+        /// Create hard link `to` in `to_dir` to entry `from` of this directory.
+        ///
+        /// # Errors
+        /// * As for [`hard_link`], plus `InvalidInput` and `EXDEV`.
+        pub fn hard_link_at(
+            &self,
+            from: impl AsRef<Path>,
+            to_dir: &Self,
+            to: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let from = entry_name(from.as_ref())?;
+            let to = entry_name(to.as_ref())?;
+            if !Arc::ptr_eq(self.handle.filesystem(), to_dir.handle.filesystem()) {
+                return Err(Errno::XDev.into());
+            }
+            let mut vfs = self.handle.filesystem().vfs();
+            let from_start = self.handle.start_in(&vfs)?;
+            let to_start = to_dir.handle.start_in(&vfs)?;
+            vfs.hard_link(from_start, Path::new(from), to_start, Path::new(to))
+                .map_err(Into::into)
+        }
+
+        /// Create symbolic link `name` pointing to `target`.
+        ///
+        /// # Errors
+        /// * As for [`symlink`], plus `InvalidInput` for a non-name.
+        pub fn symlink_at(
+            &self,
+            target: impl AsRef<Path>,
+            name: impl AsRef<Path>,
+        ) -> std::io::Result<()> {
+            let target = target.as_ref();
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.symlink(target, ino, Path::new(name))
+            })
+        }
+
+        /// Read the target of symbolic link `name`.
+        ///
+        /// # Errors
+        /// * As for [`read_link`], plus `InvalidInput` for a non-name.
+        pub fn read_link_at(&self, name: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+            self.at(name.as_ref(), |vfs, ino, name| {
+                vfs.read_link(ino, Path::new(name))
+            })
+        }
+
+        /// Change this directory's permission bits.
+        ///
+        /// # Errors
+        /// * `EPERM` unless owned by the simulated user, `ESTALE`, injected faults.
+        pub fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            self.handle.set_mode(permissions.mode())
+        }
+
+        /// The entries of this directory (excluding `.` and `..`), sorted by name.
+        ///
+        /// # Errors
+        /// * `ESTALE`, injected faults.
+        pub fn entries(&self) -> std::io::Result<Vec<DirEntryInfo>> {
+            self.handle.with(super::Vfs::list)
+        }
+
+        /// Make pending changes to this directory's entries durable.
+        ///
+        /// # Errors
+        /// * `ESTALE`, injected faults.
+        pub fn sync(&self) -> std::io::Result<()> {
+            self.handle.sync(false)
+        }
+    }
+
     #[cfg(test)]
     mod test {
-        use std::{
-            io::Read as _,
-            sync::{Arc, Mutex},
-        };
+        use std::io::Read as _;
 
-        use bytes::BytesMut;
         use pretty_assertions::assert_eq;
-
-        use crate::simulator::FILES;
 
         use super::OpenOptions;
 
@@ -1745,13 +1788,10 @@ pub mod sync {
         async fn can_read_empty_file() {
             const FILENAME: &str = "sync::test1";
 
-            FILES.with_borrow_mut(|x| {
-                x.write()
-                    .unwrap()
-                    .insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())))
-            });
+            super::super::reset_fs();
+            super::write(FILENAME, b"").unwrap();
 
-            let mut file = OpenOptions::new().create(true).open(FILENAME).unwrap();
+            let mut file = OpenOptions::new().read(true).open(FILENAME).unwrap();
 
             let mut buf = [0u8; 1024];
 
@@ -1764,14 +1804,10 @@ pub mod sync {
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "sync::test2";
 
-            FILES.with_borrow_mut(|x| {
-                x.write().unwrap().insert(
-                    FILENAME.to_string(),
-                    Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
-                )
-            });
+            super::super::reset_fs();
+            super::write(FILENAME, b"hey").unwrap();
 
-            let mut file = OpenOptions::new().create(true).open(FILENAME).unwrap();
+            let mut file = OpenOptions::new().read(true).open(FILENAME).unwrap();
 
             let mut buf = [0u8; 1024];
 
@@ -1803,12 +1839,13 @@ pub mod sync {
                     .open("/tmp/test_perms.txt")
                     .unwrap();
 
-                // Attempt to write should fail with PermissionDenied
+                // Writing through a read-only handle fails with EBADF, as on POSIX.
                 let result = file.write_all(b"should fail");
                 assert!(result.is_err());
+                #[cfg(unix)]
                 assert_eq!(
-                    result.unwrap_err().kind(),
-                    std::io::ErrorKind::PermissionDenied
+                    result.unwrap_err().raw_os_error(),
+                    Some(rustix::io::Errno::BADF.raw_os_error())
                 );
             }
         }
@@ -2046,7 +2083,7 @@ pub mod sync {
                 writer.write_all(b"updated content").unwrap();
                 drop(writer);
 
-                // Reader should see updated content (shared Arc<Mutex<BytesMut>>)
+                // Reader should see updated content (both handles share the inode)
                 let mut buf = Vec::new();
                 reader.read_to_end(&mut buf).unwrap();
                 assert_eq!(buf, b"updated content");
@@ -2125,16 +2162,16 @@ pub mod sync {
                 file.write_all(b"Hello, World!").unwrap();
                 file.seek(SeekFrom::Start(7)).unwrap();
 
-                let position = file.position;
+                let position = file.handle.position;
                 let path = file.path.clone();
 
                 // Convert to async
                 let async_file = file.into_async();
 
                 // Verify state is preserved
-                assert_eq!(async_file.position, position);
+                assert_eq!(async_file.handle.position, position);
                 assert_eq!(async_file.path, path);
-                assert_eq!(async_file.write, true);
+                assert_eq!(async_file.handle.write, true);
             }
         }
 
@@ -2205,29 +2242,36 @@ pub mod sync {
 /// Asynchronous filesystem operations for the simulator
 ///
 /// This module provides async filesystem operations that work with the in-memory
-/// simulated filesystem. Operations are non-blocking but execute immediately since
-/// no actual I/O is performed.
+/// simulated filesystem. Operations complete when first polled since no actual I/O is
+/// performed.
 #[cfg(feature = "async")]
 pub mod unsync {
     use std::{
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
         task::Poll,
     };
 
-    use bytes::BytesMut;
-
+    use super::vfs::Handle;
     use crate::unsync::OpenOptions;
+
+    pub use super::{Metadata, Permissions};
 
     /// File handle for asynchronous operations in the simulated filesystem
     ///
-    /// Provides async read, write, and seek operations on files stored in the in-memory filesystem.
+    /// Provides async read, write, and seek operations on an inode of the simulated
+    /// filesystem.
     pub struct File {
         pub(crate) path: PathBuf,
-        pub(crate) data: Arc<Mutex<BytesMut>>,
-        pub(crate) position: u64,
-        pub(crate) append: bool,
-        pub(crate) write: bool,
+        pub(crate) handle: Handle,
+    }
+
+    impl std::fmt::Debug for File {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("File")
+                .field("path", &self.path)
+                .field("handle", &self.handle)
+                .finish()
+        }
     }
 
     impl File {
@@ -2237,8 +2281,7 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If the file does not exist
-        /// * If the path cannot be converted to a string
+        /// * If the file does not exist or cannot be read
         #[allow(clippy::future_not_send)]
         pub async fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
             OpenOptions::new().read(true).open(path).await
@@ -2251,8 +2294,7 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If the parent directory does not exist
-        /// * If the path cannot be converted to a string
+        /// * If the parent directory does not exist or is not writable
         #[allow(clippy::future_not_send)]
         pub async fn create(path: impl AsRef<Path>) -> std::io::Result<Self> {
             OpenOptions::new()
@@ -2273,11 +2315,10 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If the file metadata cannot be retrieved (when using real filesystem)
+        /// * If the file metadata cannot be retrieved
         ///
         /// # Panics
         ///
-        /// * If the internal data mutex is poisoned (when using simulator)
         /// * If the `spawn_blocking` task panics (when using real filesystem)
         // Keep polling-time execution and the same async API as the native backend.
         #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
@@ -2292,12 +2333,55 @@ pub mod unsync {
                 .unwrap();
             }
 
-            Ok(Metadata {
-                len: u64::try_from(self.data.lock().unwrap().len()).unwrap_or(0),
-                is_file: true,
-                is_dir: false,
-                is_symlink: false,
-            })
+            self.handle.metadata()
+        }
+
+        /// Make the file's data, length and permissions durable.
+        ///
+        /// # Errors
+        /// * As for the synchronous `File::sync_all`.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+        pub async fn sync_all(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native synchronization"));
+            }
+            self.handle.sync(false)
+        }
+
+        /// Make the file's data and length durable.
+        ///
+        /// # Errors
+        /// * As for the synchronous `File::sync_data`.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+        pub async fn sync_data(&self) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native synchronization"));
+            }
+            self.handle.sync(true)
+        }
+
+        /// Truncate or extend the file to `len` bytes.
+        ///
+        /// # Errors
+        /// * As for the synchronous `File::set_len`.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+        pub async fn set_len(&self, len: u64) -> std::io::Result<()> {
+            self.handle.set_len(len)
+        }
+
+        /// Change the file's permission bits.
+        ///
+        /// # Errors
+        /// * As for the synchronous `File::set_permissions`.
+        #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+        pub async fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                return Err(super::real_fs_unsupported("native permissions"));
+            }
+            self.handle.set_mode(permissions.mode())
         }
 
         /// Converts this asynchronous file handle into a synchronous file handle
@@ -2306,88 +2390,73 @@ pub mod unsync {
         pub fn into_sync(self) -> crate::sync::File {
             crate::sync::File {
                 path: self.path,
-                data: self.data,
-                position: self.position,
-                append: self.append,
-                write: self.write,
+                handle: self.handle,
             }
         }
     }
-
-    pub use super::Metadata;
 
     impl_file_sync!(File);
 
-    impl tokio::io::AsyncRead for File {
+    impl switchy_async::io::AsyncRead for File {
         fn poll_read(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
-            buf: &mut tokio::io::ReadBuf<'_>,
+            buf: &mut switchy_async::io::ReadBuf<'_>,
         ) -> Poll<std::io::Result<()>> {
-            {
-                use std::io::Read as _;
+            use std::io::Read as _;
 
-                let dst = buf.initialize_unfilled();
+            let dst = buf.initialize_unfilled();
 
-                match self.get_mut().read(dst) {
-                    Ok(count) => {
-                        buf.advance(count);
-                    }
-                    Err(e) => return Poll::Ready(Err(e)),
+            match self.get_mut().read(dst) {
+                Ok(count) => {
+                    buf.advance(count);
                 }
-
-                Poll::Ready(Ok(()))
+                Err(e) => return Poll::Ready(Err(e)),
             }
+
+            Poll::Ready(Ok(()))
         }
     }
 
-    impl tokio::io::AsyncSeek for File {
+    impl switchy_async::io::AsyncSeek for File {
         fn start_seek(
             self: std::pin::Pin<&mut Self>,
             position: std::io::SeekFrom,
         ) -> std::io::Result<()> {
-            {
-                use std::io::Seek as _;
+            use std::io::Seek as _;
 
-                self.get_mut().seek(position)?;
-                Ok(())
-            }
+            self.get_mut().seek(position)?;
+            Ok(())
         }
 
         fn poll_complete(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> Poll<std::io::Result<u64>> {
-            {
-                use std::io::Seek as _;
+            use std::io::Seek as _;
 
-                Poll::Ready(self.get_mut().stream_position())
-            }
+            Poll::Ready(self.get_mut().stream_position())
         }
     }
 
-    impl tokio::io::AsyncWrite for File {
+    impl switchy_async::io::AsyncWrite for File {
         fn poll_write(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize, std::io::Error>> {
-            {
-                use std::io::Write as _;
+            use std::io::Write as _;
 
-                Poll::Ready(self.get_mut().write(buf))
-            }
+            Poll::Ready(self.get_mut().write(buf))
         }
 
         fn poll_flush(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> Poll<Result<(), std::io::Error>> {
-            {
-                use std::io::Write as _;
+            use std::io::Write as _;
 
-                Poll::Ready(self.get_mut().flush())
-            }
+            Poll::Ready(self.get_mut().flush())
         }
 
         fn poll_shutdown(
@@ -2403,11 +2472,11 @@ pub mod unsync {
         ///
         /// # Errors
         ///
-        /// * If an I/O error occurs
+        /// * As for the synchronous `File::open_with`
         ///
         /// # Panics
         ///
-        /// * If the `FILES` `RwLock` fails to read.
+        /// * If the `spawn_blocking` task panics (when using real filesystem)
         // Opening must remain lazy until polled, even when simulator I/O is immediate.
         #[allow(
             clippy::unused_async,
@@ -2431,7 +2500,6 @@ pub mod unsync {
                 .await;
             }
 
-            // Fallback to sync simulator implementation
             Ok(self.into_sync().open(path)?.into_async())
         }
     }
@@ -2440,8 +2508,7 @@ pub mod unsync {
     ///
     /// # Errors
     ///
-    /// * If the file doesn't exist
-    /// * If the file `Path` cannot be converted to a `str`
+    /// * If the file doesn't exist or cannot be read
     ///
     /// # Panics
     ///
@@ -2455,7 +2522,6 @@ pub mod unsync {
                 .unwrap();
         }
 
-        // Fallback to sync simulator implementation
         super::sync::read(path)
     }
 
@@ -2502,9 +2568,6 @@ pub mod unsync {
     ///
     /// Returns `true` if the path exists and is a file, `false` otherwise.
     ///
-    /// # Panics
-    ///
-    /// * If the `FILES` `RwLock` fails to read from
     #[allow(clippy::unused_async)]
     pub async fn is_file<P: AsRef<Path>>(path: P) -> bool {
         #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
@@ -2515,17 +2578,16 @@ pub mod unsync {
                 .unwrap_or(false);
         }
 
-        let path_str = path.as_ref().to_string_lossy().to_string();
-        super::FILES.with_borrow(|files| files.read().unwrap().contains_key(&path_str))
+        super::current_filesystem()
+            .vfs()
+            .kind_of(super::vfs::ROOT, path.as_ref(), true)
+            == Some(super::FileKind::File)
     }
 
     /// Checks if a path is a directory asynchronously
     ///
     /// Returns `true` if the path exists and is a directory, `false` otherwise.
     ///
-    /// # Panics
-    ///
-    /// * If the `DIRECTORIES` `RwLock` fails to read from
     #[allow(clippy::unused_async)]
     pub async fn is_dir<P: AsRef<Path>>(path: P) -> bool {
         #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
@@ -2536,8 +2598,10 @@ pub mod unsync {
                 .unwrap_or(false);
         }
 
-        let path_str = path.as_ref().to_string_lossy().to_string();
-        super::DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(&path_str))
+        super::current_filesystem()
+            .vfs()
+            .kind_of(super::vfs::ROOT, path.as_ref(), true)
+            == Some(super::FileKind::Dir)
     }
 
     /// Writes a slice as the entire contents of a file
@@ -2546,7 +2610,6 @@ pub mod unsync {
     ///
     /// * If the file cannot be created
     /// * If the file cannot be written to
-    /// * If the `FILES` `RwLock` fails to write to
     pub async fn write<P: AsRef<Path> + Send + Sync, C: AsRef<[u8]> + Send>(
         path: P,
         contents: C,
@@ -2749,7 +2812,6 @@ pub mod unsync {
         ///
         /// # Panics
         ///
-        /// * If the FILES or data mutex is poisoned (when using simulator)
         /// * If the `spawn_blocking` task panics (when using real filesystem)
         // Preserve polling-time metadata access across simulator/native backends.
         #[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
@@ -2764,41 +2826,7 @@ pub mod unsync {
                 .unwrap();
             }
 
-            if self.file_type_info.is_dir() {
-                Ok(Metadata {
-                    len: 0,
-                    is_file: false,
-                    is_dir: true,
-                    is_symlink: false,
-                })
-            } else if self.file_type_info.is_file() {
-                // For files, get the actual size from the simulator storage
-                let path_str = self.path.to_str().ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "path is invalid str")
-                })?;
-                let len = super::FILES
-                    .with_borrow(|files| {
-                        files
-                            .read()
-                            .unwrap()
-                            .get(path_str)
-                            .map(|data| u64::try_from(data.lock().unwrap().len()).unwrap_or(0))
-                    })
-                    .unwrap_or(0);
-                Ok(Metadata {
-                    len,
-                    is_file: true,
-                    is_dir: false,
-                    is_symlink: false,
-                })
-            } else {
-                Ok(Metadata {
-                    len: 0,
-                    is_file: false,
-                    is_dir: false,
-                    is_symlink: self.file_type_info.is_symlink(),
-                })
-            }
+            super::sync::symlink_metadata(&self.path)
         }
     }
 
@@ -2945,16 +2973,121 @@ pub mod unsync {
             .collect())
     }
 
-    #[cfg(test)]
-    #[allow(clippy::await_holding_lock)]
-    mod test {
-        use std::sync::{Arc, Mutex};
+    /// Inspect an entry, following symbolic links.
+    ///
+    /// # Errors
+    /// * As for the synchronous `metadata`.
+    #[allow(clippy::unused_async)]
+    pub async fn metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        super::sync::metadata(path)
+    }
 
-        use bytes::BytesMut;
+    /// Inspect an entry without following a final symbolic link.
+    ///
+    /// # Errors
+    /// * As for the synchronous `symlink_metadata`.
+    #[allow(clippy::unused_async)]
+    pub async fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        super::sync::symlink_metadata(path)
+    }
+
+    /// Remove a file or symbolic link.
+    ///
+    /// # Errors
+    /// * As for the synchronous `remove_file`.
+    #[allow(clippy::unused_async)]
+    pub async fn remove_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+        super::sync::remove_file(path)
+    }
+
+    /// Remove an empty directory.
+    ///
+    /// # Errors
+    /// * As for the synchronous `remove_dir`.
+    #[allow(clippy::unused_async)]
+    pub async fn remove_dir(path: impl AsRef<Path>) -> std::io::Result<()> {
+        super::sync::remove_dir(path)
+    }
+
+    /// Rename a file or directory with POSIX `rename` semantics.
+    ///
+    /// # Errors
+    /// * As for the synchronous `rename`.
+    #[allow(clippy::unused_async)]
+    pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        super::sync::rename(from, to)
+    }
+
+    /// Rename without replacing an existing destination.
+    ///
+    /// # Errors
+    /// * As for the synchronous `rename_noreplace`.
+    #[allow(clippy::unused_async)]
+    pub async fn rename_noreplace(
+        from: impl AsRef<Path>,
+        to: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        super::sync::rename_noreplace(from, to)
+    }
+
+    /// Create a hard link.
+    ///
+    /// # Errors
+    /// * As for the synchronous `hard_link`.
+    #[allow(clippy::unused_async)]
+    pub async fn hard_link(
+        original: impl AsRef<Path>,
+        link: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        super::sync::hard_link(original, link)
+    }
+
+    /// Create a symbolic link.
+    ///
+    /// # Errors
+    /// * As for the synchronous `symlink`.
+    #[allow(clippy::unused_async)]
+    pub async fn symlink(
+        original: impl AsRef<Path>,
+        link: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        super::sync::symlink(original, link)
+    }
+
+    /// Read the target of a symbolic link.
+    ///
+    /// # Errors
+    /// * As for the synchronous `read_link`.
+    #[allow(clippy::unused_async)]
+    pub async fn read_link(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+        super::sync::read_link(path)
+    }
+
+    /// Change permission bits, following symbolic links.
+    ///
+    /// # Errors
+    /// * As for the synchronous `set_permissions`.
+    #[allow(clippy::unused_async)]
+    pub async fn set_permissions(
+        path: impl AsRef<Path>,
+        permissions: Permissions,
+    ) -> std::io::Result<()> {
+        super::sync::set_permissions(path, permissions)
+    }
+
+    /// Make pending changes to a directory's entries durable.
+    ///
+    /// # Errors
+    /// * As for the synchronous `sync_directory`.
+    #[allow(clippy::unused_async)]
+    pub async fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
+        super::sync::sync_directory(path)
+    }
+
+    #[cfg(test)]
+    mod test {
         use pretty_assertions::assert_eq;
         use tokio::io::AsyncReadExt as _;
-
-        use crate::simulator::FILES;
 
         use super::OpenOptions;
 
@@ -2962,17 +3095,10 @@ pub mod unsync {
         async fn can_read_empty_file() {
             const FILENAME: &str = "unsync::test1";
 
-            FILES.with_borrow_mut(|x| {
-                x.write()
-                    .unwrap()
-                    .insert(FILENAME.to_string(), Arc::new(Mutex::new(BytesMut::new())))
-            });
+            super::super::reset_fs();
+            super::write(FILENAME, b"").await.unwrap();
 
-            let mut file = OpenOptions::new()
-                .create(true)
-                .open(FILENAME)
-                .await
-                .unwrap();
+            let mut file = OpenOptions::new().read(true).open(FILENAME).await.unwrap();
 
             let mut buf = [0u8; 1024];
 
@@ -2985,18 +3111,10 @@ pub mod unsync {
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "unsync::test2";
 
-            FILES.with_borrow_mut(|x| {
-                x.write().unwrap().insert(
-                    FILENAME.to_string(),
-                    Arc::new(Mutex::new(BytesMut::from(b"hey" as &[u8]))),
-                )
-            });
+            super::super::reset_fs();
+            super::write(FILENAME, b"hey").await.unwrap();
 
-            let mut file = OpenOptions::new()
-                .create(true)
-                .open(FILENAME)
-                .await
-                .unwrap();
+            let mut file = OpenOptions::new().read(true).open(FILENAME).await.unwrap();
 
             let mut buf = [0u8; 1024];
 
@@ -3078,41 +3196,23 @@ mod exists_tests {
 }
 
 #[cfg(test)]
-mod get_parent_directories_tests {
-    use super::get_parent_directories;
-    use pretty_assertions::assert_eq;
-
-    #[test_log::test]
-    fn test_parent_directories_for_deeply_nested_path() {
-        let parents = get_parent_directories("/a/b/c/d/e");
-        assert_eq!(parents, vec!["/", "/a", "/a/b", "/a/b/c", "/a/b/c/d"]);
-    }
-
-    #[test_log::test]
-    fn test_parent_directories_for_single_level() {
-        let parents = get_parent_directories("/single");
-        assert_eq!(parents, vec!["/"]);
-    }
-
-    #[test_log::test]
-    fn test_parent_directories_for_root() {
-        let parents = get_parent_directories("/");
-        // Root has no parents
-        assert_eq!(parents, Vec::<String>::new());
-    }
-
-    #[test_log::test]
-    fn test_parent_directories_preserves_order() {
-        // Parents should be returned from root to immediate parent
-        let parents = get_parent_directories("/usr/local/bin");
-        assert_eq!(parents, vec!["/", "/usr", "/usr/local"]);
-    }
-}
-
-#[cfg(test)]
 mod get_directory_children_tests {
-    use super::{get_directory_children, reset_fs, sync};
+    use super::{reset_fs, sync};
     use pretty_assertions::assert_eq;
+
+    fn get_directory_children(path: &str) -> (Vec<String>, Vec<String>) {
+        let mut files = Vec::new();
+        let mut subdirs = Vec::new();
+        for entry in sync::read_dir_sorted(path).unwrap() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if entry.file_type().unwrap().is_dir() {
+                subdirs.push(name);
+            } else {
+                files.push(name);
+            }
+        }
+        (files, subdirs)
+    }
 
     #[test_log::test]
     fn test_children_of_empty_directory() {
@@ -3230,13 +3330,13 @@ mod async_file_conversion_tests {
         let async_file = sync_file.into_async();
 
         // Position and path should be preserved
-        assert_eq!(async_file.position, 5);
+        assert_eq!(async_file.handle.position, 5);
         assert_eq!(async_file.path.to_string_lossy(), "/tmp/async_to_sync.txt");
-        assert!(async_file.write);
+        assert!(async_file.handle.write);
 
         // Convert back to sync
         let sync_file_again = async_file.into_sync();
-        assert_eq!(sync_file_again.position, 5);
+        assert_eq!(sync_file_again.handle.position, 5);
         assert_eq!(
             sync_file_again.path.to_string_lossy(),
             "/tmp/async_to_sync.txt"
@@ -3317,7 +3417,7 @@ mod async_operations_tests {
             .await
             .unwrap();
 
-        assert!(file.write);
+        assert!(file.handle.write);
         assert_eq!(file.path.to_string_lossy(), "/async_open/new_file.txt");
     }
 
@@ -4468,9 +4568,12 @@ mod metadata_tests {
 
         let metadata = Metadata {
             len: 1024,
-            is_file: true,
-            is_dir: false,
-            is_symlink: false,
+            kind: crate::types::FileKind::File,
+            mode: 0o644,
+            uid: None,
+            gid: None,
+            nlink: None,
+            file_id: None,
         };
 
         assert_eq!(metadata.len(), 1024);
@@ -4483,9 +4586,12 @@ mod metadata_tests {
     fn test_metadata_for_directory_entry() {
         let dir_metadata = Metadata {
             len: 0,
-            is_file: false,
-            is_dir: true,
-            is_symlink: false,
+            kind: crate::types::FileKind::Dir,
+            mode: 0o644,
+            uid: None,
+            gid: None,
+            nlink: None,
+            file_id: None,
         };
 
         assert!(dir_metadata.is_dir());
@@ -4497,9 +4603,12 @@ mod metadata_tests {
     fn test_metadata_for_symlink_entry() {
         let symlink_metadata = Metadata {
             len: 0,
-            is_file: false,
-            is_dir: false,
-            is_symlink: true,
+            kind: crate::types::FileKind::Symlink,
+            mode: 0o644,
+            uid: None,
+            gid: None,
+            nlink: None,
+            file_id: None,
         };
 
         assert!(symlink_metadata.is_symlink());
@@ -5001,86 +5110,6 @@ mod file_create_and_open_tests {
 }
 
 #[cfg(test)]
-mod normalize_path_tests {
-    use super::normalize_path;
-    use pretty_assertions::assert_eq;
-
-    #[test_log::test]
-    fn test_normalize_absolute_path_with_single_dot() {
-        // Single dot should be removed
-        assert_eq!(normalize_path("/a/./b"), "/a/b");
-        assert_eq!(normalize_path("/./a"), "/a");
-        assert_eq!(normalize_path("/a/."), "/a");
-        assert_eq!(normalize_path("/././."), "/");
-    }
-
-    #[test_log::test]
-    fn test_normalize_absolute_path_with_double_dots() {
-        // Double dots should go up one directory
-        assert_eq!(normalize_path("/a/b/../c"), "/a/c");
-        assert_eq!(normalize_path("/a/b/c/../../d"), "/a/d");
-        assert_eq!(normalize_path("/a/../b"), "/b");
-    }
-
-    #[test_log::test]
-    fn test_normalize_absolute_path_double_dots_at_root() {
-        // Double dots at root should be ignored for absolute paths
-        assert_eq!(normalize_path("/.."), "/");
-        assert_eq!(normalize_path("/../a"), "/a");
-        assert_eq!(normalize_path("/../../a/b"), "/a/b");
-    }
-
-    #[test_log::test]
-    fn test_normalize_absolute_path_with_trailing_slashes() {
-        // Trailing slashes should be handled (empty components ignored)
-        assert_eq!(normalize_path("/a/b/"), "/a/b");
-        assert_eq!(normalize_path("/a//b"), "/a/b");
-        assert_eq!(normalize_path("///a///b///"), "/a/b");
-    }
-
-    #[test_log::test]
-    fn test_normalize_relative_path_with_single_dot() {
-        assert_eq!(normalize_path("./a"), "a");
-        assert_eq!(normalize_path("a/./b"), "a/b");
-        assert_eq!(normalize_path("."), ".");
-    }
-
-    #[test_log::test]
-    fn test_normalize_relative_path_with_double_dots() {
-        // For relative paths, .. at the start should be preserved
-        assert_eq!(normalize_path("../a"), "../a");
-        assert_eq!(normalize_path("../../a"), "../../a");
-        assert_eq!(normalize_path("a/b/../../c"), "c");
-        assert_eq!(normalize_path("a/../b"), "b");
-    }
-
-    #[test_log::test]
-    fn test_normalize_relative_path_double_dots_preserved() {
-        // Double dots that can't go further up should be preserved for relative paths
-        assert_eq!(normalize_path("a/../../b"), "../b");
-        assert_eq!(normalize_path("../.."), "../..");
-    }
-
-    #[test_log::test]
-    fn test_normalize_empty_path() {
-        // Empty path should become "."
-        assert_eq!(normalize_path(""), ".");
-    }
-
-    #[test_log::test]
-    fn test_normalize_root_path() {
-        assert_eq!(normalize_path("/"), "/");
-    }
-
-    #[test_log::test]
-    fn test_normalize_mixed_dots() {
-        // Complex combinations of . and ..
-        assert_eq!(normalize_path("/a/./b/../c/./d"), "/a/c/d");
-        assert_eq!(normalize_path("./a/./b/../c"), "a/c");
-    }
-}
-
-#[cfg(test)]
 mod canonicalize_tests {
     use super::{reset_fs, sync};
     use pretty_assertions::assert_eq;
@@ -5200,8 +5229,11 @@ mod create_dir_tests {
     fn test_create_dir_root() {
         reset_fs();
 
-        // Creating root should work (no parent check needed)
-        sync::create_dir("/").unwrap();
+        // The root always exists, so creating it fails like `std::fs::create_dir`.
+        assert_eq!(
+            sync::create_dir("/").unwrap_err().kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
         assert!(exists("/"));
     }
 
@@ -5216,13 +5248,16 @@ mod create_dir_tests {
     }
 
     #[test_log::test]
-    fn test_create_dir_idempotent() {
+    fn test_create_dir_existing_fails() {
         reset_fs();
         sync::create_dir_all("/parent").unwrap();
 
-        // Creating the same directory twice should work
+        // Creating the same directory twice fails like `std::fs::create_dir`.
         sync::create_dir("/parent/child").unwrap();
-        sync::create_dir("/parent/child").unwrap();
+        assert_eq!(
+            sync::create_dir("/parent/child").unwrap_err().kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
         assert!(exists("/parent/child"));
     }
 }

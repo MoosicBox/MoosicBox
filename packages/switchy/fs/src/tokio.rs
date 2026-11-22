@@ -56,7 +56,40 @@ pub mod unsync {
         ///
         /// * If the file metadata cannot be retrieved
         pub async fn metadata(&self) -> std::io::Result<Metadata> {
-            Ok(Metadata(self.0.metadata().await?))
+            Ok(self.0.metadata().await?.into())
+        }
+
+        /// Make the file's data, length and metadata durable.
+        ///
+        /// # Errors
+        /// * Native synchronization failures.
+        pub async fn sync_all(&self) -> std::io::Result<()> {
+            self.0.sync_all().await
+        }
+
+        /// Make the file's data and length durable.
+        ///
+        /// # Errors
+        /// * Native synchronization failures.
+        pub async fn sync_data(&self) -> std::io::Result<()> {
+            self.0.sync_data().await
+        }
+
+        /// Truncate or extend the file to `len` bytes.
+        ///
+        /// # Errors
+        /// * Native failures.
+        pub async fn set_len(&self, len: u64) -> std::io::Result<()> {
+            self.0.set_len(len).await
+        }
+
+        /// Change the file's permission bits.
+        ///
+        /// # Errors
+        /// * Native failures.
+        pub async fn set_permissions(&self, permissions: Permissions) -> std::io::Result<()> {
+            let current = self.0.metadata().await?.permissions();
+            self.0.set_permissions(permissions.to_std(current)).await
         }
 
         /// Returns a reference to the inner `tokio::fs::File`
@@ -134,55 +167,7 @@ pub mod unsync {
         }
     }
 
-    /// Metadata information about a file
-    ///
-    /// Wrapper around `std::fs::Metadata` providing information about file size and type.
-    #[derive(Debug, Clone)]
-    pub struct Metadata(std::fs::Metadata);
-
-    impl Metadata {
-        /// Returns the size of the file in bytes
-        #[must_use]
-        pub fn len(&self) -> u64 {
-            self.0.len()
-        }
-
-        /// Returns `true` if the file has zero length
-        #[must_use]
-        pub fn is_empty(&self) -> bool {
-            self.len() == 0
-        }
-
-        /// Returns `true` if this metadata is for a regular file
-        #[must_use]
-        pub fn is_file(&self) -> bool {
-            self.0.is_file()
-        }
-
-        /// Returns `true` if this metadata is for a directory
-        #[must_use]
-        pub fn is_dir(&self) -> bool {
-            self.0.is_dir()
-        }
-
-        /// Returns `true` if this metadata is for a symbolic link
-        #[must_use]
-        pub fn is_symlink(&self) -> bool {
-            self.0.is_symlink()
-        }
-
-        /// Returns a reference to the inner `std::fs::Metadata`
-        #[must_use]
-        pub const fn inner(&self) -> &std::fs::Metadata {
-            &self.0
-        }
-    }
-
-    impl From<std::fs::Metadata> for Metadata {
-        fn from(metadata: std::fs::Metadata) -> Self {
-            Self(metadata)
-        }
-    }
+    pub use crate::types::{Metadata, Permissions};
 
     /// Async directory reader that yields directory entries
     ///
@@ -241,7 +226,7 @@ pub mod unsync {
         ///
         /// * If the metadata cannot be retrieved
         pub async fn metadata(&self) -> std::io::Result<Metadata> {
-            Ok(Metadata(self.0.metadata().await?))
+            Ok(self.0.metadata().await?.into())
         }
 
         /// Returns a reference to the inner `tokio::fs::DirEntry`
@@ -414,6 +399,146 @@ pub mod unsync {
         ::tokio::fs::canonicalize(path).await
     }
 
+    /// Inspect an entry, following symbolic links.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::metadata` fails
+    pub async fn metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        Ok(::tokio::fs::metadata(path).await?.into())
+    }
+
+    /// Inspect an entry without following a final symbolic link.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::symlink_metadata` fails
+    pub async fn symlink_metadata(path: impl AsRef<Path>) -> std::io::Result<Metadata> {
+        Ok(::tokio::fs::symlink_metadata(path).await?.into())
+    }
+
+    /// Remove a file or symbolic link.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::remove_file` fails
+    pub async fn remove_file(path: impl AsRef<Path>) -> std::io::Result<()> {
+        ::tokio::fs::remove_file(path).await
+    }
+
+    /// Remove an empty directory.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::remove_dir` fails
+    pub async fn remove_dir(path: impl AsRef<Path>) -> std::io::Result<()> {
+        ::tokio::fs::remove_dir(path).await
+    }
+
+    /// Rename a file or directory.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::rename` fails
+    pub async fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> std::io::Result<()> {
+        ::tokio::fs::rename(from, to).await
+    }
+
+    /// Rename without replacing an existing destination (see the synchronous
+    /// `rename_noreplace` for the system calls used).
+    ///
+    /// # Errors
+    /// * `EEXIST`, or native failures.
+    ///
+    /// # Panics
+    /// * If the blocking task panics.
+    pub async fn rename_noreplace(
+        from: impl AsRef<Path>,
+        to: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        let from = from.as_ref().to_path_buf();
+        let to = to.as_ref().to_path_buf();
+        switchy_async::task::spawn_blocking(move || {
+            #[cfg(unix)]
+            {
+                crate::native::rename_noreplace(rustix::fs::CWD, &from, rustix::fs::CWD, &to)
+            }
+            #[cfg(not(unix))]
+            {
+                std::fs::hard_link(&from, &to)?;
+                std::fs::remove_file(&from)
+            }
+        })
+        .await
+        .unwrap()
+    }
+
+    /// Create a hard link.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::hard_link` fails
+    pub async fn hard_link(
+        original: impl AsRef<Path>,
+        link: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        ::tokio::fs::hard_link(original, link).await
+    }
+
+    /// Create a symbolic link at `link` pointing to `original`.
+    ///
+    /// # Errors
+    /// * Native failures; `Unsupported` on non-Unix platforms.
+    pub async fn symlink(
+        original: impl AsRef<Path>,
+        link: impl AsRef<Path>,
+    ) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            ::tokio::fs::symlink(original, link).await
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (original, link);
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
+    /// Read the target of a symbolic link.
+    ///
+    /// # Errors
+    /// * If underlying `tokio::fs::read_link` fails
+    pub async fn read_link(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+        ::tokio::fs::read_link(path).await
+    }
+
+    /// Change permission bits, following symbolic links.
+    ///
+    /// # Errors
+    /// * Native failures.
+    pub async fn set_permissions(
+        path: impl AsRef<Path>,
+        permissions: Permissions,
+    ) -> std::io::Result<()> {
+        let path = path.as_ref();
+        let current = ::tokio::fs::metadata(path).await?.permissions();
+        ::tokio::fs::set_permissions(path, permissions.to_std(current)).await
+    }
+
+    /// Make changes to a directory's entries durable.
+    ///
+    /// # Errors
+    /// * The path cannot be opened or is not a directory; `Unsupported` on non-Unix.
+    pub async fn sync_directory(path: impl AsRef<Path>) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            let directory = ::tokio::fs::File::open(path).await?;
+            if !directory.metadata().await?.is_dir() {
+                return Err(std::io::Error::from(std::io::ErrorKind::NotADirectory));
+            }
+            directory.sync_all().await
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+        }
+    }
+
     impl From<OpenOptions> for tokio::fs::OpenOptions {
         fn from(value: OpenOptions) -> Self {
             let mut options = Self::new();
@@ -426,8 +551,31 @@ pub mod unsync {
                 .write(value.write)
                 .truncate(value.truncate);
 
+            #[cfg(unix)]
+            {
+                options.mode(value.mode);
+                let flags = native_flags(value.nofollow, value.directory);
+                if flags != 0 {
+                    options.custom_flags(flags);
+                }
+            }
+
             options
         }
+    }
+
+    /// Extra `open(2)` flags for `nofollow`/`directory`.
+    #[cfg(unix)]
+    #[allow(clippy::cast_possible_wrap)] // flag bits fit in a C int on every Unix
+    fn native_flags(nofollow: bool, directory: bool) -> i32 {
+        let mut flags = rustix::fs::OFlags::empty();
+        if nofollow {
+            flags |= rustix::fs::OFlags::NOFOLLOW;
+        }
+        if directory {
+            flags |= rustix::fs::OFlags::DIRECTORY;
+        }
+        flags.bits() as i32
     }
 
     impl From<OpenOptions> for std::fs::OpenOptions {
@@ -442,6 +590,16 @@ pub mod unsync {
                 .write(value.write)
                 .truncate(value.truncate);
 
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(value.mode);
+                let flags = native_flags(value.nofollow, value.directory);
+                if flags != 0 {
+                    options.custom_flags(flags);
+                }
+            }
+
             options
         }
     }
@@ -454,6 +612,13 @@ pub mod unsync {
         ///
         /// * If an I/O error occurs
         pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
+            #[cfg(not(unix))]
+            if self.nofollow || self.directory {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "nofollow and directory open flags require a Unix platform",
+                ));
+            }
             let options: tokio::fs::OpenOptions = self.into();
 
             Ok(File(options.open(path).await?))
