@@ -313,6 +313,32 @@ Unset, it is 1. A runtime's workers start when a step first needs them and live 
 shut down or the run ends (they are `switchy_thread` daemons), so a run starts at most `n - 1`
 threads per runtime.
 
+### Late Wakeups and Spurious `Pending`
+
+Two seeded executor faults, both off unless configured. Each takes a probability per run:
+`switchy_async::simulator::set_late_wakeups(p)` / `set_spurious_pending(p)` (for the current
+run), else `SIMULATOR_LATE_WAKEUPS` / `SIMULATOR_SPURIOUS_PENDING`: a number in `0..=1`, or
+`swarm` to draw it per run from `{0, 0.01, 0.05, 0.2}`. Unset, it is 0. Every decision is drawn
+from the fault's own named stream (`switchy_async::late_wakeups`,
+`switchy_async::spurious_pending`), and nothing is drawn while a fault is off, so other draws
+and existing seeds replay exactly as before. `simulator::fault_counts()` tells how often each
+fault was drawn and fired in the run.
+
+- **Late wakeups**: a woken task is sometimes queued only after 1 to `LATE_WAKEUP_MAX_STEPS`
+  (8) further steps of its runtime (each `tick`, each turn of `block_on`, `wait` or a blocking
+  task's loop), as on a busy executor. Under the harness the clock moves one step per tick, so
+  a wakeup can lose a race it would win at once, against a timeout say. A task waiting late
+  still counts as unfinished (`wait`, `try_finish`), `shutdown_now` drops it, and an executor
+  with late tasks steps on instead of idling, so none is lost.
+- **Spurious `Pending`**: a ready leaf future of the simulator (sleeps and timeouts,
+  `futures::Instant`, intervals, its own `mpmc` channels, `watch` and `Barrier`, the `mpsc`
+  and bounded channels it wraps, and join handles) sometimes returns `Pending` once and wakes
+  itself at once, before consuming anything. Correct code cannot tell; code that assumes a ready future
+  completes on this poll can. It reaches awaits `#[inject_yields]` does not. After a spurious
+  `Pending`, the task's next ready leaf completes without a draw, so even a probability of 1
+  makes progress. tokio's own futures (its locks, `Notify`, `oneshot`, `broadcast`) are not
+  reached.
+
 ### Runtime Features
 
 - **`rt-multi-thread`**: Multi-threaded runtime support
