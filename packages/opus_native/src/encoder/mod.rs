@@ -115,6 +115,7 @@ struct PracticalCandidate {
 
 #[derive(Clone)]
 struct PreparedCeltFrame {
+    joint_hybrid: bool,
     range: RangeEncoder,
     spectrum: Vec<Vec<i32>>,
     target_energy: Vec<i32>,
@@ -1489,6 +1490,26 @@ impl Encoder {
                 silk.short_rate_control = self.config.sample_rate == SampleRate::Hz48000
                     && (64_000..128_000).contains(&self.config.bitrate)
                     && self.config.frame_size == 480;
+                // At short packet budgets the refined NLSF can consume the bits
+                // needed for excitation. Offer its coarse alternative only at
+                // low levels or for strongly alternating low-band samples.
+                let compact = internal_size == 480
+                    && self.config.channels == Channels::Stereo
+                    && self.config.sample_rate == SampleRate::Hz48000
+                    && self.config.bitrate == 64_000
+                    && scorer.target.iter().any(|v| v.unsigned_abs() > 2)
+                    && {
+                        let power = low.iter().map(|x| x * x).sum::<f32>();
+                        let adjacent = low
+                            .iter()
+                            .zip(low.iter().skip(2))
+                            .map(|(x, y)| x * y)
+                            .sum::<f32>();
+                        power > 0.0
+                            && (scorer.target.iter().all(|v| v.unsigned_abs() <= 256)
+                                || adjacent < -0.7 * power)
+                    };
+                silk.set_compact_prefix(compact);
                 silk.encode_prefix_scored(&low, &mut enc, scorer.as_mut())?;
                 #[cfg(test)]
                 scorer.verify(&enc.clone().finish().map_err(entropy)?)?;
@@ -1535,6 +1556,13 @@ impl Encoder {
             }
         }
         let prepared = PreparedCeltFrame {
+            #[cfg(feature = "hybrid")]
+            joint_hybrid: self
+                .silk
+                .as_ref()
+                .is_some_and(silk::SilkEncoder::compact_prefix),
+            #[cfg(not(feature = "hybrid"))]
+            joint_hybrid: false,
             range: enc,
             spectrum,
             target_energy,
@@ -1561,6 +1589,7 @@ impl Encoder {
         redundant: Option<(bool, &[u8])>,
     ) -> Result<Vec<u8>> {
         let PreparedCeltFrame {
+            joint_hybrid,
             range: mut enc,
             spectrum,
             target_energy,
@@ -1639,7 +1668,18 @@ impl Encoder {
             21
         };
         let intensity = allocation::stereo_intensity(&spectrum, lm, intensity);
-        let allocation = if hybrid && end == 21 {
+        let allocation = if joint_hybrid && hybrid && channels == 2 && bitrate <= 64_000 && lm == 2
+        {
+            allocation::allocate_joint(
+                &mut enc,
+                remaining,
+                channels,
+                lm as i32,
+                start,
+                end,
+                intensity.min(end),
+            )?
+        } else if hybrid && end == 21 {
             allocation::allocate(&mut enc, remaining, channels, lm as i32, start)?
         } else if hybrid {
             allocation::allocate_celt_end(

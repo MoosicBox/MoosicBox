@@ -59,9 +59,16 @@ struct PrefixScoring<'a> {
     winner: i128,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum SpectralPolicy {
+    Standard,
+    CompareCoarse,
+}
+
 #[derive(Clone)]
 pub(super) struct SilkEncoder {
     pub(super) short_rate_control: bool,
+    spectral_policy: SpectralPolicy,
     config: EncoderConfig,
     history: [[i32; 16]; 2],
     gain: [i32; 2],
@@ -497,6 +504,18 @@ struct Model {
 }
 
 impl SilkEncoder {
+    pub(super) const fn set_compact_prefix(&mut self, compact: bool) {
+        self.spectral_policy = if compact {
+            SpectralPolicy::CompareCoarse
+        } else {
+            SpectralPolicy::Standard
+        };
+    }
+
+    pub(super) const fn compact_prefix(&self) -> bool {
+        matches!(self.spectral_policy, SpectralPolicy::CompareCoarse)
+    }
+
     pub(super) fn new(config: EncoderConfig) -> Result<Self> {
         let rate = sample_rate(config.sample_rate)?;
         if ![rate / 100, rate / 50, rate / 25, rate * 3 / 50].contains(&config.frame_size)
@@ -508,6 +527,7 @@ impl SilkEncoder {
         }
         Ok(Self {
             short_rate_control: false,
+            spectral_policy: SpectralPolicy::Standard,
             config,
             history: [[0; 16]; 2],
             gain: [65536; 2],
@@ -1081,6 +1101,8 @@ impl SilkEncoder {
         let mut best = None;
         let masks: &[u8] = if self.config.channels == crate::Channels::Mono {
             &[0, 1, 4, 5]
+        } else if self.compact_prefix() {
+            &[16, 19, 0, 3]
         } else if self.short_rate_control {
             &[0]
         } else if self.config.frame_size == 320 {
@@ -1977,21 +1999,30 @@ const fn bandwidth(rate: SampleRate) -> Bandwidth {
 }
 
 fn prediction_error(input: &[i32], lpc: &[i16]) -> i128 {
-    input
-        .iter()
-        .enumerate()
-        .map(|(i, &sample)| {
-            let prediction = lpc
+    // Reverse once per candidate, then score contiguous, fixed-size windows.
+    // Keep the initial partial predictor and its Q12 rounding unchanged.
+    fn fixed<const N: usize>(input: &[i32], coefficients: &[i16]) -> i128 {
+        let taps: [i64; N] = std::array::from_fn(|j| i64::from(coefficients[N - 1 - j]));
+        let mut error = 0_i128;
+        for i in 0..N.min(input.len()) {
+            let dot: i64 = input[..i]
                 .iter()
-                .enumerate()
-                .take(i)
-                .map(|(j, &a)| i64::from(a) * i64::from(input[i - j - 1]))
-                .sum::<i64>()
-                >> 12;
-            let error = i64::from(sample) - prediction;
-            i128::from(error) * i128::from(error)
-        })
-        .sum()
+                .zip(&taps[N - i..])
+                .map(|(&x, &a)| i64::from(x) * a)
+                .sum();
+            error += i128::from(i64::from(input[i]) - (dot >> 12)).pow(2);
+        }
+        for row in input.windows(N + 1) {
+            let dot: i64 = (0..N).map(|j| i64::from(row[j]) * taps[j]).sum();
+            error += i128::from(i64::from(row[N]) - (dot >> 12)).pow(2);
+        }
+        error
+    }
+    match lpc.len() {
+        10 => fixed::<10>(input, lpc),
+        16 => fixed::<16>(input, lpc),
+        _ => unreachable!("SILK LPC order"),
+    }
 }
 
 // Search the actual quantized LPC filters rather than an unquantized model.
