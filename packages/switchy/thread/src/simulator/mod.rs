@@ -787,6 +787,12 @@ impl Scheduler {
     }
 
     /// The calling thread's index, if it is a simulated thread of this run.
+    #[must_use]
+    pub fn try_me(&self) -> Option<ThreadIndex> {
+        self.caller()
+    }
+
+    /// The calling thread's index, if it is a simulated thread of this run.
     fn caller(&self) -> Option<ThreadIndex> {
         match IDENTITY.get() {
             Some((context, index)) if context == self.context_id => Some(index),
@@ -1246,6 +1252,13 @@ impl Scheduler {
         drop(inner);
         self.wait_turn(me);
         lock(&self.inner).killer = None;
+    }
+
+    /// Whether thread `index` has been killed: it runs none of its own code again (it unwinds,
+    /// or is parked for good).
+    #[must_use]
+    pub fn killed(&self, index: ThreadIndex) -> bool {
+        self.is_killed(index)
     }
 
     /// Whether the calling thread has been killed (and should not run its code).

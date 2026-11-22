@@ -667,6 +667,7 @@ impl Runtime {
     /// * If such a poll never returns (it waits for the caller)
     #[cfg(feature = "thread-simulator")]
     fn await_polls_elsewhere(&self) {
+        // Ten thousand seconds of the run's clock.
         const PATIENCE: u32 = 1_000_000;
         for _ in 0..PATIENCE {
             let polled = {
@@ -679,11 +680,33 @@ impl Runtime {
             if !polled {
                 return;
             }
-            switchy_thread::thread::yield_now();
+            // Asleep, not yielding: the poll may be sleeping itself, and the run's clock moves
+            // only when every thread waits.
+            switchy_thread::thread::sleep(std::time::Duration::from_millis(10));
         }
+        let pollers: Vec<String> = {
+            let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+            let snapshot = switchy_thread::simulator::try_scheduler()
+                .map(|scheduler| scheduler.snapshot());
+            registry
+                .values()
+                .filter_map(Weak::upgrade)
+                .filter(|task| task.polled_elsewhere())
+                .filter_map(|task| *task.poller.lock().unwrap_or_else(PoisonError::into_inner))
+                .map(|(_, index)| {
+                    let thread = index.and_then(|index| {
+                        snapshot.as_ref().and_then(|s| s.threads.get(index))
+                    });
+                    thread.map_or_else(
+                        || "a thread outside the run".to_string(),
+                        |t| format!("#{} {} ({:?} at {:?})", t.index, t.name, t.state, t.op),
+                    )
+                })
+                .collect()
+        };
         panic!(
             "shutting runtime {} down: a poll of one of its tasks on another thread never \
-             returned (does it wait for the thread shutting it down?)",
+             returned (does it wait for the thread shutting it down?): {pollers:?}",
             self.id
         );
     }
@@ -1141,8 +1164,8 @@ pub(crate) struct Task {
     /// Killed (its runtime shut down) while being polled elsewhere: the poll that holds its
     /// future drops it when it returns.
     killed: AtomicBool,
-    /// The thread polling its future right now, if any.
-    poller: std::sync::Mutex<Option<std::thread::ThreadId>>,
+    /// The thread polling its future right now, if any (and its index, if a simulated thread).
+    poller: std::sync::Mutex<Option<Poller>>,
 }
 
 impl std::fmt::Debug for Task {
@@ -1203,23 +1226,26 @@ impl Task {
     }
 
     /// Set the thread polling its future, returning the one before.
-    fn set_poller(
-        &self,
-        poller: Option<std::thread::ThreadId>,
-    ) -> Option<std::thread::ThreadId> {
+    fn set_poller(&self, poller: Option<Poller>) -> Option<Poller> {
         std::mem::replace(
             &mut *self.poller.lock().unwrap_or_else(PoisonError::into_inner),
             poller,
         )
     }
 
-    /// Whether a thread other than the calling one is polling its future right now.
+    /// Whether a thread other than the calling one is polling its future right now, and will
+    /// go on (one killed runs none of the task's code again, though it may never return: parked
+    /// for good, blocked while unwinding).
     #[cfg(feature = "thread-simulator")]
     fn polled_elsewhere(&self) -> bool {
-        self.poller
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_some_and(|poller| poller != std::thread::current().id())
+        let poller = *self.poller.lock().unwrap_or_else(PoisonError::into_inner);
+        poller.is_some_and(|(thread, index)| {
+            thread != std::thread::current().id()
+                && !index.is_some_and(|index| {
+                    switchy_thread::simulator::try_scheduler()
+                        .is_some_and(|scheduler| scheduler.killed(index))
+                })
+        })
     }
 
     /// Whether the task was killed (and is finished, or about to be when its poll returns).
@@ -1253,11 +1279,11 @@ impl Task {
             self.finish();
             return Poll::Ready(());
         }
-        self.polling.store(true, Ordering::SeqCst);
-        let outer = self.set_poller(Some(std::thread::current().id()));
-        let poll = future.as_mut().poll(&mut ctx);
-        self.set_poller(outer);
-        self.polling.store(false, Ordering::SeqCst);
+        let poll = {
+            // Cleared even when the poll unwinds (a panic, or its thread killed).
+            let _polling = Polling::start(self);
+            future.as_mut().poll(&mut ctx)
+        };
         // Killed while it ran (on another worker): drop it now.
         let poll = if self.killed() { Poll::Ready(()) } else { poll };
         match poll {
@@ -1310,6 +1336,35 @@ impl Task {
 
     fn finished(&self) -> bool {
         self.finished.load(Ordering::SeqCst)
+    }
+}
+
+/// A thread polling a task: its id, and its index if it is a simulated thread of the run.
+type Poller = (std::thread::ThreadId, Option<usize>);
+
+/// Marks a task polled by the calling thread while it lives.
+struct Polling<'a> {
+    task: &'a Task,
+    outer: Option<Poller>,
+}
+
+impl<'a> Polling<'a> {
+    fn start(task: &'a Task) -> Self {
+        task.polling.store(true, Ordering::SeqCst);
+        #[cfg(feature = "thread-simulator")]
+        let index = switchy_thread::simulator::try_scheduler()
+            .and_then(|scheduler| scheduler.try_me());
+        #[cfg(not(feature = "thread-simulator"))]
+        let index = None;
+        let outer = task.set_poller(Some((std::thread::current().id(), index)));
+        Self { task, outer }
+    }
+}
+
+impl Drop for Polling<'_> {
+    fn drop(&mut self) {
+        self.task.set_poller(self.outer);
+        self.task.polling.store(false, Ordering::SeqCst);
     }
 }
 
