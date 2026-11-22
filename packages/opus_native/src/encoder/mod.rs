@@ -94,6 +94,10 @@ pub struct Encoder {
     #[cfg(feature = "hybrid")]
     hybrid_tilt_db: i32,
     #[cfg(feature = "hybrid")]
+    proposal_amp: f32,
+    #[cfg(feature = "hybrid")]
+    quick_prefix: bool,
+    #[cfg(feature = "hybrid")]
     practical_prefix_bitrate: Option<u32>,
     #[cfg(feature = "hybrid")]
     native_prefix_score: Option<Box<hybrid::NativePrefixScore>>,
@@ -184,6 +188,10 @@ impl Encoder {
             hybrid_energy_db: 0,
             #[cfg(feature = "hybrid")]
             hybrid_tilt_db: 0,
+            #[cfg(feature = "hybrid")]
+            proposal_amp: 1.,
+            #[cfg(feature = "hybrid")]
+            quick_prefix: false,
             #[cfg(feature = "hybrid")]
             practical_prefix_bitrate: None,
             #[cfg(feature = "hybrid")]
@@ -742,206 +750,340 @@ impl Encoder {
         let share_scores = true;
         #[cfg(test)]
         let share_scores = !hybrid::REFERENCE_CACHE_LIFECYCLE.get();
-        for &budget in &budgets[..budget_count] {
-            let mut prepared_state = None;
-            let mut prepared_frame = None;
-            let reuse_prefix = eligible;
-            #[cfg(test)]
-            let reuse_prefix = reuse_prefix && !RD_UNFACTORED_REFERENCE.get();
-            if reuse_prefix {
-                let mut state = self.clone();
-                state.hybrid_energy_db = 0;
-                state.practical_prefix_bitrate = Some(budget);
-                {
-                    state.native_prefix_score = Some(Box::new(hybrid::NativePrefixScore {
-                        incoming: prefix_origin.clone(),
-                        target: target.clone(),
-                        cache: std::mem::take(&mut prefix_cache),
-                        best: None,
-                    }));
-                }
-                // A smaller allocation can be unrepresentable (e.g. SILK's
-                // minimum excitation exceeds its budget). Discard only this
-                // cloned candidate, as for failed suffix candidates below.
-                #[cfg(test)]
-                let phase = std::time::Instant::now();
-                let prefix_result = state.encode_practical_boundary_prepared(
-                    pcm,
-                    EncoderControl {
-                        mode: EncoderMode::Hybrid,
-                        ..control
-                    },
-                    Some(&mut prepared_frame),
-                );
-                #[cfg(test)]
-                {
-                    phases[0] += phase.elapsed().as_nanos();
-                }
-                // Move completed scores out before the five suffix clones.
-                // No scorer callback occurs in a captured CELT suffix. Keep
-                // incoming/target/best for independent prefix verification.
-                if share_scores && let Some(scorer) = &mut state.native_prefix_score {
-                    prefix_cache = std::mem::take(&mut scorer.cache);
-                }
-                if let Err(error) = prefix_result {
-                    last_error = Some(error);
-                    continue;
-                }
-                prepared_state = Some(state);
-            }
-            let quiet = self.config.sample_rate == SampleRate::Hz48000
-                && control.bitrate >= 64_000
-                && internal_size == 480
-                && self.config.channels == Channels::Stereo
-                && target.iter().all(|&x| x.unsigned_abs() <= 2);
-            let slopes = if quiet && eligible && control.bitrate <= 64_000 {
-                &[0, -3, 3][..]
+        let near = eligible
+            && internal_size == 480
+            && control.bitrate < 64000
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.channels == Channels::Stereo
+            && target.iter().any(|v| v.unsigned_abs() > 2)
+            && target.iter().all(|v| v.unsigned_abs() < 128);
+        let quiet_fast = eligible
+            && internal_size == 480
+            && control.bitrate < 64000
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.channels == Channels::Stereo
+            && target.iter().all(|x| x.unsigned_abs() < 128);
+        // Try the nominal allocation first. Stop expanding the search when the actual
+        // decoded packet has zero error or consumes less than a third of signal power in error.
+        let energy: i128 = target.iter().map(|&v| i128::from(v).pow(2)).sum();
+        for &quick in if quiet_fast {
+            &[true, false][..]
+        } else {
+            &[false][..]
+        } {
+            for (amp, budget) in (if near && !quick {
+                &[1., 0.66, 1.33][..]
             } else {
-                &[0][..]
-            };
-            let biases = if quiet {
-                &[0, -1, 1, -2, 2][..]
-            } else {
-                &[0, -1, -2, -3, -6][..]
-            };
-            // Compare spectrally tilted energy targets near the PCM quantization floor.
-            // Keep the flat target first and score each finalized packet at equal rate.
-            for (slope, db) in slopes
-                .iter()
-                .flat_map(|&s| biases.iter().map(move |&d| (s, d)))
+                &[1.][..]
+            })
+            .iter()
+            .flat_map(|&a| budgets[..budget_count].iter().map(move |&b| (a, b)))
             {
-                if db != 0 && !eligible {
+                if best
+                    .as_ref()
+                    .is_some_and(|b| quiet_fast && (b.error == 0 || b.error * 3 < energy))
+                {
+                    break;
+                }
+                if quick && budget != nominal {
                     continue;
                 }
+                let mut prepared_state = None;
+                let mut prepared_frame = None;
+                let reuse_prefix = eligible;
                 #[cfg(test)]
-                let phase = std::time::Instant::now();
-                let mut trial = prepared_state.as_ref().unwrap_or(self).clone();
-                #[cfg(test)]
-                {
-                    phases[1] += phase.elapsed().as_nanos();
-                }
-                trial.hybrid_energy_db = db;
-                trial.hybrid_tilt_db = slope;
-                trial.practical_prefix_bitrate = Some(budget);
-                #[cfg(test)]
-                let phase = std::time::Instant::now();
-                let packet = prepared_frame.as_ref().map_or_else(
-                    || {
-                        if eligible || departing {
-                            trial.encode_practical_boundary(
-                                pcm,
-                                EncoderControl {
-                                    mode: if departing {
-                                        EncoderMode::Celt
-                                    } else {
-                                        EncoderMode::Hybrid
-                                    },
-                                    ..control
-                                },
-                            )
-                        } else {
-                            trial.encode_frame_inner(pcm)
-                        }
-                    },
-                    |prepared| {
-                        let mut suffix = prepared.clone();
-                        for channel in 0..suffix.channels {
-                            for band in suffix.start..suffix.end {
-                                suffix.target_energy[channel * 21 + band] +=
-                                    (db + slope * (band as i32 - 18)) * 10_885;
-                            }
-                        }
-                        Self::encode_celt_suffix(suffix, None)
-                    },
-                );
-                #[cfg(test)]
-                {
-                    phases[2] += phase.elapsed().as_nanos();
-                }
-                let packet = match packet {
-                    Ok(packet) => packet,
-                    Err(error) => {
-                        last_error = Some(error);
-                        continue;
+                let reuse_prefix = reuse_prefix && !RD_UNFACTORED_REFERENCE.get();
+                if reuse_prefix {
+                    let mut state = self.clone();
+                    state.hybrid_energy_db = 0;
+                    state.quick_prefix = quick;
+                    state.proposal_amp = amp;
+                    state.practical_prefix_bitrate = Some(budget);
+                    {
+                        state.native_prefix_score = Some(Box::new(hybrid::NativePrefixScore {
+                            incoming: prefix_origin.clone(),
+                            target: target.clone(),
+                            cache: std::mem::take(&mut prefix_cache),
+                            best: None,
+                        }));
                     }
-                };
-                #[cfg(test)]
-                if let Some(scorer) = &trial.native_prefix_score {
-                    scorer.verify(&packet[1..])?;
-                }
-                #[cfg(test)]
-                if prepared_frame.is_some() && RD_VERIFY_CANDIDATES.get() {
-                    let mut reference = self.clone();
-                    reference.hybrid_energy_db = db;
-                    reference.hybrid_tilt_db = slope;
-                    reference.practical_prefix_bitrate = Some(budget);
-                    let expected = reference.encode_practical_boundary(
+                    // A smaller allocation can be unrepresentable (e.g. SILK's
+                    // minimum excitation exceeds its budget). Discard only this
+                    // cloned candidate, as for failed suffix candidates below.
+                    #[cfg(test)]
+                    let phase = std::time::Instant::now();
+                    let prefix_result = state.encode_practical_boundary_prepared(
                         pcm,
                         EncoderControl {
                             mode: EncoderMode::Hybrid,
                             ..control
                         },
-                    )?;
-                    assert_eq!(
-                        packet, expected,
-                        "prepared suffix differs for energy bias {db}"
+                        Some(&mut prepared_frame),
                     );
-                    let mut actual_synthesis = shadow.decoder.clone();
-                    let mut expected_synthesis = shadow.decoder.clone();
-                    let mut actual_pcm = vec![0; target.len()];
-                    let mut expected_pcm = actual_pcm.clone();
-                    actual_synthesis.decode(Some(&packet), &mut actual_pcm, false)?;
-                    expected_synthesis.decode(Some(&expected), &mut expected_pcm, false)?;
-                    assert_eq!(actual_pcm, expected_pcm, "candidate synthesis bias {db}");
+                    #[cfg(test)]
+                    {
+                        phases[0] += phase.elapsed().as_nanos();
+                    }
+                    // Move completed scores out before the five suffix clones.
+                    // No scorer callback occurs in a captured CELT suffix. Keep
+                    // incoming/target/best for independent prefix verification.
+                    if share_scores && let Some(scorer) = &mut state.native_prefix_score {
+                        prefix_cache = std::mem::take(&mut scorer.cache);
+                    }
+                    if let Err(error) = prefix_result {
+                        last_error = Some(error);
+                        continue;
+                    }
+                    if budget == nominal
+                    && eligible
+                    // The low-band gain proposals exclude this near-floor regime.
+                    && internal_size == 480
+                    && self.config.sample_rate == SampleRate::Hz48000
+                    && control.bitrate < 64000
+                    && target.len() == 960
+                    && target.iter().all(|v| v.unsigned_abs() <= 2)
+                    && target.iter().any(|&v| v != 0)
+                    && let Some(f) = prepared_frame.as_ref()
+                    && f.end >= 20
+                    {
+                        let ch = f.channels;
+                        let n = target.len() / ch;
+                        let mut analysis = analysis::Analysis::new(ch);
+                        let mut prev = vec![0; target.len()];
+                        for i in 0..120 * ch {
+                            prev[(n - 120) * ch + i] = i32::from(target[i]) * 4096;
+                        }
+                        analysis.transform(&prev);
+                        let mut next = vec![0; target.len()];
+                        for i in 0..(n - 120) * ch {
+                            next[i] = i32::from(target[120 * ch + i]) * 4096;
+                        }
+                        let spec = analysis.transform(&next);
+                        let (energy, _) = quantize::energies(&spec, f.lm);
+                        let left: i64 =
+                            target.iter().step_by(2).map(|&v| i64::from(v).pow(2)).sum();
+                        let right: i64 = target
+                            .iter()
+                            .skip(1)
+                            .step_by(2)
+                            .map(|&v| i64::from(v).pow(2))
+                            .sum();
+                        let total = left + right;
+                        let peak = target
+                            .iter()
+                            .map(|x| i64::from(x.unsigned_abs()))
+                            .max()
+                            .unwrap();
+                        let crest =
+                            (target.len() as i64 * peak * peak / total).max(1).ilog2() as i32;
+                        for db in [crest, crest + 3, crest + 6] {
+                            for tilt in [-3, 0, 3] {
+                                for balance in [0, if right <= left { -6 } else { 6 }] {
+                                    let mut alt = f.clone();
+                                    alt.spectrum.clone_from(&spec);
+                                    alt.target_energy.clone_from(&energy);
+                                    for c in 0..ch {
+                                        for b in f.start..f.end {
+                                            let ix = c * 21 + b;
+                                            if b < f.start + 3 {
+                                                alt.target_energy[ix] += (db
+                                                    + tilt * (b as i32 - f.start as i32 - 1)
+                                                    + balance * c as i32)
+                                                    * 10885;
+                                            } else {
+                                                alt.target_energy[ix] = -28 * 65536;
+                                            }
+                                        }
+                                    }
+                                    let Ok(packet) = Self::encode_celt_suffix(alt, None) else {
+                                        continue;
+                                    };
+                                    let mut dec = shadow.decoder.clone();
+                                    let mut y = vec![0; target.len()];
+                                    if dec.decode(Some(&packet), &mut y, false).ok()
+                                        != Some(self.config.frame_size)
+                                    {
+                                        continue;
+                                    }
+                                    let e = y
+                                        .iter()
+                                        .zip(&target)
+                                        .map(|(&a, &b)| (i128::from(a) - i128::from(b)).pow(2))
+                                        .sum();
+                                    if best.as_ref().is_none_or(|old| e < old.error) {
+                                        best = Some(PracticalCandidate {
+                                            #[cfg(test)]
+                                            bias: db,
+                                            error: e,
+                                            encoder: state.clone(),
+                                            synthesis: dec,
+                                            packet,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    prepared_state = Some(state);
                 }
-                if packet.len() > control.bitrate as usize * internal_size / 384_000 {
-                    continue;
-                }
-                #[cfg(test)]
-                let phase = std::time::Instant::now();
-                let mut decoder = shadow.decoder.clone();
-                let mut output = vec![0_i16; target.len()];
-                let Ok(samples) = decoder.decode(Some(&packet), &mut output, false) else {
-                    continue;
+                let quiet = self.config.sample_rate == SampleRate::Hz48000
+                    && control.bitrate >= 64_000
+                    && internal_size == 480
+                    && self.config.channels == Channels::Stereo
+                    && target.iter().all(|&x| x.unsigned_abs() <= 2);
+                let slopes = if quiet && eligible && control.bitrate <= 64_000 {
+                    &[0, -3, 3][..]
+                } else {
+                    &[0][..]
                 };
-                if samples * channel_count(self.config.channels) != target.len() {
-                    continue;
-                }
-                let error = output
+                let biases = if quiet {
+                    &[0, -1, 1, -2, 2][..]
+                } else {
+                    &[0, -1, -2, -3, -6][..]
+                };
+                // Compare spectrally tilted energy targets near the PCM quantization floor.
+                // Keep the flat target first and score each finalized packet at equal rate.
+                for (slope, db) in slopes
                     .iter()
-                    .zip(&target)
-                    .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
-                    .sum();
-                #[cfg(test)]
+                    .flat_map(|&s| biases.iter().map(move |&d| (s, d)))
                 {
-                    phases[3] += phase.elapsed().as_nanos();
-                }
-                #[cfg(test)]
-                if std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_some() {
-                    eprintln!(
-                        "practical RD mode={:?} bitrate={} bias={db} distortion={error} target_energy={} bytes={}",
-                        control.mode,
-                        control.bitrate,
-                        target.iter().map(|&x| i128::from(x).pow(2)).sum::<i128>(),
-                        packet.len()
+                    if db != 0 && !eligible {
+                        continue;
+                    }
+                    #[cfg(test)]
+                    let phase = std::time::Instant::now();
+                    let mut trial = prepared_state.as_ref().unwrap_or(self).clone();
+                    #[cfg(test)]
+                    {
+                        phases[1] += phase.elapsed().as_nanos();
+                    }
+                    trial.hybrid_energy_db = db;
+                    trial.hybrid_tilt_db = slope;
+                    trial.quick_prefix = quick;
+                    trial.proposal_amp = amp;
+                    trial.practical_prefix_bitrate = Some(budget);
+                    #[cfg(test)]
+                    let phase = std::time::Instant::now();
+                    let packet = prepared_frame.as_ref().map_or_else(
+                        || {
+                            if eligible || departing {
+                                trial.encode_practical_boundary(
+                                    pcm,
+                                    EncoderControl {
+                                        mode: if departing {
+                                            EncoderMode::Celt
+                                        } else {
+                                            EncoderMode::Hybrid
+                                        },
+                                        ..control
+                                    },
+                                )
+                            } else {
+                                trial.encode_frame_inner(pcm)
+                            }
+                        },
+                        |prepared| {
+                            let mut suffix = prepared.clone();
+                            for channel in 0..suffix.channels {
+                                for band in suffix.start..suffix.end {
+                                    suffix.target_energy[channel * 21 + band] +=
+                                        (db + slope * (band as i32 - 18)) * 10_885;
+                                }
+                            }
+                            Self::encode_celt_suffix(suffix, None)
+                        },
                     );
-                }
-                #[cfg(test)]
-                if hybrid::POOL_DIAGNOSE.get() > 0 {
-                    eprintln!(
-                        "POOL_FINAL_PACKET budget={budget} bias={db} error={error} bytes={}",
-                        packet.len()
-                    );
-                }
-                if best.as_ref().is_none_or(|old| error < old.error) {
-                    best = Some(PracticalCandidate {
-                        #[cfg(test)]
-                        bias: db,
-                        error,
-                        encoder: trial,
-                        synthesis: decoder,
-                        packet,
-                    });
+                    #[cfg(test)]
+                    {
+                        phases[2] += phase.elapsed().as_nanos();
+                    }
+                    let packet = match packet {
+                        Ok(packet) => packet,
+                        Err(error) => {
+                            last_error = Some(error);
+                            continue;
+                        }
+                    };
+                    #[cfg(test)]
+                    if let Some(scorer) = &trial.native_prefix_score {
+                        scorer.verify(&packet[1..])?;
+                    }
+                    #[cfg(test)]
+                    if prepared_frame.is_some() && RD_VERIFY_CANDIDATES.get() {
+                        let mut reference = self.clone();
+                        reference.hybrid_energy_db = db;
+                        reference.hybrid_tilt_db = slope;
+                        reference.quick_prefix = quick;
+                        reference.proposal_amp = amp;
+                        reference.practical_prefix_bitrate = Some(budget);
+                        let expected = reference.encode_practical_boundary(
+                            pcm,
+                            EncoderControl {
+                                mode: EncoderMode::Hybrid,
+                                ..control
+                            },
+                        )?;
+                        assert_eq!(
+                            packet, expected,
+                            "prepared suffix differs for energy bias {db}"
+                        );
+                        let mut actual_synthesis = shadow.decoder.clone();
+                        let mut expected_synthesis = shadow.decoder.clone();
+                        let mut actual_pcm = vec![0; target.len()];
+                        let mut expected_pcm = actual_pcm.clone();
+                        actual_synthesis.decode(Some(&packet), &mut actual_pcm, false)?;
+                        expected_synthesis.decode(Some(&expected), &mut expected_pcm, false)?;
+                        assert_eq!(actual_pcm, expected_pcm, "candidate synthesis bias {db}");
+                    }
+                    if packet.len() > control.bitrate as usize * internal_size / 384_000 {
+                        continue;
+                    }
+                    #[cfg(test)]
+                    let phase = std::time::Instant::now();
+                    let mut decoder = shadow.decoder.clone();
+                    let mut output = vec![0_i16; target.len()];
+                    let Ok(samples) = decoder.decode(Some(&packet), &mut output, false) else {
+                        continue;
+                    };
+                    if samples * channel_count(self.config.channels) != target.len() {
+                        continue;
+                    }
+                    let error = output
+                        .iter()
+                        .zip(&target)
+                        .map(|(&a, &b)| i128::from(i32::from(a) - i32::from(b)).pow(2))
+                        .sum();
+                    #[cfg(test)]
+                    {
+                        phases[3] += phase.elapsed().as_nanos();
+                    }
+                    #[cfg(test)]
+                    if std::env::var_os("MOOSICBOX_OPUS_RD_TRACE").is_some() {
+                        eprintln!(
+                            "practical RD mode={:?} bitrate={} bias={db} distortion={error} target_energy={} bytes={}",
+                            control.mode,
+                            control.bitrate,
+                            target.iter().map(|&x| i128::from(x).pow(2)).sum::<i128>(),
+                            packet.len()
+                        );
+                    }
+                    #[cfg(test)]
+                    if hybrid::POOL_DIAGNOSE.get() > 0 {
+                        eprintln!(
+                            "POOL_FINAL_PACKET budget={budget} bias={db} error={error} bytes={}",
+                            packet.len()
+                        );
+                    }
+                    if best.as_ref().is_none_or(|old| error < old.error) {
+                        best = Some(PracticalCandidate {
+                            #[cfg(test)]
+                            bias: db,
+                            error,
+                            encoder: trial,
+                            synthesis: decoder,
+                            packet,
+                        });
+                    }
                 }
             }
         }
@@ -1004,6 +1146,8 @@ impl Encoder {
             shadow.pending_prefix = None;
         }
         winner.hybrid_energy_db = 0;
+        winner.quick_prefix = false;
+        winner.proposal_amp = 1.;
         winner.hybrid_tilt_db = 0;
         winner.practical_prefix_bitrate = None;
         winner.native_prefix_score = None;
@@ -1119,6 +1263,9 @@ impl Encoder {
         let pcm = upsampled.as_deref().unwrap_or(pcm);
         let low = self.hybrid.as_mut().expect("hybrid test filters");
         self.adaptive_low = low.process(pcm);
+        for x in &mut self.adaptive_low {
+            *x *= self.proposal_amp;
+        }
         let delayed = low.delay_celt(pcm);
         if previous != target {
             if target == EncoderMode::Hybrid {
@@ -1184,6 +1331,9 @@ impl Encoder {
             .as_mut()
             .ok_or_else(|| adaptive::unavailable("missing adaptive filters"))?;
         self.adaptive_low = low.process(pcm);
+        for x in &mut self.adaptive_low {
+            *x *= self.proposal_amp;
+        }
         let delayed = low.delay_celt(pcm);
         // Conversion already produced 48 kHz PCM: use its actual clock for
         // all CELT calls, including redundancy, then restore the public clock.
@@ -1487,9 +1637,21 @@ impl Encoder {
             let incoming = enc.clone();
             if let Some(scorer) = &mut self.native_prefix_score {
                 // Preserve full-rate SILK prediction history across subsequent rate changes.
-                silk.short_rate_control = self.config.sample_rate == SampleRate::Hz48000
-                    && (64_000..128_000).contains(&self.config.bitrate)
+                let refine = self.config.sample_rate == SampleRate::Hz48000
+                    && self.config.channels == Channels::Stereo
+                    && self.config.bitrate < 64_000
+                    && internal_size == 480
+                    && scorer.target.iter().all(|v| v.unsigned_abs() < 128);
+                let rate_control = self.config.sample_rate == SampleRate::Hz48000
+                    && ((64_000..128_000).contains(&self.config.bitrate) || self.quick_prefix)
                     && self.config.frame_size == 480;
+                silk.prefix_search = if rate_control {
+                    silk::PrefixSearch::Rate
+                } else if refine {
+                    silk::PrefixSearch::QuietRefine
+                } else {
+                    silk::PrefixSearch::Full
+                };
                 // At short packet budgets the refined NLSF can consume the bits
                 // needed for excitation. Offer its coarse alternative only at
                 // low levels or for strongly alternating low-band samples.

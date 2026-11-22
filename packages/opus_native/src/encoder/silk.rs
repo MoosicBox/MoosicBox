@@ -65,9 +65,16 @@ enum SpectralPolicy {
     CompareCoarse,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum PrefixSearch {
+    Full,
+    Rate,
+    QuietRefine,
+}
+
 #[derive(Clone)]
 pub(super) struct SilkEncoder {
-    pub(super) short_rate_control: bool,
+    pub(super) prefix_search: PrefixSearch,
     spectral_policy: SpectralPolicy,
     config: EncoderConfig,
     history: [[i32; 16]; 2],
@@ -526,7 +533,7 @@ impl SilkEncoder {
             ));
         }
         Ok(Self {
-            short_rate_control: false,
+            prefix_search: PrefixSearch::Full,
             spectral_policy: SpectralPolicy::Standard,
             config,
             history: [[0; 16]; 2],
@@ -1103,7 +1110,7 @@ impl SilkEncoder {
             &[0, 1, 4, 5]
         } else if self.compact_prefix() {
             &[16, 19, 0, 3]
-        } else if self.short_rate_control {
+        } else if self.prefix_search == PrefixSearch::Rate {
             &[0]
         } else if self.config.frame_size == 320 {
             &[0, 3]

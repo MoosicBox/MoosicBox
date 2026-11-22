@@ -828,12 +828,27 @@ impl SilkEncoder {
                 })
                 .map(Some);
         }
-        if self.short_rate_control || self.config.frame_size == 320 {
+        if self.prefix_search == super::PrefixSearch::Rate || self.config.frame_size == 320 {
             search.rate_control()?;
             if search.best.is_none() {
                 return Err(crate::Error::Unsupported(
                     "no legal rate-controlled stereo prefix".into(),
                 ));
+            }
+        } else if self.prefix_search == super::PrefixSearch::QuietRefine {
+            search.rate_control()?;
+            for channel in 0..2 {
+                let anchor = search.anchor(false);
+                for gain in [-4, 0, 4] {
+                    for pressure in [0, 2, 4] {
+                        for unshaped in [false, true] {
+                            let mut trial = anchor;
+                            trial[channel] =
+                                ((anchor[channel].0 + gain).clamp(0, 63), pressure, unshaped);
+                            search.evaluate(trial)?;
+                        }
+                    }
+                }
             }
         } else {
             search.seeds()?;
