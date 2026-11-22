@@ -168,6 +168,26 @@ The simulator's `JoinSet` does not provide task ids (`join_next_with_id`), `spaw
 variants or `poll_join_next`, and a panicking task fails the run rather than joining with a
 `JoinError` (simulator join errors are always cancellations).
 
+### Synchronization Primitives
+
+With the `sync` feature, `sync` provides `Mutex`, `RwLock`, `Semaphore`, `Notify`,
+`Barrier`, and the `oneshot`, `mpsc`, `mpmc`, `broadcast` and `watch` channels. With the
+Tokio backend all but `mpsc` and `mpmc` are Tokio's. Under the simulator, `Mutex`, `RwLock`,
+`Semaphore`, `Notify`, `oneshot` and `broadcast` are still Tokio's: they wake waiters first
+in, first out, so their order follows the run's schedule. `Barrier`, `mpsc`, `mpmc` and
+`watch` are the simulator's own.
+
+The simulator's `watch` has Tokio's API (`channel`, `Sender::{send, send_replace,
+send_modify, send_if_modified, borrow, subscribe, receiver_count, sender_count, is_closed,
+closed}`, `Receiver::{borrow, borrow_and_update, changed, wait_for, has_changed, is_closed,
+mark_changed, mark_unchanged, same_channel}`, `Ref` and `error::{SendError, RecvError}`).
+Tokio's watch puts each waiting receiver in one of eight queues picked by Tokio's
+thread-local random number generator, which no seed controls, so with several receivers
+waiting their wake order changed from run to run. The simulator's wakes waiting receivers
+(and `Sender::closed` waiters) in the order they started waiting. With `thread-simulator`, a
+simulated thread that finds the value locked by another (one holding a `Ref`) waits on the
+run's scheduler instead of blocking its OS thread.
+
 ### Thread Management
 
 ```rust
