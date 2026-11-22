@@ -733,6 +733,14 @@ impl Encoder {
             target.len()
         };
         let release = split < target.len();
+        // When the buffered input falls to digital silence, compare both higher and
+        // lower CELT energy before the delayed tail reaches the packet boundary.
+        let ending = eligible
+            && internal_size == 480
+            && pcm[pcm.len() / 2..].iter().all(|&v| v == 0.)
+            && pcm[..pcm.len() / 2]
+                .iter()
+                .any(|v| v.abs() > 32.0 / 32768.0);
         let budgets = [
             nominal,
             nominal * 3 / 4,
@@ -789,9 +797,17 @@ impl Encoder {
         let shortlist = eligible
             && internal_size == 480
             && control.bitrate == 32_000
-            && self.config.sample_rate == SampleRate::Hz48000
             && self.config.channels == Channels::Stereo
-            && target.iter().any(|v| v.unsigned_abs() >= 128);
+            && target.iter().any(|v| v.unsigned_abs() >= 128)
+            // At 24 kHz the resampling delay can put an attack or its release
+            // on opposite sides of the source and reconstruction windows. Use
+            // the quick split only for sustained activity across both windows.
+            && (self.config.sample_rate == SampleRate::Hz48000
+                || (target.chunks_exact(target.len() / 4).all(|group| {
+                    group.iter().any(|v| v.unsigned_abs() >= 128)
+                }) && pcm.chunks_exact(pcm.len() / 4).all(|group| {
+                    group.iter().any(|v| v.abs() >= 128.0 / 32768.0)
+                })));
         for &quick in if quiet_fast || shortlist {
             &[true, false][..]
         } else {
@@ -976,7 +992,9 @@ impl Encoder {
                 } else {
                     &[0][..]
                 };
-                let biases = if quiet {
+                let biases = if ending {
+                    &[0, -1, -2, -3, -6, -12, -24, 3, 6, 12][..]
+                } else if quiet {
                     &[0, -1, 1, -2, 2][..]
                 } else {
                     &[0, -1, -2, -3, -6][..]
@@ -1705,9 +1723,10 @@ impl Encoder {
                     && self.config.bitrate < 64_000
                     && internal_size == 480
                     && scorer.target.iter().all(|v| v.unsigned_abs() < 128);
-                let rate_control = self.config.sample_rate == SampleRate::Hz48000
-                    && ((64_000..128_000).contains(&self.config.bitrate) || self.quick_prefix)
-                    && self.config.frame_size == 480;
+                let rate_control = internal_size == 480
+                    && (self.quick_prefix
+                        || (self.config.sample_rate == SampleRate::Hz48000
+                            && (64_000..128_000).contains(&self.config.bitrate)));
                 silk.prefix_search = if rate_control || self.proposal_amp == 0.0 {
                     silk::PrefixSearch::Rate
                 } else if refine {
