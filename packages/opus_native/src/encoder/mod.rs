@@ -292,6 +292,11 @@ impl Encoder {
                 bitrate: config.bitrate,
                 bandwidth: crate::Bandwidth::Fullband,
             })?;
+            encoder
+                .adaptive
+                .as_mut()
+                .ok_or_else(|| adaptive::unavailable("missing adaptive Hybrid state"))?
+                .fixed_controls = true;
             return Ok(encoder);
         }
         let mut encoder = Self::new(config)?;
@@ -411,9 +416,10 @@ impl Encoder {
         if self.finished {
             return Err(adaptive::unavailable("cannot control a finished encoder"));
         }
-        if self.adaptive.is_none()
-            && matches!(self.active_mode(), EncoderMode::Silk | EncoderMode::Hybrid)
-        {
+        if self.adaptive.as_ref().map_or_else(
+            || matches!(self.active_mode(), EncoderMode::Silk | EncoderMode::Hybrid),
+            |adaptive| adaptive.fixed_controls,
+        ) {
             return Err(adaptive::unavailable(
                 "explicit predictive controls are not yet qualified",
             ));

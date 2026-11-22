@@ -29,6 +29,8 @@ pub struct EncoderControl {
 pub(super) struct Adaptive {
     pub control: EncoderControl,
     pub active: EncoderMode,
+    // Explicit Hybrid may share adaptive encoding state, but not its public controls.
+    pub fixed_controls: bool,
     pub next_celt: bool,
     #[cfg(feature = "hybrid")]
     pub tail: Vec<f32>,
@@ -45,6 +47,7 @@ impl Adaptive {
                 mode: EncoderMode::Auto,
             },
             active: EncoderMode::Celt,
+            fixed_controls: false,
             next_celt: false,
             tail: Vec::new(),
             end: 21,

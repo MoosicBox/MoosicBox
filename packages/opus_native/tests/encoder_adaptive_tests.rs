@@ -61,6 +61,38 @@ fn practical_hybrid_controls_preserve_mode_after_entry() {
 }
 
 #[test]
+#[cfg(feature = "hybrid")]
+fn explicit_hybrid_control_rejection_preserves_next_packet() {
+    for bitrate in [32_000, 128_000, 256_000] {
+        let mut encoder = Encoder::new_hybrid(EncoderConfig {
+            bitrate,
+            ..EncoderConfig::default()
+        })
+        .unwrap();
+        let before = encoder.control();
+        let mut reference = encoder.clone();
+        for requested in [
+            EncoderControl {
+                bandwidth: Bandwidth::SuperWideband,
+                ..before
+            },
+            EncoderControl {
+                mode: EncoderMode::Auto,
+                ..before
+            },
+        ] {
+            assert!(encoder.set_control(requested).is_err());
+            assert_eq!(encoder.control(), before);
+        }
+        let pcm = input(0, 2);
+        assert_eq!(
+            encoder.encode(&pcm).unwrap(),
+            reference.encode(&pcm).unwrap()
+        );
+    }
+}
+
+#[test]
 fn explicit_celt_control_reports_encoded_not_input_bandwidth() {
     for sample_rate in [
         moosicbox_opus_native::SampleRate::Hz8000,
