@@ -662,9 +662,17 @@ fn silk_low_bitrate_stereo_regression() {
         frame_size: 80,
         bitrate: 32000,
     };
-    assert!(
-        Encoder::new_silk(config).is_err(),
-        "unsupported low-rate stereo must reject before encoding"
+    let mut encoder = Encoder::new_silk(config).unwrap();
+    let input: Vec<_> = (0..160)
+        .map(|i| if i % 24 < 12 { 0.2 } else { -0.2 })
+        .collect();
+    let packet = encoder.encode(&input).unwrap();
+    let mut decoder =
+        moosicbox_opus_native::Decoder::new(config.sample_rate, config.channels).unwrap();
+    let mut decoded = vec![0; 160];
+    assert_eq!(
+        decoder.decode(Some(&packet), &mut decoded, false).unwrap(),
+        80
     );
 }
 
@@ -845,7 +853,8 @@ fn unsupported_bitrate_ranges_reject_at_construction() {
         );
     }
     #[cfg(feature = "silk")]
-    for (channels, minimum) in [(Channels::Mono, 48_000), (Channels::Stereo, 96_000)] {
+    for channels in [Channels::Mono, Channels::Stereo] {
+        let minimum = 16_000;
         let config = EncoderConfig {
             sample_rate: moosicbox_opus_native::SampleRate::Hz8000,
             channels,
@@ -874,9 +883,9 @@ fn unsupported_bitrate_ranges_reject_at_construction() {
 
         for (sample_rate, channels, minimum) in [
             (SampleRate::Hz48000, Channels::Stereo, 32_000),
-            (SampleRate::Hz48000, Channels::Mono, 128_000),
-            (SampleRate::Hz24000, Channels::Stereo, 128_000),
-            (SampleRate::Hz24000, Channels::Mono, 128_000),
+            (SampleRate::Hz48000, Channels::Mono, 32_000),
+            (SampleRate::Hz24000, Channels::Stereo, 32_000),
+            (SampleRate::Hz24000, Channels::Mono, 32_000),
         ] {
             for milliseconds in [10, 20] {
                 let config = EncoderConfig {

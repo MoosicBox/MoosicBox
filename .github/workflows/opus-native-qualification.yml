@@ -267,7 +267,8 @@ jobs:
     compare:
         name: Require every actual platform and exact native fingerprints
         needs: [native, quality, layout, hybrid]
-        if: always()
+        # Report failed shards, but release the concurrency group on cancellation.
+        if: ${{ !cancelled() }}
         runs-on: ubuntu-24.04
         timeout-minutes: 10
         steps:
