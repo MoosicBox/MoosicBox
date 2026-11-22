@@ -14,15 +14,31 @@ use std::{
     any::Any,
     fmt,
     sync::{Arc, Condvar, Mutex, PoisonError},
+    time::Duration,
 };
 
 /// Identifies one run: the worker thread running it and its number.
+///
+/// Fleet runs carry their worker thread's id (from 1). Replay and shrink jobs run outside
+/// the fleet and use worker `0`, with their own numbers from 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RunId {
-    /// The worker running it.
+    /// The worker running it (`0` for a replay or shrink job).
     pub worker: u64,
-    /// The run's number, from 1.
+    /// The run's number, from 1 (fleet runs and jobs are numbered separately).
     pub run: u64,
+}
+
+/// Why a run was made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RunKind {
+    /// One of the simulation's own runs, counted in its totals.
+    Fleet,
+    /// An in-process replay of an earlier run's seed, started by an observer.
+    Replay,
+    /// The run a shrink job starts from (its shrinking replays report nothing but
+    /// [`SimEvent::Shrink`]).
+    Shrink,
 }
 
 /// Something that happened in a simulation.
@@ -31,8 +47,9 @@ pub struct RunId {
 pub enum SimEvent {
     /// The simulation started.
     Started {
-        /// How many runs it will make.
-        runs: u64,
+        /// How many runs it will make, or `None` when it runs until stopped
+        /// (`SIMULATOR_RUNS=forever`).
+        runs: Option<u64>,
         /// How many runs it makes at once.
         max_parallel: u64,
     },
@@ -46,6 +63,13 @@ pub enum SimEvent {
         props: Vec<(String, String)>,
         /// Its length in steps, when it has a fixed duration.
         steps: Option<u64>,
+        /// The fleet worker slot running it, from 1 and reused as workers come and go
+        /// (`0` for a replay or shrink job).
+        worker: u64,
+        /// Why it runs.
+        kind: RunKind,
+        /// Its simulated clock's epoch offset: with the seed, all a replay needs.
+        epoch_offset: u64,
     },
     /// A run advanced.
     Progress {
@@ -68,6 +92,26 @@ pub enum SimEvent {
         report: String,
         /// The steps it ran.
         steps: u64,
+        /// The real (wall-clock) time it took.
+        real_time: Duration,
+        /// The simulated time that passed in it.
+        sim_time: Duration,
+    },
+    /// A shrink job's progress: smaller failing thread schedules for one failed run.
+    Shrink {
+        /// The shrink job (the run it started from).
+        id: RunId,
+        /// Shrinking replays made so far.
+        attempts: u64,
+        /// Choices in the smallest failing schedule so far.
+        best_len: u64,
+        /// Choices in the failed run's own schedule.
+        original_len: u64,
+        /// Whether shrinking is over.
+        done: bool,
+        /// Once done, the smallest failing schedule in `SIMULATOR_SCHEDULE`'s format; `None`
+        /// while shrinking, or when the run did not fail.
+        schedule: Option<String>,
     },
     /// Data a simulation emitted, such as a [`SchedulerView`]; observers downcast it.
     Telemetry {
@@ -83,16 +127,33 @@ pub enum SimEvent {
 impl fmt::Debug for SimEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Started { runs, max_parallel } => {
-                write!(f, "Started({runs} runs, {max_parallel} at once)")
-            }
-            Self::RunStarted { id, seed, .. } => {
-                write!(f, "RunStarted({id:?}, seed {seed})")
+            Self::Started {
+                runs: Some(runs),
+                max_parallel,
+            } => write!(f, "Started({runs} runs, {max_parallel} at once)"),
+            Self::Started {
+                runs: None,
+                max_parallel,
+            } => write!(f, "Started(unbounded, {max_parallel} at once)"),
+            Self::RunStarted { id, seed, kind, .. } => {
+                write!(f, "RunStarted({id:?}, {kind:?}, seed {seed})")
             }
             Self::Progress { id, step, .. } => write!(f, "Progress({id:?}, step {step})"),
             Self::RunFinished {
                 id, seed, success, ..
             } => write!(f, "RunFinished({id:?}, seed {seed}, success {success})"),
+            Self::Shrink {
+                id,
+                attempts,
+                best_len,
+                original_len,
+                done,
+                ..
+            } => write!(
+                f,
+                "Shrink({id:?}, {attempts} attempts, {best_len}/{original_len} choices, done \
+                 {done})"
+            ),
             Self::Telemetry { id, .. } => write!(f, "Telemetry({id:?})"),
             Self::Finished => f.write_str("Finished"),
         }

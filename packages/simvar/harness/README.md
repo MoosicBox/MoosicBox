@@ -176,8 +176,9 @@ sim.client("load_client", async {
 
 ### Environment Variables
 
-- `SIMULATOR_RUNS`: Number of simulation runs (default: 1)
+- `SIMULATOR_RUNS`: Number of simulation runs (default: 1), or `forever` to run until stopped (only failed runs' results are then kept)
 - `SIMULATOR_MAX_PARALLEL`: Maximum parallel runs (default: CPU cores)
+- `SIMULATOR_ON_FAILURE`: `stop` (default) ends the simulation at the first failed run; `continue` records and reports it and keeps starting runs
 - `SIMULATOR_DURATION`: Simulation duration with unit suffix (e.g., "10s", "5000ms", "1000µs", "1000ns"; default: unlimited)
 - `SIMULATOR_SEED`: Fixed seed for deterministic runs
 - `SIMULATOR_EPOCH_OFFSET`: Fixed simulated epoch offset override (time feature)
@@ -191,6 +192,10 @@ sim.client("load_client", async {
 
 When a run fails, the harness prints a copy/paste rerun command that includes both
 `SIMULATOR_SEED` and the failed run's concrete `SIMULATOR_EPOCH_OFFSET` so replay is exact.
+
+`simvar_harness::control()` pauses, resumes, resizes and stops a running
+simulation, and starts in-process replay and shrink jobs beside it (see the
+crate docs).
 
 ### Example Configuration
 

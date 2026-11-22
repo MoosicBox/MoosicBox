@@ -25,7 +25,7 @@ use ratatui::{
     style::Style,
     widgets::{Block, Gauge, Paragraph},
 };
-use simvar_observer::{SimEvent, SimObserver};
+use simvar_observer::{RunKind, SimEvent, SimObserver};
 
 /// One worker's current run, as the display shows it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -42,7 +42,7 @@ struct RunInfo {
 /// What the display knows, built from events.
 #[derive(Debug, Default)]
 struct State {
-    /// Runs in the simulation, once it has started.
+    /// Runs in the simulation, once it has started (`None` before, or when unbounded).
     runs: Option<u64>,
     completed: u64,
     /// Each worker's current or last run.
@@ -52,7 +52,9 @@ struct State {
 impl State {
     fn apply(&mut self, event: &SimEvent) {
         match *event {
-            SimEvent::Started { runs, .. } => self.runs = Some(runs),
+            SimEvent::Started { runs, .. } => self.runs = runs,
+            // Replay and shrink jobs run beside the fleet; the display shows only the fleet.
+            SimEvent::RunStarted { kind, .. } if kind != RunKind::Fleet => {}
             SimEvent::RunStarted {
                 id, seed, steps, ..
             } => {
@@ -68,6 +70,8 @@ impl State {
                     },
                 );
             }
+            // Jobs report under worker 0; they are not fleet runs.
+            SimEvent::Progress { id, .. } | SimEvent::RunFinished { id, .. } if id.worker == 0 => {}
             SimEvent::Progress { id, step, progress } => {
                 if let Some(info) = self.workers.get_mut(&id.worker) {
                     info.step = step;
@@ -261,6 +265,7 @@ fn render(state: &State, frame: &mut Frame) {
 
     let header = match state.runs {
         Some(runs) if runs > 1 => format!("Simulations {}/{runs}", state.completed),
+        None => format!("Simulations {}", state.completed),
         _ => "Simulations".to_string(),
     };
     frame.render_widget(
@@ -312,6 +317,9 @@ mod tests {
             seed,
             props: vec![],
             steps,
+            worker,
+            kind: RunKind::Fleet,
+            epoch_offset: 0,
         }
     }
 
@@ -322,6 +330,8 @@ mod tests {
             success,
             report: String::new(),
             steps,
+            real_time: std::time::Duration::ZERO,
+            sim_time: std::time::Duration::ZERO,
         }
     }
 
@@ -329,7 +339,7 @@ mod tests {
     fn a_run_appears_under_its_worker_and_follows_progress() {
         let mut state = State::default();
         state.apply(&SimEvent::Started {
-            runs: 4,
+            runs: Some(4),
             max_parallel: 1,
         });
         state.apply(&started(2, 1, 42, Some(1000)));
@@ -359,6 +369,45 @@ mod tests {
     }
 
     #[test]
+    fn jobs_beside_the_fleet_are_not_shown() {
+        let mut state = State::default();
+        state.apply(&SimEvent::RunStarted {
+            id: RunId { worker: 0, run: 1 },
+            seed: 5,
+            props: vec![],
+            steps: None,
+            worker: 0,
+            kind: RunKind::Replay,
+            epoch_offset: 0,
+        });
+        state.apply(&finished(0, 1, false, 10));
+        assert!(state.workers.is_empty());
+        assert_eq!(state.completed, 0);
+    }
+
+    #[test]
+    fn an_unbounded_simulation_counts_its_runs() {
+        let mut state = State::default();
+        state.apply(&SimEvent::Started {
+            runs: None,
+            max_parallel: 1,
+        });
+        state.apply(&started(1, 1, 3, None));
+        state.apply(&finished(1, 1, true, 5));
+        let backend = ratatui::backend::TestBackend::new(80, 10);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal.draw(|frame| render(&state, frame)).unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(ratatui::buffer::Cell::symbol)
+            .collect();
+        assert!(text.contains("Simulations 1"), "{text}");
+    }
+
+    #[test]
     fn workers_are_listed_in_order() {
         let mut state = State::default();
         for worker in [3, 1, 2] {
@@ -380,7 +429,7 @@ mod tests {
     fn rendering_shows_each_run() {
         let mut state = State::default();
         state.apply(&SimEvent::Started {
-            runs: 2,
+            runs: Some(2),
             max_parallel: 1,
         });
         state.apply(&started(1, 1, 42, None));

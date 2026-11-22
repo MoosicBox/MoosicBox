@@ -299,7 +299,8 @@ impl std::fmt::Display for SimResult {
         let config = &props.config;
         let run = self.run();
 
-        let run_from_seed = if *RUNS == 1 && switchy::random::simulator::contains_fixed_seed() {
+        let run_from_seed = if *RUNS == Some(1) && switchy::random::simulator::contains_fixed_seed()
+        {
             String::new()
         } else {
             #[cfg(feature = "time")]
@@ -319,7 +320,9 @@ impl std::fmt::Display for SimResult {
             );
             format!("\n\nTo run again with this seed: `{cmd}`")
         };
-        let run_from_start = if !switchy::random::simulator::contains_fixed_seed() && *RUNS > 1 {
+        let run_from_start = if !switchy::random::simulator::contains_fixed_seed()
+            && RUNS.is_none_or(|runs| runs > 1)
+        {
             let cmd = get_run_command(
                 &["SIMULATOR_SEED"],
                 switchy::random::simulator::initial_seed(),
@@ -395,11 +398,10 @@ pub fn run_info(props: &SimProperties) -> String {
     };
 
     let run_number = props.run_number;
-    let runs = *RUNS;
-    let runs = if runs > 1 {
-        format!("{run_number}/{runs}")
-    } else {
-        runs.to_string()
+    let runs = match *RUNS {
+        Some(runs) if runs > 1 => format!("{run_number}/{runs}"),
+        Some(runs) => runs.to_string(),
+        None => format!("{run_number}/forever"),
     };
 
     format!(

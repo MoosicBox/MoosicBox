@@ -66,9 +66,15 @@
 //!
 //! # Environment Variables
 //!
-//! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1)
+//! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1), or `forever` to
+//!   run until stopped (only failed runs' results are then kept)
 //! * `SIMULATOR_MAX_PARALLEL` - Maximum parallel runs (default: number of CPUs)
+//! * `SIMULATOR_ON_FAILURE` - `stop` (the default) ends the simulation at the first failed run;
+//!   `continue` records and reports it and keeps starting runs
 //! * `NO_TUI` - Disable terminal UI when set
+//!
+//! See [`simvar_harness`] for the rest, and [`control`] for steering a running simulation:
+//! pausing, resizing and stopping it, and replaying or shrinking earlier runs in-process.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]

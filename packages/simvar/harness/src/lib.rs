@@ -49,8 +49,11 @@
 //!
 //! # Environment Variables
 //!
-//! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1)
+//! * `SIMULATOR_RUNS` - Number of simulation runs to execute (default: 1), or `forever` to
+//!   run until stopped (only failed runs' results are then kept)
 //! * `SIMULATOR_MAX_PARALLEL` - Maximum parallel runs (default: number of CPUs)
+//! * `SIMULATOR_ON_FAILURE` - `stop` (the default) ends the simulation at the first failed run;
+//!   `continue` records and reports it and keeps starting runs
 //! * `SIMULATOR_SEED` - Fixed random seed for deterministic runs
 //! * `SIMULATOR_EPOCH_OFFSET` - Fixed epoch offset override (when `time` feature is enabled)
 //! * `SIMULATOR_EPOCH_MIN` / `SIMULATOR_EPOCH_MAX` - Bounded random epoch offset (inclusive)
@@ -59,6 +62,12 @@
 //! * `SIMULATOR_SHRINK` - With the `thread` feature: shrink a failing run's thread schedule
 //!   (`1`/`true` for up to 1000 replays, or a number of replays) and print how to replay it
 //! * `NO_TUI` - Disable terminal UI when set (at build or run time); it is also off when stdout is not a terminal
+//!
+//! # Steering a running simulation
+//!
+//! [`control`] pauses, resumes, resizes and stops the fleet of runs, and starts replay and
+//! shrink jobs beside it. Inside a run, [`current_run`] and [`current_replay`] say which run
+//! the calling thread belongs to and which [`observer::ReplayControl`] (if any) holds it.
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
@@ -69,10 +78,10 @@ use std::{
     collections::BTreeMap,
     panic::AssertUnwindSafe,
     sync::{
-        Arc, LazyLock, Mutex,
-        atomic::{AtomicBool, AtomicU64},
+        Arc, LazyLock, Mutex, PoisonError,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use client::{Client, ClientResult};
@@ -80,6 +89,7 @@ use color_backtrace::{BacktracePrinter, termcolor::Buffer};
 use config::run_info;
 use formatting::TimeFormat as _;
 use host::{Host, HostResult};
+use simvar_observer::{ReplayControl, RunId, RunKind, SimEvent};
 use simvar_utils::{
     cancel_global_simulation, cancel_simulation, is_global_simulator_cancelled,
     is_simulator_cancelled, reset_simulator_cancellation_token, worker_thread_id,
@@ -91,6 +101,7 @@ use switchy::{
 };
 
 pub use config::{SimConfig, SimProperties, SimResult, SimRunProperties};
+pub use fleet::{FleetControl, FleetStatus, JobError, OnFailure, ReplayRequest, control};
 pub use logging::set_quiet;
 pub use simvar_observer as observer;
 pub use simvar_utils as utils;
@@ -105,6 +116,7 @@ pub use switchy;
 pub mod client;
 
 mod config;
+mod fleet;
 
 /// Time formatting utilities.
 ///
@@ -143,11 +155,29 @@ thread_local! {
     static PANIC: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
-static RUNS: LazyLock<u64> = LazyLock::new(|| {
+/// How many fleet runs to make: `SIMULATOR_RUNS`, `None` for `forever`.
+static RUNS: LazyLock<Option<u64>> = LazyLock::new(|| {
     std::env::var("SIMULATOR_RUNS")
         .ok()
-        .map_or(1, |x| x.parse::<u64>().unwrap())
+        .map_or(Some(1), |x| parse_runs(&x))
 });
+
+/// `SIMULATOR_RUNS`'s value: a number of runs, or `None` for `forever`.
+fn parse_runs(value: &str) -> Option<u64> {
+    if value == "forever" {
+        return None;
+    }
+    Some(value.parse::<u64>().unwrap_or_else(|_| {
+        panic!("SIMULATOR_RUNS must be a number of runs or 'forever', got '{value}'")
+    }))
+}
+
+static ON_FAILURE: LazyLock<OnFailure> = LazyLock::new(OnFailure::from_env);
+
+/// Whether a failed fleet run ends the simulation.
+fn stop_on_failure() -> bool {
+    *ON_FAILURE == OnFailure::Stop
+}
 
 static END_SIM: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
 
@@ -184,13 +214,21 @@ fn ctrl_c() {
 /// Signals all running simulations to stop.
 ///
 /// This sets a global flag and cancels the global simulation, causing all
-/// simulation runs to terminate gracefully.
+/// simulation runs (replay and shrink jobs included) to terminate gracefully.
 pub fn end_sim() {
-    END_SIM.store(true, std::sync::atomic::Ordering::SeqCst);
+    control().mark_stopped();
+    end_fleet();
+}
+
+/// Start no more fleet runs and cancel every run in progress, for a failure
+/// (`SIMULATOR_ON_FAILURE=stop`) or a stop.
+fn end_fleet() {
+    END_SIM.store(true, Ordering::SeqCst);
 
     if !is_global_simulator_cancelled() {
         cancel_global_simulation();
     }
+    control().notify();
 }
 
 fn try_get_backtrace() -> Option<String> {
@@ -285,6 +323,7 @@ pub fn run_simulation<B: SimBootstrap>(
         None
     };
 
+    let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new({
         move |x| {
             let thread_id = thread_id();
@@ -293,8 +332,22 @@ pub fn run_simulation<B: SimBootstrap>(
                 panic_str = format!("{panic_str}\n{bt}");
             }
             log::debug!("caught panic on thread_id={thread_id}: {panic_str}");
-            PANIC.with_borrow_mut(|x| *x = Some(panic_str));
-            end_sim();
+            PANIC.with_borrow_mut(|x| *x = Some(panic_str.clone()));
+            // A panic ends its run; one in a fleet run ends the whole simulation unless the
+            // fleet continues after failures.
+            let run = current_run_state();
+            match run {
+                Some(run) if run.kind != RunKind::Fleet || !stop_on_failure() => {
+                    run.panicked(panic_str);
+                }
+                Some(_) => end_fleet(),
+                // Outside every run (an observer, or the program driving the simulation): no
+                // run reports it, so report it as it would have been.
+                None => {
+                    end_fleet();
+                    previous_hook(x);
+                }
+            }
         }
     }));
 
@@ -303,11 +356,11 @@ pub fn run_simulation<B: SimBootstrap>(
 
     log::debug!("Running simulation with max_parallel={max_parallel}");
 
-    notify(&simvar_observer::SimEvent::Started { runs, max_parallel });
+    notify(&SimEvent::Started { runs, max_parallel });
     let sim_orchestrator = SimOrchestrator::new(bootstrap, runs, max_parallel);
 
     let resp = sim_orchestrator.start();
-    notify(&simvar_observer::SimEvent::Finished);
+    notify(&SimEvent::Finished);
 
     // The display stays up once every run is done, until the user quits it.
     #[cfg(feature = "tui")]
@@ -336,12 +389,68 @@ pub fn run_simulation<B: SimBootstrap>(
 
 struct SimOrchestrator<B: SimBootstrap> {
     bootstrap: B,
-    runs: u64,
+    runs: Option<u64>,
     max_parallel: u64,
 }
 
+/// Runs replay and shrink jobs with the simulation's bootstrap.
+struct Jobs<B: SimBootstrap>(Arc<B>);
+
+impl<B: SimBootstrap> fleet::JobRunner for Jobs<B> {
+    fn run(&self, number: u64, job: fleet::Job) {
+        let _ = thread_id();
+        let simulation = Simulation::new(&*self.0);
+        match job {
+            fleet::Job::Replay(request) => {
+                let spec = RunSpec {
+                    kind: RunKind::Replay,
+                    worker: 0,
+                    epoch_offset: Some(request.epoch_offset),
+                    control: request.control,
+                };
+                let _ = simulation.run_once(number, None, Replay::Seed(request.seed), &spec);
+            }
+            #[cfg(feature = "thread")]
+            fleet::Job::Shrink { seed, epoch_offset } => {
+                simulation.shrink_job(number, seed, epoch_offset);
+            }
+        }
+    }
+}
+
+/// Bookkeeping for a fleet worker thread, undone when it exits (also by a panic).
+struct WorkerSlot {
+    control: Arc<FleetControl>,
+    slot: u64,
+    /// Whether the worker already gave its slot back (see [`Self::release`]).
+    released: bool,
+}
+
+impl WorkerSlot {
+    /// Give the slot back under the fleet's lock, so workers deciding whether to retire at
+    /// the same time count this one as gone.
+    fn release(&mut self, state: &mut fleet::FleetState) {
+        if !self.released {
+            self.released = true;
+            state.workers -= 1;
+            state.slots.remove(&self.slot);
+        }
+    }
+}
+
+impl Drop for WorkerSlot {
+    fn drop(&mut self) {
+        let control = Arc::clone(&self.control);
+        self.release(&mut control.lock());
+        control.notify();
+    }
+}
+
+/// Every fleet run's result, in run order (only failures when the fleet is unbounded).
+type Results = Arc<Mutex<BTreeMap<u64, SimResult>>>;
+
 impl<B: SimBootstrap> SimOrchestrator<B> {
-    const fn new(bootstrap: B, runs: u64, max_parallel: u64) -> Self {
+    const fn new(bootstrap: B, runs: Option<u64>, max_parallel: u64) -> Self {
         Self {
             bootstrap,
             runs,
@@ -350,101 +459,26 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
     }
 
     fn start(self) -> Result<Vec<SimResult>, Box<dyn std::error::Error>> {
-        let parallel = std::cmp::min(self.runs, self.max_parallel);
-        let run_index = Arc::new(AtomicU64::new(0));
-
+        let control = control();
         let bootstrap = Arc::new(self.bootstrap);
-        // Every run's result, in run order.
-        let results = Arc::new(Mutex::new(BTreeMap::new()));
+        let results: Results = Arc::new(Mutex::new(BTreeMap::new()));
+        let runs = self.runs;
 
-        if self.max_parallel == 0 {
-            for run_number in 1..=self.runs {
-                let simulation = Simulation::new(&*bootstrap);
-
-                let result = simulation.run(run_number, None);
-
-                results.lock().unwrap().insert(run_number, result);
-
-                if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
-                    break;
-                }
-            }
-        } else {
-            let mut threads = vec![];
-
-            for i in 0..parallel {
-                log::debug!("starting thread {i}");
-
-                let run_index = run_index.clone();
-                let bootstrap = bootstrap.clone();
-                let runs = self.runs;
-                let results = results.clone();
-
-                let handle = std::thread::spawn(move || {
-                    let _ = thread_id();
-                    let thread_id = worker_thread_id();
-                    let simulation = Simulation::new(&*bootstrap);
-
-                    loop {
-                        if END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
-                            log::debug!("simulation has ended. thread {i} ({thread_id}) finished");
-                            break;
-                        }
-
-                        let run_index = run_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        if run_index >= runs {
-                            log::debug!(
-                                "finished all runs ({runs}). thread {i} ({thread_id}) finished"
-                            );
-                            break;
-                        }
-
-                        log::debug!(
-                            "starting simulation run_index={run_index} on thread {i} ({thread_id})"
-                        );
-
-                        let result = simulation.run(run_index + 1, Some(thread_id));
-
-                        results.lock().unwrap().insert(run_index + 1, result);
-
-                        log::debug!(
-                            "simulation finished run_index={run_index} on thread {i} ({thread_id})"
-                        );
-                    }
-
-                    Ok::<_, String>(())
-                });
-
-                threads.push(handle);
-            }
-
-            let mut errors = vec![];
-
-            for (i, thread) in threads.into_iter().enumerate() {
-                log::debug!("joining thread {i}...");
-
-                match thread.join() {
-                    Ok(x) => {
-                        if let Err(e) = x {
-                            errors.push(e);
-                        }
-                        log::debug!("thread {i} joined");
-                    }
-                    Err(e) => {
-                        let message = e
-                            .downcast_ref::<String>()
-                            .map(String::as_str)
-                            .or_else(|| e.downcast_ref::<&str>().copied())
-                            .unwrap_or("(not a string)");
-                        log::error!("failed to join thread {i}: {message}");
-                    }
-                }
-            }
-
-            if !errors.is_empty() {
-                return Err(errors.join("\n").into());
-            }
+        control.install(Arc::new(Jobs(Arc::clone(&bootstrap))));
+        {
+            let mut state = control.lock();
+            state.max_parallel = self.max_parallel;
+            state.running = true;
         }
+
+        let outcome = if self.max_parallel == 0 {
+            Self::run_sequentially(&control, &bootstrap, runs, &results);
+            Ok(())
+        } else {
+            Self::run_workers(&control, &bootstrap, runs, &results)
+        };
+        control.lock().running = false;
+        outcome?;
 
         Ok(Arc::try_unwrap(results)
             .unwrap()
@@ -452,6 +486,199 @@ impl<B: SimBootstrap> SimOrchestrator<B> {
             .unwrap()
             .into_values()
             .collect())
+    }
+
+    /// Every run on the calling thread (`SIMULATOR_MAX_PARALLEL=0`).
+    fn run_sequentially(
+        control: &FleetControl,
+        bootstrap: &B,
+        runs: Option<u64>,
+        results: &Results,
+    ) {
+        let simulation = Simulation::new(bootstrap);
+        for run_number in 1.. {
+            if runs.is_some_and(|runs| run_number > runs) {
+                break;
+            }
+            {
+                let mut state = control.lock();
+                while state.paused && !END_SIM.load(Ordering::SeqCst) {
+                    state = control.wait(state);
+                }
+                if END_SIM.load(Ordering::SeqCst) {
+                    break;
+                }
+                state.active += 1;
+            }
+
+            let result = simulation.run(run_number, None, 1);
+            finish_run(control, runs, results, run_number, result);
+
+            if END_SIM.load(Ordering::SeqCst) {
+                break;
+            }
+        }
+    }
+
+    /// Runs on up to `max_parallel` worker threads, started and retired as the fleet control
+    /// says, until every run is done or the simulation ends.
+    fn run_workers(
+        control: &Arc<FleetControl>,
+        bootstrap: &Arc<B>,
+        runs: Option<u64>,
+        results: &Results,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let run_index = Arc::new(AtomicU64::new(0));
+        let mut threads = vec![];
+
+        let mut state = control.lock();
+        loop {
+            let ended = END_SIM.load(Ordering::SeqCst);
+            // Runs no worker has taken yet, beyond those the idle workers will take.
+            let unclaimed = runs.map(|runs| runs.saturating_sub(run_index.load(Ordering::SeqCst)));
+            while !ended
+                && state.workers < state.max_parallel
+                && unclaimed.is_none_or(|unclaimed| state.workers < unclaimed)
+            {
+                // One of the first `slots + 1` numbers is always free.
+                let slot = (1..=state.slots.len() as u64 + 1)
+                    .find(|slot| !state.slots.contains(slot))
+                    .expect("a free worker slot");
+                state.slots.insert(slot);
+                state.workers += 1;
+                log::debug!("starting worker {slot}");
+                threads.push(Self::spawn_worker(
+                    WorkerSlot {
+                        control: Arc::clone(control),
+                        slot,
+                        released: false,
+                    },
+                    Arc::clone(bootstrap),
+                    Arc::clone(&run_index),
+                    runs,
+                    Arc::clone(results),
+                ));
+            }
+            if state.workers == 0 && (ended || unclaimed == Some(0)) {
+                break;
+            }
+            state = control.wait(state);
+        }
+        drop(state);
+
+        let mut errors = vec![];
+
+        for (i, thread) in threads.into_iter().enumerate() {
+            log::debug!("joining thread {i}...");
+
+            match thread.join() {
+                Ok(x) => {
+                    if let Err(e) = x {
+                        errors.push(e);
+                    }
+                    log::debug!("thread {i} joined");
+                }
+                Err(e) => {
+                    let message = e
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| e.downcast_ref::<&str>().copied())
+                        .unwrap_or("(not a string)");
+                    log::error!("failed to join thread {i}: {message}");
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors.join("\n").into());
+        }
+        Ok(())
+    }
+
+    fn spawn_worker(
+        worker: WorkerSlot,
+        bootstrap: Arc<B>,
+        run_index: Arc<AtomicU64>,
+        runs: Option<u64>,
+        results: Results,
+    ) -> std::thread::JoinHandle<Result<(), String>> {
+        std::thread::spawn(move || {
+            let mut worker = worker;
+            let _ = thread_id();
+            let thread_id = worker_thread_id();
+            let slot = worker.slot;
+            let control = Arc::clone(&worker.control);
+            let simulation = Simulation::new(&*bootstrap);
+
+            loop {
+                let run_index = {
+                    let mut state = control.lock();
+                    loop {
+                        if END_SIM.load(Ordering::SeqCst) {
+                            log::debug!(
+                                "simulation has ended. worker {slot} ({thread_id}) finished"
+                            );
+                            return Ok(());
+                        }
+                        if state.workers > state.max_parallel {
+                            log::debug!("worker {slot} ({thread_id}) retired");
+                            worker.release(&mut state);
+                            return Ok(());
+                        }
+                        if !state.paused {
+                            break;
+                        }
+                        state = control.wait(state);
+                    }
+                    let run_index = run_index.fetch_add(1, Ordering::SeqCst);
+                    if runs.is_some_and(|runs| run_index >= runs) {
+                        log::debug!(
+                            "finished all runs ({runs:?}). worker {slot} ({thread_id}) finished"
+                        );
+                        return Ok(());
+                    }
+                    state.active += 1;
+                    run_index
+                };
+
+                log::debug!(
+                    "starting simulation run_index={run_index} on worker {slot} ({thread_id})"
+                );
+
+                let result = simulation.run(run_index + 1, Some(thread_id), slot);
+                finish_run(&control, runs, &results, run_index + 1, result);
+
+                log::debug!(
+                    "simulation finished run_index={run_index} on worker {slot} ({thread_id})"
+                );
+            }
+        })
+    }
+}
+
+/// Count a finished fleet run and keep its result (only a failure's, when the fleet is
+/// unbounded, so memory stays flat).
+fn finish_run(
+    control: &FleetControl,
+    runs: Option<u64>,
+    results: &Results,
+    run_number: u64,
+    result: SimResult,
+) {
+    {
+        let mut state = control.lock();
+        state.active -= 1;
+        state.completed += 1;
+        if !result.is_success() {
+            state.failed += 1;
+        }
+    }
+    control.notify();
+    if runs.is_some() || !result.is_success() {
+        results
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(run_number, result);
     }
 }
 
@@ -476,6 +703,85 @@ struct RunOutcome {
     /// The thread schedule it followed.
     #[cfg(feature = "thread")]
     schedule: switchy::thread::simulator::Schedule,
+}
+
+/// How one run is made: why, by which worker, and under which control.
+struct RunSpec {
+    kind: RunKind,
+    /// The fleet worker slot (`0` for a job).
+    worker: u64,
+    /// Pin the clock's epoch offset to this (a replay of a recorded run).
+    #[cfg_attr(not(feature = "time"), allow(dead_code))]
+    epoch_offset: Option<u64>,
+    control: Option<Arc<ReplayControl>>,
+}
+
+impl RunSpec {
+    const fn fleet(worker: u64) -> Self {
+        Self {
+            kind: RunKind::Fleet,
+            worker,
+            epoch_offset: None,
+            control: None,
+        }
+    }
+
+    /// The run's id: fleet runs carry their worker thread, jobs worker `0`.
+    fn id(&self, run_number: u64, thread_id: Option<u64>) -> RunId {
+        RunId {
+            worker: match self.kind {
+                RunKind::Fleet => thread_id.unwrap_or(1),
+                RunKind::Replay | RunKind::Shrink => 0,
+            },
+            run: run_number,
+        }
+    }
+}
+
+/// What the current simulation context knows about the run it belongs to.
+struct RunState {
+    id: RunId,
+    kind: RunKind,
+    control: Option<Arc<ReplayControl>>,
+    /// The first panic on any of the run's threads (simulated ones included).
+    panic: Mutex<Option<String>>,
+    /// Set by a panic that ends only this run.
+    cancelled: AtomicBool,
+}
+
+impl RunState {
+    fn panicked(&self, panic: String) {
+        self.panic
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get_or_insert(panic);
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+}
+
+/// The run the current simulation context belongs to.
+struct CurrentRun(Option<Arc<RunState>>);
+
+fn current_run_state() -> Option<Arc<RunState>> {
+    switchy::simulation::state_with(|| CurrentRun(None))
+        .0
+        .clone()
+}
+
+/// The run the calling thread belongs to (its worker thread or one of its simulated threads),
+/// or `None` outside every run.
+#[must_use]
+pub fn current_run() -> Option<RunId> {
+    current_run_state().map(|run| run.id)
+}
+
+/// The [`ReplayControl`] holding the current run at scheduling decisions, if it has one.
+///
+/// Only a replay job started with one has it; fleet runs have none. A simulation's decision
+/// hook uses it to hold each run under its own control.
+#[must_use]
+pub fn current_replay() -> Option<Arc<ReplayControl>> {
+    current_run_state().and_then(|run| run.control.clone())
 }
 
 /// Marks a run whose reports, events and telemetry are dropped (a shrinking replay).
@@ -509,26 +815,27 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         Self { bootstrap }
     }
 
-    /// Run once (shrinking a failure's schedule if asked to), and with determinism
-    /// verification on, run the same seed again and fail if the two runs' traces differ. A
-    /// failure ends the simulation.
-    fn run(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
-        let result = self.run_checked(run_number, thread_id);
-        if !result.is_success() {
-            end_sim();
+    /// Run fleet run `run_number` on worker slot `worker` once (shrinking a failure's schedule
+    /// if asked to), and with determinism verification on, run the same seed again and fail
+    /// if the two runs' traces differ. A failure ends the simulation, unless the fleet
+    /// continues after failures.
+    fn run(&self, run_number: u64, thread_id: Option<u64>, worker: u64) -> SimResult {
+        let result = self.run_checked(run_number, thread_id, &RunSpec::fleet(worker));
+        if !result.is_success() && stop_on_failure() {
+            end_fleet();
         }
         result
     }
 
-    fn run_checked(&self, run_number: u64, thread_id: Option<u64>) -> SimResult {
-        let first = self.run_once(run_number, thread_id, Replay::No);
+    fn run_checked(&self, run_number: u64, thread_id: Option<u64>, spec: &RunSpec) -> SimResult {
+        let first = self.run_once(run_number, thread_id, Replay::No, spec);
         if !first.result.is_success() {
-            return self.shrunk(run_number, thread_id, first);
+            return self.shrunk(run_number, thread_id, first, spec);
         }
         if !verify_determinism() {
             return first.result;
         }
-        let again = self.run_once(run_number, thread_id, Replay::Seed(first.seed));
+        let again = self.run_once(run_number, thread_id, Replay::Seed(first.seed), spec);
         if !again.result.is_success() {
             return again.result;
         }
@@ -556,24 +863,31 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
     /// schedule by replaying its seed, and report the smallest failing run with how to replay
     /// it. Otherwise, the failed run's result.
     #[cfg_attr(not(feature = "thread"), allow(clippy::unused_self, unused_variables))]
-    fn shrunk(&self, run_number: u64, thread_id: Option<u64>, failed: RunOutcome) -> SimResult {
+    fn shrunk(
+        &self,
+        run_number: u64,
+        thread_id: Option<u64>,
+        failed: RunOutcome,
+        spec: &RunSpec,
+    ) -> SimResult {
         #[cfg(feature = "thread")]
         if let Some(attempts) = shrink_attempts() {
-            use switchy::thread::simulator::shrink;
             let seed = failed.seed;
             let original = failed.schedule.choices.len();
-            let schedule = shrink(&failed.schedule, attempts, |candidate| {
-                let outcome = self.run_once(
-                    run_number,
-                    thread_id,
-                    Replay::Silent(seed, candidate.clone()),
-                );
-                (!outcome.result.is_success()).then_some(outcome.schedule)
-            });
+            let schedule = self.shrink_schedule(
+                run_number,
+                thread_id,
+                seed,
+                &failed.schedule,
+                attempts,
+                spec,
+                |_, _| {},
+            );
             let last = self.run_once(
                 run_number,
                 thread_id,
                 Replay::Silent(seed, schedule.clone()),
+                spec,
             );
             if let SimResult::Fail {
                 props,
@@ -616,10 +930,101 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         failed.result
     }
 
+    /// The smallest failing schedule [`switchy::thread::simulator::shrink`] finds for the
+    /// failed run of `seed` that followed `schedule`, in at most `attempts` silent replays.
+    /// `progress` hears each replay made and the smallest failing schedule's length so far.
+    #[cfg(feature = "thread")]
+    #[allow(clippy::too_many_arguments)]
+    fn shrink_schedule(
+        &self,
+        run_number: u64,
+        thread_id: Option<u64>,
+        seed: u64,
+        schedule: &switchy::thread::simulator::Schedule,
+        attempts: usize,
+        spec: &RunSpec,
+        mut progress: impl FnMut(u64, usize),
+    ) -> switchy::thread::simulator::Schedule {
+        let mut tried = 0;
+        let mut best = schedule.choices.len();
+        switchy::thread::simulator::shrink(schedule, attempts, |candidate| {
+            let outcome = self.run_once(
+                run_number,
+                thread_id,
+                Replay::Silent(seed, candidate.clone()),
+                spec,
+            );
+            tried += 1;
+            let failed = (!outcome.result.is_success()).then_some(outcome.schedule);
+            if let Some(followed) = &failed {
+                best = best.min(followed.choices.len());
+            }
+            progress(tried, best);
+            failed
+        })
+    }
+
+    /// A shrink job: run the run of `seed` and `epoch_offset`, and if it fails, shrink its
+    /// thread schedule, reporting progress as [`SimEvent::Shrink`].
+    #[cfg(feature = "thread")]
+    fn shrink_job(&self, number: u64, seed: u64, epoch_offset: u64) {
+        let spec = RunSpec {
+            kind: RunKind::Shrink,
+            worker: 0,
+            epoch_offset: Some(epoch_offset),
+            control: None,
+        };
+        let id = spec.id(number, None);
+        let first = self.run_once(number, None, Replay::Seed(seed), &spec);
+        let original_len = first.schedule.choices.len() as u64;
+        // Sent past the silent replays' suppression: these events are the job's report.
+        let report = |attempts: u64, best_len: u64, schedule: Option<String>, done: bool| {
+            notify_observers(&SimEvent::Shrink {
+                id,
+                attempts,
+                best_len,
+                original_len,
+                done,
+                schedule,
+            });
+        };
+        if first.result.is_success() {
+            report(0, original_len, None, true);
+            return;
+        }
+        report(0, original_len, None, false);
+        let attempts = shrink_attempts().unwrap_or(switchy::thread::simulator::SHRINK_ATTEMPTS);
+        let mut tried = 0;
+        let schedule = self.shrink_schedule(
+            number,
+            None,
+            seed,
+            &first.schedule,
+            attempts,
+            &spec,
+            |attempts, best| {
+                tried = attempts;
+                report(attempts, best as u64, None, false);
+            },
+        );
+        report(
+            tried,
+            schedule.choices.len() as u64,
+            Some(schedule.to_string()),
+            true,
+        );
+    }
+
     /// One run. `replay` repeats an earlier run's seed instead of advancing the seed sequence,
     /// and can fix its thread schedule (silently: no reports, events or telemetry).
     #[allow(clippy::too_many_lines)]
-    fn run_once(&self, run_number: u64, thread_id: Option<u64>, replay: Replay) -> RunOutcome {
+    fn run_once(
+        &self,
+        run_number: u64,
+        thread_id: Option<u64>,
+        replay: Replay,
+        spec: &RunSpec,
+    ) -> RunOutcome {
         // Each run starts from a fresh simulation context, so nothing of an earlier run on
         // this worker thread (simulated threads, clock, generator) carries over.
         switchy::simulation::set_current(None);
@@ -634,9 +1039,12 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             Replay::Seed(seed) => switchy::simulation::set_seed(seed),
             #[cfg(feature = "thread")]
             Replay::Silent(seed, schedule) => {
-                // The failure being shrunk cancelled every run; this replay must still run.
-                // No new runs start either way (see `END_SIM`).
-                simvar_utils::reset_global_simulator_cancellation_token();
+                // The fleet failure being shrunk cancelled every run (and so may each failing
+                // replay); this replay must still run. No new runs start either way (see
+                // `END_SIM`).
+                if spec.kind == RunKind::Fleet && stop_on_failure() {
+                    simvar_utils::reset_global_simulator_cancellation_token();
+                }
                 switchy::simulation::set_seed(seed);
                 let _ = switchy::simulation::state_with(|| Silent(true));
                 let mut config = switchy::thread::simulator::Config::from_env(seed);
@@ -645,11 +1053,15 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             }
         }
         let seed = switchy::random::simulator::seed();
-        let run_id = simvar_observer::RunId {
-            worker: thread_id.unwrap_or(1),
-            run: run_number,
-        };
-        let _ = switchy::simulation::state_with(|| CurrentRun(run_id));
+        let run_id = spec.id(run_number, thread_id);
+        let run_state = Arc::new(RunState {
+            id: run_id,
+            kind: spec.kind,
+            control: spec.control.clone(),
+            panic: Mutex::new(None),
+            cancelled: AtomicBool::new(false),
+        });
+        let _ = switchy::simulation::state_with(|| CurrentRun(Some(Arc::clone(&run_state))));
 
         switchy::random::simulator::reset_rng();
         switchy::tcp::simulator::reset();
@@ -657,6 +1069,11 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         switchy::fs::simulator::reset_fs();
         #[cfg(feature = "time")]
         switchy::time::simulator::reset_epoch_offset();
+        // A replay pins the recorded offset after drawing one, so every later draw matches.
+        #[cfg(feature = "time")]
+        if let Some(epoch_offset) = spec.epoch_offset {
+            switchy::time::simulator::set_epoch_offset(epoch_offset);
+        }
         #[cfg(feature = "time")]
         switchy::time::simulator::reset_step_multiplier();
         reset_simulator_cancellation_token();
@@ -677,12 +1094,19 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             extra: self.bootstrap.props(),
         };
 
-        notify(&simvar_observer::SimEvent::RunStarted {
+        #[cfg(feature = "time")]
+        let epoch_offset = config.epoch_offset;
+        #[cfg(not(feature = "time"))]
+        let epoch_offset = 0;
+        notify(&SimEvent::RunStarted {
             id: run_id,
             seed,
             props: props.extra.clone(),
             steps: (duration < Duration::MAX)
                 .then(|| u64::try_from(duration_steps).unwrap_or(u64::MAX)),
+            worker: spec.worker,
+            kind: spec.kind,
+            epoch_offset,
         });
 
         logging::log_message(format!(
@@ -694,6 +1118,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         ));
 
         let start = switchy::time::now();
+        let real_start = Instant::now();
 
         self.bootstrap.on_start(&mut managed_sim);
 
@@ -719,6 +1144,10 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             managed_sim.start();
 
             loop {
+                // A panic that ends only this run (see the panic hook) cancels it here.
+                if run_state.cancelled.load(Ordering::SeqCst) && !is_simulator_cancelled() {
+                    cancel_simulation();
+                }
                 if !is_simulator_cancelled() {
                     let step = next_step();
 
@@ -734,7 +1163,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                     }
                     if step.is_multiple_of(100) {
                         #[allow(clippy::cast_precision_loss)]
-                        notify(&simvar_observer::SimEvent::Progress {
+                        notify(&SimEvent::Progress {
                             id: run_id,
                             step,
                             progress: (duration < Duration::MAX)
@@ -758,8 +1187,10 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         let end = switchy::time::now();
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
-        let sim_time_millis = managed_sim.elapsed().as_millis();
-        let steps = current_step() - 1;
+        let sim_time = managed_sim.elapsed();
+        let sim_time_millis = sim_time.as_millis();
+        // A run stopped before its first step ran none.
+        let steps = current_step().saturating_sub(1);
 
         log::debug!("after simulation run");
 
@@ -780,7 +1211,14 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         };
         trace = mix(trace, steps);
 
-        let panic = PANIC.with_borrow(Clone::clone);
+        // A panic on this thread, or else on any other thread of the run.
+        let panic = PANIC.with_borrow(Clone::clone).or_else(|| {
+            run_state
+                .panic
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+        });
 
         let result = if let Err(e) = resp {
             SimResult::Fail {
@@ -828,21 +1266,23 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             other => other,
         };
 
-        if !result.is_success() {
+        if !result.is_success() && spec.kind == RunKind::Fleet && stop_on_failure() {
             // Start no more runs; the run's caller ends the simulation once it is done with
             // this failure (shrinking it, for example).
-            END_SIM.store(true, std::sync::atomic::Ordering::SeqCst);
+            END_SIM.store(true, Ordering::SeqCst);
         }
 
         logging::log_message(result.to_string());
 
         let trace = mix(trace, u64::from(result_is_success(&result)));
-        notify(&simvar_observer::SimEvent::RunFinished {
+        notify(&SimEvent::RunFinished {
             id: run_id,
             seed,
             success: result_is_success(&result),
             report: result.to_string(),
             steps,
+            real_time: real_start.elapsed(),
+            sim_time,
         });
         RunOutcome {
             result,
@@ -870,10 +1310,15 @@ pub fn add_observer(observer: Arc<dyn simvar_observer::SimObserver>) {
     OBSERVERS.write().unwrap().push(observer);
 }
 
-fn notify(event: &simvar_observer::SimEvent) {
+fn notify(event: &SimEvent) {
     if silent() {
         return;
     }
+    notify_observers(event);
+}
+
+/// Send `event` to every observer, also from a silent run.
+fn notify_observers(event: &SimEvent) {
     let observers = OBSERVERS
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -882,17 +1327,13 @@ fn notify(event: &simvar_observer::SimEvent) {
     }
 }
 
-/// The run the current simulation context belongs to.
-struct CurrentRun(simvar_observer::RunId);
-
-/// Send `payload` to every observer as telemetry of the current run. Callable from any thread
-/// of the run, including simulated threads. Never changes the run.
+/// Send `payload` to every observer as telemetry of the current run.
+///
+/// Callable from any thread of the run, including simulated threads. Never changes the run.
+/// Outside every run, the telemetry is sent as run `0` of worker `0`.
 pub fn emit(payload: Arc<dyn std::any::Any + Send + Sync>) {
-    let id = switchy::simulation::state_with(|| {
-        CurrentRun(simvar_observer::RunId { worker: 0, run: 0 })
-    })
-    .0;
-    notify(&simvar_observer::SimEvent::Telemetry { id, payload });
+    let id = current_run().unwrap_or(RunId { worker: 0, run: 0 });
+    notify(&SimEvent::Telemetry { id, payload });
 }
 
 /// Whether each run is replayed to check it is deterministic: `SIMULATOR_VERIFY_DETERMINISM`
@@ -1117,8 +1558,7 @@ impl ManagedSim {
             }
         }
 
-        if current_step().is_multiple_of(1000) || END_SIM.load(std::sync::atomic::Ordering::SeqCst)
-        {
+        if current_step().is_multiple_of(1000) || END_SIM.load(Ordering::SeqCst) {
             log::debug!("hosts={} clients={}", self.hosts.len(), self.clients.len());
         }
 

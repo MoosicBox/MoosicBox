@@ -95,14 +95,41 @@ By default, the `all` feature is enabled. Individual features can be selected:
 
 ## Environment Variables
 
-- **`SIMULATOR_RUNS`**: Number of simulation runs to execute (default: 1)
+- **`SIMULATOR_RUNS`**: Number of simulation runs to execute (default: 1), or
+  `forever` to run until stopped (only failed runs' results are then kept)
 - **`SIMULATOR_MAX_PARALLEL`**: Maximum parallel runs (default: number of CPUs)
+- **`SIMULATOR_ON_FAILURE`**: `stop` (default) ends the simulation at the first
+  failed run; `continue` records and reports it and keeps starting runs
 - **`SIMULATOR_SEED`**: The first run's seed (default random)
 - **`SIMULATOR_VERIFY_DETERMINISM`**: `1` replays every run and fails if its trace differs
 - **`SIMULATOR_SHRINK`** (`thread` feature): shrink a failing run's thread
   schedule (`1` for up to 1000 replays, or a number) and print how to replay it
 - **`SIMULATOR_SCHEDULE`** (`thread` feature): replay a shrunk schedule
 - **`NO_TUI`**: Disable terminal UI when set
+
+## Steering a Running Simulation
+
+`simvar::control()` steers the simulation from any thread (an observer, a
+dashboard, a test) while it runs:
+
+- `pause()` / `resume()`: hold workers from starting new runs; runs in progress finish
+- `set_max_parallel(n)`: grow or shrink the pool of workers (has no effect when
+  the simulation started with `SIMULATOR_MAX_PARALLEL=0`)
+- `stop()`: end the simulation, as `end_sim()` does
+- `status()`: a `FleetStatus` of paused, `max_parallel`, active, completed and failed runs
+- `replay(ReplayRequest { seed, epoch_offset, control })`: re-run an earlier run
+  exactly, in-process, on a thread of its own
+- `shrink(seed, epoch_offset)` (`thread` feature): shrink an earlier failed run's
+  thread schedule, reporting `SimEvent::Shrink` progress and finally the
+  schedule for `SIMULATOR_SCHEDULE`
+
+Replay and shrink jobs work while the fleet runs, while it is paused and after it
+finished. They report the usual events under worker `0` with
+`RunKind::Replay`/`RunKind::Shrink`, and never count toward the fleet. A stop, or
+a failure under `SIMULATOR_ON_FAILURE=stop`, also cancels jobs in progress, so a
+long-lived dashboard should use `SIMULATOR_ON_FAILURE=continue`. Inside a run,
+`current_run()` and `current_replay()` say which run the calling thread belongs
+to and which `ReplayControl` (if any) holds it.
 
 ## Dependencies
 
