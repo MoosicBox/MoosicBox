@@ -7,7 +7,7 @@
 //! # Features
 //!
 //! * `uuid` - Use the standard `uuid` crate for random UUID generation
-//! * `simulator` - Use deterministic UUID generation with a configurable seed
+//! * `simulator` - Use deterministic UUID generation derived from the simulation run's seed
 //! * `serde` - Enable serde serialization/deserialization support
 //!
 //! # Examples

@@ -18838,10 +18838,8 @@ dependencies = [
 name = "switchy_uuid"
 version = "0.5.0"
 dependencies = [
- "log 0.4.34",
  "serde",
- "switchy_env",
- "switchy_random",
+ "switchy_simulation",
  "test-log",
  "uuid",
 ]

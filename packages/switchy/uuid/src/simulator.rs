@@ -1,27 +1,29 @@
 //! Deterministic UUID generation for testing and simulation.
 //!
-//! This module provides UUID v4 generation using a seeded random number generator,
-//! allowing for reproducible UUIDs in test and simulation environments.
+//! This module provides UUID v4 generation from the current simulation run's
+//! `switchy_uuid` RNG stream (see [`switchy_simulation::stream`]). The stream is derived from
+//! the run's seed (`SIMULATOR_SEED`, or whatever seed the harness gives the run), so:
 //!
-//! The seed can be configured via the `SIMULATOR_UUID_SEED` environment variable.
-//! If not set, defaults to 12345.
+//! * the same run seed yields the same UUID sequence,
+//! * every run restarts the sequence (setting the seed or clearing the context resets it),
+//! * parallel runs, each with its own [`switchy_simulation::Context`], never share or perturb
+//!   each other's sequences, and
+//! * drawing UUIDs never shifts the draws of other simulators (time, random, threads).
+//!
+//! Earlier releases used a process-global generator seeded by `SIMULATOR_UUID_SEED`; that
+//! variable is no longer read. Choose a different run seed to get a different sequence.
+
+use std::sync::PoisonError;
 
 use crate::Uuid;
-use switchy_env::var_parse_or;
-use switchy_random::{GenericRng, Rng};
 
-static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(|| {
-    let seed = var_parse_or("SIMULATOR_UUID_SEED", 12345u64);
-
-    log::debug!("Using UUID seed: {seed}");
-    Rng::from_seed(seed)
-});
+/// The name of the run's RNG stream UUIDs are drawn from.
+pub const STREAM: &str = "switchy_uuid";
 
 /// Generates a deterministic UUID v4 for simulation purposes.
 ///
-/// This function uses a seeded random number generator to produce UUIDs that
-/// are reproducible across runs with the same seed. The seed can be configured
-/// via the `SIMULATOR_UUID_SEED` environment variable (defaults to 12345).
+/// The bytes come from the current simulation run's [`STREAM`] stream, so the sequence is
+/// reproducible for a given run seed and independent between runs.
 ///
 /// The generated UUID is compliant with RFC 4122 version 4 format, with the
 /// version and variant bits correctly set.
@@ -35,7 +37,10 @@ static RNG: std::sync::LazyLock<Rng> = std::sync::LazyLock::new(|| {
 #[must_use]
 pub fn new_v4() -> Uuid {
     let mut bytes = [0u8; 16];
-    RNG.fill_bytes(&mut bytes);
+    switchy_simulation::stream(STREAM)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .fill_bytes(&mut bytes);
 
     // Set version (4) and variant bits according to RFC 4122
     bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
@@ -65,19 +70,85 @@ pub fn new_v4_string() -> String {
 mod tests {
     use super::*;
 
+    use std::sync::Arc;
+
+    use switchy_simulation::{Context, with_context};
+
+    fn draw(context: &Arc<Context>, count: usize) -> Vec<Uuid> {
+        with_context(Arc::clone(context), || {
+            (0..count).map(|_| new_v4()).collect()
+        })
+    }
+
     #[test_log::test]
     fn test_deterministic_generation() {
-        // The RNG is static, so we can't easily reset it between tests.
-        // Instead, we verify that consecutive calls produce different UUIDs
-        // but the sequence is deterministic within a single test run.
-        let uuid1 = new_v4();
-        let uuid2 = new_v4();
-        let uuid3 = new_v4();
+        let uuids = draw(&Context::new(7), 3);
 
         // UUIDs should be different from each other
-        assert_ne!(uuid1, uuid2);
-        assert_ne!(uuid2, uuid3);
-        assert_ne!(uuid1, uuid3);
+        assert_ne!(uuids[0], uuids[1]);
+        assert_ne!(uuids[1], uuids[2]);
+        assert_ne!(uuids[0], uuids[2]);
+    }
+
+    #[test_log::test]
+    fn same_run_seed_yields_same_sequence() {
+        assert_eq!(draw(&Context::new(42), 8), draw(&Context::new(42), 8));
+    }
+
+    #[test_log::test]
+    fn different_run_seeds_yield_different_sequences() {
+        assert_ne!(draw(&Context::new(1), 4), draw(&Context::new(2), 4));
+    }
+
+    #[test_log::test]
+    fn sequence_restarts_when_the_run_is_reseeded() {
+        let context = Context::new(5);
+        let first = draw(&context, 4);
+        assert_ne!(draw(&context, 4), first, "the stream advances within a run");
+        context.set_seed(5);
+        assert_eq!(draw(&context, 4), first);
+        let _ = draw(&context, 2);
+        context.clear();
+        assert_eq!(draw(&context, 4), first);
+    }
+
+    #[test_log::test]
+    fn runs_are_isolated_from_each_other() {
+        let a = Context::new(9);
+        let b = Context::new(9);
+        let expected = draw(&Context::new(9), 6);
+        // Interleave draws of two runs with the same seed: neither perturbs the other.
+        let mut from_a = Vec::new();
+        let mut from_b = Vec::new();
+        for _ in 0..6 {
+            from_a.extend(draw(&a, 1));
+            from_b.extend(draw(&b, 1));
+        }
+        assert_eq!(from_a, expected);
+        assert_eq!(from_b, expected);
+    }
+
+    #[test_log::test]
+    fn parallel_runs_on_threads_are_isolated() {
+        let expected = draw(&Context::new(11), 20);
+        let results: Vec<Vec<Uuid>> = std::thread::scope(|s| {
+            // Start every thread before joining any, so the runs overlap.
+            let handles: [_; 4] = std::array::from_fn(|_| s.spawn(|| draw(&Context::new(11), 20)));
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for result in results {
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test_log::test]
+    fn uuid_draws_do_not_shift_other_streams() {
+        let a = Context::new(3);
+        let b = Context::new(3);
+        let _ = draw(&a, 5);
+        let x = a.stream("other").lock().unwrap().next_u64();
+        let y = b.stream("other").lock().unwrap().next_u64();
+        assert_eq!(x, y);
     }
 
     #[test_log::test]
@@ -218,7 +289,6 @@ mod tests {
     fn test_concurrent_uuid_generation_produces_unique_uuids() {
         {
             use std::collections::BTreeSet;
-            use std::sync::Arc;
 
             // Generate UUIDs from multiple threads concurrently and verify uniqueness
             let num_threads = 4;
@@ -227,10 +297,15 @@ mod tests {
             let all_uuids: Arc<std::sync::Mutex<BTreeSet<Uuid>>> =
                 Arc::new(std::sync::Mutex::new(BTreeSet::new()));
 
+            // Threads of one run share its context (as simulated threads do), so they draw
+            // from one stream and never repeat each other.
+            let context = Context::new(13);
             std::thread::scope(|s| {
                 for _ in 0..num_threads {
                     let uuids_clone = Arc::clone(&all_uuids);
+                    let context = Arc::clone(&context);
                     s.spawn(move || {
+                        switchy_simulation::set_current(Some(context));
                         for _ in 0..uuids_per_thread {
                             let uuid = new_v4();
                             let was_inserted = uuids_clone.lock().unwrap().insert(uuid);
