@@ -712,3 +712,38 @@ fn a_killed_thread_blocking_in_a_destructor_is_parked_for_good() {
     outcome.result.unwrap();
     assert!(outcome.report.leaked.is_empty(), "{:?}", outcome.report);
 }
+
+#[test]
+fn a_killed_thread_sleeping_in_a_destructor_still_finishes_unwinding() {
+    struct SleepOnDrop;
+    impl Drop for SleepOnDrop {
+        fn drop(&mut self) {
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+    for seed in 0..5 {
+        let outcome = simulator::run(seed, || {
+            let group = simulator::new_key();
+            let dropped = Arc::new(AtomicUsize::new(0));
+            let flag = DropFlag(Arc::clone(&dropped));
+            let victim = thread::Builder::new()
+                .group(group)
+                .spawn(move || {
+                    // Dropped after the sleeper: the sleep must not park the unwinding.
+                    let _flag = flag;
+                    let _sleeper = SleepOnDrop;
+                    loop {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                })
+                .unwrap();
+            thread::sleep(Duration::from_millis(5));
+            simulator::scheduler().kill_group(group);
+            let joined = victim.join();
+            (dropped.load(Ordering::SeqCst), joined.is_err())
+        });
+        let (dropped, killed) = outcome.result.unwrap();
+        assert_eq!(dropped, 1, "seed {seed}: unwinding went on past the sleep");
+        assert!(killed, "seed {seed}");
+    }
+}

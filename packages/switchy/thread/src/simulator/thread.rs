@@ -182,6 +182,11 @@ pub fn yield_now() {
 /// Block the calling simulated thread for `duration` of simulated time.
 pub fn sleep(duration: Duration) {
     let scheduler = scheduler();
+    // A killed thread unwinding (a dead process) waits for nothing: its destructors' sleeps
+    // return at once, so they release what they hold instead of parking the thread for good.
+    if scheduler.is_killed(scheduler.me()) {
+        return;
+    }
     if duration.is_zero() {
         scheduler.yield_point(Op::Sleep);
         return;
