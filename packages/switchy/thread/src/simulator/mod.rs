@@ -23,6 +23,7 @@
 //! [`explore`] runs a short scenario under every schedule that differs from the default at no
 //! more than a given number of preemptions, as CHESS does, and reports the first failing one.
 
+mod coverage;
 mod explore;
 mod memory;
 pub mod sync;
@@ -37,6 +38,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub use coverage::{Coverage, Site};
 pub use explore::{
     Exploration, ExploreFailure, ExploreOptions, ExploredRun, explore, explore_runs,
 };
@@ -211,6 +213,11 @@ pub struct Config {
     pub weak_memory: bool,
     /// Record the run's [`Trace`] (in [`ShutdownReport::trace`]), as [`explore`] needs.
     pub record_trace: bool,
+    /// Record the run's interleaving [`Coverage`] (in [`ShutdownReport::coverage`]): which
+    /// ordered pairs of conflicting operations of different threads it made, by code location
+    /// (see `SIMULATOR_INTERLEAVING_COVERAGE`). It only observes: the run and its trace hash
+    /// are the same either way.
+    pub interleaving_coverage: bool,
 }
 
 impl Config {
@@ -222,6 +229,7 @@ impl Config {
             recent_decisions: 256,
             weak_memory: false,
             record_trace: false,
+            interleaving_coverage: false,
         }
     }
 
@@ -233,6 +241,7 @@ impl Config {
             recent_decisions: 256,
             weak_memory: false,
             record_trace: false,
+            interleaving_coverage: false,
         }
     }
 
@@ -244,6 +253,7 @@ impl Config {
             recent_decisions: 256,
             weak_memory: false,
             record_trace: false,
+            interleaving_coverage: false,
         }
     }
 
@@ -267,6 +277,8 @@ impl Config {
     /// * `SIMULATOR_WEAK_MEMORY`: `1` or `true` to model weak memory, or `swarm` to model it in
     ///   one run in four, drawn from the seed.
     /// * `SIMULATOR_SCHEDULE`: a [`Schedule`] to replay, overriding the strategy.
+    /// * `SIMULATOR_INTERLEAVING_COVERAGE`: `1` or `true` to record the run's interleaving
+    ///   [`Coverage`] (see [`Config::interleaving_coverage`]).
     ///
     /// # Panics
     ///
@@ -318,6 +330,10 @@ impl Config {
                 _ => false,
             },
             record_trace: false,
+            interleaving_coverage: matches!(
+                std::env::var("SIMULATOR_INTERLEAVING_COVERAGE").as_deref(),
+                Ok("1" | "true")
+            ),
         }
     }
 
@@ -423,6 +439,9 @@ pub(crate) enum Object {
     Atomic(u64),
     /// Whether a thread has finished (and its result).
     Thread(ThreadIndex),
+    /// A simulated device or kernel object ([`WaitKey::Io`]); recorded only for
+    /// [`Coverage`], since such operations make a trace untracked.
+    Io(u64),
     /// The order of `wake_one`'s seeded picks, which every `notify_one` draws from.
     WakeOrder,
 }
@@ -546,6 +565,8 @@ struct ThreadRecord {
     daemon: bool,
     /// What it touched since its last switch point, when tracing.
     footprint: Footprint,
+    /// Where it was spawned: the site of its finishing, for [`Coverage`].
+    spawned_at: Option<Site>,
 }
 
 /// Whether a thread was killed.
@@ -578,6 +599,8 @@ struct Inner {
     killer: Option<ThreadIndex>,
     /// The run's trace, when [`Config::record_trace`] is set.
     trace: Option<Trace>,
+    /// The run's coverage, when [`Config::interleaving_coverage`] is set.
+    coverage: Option<coverage::Recorder>,
 }
 
 /// Called at every scheduling decision, before the chosen thread runs.
@@ -601,6 +624,8 @@ pub struct Scheduler {
     hook: Mutex<Option<DecisionHook>>,
     /// Whether the run records a [`Trace`] (fixed for the run).
     tracing: bool,
+    /// Whether the run records its [`Coverage`] (fixed for the run).
+    covering: bool,
 }
 
 impl std::fmt::Debug for Scheduler {
@@ -704,6 +729,7 @@ impl Scheduler {
             main_priority = lowest_priority + rng.below(u64::MAX / 2);
         }
         let tracing = config.record_trace;
+        let covering = config.interleaving_coverage;
         let weak_memory = config.weak_memory;
         Self {
             context_id: context.id(),
@@ -724,6 +750,7 @@ impl Scheduler {
                     fate: Fate::Alive,
                     daemon: false,
                     footprint: Footprint::default(),
+                    spawned_at: None,
                 }],
                 running: 0,
                 decisions: 0,
@@ -743,8 +770,10 @@ impl Scheduler {
                     steps: Vec::new(),
                     untracked: weak_memory,
                 }),
+                coverage: covering.then(coverage::Recorder::default),
             }),
             tracing,
+            covering,
         }
     }
 
@@ -800,13 +829,29 @@ impl Scheduler {
         }
     }
 
-    /// Record, when tracing, that the calling thread's current transition touched `object`.
+    /// Record, when tracing, that the calling thread's current transition touched `object`,
+    /// and, when recording coverage, that it did at its current [`Site`].
     pub(crate) fn touch(&self, object: Object, write: bool) {
-        if !self.tracing {
+        if !self.tracing && !self.covering {
             return;
         }
         if let Some(me) = self.caller() {
-            lock(&self.inner).threads[me].footprint.add(object, write);
+            let mut inner = lock(&self.inner);
+            if self.tracing {
+                inner.threads[me].footprint.add(object, write);
+            }
+            Self::cover(&mut inner, me, object, write);
+            drop(inner);
+        }
+    }
+
+    /// Record, when recording coverage, that thread `me` touched `object` at its current
+    /// [`Site`] (if it is in a switch point that has one).
+    fn cover(inner: &mut Inner, me: ThreadIndex, object: Object, write: bool) {
+        if let Some(recorder) = &mut inner.coverage
+            && let Some(site) = coverage::current()
+        {
+            recorder.access(me, object, site, write);
         }
     }
 
@@ -843,9 +888,16 @@ impl Scheduler {
     }
 
     fn touch_wait(&self, key: WaitKey) {
-        match Self::wait_object(key) {
-            Some((object, write)) => self.touch(object, write),
-            None => self.touch_any(),
+        if let Some((object, write)) = Self::wait_object(key) {
+            self.touch(object, write);
+            return;
+        }
+        self.touch_any();
+        if let WaitKey::Io(key) = key
+            && self.covering
+            && let Some(me) = self.caller()
+        {
+            Self::cover(&mut lock(&self.inner), me, Object::Io(key), true);
         }
     }
 
@@ -880,6 +932,16 @@ impl Scheduler {
     #[must_use]
     pub fn config(&self) -> Config {
         lock(&self.inner).config.clone()
+    }
+
+    /// The run's interleaving coverage so far, if it records it (see
+    /// [`Config::interleaving_coverage`]). Taking it never changes the run.
+    #[must_use]
+    pub fn coverage(&self) -> Option<Coverage> {
+        lock(&self.inner)
+            .coverage
+            .as_ref()
+            .map(coverage::Recorder::coverage)
     }
 
     /// The running hash of every scheduling decision so far.
@@ -928,6 +990,7 @@ impl Scheduler {
             fate: Fate::Alive,
             daemon: false,
             footprint: Footprint::default(),
+            spawned_at: coverage::current(),
         });
         let child = inner.threads.len() - 1;
         if inner.config.weak_memory {
@@ -948,7 +1011,9 @@ impl Scheduler {
     /// For code outside this crate (another simulator's objects): the scheduler cannot tell
     /// what the calling thread touches around it, so a traced run that uses it is untracked
     /// (see [`Trace::untracked`]).
+    #[track_caller]
     pub fn yield_point(&self, op: Op) {
+        let _site = coverage::enter();
         self.untracked();
         self.switch_point(op);
     }
@@ -965,7 +1030,9 @@ impl Scheduler {
     /// Returns whether the wait timed out.
     ///
     /// Like [`Self::yield_point`], it makes a traced run untracked.
+    #[track_caller]
     pub fn block(&self, op: Op, key: WaitKey, deadline: Option<Instant>) -> bool {
+        let _site = coverage::enter();
         self.untracked();
         self.wait(op, key, deadline)
     }
@@ -1042,7 +1109,9 @@ impl Scheduler {
     /// Make every thread blocked on `key` runnable. They run when picked.
     ///
     /// Like [`Self::yield_point`], it makes a traced run untracked.
+    #[track_caller]
     pub fn wake_all(&self, key: WaitKey) {
+        let _site = coverage::enter();
         self.untracked();
         self.wake_all_on(key);
     }
@@ -1062,7 +1131,9 @@ impl Scheduler {
     /// there was one.
     ///
     /// Like [`Self::yield_point`], it makes a traced run untracked.
+    #[track_caller]
     pub fn wake_one(&self, key: WaitKey) -> bool {
+        let _site = coverage::enter();
         self.untracked();
         self.wake_one_on(key)
     }
@@ -1488,6 +1559,12 @@ impl Scheduler {
         if self.tracing {
             inner.threads[me].footprint.add(Object::Thread(me), true);
         }
+        if self.covering
+            && let Some(site) = inner.threads[me].spawned_at
+        {
+            let _site = coverage::enter_at(site);
+            Self::cover(&mut inner, me, Object::Thread(me), true);
+        }
         for thread in &mut inner.threads {
             if matches!(thread.state, ThreadState::Blocked { key: WaitKey::Join(j), .. } if j == me)
             {
@@ -1570,6 +1647,7 @@ impl Scheduler {
                 trace_hash: inner.trace_hash,
                 schedule: inner.schedule.clone(),
                 trace: inner.trace.take(),
+                coverage: inner.coverage.take().map(coverage::Recorder::into_coverage),
             };
             let finished: Vec<std::thread::Thread> = inner
                 .threads
@@ -1619,6 +1697,8 @@ pub struct ShutdownReport {
     pub schedule: Schedule,
     /// The run's trace, if [`Config::record_trace`] was set.
     pub trace: Option<Trace>,
+    /// The run's interleaving coverage, if [`Config::interleaving_coverage`] was set.
+    pub coverage: Option<Coverage>,
 }
 
 /// The current run's scheduler; see [`Scheduler::current`].
@@ -1647,6 +1727,12 @@ pub fn set_decision_hook(hook: Option<DecisionHook>) {
 /// Run other simulated threads until idle; see [`Scheduler::run_until_idle`].
 pub fn run_until_idle() {
     scheduler().run_until_idle();
+}
+
+/// The current run's interleaving coverage so far; see [`Scheduler::coverage`].
+#[must_use]
+pub fn coverage() -> Option<Coverage> {
+    scheduler().coverage()
 }
 
 /// Mix an observable value into the current run's trace hash; see [`Scheduler::record`].

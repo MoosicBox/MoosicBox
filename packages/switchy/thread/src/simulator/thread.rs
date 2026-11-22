@@ -7,7 +7,9 @@ use std::{
     time::Duration,
 };
 
-use super::{IDENTITY, Killed, Op, Scheduler, ThreadIndex, WaitKey, deadline_after, scheduler};
+use super::{
+    IDENTITY, Killed, Op, Scheduler, ThreadIndex, WaitKey, coverage, deadline_after, scheduler,
+};
 
 pub use std::thread::{current, panicking};
 
@@ -30,7 +32,9 @@ impl<T> JoinHandle<T> {
     /// # Panics
     ///
     /// * If the run deadlocks while waiting
+    #[track_caller]
     pub fn join(self) -> std::thread::Result<T> {
+        let _site = coverage::enter();
         loop {
             self.scheduler.switch_point(Op::Join);
             if self.scheduler.finished(self.index) {
@@ -48,7 +52,9 @@ impl<T> JoinHandle<T> {
 
     /// Whether the thread has finished. A switch point.
     #[must_use]
+    #[track_caller]
     pub fn is_finished(&self) -> bool {
+        let _site = coverage::enter();
         self.scheduler.switch_point(Op::Join);
         self.scheduler.finished(self.index)
     }
@@ -123,11 +129,13 @@ impl Builder {
     ///
     /// * If the operating system cannot start the OS thread, even after waiting for other runs
     ///   to free some (a real failure would make the run depend on the machine)
+    #[track_caller]
     pub fn spawn<F, T>(self, f: F) -> io::Result<JoinHandle<T>>
     where
         F: FnOnce() -> T + Send + 'static,
         T: Send + 'static,
     {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         let context = switchy_simulation::current();
         let context_id = context.id();
@@ -240,6 +248,7 @@ fn start_os_thread(
 ///
 /// * If the OS thread cannot be created, or the run's spawn failure fault strikes (see
 ///   [`super::set_spawn_failures`])
+#[track_caller]
 pub fn spawn<F, T>(f: F) -> JoinHandle<T>
 where
     F: FnOnce() -> T + Send + 'static,
@@ -251,12 +260,16 @@ where
 }
 
 /// Let other simulated threads run. A switch point.
+#[track_caller]
 pub fn yield_now() {
+    let _site = coverage::enter();
     scheduler().switch_point(Op::Yield);
 }
 
 /// Block the calling simulated thread for `duration` of simulated time.
+#[track_caller]
 pub fn sleep(duration: Duration) {
+    let _site = coverage::enter();
     let scheduler = scheduler();
     // A killed thread unwinding (a dead process) waits for nothing: its destructors' sleeps
     // return at once, so they release what they hold instead of parking the thread for good.

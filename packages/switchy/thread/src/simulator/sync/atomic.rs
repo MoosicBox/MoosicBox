@@ -9,7 +9,7 @@ use std::fmt;
 
 pub use std::sync::atomic::{Ordering, compiler_fence};
 
-use super::super::{Object, Op, Scheduler, new_key, scheduler, touch};
+use super::super::{Object, Op, Scheduler, coverage, new_key, scheduler, touch};
 
 /// A location id for the weak memory model, assigned on first weak access so that moving an
 /// atomic keeps its history and a freed atomic's memory never aliases a new one.
@@ -50,7 +50,9 @@ fn touch_atomic(id: &std::sync::atomic::AtomicU64, write: bool) {
 
 /// A memory fence; a switch point. With weak memory, a full fence whatever `order` says
 /// (conservative).
+#[track_caller]
 pub fn fence(order: Ordering) {
+    let _site = coverage::enter();
     switch(Op::Yield);
     std::sync::atomic::fence(order);
 }
@@ -100,11 +102,13 @@ macro_rules! atomic_common {
             }
 
             /// A read-modify-write: `update` gives the new value from the old, if any.
+            #[track_caller]
             fn update(
                 &self,
                 order: Ordering,
                 update: impl FnOnce($value) -> Option<$value>,
             ) -> Result<$value, $value> {
+                let _site = coverage::enter();
                 switch(Op::AtomicUpdate);
                 touch_atomic(&self.id, true);
                 if let Some(scheduler) = weak() {
@@ -130,7 +134,9 @@ macro_rules! atomic_common {
             }
 
             /// Load the value; a switch point.
+            #[track_caller]
             pub fn load(&self, order: Ordering) -> $value {
+                let _site = coverage::enter();
                 switch(Op::AtomicLoad);
                 touch_atomic(&self.id, false);
                 if let Some(scheduler) = weak() {
@@ -141,7 +147,9 @@ macro_rules! atomic_common {
             }
 
             /// Store `value`; a switch point.
+            #[track_caller]
             pub fn store(&self, value: $value, order: Ordering) {
+                let _site = coverage::enter();
                 switch(Op::AtomicStore);
                 touch_atomic(&self.id, true);
                 if let Some(scheduler) = weak() {
@@ -154,6 +162,7 @@ macro_rules! atomic_common {
             }
 
             /// Replace the value, returning the previous one; a switch point.
+            #[track_caller]
             pub fn swap(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |_| Some(value))
                     .unwrap_or_else(|old| old)
@@ -164,6 +173,7 @@ macro_rules! atomic_common {
             /// # Errors
             ///
             /// * The actual value, if it was not `current`
+            #[track_caller]
             pub fn compare_exchange(
                 &self,
                 current: $value,
@@ -179,6 +189,7 @@ macro_rules! atomic_common {
             /// # Errors
             ///
             /// * The actual value, if it was not `current`
+            #[track_caller]
             pub fn compare_exchange_weak(
                 &self,
                 current: $value,
@@ -195,6 +206,7 @@ macro_rules! atomic_common {
             /// # Errors
             ///
             /// * The value, if `f` returned `None`
+            #[track_caller]
             pub fn fetch_update<F: FnMut($value) -> Option<$value>>(
                 &self,
                 set_order: Ordering,
@@ -210,6 +222,7 @@ macro_rules! atomic_common {
             /// # Errors
             ///
             /// * The current value, if `f` returned `None`
+            #[track_caller]
             pub fn try_update<F: FnMut($value) -> Option<$value>>(
                 &self,
                 set_order: Ordering,
@@ -230,18 +243,21 @@ macro_rules! atomic_common {
             }
 
             /// Bitwise and; a switch point.
+            #[track_caller]
             pub fn fetch_and(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old & value))
                     .unwrap_or_else(|old| old)
             }
 
             /// Bitwise or; a switch point.
+            #[track_caller]
             pub fn fetch_or(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old | value))
                     .unwrap_or_else(|old| old)
             }
 
             /// Bitwise xor; a switch point.
+            #[track_caller]
             pub fn fetch_xor(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old ^ value))
                     .unwrap_or_else(|old| old)
@@ -276,24 +292,28 @@ macro_rules! atomic_int {
 
         impl $name {
             /// Wrapping addition; a switch point.
+            #[track_caller]
             pub fn fetch_add(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old.wrapping_add(value)))
                     .unwrap_or_else(|old| old)
             }
 
             /// Wrapping subtraction; a switch point.
+            #[track_caller]
             pub fn fetch_sub(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old.wrapping_sub(value)))
                     .unwrap_or_else(|old| old)
             }
 
             /// Maximum; a switch point.
+            #[track_caller]
             pub fn fetch_max(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old.max(value)))
                     .unwrap_or_else(|old| old)
             }
 
             /// Minimum; a switch point.
+            #[track_caller]
             pub fn fetch_min(&self, value: $value, order: Ordering) -> $value {
                 self.update(order, |old| Some(old.min(value)))
                     .unwrap_or_else(|old| old)
@@ -322,12 +342,14 @@ atomic_common!(
 
 impl AtomicBool {
     /// Logical nand; a switch point.
+    #[track_caller]
     pub fn fetch_nand(&self, value: bool, order: Ordering) -> bool {
         self.update(order, |old| Some(!(old && value)))
             .unwrap_or_else(|old| old)
     }
 
     /// Logical not; a switch point.
+    #[track_caller]
     pub fn fetch_not(&self, order: Ordering) -> bool {
         self.update(order, |old| Some(!old))
             .unwrap_or_else(|old| old)

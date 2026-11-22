@@ -42,6 +42,10 @@ The simulator also provides:
   schedules that only reorder independent operations (on different locks,
   channels, atomics or threads). `explore_runs` does the same for harnesses
   that create their runs themselves.
+- **Interleaving coverage**: with `SIMULATOR_INTERLEAVING_COVERAGE=1` (or
+  `Config::interleaving_coverage`), a run records which ordered pairs of
+  conflicting operations it made, by code location. See
+  [Interleaving coverage](#interleaving-coverage).
 
 It depends only on `switchy_simulation` and `switchy_time`, neither of which has
 external dependencies in simulator builds.
@@ -89,3 +93,55 @@ daemon: `thread::Builder::new().daemon(true)`. When the run ends, an unfinished 
 Each simulated thread keeps its OS thread until its run ends. When the operating system has
 no thread to spare (many runs at once), a spawn waits for other runs to free some, and panics
 if none do: whether the machine has threads left never changes what a run does.
+
+## Interleaving coverage
+
+A run with `SIMULATOR_INTERLEAVING_COVERAGE=1` (`1` or `true`), or with
+`Config::interleaving_coverage` set, records its interleaving coverage: the
+ordered pairs `(a, b)` of code locations where one thread operated on an object
+at `a` and later a different thread made a conflicting operation on the same
+object at `b`. The objects are locks, atomics, channels, condition variables,
+threads (finishing, and joining or asking whether one finished), and other
+simulators' kernel objects (`WaitKey::Io` keys). Two operations conflict when at
+least one writes the object, by the same reads and writes `explore` uses for
+sleep sets: taking a lock, even for reading, writes it; an atomic load reads.
+The order of the scheduler's own seeded wake-ups is not covered.
+
+Locations come from `#[track_caller]` on the public switch points (`lock`,
+`try_lock`, `read`, `write`, condition variable waits and notifications, every
+atomic operation, `send`, `recv`, channel creation and `clone`,
+`thread::spawn`, `join`, `is_finished`, `sleep`, `yield_now`, `fence`, and the
+`Scheduler` hooks other simulators call: `yield_point`, `block`, `wake_all`,
+`wake_one`), so each is the caller's `file:line:column` (a `Site`). Unlocking is
+attributed to where the lock was taken, dropping a channel end and receiving
+through its iterators to where it was made, and a thread's finishing to where
+it was spawned. Code that wraps a switch point can be `#[track_caller]` too, to
+attribute it to its own callers.
+
+The scheduler keeps, per object, the last thread that wrote it and the threads
+that read it since, each with its site, and adds a pair whenever an operation
+conflicts with one of them. `ShutdownReport::coverage` holds the result
+(`simulator::coverage()` gives it so far, during the run). It is sorted, and
+each pair has a stable hash (`Coverage::pair_hash`, the same in every run of
+the same build), so a fleet keeps the hashes it has seen and asks each run what
+it added:
+
+```rust
+use std::collections::BTreeSet;
+use switchy_thread::simulator::{self, Config};
+
+let mut seen = BTreeSet::new();
+for seed in 0..4 {
+    let config = Config { interleaving_coverage: true, ..Config::random() };
+    let outcome = simulator::run_with(config, seed, || { /* the scenario */ });
+    let coverage = outcome.report.coverage.unwrap();
+    // `new_pairs(&seen)` counts without adding.
+    let added = coverage.merge_into(&mut seen);
+    println!("seed {seed} added {added} pairs");
+}
+```
+
+Coverage only observes: the run, its schedule and its trace hash are the same
+with it on or off. Off, a switch point costs a thread-local swap and restore. On,
+each operation also locks the scheduler and updates its object's entry in a
+map (a lookup, and a pass over the readers since the object's last write).

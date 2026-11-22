@@ -10,7 +10,11 @@ use std::{
     time::Duration,
 };
 
-use super::{Object, Op, ThreadIndex, WaitKey, deadline_after, new_key, scheduler, touch};
+use super::{
+    Object, Op, ThreadIndex, WaitKey,
+    coverage::{self, Site},
+    deadline_after, new_key, scheduler, touch,
+};
 
 fn std_lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -70,13 +74,15 @@ impl<T: ?Sized> Mutex<T> {
     /// # Errors
     ///
     /// * If a thread panicked while holding the lock; the guard is still returned
+    #[track_caller]
     pub fn lock(&self) -> LockResult<MutexGuard<'_, T>> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         let me = scheduler.me();
         loop {
             scheduler.switch_point(Op::Lock);
             if self.try_acquire(me) {
-                return self.guard();
+                return self.guard(Site::caller());
             }
             scheduler.wait(Op::Lock, WaitKey::Lock(self.key), None);
         }
@@ -88,11 +94,13 @@ impl<T: ?Sized> Mutex<T> {
     ///
     /// * [`TryLockError::WouldBlock`] if another thread holds it
     /// * [`TryLockError::Poisoned`] if a thread panicked while holding it
+    #[track_caller]
     pub fn try_lock(&self) -> TryLockResult<MutexGuard<'_, T>> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         scheduler.switch_point(Op::Lock);
         if self.try_acquire(scheduler.me()) {
-            self.guard().map_err(TryLockError::Poisoned)
+            self.guard(Site::caller()).map_err(TryLockError::Poisoned)
         } else {
             Err(TryLockError::WouldBlock)
         }
@@ -122,15 +130,17 @@ impl<T: ?Sized> Mutex<T> {
         true
     }
 
-    fn guard(&self) -> LockResult<MutexGuard<'_, T>> {
+    fn guard(&self, site: Site) -> LockResult<MutexGuard<'_, T>> {
         match self.data.lock() {
             Ok(guard) => Ok(MutexGuard {
                 mutex: self,
                 guard: Some(guard),
+                site,
             }),
             Err(poisoned) => Err(PoisonError::new(MutexGuard {
                 mutex: self,
                 guard: Some(poisoned.into_inner()),
+                site,
             })),
         }
     }
@@ -147,6 +157,8 @@ impl<T: ?Sized> Mutex<T> {
 pub struct MutexGuard<'a, T: ?Sized> {
     mutex: &'a Mutex<T>,
     guard: Option<std::sync::MutexGuard<'a, T>>,
+    /// Where the lock was taken: the site of its unlocking, for coverage.
+    site: Site,
 }
 
 impl<T: ?Sized + fmt::Debug> fmt::Debug for MutexGuard<'_, T> {
@@ -171,6 +183,7 @@ impl<T: ?Sized> DerefMut for MutexGuard<'_, T> {
 
 impl<T: ?Sized> Drop for MutexGuard<'_, T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         drop(self.guard.take());
         self.mutex.release();
         if !std::thread::panicking() {
@@ -232,6 +245,7 @@ impl Condvar {
     /// # Errors
     ///
     /// * If a thread panicked while holding the lock; the guard is still returned
+    #[track_caller]
     pub fn wait<'a, T>(&self, guard: MutexGuard<'a, T>) -> LockResult<MutexGuard<'a, T>> {
         self.wait_until(guard, None).0
     }
@@ -241,6 +255,7 @@ impl Condvar {
     /// # Errors
     ///
     /// * If a thread panicked while holding the lock; the guard is still returned
+    #[track_caller]
     pub fn wait_while<'a, T, F: FnMut(&mut T) -> bool>(
         &self,
         mut guard: MutexGuard<'a, T>,
@@ -257,6 +272,7 @@ impl Condvar {
     /// # Errors
     ///
     /// * If a thread panicked while holding the lock; the guard is still returned
+    #[track_caller]
     pub fn wait_timeout<'a, T>(
         &self,
         guard: MutexGuard<'a, T>,
@@ -277,6 +293,7 @@ impl Condvar {
     /// # Errors
     ///
     /// * If a thread panicked while holding the lock; the guard is still returned
+    #[track_caller]
     pub fn wait_timeout_while<'a, T, F: FnMut(&mut T) -> bool>(
         &self,
         mut guard: MutexGuard<'a, T>,
@@ -306,11 +323,13 @@ impl Condvar {
         }
     }
 
+    #[track_caller]
     fn wait_until<'a, T>(
         &self,
         guard: MutexGuard<'a, T>,
         deadline: Option<std::time::Instant>,
     ) -> (LockResult<MutexGuard<'a, T>>, bool) {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         let mutex = guard.unlock_quietly();
         let timed_out = scheduler.wait(Op::CondvarWait, WaitKey::Condvar(self.key), deadline);
@@ -318,14 +337,18 @@ impl Condvar {
     }
 
     /// Wake one waiting thread, chosen with the run's seed.
+    #[track_caller]
     pub fn notify_one(&self) {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         scheduler.wake_one_on(WaitKey::Condvar(self.key));
         scheduler.switch_point(Op::CondvarNotify);
     }
 
     /// Wake every waiting thread.
+    #[track_caller]
     pub fn notify_all(&self) {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         scheduler.wake_all_on(WaitKey::Condvar(self.key));
         scheduler.switch_point(Op::CondvarNotify);
@@ -381,7 +404,9 @@ impl<T: ?Sized> RwLock<T> {
     /// # Errors
     ///
     /// * If a thread panicked while holding the write lock; the guard is still returned
+    #[track_caller]
     pub fn read(&self) -> LockResult<RwLockReadGuard<'_, T>> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         loop {
             scheduler.switch_point(Op::Lock);
@@ -399,10 +424,12 @@ impl<T: ?Sized> RwLock<T> {
             Ok(guard) => Ok(RwLockReadGuard {
                 lock: self,
                 guard: Some(guard),
+                site: Site::caller(),
             }),
             Err(poisoned) => Err(PoisonError::new(RwLockReadGuard {
                 lock: self,
                 guard: Some(poisoned.into_inner()),
+                site: Site::caller(),
             })),
         }
     }
@@ -412,7 +439,9 @@ impl<T: ?Sized> RwLock<T> {
     /// # Errors
     ///
     /// * If a thread panicked while holding the write lock; the guard is still returned
+    #[track_caller]
     pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, T>> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         loop {
             scheduler.switch_point(Op::Lock);
@@ -430,10 +459,12 @@ impl<T: ?Sized> RwLock<T> {
             Ok(guard) => Ok(RwLockWriteGuard {
                 lock: self,
                 guard: Some(guard),
+                site: Site::caller(),
             }),
             Err(poisoned) => Err(PoisonError::new(RwLockWriteGuard {
                 lock: self,
                 guard: Some(poisoned.into_inner()),
+                site: Site::caller(),
             })),
         }
     }
@@ -448,6 +479,8 @@ impl<T: ?Sized> RwLock<T> {
 pub struct RwLockReadGuard<'a, T: ?Sized> {
     lock: &'a RwLock<T>,
     guard: Option<std::sync::RwLockReadGuard<'a, T>>,
+    /// Where the lock was taken: the site of its unlocking, for coverage.
+    site: Site,
 }
 
 impl<T: ?Sized> Deref for RwLockReadGuard<'_, T> {
@@ -460,6 +493,7 @@ impl<T: ?Sized> Deref for RwLockReadGuard<'_, T> {
 
 impl<T: ?Sized> Drop for RwLockReadGuard<'_, T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         drop(self.guard.take());
         {
             let mut state = std_lock(&self.lock.state);
@@ -479,6 +513,8 @@ impl<T: ?Sized> Drop for RwLockReadGuard<'_, T> {
 pub struct RwLockWriteGuard<'a, T: ?Sized> {
     lock: &'a RwLock<T>,
     guard: Option<std::sync::RwLockWriteGuard<'a, T>>,
+    /// Where the lock was taken: the site of its unlocking, for coverage.
+    site: Site,
 }
 
 impl<T: ?Sized> Deref for RwLockWriteGuard<'_, T> {
@@ -497,6 +533,7 @@ impl<T: ?Sized> DerefMut for RwLockWriteGuard<'_, T> {
 
 impl<T: ?Sized> Drop for RwLockWriteGuard<'_, T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         drop(self.guard.take());
         *std_lock(&self.lock.state) = Some(0);
         let scheduler = scheduler();

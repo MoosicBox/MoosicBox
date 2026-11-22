@@ -12,7 +12,11 @@ use std::{
 
 pub use std::sync::mpsc::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
-use super::super::{Object, Op, WaitKey, deadline_after, new_key, scheduler, touch};
+use super::super::{
+    Object, Op, WaitKey,
+    coverage::{self, Site},
+    deadline_after, new_key, scheduler, touch,
+};
 
 struct Channel<T> {
     queue: VecDeque<T>,
@@ -47,41 +51,53 @@ fn new_channel<T>(capacity: Option<usize>) -> Arc<Shared<T>> {
 
 /// An unbounded channel.
 #[must_use]
+#[track_caller]
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let shared = new_channel(None);
+    let site = Site::caller();
     (
         Sender {
             shared: Arc::clone(&shared),
+            site,
         },
-        Receiver { shared },
+        Receiver { shared, site },
     )
 }
 
 /// A channel holding at most `bound` messages (at least one); senders block while it is full.
 #[must_use]
+#[track_caller]
 pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Receiver<T>) {
     let shared = new_channel(Some(bound.max(1)));
+    let site = Site::caller();
     (
         SyncSender {
             shared: Arc::clone(&shared),
+            site,
         },
-        Receiver { shared },
+        Receiver { shared, site },
     )
 }
 
 /// Sends on an unbounded [`channel`].
 pub struct Sender<T> {
     shared: Arc<Shared<T>>,
+    /// Where it was made: the site of its dropping, for coverage.
+    site: Site,
 }
 
 /// Sends on a bounded [`sync_channel`].
 pub struct SyncSender<T> {
     shared: Arc<Shared<T>>,
+    /// Where it was made: the site of its dropping, for coverage.
+    site: Site,
 }
 
 /// Receives from a channel.
 pub struct Receiver<T> {
     shared: Arc<Shared<T>>,
+    /// Where it was made: the site of its dropping, for coverage.
+    site: Site,
 }
 
 impl<T> fmt::Debug for Sender<T> {
@@ -137,15 +153,19 @@ fn try_push<T>(shared: &Shared<T>, value: T) -> Result<(), (T, bool)> {
 }
 
 impl<T> Clone for Sender<T> {
+    #[track_caller]
     fn clone(&self) -> Self {
+        let _site = coverage::enter();
         Self {
             shared: clone_sender(&self.shared),
+            site: Site::caller(),
         }
     }
 }
 
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         drop_sender(&self.shared);
     }
 }
@@ -156,22 +176,28 @@ impl<T> Sender<T> {
     /// # Errors
     ///
     /// * [`SendError`] with the value if the receiver is gone
+    #[track_caller]
     pub fn send(&self, value: T) -> Result<(), SendError<T>> {
+        let _site = coverage::enter();
         scheduler().switch_point(Op::Send);
         try_push(&self.shared, value).map_err(|(value, _)| SendError(value))
     }
 }
 
 impl<T> Clone for SyncSender<T> {
+    #[track_caller]
     fn clone(&self) -> Self {
+        let _site = coverage::enter();
         Self {
             shared: clone_sender(&self.shared),
+            site: Site::caller(),
         }
     }
 }
 
 impl<T> Drop for SyncSender<T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         drop_sender(&self.shared);
     }
 }
@@ -182,7 +208,9 @@ impl<T> SyncSender<T> {
     /// # Errors
     ///
     /// * [`SendError`] with the value if the receiver is gone
+    #[track_caller]
     pub fn send(&self, mut value: T) -> Result<(), SendError<T>> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         loop {
             scheduler.switch_point(Op::Send);
@@ -201,7 +229,9 @@ impl<T> SyncSender<T> {
     ///
     /// * [`TrySendError::Full`] if the channel is full
     /// * [`TrySendError::Disconnected`] if the receiver is gone
+    #[track_caller]
     pub fn try_send(&self, value: T) -> Result<(), TrySendError<T>> {
+        let _site = coverage::enter();
         scheduler().switch_point(Op::Send);
         try_push(&self.shared, value).map_err(|(value, disconnected)| {
             if disconnected {
@@ -215,6 +245,7 @@ impl<T> SyncSender<T> {
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
+        let _site = coverage::enter_at(self.site);
         let queued = {
             let mut channel = self.shared.channel();
             channel.receiver = false;
@@ -255,7 +286,14 @@ impl<T> Receiver<T> {
     /// # Errors
     ///
     /// * [`RecvError`] once the channel is empty and every sender is gone
+    #[track_caller]
     pub fn recv(&self) -> Result<T, RecvError> {
+        let _site = coverage::enter();
+        self.recv_here()
+    }
+
+    /// [`Self::recv`] at the calling thread's current site.
+    fn recv_here(&self) -> Result<T, RecvError> {
         let scheduler = scheduler();
         loop {
             scheduler.switch_point(Op::Recv);
@@ -274,7 +312,14 @@ impl<T> Receiver<T> {
     ///
     /// * [`TryRecvError::Empty`] if none is ready
     /// * [`TryRecvError::Disconnected`] once the channel is empty and every sender is gone
+    #[track_caller]
     pub fn try_recv(&self) -> Result<T, TryRecvError> {
+        let _site = coverage::enter();
+        self.try_recv_here()
+    }
+
+    /// [`Self::try_recv`] at the calling thread's current site.
+    fn try_recv_here(&self) -> Result<T, TryRecvError> {
         scheduler().switch_point(Op::Recv);
         match self.pop() {
             Pop::Value(value) => Ok(value),
@@ -289,11 +334,15 @@ impl<T> Receiver<T> {
     ///
     /// * [`RecvTimeoutError::Timeout`] if none arrived in time
     /// * [`RecvTimeoutError::Disconnected`] once the channel is empty and every sender is gone
+    #[track_caller]
     pub fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
+        let _site = coverage::enter();
         self.recv_deadline(deadline_after(timeout))
     }
 
+    #[track_caller]
     fn recv_deadline(&self, deadline: Option<Instant>) -> Result<T, RecvTimeoutError> {
+        let _site = coverage::enter();
         let scheduler = scheduler();
         loop {
             scheduler.switch_point(Op::Recv);
@@ -334,8 +383,10 @@ pub struct Iter<'a, T> {
 impl<T> Iterator for Iter<'_, T> {
     type Item = T;
 
+    /// Receives at the receiver's site (iterator adapters would hide the caller's).
     fn next(&mut self) -> Option<T> {
-        self.receiver.recv().ok()
+        let _site = coverage::enter_at(self.receiver.site);
+        self.receiver.recv_here().ok()
     }
 }
 
@@ -348,8 +399,10 @@ pub struct TryIter<'a, T> {
 impl<T> Iterator for TryIter<'_, T> {
     type Item = T;
 
+    /// Receives at the receiver's site (iterator adapters would hide the caller's).
     fn next(&mut self) -> Option<T> {
-        self.receiver.try_recv().ok()
+        let _site = coverage::enter_at(self.receiver.site);
+        self.receiver.try_recv_here().ok()
     }
 }
 
@@ -362,8 +415,10 @@ pub struct IntoIter<T> {
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
 
+    /// Receives at the receiver's site (iterator adapters would hide the caller's).
     fn next(&mut self) -> Option<T> {
-        self.receiver.recv().ok()
+        let _site = coverage::enter_at(self.receiver.site);
+        self.receiver.recv_here().ok()
     }
 }
 
