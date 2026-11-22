@@ -1350,8 +1350,16 @@ impl Kernel {
             .filter(|(_, p)| p.state == ProcessState::Running && p.controlling == Some(terminal))
             .map(|(&pid, _)| pid)
             .collect();
+        // `CTRL_CLOSE_EVENT`: a handler may run, but the system ends the process when it
+        // returns (or after a few seconds); it cannot be ignored as a hang-up can.
         for pid in targets {
             Self::deliver(state, pid, Signal::Hangup);
+            if let Some(process) = state.processes.get_mut(&pid)
+                && process.state == ProcessState::Running
+                && process.fatal.is_none()
+            {
+                process.fatal = Some(Signal::Hangup);
+            }
         }
         true
     }

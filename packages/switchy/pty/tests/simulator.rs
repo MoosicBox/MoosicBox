@@ -614,7 +614,14 @@ fn closing_masters_hangs_up_unix_terminals_and_closes_windows_consoles() {
                 let exit = child.wait().unwrap();
                 // The master side reads to its end, whatever still holds the terminal.
                 let _ = read_all(&mut reader);
-                let survivor = stubborn.try_wait().unwrap().is_none()
+                // A Windows console's close ends what is attached to it, whatever its handler
+                // does (`CTRL_CLOSE_EVENT`); a hang-up can be ignored.
+                let stubborn_lives = if personality.is_windows() {
+                    stubborn.wait().unwrap().exit_code() != 0xC000_013A
+                } else {
+                    stubborn.try_wait().unwrap().is_none()
+                };
+                let survivor = stubborn_lives != personality.is_windows()
                     && bystander.try_wait().unwrap().is_none();
                 drop((slave, master, other));
                 (exit, survivor)
@@ -624,7 +631,8 @@ fn closing_masters_hangs_up_unix_terminals_and_closes_windows_consoles() {
             } else {
                 assert_eq!(exit.signal(), Some("Hangup"), "{personality:?}");
             }
-            // Hang-ups are ignorable, and other terminals stay open.
+            // Hang-ups are ignorable (a console's close is not), and other terminals stay
+            // open.
             assert!(survivor, "{personality:?}");
         }
     }
@@ -933,5 +941,19 @@ fn a_detached_child_leaves_the_session_on_unix_and_stays_in_the_job_on_windows()
                 "{personality:?}"
             );
         }
+    }
+}
+
+#[test]
+fn closing_a_console_ends_even_processes_that_ignore_hang_ups() {
+    for seed in 0..5 {
+        let exit = run(seed, Personality::Windows, || {
+            let PtyPair { slave, master } = PtyPair::open(PtySize::new(80, 24)).unwrap();
+            let mut child = slave.spawn(&SpawnCommand::new("ignore-hup")).unwrap();
+            drop(slave);
+            drop(master);
+            child.wait().unwrap()
+        });
+        assert_eq!(exit.exit_code(), 0xC000_013A, "seed {seed}");
     }
 }
