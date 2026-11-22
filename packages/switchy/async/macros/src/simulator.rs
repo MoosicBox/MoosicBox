@@ -104,7 +104,20 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
         }
     };
 
-    output.into()
+    // Once a branch has completed and its handler has run, give other tasks a chance (with
+    // the run's yield probability), as `#[inject_yields]` does after an `.await`: a branch
+    // that was ready at once still lets them in. A handler that leaves (`return`, `break`,
+    // `?`) skips it.
+    quote! {
+        {
+            let switchy_select_output = #output;
+            #[allow(unreachable_code)]
+            let () = #crate_path::task::maybe_yield().await;
+            #[allow(unreachable_code)]
+            switchy_select_output
+        }
+    }
+    .into()
 }
 
 /// Represents the parsed input to a `select!` macro with crate path.

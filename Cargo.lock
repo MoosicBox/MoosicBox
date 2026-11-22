@@ -18509,7 +18509,6 @@ dependencies = [
 name = "switchy_async_macros"
 version = "0.5.0"
 dependencies = [
- "log 0.4.34",
  "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",

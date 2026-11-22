@@ -18,6 +18,8 @@ The MoosicBox Async Macros package provides:
 ### Yield Injection
 
 - **Automatic Yields**: Insert yield points after every `.await`
+- **Seeded**: Each simulation run yields with a probability (0, ¼, ½ or 1) drawn from its
+  seed; `SIMULATOR_YIELD_PROBABILITY` overrides it (a number in `0..=1`, or `swarm`)
 - **Deterministic Testing**: Enable predictable async execution in tests
 - **Simulation Support**: Required for simulation-based testing
 - **Non-Intrusive**: No overhead when simulator feature is disabled
@@ -43,9 +45,9 @@ The MoosicBox Async Macros package provides:
 ### AST Transformation
 
 - **Await Wrapping**: Wraps `.await` expressions with yield points
-- **Function Support**: Handles async functions and methods
-- **Module Support**: Process entire modules recursively
-- **Impl Block Support**: Transform all async methods in impl blocks
+- **Everything Inside**: `async fn` bodies, `async` blocks and closures in any function
+  (sync ones too), impl blocks (trait impls included), traits and nested modules
+- **Module Support**: `inject_yields_mod!` loads a module's files as rustc would
 
 ## Installation
 
@@ -87,16 +89,8 @@ async fn my_async_function() -> i32 {
 
 // With simulator feature enabled, transforms to:
 // async fn my_async_function() -> i32 {
-//     let result1 = {
-//         let __yield_res = some_async_operation().await;
-//         switchy::unsync::task::yield_now().await;
-//         __yield_res
-//     };
-//     let result2 = {
-//         let __yield_res = another_async_operation().await;
-//         switchy::unsync::task::yield_now().await;
-//         __yield_res
-//     };
+//     let result1 = ::switchy_async::task::yield_after(some_async_operation()).await;
+//     let result2 = ::switchy_async::task::yield_after(another_async_operation()).await;
 //     result1 + result2
 // }
 ```
@@ -128,13 +122,16 @@ impl MyStruct {
 ```rust
 use switchy_async_macros::inject_yields_mod;
 
-// Transform entire module (reads from src/my_module.rs)
+// Transform an entire module, its child module files included
 inject_yields_mod! {
-    mod my_module;
+    pub(crate) mod my_module;
 }
 ```
 
-The macro reads the module source from `src/{module_name}.rs`, transforms all async functions within, and emits the transformed module.
+The macro loads the module's file as rustc would (`my_module.rs` or `my_module/mod.rs` beside
+the declaring file, or its `#[path]`), and every out-of-line module inside it, recursively. It
+emits the module inline with its declared visibility and attributes, every `.await` rewritten,
+and an `include_str!` of each file it loaded, so that editing one rebuilds the crate.
 
 **Note:** This approach has limited LSP integration. Since the module is transformed at compile time, IDE features like "go to definition" may not work correctly for items defined within `inject_yields_mod!` blocks.
 
@@ -171,24 +168,27 @@ let result = async_call().await;
 **After (with simulator feature):**
 
 ```rust
-let result = {
-    let __yield_res = async_call().await;
-    switchy::unsync::task::yield_now().await;
-    __yield_res
-};
+let result = ::switchy_async::task::yield_after(async_call()).await;
 ```
+
+`yield_after` awaits its future, then yields with the run's probability (with probability 0
+it is ready at once and polls no yield). It is a plain call, so the rewrite fits wherever the
+`.await` did (`?`, method chains, `match` scrutinees, `let ... else`, `while let` heads) and
+keeps temporaries and drop order. The path is `switchy::unsync` when the crate depends on
+`switchy`. A value held across the yield must be `Send` for a `Send` future, as across any
+other `.await`.
 
 ### Supported Constructs
 
-- **Async Functions**: `async fn` declarations
-- **Async Methods**: Methods in impl blocks
-- **Nested Modules**: Recursive module processing
-- **Complex Expressions**: Handles complex await expressions
+- **Async Functions and Methods**: in free functions, impl blocks and traits
+- **Async Blocks and Closures**: in any function, sync or async
+- **Nested Modules**: inline, and out-of-line through `inject_yields_mod!`
+- **Nested Attributes**: an item inside with its own `#[inject_yields]` is left to it
 
 ### Unsupported/Unchanged
 
-- **Sync Functions**: Non-async functions remain unchanged
-- **Await in Macros**: Await expressions inside macro calls
+- **Await in Macros**: Await expressions inside macro calls (the simulator's `select!` yields
+  once after it completes instead)
 - **Non-Simulator**: No transformation without simulator feature
 
 ## Use Cases

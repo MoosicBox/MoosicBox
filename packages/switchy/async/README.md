@@ -143,6 +143,14 @@ use switchy_async::simulator;
 }
 ```
 
+Under the simulator, `#[inject_yields]` (and `inject_yields_mod!`) rewrites every `.await` in
+the item to `task::yield_after(x).await`, and `select!` calls `task::maybe_yield().await` once
+it completes. Each yields (lets other tasks run) with the run's probability: 0, ¼, ½ or 1,
+drawn from the run's seed (`simulator::yield_probability`). `SIMULATOR_YIELD_PROBABILITY`
+overrides it with a number in `0..=1`, or `swarm` (draw per run, the default), and
+`simulator::set_yield_probability` overrides it for the current run. With probability 0 an
+injected point polls no yield at all. Outside the simulator both functions are no-ops.
+
 ### Task Sets
 
 `task::JoinSet` collects spawned tasks and yields their results as they finish. With the
