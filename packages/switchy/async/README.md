@@ -30,7 +30,7 @@ The MoosicBox Async package provides:
 ### Async Utilities
 
 - **Thread ID**: Unique thread identification
-- **Task Management**: Task spawning and joining
+- **Task Management**: Task spawning and joining, and `task::JoinSet` / `task::AbortHandle`
 - **IO Operations**: Async I/O primitives (feature-gated)
 - **Synchronization**: Async synchronization primitives (feature-gated)
 - **Timers**: Async timing utilities (feature-gated)
@@ -142,6 +142,31 @@ use switchy_async::simulator;
     });
 }
 ```
+
+### Task Sets
+
+`task::JoinSet` collects spawned tasks and yields their results as they finish. With the
+Tokio backend it is `tokio::task::JoinSet`; the simulator provides the same API (`spawn`,
+`spawn_blocking`, `spawn_local`, `join_next`, `try_join_next`, `abort_all`, `detach_all`,
+`shutdown`, `join_all`, `len`, `is_empty`; dropping the set aborts its tasks). Under the
+simulator, tasks finish in an order fixed by the run's seed, so `join_next` replays exactly.
+
+```rust,ignore
+use switchy_async::task::JoinSet;
+
+let mut set = JoinSet::new();
+for i in 0..4 {
+    set.spawn(async move { i * 2 });
+}
+while let Some(result) = set.join_next().await {
+    let value = result?;
+    // ...
+}
+```
+
+The simulator's `JoinSet` does not provide task ids (`join_next_with_id`), `spawn_on`
+variants or `poll_join_next`, and a panicking task fails the run rather than joining with a
+`JoinError` (simulator join errors are always cancellations).
 
 ### Thread Management
 

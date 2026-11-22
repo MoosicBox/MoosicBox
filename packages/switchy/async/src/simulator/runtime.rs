@@ -620,6 +620,42 @@ impl Drop for Finished {
     }
 }
 
+impl<T> JoinHandle<T> {
+    /// A handle that can abort this task without owning (or awaiting) it.
+    #[must_use]
+    pub fn abort_handle(&self) -> AbortHandle {
+        AbortHandle {
+            abort_handle: self.abort_handle.clone(),
+            done: Arc::clone(&self.done),
+        }
+    }
+}
+
+/// A handle to abort a spawned task, without the right to await its result (as
+/// `tokio::task::AbortHandle`).
+///
+/// Dropping it neither aborts nor detaches the task.
+#[derive(Debug, Clone)]
+pub struct AbortHandle {
+    abort_handle: Option<futures::future::AbortHandle>,
+    done: Arc<AtomicBool>,
+}
+
+impl AbortHandle {
+    /// Requests cancellation of the task at its next poll; see [`JoinHandle::abort`].
+    pub fn abort(&self) {
+        if let Some(handle) = &self.abort_handle {
+            handle.abort();
+        }
+    }
+
+    /// Whether the task has finished: completed, or dropped after being aborted.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.done.load(Ordering::SeqCst)
+    }
+}
+
 impl<T: Send + Unpin> JoinHandle<T> {
     /// Checks if the task has completed.
     ///

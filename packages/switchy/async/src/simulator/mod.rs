@@ -4,6 +4,7 @@
 //! with controlled time advancement and reproducible behavior.
 
 pub mod futures;
+mod join_set;
 pub mod runtime;
 pub mod task;
 
