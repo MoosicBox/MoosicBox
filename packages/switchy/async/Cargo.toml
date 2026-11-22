@@ -60,6 +60,7 @@ default = [
 fail-on-warnings = [
     "switchy_async_macros?/fail-on-warnings",
     "switchy_random?/fail-on-warnings",
+    "switchy_simulation?/fail-on-warnings",
     "switchy_thread?/fail-on-warnings",
     "switchy_time?/fail-on-warnings",
 ]
@@ -69,6 +70,7 @@ simulator = [
     "_any_backend",
     "dep:futures",
     "dep:switchy_random",
+    "dep:switchy_simulation",
     "dep:switchy_time",
     "dep:tokio",
     "macros",

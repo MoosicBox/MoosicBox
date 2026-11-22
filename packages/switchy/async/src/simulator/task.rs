@@ -7,6 +7,8 @@ pub use super::runtime::{AbortHandle, JoinHandle, spawn, spawn_blocking, spawn_l
 
 pub use tokio::task::yield_now;
 
+pub use super::yields::{MaybeYield, YieldAfter, maybe_yield, yield_after};
+
 /// Run blocking `f` in place. The simulator runs every task on the calling thread already,
 /// and futures nested with `Handle::block_on` drive the runtime's other tasks meanwhile.
 pub fn block_in_place<F: FnOnce() -> R, R>(f: F) -> R {

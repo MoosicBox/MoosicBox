@@ -9,6 +9,9 @@ pub mod runtime;
 pub mod task;
 #[cfg(feature = "thread-simulator")]
 mod workers;
+mod yields;
+
+pub use yields::{YIELD_PROBABILITY_ENV, YIELD_STREAM, set_yield_probability, yield_probability};
 
 /// The branch a non-biased `select!` polls first, among `branches`: drawn from the run's seeded
 /// generator (as `tokio::select!` draws its own), so which ready branch wins replays by seed.
