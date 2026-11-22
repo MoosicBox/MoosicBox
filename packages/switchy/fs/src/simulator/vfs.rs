@@ -1752,6 +1752,7 @@ impl Handle {
         spec: &OpenSpec,
     ) -> std::io::Result<Self> {
         spec.validate()?;
+        super::before_operation(OpClass::Open);
         let mut vfs = fs.vfs();
         let start = match start {
             Some(handle) => handle.start_in(&vfs)?,
@@ -1805,11 +1806,16 @@ impl Handle {
         &self.fs
     }
 
-    /// Run `work` against this handle's inode.
+    /// Run `work`, an operation of `class`, against this handle's inode.
     ///
     /// # Errors
     /// * `ESTALE` after a crash or reset of the filesystem.
-    pub fn with<T>(&self, work: impl FnOnce(&mut Vfs, Ino) -> Result<T>) -> std::io::Result<T> {
+    pub fn with<T>(
+        &self,
+        class: OpClass,
+        work: impl FnOnce(&mut Vfs, Ino) -> Result<T>,
+    ) -> std::io::Result<T> {
+        super::before_operation(class);
         let mut vfs = self.fs.vfs();
         if vfs.generation != self.generation {
             return Err(Errno::Stale.into());
@@ -1827,7 +1833,7 @@ impl Handle {
             return Ok(0);
         }
         let position = self.position;
-        let count = self.with(|vfs, ino| vfs.read_at(ino, position, buf))?;
+        let count = self.with(OpClass::Read, |vfs, ino| vfs.read_at(ino, position, buf))?;
         self.position += count as u64;
         Ok(count)
     }
@@ -1837,7 +1843,7 @@ impl Handle {
             return Err(Errno::BadF.into());
         }
         let offset = (!self.append).then_some(self.position);
-        let (count, position) = self.with(|vfs, ino| vfs.write_at(ino, offset, buf))?;
+        let (count, position) = self.with(OpClass::Write, |vfs, ino| vfs.write_at(ino, offset, buf))?;
         self.position = position;
         Ok(count)
     }
@@ -1846,7 +1852,7 @@ impl Handle {
         let next = match position {
             std::io::SeekFrom::Start(offset) => Some(offset),
             std::io::SeekFrom::End(offset) => {
-                let len = self.with(|vfs, ino| vfs.len(ino))?;
+                let len = self.with(OpClass::Metadata, |vfs, ino| vfs.len(ino))?;
                 len.checked_add_signed(offset)
             }
             std::io::SeekFrom::Current(offset) => self.position.checked_add_signed(offset),
@@ -1860,29 +1866,29 @@ impl Handle {
         if !self.write {
             return Err(Errno::Inval.into());
         }
-        self.with(|vfs, ino| vfs.set_len(ino, len))
+        self.with(OpClass::SetLen, |vfs, ino| vfs.set_len(ino, len))
     }
 
     pub fn sync(&self, data_only: bool) -> std::io::Result<()> {
-        self.with(|vfs, ino| vfs.sync(ino, data_only))
+        self.with(OpClass::Sync, |vfs, ino| vfs.sync(ino, data_only))
     }
 
     pub fn metadata(&self) -> std::io::Result<Metadata> {
-        self.with(Vfs::metadata_handle)
+        self.with(OpClass::Metadata, Vfs::metadata_handle)
     }
 
     pub fn set_mode(&self, mode: u32) -> std::io::Result<()> {
-        self.with(|vfs, ino| vfs.set_mode_handle(ino, mode))
+        self.with(OpClass::Metadata, |vfs, ino| vfs.set_mode_handle(ino, mode))
     }
 
     pub fn try_lock(&self, exclusive: bool) -> std::io::Result<()> {
         let id = self.id;
-        self.with(|vfs, ino| vfs.try_lock(ino, id, exclusive))
+        self.with(OpClass::Metadata, |vfs, ino| vfs.try_lock(ino, id, exclusive))
     }
 
     pub fn unlock(&self) -> std::io::Result<()> {
         let id = self.id;
-        self.with(|vfs, ino| {
+        self.with(OpClass::Metadata, |vfs, ino| {
             vfs.unlock(ino, id);
             Ok(())
         })

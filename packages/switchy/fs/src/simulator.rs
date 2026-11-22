@@ -64,7 +64,7 @@
 //! ```
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     sync::{Arc, Mutex, MutexGuard, PoisonError},
 };
 
@@ -442,11 +442,76 @@ impl<F: std::future::Future> Drop for FilesystemFuture<F> {
     }
 }
 
-/// Run `work` against the current namespace's state.
-fn with_vfs<T>(work: impl FnOnce(&mut Vfs) -> vfs::Result<T>) -> std::io::Result<T> {
+/// Run `work`, an operation of `class`, against the current namespace's state.
+fn with_vfs<T>(
+    class: OpClass,
+    work: impl FnOnce(&mut Vfs) -> vfs::Result<T>,
+) -> std::io::Result<T> {
+    before_operation(class);
     let filesystem = current_filesystem();
     let mut vfs = filesystem.vfs();
     work(&mut vfs).map_err(Into::into)
+}
+
+/// A callback run at the start of simulated filesystem operations; see
+/// [`set_operation_hook`].
+pub type OperationHook = Arc<dyn Fn(OpClass) + Send + Sync>;
+
+/// The operation hook of one simulation run.
+#[derive(Default)]
+struct RunOperationHook(Mutex<Option<OperationHook>>);
+
+thread_local! {
+    /// Whether this thread is running the operation hook. A property of the call stack,
+    /// not of the simulation run, so it stays per OS thread.
+    static IN_OPERATION_HOOK: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Install (or with `None`, remove) the current simulation run's operation hook,
+/// returning the previous one.
+///
+/// The hook is called with the operation's [`OpClass`] at the start of every simulated
+/// filesystem operation that reads or changes a namespace (opening, reading, writing,
+/// seeking from the end, synchronizing, inspecting or changing metadata, locking,
+/// creating, listing, linking, renaming and removing entries), in every namespace, on the
+/// thread performing the operation. Locking and seeking report [`OpClass::Metadata`].
+/// Closing a handle and configuring a [`Filesystem`] do not call it, nor does explicit
+/// real-filesystem mode.
+///
+/// The hook runs before the operation takes any filesystem lock, so it may block or
+/// yield to other threads (a deterministic scheduler's switch point) and may itself
+/// perform filesystem operations; those do not call the hook again.
+///
+/// The hook belongs to the run (the current `switchy_simulation` context), so simulated
+/// threads of the run share it and parallel runs never see each other's hooks.
+pub fn set_operation_hook(hook: Option<OperationHook>) -> Option<OperationHook> {
+    let state = switchy_simulation::state::<RunOperationHook>();
+    let mut current = state.0.lock().unwrap_or_else(PoisonError::into_inner);
+    std::mem::replace(&mut *current, hook)
+}
+
+/// Call the run's operation hook for an operation of `class`, unless the hook is already
+/// running on this thread. Must be called without holding any filesystem lock.
+fn before_operation(class: OpClass) {
+    struct Leave;
+    impl Drop for Leave {
+        fn drop(&mut self) {
+            IN_OPERATION_HOOK.set(false);
+        }
+    }
+    if IN_OPERATION_HOOK.get() {
+        return;
+    }
+    let hook = switchy_simulation::state::<RunOperationHook>()
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some(hook) = hook {
+        IN_OPERATION_HOOK.set(true);
+        let _leave = Leave;
+        hook(class);
+    }
 }
 
 /// Resets the current simulated filesystem to an empty state.
@@ -474,6 +539,7 @@ pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
     if real_fs_support::is_real_fs() {
         return path.as_ref().exists();
     }
+    before_operation(OpClass::Metadata);
     current_filesystem().vfs().exists(ROOT, path.as_ref())
 }
 
@@ -746,7 +812,7 @@ pub mod sync {
     };
 
     use super::{
-        FileKind,
+        FileKind, OpClass, before_operation,
         vfs::{Handle, ROOT},
         with_vfs,
     };
@@ -1049,7 +1115,7 @@ pub mod sync {
             return crate::standard::sync::create_dir(path);
         }
 
-        with_vfs(|vfs| vfs.create_dir(ROOT, path.as_ref(), 0o777))
+        with_vfs(OpClass::DirOp, |vfs| vfs.create_dir(ROOT, path.as_ref(), 0o777))
     }
 
     /// Creates a directory and all missing parent directories
@@ -1064,7 +1130,7 @@ pub mod sync {
             return crate::standard::sync::create_dir_all(path);
         }
 
-        with_vfs(|vfs| vfs.create_dir_all(ROOT, path.as_ref(), 0o777))
+        with_vfs(OpClass::DirOp, |vfs| vfs.create_dir_all(ROOT, path.as_ref(), 0o777))
     }
 
     /// Removes a directory and all its contents recursively
@@ -1081,7 +1147,7 @@ pub mod sync {
             return crate::standard::sync::remove_dir_all(path);
         }
 
-        with_vfs(|vfs| vfs.remove_dir_all(ROOT, path.as_ref()))
+        with_vfs(OpClass::DirOp, |vfs| vfs.remove_dir_all(ROOT, path.as_ref()))
     }
 
     /// Exclusively create a writable file with owner-only (`0o600`) permissions.
@@ -1113,7 +1179,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::symlink_metadata(path);
         }
-        with_vfs(|vfs| vfs.stat(ROOT, path.as_ref(), false))
+        with_vfs(OpClass::Metadata, |vfs| vfs.stat(ROOT, path.as_ref(), false))
     }
 
     /// Inspect an entry, following symbolic links.
@@ -1125,7 +1191,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::metadata(path);
         }
-        with_vfs(|vfs| vfs.stat(ROOT, path.as_ref(), true))
+        with_vfs(OpClass::Metadata, |vfs| vfs.stat(ROOT, path.as_ref(), true))
     }
 
     /// Make pending changes to a directory's entries durable.
@@ -1138,7 +1204,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::sync_directory(path);
         }
-        with_vfs(|vfs| {
+        with_vfs(OpClass::Sync, |vfs| {
             let ino = vfs.resolve(ROOT, path.as_ref(), true)?;
             if vfs.kind_of(ROOT, path.as_ref(), true) != Some(FileKind::Dir) {
                 return Err(Errno::NotDir);
@@ -1194,7 +1260,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::rename(from, to);
         }
-        with_vfs(|vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), false))
+        with_vfs(OpClass::Rename, |vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), false))
     }
 
     /// Rename without replacing: fails with `EEXIST` if `to` exists (also a dangling
@@ -1207,7 +1273,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::rename_noreplace(from, to);
         }
-        with_vfs(|vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), true))
+        with_vfs(OpClass::Rename, |vfs| vfs.rename(ROOT, from.as_ref(), ROOT, to.as_ref(), true))
     }
 
     /// Remove a file or symbolic link (never a directory).
@@ -1220,7 +1286,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::remove_file(path);
         }
-        with_vfs(|vfs| vfs.remove_file(ROOT, path.as_ref()))
+        with_vfs(OpClass::DirOp, |vfs| vfs.remove_file(ROOT, path.as_ref()))
     }
 
     /// Remove an empty directory.
@@ -1232,7 +1298,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::remove_dir(path);
         }
-        with_vfs(|vfs| vfs.remove_dir(ROOT, path.as_ref()))
+        with_vfs(OpClass::DirOp, |vfs| vfs.remove_dir(ROOT, path.as_ref()))
     }
 
     /// Create a hard link `link` to `original` (which is not followed if it is a
@@ -1245,7 +1311,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::hard_link(original, link);
         }
-        with_vfs(|vfs| vfs.hard_link(ROOT, original.as_ref(), ROOT, link.as_ref()))
+        with_vfs(OpClass::DirOp, |vfs| vfs.hard_link(ROOT, original.as_ref(), ROOT, link.as_ref()))
     }
 
     /// Create a symbolic link at `link` pointing to `original` (which need not exist).
@@ -1257,7 +1323,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::symlink(original, link);
         }
-        with_vfs(|vfs| vfs.symlink(original.as_ref(), ROOT, link.as_ref()))
+        with_vfs(OpClass::DirOp, |vfs| vfs.symlink(original.as_ref(), ROOT, link.as_ref()))
     }
 
     /// Read the target of a symbolic link.
@@ -1269,7 +1335,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::read_link(path);
         }
-        with_vfs(|vfs| vfs.read_link(ROOT, path.as_ref()))
+        with_vfs(OpClass::Read, |vfs| vfs.read_link(ROOT, path.as_ref()))
     }
 
     /// Change permission bits, following symbolic links.
@@ -1285,7 +1351,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::set_permissions(path, permissions);
         }
-        with_vfs(|vfs| vfs.set_mode(ROOT, path.as_ref(), permissions.mode()))
+        with_vfs(OpClass::Metadata, |vfs| vfs.set_mode(ROOT, path.as_ref(), permissions.mode()))
     }
 
     /// The simulated effective user id of the current namespace.
@@ -1310,6 +1376,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return Err(super::real_fs_unsupported("anonymous temporary files"));
         }
+        before_operation(OpClass::Open);
         let filesystem = super::current_filesystem();
         let mut vfs = filesystem.vfs();
         vfs.check_open_fault()?;
@@ -1332,6 +1399,7 @@ pub mod sync {
         if super::real_fs_support::is_real_fs() {
             return Err(super::real_fs_unsupported("anonymous temporary files"));
         }
+        before_operation(OpClass::Open);
         let filesystem = super::current_filesystem();
         let mut vfs = filesystem.vfs();
         vfs.check_temp_dir(ROOT, dir.as_ref())?;
@@ -1357,11 +1425,11 @@ pub mod sync {
             return crate::standard::sync::canonicalize(path);
         }
 
-        with_vfs(|vfs| vfs.canonicalize(ROOT, path.as_ref()))
+        with_vfs(OpClass::Metadata, |vfs| vfs.canonicalize(ROOT, path.as_ref()))
     }
 
     fn list_dir(path: &Path) -> std::io::Result<Vec<DirEntry>> {
-        let entries = with_vfs(|vfs| vfs.read_dir(ROOT, path))?;
+        let entries = with_vfs(OpClass::DirOp, |vfs| vfs.read_dir(ROOT, path))?;
         Ok(entries
             .into_iter()
             .map(|entry| DirEntry {
@@ -1563,11 +1631,12 @@ pub mod sync {
 
         fn at<T>(
             &self,
+            class: OpClass,
             name: &Path,
             work: impl FnOnce(&mut super::Vfs, super::vfs::Ino, &OsStr) -> super::vfs::Result<T>,
         ) -> std::io::Result<T> {
             let name = entry_name(name)?;
-            self.handle.with(|vfs, ino| work(vfs, ino, name))
+            self.handle.with(class, |vfs, ino| work(vfs, ino, name))
         }
 
         /// Open the subdirectory `name` without following symbolic links.
@@ -1614,7 +1683,7 @@ pub mod sync {
         /// # Errors
         /// * `EEXIST`, `EACCES`, `ENOENT` (this directory was removed), injected faults.
         pub fn create_dir_at(&self, name: impl AsRef<Path>, mode: u32) -> std::io::Result<()> {
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::DirOp, name.as_ref(), |vfs, ino, name| {
                 vfs.create_dir(ino, Path::new(name), mode)
             })
         }
@@ -1632,7 +1701,7 @@ pub mod sync {
         /// # Errors
         /// * `ENOENT`, `InvalidInput` for a non-name, injected faults.
         pub fn metadata_at(&self, name: impl AsRef<Path>) -> std::io::Result<Metadata> {
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::Metadata, name.as_ref(), |vfs, ino, name| {
                 vfs.stat(ino, Path::new(name), false)
             })
         }
@@ -1642,7 +1711,7 @@ pub mod sync {
         /// # Errors
         /// * As for [`remove_file`], plus `InvalidInput` for a non-name.
         pub fn remove_file_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::DirOp, name.as_ref(), |vfs, ino, name| {
                 vfs.remove_file(ino, Path::new(name))
             })
         }
@@ -1652,7 +1721,7 @@ pub mod sync {
         /// # Errors
         /// * As for [`remove_dir`], plus `InvalidInput` for a non-name.
         pub fn remove_dir_at(&self, name: impl AsRef<Path>) -> std::io::Result<()> {
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::DirOp, name.as_ref(), |vfs, ino, name| {
                 vfs.remove_dir(ino, Path::new(name))
             })
         }
@@ -1669,6 +1738,7 @@ pub mod sync {
             if !Arc::ptr_eq(self.handle.filesystem(), to_dir.handle.filesystem()) {
                 return Err(Errno::XDev.into());
             }
+            before_operation(OpClass::Rename);
             let mut vfs = self.handle.filesystem().vfs();
             let from_start = self.handle.start_in(&vfs)?;
             let to_start = to_dir.handle.start_in(&vfs)?;
@@ -1725,6 +1795,7 @@ pub mod sync {
             if !Arc::ptr_eq(self.handle.filesystem(), to_dir.handle.filesystem()) {
                 return Err(Errno::XDev.into());
             }
+            before_operation(OpClass::DirOp);
             let mut vfs = self.handle.filesystem().vfs();
             let from_start = self.handle.start_in(&vfs)?;
             let to_start = to_dir.handle.start_in(&vfs)?;
@@ -1742,7 +1813,7 @@ pub mod sync {
             name: impl AsRef<Path>,
         ) -> std::io::Result<()> {
             let target = target.as_ref();
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::DirOp, name.as_ref(), |vfs, ino, name| {
                 vfs.symlink(target, ino, Path::new(name))
             })
         }
@@ -1752,7 +1823,7 @@ pub mod sync {
         /// # Errors
         /// * As for [`read_link`], plus `InvalidInput` for a non-name.
         pub fn read_link_at(&self, name: impl AsRef<Path>) -> std::io::Result<PathBuf> {
-            self.at(name.as_ref(), |vfs, ino, name| {
+            self.at(OpClass::Read, name.as_ref(), |vfs, ino, name| {
                 vfs.read_link(ino, Path::new(name))
             })
         }
@@ -1770,7 +1841,7 @@ pub mod sync {
         /// # Errors
         /// * `ESTALE`, injected faults.
         pub fn entries(&self) -> std::io::Result<Vec<DirEntryInfo>> {
-            self.handle.with(super::Vfs::list)
+            self.handle.with(OpClass::DirOp, super::Vfs::list)
         }
 
         /// Make pending changes to this directory's entries durable.
@@ -2584,6 +2655,7 @@ pub mod unsync {
                 .unwrap_or(false);
         }
 
+        super::before_operation(super::OpClass::Metadata);
         super::current_filesystem()
             .vfs()
             .kind_of(super::vfs::ROOT, path.as_ref(), true)
@@ -2604,6 +2676,7 @@ pub mod unsync {
                 .unwrap_or(false);
         }
 
+        super::before_operation(super::OpClass::Metadata);
         super::current_filesystem()
             .vfs()
             .kind_of(super::vfs::ROOT, path.as_ref(), true)
@@ -3687,6 +3760,7 @@ pub mod temp_dir {
                 return remove_native(&self.path);
             };
             with_registry(filesystem, |dirs| dirs.remove(&self.path));
+            super::before_operation(super::OpClass::DirOp);
             filesystem
                 .vfs()
                 .remove_dir_all(ROOT, &self.path)
@@ -3836,6 +3910,7 @@ pub mod temp_dir {
                     self.suffix.as_deref(),
                     self.rand_bytes,
                 ));
+                super::before_operation(super::OpClass::DirOp);
                 let created = filesystem.vfs().create_dir(ROOT, &path, DIR_MODE);
                 match created {
                     Ok(()) => {
