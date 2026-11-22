@@ -7,6 +7,7 @@ use super::{
 #[cfg(test)]
 use super::{EncoderConfig, Error, SampleRate};
 
+type ProgramVariants = Vec<(SharedQuantizedFrame, Rc<super::SilkProgram>)>;
 type Choice = [(i32, u32, bool); 2];
 #[cfg(test)]
 type ComponentBeam = Vec<(i128, (i32, u32, bool))>;
@@ -21,6 +22,11 @@ struct Search<'a> {
     model_ids: [usize; 2],
     quantized: BTreeMap<(usize, i32, u32, bool), SharedQuantizedFrame>,
     pulse_programs: BTreeMap<(usize, i32, u32, bool), Rc<super::SilkProgram>>,
+    // At fixed channel and gain, pressure and shaping affect the entropy
+    // program only through the quantized pulses. Keep one program per distinct
+    // pulse sequence instead of rebuilding it under each equivalent choice.
+    unique_programs: BTreeMap<(usize, i32), ProgramVariants>,
+    left_prefixes: BTreeMap<(i32, u32, bool), (RangeEncoder, bool)>,
     #[cfg(test)]
     proposals: Vec<(i128, usize, Choice)>,
     #[cfg(test)]
@@ -365,6 +371,14 @@ impl Search<'_> {
                 if let Some(program) = self.pulse_programs.get(&key) {
                     return Ok(program.clone());
                 }
+                let bucket = self.unique_programs.entry((channel, key.1)).or_default();
+                if let Some((_, program)) = bucket
+                    .iter()
+                    .find(|(frame, _)| frame.0 == frames[channel].0)
+                {
+                    self.pulse_programs.insert(key, program.clone());
+                    return Ok(program.clone());
+                }
                 let mut program = super::SilkProgram::default();
                 encode_parameters(
                     &mut program,
@@ -380,12 +394,14 @@ impl Search<'_> {
                 )?;
                 encode_pulses(&mut program, &frames[channel].0, false)?;
                 let program = Rc::new(program);
+                bucket.push((frames[channel].clone(), program.clone()));
                 self.pulse_programs.insert(key, program.clone());
                 Ok(program)
             })
             .collect::<Result<Vec<_>>>()?;
+        let direct = false;
         #[cfg(test)]
-        let direct = super::REFERENCE_PAIRS.get();
+        let direct = direct || super::REFERENCE_PAIRS.get();
         let encode = |coder: &mut RangeEncoder| -> Result<()> {
             encode_header(coder, 2)?;
             #[allow(unused_variables)]
@@ -415,8 +431,23 @@ impl Search<'_> {
         let budget = (config.bitrate as usize * config.frame_size / 128_000).saturating_sub(1) * 8;
         #[cfg(test)]
         let phase = std::time::Instant::now();
-        let mut coder = self.incoming.clone();
-        let valid = encode(&mut coder).is_ok();
+        let (coder, valid) = if direct || self.incoming.storage() > 1275 {
+            let mut coder = self.incoming.clone();
+            let valid = encode(&mut coder).is_ok();
+            (coder, valid)
+        } else {
+            // The incoming state is fixed for this search. Many proposals change
+            // only the right channel; resume from the exact left-channel state.
+            let (prefix, left_valid) = self.left_prefixes.entry(choice[0]).or_insert_with(|| {
+                let mut coder = self.incoming.clone();
+                let valid =
+                    encode_header(&mut coder, 2).is_ok() && programs[0].replay(&mut coder).is_ok();
+                (coder, valid)
+            });
+            let mut coder = prefix.clone();
+            let valid = *left_valid && programs[1].replay(&mut coder).is_ok();
+            (coder, valid)
+        };
         #[cfg(test)]
         {
             self.phases[1] += phase.elapsed().as_nanos();
@@ -438,15 +469,21 @@ impl Search<'_> {
                 .sum()
         };
         if !valid || bits as usize > budget {
-            self.feasibility.push((
-                if valid {
-                    bits.saturating_sub(budget as u64)
-                } else {
-                    u64::MAX
-                },
-                raw(),
-                choice,
-            ));
+            let excess = if valid {
+                bits.saturating_sub(budget as u64)
+            } else {
+                u64::MAX
+            };
+            // Error only breaks ties after excess bits. A strictly worse
+            // excess cannot survive truncation regardless of reconstruction.
+            if self
+                .feasibility
+                .get(1)
+                .is_some_and(|entry| excess > entry.0)
+            {
+                return Ok(());
+            }
+            self.feasibility.push((excess, raw(), choice));
             self.feasibility.sort_unstable();
             self.feasibility.truncate(2);
             return Ok(());
@@ -699,6 +736,8 @@ impl SilkEncoder {
             model_ids,
             quantized: BTreeMap::new(),
             pulse_programs: BTreeMap::new(),
+            unique_programs: BTreeMap::new(),
+            left_prefixes: BTreeMap::new(),
             #[cfg(test)]
             proposals: Vec::new(),
             #[cfg(test)]
