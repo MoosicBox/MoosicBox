@@ -15,13 +15,14 @@ examples = false
 
 [dependencies]
 clap              = { workspace = true }
-log               = { workspace = true }
 pretty_env_logger = { workspace = true }
-syn               = { workspace = true, features = ["full", "visit"] }
-walkdir           = { workspace = true }
+# Line and column numbers of findings.
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+syn         = { workspace = true, features = ["full", "parsing", "visit"] }
+walkdir     = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
+pretty_assertions = { workspace = true }
 
 [features]
 default = []

@@ -1,13 +1,14 @@
 # MoosicBox Async Cargo
 
-Cargo tool for detecting missing `#[inject_yields]` attributes on async functions.
+Cargo tool (and library) reporting async code that `#[inject_yields]` does not cover.
 
 ## Overview
 
 The MoosicBox Async Cargo package provides:
 
-- **Lint Tool**: Command-line tool for async function analysis
-- **Attribute Detection**: Finds async functions missing `#[inject_yields]`
+- **Lint Tool**: Command-line tool for async code analysis
+- **Library**: `uncovered(root)`, for a test to call on its crate
+- **Attribute Detection**: Finds async functions, blocks and closures `#[inject_yields]` does not cover
 - **Root Source Support**: Analyzes Rust source files under `<root>/src`
 - **CI Integration**: Suitable for continuous integration pipelines
 - **Syntax Analysis**: Uses syn for accurate Rust code parsing
@@ -17,9 +18,9 @@ The MoosicBox Async Cargo package provides:
 ### Async Function Analysis
 
 - **Function Detection**: Identifies async functions and methods
-- **Attribute Checking**: Verifies presence of `#[inject_yields]` attribute
-- **Impl Block Support**: Analyzes async methods in impl blocks
-- **Module Support**: Handles module-level attribute inheritance
+- **Block and Closure Detection**: Identifies `async` blocks and closures in any function
+- **Attribute Checking**: Verifies an `#[inject_yields]` on the code or an enclosing item
+- **Module Support**: Follows the module tree, `#[inject_yields]` modules and `inject_yields_mod!`
 
 ### Code Coverage
 
@@ -30,8 +31,8 @@ The MoosicBox Async Cargo package provides:
 
 ### Reporting
 
-- **Warning Messages**: Clear warnings for missing attributes
-- **File Location**: Reports exact file and function names
+- **Warning Messages**: Clear warnings for uncovered code
+- **File Location**: Reports file, line, column and enclosing function
 - **Exit Codes**: Returns appropriate exit codes for CI/CD
 - **Batch Processing**: Processes multiple files efficiently
 
@@ -57,110 +58,60 @@ cargo build --release
 ### Command Line
 
 ```bash
-# Check using CARGO_MANIFEST_DIR
-CARGO_MANIFEST_DIR=/path/to/project switchy_async_cargo
+# Check the crate in CARGO_MANIFEST_DIR
+CARGO_MANIFEST_DIR=/path/to/crate switchy_async_cargo
 
-# Check specific directory
-switchy_async_cargo --root /path/to/project
-
-# Use in CI/CD
-switchy_async_cargo || exit 1
+# Check a specific crate, leaving out `#[cfg(test)]` code
+switchy_async_cargo --root /path/to/crate --skip-tests
 ```
+
+### Library
+
+```rust
+let findings = switchy_async_cargo::uncovered(std::path::Path::new("path/to/crate"));
+for finding in findings.iter().filter(|finding| !finding.cfg_test) {
+    eprintln!("{finding}");
+}
+```
+
+`uncovered(root)` returns a `Finding` (file, line, column, kind, name, whether it is in
+`#[cfg(test)]` code) for each:
+
+- `async fn` and async method (in impls, and traits with a body);
+- `async` block and `async` closure, in any function, sync or async;
+- file it could not read or parse (`Kind::Unreadable`).
 
 ### Example Output
 
 ```
 2 warnings:
-warning: src/lib.rs: async fn `process_data` is missing #[inject_yields]
-warning: src/handlers.rs: async method `handle_request` in impl is missing #[inject_yields]
+warning: src/lib.rs:12:5: async fn `process_data` is not covered by #[inject_yields]
+warning: src/handlers.rs:40:9: async block in `spawn_worker` is not covered by #[inject_yields]
 ```
 
-### Integration with CI
+## Coverage Rules
 
-```yaml
-# GitHub Actions example
-- name: Check async functions
-  run: |
-      cargo install --path packages/switchy/async/cargo
-      switchy_async_cargo --root "${{ github.workspace }}"
-```
+Code is covered when it, or an item around it (function, impl, trait, module, const or
+static), has `#[inject_yields]` (any path ending in `inject_yields`), or when it is in a
+module loaded with `inject_yields_mod!(mod name;)`. Async code inside an uncovered `async fn`,
+block or closure is reported once, for the outermost one. Code inside macro invocations is
+invisible to the attribute and to the check alike.
 
-## Attribute Rules
-
-### Required Attributes
-
-Functions and methods that need `#[inject_yields]`:
-
-- **Async Functions**: All `async fn` declarations
-- **Async Methods**: All `async fn` in impl blocks
-- **Public APIs**: Especially important for public async functions
-
-### Exemptions
-
-Attributes that exempt from checking:
-
-- **Function Level**: `#[inject_yields]` on the function
-- **Impl Level**: `#[inject_yields]` on the impl block
-- **Module Level**: `#[inject_yields]` on the module
-
-### Example Code
-
-```rust
-// ✅ Correct: Has inject_yields attribute
-#[inject_yields]
-async fn good_function() {
-    // Function body
-}
-
-// ❌ Warning: Missing inject_yields attribute
-async fn bad_function() {
-    // Function body
-}
-
-// ✅ Correct: Impl-level attribute covers all methods
-#[inject_yields]
-impl MyStruct {
-    async fn method1(&self) {
-        // Method body
-    }
-
-    async fn method2(&self) {
-        // Method body
-    }
-}
-
-// ✅ Correct: Module-level attribute covers all functions
-#[inject_yields]
-mod my_module {
-    async fn function_in_module() {
-        // Function body
-    }
-}
-```
-
-## Command Line Options
-
-- **`--root <PATH>`**: Specify root directory to analyze (if not specified, uses `$CARGO_MANIFEST_DIR`)
-
-## Error Handling
-
-The tool handles various error conditions gracefully:
-
-- **Parse Errors**: Continues processing other files if one file fails to parse
-- **File Access**: Handles missing or inaccessible files
-- **Syntax Errors**: Provides empty AST for unparseable files
+The check walks the module tree from `src/lib.rs`, `src/main.rs` and `src/bin/*`, following
+`mod` declarations (and `#[path]`) as rustc does, then checks the other `.rs` files under
+`src` on their own.
 
 ## Exit Codes
 
-- **0**: Success, no warnings found
-- **1**: Warnings found, missing `#[inject_yields]` attributes detected
+- **0**: Nothing uncovered
+- **1**: Uncovered async code (or files that could not be checked) found
 
 ## Dependencies
 
 - **Clap**: Command-line argument parsing
 - **Syn**: Rust syntax parsing and AST traversal
 - **WalkDir**: Recursive directory traversal
-- **Log**: Logging facade
+- **Proc Macro2**: Line and column numbers of findings
 - **Pretty Env Logger**: Logging implementation
 
 ## Integration
