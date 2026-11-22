@@ -386,6 +386,9 @@ pub struct ThreadSnapshot {
     pub op: Op,
     /// Whether it ended by panicking.
     pub panicked: bool,
+    /// Whether it is a daemon (see [`super::thread::Builder::daemon`]): it serves the run until
+    /// it ends, so it is not expected to finish before.
+    pub daemon: bool,
 }
 
 /// One scheduling decision.
@@ -538,6 +541,9 @@ struct ThreadRecord {
     group: u64,
     /// Whether it was killed; see [`Scheduler::kill_group`].
     fate: Fate,
+    /// A daemon: killed when the run ends, not reported as leaked (see
+    /// [`super::thread::Builder::daemon`]).
+    daemon: bool,
     /// What it touched since its last switch point, when tracing.
     footprint: Footprint,
 }
@@ -716,6 +722,7 @@ impl Scheduler {
                     panicked: false,
                     group: 0,
                     fate: Fate::Alive,
+                    daemon: false,
                     footprint: Footprint::default(),
                 }],
                 running: 0,
@@ -741,7 +748,7 @@ impl Scheduler {
         }
     }
 
-    /// Whether any simulated thread but the caller has not finished.
+    /// Whether any simulated thread but the caller and the daemons has not finished.
     ///
     /// # Panics
     ///
@@ -754,7 +761,9 @@ impl Scheduler {
             .threads
             .iter()
             .enumerate()
-            .any(|(index, thread)| index != me && thread.state != ThreadState::Finished)
+            .any(|(index, thread)| {
+                index != me && !thread.daemon && thread.state != ThreadState::Finished
+            })
     }
 
     /// The calling thread's index in this run.
@@ -851,6 +860,7 @@ impl Scheduler {
                     state: t.state,
                     op: t.op,
                     panicked: t.panicked,
+                    daemon: t.daemon,
                 })
                 .collect(),
             running: inner.running,
@@ -910,6 +920,7 @@ impl Scheduler {
             panicked: false,
             group,
             fate: Fate::Alive,
+            daemon: false,
             footprint: Footprint::default(),
         });
         let child = inner.threads.len() - 1;
@@ -1144,6 +1155,27 @@ impl Scheduler {
         if group == 0 {
             return;
         }
+        self.kill_where(|thread| thread.group == group);
+    }
+
+    /// Mark thread `index` a daemon: the run's end kills it if it has not finished, and does not
+    /// report it as leaked.
+    pub(crate) fn mark_daemon(&self, index: ThreadIndex) {
+        lock(&self.inner).threads[index].daemon = true;
+    }
+
+    /// Forget thread `index`, whose OS thread could not start: it finished without running, so
+    /// the scheduler never hands it a turn.
+    pub(crate) fn forget(&self, index: ThreadIndex) {
+        let thread = &mut lock(&self.inner).threads[index];
+        thread.state = ThreadState::Finished;
+        thread.op = Op::Exit;
+        thread.os = None;
+    }
+
+    /// Kill every unfinished thread but this one and the main thread that `which` selects; see
+    /// [`Self::kill_group`].
+    fn kill_where(&self, which: impl Fn(&ThreadRecord) -> bool) {
         self.untracked();
         let me = self.me();
         let victims: Vec<ThreadIndex> = {
@@ -1153,7 +1185,7 @@ impl Scheduler {
                 .iter()
                 .enumerate()
                 .filter(|(i, t)| {
-                    *i != me && *i != 0 && t.group == group && t.state != ThreadState::Finished
+                    *i != me && *i != 0 && which(t) && t.state != ThreadState::Finished
                 })
                 .map(|(i, _)| i)
                 .collect()
@@ -1491,6 +1523,19 @@ impl Scheduler {
     #[must_use]
     pub fn shutdown(&self) -> ShutdownReport {
         assert_eq!(self.me(), 0, "shutdown must be called from the main thread");
+        // Daemons serve the run until it ends: end them now, as a process's exit does (unless
+        // the run failed, when the scheduler hands out no more turns and they stay parked).
+        let daemons = {
+            let inner = lock(&self.inner);
+            inner.failure.is_none()
+                && inner
+                    .threads
+                    .iter()
+                    .any(|t| t.daemon && t.state != ThreadState::Finished)
+        };
+        if daemons {
+            self.kill_where(|thread| thread.daemon);
+        }
         let (handles, report) = {
             let mut inner = lock(&self.inner);
             inner.shutting_down = true;
@@ -1499,7 +1544,7 @@ impl Scheduler {
                     .threads
                     .iter()
                     .skip(1)
-                    .filter(|t| t.state != ThreadState::Finished)
+                    .filter(|t| t.state != ThreadState::Finished && !t.daemon)
                     .map(|t| t.name.clone())
                     .collect(),
                 panicked: inner

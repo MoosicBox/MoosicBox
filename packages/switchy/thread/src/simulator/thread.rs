@@ -66,6 +66,7 @@ pub struct Builder {
     name: Option<String>,
     stack_size: Option<usize>,
     group: Option<u64>,
+    daemon: bool,
 }
 
 impl Builder {
@@ -76,7 +77,17 @@ impl Builder {
             name: None,
             stack_size: None,
             group: None,
+            daemon: false,
         }
+    }
+
+    /// Make the thread a daemon: one that serves the run until it ends (a runtime's worker, a
+    /// service loop). When the run ends, it is killed if it has not finished, and it is not
+    /// reported as leaked.
+    #[must_use]
+    pub const fn daemon(mut self, daemon: bool) -> Self {
+        self.daemon = daemon;
+        self
     }
 
     /// Put the thread in `group` (see [`Scheduler::kill_group`]), rather than the group set by
@@ -105,9 +116,13 @@ impl Builder {
     ///
     /// # Errors
     ///
-    /// * If the OS thread cannot be created
     /// * [`io::ErrorKind::WouldBlock`] when the run's spawn failure fault strikes (see
     ///   [`super::set_spawn_failures`])
+    ///
+    /// # Panics
+    ///
+    /// * If the operating system cannot start the OS thread, even after waiting for other runs
+    ///   to free some (a real failure would make the run depend on the machine)
     pub fn spawn<F, T>(self, f: F) -> io::Result<JoinHandle<T>>
     where
         F: FnOnce() -> T + Send + 'static,
@@ -131,14 +146,13 @@ impl Builder {
             ));
         }
         let index = scheduler.add_thread(scheduler.me(), name.clone(), group);
-        let result = Arc::new(Mutex::new(None));
-        let mut builder = std::thread::Builder::new().name(name);
-        if let Some(size) = self.stack_size {
-            builder = builder.stack_size(size);
+        if self.daemon {
+            scheduler.mark_daemon(index);
         }
+        let result = Arc::new(Mutex::new(None));
         let child_scheduler = Arc::clone(&scheduler);
         let child_result = Arc::clone(&result);
-        let handle = builder.spawn(move || {
+        let body = move || {
             switchy_simulation::set_current(Some(context));
             IDENTITY.set(Some((context_id, index)));
             child_scheduler.wait_turn(index);
@@ -157,7 +171,19 @@ impl Builder {
             // Stay alive (parked) until the run ends, so this thread's thread-local
             // destructors cannot run concurrently with the run's other threads.
             child_scheduler.wait_turn(index);
-        })?;
+        };
+        let handle = match start_os_thread(&name, self.stack_size, body) {
+            Ok(handle) => handle,
+            Err(error) => {
+                // No OS thread: the scheduler must never hand this one a turn.
+                scheduler.forget(index);
+                panic!(
+                    "the operating system cannot start simulated thread '{name}' ({error}): \
+                     the run needs more threads than the system allows (simulated threads keep \
+                     their OS thread until their run ends; run fewer runs at once)"
+                );
+            }
+        };
         let thread = handle.thread().clone();
         scheduler.attach(index, handle);
         scheduler.switch_point(Op::Spawn);
@@ -167,6 +193,44 @@ impl Builder {
             result,
             thread,
         })
+    }
+}
+
+/// How long a simulated spawn waits for the operating system to have a thread to spare.
+const OS_THREAD_PATIENCE: Duration = Duration::from_secs(120);
+
+/// Start the OS thread of a simulated thread. When the operating system refuses (too many
+/// threads: the runs at once, each keeping its finished threads until it ends), wait in real
+/// time for other runs to free some and try again, up to [`OS_THREAD_PATIENCE`]: whether the OS
+/// has a thread to spare is not the run's to decide, so it must never change what the run does.
+fn start_os_thread(
+    name: &str,
+    stack_size: Option<usize>,
+    body: impl FnOnce() + Send + 'static,
+) -> io::Result<std::thread::JoinHandle<()>> {
+    let body = Arc::new(Mutex::new(Some(body)));
+    let started = std::time::Instant::now();
+    let mut pause = Duration::from_millis(1);
+    loop {
+        let mut builder = std::thread::Builder::new().name(name.to_string());
+        if let Some(size) = stack_size {
+            builder = builder.stack_size(size);
+        }
+        let slot = Arc::clone(&body);
+        let attempt = builder.spawn(move || {
+            let body = slot.lock().unwrap_or_else(PoisonError::into_inner).take();
+            if let Some(body) = body {
+                body();
+            }
+        });
+        match attempt {
+            Ok(handle) => return Ok(handle),
+            Err(error) if started.elapsed() >= OS_THREAD_PATIENCE => return Err(error),
+            Err(_) => {
+                std::thread::sleep(pause);
+                pause = (pause * 2).min(Duration::from_millis(500));
+            }
+        }
     }
 }
 

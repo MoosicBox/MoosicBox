@@ -81,3 +81,11 @@ assert!(outcome.report.leaked.is_empty());
 Harnesses that advance time themselves (such as simvar) call
 `simulator::run_until_idle()` from the run's main thread each tick: it runs the
 other threads until none can make progress at the current simulated time.
+
+A thread that serves the run until it ends (a runtime's worker, a service loop) can be a
+daemon: `thread::Builder::new().daemon(true)`. When the run ends, an unfinished daemon is killed
+(it unwinds, dropping what it holds) and is not reported as leaked.
+
+Each simulated thread keeps its OS thread until its run ends. When the operating system has
+no thread to spare (many runs at once), a spawn waits for other runs to free some, and panics
+if none do: whether the machine has threads left never changes what a run does.

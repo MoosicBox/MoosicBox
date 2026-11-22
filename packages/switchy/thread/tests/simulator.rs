@@ -854,3 +854,43 @@ fn a_failed_spawn_makes_thread_spawn_panic() {
     });
     assert!(outcome.result.is_err());
 }
+
+/// A daemon still waiting when the run ends is killed (unwinding, so its values drop), and is
+/// not reported as leaked; an ordinary thread waiting is.
+#[test]
+fn the_run_end_kills_daemons_and_reports_only_other_threads_leaked() {
+    struct Flag(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+    impl Drop for Flag {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    let dropped = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let flag = Flag(std::sync::Arc::clone(&dropped));
+    let outcome = simulator::run(3, move || {
+        let gate = Arc::new((Mutex::new(()), Condvar::new()));
+        let waits = |gate: Arc<(Mutex<()>, Condvar)>| {
+            move || {
+                let guard = gate.0.lock().unwrap();
+                let _guard = gate.1.wait(guard).unwrap();
+            }
+        };
+        let daemon_wait = waits(Arc::clone(&gate));
+        thread::Builder::new()
+            .name("daemon".to_string())
+            .daemon(true)
+            .spawn(move || {
+                let _flag = flag;
+                daemon_wait();
+            })
+            .unwrap();
+        thread::Builder::new()
+            .name("ordinary".to_string())
+            .spawn(waits(gate))
+            .unwrap();
+        thread::sleep(Duration::from_millis(5));
+    });
+    assert!(outcome.result.is_ok());
+    assert_eq!(outcome.report.leaked, vec!["ordinary".to_string()]);
+    assert_eq!(dropped.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
