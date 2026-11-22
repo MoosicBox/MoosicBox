@@ -5,7 +5,7 @@ on:
         inputs:
             music_wav_url:
                 description: "Reviewed public HTTPS URL of exact music-carefree-30s.wav bytes (manifest SHA-256 enforced; not source MP3)"
-                required: true
+                required: false
                 type: string
     pull_request:
         paths:
@@ -97,7 +97,7 @@ jobs:
                   submodules: false
             - name: Fail closed when reviewed derived music WAV URL is missing
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   if [[ -z "$MUSIC_WAV_URL" ]]; then
@@ -121,7 +121,7 @@ jobs:
               run: cargo fetch --locked
             - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   python -B packages/opus_native/test_runner/src/qualification_ci.py run \
@@ -159,7 +159,7 @@ jobs:
                   submodules: false
             - name: Fail closed when reviewed derived music WAV URL is missing
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   if [[ -z "$MUSIC_WAV_URL" ]]; then
@@ -183,7 +183,7 @@ jobs:
               run: cargo fetch --locked
             - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   python -B packages/opus_native/test_runner/src/qualification_ci.py run \
@@ -221,7 +221,7 @@ jobs:
                   submodules: false
             - name: Fail closed when reviewed derived music WAV URL is missing
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   if [[ -z "$MUSIC_WAV_URL" ]]; then
@@ -245,7 +245,7 @@ jobs:
               run: cargo fetch --locked
             - name: Explicit fixed-point oracle, frozen expectations and strict media qualification
               env:
-                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL }}
+                  MUSIC_WAV_URL: ${{ inputs.music_wav_url || vars.OPUS_REVIEWED_MUSIC_WAV_URL || format('https://raw.githubusercontent.com/{0}/{1}/packages/opus_native/test_runner/fixtures/music-carefree-30s.wav', github.repository, github.sha) }}
               shell: bash
               run: |
                   python -B packages/opus_native/test_runner/src/qualification_ci.py run \
