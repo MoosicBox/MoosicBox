@@ -18,7 +18,7 @@ This package provides a unified interface for simulation-based testing with dete
 The package re-exports from `simvar_harness`:
 
 - **`run_simulation`**: Main function to run simulation tests
-- **`SimBootstrap` trait**: Trait for configuring simulation lifecycle hooks (`init`, `on_start`, `on_step`, `on_end`, `props`, `build_sim`)
+- **`SimBootstrap` trait**: Trait for configuring simulation lifecycle hooks (`init`, `on_start`, `on_step`, `on_end`, `on_result`, `props`, `build_sim`)
 - **`Sim` trait**: Interface for managing hosts and clients in simulations
 - **Configuration types**: `SimConfig`, `SimProperties`, `SimResult`, `SimRunProperties`
 - **Modules**: `client`, `host`, `plan`
@@ -107,6 +107,8 @@ By default, the `all` feature is enabled. Individual features can be selected:
 - **`SIMULATOR_SHRINK`** (`thread` feature): shrink a failing run's thread
   schedule (`1` for up to 1000 replays, or a number) and print how to replay it
 - **`SIMULATOR_SCHEDULE`** (`thread` feature): replay a shrunk schedule
+- **`SIMULATOR_INTERLEAVING_COVERAGE`** (`thread` feature): `1` records each
+  run's interleaving coverage in its result (`SimRunProperties::coverage`)
 - **`NO_TUI`**: Disable terminal UI when set
 
 ## Steering a Running Simulation

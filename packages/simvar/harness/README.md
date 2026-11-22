@@ -141,6 +141,10 @@ impl SimBootstrap for AdvancedSimulation {
     fn on_end(&self, sim: &mut impl Sim) {
         // Cleanup and final validation
     }
+
+    fn on_result(&self, result: &SimResult) {
+        // Each run's result, once its threads ended (a guided fleet steers by it)
+    }
 }
 ```
 
@@ -231,6 +235,7 @@ faults.
 - `SIMULATOR_VERIFY_DETERMINISM`: `1` replays every run with its seed and fails if its trace differs
 - `SIMULATOR_SHRINK` (thread feature): shrink a failing run's thread schedule (`1` for up to 1000 replays, or a number of replays) and print how to replay the result
 - `SIMULATOR_SCHEDULE` (thread feature): replay a thread schedule, as printed by `SIMULATOR_SHRINK`
+- `SIMULATOR_INTERLEAVING_COVERAGE` (thread feature): `1` records each run's interleaving coverage (the ordered pairs of conflicting operations of different simulated threads, by code location; see `switchy_thread`) in its result's `SimRunProperties::coverage`, which `SimBootstrap::on_result` sees, so a guided fleet can keep the inputs whose runs added pairs
 - `NO_TUI`: Disable TUI interface when set at compile or run time
 - `RUST_LOG`: Log level configuration (e.g., "debug", "info", "warn")
 

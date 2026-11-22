@@ -493,3 +493,77 @@ fn a_crash_drops_every_spawned_task_and_thread_before_the_hooks_run() {
         assert_eq!(log.ticks, again.ticks, "seed {seed}");
     }
 }
+
+/// Two blocking closures contending for a lock, on simulated threads; with `covering`, the run
+/// records its interleaving coverage, which [`SimBootstrap::on_result`] keeps.
+#[cfg(feature = "thread")]
+struct CoverageBootstrap {
+    covering: bool,
+    coverage: Mutex<Vec<Option<switchy::thread::simulator::Coverage>>>,
+}
+
+#[cfg(feature = "thread")]
+impl SimBootstrap for CoverageBootstrap {
+    fn init(&self) {
+        if self.covering {
+            let seed = switchy::random::simulator::seed();
+            switchy::thread::simulator::configure(switchy::thread::simulator::Config {
+                interleaving_coverage: true,
+                ..switchy::thread::simulator::Config::from_env(seed)
+            });
+        }
+    }
+
+    fn on_start(&self, sim: &mut impl Sim) {
+        sim.client("contender", async move {
+            let lock = Arc::new(switchy::thread::sync::Mutex::new(0));
+            let handles: Vec<_> = (0..2)
+                .map(|_| {
+                    let lock = Arc::clone(&lock);
+                    task::spawn_blocking(move || *lock.lock().unwrap() += 1)
+                })
+                .collect();
+            for handle in handles {
+                handle.await.map_err(boxed)?;
+            }
+            simvar_utils::cancel_simulation();
+            Ok(())
+        });
+    }
+
+    fn on_result(&self, result: &SimResult) {
+        self.coverage
+            .lock()
+            .unwrap()
+            .push(result.run().coverage.clone());
+    }
+}
+
+#[cfg(feature = "thread")]
+#[test_log::test]
+fn a_bootstrap_reads_each_runs_interleaving_coverage_from_its_result() {
+    for seed in [1, 2] {
+        let bootstrap = CoverageBootstrap {
+            covering: true,
+            coverage: Mutex::new(Vec::new()),
+        };
+        let (first, _) = run(&bootstrap, seed);
+        assert_success(&first);
+        assert!(first.run().coverage.as_ref().is_some_and(|c| !c.is_empty()));
+        let (second, _) = run(&bootstrap, seed);
+        assert_eq!(first.run().coverage, second.run().coverage, "seed {seed}");
+        let seen = bootstrap.coverage.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        assert_eq!(seen[0], first.run().coverage);
+        assert_eq!(seen[1], second.run().coverage);
+    }
+
+    let bootstrap = CoverageBootstrap {
+        covering: false,
+        coverage: Mutex::new(Vec::new()),
+    };
+    let (result, _) = run(&bootstrap, 1);
+    assert_success(&result);
+    assert!(result.run().coverage.is_none());
+    assert_eq!(*bootstrap.coverage.lock().unwrap(), vec![None]);
+}

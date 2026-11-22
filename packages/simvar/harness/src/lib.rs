@@ -1208,20 +1208,21 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         log::debug!("after simulation run");
 
-        let run = SimRunProperties {
-            steps,
-            real_time_millis,
-            sim_time_millis,
-        };
-
         managed_sim.shutdown();
 
         let mut trace = run_trace();
         #[cfg(feature = "thread")]
-        let (leaked_threads, schedule) = {
+        let (leaked_threads, schedule, coverage) = {
             let report = switchy::thread::simulator::scheduler().shutdown();
             trace = mix(trace, report.trace_hash);
-            (report.leaked, report.schedule)
+            (report.leaked, report.schedule, report.coverage)
+        };
+        let run = SimRunProperties {
+            steps,
+            real_time_millis,
+            sim_time_millis,
+            #[cfg(feature = "thread")]
+            coverage,
         };
         trace = mix(trace, steps);
 
@@ -1297,6 +1298,9 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
         }
 
         logging::log_message(result.to_string());
+        if !silent() {
+            self.bootstrap.on_result(&result);
+        }
 
         let trace = mix(trace, u64::from(result_is_success(&result)));
         notify(&SimEvent::RunFinished {
@@ -1432,6 +1436,14 @@ pub trait SimBootstrap: Send + Sync + 'static {
 
     /// Called when a simulation run ends.
     fn on_end(&self, #[allow(unused)] sim: &mut impl Sim) {}
+
+    /// Called with each run's result, once the run is over (its threads ended), still in the
+    /// run's simulation context (so its seed is current). Called for fleet runs and replay jobs,
+    /// not for the silent replays that shrink a failure.
+    ///
+    /// The result's [`SimRunProperties`] carry what the run measured, such as its interleaving
+    /// coverage (`coverage`, with the `thread` feature), for a guided fleet to steer by.
+    fn on_result(&self, #[allow(unused)] result: &SimResult) {}
 }
 
 /// Interface for managing simulation actors (hosts and clients) and injecting faults.

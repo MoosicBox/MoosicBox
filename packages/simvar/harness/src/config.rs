@@ -213,7 +213,7 @@ pub struct SimProperties {
 /// Runtime metrics from a simulation run.
 ///
 /// Captures timing and step count information after a simulation completes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SimRunProperties {
     /// Number of simulation steps executed.
     pub steps: u64,
@@ -221,6 +221,13 @@ pub struct SimRunProperties {
     pub real_time_millis: u128,
     /// Simulated time elapsed in milliseconds.
     pub sim_time_millis: u128,
+    /// The run's interleaving coverage, when its thread scheduler recorded it
+    /// (`SIMULATOR_INTERLEAVING_COVERAGE=1`, or a configuration with
+    /// `interleaving_coverage` set): see
+    /// [`switchy::thread::simulator::Coverage`]. A bootstrap reads it in
+    /// [`crate::SimBootstrap::on_result`].
+    #[cfg(feature = "thread")]
+    pub coverage: Option<switchy::thread::simulator::Coverage>,
 }
 
 /// Result of a simulation run.
@@ -617,6 +624,8 @@ mod tests {
             steps: 100,
             real_time_millis: 1000,
             sim_time_millis: 5000,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let success = SimResult::Success {
@@ -647,6 +656,8 @@ mod tests {
             steps: 100,
             real_time_millis: 1000,
             sim_time_millis: 5000,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let result = SimResult::Success { props, run };
@@ -673,6 +684,8 @@ mod tests {
             steps: 100,
             real_time_millis: 1000,
             sim_time_millis: 5000,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let result = SimResult::Success { props, run };
@@ -693,6 +706,8 @@ mod tests {
             steps: 12345,
             real_time_millis: 9876,
             sim_time_millis: 54321,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let result = SimResult::Success { props, run };
@@ -724,6 +739,8 @@ mod tests {
             steps: 500,
             real_time_millis: 2000,
             sim_time_millis: 10000,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let fail = SimResult::Fail {
@@ -752,6 +769,8 @@ mod tests {
             steps: 999,
             real_time_millis: 5555,
             sim_time_millis: 8888,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let fail = SimResult::Fail {
@@ -783,6 +802,8 @@ mod tests {
             steps: 100,
             real_time_millis: 1000,
             sim_time_millis: 5000,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let fail = SimResult::Fail {
@@ -915,6 +936,8 @@ mod tests {
             steps: 10,
             real_time_millis: 100,
             sim_time_millis: 200,
+            #[cfg(feature = "thread")]
+            coverage: None,
         };
 
         let result = SimResult::Fail {
