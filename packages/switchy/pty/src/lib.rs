@@ -237,15 +237,19 @@ impl PtyMaster {
     }
 
     /// Path of the terminal's slave device, for handing the terminal to another process.
-    #[cfg(any(unix, feature = "simulator"))]
+    /// `None` where terminals have no device ([`Behavior::terminal_device`]: Windows).
     #[must_use]
+    // Constant only on some backends.
+    #[allow(clippy::missing_const_for_fn)]
     pub fn tty_name(&self) -> Option<&std::path::Path> {
         self.0.tty_name()
     }
 
-    /// The terminal's foreground process group, when it has one.
-    #[cfg(any(unix, feature = "simulator"))]
+    /// The terminal's foreground process group, when it has one (never on Windows, where
+    /// processes have no groups).
     #[must_use]
+    // Constant only on some backends.
+    #[allow(clippy::missing_const_for_fn)]
     pub fn foreground_process_group(&self) -> Option<i32> {
         self.0.foreground_process_group()
     }

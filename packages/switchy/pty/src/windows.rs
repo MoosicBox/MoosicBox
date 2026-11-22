@@ -264,6 +264,18 @@ impl Master {
         true
     }
 
+    /// A pseudo-console has no device path.
+    #[allow(clippy::unused_self)]
+    pub const fn tty_name(&self) -> Option<&std::path::Path> {
+        None
+    }
+
+    /// Windows processes have no groups.
+    #[allow(clippy::unused_self)]
+    pub const fn foreground_process_group(&self) -> Option<i32> {
+        None
+    }
+
     pub fn take_writer(&self) -> io::Result<Input> {
         self.shared
             .input
