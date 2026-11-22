@@ -309,7 +309,9 @@ a multi-thread runtime (lock-order deadlocks and read-modify-write races between
 reachable). The seeded scheduler decides every switch, so runs stay deterministic. `n` is 1 for
 a current-thread runtime, `worker_threads` for a multi-thread one, else the run's
 `SIMULATOR_ASYNC_WORKERS`: a number, or `swarm` (one run in four gets 1, the others 2 to 4).
-Unset, it is 1.
+Unset, it is 1. A runtime's workers start when a step first needs them and live until it is
+shut down or the run ends (they are `switchy_thread` daemons), so a run starts at most `n - 1`
+threads per runtime.
 
 ### Runtime Features
 

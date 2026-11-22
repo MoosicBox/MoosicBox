@@ -314,6 +314,9 @@ pub struct Runtime {
     /// Its number of workers, from `Builder::worker_threads`; 0 for the run's.
     #[cfg(feature = "thread-simulator")]
     worker_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Its workers, started by the first step that needs them (in a simulation run).
+    #[cfg(feature = "thread-simulator")]
+    workers: Arc<std::sync::OnceLock<Arc<super::workers::Pool>>>,
     handle: Option<Handle>,
 }
 
@@ -391,6 +394,8 @@ impl Runtime {
             thread_group: switchy_thread::simulator::new_key(),
             #[cfg(feature = "thread-simulator")]
             worker_count: Arc::default(),
+            #[cfg(feature = "thread-simulator")]
+            workers: Arc::default(),
             handle: None,
         };
 
@@ -577,7 +582,8 @@ impl Runtime {
         if batch.len() == 1 {
             here.insert(0, batch.remove(0));
         } else if !batch.is_empty() {
-            super::workers::run_batch(self, batch);
+            let pool = self.workers.get_or_init(Arc::default);
+            pool.run_batch(self, batch);
         }
         for task in here {
             self.process_on_this_thread(task);

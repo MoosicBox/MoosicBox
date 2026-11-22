@@ -320,6 +320,30 @@ mod workers {
         (result, outcome.report.trace_hash)
     }
 
+    /// Workers live as long as their runtime, not one step: however many steps a run takes, it
+    /// starts at most `workers - 1` threads for them.
+    #[test]
+    fn many_steps_start_a_bounded_number_of_threads() {
+        let ((), _) = run_multi(5, 4, |runtime| {
+            runtime.block_on(async {
+                let handles: Vec<_> = (0..4)
+                    .map(|_| {
+                        switchy_async::task::spawn(async {
+                            for _ in 0..50 {
+                                switchy_async::task::yield_now().await;
+                            }
+                        })
+                    })
+                    .collect();
+                for handle in handles {
+                    handle.await.unwrap();
+                }
+            });
+            let threads = switchy_thread::simulator::scheduler().snapshot().threads.len();
+            assert!(threads <= 4, "{threads} threads");
+        });
+    }
+
     #[test]
     fn several_workers_lose_an_update_one_never_does() {
         assert!((0..40).all(|seed| lost_update(seed, 1).0 == 2));
