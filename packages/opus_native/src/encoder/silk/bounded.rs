@@ -422,18 +422,21 @@ impl Search<'_> {
             self.phases[1] += phase.elapsed().as_nanos();
         }
         let bits = coder.tell().saturating_sub(self.incoming.tell());
-        let raw: i128 = self
-            .inputs
-            .iter()
-            .zip(&frames)
-            .map(|(input, frame)| {
-                input
-                    .iter()
-                    .zip(&frame.2)
-                    .map(|(&x, &y)| (i128::from(x) - i128::from(y)).pow(2))
-                    .sum::<i128>()
-            })
-            .sum();
+        // Legal candidates use the decoded score. Only compute the input-domain
+        // error for an infeasible candidate (or the diagnostic proposal pool).
+        let raw = || -> i128 {
+            self.inputs
+                .iter()
+                .zip(&frames)
+                .map(|(input, frame)| {
+                    input
+                        .iter()
+                        .zip(&frame.2)
+                        .map(|(&x, &y)| (i128::from(x) - i128::from(y)).pow(2))
+                        .sum::<i128>()
+                })
+                .sum()
+        };
         if !valid || bits as usize > budget {
             self.feasibility.push((
                 if valid {
@@ -441,7 +444,7 @@ impl Search<'_> {
                 } else {
                     u64::MAX
                 },
-                raw,
+                raw(),
                 choice,
             ));
             self.feasibility.sort_unstable();
@@ -453,7 +456,7 @@ impl Search<'_> {
             let proposed = self
                 .scorer
                 .proposal_score(config, &frames[0].2, &frames[1].2)?
-                .unwrap_or(raw);
+                .unwrap_or_else(raw);
             self.proposals
                 .push((proposed, self.proposals.len(), choice));
             return Ok(());
@@ -479,6 +482,7 @@ impl Search<'_> {
             let projected = self
                 .scorer
                 .proposal_score(config, &frames[0].2, &frames[1].2)?;
+            let raw = raw();
             eprintln!(
                 "POOL_NATIVE choice={choice:?} raw={raw} projected={projected:?} actual={score} bits={bits} previous={:?}",
                 self.encoder.previous_index
