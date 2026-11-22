@@ -407,12 +407,13 @@ impl Runtime {
         })
     }
 
+    /// Mark the runtime active (its tasks' wakers reschedule them). Spawning onto it from
+    /// within another runtime's task is fine, as with tokio; only `block_on` refuses to nest.
     fn start(&self) {
-        if self.shut_down.load(Ordering::SeqCst) || self.active.fetch_or(true, Ordering::SeqCst) {
+        if self.shut_down.load(Ordering::SeqCst) {
             return;
         }
-
-        assert!(!RUNTIME.is_set(), "Cannot start a Runtime within a Runtime");
+        self.active.store(true, Ordering::SeqCst);
     }
 
     fn next_task(&self) -> Option<Arc<Task>> {

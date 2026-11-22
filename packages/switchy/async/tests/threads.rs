@@ -203,3 +203,24 @@ fn a_task_spawned_from_another_thread_wakes_the_executor() {
         assert_eq!(value, 9, "seed {seed}");
     }
 }
+
+#[test]
+fn a_task_can_spawn_onto_another_runtime_and_drive_it() {
+    for seed in 0..5 {
+        let (value, _) = run(seed, |runtime| {
+            runtime.block_on(async {
+                let other = Runtime::new();
+                let done = other.handle().spawn(async { 3 });
+                let mut done = Box::pin(done);
+                loop {
+                    other.tick();
+                    if let Some(value) = futures::FutureExt::now_or_never(&mut done) {
+                        break value.unwrap();
+                    }
+                    switchy_async::task::yield_now().await;
+                }
+            })
+        });
+        assert_eq!(value, 3, "seed {seed}");
+    }
+}
