@@ -47,6 +47,12 @@ impl Analysis {
         if !transient {
             return (self.transform(pcm), false);
         }
+        self.short_transform(pcm)
+    }
+
+    pub(super) fn short_transform(&mut self, pcm: &[i32]) -> (Vec<Vec<i32>>, bool) {
+        let channels = self.overlap.len();
+        let frames = pcm.len() / channels;
         let blocks = frames / 120;
         let mut spectrum = vec![vec![0; frames]; channels];
         for (block, input) in pcm.chunks_exact(120 * channels).enumerate() {

@@ -1672,9 +1672,26 @@ impl Encoder {
         let internal_size = self.config.frame_size * rate_factor(self.config.sample_rate);
         let bytes = (self.config.bitrate as usize * internal_size / 384_000)
             .saturating_sub(1 + redundant.map_or(0, |(_, data)| data.len()));
-        let (spectrum, transient) = self
-            .analysis
-            .transform_celt(&resampled, !hybrid && bytes >= 24 * channels);
+        let block = 120 * channels;
+        let shaped = hybrid
+            && internal_size == 480
+            && channels == 2
+            && self.config.sample_rate == SampleRate::Hz48000
+            && self.config.bitrate == 64000
+            && {
+                let mut e = [0_i64; 4];
+                for (i, y) in resampled.chunks_exact(block).enumerate() {
+                    e[i] = y.iter().map(|x| i64::from(x >> 12).pow(2)).sum();
+                }
+                let hi = *e.iter().max().unwrap();
+                hi > block as i64 * 128 * 128 && hi > 8 * e.iter().min().unwrap()
+            };
+        let (spectrum, transient) = if shaped {
+            self.analysis.short_transform(&resampled)
+        } else {
+            self.analysis
+                .transform_celt(&resampled, !hybrid && bytes >= 24 * channels)
+        };
         let lm = (internal_size / 120).ilog2() as usize;
         #[cfg_attr(not(feature = "hybrid"), allow(unused_mut))]
         let (mut target_energy, energy) = quantize::energies(&spectrum, lm);
@@ -1944,7 +1961,11 @@ impl Encoder {
             21
         };
         let intensity = allocation::stereo_intensity(&spectrum, lm, intensity);
-        let allocation = if joint_hybrid && hybrid && channels == 2 && bitrate <= 64_000 && lm == 2
+        let allocation = if (transient || joint_hybrid)
+            && hybrid
+            && channels == 2
+            && bitrate <= 64_000
+            && lm == 2
         {
             allocation::allocate_joint(
                 &mut enc,
@@ -1953,7 +1974,7 @@ impl Encoder {
                 lm as i32,
                 start,
                 end,
-                intensity.min(end),
+                if transient { start } else { intensity.min(end) },
             )?
         } else if hybrid && end == 21 {
             allocation::allocate(&mut enc, remaining, channels, lm as i32, start)?
