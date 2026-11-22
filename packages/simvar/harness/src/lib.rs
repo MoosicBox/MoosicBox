@@ -1131,7 +1131,8 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             run_info(&props)
         ));
 
-        let start = switchy::time::now();
+        // The run's monotonic clock: its wall clock may jump backward (a fault).
+        let start = switchy::time::Instant::now();
         let real_start = Instant::now();
 
         self.bootstrap.on_start(&mut managed_sim);
@@ -1199,8 +1200,9 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         self.bootstrap.on_end(&mut managed_sim);
 
-        let end = switchy::time::now();
-        let real_time_millis = end.duration_since(start).unwrap().as_millis();
+        let real_time_millis = switchy::time::Instant::now()
+            .saturating_duration_since(start)
+            .as_millis();
         let sim_time = managed_sim.elapsed();
         let sim_time_millis = sim_time.as_millis();
         // A run stopped before its first step ran none.
@@ -1533,7 +1535,8 @@ struct ManagedSim {
     config: SimConfig,
     hosts: Vec<Host>,
     clients: Vec<Client>,
-    start: Option<SystemTime>,
+    /// When it started, on the run's monotonic clock (its wall clock may jump backward).
+    start: Option<switchy::time::Instant>,
     /// Hosts to restart, and when, in the order their bounces were applied.
     restarts: Vec<(SystemTime, String)>,
 }
@@ -1612,11 +1615,11 @@ impl ManagedSim {
         let Some(start) = self.start else {
             return Duration::ZERO;
         };
-        switchy::time::now().duration_since(start).unwrap()
+        switchy::time::Instant::now().saturating_duration_since(start)
     }
 
     pub fn start(&mut self) {
-        self.start = Some(switchy::time::now());
+        self.start = Some(switchy::time::Instant::now());
 
         for host in self.hosts.iter_mut().filter(|x| x.is_down()) {
             host.start();
