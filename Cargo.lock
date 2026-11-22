@@ -18660,6 +18660,7 @@ dependencies = [
  "libc",
  "switchy_simulation",
  "switchy_thread",
+ "switchy_time",
  "windows-sys 0.61.2",
 ]
 

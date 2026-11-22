@@ -40,7 +40,8 @@ windows-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-switchy_thread = { workspace = true }
+switchy_thread = { workspace = true, features = ["std"] }
+switchy_time   = { workspace = true, features = ["std"] }
 
 [features]
 default = ["native"]
