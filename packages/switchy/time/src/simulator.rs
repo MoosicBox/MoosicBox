@@ -11,6 +11,10 @@
 //! * Step multiplier - How many milliseconds of simulated time pass per step
 //!
 //! Simulated time is calculated as: `epoch_offset + (step * step_multiplier)`
+//!
+//! The wall clock ([`now`]) may also jump at a clock advance, forward or backward, as NTP and
+//! daylight saving adjustments make it: see [`set_wall_clock_jumps`]. The monotonic clock
+//! ([`instant_now`], [`crate::Instant`]) never does.
 
 use std::{
     cell::Cell,
@@ -42,6 +46,84 @@ struct ClockState {
     step_multiplier: Option<u64>,
     clock_generation: u64,
     step: u64,
+    /// How far the wall clock has jumped in all, in milliseconds.
+    wall_adjustment: i64,
+    /// The probability of a wall clock jump at each advance (`None`: not read yet).
+    wall_jumps: Option<f64>,
+}
+
+/// The farthest a wall clock jump goes forward.
+pub const WALL_CLOCK_JUMP_FORWARD: Duration = Duration::from_hours(1);
+/// The farthest a wall clock jump goes backward.
+pub const WALL_CLOCK_JUMP_BACKWARD: Duration = Duration::from_mins(1);
+
+/// Make the current run's wall clock jump with probability `probability` (clamped to 0..=1)
+/// at each clock advance, instead of `SIMULATOR_WALL_CLOCK_JUMPS` (default 0).
+///
+/// A jump moves [`now`] (not [`instant_now`] or [`crate::Instant`], which stay monotonic)
+/// forward by up to [`WALL_CLOCK_JUMP_FORWARD`] or, as often, backward by up to
+/// [`WALL_CLOCK_JUMP_BACKWARD`]. Its draws come from the run's `switchy_time::wall_clock`
+/// stream, and only while the probability is above 0, so other draw sequences are the same
+/// either way.
+pub fn set_wall_clock_jumps(probability: f64) {
+    with_clock(|clock| clock.wall_jumps = Some(probability.clamp(0.0, 1.0)));
+}
+
+/// The current run's probability of a wall clock jump at each advance: the one set with
+/// [`set_wall_clock_jumps`], or else `SIMULATOR_WALL_CLOCK_JUMPS` (default 0).
+///
+/// # Panics
+///
+/// * If `SIMULATOR_WALL_CLOCK_JUMPS` is not a number
+#[must_use]
+pub fn wall_clock_jumps() -> f64 {
+    with_clock(wall_jumps)
+}
+
+fn wall_jumps(clock: &mut ClockState) -> f64 {
+    *clock.wall_jumps.get_or_insert_with(|| {
+        std::env::var("SIMULATOR_WALL_CLOCK_JUMPS").map_or(0.0, |value| {
+            value
+                .parse::<f64>()
+                .unwrap_or_else(|_| {
+                    panic!("SIMULATOR_WALL_CLOCK_JUMPS must be a probability, got '{value}'")
+                })
+                .clamp(0.0, 1.0)
+        })
+    })
+}
+
+/// How far the current run's wall clock has jumped in all (see [`set_wall_clock_jumps`]), in
+/// milliseconds: positive when ahead.
+#[must_use]
+pub fn wall_clock_adjustment() -> i64 {
+    with_clock(|clock| clock.wall_adjustment)
+}
+
+/// At a clock advance, maybe jump the wall clock.
+fn maybe_jump_wall_clock(clock: &mut ClockState) {
+    let probability = wall_jumps(clock);
+    if probability <= 0.0 {
+        return;
+    }
+    let jump = {
+        let stream = switchy_simulation::stream("switchy_time::wall_clock");
+        let mut rng = stream.lock().unwrap_or_else(PoisonError::into_inner);
+        if !rng.chance(probability) {
+            return;
+        }
+        let forward = rng.chance(0.5);
+        let limit = if forward {
+            WALL_CLOCK_JUMP_FORWARD
+        } else {
+            WALL_CLOCK_JUMP_BACKWARD
+        };
+        let limit = u64::try_from(limit.as_millis()).unwrap_or(u64::MAX);
+        let millis = i64::try_from(rng.range_inclusive(1..=limit)).unwrap_or(i64::MAX);
+        if forward { millis } else { -millis }
+    };
+    crate::trace!("wall clock jumps by {jump}ms");
+    clock.wall_adjustment = clock.wall_adjustment.saturating_add(jump);
 }
 
 fn clock() -> Arc<Clock> {
@@ -336,6 +418,8 @@ pub fn set_step(step: u64) -> u64 {
     with_clock(|clock| {
         if step < clock.step {
             advance_generation(clock);
+        } else if step > clock.step {
+            maybe_jump_wall_clock(clock);
         }
         clock.step = step;
     });
@@ -440,6 +524,7 @@ pub fn now() -> SystemTime {
     let step = current_step();
     let mult_step = step.checked_mul(step_multiplier).unwrap();
     let millis = epoch_offset.checked_add(mult_step).unwrap();
+    let millis = millis.saturating_add_signed(wall_clock_adjustment());
     crate::trace!(
         "now: epoch_offset={epoch_offset} step={step} step_multiplier={step_multiplier} millis={millis}"
     );
@@ -601,6 +686,85 @@ mod tests {
         })
         .join()
         .unwrap();
+    }
+
+    /// Wall clock (milliseconds since the epoch) and monotonic readings over 300 advances of
+    /// a second each, with jumps at `probability`.
+    fn wall_clock_readings(seed: u64, probability: Option<f64>) -> Vec<(u64, Instant)> {
+        switchy_simulation::with_context(switchy_simulation::Context::new(seed), || {
+            super::set_step_multiplier(1000);
+            super::set_epoch_offset(1_700_000_000_000);
+            if let Some(probability) = probability {
+                super::set_wall_clock_jumps(probability);
+            }
+            (0..300)
+                .map(|_| {
+                    let _ = super::next_step();
+                    let wall = super::now().duration_since(UNIX_EPOCH).unwrap();
+                    (
+                        u64::try_from(wall.as_millis()).unwrap(),
+                        super::instant_now(),
+                    )
+                })
+                .collect()
+        })
+    }
+
+    #[test]
+    fn the_wall_clock_jumps_while_instants_stay_monotonic() {
+        let readings = wall_clock_readings(3, Some(0.2));
+        let (mut forward, mut backward) = (0, 0);
+        for pair in readings.windows(2) {
+            let ((wall, instant), (next_wall, next_instant)) = (pair[0], pair[1]);
+            assert_eq!(next_instant - instant, Duration::from_secs(1));
+            let step = i128::from(next_wall) - i128::from(wall);
+            assert!((1000 - 60_000..=1000 + 3_600_000).contains(&step), "{step}");
+            if step > 1000 {
+                forward += 1;
+            } else if step < 1000 {
+                backward += 1;
+            }
+        }
+        assert!(
+            forward > 0 && backward > 0,
+            "{forward} forward, {backward} backward"
+        );
+        assert!(
+            readings.windows(2).any(|pair| pair[1].0 < pair[0].0),
+            "went backward"
+        );
+    }
+
+    #[test]
+    fn wall_clock_jumps_are_deterministic_per_seed() {
+        let first = wall_clock_readings(11, Some(0.1));
+        let walls = |readings: &[(u64, Instant)]| readings.iter().map(|r| r.0).collect::<Vec<_>>();
+        assert_eq!(walls(&first), walls(&wall_clock_readings(11, Some(0.1))));
+        assert_ne!(walls(&first), walls(&wall_clock_readings(12, Some(0.1))));
+    }
+
+    #[test]
+    fn without_jumps_the_wall_clock_follows_the_steps_and_draws_nothing() {
+        for probability in [None, Some(0.0)] {
+            let readings = wall_clock_readings(5, probability);
+            for (i, (wall, _)) in readings.iter().enumerate() {
+                assert_eq!(*wall, 1_700_000_000_000 + (i as u64 + 1) * 1000);
+            }
+        }
+        // The jump stream is untouched: its first draw is a fresh run's first draw.
+        let first_draw = |advance: bool| {
+            switchy_simulation::with_context(switchy_simulation::Context::new(5), || {
+                if advance {
+                    super::set_wall_clock_jumps(0.0);
+                    let _ = super::next_step();
+                }
+                switchy_simulation::stream("switchy_time::wall_clock")
+                    .lock()
+                    .unwrap()
+                    .next_u64()
+            })
+        };
+        assert_eq!(first_draw(true), first_draw(false));
     }
 
     #[test]

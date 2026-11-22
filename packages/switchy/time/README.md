@@ -116,6 +116,8 @@ fn configure_simulation() {
     // SIMULATOR_EPOCH_MIN / SIMULATOR_EPOCH_MAX - bounded random epoch offset (inclusive)
     // SIMULATOR_EPOCH_RANGE_PROFILE - preset random epoch range: low | wide | full
     // SIMULATOR_STEP_MULTIPLIER - sets the step multiplier (milliseconds)
+    // SIMULATOR_WALL_CLOCK_JUMPS - probability per advance that now() jumps (forward up
+    //   to an hour, or backward up to a minute); instants stay monotonic. Default 0.
 }
 ```
 
