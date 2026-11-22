@@ -700,11 +700,26 @@ impl Encoder {
             && control.bitrate <= 64_000;
         let nominal =
             hybrid::packet_lowband_bitrate(control.bitrate, self.config.channels, internal_size);
-        let budgets = [nominal, nominal * 3 / 4, nominal / 2];
-        // Compare legal low-band allocations from the same incoming predictive
-        // state at every practical rate/layout. Nominal remains first for ties;
-        // full-signal synthesis error selects both prefix and suffix together.
-        let budget_count = if eligible { budgets.len() } else { 1 };
+        let budgets = [
+            nominal,
+            nominal * 3 / 4,
+            nominal / 2,
+            nominal * 9 / 8,
+            nominal * 5 / 4,
+        ];
+        // At low stereo rates the nominal split reserves bytes for CELT. Also
+        // try spending more on SILK when that improves the decoded full frame.
+        // Keep nominal first for ties and enforce the same total packet budget.
+        let budget_count = if !eligible {
+            1
+        } else if self.config.channels == Channels::Stereo
+            && internal_size == 480
+            && control.bitrate < 64_000
+        {
+            budgets.len()
+        } else {
+            3
+        };
         let mut last_error = None;
         #[cfg(test)]
         let mut phases = [0_u128; 4];
