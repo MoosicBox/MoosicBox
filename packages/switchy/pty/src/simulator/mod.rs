@@ -1711,6 +1711,8 @@ impl Kernel {
             // A process outlives the threads that started it (a server that crashes, a runtime
             // shut down): its program belongs to no thread group.
             .group(0)
+            // The kernel's own spawn fault decides whether a process starts.
+            .fault_free(true)
             .spawn(move || {
                 unborn.born();
                 let mut process = Process {

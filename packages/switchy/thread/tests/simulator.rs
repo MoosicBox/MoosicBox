@@ -855,6 +855,22 @@ fn a_failed_spawn_makes_thread_spawn_panic() {
     assert!(outcome.result.is_err());
 }
 
+/// A fault-free spawn (a simulated library's own thread) starts whatever the fault's rate, and
+/// draws nothing from the fault's stream.
+#[test]
+fn a_fault_free_spawn_never_fails() {
+    let outcome = simulator::run_with(Config::random(), 0, || {
+        simulator::set_spawn_failures(1.0);
+        thread::Builder::new()
+            .fault_free(true)
+            .spawn(|| 7)
+            .unwrap()
+            .join()
+            .unwrap()
+    });
+    assert_eq!(outcome.result.unwrap(), 7);
+}
+
 /// A daemon still waiting when the run ends is killed (unwinding, so its values drop), and is
 /// not reported as leaked; an ordinary thread waiting is.
 #[test]

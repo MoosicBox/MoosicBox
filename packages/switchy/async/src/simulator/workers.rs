@@ -143,6 +143,7 @@ impl Pool {
                 .name(format!("async-worker-{}", state.workers))
                 .group(runtime.thread_group())
                 .daemon(true)
+                .fault_free(true)
                 .spawn(move || pool.serve(&runtime))
                 .expect("a simulated thread starts");
         }

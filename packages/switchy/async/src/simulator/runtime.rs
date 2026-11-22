@@ -1480,6 +1480,9 @@ fn start_blocking_thread<F, R>(
     let done = runtime.clone();
     switchy_thread::thread::Builder::new()
         .name("spawn-blocking".to_owned())
+        // tokio's blocking pool does not fail to start a thread: the fault is for the code
+        // under test's own spawns.
+        .fault_free(true)
         .spawn(move || {
             let _ = result.send(func());
             drop(finished);

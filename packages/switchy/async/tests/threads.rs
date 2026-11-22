@@ -44,6 +44,18 @@ fn blocking_work_can_wait_on_an_async_task() {
     }
 }
 
+/// The spawn failure fault reaches the code under test's spawns, not the runtime's own
+/// threads: blocking work starts however often spawns fail.
+#[test]
+fn spawn_failures_spare_the_runtimes_own_threads() {
+    let (value, _) = run(3, |runtime| {
+        simulator::set_spawn_failures(1.0);
+        let handle = runtime.handle();
+        runtime.block_on(async move { handle.spawn_blocking(|| 5).await.unwrap() })
+    });
+    assert_eq!(value, 5);
+}
+
 #[test]
 fn blocking_sleep_moves_the_run_clock() {
     let (elapsed, _) = run(1, |runtime| {

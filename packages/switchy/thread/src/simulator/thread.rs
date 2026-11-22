@@ -73,6 +73,7 @@ pub struct Builder {
     stack_size: Option<usize>,
     group: Option<u64>,
     daemon: bool,
+    fault_free: bool,
 }
 
 impl Builder {
@@ -84,7 +85,17 @@ impl Builder {
             stack_size: None,
             group: None,
             daemon: false,
+            fault_free: false,
         }
+    }
+
+    /// Exempt the spawn from the run's spawn failure fault (see [`super::set_spawn_failures`]):
+    /// for the threads of a simulated library whose real counterpart does not fail this way
+    /// (an async runtime's blocking pool and workers), so the fault reaches the code under test.
+    #[must_use]
+    pub const fn fault_free(mut self, fault_free: bool) -> Self {
+        self.fault_free = fault_free;
+        self
     }
 
     /// Make the thread a daemon: one that serves the run until it ends (a runtime's worker, a
@@ -147,7 +158,7 @@ impl Builder {
         // Spawning numbers the new thread, so it depends on every other spawn (and on
         // anything reading the scheduler's threads).
         scheduler.touch_any();
-        if super::spawn_fails() {
+        if !self.fault_free && super::spawn_fails() {
             return Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "Resource temporarily unavailable",
